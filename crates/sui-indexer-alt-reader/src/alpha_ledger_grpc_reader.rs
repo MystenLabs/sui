@@ -155,11 +155,11 @@ impl<T> StreamPage<T> {
             .or_else(|| self.items.last().map(|item| &item.cursor))
     }
 
-    /// Construct a page directly for cross-crate tests, bypassing the drain loop. The watermark
-    /// fields are private (their invariant is maintained by [`Self::apply`]); this is the only
-    /// sanctioned way to set them from outside the crate.
-    #[cfg(feature = "testing")]
-    pub fn for_test(
+    /// Construct a page from parts already in stream shape. The watermark fields are private
+    /// (their invariant — a standalone watermark, distinct from any item's cursor — is normally
+    /// maintained by [`Self::apply`]); this is the only sanctioned way to set them from outside
+    /// this module, for derived views that re-mint items and fences client-side.
+    pub(crate) fn from_parts(
         items: Vec<PageItem<T>>,
         first_wm_cursor: Option<Bytes>,
         last_wm_cursor: Option<Bytes>,
@@ -171,6 +171,17 @@ impl<T> StreamPage<T> {
             last_wm_cursor,
             end_reason,
         }
+    }
+
+    /// [`Self::from_parts`] for cross-crate tests.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn for_test(
+        items: Vec<PageItem<T>>,
+        first_wm_cursor: Option<Bytes>,
+        last_wm_cursor: Option<Bytes>,
+        end_reason: Option<proto::QueryEndReason>,
+    ) -> Self {
+        Self::from_parts(items, first_wm_cursor, last_wm_cursor, end_reason)
     }
 
     /// Fold one frame into the page.

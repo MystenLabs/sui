@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
-use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -12,18 +10,18 @@ use async_graphql::Object;
 use async_graphql::connection::Connection;
 use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
-use async_graphql::connection::PageInfo;
 use async_graphql::dataloader::DataLoader;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel::sql_types::Bool;
-use prost_types::FieldMask;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::objects::VersionedObjectKey;
+use sui_indexer_alt_reader::package_writes::PackageToken;
+use sui_indexer_alt_reader::package_writes::PackageWrite;
 use sui_indexer_alt_reader::packages::CheckpointBoundedOriginalPackageKey;
 use sui_indexer_alt_reader::packages::PackageOriginalIdKey;
 use sui_indexer_alt_reader::packages::VersionedOriginalPackageKey;
@@ -32,15 +30,9 @@ use sui_indexer_alt_schema::packages::StoredPackage;
 use sui_indexer_alt_schema::schema::kv_packages;
 use sui_package_resolver::Package as ParsedMovePackage;
 use sui_pg_db::sql;
-use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::sui::rpc::v2;
-use sui_rpc_cursor::CursorToken;
-use sui_rpc_cursor::Position;
 use sui_sql_macro::query;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
-use sui_types::effects::TransactionEffects as NativeTransactionEffects;
-use sui_types::effects::TransactionEffectsAPI;
 use sui_types::move_package::MovePackage as NativeMovePackage;
 use sui_types::object::Object as NativeObject;
 use tokio::sync::OnceCell;
@@ -137,43 +129,6 @@ pub(crate) struct PackageCursor {
     pub cp_sequence_number: u64,
     pub original_id: Vec<u8>,
     pub package_version: u64,
-}
-
-/// Cursor for iterating over package publishes on the gRPC path, which scans transactions that
-/// wrote packages, in transaction order.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, Copy)]
-pub struct PackageToken {
-    /// Hint for the checkpoint the transaction belongs to (0 = unknown).
-    checkpoint: u64,
-    position: PackagePosition,
-}
-
-/// Where a [`PackageToken`] sits in the scan. Enriches the wire's item vs. watermark cursor
-/// distinction: a cursor either points at a served package write, or at scan progress through a
-/// transaction that served nothing.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, Copy)]
-enum PackagePosition {
-    /// Points at one package write within a transaction, by its position in effects order. The
-    /// transaction may hold writes on either side of this one, so resuming from here re-fetches
-    /// the transaction and skips the writes on the cursor's served side (at-or-before it going
-    /// forwards, at-or-after it going backwards).
-    Tx { tx_seq: u64, write_index: u32 },
-
-    /// A scan frontier: the wire scanned through this transaction but served nothing from it.
-    /// Resume strictly past it, in either direction.
-    Scan { tx_seq: u64 },
-}
-
-/// The pure pagination of a scanned page: the package writes it serves and the page-info values
-/// describing how to resume around it.
-#[derive(Debug)]
-struct PackagePage {
-    /// The served package writes, in scan order: resume token, storage ID, and version.
-    writes: Vec<(PackageToken, ObjectID, u64)>,
-    has_previous_page: bool,
-    has_next_page: bool,
-    start: Option<PackageToken>,
-    end: Option<PackageToken>,
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -1057,73 +1012,53 @@ impl MovePackage {
         let after = page.after().map(|c| c.token()).transpose()?;
         let before = page.before().map(|c| c.token()).transpose()?;
 
-        let request = build_scan_request(&page, &cp_bounds, after.as_ref(), before.as_ref());
-
         let result = reader
-            .list_transactions(request)
+            .list_package_writes(cp_bounds, page.limit(), page.is_from_front(), after, before)
             .await
-            .context("Failed to list transactions")?;
+            .context("Failed to list package writes")?;
 
-        Self::build_grpc_package_connection(ctx, scope, &page, after, before, result).await
+        Self::build_grpc_package_connection(ctx, scope, &page, result).await
     }
 
-    /// Translate a page of package-writing transactions into a page of packages: work out the
-    /// served writes and resume cursors with [`paginate_package_writes`], then load package
-    /// contents in one batched lookup.
+    /// Translate a page of package writes into a `MovePackageConnection`: load package contents
+    /// in one batched lookup, then hand the page to the stream paginator like any other list
+    /// stream.
     async fn build_grpc_package_connection(
         ctx: &Context<'_>,
         scope: Scope,
         page: &Page<CPackage>,
-        after: Option<PackageToken>,
-        before: Option<PackageToken>,
-        result: StreamPage<v2::ExecutedTransaction>,
+        result: StreamPage<PackageWrite>,
     ) -> Result<MovePackageConnection, RpcError> {
-        let PackagePage {
-            writes,
-            has_previous_page,
-            has_next_page,
-            start,
-            end,
-        } = paginate_package_writes(page, after, before, &result)?;
-
+        // Batch-load the package contents up front; the stream paginator's node callback then
+        // only looks them up.
         let kv_loader: &KvLoader = ctx.data()?;
         let objects = kv_loader
             .load_many_objects(
-                writes
+                result
+                    .items
                     .iter()
-                    .map(|(_, id, version)| VersionedObjectKey(*id, *version))
+                    .map(|item| VersionedObjectKey(item.payload.id, item.payload.version))
                     .collect(),
             )
             .await
             .context("Failed to load package objects")?;
 
-        let mut edges = Vec::with_capacity(writes.len());
-        for (token, id, version) in &writes {
+        page.paginate_stream_results(result, |write| {
             let object = objects
-                .get(&VersionedObjectKey(*id, *version))
-                .with_context(|| format!("Missing package object {id} at version {version}"))?;
+                .get(&VersionedObjectKey(write.id, write.version))
+                .with_context(|| {
+                    format!(
+                        "Missing package object {} at version {}",
+                        write.id, write.version
+                    )
+                })?;
 
-            let package = Self::from_object_contents(scope.clone(), object.clone())
-                .with_context(|| format!("Object {id} written as a package is not a package"))?;
+            let package =
+                Self::from_object_contents(scope.clone(), object.clone()).with_context(|| {
+                    format!("Object {} written as a package is not a package", write.id)
+                })?;
 
-            let cursor = CPackage::new(OpaqueCursor::new(*token)).encode_cursor();
-            edges.push(Edge::new(cursor, package));
-        }
-
-        // Writes are in scan order; a backward page presents them ascending.
-        if !page.is_from_front() {
-            edges.reverse();
-        }
-
-        let encode = |t: PackageToken| CPackage::new(OpaqueCursor::new(t)).encode_cursor();
-        Ok(MovePackageConnection {
-            edges,
-            page_info: PageInfo {
-                has_previous_page,
-                has_next_page,
-                start_cursor: start.map(encode),
-                end_cursor: end.map(encode),
-            },
+            Ok(package)
         })
     }
 
@@ -1256,63 +1191,6 @@ impl MovePackage {
     }
 }
 
-impl PackageToken {
-    /// Converts an encoded `CursorToken` (a transaction position) into a scan frontier.
-    fn from_cursor(bytes: &[u8]) -> Result<Self, RpcError> {
-        let token = CursorToken::decode(bytes).context("Failed to decode stream cursor")?;
-        let Position::Transactions { checkpoint, tx_seq } = token.position else {
-            return Err(anyhow::anyhow!("Unexpected position in stream cursor").into());
-        };
-        Ok(PackageToken {
-            checkpoint,
-            position: PackagePosition::Scan { tx_seq },
-        })
-    }
-
-    /// The position of one package write within this token's transaction.
-    fn at(self, write_index: u32) -> Self {
-        Self {
-            checkpoint: self.checkpoint,
-            position: PackagePosition::Tx {
-                tx_seq: self.tx_seq(),
-                write_index,
-            },
-        }
-    }
-
-    fn tx_seq(&self) -> u64 {
-        match self.position {
-            PackagePosition::Tx { tx_seq, .. } | PackagePosition::Scan { tx_seq } => tx_seq,
-        }
-    }
-
-    /// Whether the write at `write_index` of transaction `tx_seq` is behind this token when it is
-    /// used as an `after` bound.
-    fn covers_up_to(&self, tx_seq: u64, write_index: u32) -> bool {
-        self.tx_seq() == tx_seq
-            && match self.position {
-                PackagePosition::Tx {
-                    write_index: served,
-                    ..
-                } => write_index <= served,
-                PackagePosition::Scan { .. } => true,
-            }
-    }
-
-    /// Whether the write at `write_index` of transaction `tx_seq` is behind this token when it is
-    /// used as a `before` bound.
-    fn covers_from(&self, tx_seq: u64, write_index: u32) -> bool {
-        self.tx_seq() == tx_seq
-            && match self.position {
-                PackagePosition::Tx {
-                    write_index: served,
-                    ..
-                } => write_index >= served,
-                PackagePosition::Scan { .. } => true,
-            }
-    }
-}
-
 impl CPackage {
     /// View the cursor as a package-write position for the gRPC path. Fails if it was minted by
     /// the Postgres path, whose `(checkpoint, original_id, version)` positions cannot seek a
@@ -1351,573 +1229,20 @@ impl PartialEq for CPackage {
 
 impl ByteCursor for PackageToken {
     fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
-        Ok(bcs::from_bytes(bytes)?)
+        PackageToken::decode(bytes)
     }
 
     fn encode_cursor(&self) -> bytes::Bytes {
-        bcs::to_bytes(self)
-            .expect("serialization cannot fail for a plain struct")
-            .into()
+        self.encode()
     }
 }
 
-/// Build the `ListTransactions` request scanning `cp_bounds` for package-writing transactions.
-///
-/// The wire cursors address transactions, so a `Tx` cursor widens to re-include its transaction —
-/// the writes it has already covered are skipped client-side during expansion — while a `Scan`
-/// cursor bounds on its transaction directly. Checkpoint hints on widened bounds are reset to
-/// unknown (0 for `after`, `u64::MAX` for `before`) because the neighboring transaction may fall
-/// in a different checkpoint.
-fn build_scan_request(
-    page: &Page<CPackage>,
-    cp_bounds: &RangeInclusive<u64>,
-    after: Option<&PackageToken>,
-    before: Option<&PackageToken>,
-) -> v2::ListTransactionsRequest {
-    let wire_after = after.and_then(|t| {
-        let position = match t.position {
-            // Nothing was served from a scan frontier; bound on it directly.
-            PackagePosition::Scan { tx_seq } => Position::Transactions {
-                checkpoint: t.checkpoint,
-                tx_seq,
-            },
-            // Nothing precedes the first transaction; resume from the range start and skip
-            // client-side.
-            PackagePosition::Tx { tx_seq: 0, .. } => return None,
-            // The cursor's transaction may hold further writes; re-include it.
-            PackagePosition::Tx { tx_seq, .. } => Position::Transactions {
-                checkpoint: 0,
-                tx_seq: tx_seq - 1,
-            },
-        };
-        Some(CursorToken::item(position).encode())
-    });
-
-    let wire_before = before.map(|t| {
-        let position = match t.position {
-            // A scan frontier, or a cursor at a transaction's first write: everything from the
-            // transaction's start onward is on the served side, so bound on it directly.
-            PackagePosition::Scan { tx_seq }
-            | PackagePosition::Tx {
-                tx_seq,
-                write_index: 0,
-            } => Position::Transactions {
-                // A 0 hint would collapse the checkpoint window, so treat it as unknown.
-                checkpoint: if t.checkpoint == 0 {
-                    u64::MAX
-                } else {
-                    t.checkpoint
-                },
-                tx_seq,
-            },
-            // Writes before the cursor still belong to the backward page; re-include the
-            // transaction.
-            PackagePosition::Tx { tx_seq, .. } => Position::Transactions {
-                checkpoint: u64::MAX,
-                tx_seq: tx_seq.saturating_add(1),
-            },
-        };
-        CursorToken::item(position).encode()
-    });
-
-    let mut options = v2::QueryOptions::default();
-    // One extra transaction: a re-included boundary transaction may contribute no further
-    // packages, while every other matched transaction contributes at least one.
-    options.limit = Some(page.limit() as u32 + 1);
-    options.after = wire_after;
-    options.before = wire_before;
-    options.ordering = Some(if page.is_from_front() {
-        v2::Ordering::Ascending as i32
-    } else {
-        v2::Ordering::Descending as i32
-    });
-
-    let mut request = v2::ListTransactionsRequest::default();
-    // Only the effects are needed to identify package writes; contents load separately.
-    request.read_mask = Some(FieldMask::from_paths(["effects.bcs"]));
-    request.start_checkpoint = Some(*cp_bounds.start());
-    // `cp_bounds` end is inclusive; the request bound is exclusive.
-    request.end_checkpoint = Some(cp_bounds.end().saturating_add(1));
-    request.filter = Some(package_write_filter());
-    request.options = Some(options);
-    request
-}
-
-/// Expand a page of package-writing transactions into the page of package writes it serves: skip
-/// writes a boundary cursor has already covered, trim to the page size, and work out the resume
-/// cursors on both sides.
-fn paginate_package_writes(
-    page: &Page<CPackage>,
-    after: Option<PackageToken>,
-    before: Option<PackageToken>,
-    result: &StreamPage<v2::ExecutedTransaction>,
-) -> Result<PackagePage, RpcError> {
-    let more = result.has_more();
-
-    let mut expanded: Vec<(PackageToken, ObjectID, u64)> = vec![];
-    for item in &result.items {
-        let position = PackageToken::from_cursor(&item.cursor)?;
-
-        let mut writes = package_writes(&item.payload)?;
-        if !page.is_from_front() {
-            writes.reverse();
-        }
-
-        for (write_index, id, version) in writes {
-            // Skip writes a boundary cursor has already covered — its transaction was
-            // deliberately re-included by the widened wire bounds.
-            if after.is_some_and(|a| a.covers_up_to(position.tx_seq(), write_index)) {
-                continue;
-            }
-            if before.is_some_and(|b| b.covers_from(position.tx_seq(), write_index)) {
-                continue;
-            }
-
-            expanded.push((position.at(write_index), id, version));
-        }
-    }
-
-    // More matches than the page can hold: trim the scan-direction tail and resume from the last
-    // edge kept rather than the scan frontier.
-    let trimmed = expanded.len() > page.limit();
-    expanded.truncate(page.limit());
-
-    let first_pos = result
-        .first_cursor()
-        .map(|c| PackageToken::from_cursor(c))
-        .transpose()?;
-    let last_pos = result
-        .last_cursor()
-        .map(|c| PackageToken::from_cursor(c))
-        .transpose()?;
-
-    let first_edge = expanded.first().map(|(t, _, _)| *t);
-    let last_edge = expanded.last().map(|(t, _, _)| *t);
-
-    // The side where the scan entered, and the side where it stopped. A fence naming the same
-    // transaction as its boundary edge is that item's own cursor — the transaction served
-    // writes, so resume at the edge (`Tx`); otherwise nothing was served from the fence's
-    // transaction and it can be scanned past (`Scan`). A trimmed page's far side always resumes
-    // from the last kept edge.
-    let same_tx = |edge: Option<PackageToken>, fence: Option<PackageToken>| {
-        edge.zip(fence)
-            .is_some_and(|(edge, fence)| edge.tx_seq() == fence.tx_seq())
-    };
-
-    let entry = if same_tx(first_edge, first_pos) {
-        first_edge
-    } else {
-        first_pos
-    };
-
-    let far = if trimmed || same_tx(last_edge, last_pos) {
-        last_edge
-    } else {
-        last_pos
-    };
-
-    let (has_previous_page, has_next_page, start, end) = if page.is_from_front() {
-        (page.after().is_some(), trimmed || more, entry, far)
-    } else {
-        // Descending: the scan enters at the ascending end of the page, and its far side is the
-        // ascending start.
-        (trimmed || more, page.before().is_some(), far, entry)
-    };
-
-    Ok(PackagePage {
-        writes: expanded,
-        has_previous_page,
-        has_next_page,
-        start,
-        end,
-    })
-}
-
-/// Extract a transaction's package writes from its effects: the written refs of published
-/// packages, paired with their index in effects order (`written()` preserves it), which
-/// `PackageToken::write_index` is defined over.
-fn package_writes(
-    transaction: &v2::ExecutedTransaction,
-) -> Result<Vec<(u32, ObjectID, u64)>, RpcError> {
-    let effects: NativeTransactionEffects = transaction
-        .effects
-        .as_ref()
-        .and_then(|fx| fx.bcs.as_ref())
-        .context("ListTransactions item missing effects")?
-        .deserialize()
-        .context("Failed to deserialize effects")?;
-
-    let published: BTreeSet<ObjectID> = effects.published_packages().into_iter().collect();
-    Ok(effects
-        .written()
-        .into_iter()
-        .filter(|(id, _, _)| published.contains(id))
-        .enumerate()
-        .map(|(i, (id, version, _))| (i as u32, id, version.value()))
-        .collect())
-}
-
-/// A filter matching every transaction that wrote a Move package — first publishes and upgrades
-/// alike (the `AnyPackageWrite` bitmap dimension).
-fn package_write_filter() -> v2::TransactionFilter {
-    let mut literal = v2::TransactionLiteral::default();
-    literal.predicate = Some(v2::transaction_literal::Predicate::PackageWrite(
-        v2::PackageWriteFilter::default(),
-    ));
-
-    v2::TransactionFilter::default().with_terms(vec![
-        v2::TransactionTerm::default().with_literals(vec![literal]),
-    ])
-}
-
-#[cfg(test)]
-mod tests {
-    use bytes::Bytes;
-    use sui_indexer_alt_reader::alpha_ledger_grpc_reader::PageItem;
-    use sui_types::base_types::SequenceNumber;
-    use sui_types::base_types::random_object_ref;
-    use sui_types::effects::TestEffectsBuilder;
-    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-    use sui_types::transaction::SenderSignedData;
-    use sui_types::transaction::TransactionData;
-
-    use crate::pagination::PageLimits;
-
-    use super::*;
-
-    /// The checkpoint hint carried by item cursors in these tests.
-    const CP: u64 = 7;
-
-    fn pkg(n: u8) -> ObjectID {
-        ObjectID::from_single_byte(n)
-    }
-
-    /// Wire cursor bytes for transaction `tx_seq` in `checkpoint`.
-    fn wire_cursor(checkpoint: u64, tx_seq: u64) -> Bytes {
-        CursorToken::item(Position::Transactions { checkpoint, tx_seq }).encode()
-    }
-
-    /// A `PageItem` whose effects publish `packages` as `(id, version)` pairs, with its cursor at
-    /// `(CP, tx_seq)`.
-    fn pkg_item(tx_seq: u64, packages: &[(ObjectID, u64)]) -> PageItem<v2::ExecutedTransaction> {
-        let pt = ProgrammableTransactionBuilder::new().finish();
-        let data = TransactionData::new_programmable(
-            NativeSuiAddress::ZERO,
-            vec![random_object_ref()],
-            pt,
-            1,
-            1,
-        );
-        let signed = SenderSignedData::new(data, vec![]);
-
-        let effects = TestEffectsBuilder::new(&signed)
-            .with_package_writes(
-                packages
-                    .iter()
-                    .map(|(id, version)| (*id, SequenceNumber::from(*version))),
-            )
-            .build();
-
-        let mut fx = v2::TransactionEffects::default();
-        fx.bcs = Some(v2::Bcs::serialize(&effects).expect("serialize effects"));
-
-        let mut payload = v2::ExecutedTransaction::default();
-        payload.effects = Some(fx);
-
-        PageItem {
-            payload,
-            cursor: wire_cursor(CP, tx_seq),
-        }
-    }
-
-    /// A `Tx` token in checkpoint `CP`.
-    fn tx(tx_seq: u64, write_index: u32) -> PackageToken {
-        PackageToken {
-            checkpoint: CP,
-            position: PackagePosition::Tx {
-                tx_seq,
-                write_index,
-            },
-        }
-    }
-
-    fn scan(checkpoint: u64, tx_seq: u64) -> PackageToken {
-        PackageToken {
-            checkpoint,
-            position: PackagePosition::Scan { tx_seq },
-        }
-    }
-
-    fn limits(limit: u64) -> PageLimits {
-        PageLimits {
-            default: limit as u32,
-            max: limit as u32,
-        }
-    }
-
-    fn forward(limit: u64) -> Page<CPackage> {
-        Page::from_params(&limits(limit), Some(limit), None, None, None).expect("forward page")
-    }
-
-    fn forward_after(limit: u64, after: PackageToken) -> Page<CPackage> {
-        let after = CPackage::new(OpaqueCursor::new(after));
-        Page::from_params(&limits(limit), Some(limit), Some(after), None, None)
-            .expect("forward page with after")
-    }
-
-    fn backward(limit: u64) -> Page<CPackage> {
-        Page::from_params(&limits(limit), None, None, Some(limit), None).expect("backward page")
-    }
-
-    fn backward_before(limit: u64, before: PackageToken) -> Page<CPackage> {
-        let before = CPackage::new(OpaqueCursor::new(before));
-        Page::from_params(&limits(limit), None, None, Some(limit), Some(before))
-            .expect("backward page with before")
-    }
-
-    /// The served writes, flattened to `(tx_seq, write_index, id, version)`.
-    fn served(page: &PackagePage) -> Vec<(u64, u32, ObjectID, u64)> {
-        page.writes
-            .iter()
-            .map(|(t, id, version)| match t.position {
-                PackagePosition::Tx {
-                    tx_seq,
-                    write_index,
-                } => (tx_seq, write_index, *id, *version),
-                PackagePosition::Scan { .. } => panic!("edge token must be `Tx`"),
-            })
-            .collect()
-    }
-
-    /// Decode a wire bound back into `(checkpoint, tx_seq)`.
-    fn wire_position(bytes: &Bytes) -> (u64, u64) {
-        let token = CursorToken::decode(bytes).expect("decode wire cursor");
-        let Position::Transactions { checkpoint, tx_seq } = token.position else {
-            panic!("expected transactions position, got {:?}", token.position);
-        };
-        (checkpoint, tx_seq)
-    }
-
-    /// Fences that are the boundary items' own cursors resume as `Tx` positions at the boundary
-    /// edges.
-    #[test]
-    fn forward_fences_on_items_mint_tx() {
-        let (a, b) = (pkg(1), pkg(2));
-        let result = StreamPage::for_test(
-            vec![pkg_item(10, &[(a, 1)]), pkg_item(11, &[(b, 1)])],
-            None,
-            None,
-            Some(v2::QueryEndReason::LedgerTip),
-        );
-
-        let page = paginate_package_writes(&forward(5), None, None, &result).expect("paginate");
-
-        assert_eq!(served(&page), vec![(10, 0, a, 1), (11, 0, b, 1)]);
-        assert_eq!(page.start, Some(tx(10, 0)));
-        assert_eq!(page.end, Some(tx(11, 0)));
-        assert!(!page.has_previous_page);
-        assert!(!page.has_next_page);
-    }
-
-    /// Standalone watermark cursors decode as `Scan` fences: their transactions served nothing,
-    /// so resumption seeks strictly past them.
-    #[test]
-    fn forward_watermark_fences_mint_scan() {
-        let a = pkg(1);
-        let result = StreamPage::for_test(
-            vec![pkg_item(10, &[(a, 1)])],
-            Some(wire_cursor(6, 8)),
-            Some(wire_cursor(9, 15)),
-            None,
-        );
-
-        let page = paginate_package_writes(&forward(5), None, None, &result).expect("paginate");
-
-        assert_eq!(served(&page), vec![(10, 0, a, 1)]);
-        assert_eq!(page.start, Some(scan(6, 8)));
-        assert_eq!(page.end, Some(scan(9, 15)));
-        assert!(page.has_next_page);
-    }
-
-    /// A trimmed page resumes from its last kept edge, not the scan frontier.
-    #[test]
-    fn forward_trim_resumes_from_last_kept_edge() {
-        let (a, b, c, d) = (pkg(1), pkg(2), pkg(3), pkg(4));
-        let result = StreamPage::for_test(
-            vec![
-                pkg_item(10, &[(a, 1), (b, 1)]),
-                pkg_item(11, &[(c, 1), (d, 1)]),
-            ],
-            None,
-            None,
-            Some(v2::QueryEndReason::LedgerTip),
-        );
-
-        let page = paginate_package_writes(&forward(3), None, None, &result).expect("paginate");
-
-        assert_eq!(
-            served(&page),
-            vec![(10, 0, a, 1), (10, 1, b, 1), (11, 0, c, 1)]
-        );
-        assert_eq!(page.end, Some(tx(11, 0)));
-        assert!(page.has_next_page);
-    }
-
-    /// An `after` cursor's transaction is re-included by the widened wire bounds; the writes the
-    /// cursor already covered are skipped.
-    #[test]
-    fn forward_after_tx_skips_covered_writes() {
-        let (a, b, c) = (pkg(1), pkg(2), pkg(3));
-        let result = StreamPage::for_test(
-            vec![pkg_item(10, &[(a, 1), (b, 1)]), pkg_item(11, &[(c, 1)])],
-            None,
-            None,
-            Some(v2::QueryEndReason::LedgerTip),
-        );
-
-        let page = paginate_package_writes(
-            &forward_after(5, tx(10, 0)),
-            Some(tx(10, 0)),
-            None,
-            &result,
-        )
-        .expect("paginate");
-
-        assert_eq!(served(&page), vec![(10, 1, b, 1), (11, 0, c, 1)]);
-        assert!(page.has_previous_page);
-    }
-
-    /// Backward pages scan descending: writes within each transaction reverse, and the page's
-    /// `end` is the scan's entry side while `start` is its far side.
-    #[test]
-    fn backward_fences_swap_sides() {
-        let (a, b, c) = (pkg(1), pkg(2), pkg(3));
-        // Descending scan order: tx 11 first, then tx 10.
-        let result = StreamPage::for_test(
-            vec![pkg_item(11, &[(b, 1), (c, 1)]), pkg_item(10, &[(a, 1)])],
-            None,
-            None,
-            Some(v2::QueryEndReason::LedgerTip),
-        );
-
-        let page = paginate_package_writes(&backward(5), None, None, &result).expect("paginate");
-
-        assert_eq!(
-            served(&page),
-            vec![(11, 1, c, 1), (11, 0, b, 1), (10, 0, a, 1)]
-        );
-        assert_eq!(page.start, Some(tx(10, 0)));
-        assert_eq!(page.end, Some(tx(11, 1)));
-        assert!(!page.has_previous_page);
-        assert!(!page.has_next_page);
-    }
-
-    /// A `before` cursor's transaction is re-included; the writes it already covered are skipped.
-    #[test]
-    fn backward_before_tx_skips_covered_writes() {
-        let (a, b, c) = (pkg(1), pkg(2), pkg(3));
-        let result = StreamPage::for_test(
-            vec![pkg_item(11, &[(b, 1), (c, 1)]), pkg_item(10, &[(a, 1)])],
-            None,
-            None,
-            Some(v2::QueryEndReason::LedgerTip),
-        );
-
-        let page = paginate_package_writes(
-            &backward_before(5, tx(11, 1)),
-            None,
-            Some(tx(11, 1)),
-            &result,
-        )
-        .expect("paginate");
-
-        assert_eq!(served(&page), vec![(11, 0, b, 1), (10, 0, a, 1)]);
-        assert!(page.has_next_page);
-    }
-
-    /// A page that served nothing still reports scan progress through its fences.
-    #[test]
-    fn empty_page_keeps_scan_fences() {
-        let result: StreamPage<v2::ExecutedTransaction> = StreamPage::for_test(
-            vec![],
-            Some(wire_cursor(6, 8)),
-            Some(wire_cursor(9, 15)),
-            None,
-        );
-
-        let page = paginate_package_writes(&forward(5), None, None, &result).expect("paginate");
-
-        assert!(page.writes.is_empty());
-        assert_eq!(page.start, Some(scan(6, 8)));
-        assert_eq!(page.end, Some(scan(9, 15)));
-        assert!(page.has_next_page);
-    }
-
-    #[test]
-    fn scan_request_bounds_and_ordering() {
-        let request = build_scan_request(&forward(5), &(3..=9), None, None);
-        assert_eq!(request.start_checkpoint, Some(3));
-        // `cp_bounds` end is inclusive; the request bound is exclusive.
-        assert_eq!(request.end_checkpoint, Some(10));
-
-        let options = request.options.expect("options");
-        // One extra transaction beyond the page limit for a re-included boundary transaction.
-        assert_eq!(options.limit, Some(6));
-        assert_eq!(options.ordering, Some(v2::Ordering::Ascending as i32));
-        assert_eq!(options.after, None);
-        assert_eq!(options.before, None);
-
-        let request = build_scan_request(&backward(5), &(3..=9), None, None);
-        let options = request.options.expect("options");
-        assert_eq!(options.ordering, Some(v2::Ordering::Descending as i32));
-    }
-
-    /// A `Scan` after-bound excludes its transaction directly, hint intact.
-    #[test]
-    fn scan_request_after_scan_bounds_directly() {
-        let request = build_scan_request(&forward(5), &(0..=9), Some(&scan(4, 17)), None);
-        let after = request.options.expect("options").after.expect("after");
-        assert_eq!(wire_position(&after), (4, 17));
-    }
-
-    /// A `Tx` after-bound widens to re-include its transaction, hint reset to unknown.
-    #[test]
-    fn scan_request_after_tx_widens() {
-        let request = build_scan_request(&forward(5), &(0..=9), Some(&tx(17, 2)), None);
-        let after = request.options.expect("options").after.expect("after");
-        assert_eq!(wire_position(&after), (0, 16));
-    }
-
-    /// Nothing precedes the first transaction: a `Tx` after-bound at `tx_seq` 0 resumes from the
-    /// range start.
-    #[test]
-    fn scan_request_after_tx_zero_unbounded() {
-        let request = build_scan_request(&forward(5), &(0..=9), Some(&tx(0, 2)), None);
-        assert_eq!(request.options.expect("options").after, None);
-    }
-
-    /// `Scan` and first-write `Tx` before-bounds exclude their transaction directly, hint intact;
-    /// a 0 hint is treated as unknown.
-    #[test]
-    fn scan_request_before_bounds_directly() {
-        let request = build_scan_request(&forward(5), &(0..=9), None, Some(&scan(4, 17)));
-        let before = request.options.expect("options").before.expect("before");
-        assert_eq!(wire_position(&before), (4, 17));
-
-        let request = build_scan_request(&forward(5), &(0..=9), None, Some(&tx(17, 0)));
-        let before = request.options.expect("options").before.expect("before");
-        assert_eq!(wire_position(&before), (CP, 17));
-
-        let request = build_scan_request(&forward(5), &(0..=9), None, Some(&scan(0, 17)));
-        let before = request.options.expect("options").before.expect("before");
-        assert_eq!(wire_position(&before), (u64::MAX, 17));
-    }
-
-    /// A mid-transaction `Tx` before-bound widens to re-include its transaction.
-    #[test]
-    fn scan_request_before_tx_widens() {
-        let request = build_scan_request(&forward(5), &(0..=9), None, Some(&tx(17, 3)));
-        let before = request.options.expect("options").before.expect("before");
-        assert_eq!(wire_position(&before), (u64::MAX, 18));
+/// The package-write stream's raw cursor bytes are reader-minted `PackageToken`s.
+impl TryFrom<&[u8]> for CPackage {
+    type Error = anyhow::Error;
+
+    fn try_from(bytes: &[u8]) -> anyhow::Result<Self> {
+        Ok(Self::new(OpaqueCursor::new(PackageToken::decode(bytes)?)))
     }
 }
+

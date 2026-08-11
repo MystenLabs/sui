@@ -423,6 +423,15 @@ impl TryFrom<CursorToken> for CEvent {
     }
 }
 
+/// The event stream's raw cursor bytes are wire `CursorToken`s.
+impl TryFrom<&[u8]> for CEvent {
+    type Error = anyhow::Error;
+
+    fn try_from(bytes: &[u8]) -> anyhow::Result<Self> {
+        Self::try_from(CursorToken::decode(bytes)?)
+    }
+}
+
 impl Eq for CEvent {}
 
 /// Cursors minted by different paths disagree on the checkpoint hint (and kind), so pagination
