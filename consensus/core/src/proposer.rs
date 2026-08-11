@@ -12,8 +12,8 @@ use tracing::{debug, info, trace};
 use crate::{
     ancestor::{AncestorState, AncestorStateManager},
     block::{
-        Block, BlockAPI, BlockV1, BlockV2, ExtendedBlock, GENESIS_ROUND, SignedBlock, Slot,
-        VerifiedBlock,
+        Block, BlockAPI, BlockV1, BlockV2, BlockV3, ExtendedBlock, GENESIS_ROUND, SignedBlock,
+        Slot, VerifiedBlock,
     },
     context::Context,
     dag_state::DagState,
@@ -26,6 +26,21 @@ use crate::{
 };
 
 const MAX_COMMIT_VOTES_PER_BLOCK: usize = 100;
+
+fn transaction_vote_targets(
+    enable_v3: bool,
+    clock_round: Round,
+    new_causal_history: Vec<BlockRef>,
+) -> Vec<BlockRef> {
+    if enable_v3 {
+        new_causal_history
+            .into_iter()
+            .filter(|block_ref| block_ref.round.saturating_add(1) == clock_round)
+            .collect()
+    } else {
+        new_causal_history
+    }
+}
 
 /// Trait for handling block proposal logic.
 /// Only Validators have a proposer; Observers use None for the proposer field in Core.
@@ -539,39 +554,62 @@ impl Proposer for ValidatorProposer {
             .write()
             .take_commit_votes(MAX_COMMIT_VOTES_PER_BLOCK);
 
-        let transaction_votes = if self.context.protocol_config.transaction_voting_enabled() {
-            let new_causal_history = {
-                let mut dag_state = self.dag_state.write();
-                ancestors
-                    .iter()
-                    .flat_map(|ancestor| dag_state.link_causal_history(ancestor.reference()))
-                    .collect()
-            };
-            let transaction_votes = self
-                .transaction_vote_tracker
-                .get_own_votes(new_causal_history);
-            self.context
-                .metrics
-                .node_metrics
-                .proposed_block_transaction_vote_blocks
-                .observe(transaction_votes.len() as f64);
-            self.context
-                .metrics
-                .node_metrics
-                .proposed_block_transaction_vote_entries
-                .observe(
-                    transaction_votes
+        let (transaction_votes, transaction_votes_cutoff_round) =
+            if self.context.protocol_config.transaction_voting_enabled() {
+                let (new_causal_history, causal_history_cutoff_round) = {
+                    let mut dag_state = self.dag_state.write();
+                    let causal_history_cutoff_round = dag_state.gc_round();
+                    let new_causal_history: Vec<BlockRef> = ancestors
                         .iter()
-                        .map(|votes| votes.rejects.len())
-                        .sum::<usize>() as f64,
+                        .flat_map(|ancestor| dag_state.link_causal_history(ancestor.reference()))
+                        .collect();
+                    (new_causal_history, causal_history_cutoff_round)
+                };
+                // A v3 block votes only on blocks in the previous round. Keep linking the
+                // complete causal history, but do not carry votes that the v3 finalizer cannot use.
+                let vote_targets = transaction_vote_targets(
+                    self.context.protocol_config.enable_v3(),
+                    clock_round,
+                    new_causal_history,
                 );
-            transaction_votes
-        } else {
-            vec![]
-        };
+                let (transaction_votes, transaction_votes_cutoff_round) = self
+                    .transaction_vote_tracker
+                    .get_own_votes(vote_targets, causal_history_cutoff_round);
+                self.context
+                    .metrics
+                    .node_metrics
+                    .proposed_block_transaction_vote_blocks
+                    .observe(transaction_votes.len() as f64);
+                self.context
+                    .metrics
+                    .node_metrics
+                    .proposed_block_transaction_vote_entries
+                    .observe(
+                        transaction_votes
+                            .iter()
+                            .map(|votes| votes.rejects.len())
+                            .sum::<usize>() as f64,
+                    );
+                (transaction_votes, transaction_votes_cutoff_round)
+            } else {
+                (vec![], self.dag_state.read().gc_round())
+            };
 
         // Create the block.
-        let block = if self.context.protocol_config.transaction_voting_enabled() {
+        let block = if self.context.protocol_config.enable_v3() {
+            Block::V3(BlockV3::new(
+                self.context.committee.epoch(),
+                clock_round,
+                self.context.own_index,
+                now,
+                ancestors.iter().map(|b| b.reference()).collect(),
+                transactions,
+                transaction_votes,
+                transaction_votes_cutoff_round,
+                commit_votes,
+                vec![],
+            ))
+        } else if self.context.protocol_config.transaction_voting_enabled() {
             Block::V2(BlockV2::new(
                 self.context.committee.epoch(),
                 clock_round,
@@ -794,6 +832,7 @@ impl ProposalLeaderWaiter {
 #[cfg(test)]
 mod tests {
     use consensus_config::AuthorityIndex;
+    use consensus_types::block::BlockDigest;
 
     use super::*;
 
@@ -832,6 +871,21 @@ mod tests {
                 Slot::new(4, AuthorityIndex::new_for_test(1)),
                 Slot::new(4, AuthorityIndex::new_for_test(3)),
             ]
+        );
+    }
+
+    #[test]
+    fn v3_transaction_vote_targets_only_include_the_previous_round() {
+        let older = BlockRef::new(8, AuthorityIndex::new_for_test(1), BlockDigest::MIN);
+        let previous = BlockRef::new(9, AuthorityIndex::new_for_test(2), BlockDigest::MIN);
+
+        assert_eq!(
+            transaction_vote_targets(true, 10, vec![older, previous]),
+            vec![previous]
+        );
+        assert_eq!(
+            transaction_vote_targets(false, 10, vec![older, previous]),
+            vec![older, previous]
         );
     }
 }

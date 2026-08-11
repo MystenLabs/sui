@@ -9,7 +9,7 @@ use std::{
 
 use consensus_config::ProtocolKeyPair;
 #[cfg(test)]
-use consensus_config::{AuthorityIndex, Stake, local_committee_and_keys};
+use consensus_config::{AuthorityIndex, Committee, Stake, local_committee_and_keys};
 use consensus_types::block::{BlockRef, Round};
 use itertools::Itertools as _;
 #[cfg(test)]
@@ -1289,6 +1289,16 @@ impl CoreTestFixture {
         store: Arc<MemStore>,
     ) -> Self {
         let (committee, mut signers) = local_committee_and_keys(0, authorities.clone());
+        let committee = if context.protocol_config.enable_v3() {
+            Committee::new_v3(
+                committee.epoch(),
+                committee.authorities_slice().to_vec(),
+                1,
+                0,
+            )
+        } else {
+            committee
+        };
         let mut context = context.clone();
         context = context
             .with_committee(committee)
@@ -1723,6 +1733,32 @@ mod test {
         let last_commit = fixture.store.read_last_commit().unwrap();
         assert!(last_commit.is_none());
         assert_eq!(fixture.dag_state.read().last_commit_index(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_core_proposes_v3_block_with_gc_cutoff() {
+        telemetry_subscribers::init_for_testing();
+        let (mut context, _) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+
+        let mut fixture = CoreTestFixture::new(
+            context,
+            vec![1, 1, 1, 1],
+            AuthorityIndex::new_for_test(0),
+            false,
+        )
+        .await;
+        let proposed = fixture
+            .block_receiver
+            .recv()
+            .await
+            .expect("Recovery should propose the first v3 block");
+
+        assert_eq!(
+            proposed.block.transaction_votes_cutoff_round_v3(),
+            Some(fixture.dag_state.read().gc_round())
+        );
+        assert_eq!(proposed.block.transaction_votes_cutoff_round(), 0);
     }
 
     #[tokio::test]

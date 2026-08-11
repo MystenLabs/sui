@@ -65,6 +65,26 @@ pub enum Block {
     V3(BlockV3),
 }
 
+impl Block {
+    /// Returns the serialized block format version.
+    pub(crate) fn version(&self) -> u8 {
+        match self {
+            Self::V1(_) => 1,
+            Self::V2(_) => 2,
+            Self::V3(_) => 3,
+        }
+    }
+
+    /// Returns the signed transaction-vote cutoff for a v3 block.
+    /// Older block versions cannot create implicit accept votes in v3.
+    pub(crate) fn transaction_votes_cutoff_round_v3(&self) -> Option<Round> {
+        match self {
+            Self::V3(block) => Some(block.transaction_votes_cutoff_round),
+            Self::V1(_) | Self::V2(_) => None,
+        }
+    }
+}
+
 #[allow(private_interfaces)]
 #[enum_dispatch]
 pub trait BlockAPI {
@@ -82,8 +102,7 @@ pub trait BlockAPI {
     /// Votes on if a transaction should be accepted or rejected.
     fn transaction_votes(&self) -> &[BlockTransactionVotes];
 
-    /// Transactions in this blocks' casual history at and before the cutoff round
-    /// will not receive accept votes from this block.
+    /// Highest round for which this block does not carry implicit accept votes.
     /// Only `BlockV3` carries this — earlier variants panic.
     fn transaction_votes_cutoff_round(&self) -> Round;
 
@@ -677,7 +696,9 @@ pub(crate) fn genesis_blocks(context: &Context) -> Vec<VerifiedBlock> {
         .committee
         .authorities()
         .map(|(authority_index, _)| {
-            let block = if context.protocol_config.transaction_voting_enabled() {
+            let block = if context.protocol_config.enable_v3() {
+                Block::V3(BlockV3::genesis_block(context, authority_index))
+            } else if context.protocol_config.transaction_voting_enabled() {
                 Block::V2(BlockV2::genesis_block(context, authority_index))
             } else {
                 Block::V1(BlockV1::genesis_block(context, authority_index))
@@ -771,6 +792,23 @@ impl TestBlock {
 
     pub fn build(self) -> Block {
         Block::V2(self.block)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn build_v3(self, transaction_votes_cutoff_round: Round) -> Block {
+        let block = self.block;
+        Block::V3(BlockV3::new(
+            block.epoch,
+            block.round,
+            block.author,
+            block.timestamp_ms,
+            block.ancestors,
+            block.transactions,
+            block.transaction_votes,
+            transaction_votes_cutoff_round,
+            block.commit_votes,
+            block.misbehavior_reports,
+        ))
     }
 }
 

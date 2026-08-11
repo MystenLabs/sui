@@ -142,12 +142,21 @@ impl TransactionVoteTracker {
             .add_voted_blocks(voted_blocks);
     }
 
-    /// Retrieves own votes on peer block transactions.
-    pub(crate) fn get_own_votes(&self, block_refs: Vec<BlockRef>) -> Vec<BlockTransactionVotes> {
+    /// Retrieves own votes on peer block transactions and the effective vote cutoff.
+    ///
+    /// The returned cutoff covers blocks omitted by causal-history GC and blocks omitted by
+    /// vote-tracker GC. It is read under the same lock as the votes. Thus, later GC cannot make
+    /// the returned votes inconsistent with the returned cutoff.
+    pub(crate) fn get_own_votes(
+        &self,
+        block_refs: Vec<BlockRef>,
+        causal_history_cutoff_round: Round,
+    ) -> (Vec<BlockTransactionVotes>, Round) {
         let mut votes = vec![];
         let vote_tracker_state = self.vote_tracker_state.read();
+        let effective_cutoff_round = causal_history_cutoff_round.max(vote_tracker_state.gc_round);
         for block_ref in block_refs {
-            if block_ref.round <= vote_tracker_state.gc_round {
+            if block_ref.round <= effective_cutoff_round {
                 continue;
             }
             let vote_info = vote_tracker_state.votes.get(&block_ref).unwrap_or_else(|| {
@@ -163,7 +172,7 @@ impl TransactionVoteTracker {
                 });
             }
         }
-        votes
+        (votes, effective_cutoff_round)
     }
 
     /// Retrieves transactions in the block that have received reject votes, and the total stake of the votes.
@@ -324,7 +333,7 @@ mod test {
 
     use crate::{
         TestBlock, Transaction, VerifiedBlock, block::BlockTransactionVotes, context::Context,
-        metrics::test_metrics,
+        metrics::test_metrics, storage::mem_store::MemStore,
     };
 
     use super::*;
@@ -472,5 +481,35 @@ mod test {
             .unwrap()
             .reject_txn_votes;
         assert!(reject_votes_2.is_empty());
+    }
+
+    #[test]
+    fn test_own_votes_return_the_effective_cutoff() {
+        let (context, _) = Context::new_with_test_options(4, false);
+        let context = Arc::new(context);
+        let dag_state = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let tracker = TransactionVoteTracker::new(
+            context,
+            Arc::new(crate::block_verifier::NoopBlockVerifier),
+            dag_state,
+        );
+        let block = VerifiedBlock::new_for_test(
+            TestBlock::new(2, 1)
+                .set_transactions(vec![Transaction::new(vec![1])])
+                .build(),
+        );
+        tracker.add_voted_blocks(vec![(block.clone(), vec![0])]);
+
+        let (votes, cutoff_round) = tracker.get_own_votes(vec![block.reference()], 1);
+        assert_eq!(cutoff_round, 1);
+        assert_eq!(votes.len(), 1);
+
+        tracker.vote_tracker_state.write().update_gc_round(2);
+        let (votes, cutoff_round) = tracker.get_own_votes(vec![block.reference()], 1);
+        assert_eq!(cutoff_round, 2);
+        assert!(votes.is_empty());
     }
 }

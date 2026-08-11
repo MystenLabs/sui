@@ -77,6 +77,20 @@ impl SignedBlockVerifier {
         if block.round() == 0 {
             return Err(ConsensusError::UnexpectedGenesisBlock);
         }
+        if self.context.protocol_config.enable_v3() && block.version() != 3 {
+            return Err(ConsensusError::UnexpectedBlockVersion {
+                expected: 3,
+                actual: block.version(),
+            });
+        }
+        if let Some(cutoff) = block.transaction_votes_cutoff_round_v3()
+            && cutoff >= block.round()
+        {
+            return Err(ConsensusError::InvalidTransactionVotesCutoff {
+                cutoff,
+                block: block.round(),
+            });
+        }
         if !committee.is_valid_index(block.author()) {
             return Err(ConsensusError::InvalidAuthorityIndex {
                 index: block.author(),
@@ -566,6 +580,44 @@ mod test {
                 Err(ConsensusError::InvalidTransaction(_))
             ));
         }
+    }
+
+    #[tokio::test]
+    async fn test_v3_requires_v3_blocks() {
+        let (mut context, keypairs) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        let context = Arc::new(context);
+        const AUTHOR: u32 = 2;
+        let verifier = SignedBlockVerifier::new(context, Arc::new(TxnSizeVerifier {}));
+        let test_block = TestBlock::new(10, AUTHOR).set_ancestors_raw(vec![
+            BlockRef::new(9, AuthorityIndex::new_for_test(2), BlockDigest::MIN),
+            BlockRef::new(9, AuthorityIndex::new_for_test(0), BlockDigest::MIN),
+            BlockRef::new(9, AuthorityIndex::new_for_test(1), BlockDigest::MIN),
+        ]);
+
+        let v2 =
+            SignedBlock::new(test_block.clone().build(), &keypairs[AUTHOR as usize].1).unwrap();
+        assert!(matches!(
+            verifier.verify_block(&v2),
+            Err(ConsensusError::UnexpectedBlockVersion {
+                expected: 3,
+                actual: 2,
+            })
+        ));
+
+        let v3 =
+            SignedBlock::new(test_block.clone().build_v3(0), &keypairs[AUTHOR as usize].1).unwrap();
+        verifier.verify_block(&v3).unwrap();
+
+        let invalid_cutoff =
+            SignedBlock::new(test_block.build_v3(10), &keypairs[AUTHOR as usize].1).unwrap();
+        assert!(matches!(
+            verifier.verify_block(&invalid_cutoff),
+            Err(ConsensusError::InvalidTransactionVotesCutoff {
+                cutoff: 10,
+                block: 10,
+            })
+        ));
     }
 
     #[tokio::test]
