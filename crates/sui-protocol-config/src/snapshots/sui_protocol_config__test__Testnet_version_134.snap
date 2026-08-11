@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 133
+version: 134
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -282,6 +282,8 @@ address_to_u256_cost_base: 52
 address_from_u256_cost_base: 52
 config_read_setting_impl_cost_base: 100
 config_read_setting_impl_cost_per_byte: 40
+package_original_package_id_impl_cost_base: 52
+package_original_package_id_impl_cost_per_byte: 15
 dynamic_field_hash_type_and_key_cost_base: 52
 dynamic_field_hash_type_and_key_type_cost_per_byte: 2
 dynamic_field_hash_type_and_key_value_cost_per_byte: 2
