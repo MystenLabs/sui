@@ -68,7 +68,6 @@ use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
 use crate::api::types::owner::Owner;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
-use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction_object::TransactionObject;
 use crate::error::RpcError;
@@ -80,6 +79,7 @@ use crate::intersect;
 use crate::pagination::Page;
 use crate::pagination::PageLimits;
 use crate::pagination::PaginationConfig;
+use crate::pagination::StreamConnection;
 use crate::scope::Scope;
 use crate::task::watermark::Watermarks;
 
@@ -153,7 +153,7 @@ use crate::task::watermark::Watermarks;
         arg(name = "last", ty = "Option<u64>"),
         arg(name = "before", ty = "Option<CTransaction>"),
         arg(name = "filter", ty = "Option<TransactionFilter>"),
-        ty = "Option<Result<TransactionConnection, RpcError>>",
+        ty = "Option<Result<StreamConnection<Transaction>, RpcError>>",
         desc = "The transactions that sent objects to this object."
     )
 )]
@@ -665,7 +665,7 @@ impl Object {
         last: Option<u64>,
         before: Option<CTransaction>,
         filter: Option<TransactionFilter>,
-    ) -> Option<Result<TransactionConnection, RpcError>> {
+    ) -> Option<Result<StreamConnection<Transaction>, RpcError>> {
         let result = async {
             let pagination: &PaginationConfig = ctx.data()?;
             let limits = pagination.limits("IObject", "receivedTransactions");

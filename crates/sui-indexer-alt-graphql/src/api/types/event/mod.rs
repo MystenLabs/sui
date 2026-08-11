@@ -97,9 +97,6 @@ pub(crate) struct Event {
     pub(crate) timestamp_ms: OnceCell<Option<u64>>,
 }
 
-/// Custom `Connection` for events to support partially-filled pages.
-pub(crate) type EventConnection = StreamConnection<Event>;
-
 #[Object]
 impl Event {
     /// The Move value emitted for this event.
@@ -192,7 +189,7 @@ impl Event {
         scope: Scope,
         page: Page<CEvent>,
         filter: EventFilter,
-    ) -> Result<EventConnection, RpcError> {
+    ) -> Result<StreamConnection<Event>, RpcError> {
         query_limits::rich::debit(ctx)?;
 
         if let Some(reader) = ctx.data_opt::<AlphaLedgerGrpcReader>() {
@@ -210,7 +207,7 @@ impl Event {
         let reader_lo = available_range_key.reader_lo(watermarks)?;
 
         let Some(mut query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
-            return Ok(EventConnection::empty());
+            return Ok(StreamConnection::empty());
         };
 
         #[derive(QueryableByName)]
@@ -263,14 +260,14 @@ impl Event {
         scope: Scope,
         page: Page<CEvent>,
         filter: EventFilter,
-    ) -> Result<EventConnection, RpcError> {
+    ) -> Result<StreamConnection<Event>, RpcError> {
         if page.limit() == 0 {
-            return Ok(EventConnection::empty());
+            return Ok(StreamConnection::empty());
         }
 
         // Consistency upper bound; empty when scope has no checkpoint set.
         let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
-            return Ok(EventConnection::empty());
+            return Ok(StreamConnection::empty());
         };
 
         // TODO: LedgerService expose available checkpoint range for `reader_lo`.
@@ -283,7 +280,7 @@ impl Event {
             reader_lo,
             checkpoint_viewed_at,
         ) else {
-            return Ok(EventConnection::empty());
+            return Ok(StreamConnection::empty());
         };
 
         // Extract the cursor and pass through to grpc.
@@ -473,7 +470,7 @@ fn event_from_stream_item(scope: Scope, payload: &v2::Event) -> Result<Event, Rp
     })
 }
 
-/// Build an `EventConnection` from draining a bitmap-scan page, hydrating each edge's event from
+/// Build a `StreamConnection<Event>` from draining a bitmap-scan page, hydrating each edge's event from
 /// the stream item itself.
 ///
 /// Edges are returned in ascending order.
@@ -481,7 +478,7 @@ fn build_grpc_connection(
     scope: Scope,
     page: &Page<CEvent>,
     result: StreamPage<v2::Event>,
-) -> Result<EventConnection, RpcError> {
+) -> Result<StreamConnection<Event>, RpcError> {
     page.paginate_stream_results(result, |payload| {
         event_from_stream_item(scope.clone(), payload)
     })

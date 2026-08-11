@@ -435,8 +435,7 @@ impl<N: OutputType> StreamConnection<N> {
 
 impl<N: OutputType> TypeName for StreamConnection<N> {
     /// Names each instantiation `{Node}Connection`, matching the convention of the stock
-    /// `Connection`, so new node types are registered in the schema without needing an explicit
-    /// `concrete(...)` entry.
+    /// `Connection`.
     fn type_name() -> Cow<'static, str> {
         format!("{}Connection", N::type_name()).into()
     }

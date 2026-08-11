@@ -39,17 +39,16 @@ use crate::api::types::balance_change::BalanceChangeContents;
 use crate::api::types::checkpoint::Checkpoint;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::event::Event;
-use crate::api::types::event::EventConnection;
 use crate::api::types::execution_error::ExecutionError;
 use crate::api::types::gas_effects::GasEffects;
 use crate::api::types::object_change::ObjectChange;
 use crate::api::types::transaction::Transaction;
-use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::TransactionContents;
 use crate::api::types::unchanged_consensus_object::UnchangedConsensusObject;
 use crate::error::RpcError;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
+use crate::pagination::StreamConnection;
 use crate::scope::Scope;
 
 /// The execution status of this transaction: success or failure.
@@ -212,7 +211,7 @@ impl EffectsContents {
         after: Option<CEvent>,
         last: Option<u64>,
         before: Option<CEvent>,
-    ) -> Option<Result<EventConnection, RpcError>> {
+    ) -> Option<Result<StreamConnection<Event>, RpcError>> {
         let content = self.contents.as_ref()?;
 
         Some(
@@ -474,7 +473,7 @@ impl EffectsContents {
         after: Option<CDependency>,
         last: Option<u64>,
         before: Option<CDependency>,
-    ) -> Option<Result<TransactionConnection, RpcError>> {
+    ) -> Option<Result<StreamConnection<Transaction>, RpcError>> {
         let content = self.contents.as_ref()?;
 
         Some(
