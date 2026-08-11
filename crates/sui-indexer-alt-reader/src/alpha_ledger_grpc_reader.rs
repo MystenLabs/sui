@@ -155,10 +155,6 @@ impl<T> StreamPage<T> {
             .or_else(|| self.items.last().map(|item| &item.cursor))
     }
 
-    /// Construct a page from parts already in stream shape. The watermark fields are private
-    /// (their invariant — a standalone watermark, distinct from any item's cursor — is normally
-    /// maintained by [`Self::apply`]); this is the only sanctioned way to set them from outside
-    /// this module, for derived views that re-mint items and fences client-side.
     pub(crate) fn from_parts(
         items: Vec<PageItem<T>>,
         first_wm_cursor: Option<Bytes>,
@@ -173,7 +169,6 @@ impl<T> StreamPage<T> {
         }
     }
 
-    /// [`Self::from_parts`] for cross-crate tests.
     #[cfg(any(test, feature = "testing"))]
     pub fn for_test(
         items: Vec<PageItem<T>>,
