@@ -1695,17 +1695,13 @@ mod checked {
             TypeTag::U64 => Type::U64,
             TypeTag::U128 => Type::U128,
             TypeTag::U256 => Type::U256,
-            // Signed integer types are not supported at the Sui layer for v3
-            // execution, and the v3 VM runtime has no signed integer types.
             TypeTag::I8
             | TypeTag::I16
             | TypeTag::I32
             | TypeTag::I64
             | TypeTag::I128
             | TypeTag::I256 => {
-                return Err(PartialVMError::new(StatusCode::TYPE_RESOLUTION_FAILURE)
-                    .with_message("signed integer types are not supported".to_string())
-                    .finish(Location::Undefined));
+                unreachable!("Impossible to hit signed integer types in v3")
             }
             TypeTag::Address => Type::Address,
             TypeTag::Signer => Type::Signer,

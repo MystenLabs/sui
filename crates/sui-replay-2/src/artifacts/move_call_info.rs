@@ -7,6 +7,7 @@ use move_binary_format::{
     file_format::{CompiledModule, SignatureToken},
 };
 use move_core_types::account_address::AccountAddress;
+use move_core_types::signed_ints_todo;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use sui_types::{
@@ -157,7 +158,7 @@ impl MoveCallInfo {
             .type_arguments
             .iter()
             .map(Self::type_input_to_move_type)
-            .collect::<Result<_>>()?;
+            .collect();
 
         // Convert SignatureTokens to MoveTypes
         let parameters = param_signature
@@ -194,12 +195,9 @@ impl MoveCallInfo {
     }
 
     /// Convert TypeInput to MoveType.
-    /// TypeInput comes from the transaction's type arguments. Returns `Err` for types not
-    /// representable in `MoveType` — matching the fallible behavior of
-    /// [`signature_token_to_move_type`] — so replay can surface a clean error rather than
-    /// aborting the session.
-    fn type_input_to_move_type(type_input: &TypeInput) -> Result<MoveType> {
-        Ok(match type_input {
+    /// TypeInput comes from the transaction's type arguments.
+    fn type_input_to_move_type(type_input: &TypeInput) -> MoveType {
+        match type_input {
             TypeInput::Bool => MoveType::Bool,
             TypeInput::U8 => MoveType::U8,
             TypeInput::U16 => MoveType::U16,
@@ -207,29 +205,25 @@ impl MoveCallInfo {
             TypeInput::U64 => MoveType::U64,
             TypeInput::U128 => MoveType::U128,
             TypeInput::U256 => MoveType::U256,
-            // Signed integer types are not supported at the Sui layer.
+            // Signed TypeInputs are rejected at the transaction input boundary, so replay can
+            // never see one before the Sui-layer enablement PR fills this in.
             TypeInput::I8
             | TypeInput::I16
             | TypeInput::I32
             | TypeInput::I64
             | TypeInput::I128
-            | TypeInput::I256 => {
-                return Err(anyhow!(
-                    "signed integer type {:?} is not supported at the Sui layer",
-                    type_input
-                ));
-            }
+            | TypeInput::I256 => signed_ints_todo!("replay type input {type_input:?}"),
             TypeInput::Address => MoveType::Address,
             TypeInput::Signer => MoveType::Address, // Signer is treated as Address
             TypeInput::Vector(element) => {
-                MoveType::Vector(Box::new(Self::type_input_to_move_type(element)?))
+                MoveType::Vector(Box::new(Self::type_input_to_move_type(element)))
             }
             TypeInput::Struct(struct_input) => {
                 let type_params: Vec<MoveType> = struct_input
                     .type_params
                     .iter()
                     .map(Self::type_input_to_move_type)
-                    .collect::<Result<_>>()?;
+                    .collect();
 
                 let datatype = (
                     struct_input.address,
@@ -246,7 +240,7 @@ impl MoveCallInfo {
                     MoveType::DatatypeInstantiation(Box::new((datatype, type_params)))
                 }
             }
-        })
+        }
     }
 
     /// Convert SignatureToken to MoveType.
