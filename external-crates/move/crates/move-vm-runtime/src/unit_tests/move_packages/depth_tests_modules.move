@@ -39,6 +39,15 @@ module 0x2::E {
     }
 }
 
+module 0x2::J {
+    // Generic enum with two variants: exercises `extra_layout_nodes` (one per variant) and
+    // parameter folding across variants.
+    public enum E<T> has copy, drop {
+        A(T),
+        B(T, u64),
+    }
+}
+
 module 0x2::F {
     public struct S<T> has copy, drop {
         f1: T,
@@ -107,5 +116,34 @@ module 0x2::I {
 
     public struct N<phantom Y> {
         f: u64
+    }
+}
+
+module 0x2::W {
+    // A family with nested datatype applications in field position, exercising the linearized
+    // size-formula path: subterm vs. field-root applications, vector layers on arguments, and
+    // term merging across fields (value depths max, layout sizes sum).
+    public struct SS<A> {
+        x: vector<A>,
+    }
+
+    public struct Z {
+        z: u64,
+    }
+
+    public struct KK<X, Y> {
+        a: X,
+        b: Y,
+    }
+
+    public struct T<P, Q> {
+        p: P,
+        q: vector<Q>,
+    }
+
+    public struct W<A> {
+        f: T<SS<A>, vector<KK<u64, Z>>>,
+        g: SS<A>,
+        h: SS<A>,
     }
 }

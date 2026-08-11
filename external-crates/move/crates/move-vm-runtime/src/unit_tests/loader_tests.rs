@@ -12,11 +12,13 @@ use crate::{
         storage::{InMemoryStorage, StoredPackage},
         vm_test_adapter::VMTestAdapter,
     },
-    execution::{dispatch_tables::DepthFormula, values::Value},
+    execution::values::Value,
     jit::execution::ast::Type,
     natives::functions::NativeFunctions,
     runtime::MoveRuntime,
+    shared::type_size_formulae::{LinearForm, LinearTerm, MaxPlusForm, MaxPlusTerm, TypeSize},
     shared::{
+        constants::MAX_TYPE_INSTANTIATION_NODES,
         gas::UnmeteredGasMeter,
         linkage_context::LinkageContext,
         types::{DefiningTypeId, OriginalId, VersionId},
@@ -25,7 +27,7 @@ use crate::{
 use indexmap::IndexMap;
 use move_binary_format::{
     CompiledModule,
-    errors::{VMError, VMResult},
+    errors::{PartialVMResult, VMError, VMResult},
     file_format::{
         AddressIdentifierIndex, IdentifierIndex, ModuleHandle, TableIndex, empty_module,
     },
@@ -204,17 +206,76 @@ impl Adapter {
         &self,
         module_id: &ModuleId,
         struct_name: &IdentStr,
-    ) -> DepthFormula {
+    ) -> MaxPlusForm {
         let vm = self.runtime_adapter.write();
-        let mut session = vm.make_vm(self.store.linkage.clone()).unwrap();
+        let session = vm.make_vm(self.store.linkage.clone()).unwrap();
         let key = session
             .virtual_tables
             .to_virtual_table_key_for_testing(module_id.address(), module_id.name(), struct_name)
             .unwrap();
         session
             .virtual_tables
-            .calculate_depth_of_type(&key)
+            .virtual_key_size_formula(&key)
             .expect("computing depth of datatype should succeed")
+            .value_depth
+    }
+
+    /// The resolved `layout_size` formula (a [`LinearForm`] over the datatype's parameters).
+    fn compute_layout_of_datatype(
+        &self,
+        module_id: &ModuleId,
+        struct_name: &IdentStr,
+    ) -> LinearForm {
+        let vm = self.runtime_adapter.write();
+        let session = vm.make_vm(self.store.linkage.clone()).unwrap();
+        let key = session
+            .virtual_tables
+            .to_virtual_table_key_for_testing(module_id.address(), module_id.name(), struct_name)
+            .unwrap();
+        session
+            .virtual_tables
+            .virtual_key_size_formula(&key)
+            .expect("computing layout of datatype should succeed")
+            .layout_size
+    }
+
+    /// A concrete datatype type: `module_id::name<args>` (or `module_id::name` when `args` is
+    /// empty).
+    fn datatype(&self, module_id: &ModuleId, name: &IdentStr, args: Vec<Type>) -> Type {
+        let vm = self.runtime_adapter.write();
+        let session = vm.make_vm(self.store.linkage.clone()).unwrap();
+        let key = session
+            .virtual_tables
+            .to_virtual_table_key_for_testing(module_id.address(), module_id.name(), name)
+            .unwrap();
+        if args.is_empty() {
+            Type::Datatype(key)
+        } else {
+            Type::DatatypeInstantiation(Box::new((key, args)))
+        }
+    }
+
+    /// The concrete [`TypeSize`] of a fully-substituted type.
+    fn type_size_of(&self, ty: &Type) -> TypeSize {
+        self.try_type_size_of(ty)
+            .expect("sizing a concrete type should succeed")
+    }
+
+    fn try_type_size_of(&self, ty: &Type) -> PartialVMResult<TypeSize> {
+        let vm = self.runtime_adapter.write();
+        let session = vm.make_vm(self.store.linkage.clone()).unwrap();
+        session.virtual_tables.type_size_of(ty)
+    }
+
+    /// The number of nodes in the runtime layout generated for `ty`.
+    fn generated_layout_nodes(&self, ty: &Type) -> u64 {
+        let vm = self.runtime_adapter.write();
+        let session = vm.make_vm(self.store.linkage.clone()).unwrap();
+        let layout = session
+            .virtual_tables
+            .type_to_type_layout(ty)
+            .expect("generating a layout should succeed");
+        count_layout_nodes(&layout)
     }
 
     fn get_type_tag(&self, ty: &Type) -> TypeTag {
@@ -349,63 +410,84 @@ fn test_depth() {
         (
             "A",
             "Box",
-            DepthFormula {
-                terms: vec![(0, 1)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 1,
+                }],
                 constant: 1,
             },
         ),
         (
             "A",
             "Box3",
-            DepthFormula {
-                terms: vec![(0, 3)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 3,
+                }],
                 constant: 3,
             },
         ),
         (
             "A",
             "Box7",
-            DepthFormula {
-                terms: vec![(0, 7)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 7,
+                }],
                 constant: 7,
             },
         ),
         (
             "A",
             "Box15",
-            DepthFormula {
-                terms: vec![(0, 15)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 15,
+                }],
                 constant: 15,
             },
         ),
         (
             "A",
             "Box31",
-            DepthFormula {
-                terms: vec![(0, 31)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 31,
+                }],
                 constant: 31,
             },
         ),
         (
             "A",
             "Box63",
-            DepthFormula {
-                terms: vec![(0, 63)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 63,
+                }],
                 constant: 63,
             },
         ),
         (
             "A",
             "Box127",
-            DepthFormula {
-                terms: vec![(0, 127)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 127,
+                }],
                 constant: 127,
             },
         ),
         (
             "A",
             "S",
-            DepthFormula {
+            MaxPlusForm {
                 terms: vec![],
                 constant: 3,
             },
@@ -413,7 +495,7 @@ fn test_depth() {
         (
             "B",
             "S",
-            DepthFormula {
+            MaxPlusForm {
                 terms: vec![],
                 constant: 2,
             },
@@ -421,7 +503,7 @@ fn test_depth() {
         (
             "C",
             "S",
-            DepthFormula {
+            MaxPlusForm {
                 terms: vec![],
                 constant: 2,
             },
@@ -429,7 +511,7 @@ fn test_depth() {
         (
             "D",
             "S",
-            DepthFormula {
+            MaxPlusForm {
                 terms: vec![],
                 constant: 3,
             },
@@ -437,47 +519,74 @@ fn test_depth() {
         (
             "E",
             "S",
-            DepthFormula {
-                terms: vec![(0, 2)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 2,
+                }],
                 constant: 3,
             },
         ),
         (
             "F",
             "S",
-            DepthFormula {
-                terms: vec![(0, 1)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 1,
+                }],
                 constant: 2,
             },
         ),
         (
             "G",
             "S",
-            DepthFormula {
-                terms: vec![(0, 5), (1, 3)],
+            MaxPlusForm {
+                terms: vec![
+                    MaxPlusTerm {
+                        param: 0,
+                        offset: 5,
+                    },
+                    MaxPlusTerm {
+                        param: 1,
+                        offset: 3,
+                    },
+                ],
                 constant: 6,
             },
         ),
         (
             "H",
             "S",
-            DepthFormula {
-                terms: vec![(0, 2), (1, 4)],
+            MaxPlusForm {
+                terms: vec![
+                    MaxPlusTerm {
+                        param: 0,
+                        offset: 2,
+                    },
+                    MaxPlusTerm {
+                        param: 1,
+                        offset: 4,
+                    },
+                ],
                 constant: 5,
             },
         ),
         (
             "I",
             "L",
-            DepthFormula {
-                terms: vec![(0, 2)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 2,
+                }],
                 constant: 4,
             },
         ),
         (
             "I",
             "G",
-            DepthFormula {
+            MaxPlusForm {
                 terms: vec![],
                 constant: 3,
             },
@@ -485,48 +594,82 @@ fn test_depth() {
         (
             "I",
             "H",
-            DepthFormula {
-                terms: vec![(0, 1)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 1,
+                }],
                 constant: 2,
             },
         ),
         (
             "I",
             "E",
-            DepthFormula {
-                terms: vec![(0, 2)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 2,
+                }],
                 constant: 3,
             },
         ),
         (
             "I",
             "F",
-            DepthFormula {
-                terms: vec![(0, 1)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 1,
+                }],
                 constant: 2,
             },
         ),
         (
             "I",
             "S",
-            DepthFormula {
-                terms: vec![(0, 2), (1, 7)],
+            MaxPlusForm {
+                terms: vec![
+                    MaxPlusTerm {
+                        param: 0,
+                        offset: 2,
+                    },
+                    MaxPlusTerm {
+                        param: 1,
+                        offset: 7,
+                    },
+                ],
                 constant: 9,
             },
         ),
         (
             "I",
             "LL",
-            DepthFormula {
-                terms: vec![(1, 2)],
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 1,
+                    offset: 2,
+                }],
                 constant: 4,
             },
         ),
         (
             "I",
             "N",
-            DepthFormula {
+            MaxPlusForm {
                 terms: vec![],
+                constant: 2,
+            },
+        ),
+        // enum J::E<T> { A(T), B(T, u64) }: value nests one level past the enum for each field,
+        // and the u64 bottoms out at level 2 -> max(2, 1 + depth(T)).
+        (
+            "J",
+            "E",
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 1,
+                }],
                 constant: 2,
             },
         ),
@@ -540,6 +683,399 @@ fn test_depth() {
         );
         assert_eq!(computed_depth, expected_depth);
     }
+}
+
+/// Count the nodes in a runtime layout, matching the `layout_size` measure: one node per
+/// primitive/vector/struct/enum, plus one per enum variant.
+fn count_layout_nodes(layout: &move_core_types::runtime_value::MoveTypeLayout) -> u64 {
+    use move_core_types::runtime_value::MoveTypeLayout as L;
+    match layout {
+        L::Bool | L::U8 | L::U16 | L::U32 | L::U64 | L::U128 | L::U256 | L::Address | L::Signer => {
+            1
+        }
+        L::Vector(inner) => 1 + count_layout_nodes(inner),
+        L::Struct(s) => 1 + s.0.iter().map(count_layout_nodes).sum::<u64>(),
+        L::Enum(e) => {
+            1 + e.0.len() as u64
+                + e.0
+                    .iter()
+                    .flat_map(|variant| variant.iter())
+                    .map(count_layout_nodes)
+                    .sum::<u64>()
+        }
+    }
+}
+
+#[test]
+fn test_layout_size() {
+    let data_store = InMemoryStorage::new();
+    let mut adapter =
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+    let modules = get_depth_tests_modules();
+    // A single type parameter carried through the layout with coefficient 1.
+    let param0 = || {
+        vec![LinearTerm {
+            param: 0,
+            coefficient: 1,
+        }]
+    };
+    let structs = vec![
+        // Each Box_N chains N single-field wrappers, so its layout is N nodes plus the element's.
+        (
+            "A",
+            "Box",
+            LinearForm {
+                constant: 1,
+                terms: param0(),
+            },
+        ),
+        (
+            "A",
+            "Box3",
+            LinearForm {
+                constant: 3,
+                terms: param0(),
+            },
+        ),
+        (
+            "A",
+            "Box7",
+            LinearForm {
+                constant: 7,
+                terms: param0(),
+            },
+        ),
+        (
+            "A",
+            "Box15",
+            LinearForm {
+                constant: 15,
+                terms: param0(),
+            },
+        ),
+        (
+            "A",
+            "Box31",
+            LinearForm {
+                constant: 31,
+                terms: param0(),
+            },
+        ),
+        (
+            "A",
+            "Box63",
+            LinearForm {
+                constant: 63,
+                terms: param0(),
+            },
+        ),
+        (
+            "A",
+            "Box127",
+            LinearForm {
+                constant: 127,
+                terms: param0(),
+            },
+        ),
+        // A::S { f1: B::S, f2: C::S } -- 1 + 3 + 3, no parameters.
+        (
+            "A",
+            "S",
+            LinearForm {
+                constant: 7,
+                terms: vec![],
+            },
+        ),
+        (
+            "B",
+            "S",
+            LinearForm {
+                constant: 3,
+                terms: vec![],
+            },
+        ),
+        (
+            "C",
+            "S",
+            LinearForm {
+                constant: 3,
+                terms: vec![],
+            },
+        ),
+        // D::S { f1: B::S } -- 1 + 3.
+        (
+            "D",
+            "S",
+            LinearForm {
+                constant: 4,
+                terms: vec![],
+            },
+        ),
+        // F::S<T> { f1: T, f2: u64 } -- 1 + T + 1.
+        (
+            "F",
+            "S",
+            LinearForm {
+                constant: 2,
+                terms: param0(),
+            },
+        ),
+        // E::S<T> { f1: F::S<T>, f2: u64 } -- 1 + (2 + T) + 1.
+        (
+            "E",
+            "S",
+            LinearForm {
+                constant: 4,
+                terms: param0(),
+            },
+        ),
+        // enum J::E<T> { A(T), B(T, u64) } -- E node + 2 variant nodes + 2·T (one per T field) +
+        // u64 node = 4 + 2·T.
+        (
+            "J",
+            "E",
+            LinearForm {
+                constant: 4,
+                terms: vec![LinearTerm {
+                    param: 0,
+                    coefficient: 2,
+                }],
+            },
+        ),
+    ];
+    adapter.publish_package(modules);
+    for (module_name, type_name, expected) in structs.iter() {
+        let computed = adapter.compute_layout_of_datatype(
+            &ModuleId::new(ADDR2, Identifier::new(module_name.to_string()).unwrap()),
+            ident_str!(type_name),
+        );
+        assert_eq!(
+            &computed, expected,
+            "layout_size mismatch for {module_name}::{type_name}"
+        );
+    }
+}
+
+/// Nested datatype applications through the linearized formula path. `0x2::W::W<A>` exercises
+/// everything at once: subterm applications (whose sizes must fold in exactly once, through
+/// their consumer), field-root applications, vector layers on an application argument, and
+/// term merging across fields (`A` occurs at depths 4 and 3, so depths max; and in three
+/// field positions, so layouts sum). Expected forms are hand-computed:
+///
+///   value_depth(W)  = max(7, 4 + A)     layout_size(W) = 14 + 3·A
+#[test]
+fn test_nested_application_formulas() {
+    let data_store = InMemoryStorage::new();
+    let mut adapter =
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+    adapter.publish_package(get_depth_tests_modules());
+    let module_w = ModuleId::new(ADDR2, Identifier::new("W").unwrap());
+    let w = ident_str!("W");
+
+    assert_eq!(
+        adapter.compute_depth_of_datatype(&module_w, w),
+        MaxPlusForm {
+            constant: 7,
+            terms: vec![MaxPlusTerm {
+                param: 0,
+                offset: 4,
+            }],
+        }
+    );
+    assert_eq!(
+        adapter.compute_layout_of_datatype(&module_w, w),
+        LinearForm {
+            constant: 14,
+            terms: vec![LinearTerm {
+                param: 0,
+                coefficient: 3,
+            }],
+        }
+    );
+
+    // Solve concrete instantiations against the resolved formula, and check the layout measure
+    // against the actually generated layout (the closure property).
+    let w_u64 = adapter.datatype(&module_w, w, vec![Type::U64]);
+    assert_eq!(
+        adapter.type_size_of(&w_u64),
+        TypeSize {
+            type_size: 2,
+            type_depth: 2,
+            value_depth: 7,
+            layout_size: 17,
+        }
+    );
+    assert_eq!(adapter.generated_layout_nodes(&w_u64), 17);
+
+    let ss_u64 = adapter.datatype(&module_w, ident_str!("SS"), vec![Type::U64]);
+    let w_ss_u64 = adapter.datatype(&module_w, w, vec![ss_u64]);
+    assert_eq!(
+        adapter.type_size_of(&w_ss_u64),
+        TypeSize {
+            type_size: 3,
+            type_depth: 3,
+            value_depth: 7,
+            layout_size: 23,
+        }
+    );
+    assert_eq!(adapter.generated_layout_nodes(&w_ss_u64), 23);
+}
+
+/// The term pipeline (`ArenaTypeSizeFormula::from_term` at JIT + `term_size_formula` at
+/// runtime) must preserve argument order. `0x2::W::T<P, Q>` is asymmetric in `value_depth`
+/// (`max(2, 1+P, 2+Q)`), so swapped arguments would produce a wrong-but-plausible answer rather
+/// than an error: `T<u64, vector<u64>>` solves to depth 4 in argument order but 3 reversed. The
+/// nested term also exercises applications and vector layers inside a term's arguments.
+#[test]
+fn test_term_formula_argument_order() {
+    use crate::{
+        cache::arena::ArenaBuilder,
+        jit::execution::ast::{ArenaType, SizedArenaType},
+        shared::type_size_formulae::ArenaTypeSizeFormula,
+    };
+
+    let data_store = InMemoryStorage::new();
+    let mut adapter =
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+    adapter.publish_package(get_depth_tests_modules());
+
+    let vm = adapter.runtime_adapter.write();
+    let session = vm.make_vm(adapter.store.linkage.clone()).unwrap();
+    let module_w = Identifier::new("W").unwrap();
+    let key = |name: &str| {
+        session
+            .virtual_tables
+            .to_virtual_table_key_for_testing(&ADDR2, &module_w, &Identifier::new(name).unwrap())
+            .unwrap()
+    };
+
+    let arena = ArenaBuilder::new_bounded();
+    let apply = |name: &str, args: Vec<ArenaType>| {
+        ArenaType::DatatypeInstantiation(
+            arena
+                .alloc_box((key(name), arena.alloc_vec(args.into_iter()).unwrap()))
+                .unwrap(),
+        )
+    };
+    let vec_of = |inner: ArenaType| ArenaType::Vector(arena.alloc_box(inner).unwrap());
+
+    // T<u64, vector<u64>>: type 4 nodes / 3 deep; value depth max(2, 1+1, 2+2) = 4 (3 if the
+    // arguments were swapped); layout 2 + 1 + 2 = 5.
+    let sized = |ty: ArenaType| SizedArenaType {
+        size_formula: ArenaTypeSizeFormula::from_term(&ty, &arena).unwrap(),
+        ty,
+    };
+
+    let term = sized(apply("T", vec![ArenaType::U64, vec_of(ArenaType::U64)]));
+    let solved = session
+        .virtual_tables
+        .term_size_formula(&term)
+        .unwrap()
+        .solved()
+        .unwrap();
+    assert_eq!(
+        solved,
+        TypeSize {
+            type_size: 4,
+            type_depth: 3,
+            value_depth: 4,
+            layout_size: 5,
+        }
+    );
+
+    // T<SS<u64>, vector<KK<u64, Z>>>: nested applications on both sides, one under a vector.
+    let term = sized(apply(
+        "T",
+        vec![
+            apply("SS", vec![ArenaType::U64]),
+            vec_of(apply(
+                "KK",
+                vec![ArenaType::U64, ArenaType::Datatype(key("Z"))],
+            )),
+        ],
+    ));
+    let solved = session
+        .virtual_tables
+        .term_size_formula(&term)
+        .unwrap()
+        .solved()
+        .unwrap();
+    assert_eq!(
+        solved,
+        TypeSize {
+            type_size: 7,
+            type_depth: 4,
+            value_depth: 6,
+            layout_size: 10,
+        }
+    );
+}
+
+/// The `layout_size` formula must equal the actual node count of the generated layout -- the
+/// closure property, checked here against a spread of concrete instantiations.
+#[test]
+fn test_layout_size_matches_generated_layout() {
+    let data_store = InMemoryStorage::new();
+    let mut adapter =
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+    adapter.publish_package(get_depth_tests_modules());
+
+    let m = |name: &str| ModuleId::new(ADDR2, Identifier::new(name.to_string()).unwrap());
+    let bs = adapter.datatype(&m("B"), ident_str!("S"), vec![]);
+    let types = vec![
+        bs.clone(),                                                     // non-generic
+        adapter.datatype(&m("D"), ident_str!("S"), vec![]),             // nested datatype
+        adapter.datatype(&m("A"), ident_str!("S"), vec![]),             // two datatype fields
+        adapter.datatype(&m("F"), ident_str!("S"), vec![Type::U64]),    // generic over primitive
+        adapter.datatype(&m("E"), ident_str!("S"), vec![bs.clone()]),   // generic over datatype
+        adapter.datatype(&m("A"), ident_str!("Box7"), vec![Type::U64]), // deep generic
+        adapter.datatype(
+            &m("A"),
+            ident_str!("Box3"),
+            vec![Type::Vector(Box::new(Type::U8))],
+        ), // generic over vector
+    ];
+    for ty in &types {
+        let predicted = adapter.type_size_of(ty).layout_size;
+        let actual = adapter.generated_layout_nodes(ty);
+        assert_eq!(
+            predicted, actual,
+            "layout_size formula disagrees with generated layout for {ty:?}"
+        );
+    }
+}
+
+/// `type_size_of` recurs structurally over a concrete type; a nesting at the depth limit must
+/// be sized without overflowing the stack, and one past the limit must be rejected by the
+/// traversal budget (no runtime-created type can exceed it, but the walk meters anyway).
+#[test]
+fn test_type_size_of_deep_no_overflow() {
+    let data_store = InMemoryStorage::new();
+    let mut adapter =
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+    adapter.publish_package(get_depth_tests_modules());
+
+    // `vector<vector<...<u8>>>`, `depth` levels deep.
+    let nested_vec = |depth: u64| {
+        let mut ty = Type::U8;
+        for _ in 1..depth {
+            ty = Type::Vector(Box::new(ty));
+        }
+        ty
+    };
+
+    // On a linear chain the node limit (128) binds before the depth limit (256).
+    let depth = MAX_TYPE_INSTANTIATION_NODES;
+    let size = adapter.type_size_of(&nested_vec(depth));
+    assert_eq!(size.type_size, depth);
+    assert_eq!(size.type_depth, depth);
+    assert_eq!(size.value_depth, depth);
+    assert_eq!(size.layout_size, depth);
+
+    let err = adapter
+        .try_type_size_of(&nested_vec(MAX_TYPE_INSTANTIATION_NODES + 1))
+        .unwrap_err();
+    assert_eq!(err.major_status(), StatusCode::VM_MAX_TYPE_NODES_REACHED);
 }
 
 #[test]
