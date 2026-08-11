@@ -8,7 +8,7 @@ pub struct CursorToken {
     #[prost(enumeration = "CursorKind", tag = "5")]
     pub kind: i32,
     /// Coordinate schema / endpoint scope. This does not imply Item vs Boundary.
-    #[prost(oneof = "cursor_token::Position", tags = "6, 7, 8")]
+    #[prost(oneof = "cursor_token::Position", tags = "6, 7, 8, 9")]
     pub position: ::core::option::Option<cursor_token::Position>,
 }
 /// Nested message and enum types in `CursorToken`.
@@ -22,6 +22,8 @@ pub mod cursor_token {
         Transactions(super::TransactionsPosition),
         #[prost(message, tag = "8")]
         Events(super::EventsPosition),
+        #[prost(message, tag = "9")]
+        Packages(super::PackagesPosition),
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -52,6 +54,19 @@ pub struct EventsPosition {
     /// Index of the event within its transaction.
     #[prost(uint32, optional, tag = "3")]
     pub event_index: ::core::option::Option<u32>,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct PackagesPosition {
+    /// Checkpoint containing or bounding the package-write position.
+    #[prost(uint64, optional, tag = "1")]
+    pub checkpoint: ::core::option::Option<u64>,
+    /// Global transaction sequence number.
+    #[prost(uint64, optional, tag = "2")]
+    pub tx_seq: ::core::option::Option<u64>,
+    /// Index of the write among the transaction's package writes, in the order
+    /// they appear in the transaction's effects.
+    #[prost(uint32, optional, tag = "3")]
+    pub write_index: ::core::option::Option<u32>,
 }
 /// Whether `position` is a matched row returned to the client or a scan frontier the server reached.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
