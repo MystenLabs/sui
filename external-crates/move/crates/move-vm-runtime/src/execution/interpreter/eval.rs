@@ -109,6 +109,7 @@ pub(super) fn run(
         operand_stack,
         call_stack,
         interner: _,
+        type_limits: _,
         callstack_highwatermark,
         valuestack_highwatermark,
     } = state;
@@ -242,6 +243,7 @@ fn step(
                 )
             });
             let ty_args = instantiate_generic_function(
+                &state.type_limits,
                 fun_inst_ptr,
                 state.call_stack.current_frame.ty_args(),
             )
@@ -557,8 +559,11 @@ fn op_step_impl(
         }
         Bytecode::PackGeneric(struct_inst_ptr) => {
             let field_count = struct_inst_ptr.field_count;
-            let ty =
-                instantiate_struct_type(struct_inst_ptr, state.call_stack.current_frame.ty_args())?;
+            let ty = instantiate_struct_type(
+                &state.type_limits,
+                struct_inst_ptr,
+                state.call_stack.current_frame.ty_args(),
+            )?;
             check_depth_of_type(run_context, &ty)?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
@@ -736,7 +741,11 @@ fn op_step_impl(
         }
         Bytecode::VecPack(ty_ptr, num) => {
             let num = checked_as!(*num, u16)?;
-            let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            let ty = instantiate_single_type(
+                &state.type_limits,
+                ty_ptr,
+                state.call_stack.current_frame.ty_args(),
+            )?;
             check_depth_of_type(run_context, &ty)?;
             gas_meter.charge_vec_pack(state.last_n_operands(num as usize)?)?;
             let elements = state.pop_n_operands(num)?;
@@ -746,7 +755,11 @@ fn op_step_impl(
         }
         Bytecode::VecLen(ty_ptr) => {
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            let ty = instantiate_single_type(
+                &state.type_limits,
+                ty_ptr,
+                state.call_stack.current_frame.ty_args(),
+            )?;
             gas_meter.charge_vec_len()?;
             let value = vec_ref.len(&ty)?;
             state.push_operand(value)?;
@@ -754,7 +767,11 @@ fn op_step_impl(
         Bytecode::VecImmBorrow(ty_ptr) => {
             let idx = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            let ty = instantiate_single_type(
+                &state.type_limits,
+                ty_ptr,
+                state.call_stack.current_frame.ty_args(),
+            )?;
             let res = vec_ref.borrow_elem(idx, &ty);
             gas_meter.charge_vec_borrow(false, res.is_ok())?;
             state.push_operand(res?)?;
@@ -762,7 +779,11 @@ fn op_step_impl(
         Bytecode::VecMutBorrow(ty_ptr) => {
             let idx = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            let ty = instantiate_single_type(
+                &state.type_limits,
+                ty_ptr,
+                state.call_stack.current_frame.ty_args(),
+            )?;
             let res = vec_ref.borrow_elem(idx, &ty);
             gas_meter.charge_vec_borrow(true, res.is_ok())?;
             state.push_operand(res?)?;
@@ -770,7 +791,11 @@ fn op_step_impl(
         Bytecode::VecPushBack(ty_ptr) => {
             let elem = state.pop_operand()?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            let ty = instantiate_single_type(
+                &state.type_limits,
+                ty_ptr,
+                state.call_stack.current_frame.ty_args(),
+            )?;
             gas_meter.charge_vec_push_back(&elem)?;
             vec_ref.push_back(
                 elem,
@@ -780,14 +805,22 @@ fn op_step_impl(
         }
         Bytecode::VecPopBack(ty_ptr) => {
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            let ty = instantiate_single_type(
+                &state.type_limits,
+                ty_ptr,
+                state.call_stack.current_frame.ty_args(),
+            )?;
             let res = vec_ref.pop(&ty);
             gas_meter.charge_vec_pop_back(res.as_ref().ok())?;
             state.push_operand(res?)?;
         }
         Bytecode::VecUnpack(ty_ptr, num) => {
             let vec_val = state.pop_operand_as::<Vector>()?;
-            let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            let ty = instantiate_single_type(
+                &state.type_limits,
+                ty_ptr,
+                state.call_stack.current_frame.ty_args(),
+            )?;
             gas_meter.charge_vec_unpack(NumArgs::new(*num), vec_val.elem_views()?)?;
             let elements = vec_val.unpack(&ty, *num)?;
             for value in elements {
@@ -798,8 +831,11 @@ fn op_step_impl(
             let idx2 = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let idx1 = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty =
-                instantiate_single_type(ty_ptr.to_ref(), state.call_stack.current_frame.ty_args())?;
+            let ty = instantiate_single_type(
+                &state.type_limits,
+                ty_ptr.to_ref(),
+                state.call_stack.current_frame.ty_args(),
+            )?;
             gas_meter.charge_vec_swap()?;
             vec_ref.swap(idx1, idx2, &ty)?;
         }
@@ -814,7 +850,11 @@ fn op_step_impl(
         Bytecode::PackVariantGeneric(vinst_ptr) => {
             let variant = &vinst_ptr.variant;
             let (field_count, variant_tag) = (variant.field_count(), variant.variant_tag);
-            let ty = instantiate_enum_type(vinst_ptr, state.call_stack.current_frame.ty_args())?;
+            let ty = instantiate_enum_type(
+                &state.type_limits,
+                vinst_ptr,
+                state.call_stack.current_frame.ty_args(),
+            )?;
             check_depth_of_type(run_context, &ty)?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count)?)?;
             let args = state.pop_n_operands(checked_as!(field_count, u16)?)?;
