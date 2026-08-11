@@ -16,12 +16,14 @@ GraphQL can run with access to just a postgres database, written to by
 pipelines are enabled on the indexer). See the indexer's
 [README](../sui-indexer-alt/README.md) for details on how to set it up.
 
-### (optional) Bigtable
+### (optional) Ledger gRPC
 
-If GraphQL is given access to credentials for Bigtable, it will look there to
-answer key-value queries (fetching an object by its ID and version, a
-checkpoint by its sequence number, or a transaction by its digest), instead of
-the relevant postgres tables.
+If GraphQL is given a Ledger gRPC service URL (`--ledger-grpc-url`), it will
+look there to answer key-value queries (fetching an object by its ID and
+version, a checkpoint by its sequence number, or a transaction by its
+digest), instead of the relevant postgres tables. This can point at either a
+full node or a dedicated archival store (e.g. `sui-kv-rpc`, backed by
+Bigtable) -- both expose the same `LedgerService` gRPC API.
 
 ### (optional) Consistent Store
 
@@ -106,4 +108,4 @@ In this configuration, the RPC will respond at
 - `http://localhost:9184/metrics` for Prometheus metrics.
 
 It will try and connect to the indexer's default postgres database and route
-all its queries there (no Bigtable, fullnode, or consistent store access).
+all its queries there (no Ledger gRPC, fullnode, or consistent store access).
