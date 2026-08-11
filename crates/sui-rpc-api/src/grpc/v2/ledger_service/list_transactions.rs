@@ -50,7 +50,6 @@ use super::chunked_scan::cancelled;
 use super::chunked_scan::scan_limit_or_range;
 use super::chunked_scan::spawn_list_chunk;
 use super::ledger_read::checkpoint_hi_exclusive;
-use super::ledger_read::checkpoint_to_tx_boundary;
 use super::ledger_read::checkpoint_to_tx_range;
 use super::ledger_read::clamp_to_serving_floor;
 use super::ledger_read::get_tx_seq_digest_multi;
@@ -632,13 +631,11 @@ fn resolve_tx_range(
     options: &QueryOptions,
 ) -> Result<ResolvedRange, RpcError> {
     let cp_range = checkpoint_range.resolve(options);
+    let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
     if cp_range.is_empty() {
-        let tx_boundary =
-            checkpoint_to_tx_boundary(service, cp_range.terminal_checkpoint(options.ordering))?;
-        return Ok(cp_range.with_range(tx_boundary..tx_boundary, options.ordering));
+        return Ok(cp_range.with_range(tx_range, options.ordering));
     }
 
-    let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
     let resolved = cp_range.with_range(tx_range, options.ordering);
     let mut resolved = options.apply_cursor_bounds(resolved);
     if !resolved.range.is_empty()
