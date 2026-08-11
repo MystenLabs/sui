@@ -80,6 +80,8 @@ feature_flags:
   prepend_prologue_tx_in_consensus_commit_in_checkpoints: true
   mysticeti_num_leaders_per_round: 1
   soft_bundle: true
+  enable_package_version_forbid_list: true
+  enable_package_global_pause: true
   enable_coin_deny_list_v2: true
   passkey_auth: true
   authority_capabilities_v2: true

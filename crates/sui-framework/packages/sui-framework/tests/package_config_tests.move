@@ -22,6 +22,47 @@ fun end(config: package_config::PackageConfig, scenario: ts::Scenario) {
 }
 
 #[test]
+fun test_global_pause_is_per_package() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+
+    config.enable_global_pause_for_testing(PACKAGE_A.to_id(), scenario.ctx());
+    assert!(config.is_global_pause_enabled_for_next_epoch(PACKAGE_A.to_id()));
+    assert!(!config.is_global_pause_enabled_for_next_epoch(PACKAGE_B.to_id()));
+
+    end(config, scenario);
+}
+
+#[test]
+fun test_global_pause_disable_is_idempotent_and_preserves_setting() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+
+    config.enable_global_pause_for_testing(PACKAGE_A.to_id(), scenario.ctx());
+    config.enable_global_pause_for_testing(PACKAGE_A.to_id(), scenario.ctx());
+    assert!(config.is_global_pause_enabled_for_next_epoch(PACKAGE_A.to_id()));
+
+    config.disable_global_pause_for_testing(PACKAGE_A.to_id(), scenario.ctx());
+    config.disable_global_pause_for_testing(PACKAGE_A.to_id(), scenario.ctx());
+    assert!(!config.is_global_pause_enabled_for_next_epoch(PACKAGE_A.to_id()));
+    assert!(config.global_pause_setting_exists_for_testing(PACKAGE_A.to_id()));
+
+    end(config, scenario);
+}
+
+#[test]
+fun test_global_pause_disable_is_noop_when_absent() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+
+    config.disable_global_pause_for_testing(PACKAGE_A.to_id(), scenario.ctx());
+    assert!(!config.is_global_pause_enabled_for_next_epoch(PACKAGE_A.to_id()));
+    assert!(!config.global_pause_setting_exists_for_testing(PACKAGE_A.to_id()));
+
+    end(config, scenario);
+}
+
+#[test]
 fun test_forbid_and_allow_are_idempotent() {
     let mut scenario = ts::begin(SENDER);
     let mut config = new_config(&mut scenario);

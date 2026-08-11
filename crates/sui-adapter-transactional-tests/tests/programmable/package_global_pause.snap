@@ -1,0 +1,126 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 21 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 11-18:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5844400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 20-24:
+//# publish --dependencies LeafV1 --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4339600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 26-36:
+//# publish --dependencies Mid LeafV1 --sender A
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6847600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 38-41:
+//# publish --sender A
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3518800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 43:
+//# run Root::root::make --sender A
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 45-54:
+//# upgrade --package LeafV1 --upgrade-capability 1,1 --sender A
+created: object(6,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5844400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 7, line 55:
+//# run LeafV1::leaf::ping --sender A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, line 57:
+//# run LeafV2::leaf::ping --sender A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, lines 59-62:
+//# programmable --sender A --inputs object(5,0)
+//> Root::root::go(Input(0));
+// A type-only reference is allowed before and after pause.
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
+
+task 10, line 63:
+//# run Generic::generic::use_type --type-args LeafV1::leaf::Type --sender A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11, lines 65-70:
+//# programmable --sender A --inputs object(0x426) object(1,1)
+// The pause is not visible to this transaction's signing check, so this call executes.
+//> 0: sui::package_config::enable_global_pause(Input(0), Input(1));
+//> 1: LeafV1::leaf::ping();
+// Both versions of the paused package family are rejected.
+Error: Transaction Effects Status: Function Not Found.
+Debug of error: FunctionNotFound at command Some(0)
+
+task 12, line 71:
+//# run LeafV1::leaf::ping --sender A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13, lines 73-75:
+//# run LeafV2::leaf::ping --sender A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 14, lines 76-79:
+//# programmable --sender A --inputs object(5,0)
+//> Root::root::go(Input(0));
+// Type-only references remain allowed.
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
+
+task 15, line 80:
+//# run Generic::generic::use_type --type-args LeafV1::leaf::Type --sender A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16, lines 82-87:
+//# programmable --sender A --inputs object(0x426) object(1,1)
+// The existing pause is visible to signing, so the PTB is denied before disable executes.
+//> 0: sui::package_config::disable_global_pause(Input(0), Input(1));
+//> 1: LeafV1::leaf::ping();
+// A separate disable transaction restores execution.
+Error: Transaction Effects Status: Function Not Found.
+Debug of error: FunctionNotFound at command Some(0)
+
+task 17, line 88:
+//# run sui::package_config::disable_global_pause --args object(0x426) object(1,1) --sender A
+Error: Transaction Effects Status: Function Not Found.
+Debug of error: FunctionNotFound at command Some(0)
+
+task 18, line 90:
+//# run LeafV1::leaf::ping --sender A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 19, line 92:
+//# run LeafV2::leaf::ping --sender A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 20, lines 94-95:
+//# programmable --sender A --inputs object(5,0)
+//> Root::root::go(Input(0));
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
