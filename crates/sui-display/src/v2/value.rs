@@ -11,8 +11,10 @@ use chrono::DateTime;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value as A;
 use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::i256::I256;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
+use move_core_types::signed_ints_todo;
 use move_core_types::u256::U256;
 use serde::Serialize;
 use serde::ser::SerializeSeq as _;
@@ -342,9 +344,19 @@ impl Value<'_> {
                 L::U64 => bcs::from_bytes::<u64>(data).ok(),
                 L::U128 => bcs::from_bytes::<u128>(data).ok()?.try_into().ok(),
                 L::U256 => bcs::from_bytes::<U256>(data).ok()?.try_into().ok(),
-                // Signed integer types are not supported on Sui, so they cannot
-                // be coerced to `u64`.
-                L::I8 | L::I16 | L::I32 | L::I64 | L::I128 | L::I256 => None,
+                // Signed values coerce like the wide unsigned ones: in-range
+                // (non-negative, fits in u64) succeeds, anything else is None.
+                L::I8 => bcs::from_bytes::<i8>(data).ok()?.try_into().ok(),
+                L::I16 => bcs::from_bytes::<i16>(data).ok()?.try_into().ok(),
+                L::I32 => bcs::from_bytes::<i32>(data).ok()?.try_into().ok(),
+                L::I64 => bcs::from_bytes::<i64>(data).ok()?.try_into().ok(),
+                L::I128 => bcs::from_bytes::<i128>(data).ok()?.try_into().ok(),
+                // I256 has no direct u64 conversion; any I256 that fits in u64
+                // also fits in i128, so route through it.
+                L::I256 => i128::try_from(bcs::from_bytes::<I256>(data).ok()?)
+                    .ok()?
+                    .try_into()
+                    .ok(),
                 L::Address | L::Bool | L::Enum(_) | L::Signer | L::Struct(_) | L::Vector(_) => None,
             },
 
@@ -878,10 +890,10 @@ impl<'s> TryFrom<Value<'s>> for Atom<'s> {
                 L::U64 => A::U64(bcs::from_bytes(bytes)?),
                 L::U128 => A::U128(bcs::from_bytes(bytes)?),
                 L::U256 => A::U256(bcs::from_bytes(bytes)?),
-                // Signed integer types are not supported on Sui, and the
-                // display `Atom` has no variants for them.
+                // No signed value can exist on-chain until enablement, and the
+                // display `Atom` has no variants for them yet.
                 L::I8 | L::I16 | L::I32 | L::I64 | L::I128 | L::I256 => {
-                    return Err(FormatError::TransformInvalid("unexpected signed integer"));
+                    signed_ints_todo!("display v2 atom rendering")
                 }
 
                 L::Vector(layout) if layout.as_ref() == &L::U8 => {
