@@ -604,15 +604,6 @@ impl TryFrom<CursorToken> for CTransaction {
     }
 }
 
-/// The transaction stream's raw cursor bytes are wire `CursorToken`s.
-impl TryFrom<&[u8]> for CTransaction {
-    type Error = anyhow::Error;
-
-    fn try_from(bytes: &[u8]) -> anyhow::Result<Self> {
-        Self::try_from(CursorToken::decode(bytes)?)
-    }
-}
-
 impl Eq for TransactionToken {}
 impl PartialEq for TransactionToken {
     fn eq(&self, other: &Self) -> bool {

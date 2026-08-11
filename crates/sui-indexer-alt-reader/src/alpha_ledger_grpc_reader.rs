@@ -13,6 +13,7 @@ use prometheus::Registry;
 use sui_rpc::Client;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
+use sui_types::base_types::ObjectID;
 use tonic::transport::Uri;
 use tracing::warn;
 
@@ -108,6 +109,24 @@ impl AlphaLedgerGrpcReader {
         drain_list_stream("ListEvents", stream).await
     }
 
+    /// List package writes via `MovePackageService.ListPackages`. Items are the written package
+    /// versions, parsed into native `(package_id, version)` pairs.
+    pub async fn list_packages(
+        &self,
+        request: proto::ListPackagesRequest,
+    ) -> anyhow::Result<StreamPage<(ObjectID, u64)>> {
+        let stream = self
+            .client
+            .clone()
+            .package_client()
+            .list_packages(self.request(request))
+            .await
+            .context("ListPackages stream open failed")?
+            .into_inner();
+
+        drain_list_stream("ListPackages", stream).await
+    }
+
     /// Create a gRPC request, optionally with the grpc-timeout header if configured.
     fn request<T>(&self, input: T) -> tonic::Request<T> {
         let mut request = tonic::Request::new(input);
@@ -155,7 +174,11 @@ impl<T> StreamPage<T> {
             .or_else(|| self.items.last().map(|item| &item.cursor))
     }
 
-    pub(crate) fn from_parts(
+    /// Construct a page directly for tests, bypassing the drain loop. The watermark fields are
+    /// private (their invariant is maintained by [`Self::apply`]); this is the only sanctioned
+    /// way to set them from outside this module.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn for_test(
         items: Vec<PageItem<T>>,
         first_wm_cursor: Option<Bytes>,
         last_wm_cursor: Option<Bytes>,
@@ -167,16 +190,6 @@ impl<T> StreamPage<T> {
             last_wm_cursor,
             end_reason,
         }
-    }
-
-    #[cfg(any(test, feature = "testing"))]
-    pub fn for_test(
-        items: Vec<PageItem<T>>,
-        first_wm_cursor: Option<Bytes>,
-        last_wm_cursor: Option<Bytes>,
-        end_reason: Option<proto::QueryEndReason>,
-    ) -> Self {
-        Self::from_parts(items, first_wm_cursor, last_wm_cursor, end_reason)
     }
 
     /// Fold one frame into the page.
@@ -242,6 +255,27 @@ impl TryFrom<proto::ListEventsResponse> for FrameKind<proto::Event> {
 
     fn try_from(response: proto::ListEventsResponse) -> anyhow::Result<Self> {
         classify_frame(response.event, response.watermark, response.end)
+    }
+}
+
+impl TryFrom<proto::ListPackagesResponse> for FrameKind<(ObjectID, u64)> {
+    type Error = anyhow::Error;
+
+    fn try_from(response: proto::ListPackagesResponse) -> anyhow::Result<Self> {
+        let package = response
+            .package
+            .map(|package| -> anyhow::Result<(ObjectID, u64)> {
+                let package_id: ObjectID = package
+                    .package_id
+                    .as_deref()
+                    .context("package version missing package_id")?
+                    .parse()
+                    .context("invalid package_id")?;
+                let version = package.version.context("package version missing version")?;
+                Ok((package_id, version))
+            })
+            .transpose()?;
+        classify_frame(package, response.watermark, response.end)
     }
 }
 

@@ -20,7 +20,6 @@ use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::objects::VersionedObjectKey;
-use sui_indexer_alt_reader::package_writes::PackageToken;
 use sui_indexer_alt_reader::packages::CheckpointBoundedOriginalPackageKey;
 use sui_indexer_alt_reader::packages::PackageOriginalIdKey;
 use sui_indexer_alt_reader::packages::VersionedOriginalPackageKey;
@@ -29,9 +28,12 @@ use sui_indexer_alt_schema::packages::StoredPackage;
 use sui_indexer_alt_schema::schema::kv_packages;
 use sui_package_resolver::Package as ParsedMovePackage;
 use sui_pg_db::sql;
+use sui_rpc::proto::sui::rpc::v2;
+use sui_rpc_cursor::CursorKind;
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::Position;
 use sui_sql_macro::query;
 use sui_types::base_types::ObjectID;
-use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::move_package::MovePackage as NativeMovePackage;
 use sui_types::object::Object as NativeObject;
@@ -144,6 +146,18 @@ pub(crate) enum Error {
 
 /// Cursor for iterating over modules in a package. Points to the module by its name.
 pub(crate) type CModule = JsonCursor<String>;
+
+/// Cursor token for the gRPC path: one package write within one transaction, in transaction
+/// order. Wraps the wire `CursorToken` minted by `MovePackageService.ListPackages`, so
+/// server-minted cursors round-trip exactly.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PackageToken {
+    /// Tracks the originating `CursorToken`'s kind, so it can be reproduced on re-encode.
+    kind: CursorKind,
+    checkpoint: u64,
+    tx_seq: u64,
+    write_index: u32,
+}
 
 /// Cursor for iterating over package publishes. gRPC iterates on transaction order, while Postgres
 /// is on `(checkpoint, original_id, version)`, so the cursors are not interchangeable.
@@ -1012,8 +1026,24 @@ impl MovePackage {
         let after = page.after().map(|c| c.token()).transpose()?;
         let before = page.before().map(|c| c.token()).transpose()?;
 
+        let mut options = v2::QueryOptions::default();
+        options.limit = Some(page.limit() as u32);
+        options.after = after.as_ref().map(|t| CursorToken::from(t).encode());
+        options.before = before.as_ref().map(|t| CursorToken::from(t).encode());
+        options.ordering = Some(if page.is_from_front() {
+            v2::Ordering::Ascending as i32
+        } else {
+            v2::Ordering::Descending as i32
+        });
+
+        let mut request = v2::ListPackagesRequest::default();
+        request.start_checkpoint = Some(*cp_bounds.start());
+        // `cp_bounds` end is inclusive; the request bound is exclusive.
+        request.end_checkpoint = Some(cp_bounds.end().saturating_add(1));
+        request.options = Some(options);
+
         let result = reader
-            .list_package_writes(cp_bounds, page.limit(), page.is_from_front(), after, before)
+            .list_packages(request)
             .await
             .context("Failed to list package writes")?;
 
@@ -1027,7 +1057,7 @@ impl MovePackage {
         ctx: &Context<'_>,
         scope: Scope,
         page: &Page<CPackage>,
-        result: StreamPage<ObjectRef>,
+        result: StreamPage<(ObjectID, u64)>,
     ) -> Result<MovePackageConnection, RpcError> {
         // Batch-load the package contents up front; the stream paginator's node callback then
         // only looks them up.
@@ -1037,15 +1067,15 @@ impl MovePackage {
                 result
                     .items
                     .iter()
-                    .map(|item| VersionedObjectKey(item.payload.0, item.payload.1.value()))
+                    .map(|item| VersionedObjectKey(item.payload.0, item.payload.1))
                     .collect(),
             )
             .await
             .context("Failed to load package objects")?;
 
-        page.paginate_stream_results(result, |&(id, version, _)| {
+        page.paginate_stream_results(result, |&(id, version)| {
             let object = objects
-                .get(&VersionedObjectKey(id, version.value()))
+                .get(&VersionedObjectKey(id, version))
                 .with_context(|| format!("Missing package object {id} at version {version}"))?;
 
             let package = Self::from_object_contents(scope.clone(), object.clone())
@@ -1220,21 +1250,64 @@ impl PartialEq for CPackage {
     }
 }
 
-impl ByteCursor for PackageToken {
-    fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
-        PackageToken::decode(bytes)
-    }
+impl Eq for PackageToken {}
 
-    fn encode_cursor(&self) -> bytes::Bytes {
-        self.encode()
+/// Cursors minted by different scans may disagree on the checkpoint hint and kind, so pagination
+/// only compares the write coordinates.
+impl PartialEq for PackageToken {
+    fn eq(&self, other: &Self) -> bool {
+        (self.tx_seq, self.write_index) == (other.tx_seq, other.write_index)
     }
 }
 
-/// The package-write stream's raw cursor bytes are reader-minted `PackageToken`s.
-impl TryFrom<&[u8]> for CPackage {
+impl ByteCursor for PackageToken {
+    fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
+        CursorToken::decode(bytes)?.try_into()
+    }
+
+    fn encode_cursor(&self) -> bytes::Bytes {
+        CursorToken::from(self).encode()
+    }
+}
+
+impl From<&PackageToken> for CursorToken {
+    fn from(token: &PackageToken) -> Self {
+        CursorToken {
+            kind: token.kind,
+            position: Position::Packages {
+                checkpoint: token.checkpoint,
+                tx_seq: token.tx_seq,
+                write_index: token.write_index,
+            },
+        }
+    }
+}
+
+impl TryFrom<CursorToken> for PackageToken {
     type Error = anyhow::Error;
 
-    fn try_from(bytes: &[u8]) -> anyhow::Result<Self> {
-        Ok(Self::new(OpaqueCursor::new(PackageToken::decode(bytes)?)))
+    fn try_from(token: CursorToken) -> anyhow::Result<Self> {
+        let Position::Packages {
+            checkpoint,
+            tx_seq,
+            write_index,
+        } = token.position
+        else {
+            anyhow::bail!("invalid cursor");
+        };
+        Ok(Self {
+            kind: token.kind,
+            checkpoint,
+            tx_seq,
+            write_index,
+        })
+    }
+}
+
+impl TryFrom<CursorToken> for CPackage {
+    type Error = anyhow::Error;
+
+    fn try_from(token: CursorToken) -> anyhow::Result<Self> {
+        Ok(Self::new(OpaqueCursor::new(PackageToken::try_from(token)?)))
     }
 }
