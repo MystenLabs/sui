@@ -57,6 +57,26 @@ impl From<(u64, u32)> for EventPosition {
     }
 }
 
+/// Package-write coordinate: one Move package write within a transaction, by
+/// its position among the transaction's package writes in effects order.
+/// Boundary cursors may point at slots with no write.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct PackagePosition {
+    pub tx_seq: u64,
+    pub write_index: u32,
+}
+
+impl PackagePosition {
+    /// Fencepost at the first package-write slot of `tx_seq`; valid as a
+    /// boundary even if the transaction has no package writes.
+    pub fn start_of_tx(tx_seq: u64) -> Self {
+        Self {
+            tx_seq,
+            write_index: 0,
+        }
+    }
+}
+
 /// Why a resolved scan interval is exhausted. Fixed at range-resolution time,
 /// carried through scan state, and rendered by [`ScanTerminal`].
 ///
@@ -179,6 +199,36 @@ pub struct ResolvedEventRange {
     pub exhaustion: RangeExhaustion,
 }
 
+/// [`EventScanBounds`]' analogue for package-write scans.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PackageScanBounds {
+    pub lo: Bound<PackagePosition>,
+    pub hi: Bound<PackagePosition>,
+}
+
+/// [`ResolvedEventRange`]'s analogue for package-write scans: the scan domain
+/// is `(tx_seq, write_index)` coordinates, and the same two endpoint
+/// checkpoints annotate it for watermark rendering.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResolvedPackageRange {
+    /// Package-write interval to scan, expressed as explicit lo/hi [`Bound`]s
+    /// (cursor trims need exclusive bounds on either side).
+    pub bounds: PackageScanBounds,
+    /// Checkpoint containing the interval's first position in scan
+    /// direction; same coverage-clamp role as
+    /// [`ResolvedRange::entry_checkpoint`].
+    pub entry_checkpoint: u64,
+    /// Checkpoint containing `end_position`; same terminal-frame role as
+    /// [`ResolvedRange::end_checkpoint`].
+    pub end_checkpoint: u64,
+    /// The package-write coordinate the scan reports when the interval is
+    /// exhausted (terminal-frame cursor position, paired with
+    /// `end_checkpoint`).
+    pub end_position: PackagePosition,
+    /// Why the interval is exhausted once the scan drains it.
+    pub exhaustion: RangeExhaustion,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CheckpointRange {
     start: u64,
@@ -215,6 +265,16 @@ impl QueryOptions {
     ) -> Result<Self, RpcError> {
         Self::from_proto_with_position(request, default_limit_items, max_limit_items, |position| {
             matches!(position, Position::Events { .. })
+        })
+    }
+
+    pub fn packages_from_proto(
+        request: Option<&ProtoQueryOptions>,
+        default_limit_items: u32,
+        max_limit_items: u32,
+    ) -> Result<Self, RpcError> {
+        Self::from_proto_with_position(request, default_limit_items, max_limit_items, |position| {
+            matches!(position, Position::Packages { .. })
         })
     }
 
@@ -501,6 +561,115 @@ impl QueryOptions {
             }
         }
     }
+
+    /// [`Self::apply_event_cursor_bounds`]'s analogue for package-write scans:
+    /// Item cursors bound exclusively, Boundary cursors inclusively, and an
+    /// ascending interval emptied by an `after` Item cursor retains Item kind
+    /// in its terminal bookkeeping (see the event version for why).
+    pub fn apply_package_cursor_bounds(
+        &self,
+        resolved: ResolvedPackageRange,
+    ) -> ResolvedPackageRange {
+        if resolved.is_empty() {
+            return resolved;
+        }
+
+        let mut bounds = resolved.bounds;
+        let mut end_checkpoint = resolved.end_checkpoint;
+        let mut end_position = resolved.end_position;
+        let mut exhaustion = resolved.exhaustion;
+        let mut entry_checkpoint = resolved.entry_checkpoint;
+        let mut cursor_terminal = None;
+
+        if let Some(cursor) = &self.after {
+            let position = package_cursor_position(cursor);
+            if matches!(self.ordering, Ordering::Ascending) {
+                entry_checkpoint = entry_checkpoint.max(cursor.position.checkpoint());
+            }
+            let candidate = match cursor.kind {
+                sui_rpc_cursor::CursorKind::Item => Bound::Excluded(position),
+                sui_rpc_cursor::CursorKind::Boundary => Bound::Included(position),
+            };
+            if lower_bound_gte(candidate, bounds.lo) {
+                let candidate_bounds = PackageScanBounds {
+                    lo: candidate,
+                    hi: bounds.hi,
+                };
+                bounds.lo = candidate;
+                if matches!(self.ordering, Ordering::Descending) || candidate_bounds.is_empty() {
+                    let kind = if matches!(self.ordering, Ordering::Ascending) {
+                        cursor.kind
+                    } else {
+                        sui_rpc_cursor::CursorKind::Boundary
+                    };
+                    cursor_terminal = Some((cursor.position.checkpoint(), position, kind));
+                }
+                if matches!(self.ordering, Ordering::Descending) {
+                    end_checkpoint = cursor.position.checkpoint();
+                    end_position = position;
+                    exhaustion = RangeExhaustion::CursorBound {
+                        kind: sui_rpc_cursor::CursorKind::Boundary,
+                    };
+                }
+            }
+        }
+
+        if let Some(cursor) = &self.before {
+            let position = package_cursor_position(cursor);
+            if matches!(self.ordering, Ordering::Descending) {
+                entry_checkpoint = entry_checkpoint.min(cursor.position.checkpoint());
+            }
+            if hi_admits_upper_bound(bounds.hi, position) {
+                let candidate = Bound::Excluded(position);
+                let candidate_bounds = PackageScanBounds {
+                    lo: bounds.lo,
+                    hi: candidate,
+                };
+                bounds.hi = candidate;
+                if matches!(self.ordering, Ordering::Ascending) || candidate_bounds.is_empty() {
+                    cursor_terminal = Some((
+                        cursor.position.checkpoint(),
+                        position,
+                        sui_rpc_cursor::CursorKind::Boundary,
+                    ));
+                }
+                if matches!(self.ordering, Ordering::Ascending) {
+                    end_checkpoint = cursor.position.checkpoint();
+                    end_position = position;
+                    exhaustion = RangeExhaustion::CursorBound {
+                        kind: sui_rpc_cursor::CursorKind::Boundary,
+                    };
+                }
+            }
+        }
+
+        if bounds.is_empty() {
+            if let Some((checkpoint, position, kind)) = cursor_terminal {
+                end_checkpoint = checkpoint;
+                end_position = position;
+                exhaustion = RangeExhaustion::CursorBound { kind };
+            } else if self.after.is_some() || self.before.is_some() {
+                exhaustion = RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                };
+            }
+            ResolvedPackageRange {
+                bounds: PackageScanBounds::empty_at(end_position),
+                end_checkpoint,
+                end_position,
+                exhaustion,
+                entry_checkpoint,
+            }
+        } else {
+            ResolvedPackageRange {
+                bounds,
+                end_checkpoint,
+                end_position,
+                exhaustion,
+                entry_checkpoint,
+            }
+        }
+    }
 }
 
 fn u64_cursor_position(cursor: &CursorToken) -> u64 {
@@ -508,6 +677,9 @@ fn u64_cursor_position(cursor: &CursorToken) -> u64 {
         Position::Checkpoints { checkpoint } => checkpoint,
         Position::Transactions { tx_seq, .. } => tx_seq,
         Position::Events { .. } => panic!("event queries must use apply_event_cursor_bounds"),
+        Position::Packages { .. } => {
+            panic!("package queries must use apply_package_cursor_bounds")
+        }
     }
 }
 
@@ -520,6 +692,20 @@ fn event_cursor_position(cursor: &CursorToken) -> EventPosition {
         } => EventPosition {
             tx_seq,
             event_index,
+        },
+        _ => unreachable!("validated at decode"),
+    }
+}
+
+fn package_cursor_position(cursor: &CursorToken) -> PackagePosition {
+    match cursor.position {
+        Position::Packages {
+            tx_seq,
+            write_index,
+            ..
+        } => PackagePosition {
+            tx_seq,
+            write_index,
         },
         _ => unreachable!("validated at decode"),
     }
@@ -724,7 +910,86 @@ impl ResolvedEventRange {
     }
 }
 
-fn lower_bound_gte(candidate: Bound<EventPosition>, current: Bound<EventPosition>) -> bool {
+impl PackageScanBounds {
+    pub fn tx_span(start_tx: u64, end_tx: u64) -> Self {
+        Self {
+            lo: Bound::Included(PackagePosition::start_of_tx(start_tx)),
+            hi: Bound::Excluded(PackagePosition::start_of_tx(end_tx)),
+        }
+    }
+
+    pub fn empty_at(position: PackagePosition) -> Self {
+        Self {
+            lo: Bound::Included(position),
+            hi: Bound::Excluded(position),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match (self.lo, self.hi) {
+            (Bound::Included(a), Bound::Excluded(b))
+            | (Bound::Excluded(a), Bound::Excluded(b))
+            | (Bound::Excluded(a), Bound::Included(b)) => a >= b,
+            (Bound::Included(a), Bound::Included(b)) => a > b,
+            (Bound::Unbounded, _) | (_, Bound::Unbounded) => false,
+        }
+    }
+
+    pub fn contains(&self, position: PackagePosition) -> bool {
+        let above_lo = match self.lo {
+            Bound::Included(lo) => position >= lo,
+            Bound::Excluded(lo) => position > lo,
+            Bound::Unbounded => true,
+        };
+        let below_hi = match self.hi {
+            Bound::Included(hi) => position <= hi,
+            Bound::Excluded(hi) => position < hi,
+            Bound::Unbounded => true,
+        };
+        above_lo && below_hi
+    }
+
+    /// Smallest half-open tx range covering every position these bounds could
+    /// admit. An exclusive `hi` at the start of tx N excludes tx N entirely;
+    /// any other bounded endpoint keeps its transaction, since earlier writes
+    /// of that tx may still be in bounds. `None` when no tx can qualify.
+    pub fn tx_range(&self) -> Option<Range<u64>> {
+        let start_tx = match self.lo {
+            Bound::Included(position) | Bound::Excluded(position) => position.tx_seq,
+            Bound::Unbounded => 0,
+        };
+        let end_tx = match self.hi {
+            Bound::Excluded(position) if position.write_index == 0 => position.tx_seq,
+            Bound::Included(position) | Bound::Excluded(position) => {
+                position.tx_seq.saturating_add(1)
+            }
+            Bound::Unbounded => u64::MAX,
+        };
+        (start_tx < end_tx).then_some(start_tx..end_tx)
+    }
+}
+
+impl ResolvedPackageRange {
+    pub fn empty_at(
+        end_checkpoint: u64,
+        end_position: PackagePosition,
+        exhaustion: RangeExhaustion,
+    ) -> Self {
+        Self {
+            bounds: PackageScanBounds::empty_at(end_position),
+            end_checkpoint,
+            end_position,
+            exhaustion,
+            entry_checkpoint: end_checkpoint,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.bounds.is_empty()
+    }
+}
+
+fn lower_bound_gte<P: Copy + Ord>(candidate: Bound<P>, current: Bound<P>) -> bool {
     let Some(candidate) = lower_bound_key(candidate) else {
         return false;
     };
@@ -734,7 +999,7 @@ fn lower_bound_gte(candidate: Bound<EventPosition>, current: Bound<EventPosition
     }
 }
 
-fn lower_bound_key(bound: Bound<EventPosition>) -> Option<(EventPosition, u8)> {
+fn lower_bound_key<P: Copy + Ord>(bound: Bound<P>) -> Option<(P, u8)> {
     match bound {
         Bound::Included(position) => Some((position, 0)),
         Bound::Excluded(position) => Some((position, 1)),
@@ -742,7 +1007,7 @@ fn lower_bound_key(bound: Bound<EventPosition>) -> Option<(EventPosition, u8)> {
     }
 }
 
-fn hi_admits_upper_bound(current: Bound<EventPosition>, candidate: EventPosition) -> bool {
+fn hi_admits_upper_bound<P: Copy + Ord>(current: Bound<P>, candidate: P) -> bool {
     match current {
         Bound::Included(position) | Bound::Excluded(position) => candidate <= position,
         Bound::Unbounded => true,
@@ -1447,5 +1712,124 @@ mod tests {
             options.apply_cursor_bounds(resolved_range(10..20)).range,
             10..11
         );
+    }
+
+    fn pkg_position(tx_seq: u64, write_index: u32) -> PackagePosition {
+        PackagePosition {
+            tx_seq,
+            write_index,
+        }
+    }
+
+    fn pkg_cursor_position(tx_seq: u64, write_index: u32) -> Position {
+        Position::Packages {
+            checkpoint: 1,
+            tx_seq,
+            write_index,
+        }
+    }
+
+    fn resolved_package_range(start_tx: u64, end_tx: u64) -> ResolvedPackageRange {
+        ResolvedPackageRange {
+            bounds: PackageScanBounds::tx_span(start_tx, end_tx),
+            end_checkpoint: 20,
+            end_position: PackagePosition::start_of_tx(end_tx),
+            exhaustion: RangeExhaustion::CheckpointBound,
+            entry_checkpoint: 0,
+        }
+    }
+
+    /// `PackageScanBounds::tx_range` mirrors the event semantics: partially
+    /// bounded endpoint transactions stay in the range, an exclusive `hi` at a
+    /// transaction's first write excludes the transaction, and empty bounds
+    /// yield no range.
+    #[test]
+    fn package_tx_range_mirrors_event_semantics() {
+        let bounds = PackageScanBounds {
+            lo: Bound::Included(pkg_position(10, 2)),
+            hi: Bound::Excluded(PackagePosition::start_of_tx(13)),
+        };
+        assert_eq!(bounds.tx_range(), Some(10..13));
+
+        let bounds = PackageScanBounds {
+            lo: Bound::Unbounded,
+            hi: Bound::Excluded(pkg_position(13, 1)),
+        };
+        assert_eq!(bounds.tx_range(), Some(0..14));
+
+        assert_eq!(PackageScanBounds::tx_span(10, 10).tx_range(), None);
+    }
+
+    /// Item cursors bound exclusively, Boundary cursors inclusively, and
+    /// `before` cursors bound exclusively regardless of kind.
+    #[test]
+    fn package_cursor_kinds_set_bound_inclusivity() {
+        let mut request = ProtoQueryOptions::default();
+        request.after = Some(CursorToken::item(pkg_cursor_position(12, 1)).encode());
+        let options = QueryOptions::packages_from_proto(Some(&request), 100, 100).unwrap();
+        let bounded = options.apply_package_cursor_bounds(resolved_package_range(10, 20));
+        assert!(!bounded.bounds.contains(pkg_position(12, 1)));
+        assert!(bounded.bounds.contains(pkg_position(12, 2)));
+
+        request.after = Some(CursorToken::boundary(pkg_cursor_position(12, 1)).encode());
+        let options = QueryOptions::packages_from_proto(Some(&request), 100, 100).unwrap();
+        let bounded = options.apply_package_cursor_bounds(resolved_package_range(10, 20));
+        assert!(bounded.bounds.contains(pkg_position(12, 1)));
+        assert!(!bounded.bounds.contains(pkg_position(12, 0)));
+
+        request.after = None;
+        request.before = Some(CursorToken::item(pkg_cursor_position(15, 3)).encode());
+        let options = QueryOptions::packages_from_proto(Some(&request), 100, 100).unwrap();
+        let bounded = options.apply_package_cursor_bounds(resolved_package_range(10, 20));
+        assert!(!bounded.bounds.contains(pkg_position(15, 3)));
+        assert!(bounded.bounds.contains(pkg_position(15, 2)));
+    }
+
+    /// Mirror of [`event_after_item_empty_interval_retains_item_kind`] for
+    /// package intervals.
+    #[test]
+    fn package_after_item_empty_interval_retains_item_kind() {
+        let position = pkg_cursor_position(3, 0);
+        let resolved = ResolvedPackageRange {
+            bounds: PackageScanBounds::tx_span(0, 3),
+            end_checkpoint: 1,
+            end_position: PackagePosition::start_of_tx(3),
+            exhaustion: RangeExhaustion::CheckpointBound,
+            entry_checkpoint: 0,
+        };
+
+        let mut request = ProtoQueryOptions::default();
+        request.after = Some(CursorToken::item(position).encode());
+        let options = QueryOptions::packages_from_proto(Some(&request), 100, 100).unwrap();
+        let item_bounded = options.apply_package_cursor_bounds(resolved.clone());
+        assert!(item_bounded.is_empty());
+        assert_eq!(
+            item_bounded.exhaustion,
+            RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Item,
+            }
+        );
+
+        request.after = Some(CursorToken::boundary(position).encode());
+        let options = QueryOptions::packages_from_proto(Some(&request), 100, 100).unwrap();
+        let boundary_bounded = options.apply_package_cursor_bounds(resolved);
+        assert!(boundary_bounded.is_empty());
+        assert_eq!(
+            boundary_bounded.exhaustion,
+            RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Boundary,
+            }
+        );
+    }
+
+    #[test]
+    fn package_options_reject_foreign_position_variants() {
+        let mut request = ProtoQueryOptions::default();
+        request.after = Some(tx_item(1, 5).encode());
+        assert!(QueryOptions::packages_from_proto(Some(&request), 100, 100).is_err());
+
+        let mut request = ProtoQueryOptions::default();
+        request.after = Some(CursorToken::item(pkg_cursor_position(5, 0)).encode());
+        assert!(QueryOptions::transactions_from_proto(Some(&request), 100, 100).is_err());
     }
 }

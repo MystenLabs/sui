@@ -784,6 +784,12 @@ sui-execution = { path = "sui-execution" }
 # move-vm-runtime = { path = "external-crates/move/move-vm/runtime" }
 # move-bytecode-verifier = { path = "external-crates/move/move-bytecode-verifier" }
 
+[patch."https://github.com/MystenLabs/sui-rust-sdk.git"]
+# TODO: remove once sui-rust-sdk#<ListPackages PR> merges and the rev above is bumped.
+sui-sdk-types = { path = "../sui-rust-sdk/crates/sui-sdk-types" }
+sui-crypto = { path = "../sui-rust-sdk/crates/sui-crypto" }
+sui-rpc = { path = "../sui-rust-sdk/crates/sui-rpc" }
+
 [patch.crates-io]
 async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }

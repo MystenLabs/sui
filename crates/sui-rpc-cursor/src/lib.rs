@@ -31,6 +31,11 @@ pub enum Position {
         tx_seq: u64,
         event_index: u32,
     },
+    Packages {
+        checkpoint: u64,
+        tx_seq: u64,
+        write_index: u32,
+    },
 }
 
 impl Position {
@@ -38,7 +43,8 @@ impl Position {
         match *self {
             Position::Checkpoints { checkpoint }
             | Position::Transactions { checkpoint, .. }
-            | Position::Events { checkpoint, .. } => checkpoint,
+            | Position::Events { checkpoint, .. }
+            | Position::Packages { checkpoint, .. } => checkpoint,
         }
     }
 }
@@ -164,6 +170,15 @@ impl From<Position> for grpc::cursor_token::Position {
                 tx_seq: Some(tx_seq),
                 event_index: Some(event_index),
             }),
+            Position::Packages {
+                checkpoint,
+                tx_seq,
+                write_index,
+            } => grpc::cursor_token::Position::Packages(grpc::PackagesPosition {
+                checkpoint: Some(checkpoint),
+                tx_seq: Some(tx_seq),
+                write_index: Some(write_index),
+            }),
         }
     }
 }
@@ -184,6 +199,11 @@ impl TryFrom<grpc::cursor_token::Position> for Position {
                 checkpoint: position.checkpoint.context("cursor missing checkpoint")?,
                 tx_seq: position.tx_seq.context("cursor missing tx_seq")?,
                 event_index: position.event_index.context("cursor missing event_index")?,
+            }),
+            grpc::cursor_token::Position::Packages(position) => Ok(Position::Packages {
+                checkpoint: position.checkpoint.context("cursor missing checkpoint")?,
+                tx_seq: position.tx_seq.context("cursor missing tx_seq")?,
+                write_index: position.write_index.context("cursor missing write_index")?,
             }),
         }
     }
@@ -249,6 +269,16 @@ mod tests {
                 checkpoint: 11,
                 tx_seq: 12,
                 event_index: 13,
+            }),
+            CursorToken::item(Position::Packages {
+                checkpoint: 14,
+                tx_seq: 15,
+                write_index: 16,
+            }),
+            CursorToken::boundary(Position::Packages {
+                checkpoint: 17,
+                tx_seq: 18,
+                write_index: 0,
             }),
         ] {
             assert_eq!(CursorToken::decode(&token.encode()).unwrap(), token);
