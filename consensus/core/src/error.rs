@@ -43,6 +43,14 @@ pub enum ConsensusError {
     #[error("Genesis blocks should only be generated from Committee!")]
     UnexpectedGenesisBlock,
 
+    #[error(
+        "Transaction vote cutoff round must be lower than the block round: cutoff {cutoff}, block {block}"
+    )]
+    InvalidTransactionVotesCutoff { cutoff: Round, block: Round },
+
+    #[error("Invalid transaction votes: {0}")]
+    InvalidTransactionVotes(String),
+
     #[error("Genesis blocks should not be queried!")]
     UnexpectedGenesisBlockRequested,
 

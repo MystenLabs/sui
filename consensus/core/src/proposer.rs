@@ -12,8 +12,8 @@ use tracing::{debug, info, trace};
 use crate::{
     ancestor::{AncestorState, AncestorStateManager},
     block::{
-        Block, BlockAPI, BlockV1, BlockV2, ExtendedBlock, GENESIS_ROUND, SignedBlock, Slot,
-        VerifiedBlock,
+        Block, BlockAPI, BlockV1, BlockV2, BlockV3, ExtendedBlock, GENESIS_ROUND, SignedBlock,
+        Slot, VerifiedBlock,
     },
     context::Context,
     dag_state::DagState,
@@ -131,6 +131,7 @@ impl ValidatorProposer {
         &mut self,
         clock_round: Round,
         smart_select: bool,
+        leader_slots: &[Slot],
     ) -> (Vec<VerifiedBlock>, BTreeSet<BlockRef>) {
         let node_metrics = &self.context.metrics.node_metrics;
         let _s = node_metrics
@@ -188,6 +189,13 @@ impl ValidatorProposer {
                         match ancestor_state {
                             AncestorState::Include => {
                                 trace!("Found ancestor {ancestor} with INCLUDE state for round {clock_round}");
+                            }
+                            AncestorState::Exclude(score)
+                                if leader_slots.contains(&ancestor.slot()) =>
+                            {
+                                trace!(
+                                    "Including leader ancestor {ancestor} despite EXCLUDE state with score {score} for round {clock_round}"
+                                );
                             }
                             AncestorState::Exclude(score) => {
                                 trace!("Added ancestor {ancestor} with EXCLUDE state with score {score} to temporary excluded ancestors for round {clock_round}");
@@ -417,7 +425,7 @@ impl Proposer for ValidatorProposer {
 
         // Determine the ancestors to be included in proposal.
         let (ancestors, excluded_and_equivocating_ancestors) =
-            self.smart_ancestors_to_propose(clock_round, !force);
+            self.smart_ancestors_to_propose(clock_round, !force, &leader_slots);
 
         // If we did not find enough good ancestors to propose, continue to wait before proposing.
         if ancestors.is_empty() {
@@ -539,39 +547,60 @@ impl Proposer for ValidatorProposer {
             .write()
             .take_commit_votes(MAX_COMMIT_VOTES_PER_BLOCK);
 
-        let transaction_votes = if self.context.protocol_config.transaction_voting_enabled() {
-            let new_causal_history = {
-                let mut dag_state = self.dag_state.write();
-                ancestors
-                    .iter()
-                    .flat_map(|ancestor| dag_state.link_causal_history(ancestor.reference()))
-                    .collect()
-            };
-            let transaction_votes = self
-                .transaction_vote_tracker
-                .get_own_votes(new_causal_history);
-            self.context
-                .metrics
-                .node_metrics
-                .proposed_block_transaction_vote_blocks
-                .observe(transaction_votes.len() as f64);
-            self.context
-                .metrics
-                .node_metrics
-                .proposed_block_transaction_vote_entries
-                .observe(
-                    transaction_votes
+        let (transaction_votes, transaction_votes_cutoff_round) =
+            if self.context.protocol_config.transaction_voting_enabled() {
+                let (new_causal_history, causal_history_cutoff_round) = {
+                    let mut dag_state = self.dag_state.write();
+                    let causal_history_cutoff_round = dag_state.gc_round();
+                    let new_causal_history: Vec<BlockRef> = ancestors
                         .iter()
-                        .map(|votes| votes.rejects.len())
-                        .sum::<usize>() as f64,
-                );
-            transaction_votes
-        } else {
-            vec![]
-        };
+                        .flat_map(|ancestor| dag_state.link_causal_history(ancestor.reference()))
+                        .collect();
+                    (new_causal_history, causal_history_cutoff_round)
+                };
+                let vote_targets = new_causal_history
+                    .into_iter()
+                    .filter(|block_ref| block_ref.round > causal_history_cutoff_round)
+                    .collect();
+                let transaction_votes = self.transaction_vote_tracker.get_own_votes(vote_targets);
+                // Tracker GC never exceeds DAG GC. Read DAG GC after copying votes so the signed
+                // cutoff covers targets omitted by either GC operation.
+                let transaction_votes_cutoff_round = self.dag_state.read().gc_round();
+                self.context
+                    .metrics
+                    .node_metrics
+                    .proposed_block_transaction_vote_blocks
+                    .observe(transaction_votes.len() as f64);
+                self.context
+                    .metrics
+                    .node_metrics
+                    .proposed_block_transaction_vote_entries
+                    .observe(
+                        transaction_votes
+                            .iter()
+                            .map(|votes| votes.rejects.len())
+                            .sum::<usize>() as f64,
+                    );
+                (transaction_votes, transaction_votes_cutoff_round)
+            } else {
+                (vec![], self.dag_state.read().gc_round())
+            };
 
         // Create the block.
-        let block = if self.context.protocol_config.transaction_voting_enabled() {
+        let block = if self.context.protocol_config.enable_v3() {
+            Block::V3(BlockV3::new(
+                self.context.committee.epoch(),
+                clock_round,
+                self.context.own_index,
+                now,
+                ancestors.iter().map(|b| b.reference()).collect(),
+                transactions,
+                transaction_votes,
+                transaction_votes_cutoff_round,
+                commit_votes,
+                vec![],
+            ))
+        } else if self.context.protocol_config.transaction_voting_enabled() {
             Block::V2(BlockV2::new(
                 self.context.committee.epoch(),
                 clock_round,

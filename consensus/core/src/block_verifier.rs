@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
-use consensus_types::block::{BlockRef, TransactionIndex};
+use consensus_types::block::{BlockRef, NUM_RESERVED_TRANSACTION_INDICES, TransactionIndex};
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
@@ -146,9 +146,93 @@ impl SignedBlockVerifier {
             });
         }
 
-        let batch: Vec<_> = block.transactions().iter().map(|t| t.data()).collect();
+        if self.context.protocol_config.enable_v3() {
+            let cutoff = block.transaction_votes_cutoff_round();
+            if cutoff >= block.round() {
+                return Err(ConsensusError::InvalidTransactionVotesCutoff {
+                    cutoff,
+                    block: block.round(),
+                });
+            }
+            self.check_transaction_votes(block)?;
+        }
 
+        let batch: Vec<_> = block.transactions().iter().map(|t| t.data()).collect();
         self.check_transactions(&batch)
+    }
+
+    fn check_transaction_votes(&self, block: &SignedBlock) -> ConsensusResult<()> {
+        let transaction_votes = block.transaction_votes();
+        let previous_round = block
+            .round()
+            .checked_sub(1)
+            .expect("Genesis blocks are rejected before transaction vote validation");
+        let cutoff_round = block.transaction_votes_cutoff_round();
+        let transaction_limit = self
+            .context
+            .protocol_config
+            .max_num_transactions_in_block()
+            .min(
+                TransactionIndex::MAX
+                    .saturating_sub(NUM_RESERVED_TRANSACTION_INDICES)
+                    .into(),
+            ) as u16;
+
+        let mut vote_targets = BTreeSet::new();
+        for votes in transaction_votes {
+            if votes.block_ref.round > previous_round {
+                return Err(ConsensusError::InvalidTransactionVotes(format!(
+                    "vote target {} must have a round less than block round {} from {}",
+                    votes.block_ref,
+                    block.round(),
+                    block.author(),
+                )));
+            }
+            if votes.block_ref.round <= cutoff_round {
+                return Err(ConsensusError::InvalidTransactionVotes(format!(
+                    "vote target {} is at or below cutoff round {}",
+                    votes.block_ref, cutoff_round,
+                )));
+            }
+            if !vote_targets.insert(votes.block_ref) {
+                return Err(ConsensusError::InvalidTransactionVotes(format!(
+                    "vote target {} appears more than once",
+                    votes.block_ref,
+                )));
+            }
+            if votes.rejects.is_empty() {
+                return Err(ConsensusError::InvalidTransactionVotes(format!(
+                    "vote target {} has no reject indices",
+                    votes.block_ref,
+                )));
+            }
+            // This bounds the scans below. Because the indices must increase, an oversized
+            // vector also fails the last index check, but only after a full scan of the vector.
+            if votes.rejects.len() > transaction_limit as usize {
+                return Err(ConsensusError::InvalidTransactionVotes(format!(
+                    "vote target {} has {} reject indices but the limit is {}",
+                    votes.block_ref,
+                    votes.rejects.len(),
+                    transaction_limit,
+                )));
+            }
+            if votes.rejects.windows(2).any(|pair| pair[0] >= pair[1]) {
+                return Err(ConsensusError::InvalidTransactionVotes(format!(
+                    "reject indices for vote target {} are not strictly increasing: {:?}",
+                    votes.block_ref, votes.rejects,
+                )));
+            }
+            if let Some(reject) = votes.rejects.last()
+                && *reject >= transaction_limit
+            {
+                return Err(ConsensusError::InvalidTransactionVotes(format!(
+                    "reject index {} for vote target {} is not below limit {}",
+                    reject, votes.block_ref, transaction_limit,
+                )));
+            }
+        }
+
+        Ok(())
     }
 
     pub(crate) fn check_transactions(&self, batch: &[&[u8]]) -> ConsensusResult<()> {
@@ -246,7 +330,7 @@ mod test {
 
     use super::*;
     use crate::{
-        block::{TestBlock, Transaction},
+        block::{Block, BlockTransactionVotes, BlockV1, GENESIS_ROUND, TestBlock, Transaction},
         context::Context,
         transaction::{TransactionVerifier, ValidationError},
     };
@@ -566,6 +650,265 @@ mod test {
                 Err(ConsensusError::InvalidTransaction(_))
             ));
         }
+    }
+
+    #[tokio::test]
+    async fn test_v3_validates_all_block_versions() {
+        let (mut context, keypairs) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        let epoch = context.committee.epoch();
+        let context = Arc::new(context);
+        const AUTHOR: u32 = 2;
+        let verifier = SignedBlockVerifier::new(context, Arc::new(TxnSizeVerifier {}));
+        let ancestors = vec![
+            BlockRef::new(9, AuthorityIndex::new_for_test(2), BlockDigest::MIN),
+            BlockRef::new(9, AuthorityIndex::new_for_test(0), BlockDigest::MIN),
+            BlockRef::new(9, AuthorityIndex::new_for_test(1), BlockDigest::MIN),
+        ];
+        let test_block = TestBlock::new(10, AUTHOR).set_ancestors_raw(ancestors.clone());
+
+        let v1 = SignedBlock::new(
+            Block::V1(BlockV1::new(
+                epoch,
+                10,
+                AuthorityIndex::new_for_test(AUTHOR),
+                0,
+                ancestors,
+                vec![],
+                vec![],
+                vec![],
+            )),
+            &keypairs[AUTHOR as usize].1,
+        )
+        .unwrap();
+        verifier.verify_block(&v1).unwrap();
+        assert_eq!(v1.transaction_votes_cutoff_round(), GENESIS_ROUND);
+
+        let v2 =
+            SignedBlock::new(test_block.clone().build(), &keypairs[AUTHOR as usize].1).unwrap();
+        verifier.verify_block(&v2).unwrap();
+        assert_eq!(v2.transaction_votes_cutoff_round(), GENESIS_ROUND);
+
+        let v3 =
+            SignedBlock::new(test_block.clone().build_v3(0), &keypairs[AUTHOR as usize].1).unwrap();
+        verifier.verify_block(&v3).unwrap();
+
+        let invalid_cutoff =
+            SignedBlock::new(test_block.build_v3(10), &keypairs[AUTHOR as usize].1).unwrap();
+        assert!(matches!(
+            verifier.verify_block(&invalid_cutoff),
+            Err(ConsensusError::InvalidTransactionVotesCutoff {
+                cutoff: 10,
+                block: 10,
+            })
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_v3_transaction_votes_are_bounded_and_valid() {
+        let (mut context, keypairs) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        context
+            .protocol_config
+            .set_max_num_transactions_in_block_for_testing(2);
+        let context = Arc::new(context);
+        const AUTHOR: u32 = 2;
+        let verifier = SignedBlockVerifier::new(context, Arc::new(TxnSizeVerifier {}));
+        let direct_target = BlockRef::new(9, AuthorityIndex::new_for_test(0), BlockDigest::MIN);
+        let old_ancestor = BlockRef::new(7, AuthorityIndex::new_for_test(3), BlockDigest::MIN);
+        let test_block = TestBlock::new(10, AUTHOR).set_ancestors_raw(vec![
+            BlockRef::new(9, AuthorityIndex::new_for_test(2), BlockDigest::MIN),
+            direct_target,
+            BlockRef::new(9, AuthorityIndex::new_for_test(1), BlockDigest::MIN),
+        ]);
+        let verify = |votes, cutoff_round| {
+            let block = test_block
+                .clone()
+                .set_transaction_votes(votes)
+                .build_v3(cutoff_round);
+            let signed_block = SignedBlock::new(block, &keypairs[AUTHOR as usize].1).unwrap();
+            verifier.verify_block(&signed_block)
+        };
+        let assert_invalid = |result: ConsensusResult<()>, reason: &str| match result {
+            Err(ConsensusError::InvalidTransactionVotes(message)) => {
+                assert!(message.contains(reason), "unexpected error: {message}");
+            }
+            other => panic!("expected invalid transaction votes, got {other:?}"),
+        };
+
+        verify(
+            vec![BlockTransactionVotes {
+                block_ref: direct_target,
+                rejects: vec![0, 1],
+            }],
+            8,
+        )
+        .unwrap();
+
+        assert_invalid(
+            verify(
+                vec![
+                    BlockTransactionVotes {
+                        block_ref: direct_target,
+                        rejects: vec![0],
+                    },
+                    BlockTransactionVotes {
+                        block_ref: direct_target,
+                        rejects: vec![1],
+                    },
+                ],
+                8,
+            ),
+            "appears more than once",
+        );
+        verify(
+            vec![BlockTransactionVotes {
+                block_ref: old_ancestor,
+                rejects: vec![0],
+            }],
+            6,
+        )
+        .unwrap();
+        assert_invalid(
+            verify(
+                vec![BlockTransactionVotes {
+                    block_ref: BlockRef::new(10, AuthorityIndex::new_for_test(3), BlockDigest::MIN),
+                    rejects: vec![0],
+                }],
+                8,
+            ),
+            "must have a round less than block round",
+        );
+        assert_invalid(
+            verify(
+                vec![BlockTransactionVotes {
+                    block_ref: direct_target,
+                    rejects: vec![0],
+                }],
+                9,
+            ),
+            "at or below cutoff",
+        );
+        assert_invalid(
+            verify(
+                vec![BlockTransactionVotes {
+                    block_ref: direct_target,
+                    rejects: vec![],
+                }],
+                8,
+            ),
+            "has no reject indices",
+        );
+        assert_invalid(
+            verify(
+                vec![BlockTransactionVotes {
+                    block_ref: direct_target,
+                    rejects: vec![0, 0],
+                }],
+                8,
+            ),
+            "not strictly increasing",
+        );
+        assert_invalid(
+            verify(
+                vec![BlockTransactionVotes {
+                    block_ref: direct_target,
+                    rejects: vec![0, 1, 2],
+                }],
+                8,
+            ),
+            "3 reject indices but the limit is 2",
+        );
+        assert_invalid(
+            verify(
+                vec![BlockTransactionVotes {
+                    block_ref: direct_target,
+                    rejects: vec![1, 0],
+                }],
+                8,
+            ),
+            "not strictly increasing",
+        );
+        assert_invalid(
+            verify(
+                vec![BlockTransactionVotes {
+                    block_ref: direct_target,
+                    rejects: vec![2],
+                }],
+                8,
+            ),
+            "is not below limit 2",
+        );
+    }
+
+    #[tokio::test]
+    async fn test_v3_transaction_count_limit() {
+        let (mut context, keypairs) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        context
+            .protocol_config
+            .set_max_num_transactions_in_block_for_testing(2);
+        let context = Arc::new(context);
+        const AUTHOR: u32 = 2;
+        let verifier = SignedBlockVerifier::new(context, Arc::new(TxnSizeVerifier {}));
+        let test_block = TestBlock::new(10, AUTHOR).set_ancestors_raw(vec![
+            BlockRef::new(9, AuthorityIndex::new_for_test(2), BlockDigest::MIN),
+            BlockRef::new(9, AuthorityIndex::new_for_test(0), BlockDigest::MIN),
+            BlockRef::new(9, AuthorityIndex::new_for_test(1), BlockDigest::MIN),
+        ]);
+        let verify = |num_transactions: usize| {
+            let block = test_block
+                .clone()
+                .set_transactions(vec![Transaction::new(vec![1]); num_transactions])
+                .build_v3(8);
+            let signed_block = SignedBlock::new(block, &keypairs[AUTHOR as usize].1).unwrap();
+            verifier.verify_block(&signed_block)
+        };
+
+        verify(2).unwrap();
+        assert!(matches!(
+            verify(3),
+            Err(ConsensusError::TooManyTransactions { count: 3, limit: 2 })
+        ));
+    }
+
+    // `TransactionConsumer::new()` asserts max_num_transactions_in_block is not more than the
+    // first reserved index. Votes must not use reserved indices, even at that highest limit.
+    #[tokio::test]
+    async fn test_v3_transaction_votes_exclude_reserved_indices() {
+        let first_reserved_index =
+            TransactionIndex::MAX.saturating_sub(NUM_RESERVED_TRANSACTION_INDICES);
+        let (mut context, keypairs) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        context
+            .protocol_config
+            .set_max_num_transactions_in_block_for_testing(first_reserved_index.into());
+        let context = Arc::new(context);
+        const AUTHOR: u32 = 2;
+        let verifier = SignedBlockVerifier::new(context, Arc::new(TxnSizeVerifier {}));
+        let direct_target = BlockRef::new(9, AuthorityIndex::new_for_test(0), BlockDigest::MIN);
+        let test_block = TestBlock::new(10, AUTHOR).set_ancestors_raw(vec![
+            BlockRef::new(9, AuthorityIndex::new_for_test(2), BlockDigest::MIN),
+            direct_target,
+            BlockRef::new(9, AuthorityIndex::new_for_test(1), BlockDigest::MIN),
+        ]);
+        let verify = |rejects: Vec<TransactionIndex>| {
+            let block = test_block
+                .clone()
+                .set_transaction_votes(vec![BlockTransactionVotes {
+                    block_ref: direct_target,
+                    rejects,
+                }])
+                .build_v3(8);
+            let signed_block = SignedBlock::new(block, &keypairs[AUTHOR as usize].1).unwrap();
+            verifier.verify_block(&signed_block)
+        };
+
+        verify(vec![first_reserved_index - 1]).unwrap();
+        assert!(matches!(
+            verify(vec![first_reserved_index]),
+            Err(ConsensusError::InvalidTransactionVotes(_))
+        ));
     }
 
     #[tokio::test]

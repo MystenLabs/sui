@@ -82,9 +82,8 @@ pub trait BlockAPI {
     /// Votes on if a transaction should be accepted or rejected.
     fn transaction_votes(&self) -> &[BlockTransactionVotes];
 
-    /// Transactions in this blocks' casual history at and before the cutoff round
-    /// will not receive accept votes from this block.
-    /// Only `BlockV3` carries this — earlier variants panic.
+    /// Highest round for which this block does not carry implicit accept votes.
+    /// V1 and V2 use the genesis round because they have no cutoff.
     fn transaction_votes_cutoff_round(&self) -> Round;
 
     /// Votes on commits observed by this authority.
@@ -180,7 +179,7 @@ impl BlockAPI for BlockV1 {
     }
 
     fn transaction_votes_cutoff_round(&self) -> Round {
-        panic!("transaction_votes_cutoff_round() is not supported on BlockV1");
+        GENESIS_ROUND
     }
 
     fn commit_votes(&self) -> &[CommitVote] {
@@ -283,7 +282,7 @@ impl BlockAPI for BlockV2 {
     }
 
     fn transaction_votes_cutoff_round(&self) -> Round {
-        panic!("transaction_votes_cutoff_round() is not supported on BlockV2");
+        GENESIS_ROUND
     }
 
     fn commit_votes(&self) -> &[CommitVote] {
@@ -677,7 +676,9 @@ pub(crate) fn genesis_blocks(context: &Context) -> Vec<VerifiedBlock> {
         .committee
         .authorities()
         .map(|(authority_index, _)| {
-            let block = if context.protocol_config.transaction_voting_enabled() {
+            let block = if context.protocol_config.enable_v3() {
+                Block::V3(BlockV3::genesis_block(context, authority_index))
+            } else if context.protocol_config.transaction_voting_enabled() {
                 Block::V2(BlockV2::genesis_block(context, authority_index))
             } else {
                 Block::V1(BlockV1::genesis_block(context, authority_index))
@@ -771,6 +772,23 @@ impl TestBlock {
 
     pub fn build(self) -> Block {
         Block::V2(self.block)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn build_v3(self, transaction_votes_cutoff_round: Round) -> Block {
+        let block = self.block;
+        Block::V3(BlockV3::new(
+            block.epoch,
+            block.round,
+            block.author,
+            block.timestamp_ms,
+            block.ancestors,
+            block.transactions,
+            block.transaction_votes,
+            transaction_votes_cutoff_round,
+            block.commit_votes,
+            block.misbehavior_reports,
+        ))
     }
 }
 
