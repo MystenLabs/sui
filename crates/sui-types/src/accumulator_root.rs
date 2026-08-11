@@ -24,6 +24,7 @@ use move_core_types::{
     u256::U256,
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use sui_protocol_config::ProtocolConfig;
 
 pub const ACCUMULATOR_ROOT_MODULE: &IdentStr = ident_str!("accumulator");
 pub const ACCUMULATOR_METADATA_MODULE: &IdentStr = ident_str!("accumulator_metadata");
@@ -47,6 +48,13 @@ pub fn is_settle_u128_call(
     *module_address == SUI_FRAMEWORK_ADDRESS
         && module == ACCUMULATOR_SETTLEMENT_MODULE
         && function == ACCUMULATOR_ROOT_SETTLE_U128_FUNC
+}
+
+pub fn check_accumulator_type_bounds(config: &ProtocolConfig, ty: &TypeTag) -> bool {
+    match config.max_accumulator_type_nodes_as_option() {
+        Some(max) => ty.node_count() <= max,
+        None => true,
+    }
 }
 
 pub fn get_accumulator_root_obj_initial_shared_version(
