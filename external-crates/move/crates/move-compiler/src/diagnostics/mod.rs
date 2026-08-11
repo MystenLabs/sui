@@ -52,6 +52,13 @@ pub struct DiagnosticReporter<'env> {
     filter_stack: FilterStack,
 }
 
+/// A reporter restricted to internal compiler errors. Passes that should not produce any
+/// user-facing diagnostics (e.g. `to_bytecode`) carry this instead of a full
+/// [`DiagnosticReporter`] so that only `Severity::Bug` diagnostics (`ice!`, `ice_assert!`, and
+/// other `Bug` codes) can be reported through it.
+#[derive(Clone, Debug)]
+pub struct IceReporter<'env>(DiagnosticReporter<'env>);
+
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
 pub struct Diagnostics {
     diags: Option<Diagnostics_>,
@@ -478,6 +485,28 @@ impl<'env> DiagnosticReporter<'env> {
 
     pub fn is_empty(&self) -> bool {
         self.diags.read().unwrap().is_empty()
+    }
+}
+
+impl<'env> IceReporter<'env> {
+    pub fn new(reporter: DiagnosticReporter<'env>) -> Self {
+        Self(reporter)
+    }
+
+    /// Adds an internal compiler error (`Severity::Bug`) diagnostic. Reporting any other severity
+    /// through this reporter is itself an internal invariant violation, and raises an additional
+    /// ICE alongside the original diagnostic.
+    pub fn add_diag(&self, diag: Diagnostic) {
+        if diag.info().severity() != Severity::Bug {
+            self.0.add_diag(crate::ice!((
+                diag.primary_loc(),
+                format!(
+                    "non-ICE diagnostic '{}' reported through an ICE-only reporter",
+                    diag.info().message()
+                )
+            )));
+        }
+        self.0.add_diag(diag)
     }
 }
 
