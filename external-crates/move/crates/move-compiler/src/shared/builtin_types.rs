@@ -3,30 +3,30 @@
 
 pub const ADDRESS: &str = "address";
 pub const SIGNER: &str = "signer";
-pub const U_8: &str = "u8";
-pub const U_16: &str = "u16";
-pub const U_32: &str = "u32";
-pub const U_64: &str = "u64";
-pub const U_128: &str = "u128";
-pub const U_256: &str = "u256";
-pub const I_8: &str = "i8";
-pub const I_16: &str = "i16";
-pub const I_32: &str = "i32";
-pub const I_64: &str = "i64";
-pub const I_128: &str = "i128";
-pub const I_256: &str = "i256";
+pub const U8: &str = "u8";
+pub const U16: &str = "u16";
+pub const U32: &str = "u32";
+pub const U64: &str = "u64";
+pub const U128: &str = "u128";
+pub const U256: &str = "u256";
+pub const I8: &str = "i8";
+pub const I16: &str = "i16";
+pub const I32: &str = "i32";
+pub const I64: &str = "i64";
+pub const I128: &str = "i128";
+pub const I256: &str = "i256";
 pub const BOOL: &str = "bool";
 pub const VECTOR: &str = "vector";
 
 // Sorted longest-first so that `starts_with`-based matching in the lexer cannot misparse a
 // shorter suffix as a prefix of a longer one (e.g., matching "u1" before "u128").
-pub const UNSIGNED_INT_SUFFIXES: &[&str] = &[U_256, U_128, U_64, U_32, U_16, U_8];
-pub const SIGNED_INT_SUFFIXES: &[&str] = &[I_256, I_128, I_64, I_32, I_16, I_8];
+pub const UNSIGNED_INT_SUFFIXES: &[&str] = &[U256, U128, U64, U32, U16, U8];
+pub const SIGNED_INT_SUFFIXES: &[&str] = &[I256, I128, I64, I32, I16, I8];
 
 /// All primitive type names recognized by the parser. This list is not feature-gated; all types
 /// are included regardless of edition so that the parser can always recognize them as keywords.
 pub const PRIMITIVE_TYPES: &[&str] = &[
-    U_8, U_16, U_32, U_64, U_128, U_256, I_8, I_16, I_32, I_64, I_128, I_256, BOOL, VECTOR,
+    U8, U16, U32, U64, U128, U256, I8, I16, I32, I64, I128, I256, BOOL, VECTOR,
 ];
 
 //**************************************************************************************************

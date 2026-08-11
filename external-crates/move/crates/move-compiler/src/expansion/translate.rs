@@ -3816,17 +3816,17 @@ fn signed_num(loc: Loc, s: &str, negated: bool) -> Result<E::Value_, ValueError>
         }};
     }
     use crate::shared::builtin_types as BT;
-    if let Some(num) = s.strip_suffix(BT::I_256) {
+    if let Some(num) = s.strip_suffix(BT::I256) {
         parse_signed!(num, parse_i256, I256, "'i256'")
-    } else if let Some(num) = s.strip_suffix(BT::I_128) {
+    } else if let Some(num) = s.strip_suffix(BT::I128) {
         parse_signed!(num, parse_i128, I128, "'i128'")
-    } else if let Some(num) = s.strip_suffix(BT::I_64) {
+    } else if let Some(num) = s.strip_suffix(BT::I64) {
         parse_signed!(num, parse_i64, I64, "'i64'")
-    } else if let Some(num) = s.strip_suffix(BT::I_32) {
+    } else if let Some(num) = s.strip_suffix(BT::I32) {
         parse_signed!(num, parse_i32, I32, "'i32'")
-    } else if let Some(num) = s.strip_suffix(BT::I_16) {
+    } else if let Some(num) = s.strip_suffix(BT::I16) {
         parse_signed!(num, parse_i16, I16, "'i16'")
-    } else if let Some(num) = s.strip_suffix(BT::I_8) {
+    } else if let Some(num) = s.strip_suffix(BT::I8) {
         parse_signed!(num, parse_i8, I8, "'i8'")
     } else {
         // Callers guard with `has_signed_suffix`, so this is unreachable.
@@ -3850,17 +3850,17 @@ fn unsigned_num(loc: Loc, s: &str) -> Result<E::Value_, ValueError> {
         }};
     }
     use crate::shared::builtin_types as BT;
-    if let Some(num) = s.strip_suffix(BT::U_256) {
+    if let Some(num) = s.strip_suffix(BT::U256) {
         parse_unsigned!(num, parse_u256, U256, "'u256'")
-    } else if let Some(num) = s.strip_suffix(BT::U_128) {
+    } else if let Some(num) = s.strip_suffix(BT::U128) {
         parse_unsigned!(num, parse_u128, U128, "'u128'")
-    } else if let Some(num) = s.strip_suffix(BT::U_64) {
+    } else if let Some(num) = s.strip_suffix(BT::U64) {
         parse_unsigned!(num, parse_u64, U64, "'u64'")
-    } else if let Some(num) = s.strip_suffix(BT::U_32) {
+    } else if let Some(num) = s.strip_suffix(BT::U32) {
         parse_unsigned!(num, parse_u32, U32, "'u32'")
-    } else if let Some(num) = s.strip_suffix(BT::U_16) {
+    } else if let Some(num) = s.strip_suffix(BT::U16) {
         parse_unsigned!(num, parse_u16, U16, "'u16'")
-    } else if let Some(num) = s.strip_suffix(BT::U_8) {
+    } else if let Some(num) = s.strip_suffix(BT::U8) {
         parse_unsigned!(num, parse_u8, U8, "'u8'")
     } else {
         // Callers guard with `has_unsigned_suffix`, so this is unreachable.

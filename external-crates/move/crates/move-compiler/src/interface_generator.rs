@@ -346,12 +346,12 @@ fn write_return_type(ctx: &mut Context, tys: &[SignatureToken]) -> String {
 fn write_signature_token(ctx: &mut Context, t: &SignatureToken) -> String {
     match t {
         SignatureToken::Bool => BT::BOOL.to_string(),
-        SignatureToken::U8 => BT::U_8.to_string(),
-        SignatureToken::U16 => BT::U_16.to_string(),
-        SignatureToken::U32 => BT::U_32.to_string(),
-        SignatureToken::U64 => BT::U_64.to_string(),
-        SignatureToken::U128 => BT::U_128.to_string(),
-        SignatureToken::U256 => BT::U_256.to_string(),
+        SignatureToken::U8 => BT::U8.to_string(),
+        SignatureToken::U16 => BT::U16.to_string(),
+        SignatureToken::U32 => BT::U32.to_string(),
+        SignatureToken::U64 => BT::U64.to_string(),
+        SignatureToken::U128 => BT::U128.to_string(),
+        SignatureToken::U256 => BT::U256.to_string(),
         SignatureToken::Address => BT::ADDRESS.to_string(),
         SignatureToken::Signer => BT::SIGNER.to_string(),
         SignatureToken::Vector(inner) => format!("vector<{}>", write_signature_token(ctx, inner)),
