@@ -18,6 +18,7 @@ pub struct DebugPrintFlags {
     pub structured: bool,
     pub structuring: bool,
     pub dominators: bool,
+    pub regions: bool,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -38,6 +39,7 @@ impl DebugPrintFlags {
             || self.stackless
             || self.structured
             || self.structuring
+            || self.regions
     }
 }
 
@@ -76,6 +78,7 @@ impl Default for DebugPrintFlags {
             control_flow_graph: false,
             structuring: false,
             dominators: false,
+            regions: false,
         }
     }
 }

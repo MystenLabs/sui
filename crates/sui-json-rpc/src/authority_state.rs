@@ -109,7 +109,6 @@ pub trait StateRead: Send + Sync {
     async fn dry_exec_transaction(
         &self,
         transaction: TransactionData,
-        transaction_digest: TransactionDigest,
     ) -> StateReadResult<(
         DryRunTransactionBlockResponse,
         BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
@@ -306,7 +305,7 @@ impl StateRead for AuthorityState {
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> StateReadResult<Option<Object>> {
-        Ok(self.get_object(object_id).await)
+        Ok(self.get_object(object_id))
     }
 
     fn get_past_object_read(
@@ -371,16 +370,13 @@ impl StateRead for AuthorityState {
     async fn dry_exec_transaction(
         &self,
         transaction: TransactionData,
-        transaction_digest: TransactionDigest,
     ) -> StateReadResult<(
         DryRunTransactionBlockResponse,
         BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
         TransactionEffects,
         Option<ObjectID>,
     )> {
-        Ok(self
-            .dry_exec_transaction(transaction, transaction_digest)
-            .await?)
+        Ok(self.dry_exec_transaction(transaction).await?)
     }
 
     async fn dev_inspect_transaction_block(
@@ -446,9 +442,7 @@ impl StateRead for AuthorityState {
     }
 
     async fn get_staked_sui(&self, owner: SuiAddress) -> StateReadResult<Vec<StakedSui>> {
-        Ok(self
-            .get_move_objects(owner, MoveObjectType::staked_sui())
-            .await?)
+        Ok(self.get_move_objects(owner, MoveObjectType::staked_sui())?)
     }
     fn get_system_state(&self) -> StateReadResult<SuiSystemState> {
         Ok(self
@@ -659,11 +653,11 @@ impl StateRead for AuthorityState {
         coin_type: TypeTag,
     ) -> StateReadResult<TotalBalance> {
         let indexes = self.indexes.clone();
-        let child_object_resolver = self.get_child_object_resolver().clone();
+        let runtime_object_resolver = self.get_runtime_object_resolver().clone();
         Ok(
             tokio::task::spawn_blocking(move || -> SuiResult<TotalBalance> {
                 let address_balance =
-                    get_balance(owner, child_object_resolver.as_ref(), coin_type.clone())?;
+                    get_balance(owner, runtime_object_resolver.as_ref(), coin_type.clone())?;
                 let coin_balance = indexes
                     .as_ref()
                     .ok_or(SuiErrorKind::IndexStoreNotAvailable)?
@@ -688,14 +682,14 @@ impl StateRead for AuthorityState {
         owner: SuiAddress,
     ) -> StateReadResult<Arc<HashMap<TypeTag, TotalBalance>>> {
         let indexes = self.indexes.clone();
-        let child_object_resolver = self.get_child_object_resolver().clone();
+        let runtime_object_resolver = self.get_runtime_object_resolver().clone();
         Ok(tokio::task::spawn_blocking(
             move || -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
                 let indexes = indexes
                     .as_ref()
                     .ok_or(SuiErrorKind::IndexStoreNotAvailable)?;
                 let address_balances =
-                    get_all_balances_for_owner(owner, child_object_resolver.as_ref(), indexes)?;
+                    get_all_balances_for_owner(owner, runtime_object_resolver.as_ref(), indexes)?;
                 let coin_balances = (*indexes.get_all_coin_object_balances(owner)?).clone();
                 let mut all_balances = coin_balances;
                 for (coin_type, balance) in address_balances {

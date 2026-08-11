@@ -648,6 +648,7 @@ async fn test_execute_transaction_effects_json() {
                 executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
                     effects {
                         status
+                        version
                         effectsJson
                         balanceChangesJson
                     }

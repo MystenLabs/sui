@@ -1,0 +1,16 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 0, lines 1-5:
+//# print-bytecode
+Error: ParserError: Invalid Token: integer constant value requires a type suffix (e.g. 7u64)
+
+task 1, lines 7-11:
+//# print-bytecode
+Error: ParserError: Invalid Token: unrecognized token kind NameValue
+
+task 2, lines 13-18:
+//# print-bytecode
+Error: ParserError: Invalid Token: unrecognized token kind Copy

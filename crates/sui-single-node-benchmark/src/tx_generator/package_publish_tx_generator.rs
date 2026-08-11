@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
-use sui_move_build::{BuildConfig, CompiledPackage};
+use sui_move_build::{BuildConfig, CompiledPackage, PublishedDependency};
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
 use sui_types::transaction::{DEFAULT_VALIDATOR_GAS_PRICE, Transaction};
 use tracing::info;
@@ -80,7 +80,12 @@ impl PackagePublishTxGenerator {
         );
 
         let target_path = dir.join(path);
-        let published_deps = dep_map.clone();
+        let published_deps = dep_map
+            .iter()
+            .map(|(name, published_at)| {
+                (*name, PublishedDependency::new(*name, *name, *published_at))
+            })
+            .collect();
 
         let mut compiled_package = BuildConfig::new_for_testing_replace_addresses(
             dep_map.into_iter().map(|(k, v)| (k.to_string(), v)),

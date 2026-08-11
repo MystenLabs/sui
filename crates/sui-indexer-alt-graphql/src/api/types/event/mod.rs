@@ -6,24 +6,38 @@ use std::sync::Arc;
 use anyhow::Context as _;
 use async_graphql::Context;
 use async_graphql::Object;
-use async_graphql::connection::Connection;
 use diesel::prelude::QueryableByName;
 use diesel::sql_types::BigInt;
 use itertools::Itertools;
+use prost_types::FieldMask;
 use serde::Deserialize;
 use serde::Serialize;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
+use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::pg_reader::PgReader;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2;
+use sui_rpc_cursor::CursorKind;
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::Position;
+use sui_sdk_types::Event as SdkEvent;
 use sui_sql_macro::query;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::digests::TransactionDigest;
 use sui_types::event::Event as NativeEvent;
+use tokio::sync::OnceCell;
 
 use crate::api::scalars::base64::Base64;
+use crate::api::scalars::cursor::ByteCursor;
 use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::cursor::MultiCursor;
+use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::date_time::DateTime;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::address::Address;
 use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::lookups::CheckpointBounds;
 use crate::api::types::lookups::TxBoundsCursor;
@@ -35,6 +49,7 @@ use crate::api::types::transaction::Transaction;
 use crate::error::RpcError;
 use crate::extensions::query_limits;
 use crate::pagination::Page;
+use crate::pagination::StreamConnection;
 use crate::scope::Scope;
 use crate::task::watermark::Watermarks;
 
@@ -42,29 +57,48 @@ pub(crate) mod filter;
 mod lookups;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Copy)]
-pub(crate) struct EventCursor {
+pub struct EventCursor {
     #[serde(rename = "t")]
     pub tx_sequence_number: u64,
+    /// `u32` matches the primary format's `event_index` bound: legitimate values are event array
+    /// indices, capped by `max_num_event_emit` in the protocol config.
     #[serde(rename = "e")]
-    pub ev_sequence_number: u64,
+    pub ev_sequence_number: u32,
 }
 
-pub(crate) type CEvent = JsonCursor<EventCursor>;
+/// Validated event cursor coordinates.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EventToken {
+    /// Tracks the originating `CursorToken`'s kind, so it can be reproduced on re-encode.
+    kind: CursorKind,
+    checkpoint: u64,
+    tx_seq: u64,
+    event_index: u32,
+}
+
+/// Compatibility dispatch over the on-wire cursor formats: `CursorToken` (primary) or the
+/// legacy JSON cursor (secondary).
+pub type CEvent = MultiCursor<OpaqueCursor<EventToken>, JsonCursor<EventCursor>>;
 
 #[derive(Clone)]
 pub(crate) struct Event {
     pub(crate) scope: Scope,
-    /// Shared `Arc` so that multiple subscribers receiving events from the same
-    /// streamed checkpoint avoid a deep clone per yield. Cloning an `Event` is then
-    /// just an atomic refcount bump on the `native` field.
+    /// Shared `Arc` so that multiple subscribers receiving events from the same streamed checkpoint
+    /// avoid a deep clone per yield. Cloning an `Event` is then just an atomic refcount bump on the
+    /// `native` field.
     pub(crate) native: Arc<NativeEvent>,
-    /// Digest of the transaction that emitted this event
+    /// Digest of the transaction that emitted this event.
     pub(crate) transaction_digest: TransactionDigest,
-    /// Position of this event within the transaction's events list (0-indexed)
+    /// Position of this event within the transaction's events list (0-indexed).
     pub(crate) sequence_number: u64,
-    /// Timestamp of the checkpoint that includes the transaction containing this event.
-    pub(crate) timestamp_ms: Option<u64>,
+    /// Timestamp of the checkpoint that includes the transaction containing this event. Seeded at
+    /// construction when known (`None` when the transaction is not part of a checkpoint — simulated
+    /// or just-executed transactions), or left empty.
+    pub(crate) timestamp_ms: OnceCell<Option<u64>>,
 }
+
+/// Custom `Connection` for events to support partially-filled pages.
+pub(crate) type EventConnection = StreamConnection<Event>;
 
 #[Object]
 impl Event {
@@ -106,8 +140,29 @@ impl Event {
     /// All events from the same transaction share the same timestamp.
     ///
     /// `null` for simulated/executed transactions as they are not included in a checkpoint.
-    async fn timestamp(&self) -> Option<Result<DateTime, RpcError>> {
-        Some(DateTime::from_ms(self.timestamp_ms? as i64))
+    async fn timestamp(&self, ctx: &Context<'_>) -> Option<Result<DateTime, RpcError>> {
+        async {
+            let timestamp_ms = self
+                .timestamp_ms
+                .get_or_try_init(async || {
+                    let kv_loader: &KvLoader = ctx.data()?;
+                    Ok::<_, RpcError>(
+                        kv_loader
+                            .load_one_transaction_timestamp(self.transaction_digest)
+                            .await
+                            .context("Failed to fetch transaction timestamp")?,
+                    )
+                })
+                .await?;
+
+            let Some(timestamp_ms) = *timestamp_ms else {
+                return Ok(None);
+            };
+
+            Ok(Some(DateTime::from_ms(timestamp_ms as i64)?))
+        }
+        .await
+        .transpose()
     }
 
     /// The transaction that emitted this event. This information is only available for events from indexed transactions, and not from transactions that have just been executed or dry-run.
@@ -137,8 +192,13 @@ impl Event {
         scope: Scope,
         page: Page<CEvent>,
         filter: EventFilter,
-    ) -> Result<Connection<String, Event>, RpcError> {
+    ) -> Result<EventConnection, RpcError> {
         query_limits::rich::debit(ctx)?;
+
+        if let Some(reader) = ctx.data_opt::<AlphaLedgerGrpcReader>() {
+            return Self::paginate_grpc(reader, scope, page, filter).await;
+        }
+
         let pg_reader: &PgReader = ctx.data()?;
 
         let watermarks: &Arc<Watermarks> = ctx.data()?;
@@ -150,7 +210,7 @@ impl Event {
         let reader_lo = available_range_key.reader_lo(watermarks)?;
 
         let Some(mut query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
-            return Ok(Connection::new(false, false));
+            return Ok(EventConnection::empty());
         };
 
         #[derive(QueryableByName)]
@@ -188,12 +248,622 @@ impl Event {
         )
         .await?;
 
-        page.paginate_results(events, |(c, _)| JsonCursor::new(*c), |(_, e)| Ok(e))
+        page.paginate_results(
+            events,
+            |(c, _)| EventToken::cursor(0, c.tx_sequence_number, c.ev_sequence_number),
+            |(_, e)| Ok(e),
+        )
+        .map(Into::into)
+    }
+
+    /// Serve event pagination by streaming gRPC. Returns pages that may be partially filled,
+    /// with valid cursors if there are more pages to paginate through.
+    async fn paginate_grpc(
+        reader: &AlphaLedgerGrpcReader,
+        scope: Scope,
+        page: Page<CEvent>,
+        filter: EventFilter,
+    ) -> Result<EventConnection, RpcError> {
+        if page.limit() == 0 {
+            return Ok(EventConnection::empty());
+        }
+
+        // Consistency upper bound; empty when scope has no checkpoint set.
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(EventConnection::empty());
+        };
+
+        // TODO: LedgerService expose available checkpoint range for `reader_lo`.
+        let reader_lo = 0;
+
+        let Some(cp_bounds) = checkpoint_bounds(
+            filter.after_checkpoint().map(u64::from),
+            filter.at_checkpoint().map(u64::from),
+            filter.before_checkpoint().map(u64::from),
+            reader_lo,
+            checkpoint_viewed_at,
+        ) else {
+            return Ok(EventConnection::empty());
+        };
+
+        // Extract the cursor and pass through to grpc.
+        let after = page.after().map(|c| CursorToken::from(&c.token()).encode());
+        // Pg-minted cursors set checkpoint as 0 (as do legacy JSON cursors, which carry no
+        // checkpoint at all). Substitute the checkpoint with u64::max on the `before` bound to
+        // avoid collapsing the checkpoint window.
+        let before = page.before().map(|c| {
+            let mut token = c.token();
+            if token.checkpoint == 0 && (token.tx_seq != 0 || token.event_index != 0) {
+                token.checkpoint = u64::MAX;
+            }
+            CursorToken::from(&token).encode()
+        });
+
+        let mut options = v2::QueryOptions::default();
+        options.limit = Some(page.limit() as u32);
+        options.after = after;
+        options.before = before;
+        options.ordering = Some(if page.is_from_front() {
+            v2::Ordering::Ascending as i32
+        } else {
+            v2::Ordering::Descending as i32
+        });
+
+        let mut request = v2::ListEventsRequest::default();
+        // Everything the GraphQL node needs rides on the stream item: the event envelope and its
+        // position (the timestamp resolves lazily via a timestamp-only KV lookup).
+        request.read_mask = Some(FieldMask::from_paths([
+            "contents",
+            "event_type",
+            "package_id",
+            "module",
+            "sender",
+            "transaction_digest",
+            "event_index",
+        ]));
+        request.start_checkpoint = Some(*cp_bounds.start());
+        // `cp_bounds` end is inclusive; the request bound is exclusive.
+        request.end_checkpoint = Some(cp_bounds.end().saturating_add(1));
+        request.filter = filter.to_grpc_filter()?;
+        request.options = Some(options);
+
+        let result = reader
+            .list_events(request)
+            .await
+            .context("Failed to list events")?;
+
+        build_grpc_connection(scope, &page, result)
+    }
+}
+
+impl EventToken {
+    /// Mint the edge cursor for the event at the given coordinates.
+    pub(crate) fn cursor(checkpoint: u64, tx_seq: u64, event_index: u32) -> CEvent {
+        CEvent::new(OpaqueCursor::new(Self {
+            kind: CursorKind::Item,
+            checkpoint,
+            tx_seq,
+            event_index,
+        }))
+    }
+}
+
+impl CEvent {
+    pub(crate) fn ev_sequence_number(&self) -> u32 {
+        match self {
+            CEvent::Primary(c) => c.event_index,
+            CEvent::Secondary(c) => c.ev_sequence_number,
+        }
+    }
+
+    /// View the cursor as validated event coordinates, regardless of wire format. Legacy JSON
+    /// cursors carry no checkpoint, so their hint defaults to 0 (unknown).
+    fn token(&self) -> EventToken {
+        match self {
+            CEvent::Primary(c) => (**c).clone(),
+            CEvent::Secondary(c) => EventToken {
+                kind: CursorKind::Item,
+                checkpoint: 0,
+                tx_seq: c.tx_sequence_number,
+                event_index: c.ev_sequence_number,
+            },
+        }
+    }
+}
+
+impl ByteCursor for EventToken {
+    fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
+        CursorToken::decode(bytes)?.try_into()
+    }
+
+    fn encode_cursor(&self) -> bytes::Bytes {
+        CursorToken::from(self).encode()
+    }
+}
+
+impl From<&EventToken> for CursorToken {
+    fn from(token: &EventToken) -> Self {
+        CursorToken {
+            kind: token.kind,
+            position: Position::Events {
+                checkpoint: token.checkpoint,
+                tx_seq: token.tx_seq,
+                event_index: token.event_index,
+            },
+        }
+    }
+}
+
+impl TryFrom<CursorToken> for EventToken {
+    type Error = anyhow::Error;
+
+    fn try_from(token: CursorToken) -> anyhow::Result<Self> {
+        let Position::Events {
+            checkpoint,
+            tx_seq,
+            event_index,
+        } = token.position
+        else {
+            anyhow::bail!("invalid cursor");
+        };
+        Ok(Self {
+            kind: token.kind,
+            checkpoint,
+            tx_seq,
+            event_index,
+        })
+    }
+}
+
+impl TryFrom<CursorToken> for CEvent {
+    type Error = anyhow::Error;
+
+    fn try_from(token: CursorToken) -> anyhow::Result<Self> {
+        Ok(Self::new(OpaqueCursor::new(EventToken::try_from(token)?)))
+    }
+}
+
+impl Eq for CEvent {}
+
+/// Cursors minted by different paths disagree on the checkpoint hint (and kind), so pagination
+/// only compares the event coordinates.
+impl PartialEq for CEvent {
+    fn eq(&self, other: &Self) -> bool {
+        (self.tx_sequence_number(), self.ev_sequence_number())
+            == (other.tx_sequence_number(), other.ev_sequence_number())
     }
 }
 
 impl TxBoundsCursor for CEvent {
     fn tx_sequence_number(&self) -> u64 {
-        self.tx_sequence_number
+        match self {
+            CEvent::Primary(c) => c.tx_seq,
+            CEvent::Secondary(c) => c.tx_sequence_number,
+        }
+    }
+}
+
+/// Hydrate an `Event` node from a `ListEvents` stream item. The read mask requests everything the
+/// node needs — the event envelope and its position — so no KV lookup is required (the timestamp
+/// resolves lazily); a missing field is an internal inconsistency.
+fn event_from_stream_item(scope: Scope, payload: &v2::Event) -> Result<Event, RpcError> {
+    // TODO: can we consolidate to using sui_sdk type? To explore, captured in DVX-2189
+    let transaction_digest: TransactionDigest = payload
+        .transaction_digest
+        .as_deref()
+        .context("ListEvents item missing transaction digest")?
+        .parse()
+        .context("Failed to parse transaction digest from ListEvents")?;
+
+    let event_index = payload
+        .event_index
+        .context("ListEvents item missing event index")?;
+
+    let native: NativeEvent = SdkEvent::try_from(payload)
+        .context("Failed to convert ListEvents item")?
+        .try_into()
+        .context("Failed to convert event to native representation")?;
+
+    Ok(Event {
+        scope,
+        native: Arc::new(native),
+        transaction_digest,
+        sequence_number: event_index as u64,
+        timestamp_ms: OnceCell::new(),
+    })
+}
+
+/// Build an `EventConnection` from draining a bitmap-scan page, hydrating each edge's event from
+/// the stream item itself.
+///
+/// Edges are returned in ascending order.
+fn build_grpc_connection(
+    scope: Scope,
+    page: &Page<CEvent>,
+    result: StreamPage<v2::Event>,
+) -> Result<EventConnection, RpcError> {
+    page.paginate_stream_results(result, |payload| {
+        event_from_stream_item(scope.clone(), payload)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use async_graphql::connection::CursorType;
+    use fastcrypto::encoding::Base58;
+    use fastcrypto::encoding::Base64 as B64;
+    use fastcrypto::encoding::Encoding;
+    use sui_indexer_alt_reader::alpha_ledger_grpc_reader::PageItem;
+    use sui_types::base_types::ObjectID;
+    use sui_types::parse_sui_struct_tag;
+
+    use crate::pagination::PageLimits;
+
+    /// Legacy pg-style cursor: a JSON-encoded `EventCursor`.
+    fn legacy_cursor(tx_sequence_number: u64, ev_sequence_number: u32) -> CEvent {
+        CEvent::Secondary(JsonCursor::new(EventCursor {
+            tx_sequence_number,
+            ev_sequence_number,
+        }))
+    }
+
+    fn ev_position(checkpoint: u64, tx_seq: u64, event_index: u32) -> Position {
+        Position::Events {
+            checkpoint,
+            tx_seq,
+            event_index,
+        }
+    }
+
+    /// Build a synthetic `PageItem` pointing at `event_index` of the zero-digest
+    /// transaction, with the provided resume cursor.
+    fn ev_item(event_index: u32, cursor: CursorToken) -> PageItem<v2::Event> {
+        let mut contents = v2::Bcs::default();
+        contents.value = Some(Default::default());
+
+        let mut payload = v2::Event::default();
+        payload.transaction_digest = Some(Base58::encode(TransactionDigest::default().inner()));
+        payload.event_index = Some(event_index);
+        payload.package_id = Some(ObjectID::ZERO.to_canonical_string(true));
+        payload.module = Some("m".to_string());
+        payload.sender = Some(NativeSuiAddress::ZERO.to_string());
+        payload.event_type = Some("0x0::m::T".to_string());
+        payload.contents = Some(contents);
+        PageItem {
+            payload,
+            cursor: cursor.encode(),
+        }
+    }
+
+    /// The GraphQL cursor string that `build_grpc_connection` mints for raw server cursor
+    /// bytes.
+    fn graphql_cursor(token: CursorToken) -> String {
+        let token: EventToken = token.try_into().expect("events cursor");
+        CEvent::new(OpaqueCursor::new(token)).encode_cursor()
+    }
+
+    fn page_limits(limit: u64) -> PageLimits {
+        PageLimits {
+            default: limit as u32,
+            max: limit as u32,
+        }
+    }
+
+    /// Build a `Page<CEvent>` going forwards (`first: N`, no `after`/`before`).
+    fn forward_page(limit: u64) -> Page<CEvent> {
+        Page::from_params(&page_limits(limit), Some(limit), None, None, None)
+            .expect("constructing forward Page<CEvent>")
+    }
+
+    /// Build a `Page<CEvent>` going backwards (`last: N`, no `after`/`before`).
+    fn backward_page(limit: u64) -> Page<CEvent> {
+        Page::from_params(&page_limits(limit), None, None, Some(limit), None)
+            .expect("constructing backward Page<CEvent>")
+    }
+
+    /// Forward page opened from an `after` cursor (`first: N, after: <cursor>`).
+    fn forward_page_after(limit: u64, after: CEvent) -> Page<CEvent> {
+        Page::from_params(&page_limits(limit), Some(limit), Some(after), None, None)
+            .expect("constructing forward Page with after")
+    }
+
+    /// Backward page opened from a `before` cursor (`last: N, before: <cursor>`).
+    fn backward_page_before(limit: u64, before: CEvent) -> Page<CEvent> {
+        Page::from_params(&page_limits(limit), None, None, Some(limit), Some(before))
+            .expect("constructing backward Page with before")
+    }
+
+    #[test]
+    fn primary_cursor_roundtrips() {
+        let cursor = EventToken::cursor(1, 2, 3);
+        let decoded = CEvent::decode_cursor(&cursor.encode_cursor()).expect("valid cursor");
+        assert_eq!(decoded.tx_sequence_number(), 2);
+        assert_eq!(decoded.ev_sequence_number(), 3);
+        assert_eq!(decoded, cursor);
+    }
+
+    /// Pagination equality keys off the event coordinates only: legacy cursors and grpc cursors
+    /// minted with different checkpoint hints all compare equal at the same position.
+    #[test]
+    fn equality_ignores_checkpoint_hint() {
+        assert_eq!(legacy_cursor(2, 3), EventToken::cursor(0, 2, 3));
+        assert_eq!(EventToken::cursor(7, 2, 3), EventToken::cursor(0, 2, 3));
+        assert_eq!(legacy_cursor(2, 3), EventToken::cursor(100, 2, 3));
+        assert_ne!(legacy_cursor(2, 4), EventToken::cursor(0, 2, 3));
+    }
+
+    /// Legacy cursors carrying an event index beyond `u32` were never minted by a server (indices
+    /// are capped by `max_num_event_emit`) and must fail to parse.
+    #[test]
+    fn rejects_oversized_legacy_event_index() {
+        let bytes = format!(r#"{{"t":2,"e":{}}}"#, u64::MAX);
+        let encoded = B64::encode(bytes.as_bytes());
+        assert!(CEvent::decode_cursor(&encoded).is_err());
+    }
+
+    /// A token scoped to another endpoint must not decode as an event cursor.
+    #[test]
+    fn rejects_wrong_variant_cursor() {
+        let token = CursorToken::item(Position::Transactions {
+            checkpoint: 1,
+            tx_seq: 2,
+        });
+        let encoded = B64::encode(token.encode());
+        assert!(CEvent::decode_cursor(&encoded).is_err());
+    }
+
+    /// Legacy JSON cursors carry no checkpoint; the coordinate view defaults the hint to 0.
+    #[test]
+    fn legacy_cursor_token_defaults_checkpoint_zero() {
+        let token = legacy_cursor(2, 3).token();
+        assert_eq!(token.kind, CursorKind::Item);
+        assert_eq!(token.checkpoint, 0);
+        assert_eq!(token.tx_seq, 2);
+        assert_eq!(token.event_index, 3);
+    }
+
+    /// Empty connection surfaces cursors if provided by the streamed page.
+    #[test]
+    fn empty_page_surfaces_boundary_cursors() {
+        let scope = Scope::for_tests();
+        let page = forward_page(10);
+        let result = StreamPage::<v2::Event>::for_test(
+            Vec::new(),
+            Some(CursorToken::boundary(ev_position(1, 10, 0)).encode()),
+            Some(CursorToken::boundary(ev_position(2, 20, 0)).encode()),
+            None,
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert!(conn.edges.is_empty());
+        assert!(!conn.page_info.has_previous_page);
+        assert!(conn.page_info.has_next_page);
+
+        let start = conn.page_info.start_cursor.expect("start cursor set");
+        let end = conn.page_info.end_cursor.expect("end cursor set");
+        assert_ne!(start, end, "start and end cursors should be different");
+    }
+
+    /// Order of cursors on connection should be swapped from streamed page.
+    #[test]
+    fn empty_page_backward_correct_cursors() {
+        let scope = Scope::for_tests();
+        let page = backward_page(10);
+        // Descending stream: the first watermark the stream reports is the high end.
+        let result = StreamPage::<v2::Event>::for_test(
+            Vec::new(),
+            Some(CursorToken::boundary(ev_position(2, 20, 0)).encode()),
+            Some(CursorToken::boundary(ev_position(1, 10, 0)).encode()),
+            None,
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert!(conn.edges.is_empty());
+        assert!(conn.page_info.has_previous_page);
+        assert!(!conn.page_info.has_next_page);
+
+        let start = conn.page_info.start_cursor.expect("start cursor set");
+        let end = conn.page_info.end_cursor.expect("end cursor set");
+        assert_eq!(
+            start,
+            graphql_cursor(CursorToken::boundary(ev_position(1, 10, 0)))
+        );
+        assert_eq!(
+            end,
+            graphql_cursor(CursorToken::boundary(ev_position(2, 20, 0)))
+        );
+    }
+
+    #[test]
+    fn non_empty_page_uses_edge_cursors_and_hydrates_nodes() {
+        let scope = Scope::for_tests();
+        let page = forward_page(10);
+        let result = StreamPage::<v2::Event>::for_test(
+            vec![
+                ev_item(0, CursorToken::item(ev_position(1, 1, 0))),
+                ev_item(1, CursorToken::item(ev_position(1, 1, 1))),
+                ev_item(2, CursorToken::item(ev_position(1, 1, 2))),
+            ],
+            None,
+            None,
+            Some(v2::QueryEndReason::CheckpointBound),
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert_eq!(conn.edges.len(), 3);
+        // `CheckpointBound` means the range was exhausted — no forward continuation.
+        assert!(!conn.page_info.has_next_page);
+
+        let start = conn.page_info.start_cursor.expect("start set");
+        let end = conn.page_info.end_cursor.expect("end set");
+        assert_eq!(
+            start, conn.edges[0].cursor,
+            "non-empty page should anchor start_cursor on first edge, not stream watermark"
+        );
+        assert_eq!(
+            end, conn.edges[2].cursor,
+            "non-empty page should anchor end_cursor on last edge, not stream watermark"
+        );
+
+        // Nodes carry the hydrated position and envelope; timestamps resolve lazily.
+        for (i, edge) in conn.edges.iter().enumerate() {
+            assert_eq!(edge.node.sequence_number, i as u64);
+            assert_eq!(edge.node.transaction_digest, TransactionDigest::default());
+            assert_eq!(edge.node.native.package_id, ObjectID::ZERO);
+            assert_eq!(
+                edge.node.native.type_,
+                parse_sui_struct_tag("0x0::m::T").unwrap()
+            );
+            assert!(edge.node.timestamp_ms.get().is_none());
+        }
+    }
+
+    /// The read mask requests the full event envelope, so an item missing one of its fields
+    /// is an internal inconsistency, not an empty result.
+    #[test]
+    fn missing_payload_field_errors() {
+        let scope = Scope::for_tests();
+        let page = forward_page(10);
+
+        let mut item = ev_item(0, CursorToken::item(ev_position(1, 1, 0)));
+        item.payload.contents = None;
+        let result = StreamPage::<v2::Event>::for_test(
+            vec![item],
+            None,
+            None,
+            Some(v2::QueryEndReason::CheckpointBound),
+        );
+        assert!(
+            build_grpc_connection(scope.clone(), &page, result).is_err(),
+            "missing event contents should error"
+        );
+
+        let mut item = ev_item(0, CursorToken::item(ev_position(1, 1, 0)));
+        item.payload.sender = None;
+        let result = StreamPage::<v2::Event>::for_test(
+            vec![item],
+            None,
+            None,
+            Some(v2::QueryEndReason::CheckpointBound),
+        );
+        assert!(
+            build_grpc_connection(scope, &page, result).is_err(),
+            "missing sender should error"
+        );
+    }
+
+    #[test]
+    fn full_page_at_item_limit_signals_more() {
+        let scope = Scope::for_tests();
+        let page = forward_page(2);
+        let result = StreamPage::<v2::Event>::for_test(
+            vec![
+                ev_item(0, CursorToken::item(ev_position(1, 1, 0))),
+                ev_item(1, CursorToken::item(ev_position(1, 1, 1))),
+            ],
+            None,
+            None,
+            Some(v2::QueryEndReason::ItemLimit),
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert_eq!(conn.edges.len(), 2);
+        assert!(
+            conn.page_info.has_next_page,
+            "full page + ItemLimit must report hasNextPage: true (has_more() is true)"
+        );
+    }
+
+    #[test]
+    fn descending_page_reverses_to_ascending_edges() {
+        let scope = Scope::for_tests();
+        let page = backward_page(10);
+        // Descending stream order: event indices 2, 1, 0 (highest position first).
+        let result = StreamPage::<v2::Event>::for_test(
+            vec![
+                ev_item(2, CursorToken::item(ev_position(1, 1, 2))),
+                ev_item(1, CursorToken::item(ev_position(1, 1, 1))),
+                ev_item(0, CursorToken::item(ev_position(1, 1, 0))),
+            ],
+            None,
+            None,
+            Some(v2::QueryEndReason::CheckpointBound),
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert_eq!(conn.edges.len(), 3);
+        // After reversal, the *first* edge corresponds to the *lowest* position from the
+        // stream — i.e. the last item the stream emitted (event index 0).
+        let start = conn.page_info.start_cursor.expect("start set");
+        let end = conn.page_info.end_cursor.expect("end set");
+        assert_eq!(start, conn.edges[0].cursor);
+        assert_eq!(
+            start,
+            graphql_cursor(CursorToken::item(ev_position(1, 1, 0)))
+        );
+        assert_eq!(end, conn.edges[2].cursor);
+        assert_eq!(end, graphql_cursor(CursorToken::item(ev_position(1, 1, 2))));
+        assert_eq!(
+            conn.edges
+                .iter()
+                .map(|e| e.node.sequence_number)
+                .collect::<Vec<_>>(),
+            [0, 1, 2],
+        );
+    }
+
+    /// A forward page opened from an `after` cursor reports `hasPreviousPage: true`
+    /// (`page.after().is_some()`). `CheckpointBound` makes `has_more()` false, so the only
+    /// source of a `true` flag is the input cursor — not the stream.
+    #[test]
+    fn forward_after_signals_previous_page() {
+        let scope = Scope::for_tests();
+        let page = forward_page_after(10, EventToken::cursor(1, 1, 0));
+        let result = StreamPage::<v2::Event>::for_test(
+            vec![ev_item(1, CursorToken::item(ev_position(1, 1, 1)))],
+            None,
+            None,
+            Some(v2::QueryEndReason::CheckpointBound),
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert!(
+            conn.page_info.has_previous_page,
+            "after cursor set → hasPreviousPage"
+        );
+        assert!(
+            !conn.page_info.has_next_page,
+            "CheckpointBound → no hasNextPage"
+        );
+    }
+
+    /// A backward page opened from a `before` cursor reports `hasNextPage: true`
+    /// (`page.before().is_some()`). `CheckpointBound` makes `has_more()` false, so the only
+    /// source of a `true` flag is the input cursor — not the stream.
+    #[test]
+    fn backward_before_signals_next_page() {
+        let scope = Scope::for_tests();
+        let page = backward_page_before(10, EventToken::cursor(1, 1, 2));
+        let result = StreamPage::<v2::Event>::for_test(
+            vec![
+                ev_item(1, CursorToken::item(ev_position(1, 1, 1))),
+                ev_item(0, CursorToken::item(ev_position(1, 1, 0))),
+            ],
+            None,
+            None,
+            Some(v2::QueryEndReason::CheckpointBound),
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert!(
+            conn.page_info.has_next_page,
+            "before cursor set → hasNextPage"
+        );
+        assert!(
+            !conn.page_info.has_previous_page,
+            "CheckpointBound → no hasPreviousPage"
+        );
     }
 }

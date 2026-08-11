@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/matching/abc_match_no_drop_exhaustive_invalid.move:14:13
    │
  3 │     public enum ABC<T> {

@@ -14,16 +14,16 @@
 //! terminate eventually.
 
 use move_binary_format::{
-    errors::{Location, PartialVMError, PartialVMResult, VMResult},
+    errors::{Location, PartialVMResult, VMResult},
     file_format::{
         Bytecode, CompiledModule, FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex,
         SignatureIndex, SignatureToken, TypeParameterIndex,
     },
+    partial_vm_error_with_debug_message,
 };
-use move_core_types::vm_status::StatusCode;
 use petgraph::{
     Graph,
-    algo::tarjan_scc,
+    algo::kosaraju_scc,
     graph::{EdgeIndex, NodeIndex},
     visit::EdgeRef,
 };
@@ -95,28 +95,30 @@ impl<'a> InstantiationLoopChecker<'a> {
 
         match components.pop() {
             None => Ok(()),
-            Some((nodes, edges)) => {
-                let msg_edges = edges
-                    .into_iter()
-                    .filter_map(
-                        |edge_idx| match checker.graph.edge_weight(edge_idx).unwrap() {
-                            Edge::TyConApp(_) => Some(checker.format_edge(edge_idx)),
-                            _ => None,
-                        },
+            Some((nodes, edges)) => Err(partial_vm_error_with_debug_message!(
+                LOOP_IN_INSTANTIATION_GRAPH,
+                {
+                    let msg_edges = edges
+                        .into_iter()
+                        .filter_map(
+                            |edge_idx| match checker.graph.edge_weight(edge_idx).unwrap() {
+                                Edge::TyConApp(_) => Some(checker.format_edge(edge_idx)),
+                                _ => None,
+                            },
+                        )
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    let msg_nodes = nodes
+                        .into_iter()
+                        .map(|node_idx| checker.format_node(node_idx))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!(
+                        "edges with constructors: [{}], nodes: [{}]",
+                        msg_edges, msg_nodes,
                     )
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let msg_nodes = nodes
-                    .into_iter()
-                    .map(|node_idx| checker.format_node(node_idx))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let msg = format!(
-                    "edges with constructors: [{}], nodes: [{}]",
-                    msg_edges, msg_nodes
-                );
-                Err(PartialVMError::new(StatusCode::LOOP_IN_INSTANTIATION_GRAPH).with_message(msg))
-            }
+                }
+            )),
         }
     }
 
@@ -245,7 +247,7 @@ impl<'a> InstantiationLoopChecker<'a> {
     /// that an input type can get "bigger" infinitely many times along the loop, also creating
     /// infinitely many types. This is precisely the kind of constructs we want to forbid.
     fn find_non_trivial_components(&self) -> Vec<(Vec<NodeIndex>, Vec<EdgeIndex>)> {
-        tarjan_scc(&self.graph)
+        kosaraju_scc(&self.graph)
             .into_iter()
             .filter_map(move |nodes| {
                 let node_set: HashSet<_> = nodes.iter().cloned().collect();

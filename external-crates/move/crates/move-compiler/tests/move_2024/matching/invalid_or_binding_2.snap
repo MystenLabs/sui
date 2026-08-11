@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_2024/matching/invalid_or_binding_2.move:9:53
   │
 9 │             Three::Tuple(x, _, _) | Three::Tuple(_, y, _) | Three::Tuple(_, _, x) => { let _y = x; },
@@ -13,7 +13,7 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E03019]: invalid pattern
+error[EC03019]: invalid pattern
   ┌─ tests/move_2024/matching/invalid_or_binding_2.move:9:53
   │
 9 │             Three::Tuple(x, _, _) | Three::Tuple(_, y, _) | Three::Tuple(_, _, x) => { let _y = x; },
@@ -23,7 +23,7 @@ error[E03019]: invalid pattern
   │
   = Both sides of an or-pattern must bind the same variables.
 
-error[E03019]: invalid pattern
+error[EC03019]: invalid pattern
   ┌─ tests/move_2024/matching/invalid_or_binding_2.move:9:53
   │
 9 │             Three::Tuple(x, _, _) | Three::Tuple(_, y, _) | Three::Tuple(_, _, x) => { let _y = x; },
@@ -33,7 +33,7 @@ error[E03019]: invalid pattern
   │
   = Both sides of an or-pattern must bind the same variables.
 
-error[E03019]: invalid pattern
+error[EC03019]: invalid pattern
   ┌─ tests/move_2024/matching/invalid_or_binding_2.move:9:80
   │
 9 │             Three::Tuple(x, _, _) | Three::Tuple(_, y, _) | Three::Tuple(_, _, x) => { let _y = x; },

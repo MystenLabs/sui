@@ -11,7 +11,7 @@ use std::{
 
 use crate::lexer::*;
 use move_command_line_common::files::FileHash;
-use move_core_types::{account_address::AccountAddress, u256};
+use move_core_types::{account_address::AccountAddress, runtime_value::MoveValue, u256};
 use move_ir_types::{ast::*, location::*};
 use move_symbol_pool::Symbol;
 
@@ -214,6 +214,27 @@ fn parse_var(tokens: &mut Lexer) -> Result<Var, ParseError<Loc, anyhow::Error>> 
     let var = parse_var_(tokens)?;
     let end_loc = tokens.previous_end_loc();
     Ok(spanned(tokens.file_hash(), start_loc, end_loc, var))
+}
+
+/// A name beginning with an uppercase letter denotes a constant. Local
+/// variables and parameters must not begin with an uppercase letter.
+fn is_constant_name(name: &str) -> bool {
+    name.starts_with(|c: char| c.is_ascii_uppercase())
+}
+
+/// Parse a variable that introduces a local binding (a `let`, parameter, or
+/// unpack binding), which must not begin with an uppercase letter.
+fn parse_binding_var(tokens: &mut Lexer) -> Result<Var, ParseError<Loc, anyhow::Error>> {
+    let var = parse_var(tokens)?;
+    if is_constant_name(var.value.0.as_str()) {
+        return Err(ParseError::InvalidToken {
+            location: var.loc,
+            message: "local and parameter names must not begin with an uppercase letter \
+                      (that is reserved for constants)"
+                .to_string(),
+        });
+    }
+    Ok(var)
 }
 
 // Field: Field = {
@@ -450,13 +471,11 @@ fn parse_qualified_function_name(
 ) -> Result<FunctionCall, ParseError<Loc, anyhow::Error>> {
     let start_loc = tokens.start_loc();
     let call = match tokens.peek() {
-        Tok::VecPack(_)
-        | Tok::VecLen
+        Tok::VecLen
         | Tok::VecImmBorrow
         | Tok::VecMutBorrow
         | Tok::VecPushBack
         | Tok::VecPopBack
-        | Tok::VecUnpack(_)
         | Tok::VecSwap
         | Tok::Freeze
         | Tok::ToU8
@@ -527,6 +546,16 @@ fn parse_borrow_field_(
             Tok::ColonColon => parse_unary_exp(tokens)?,
             _ => {
                 let var = parse_var(tokens)?;
+                if is_constant_name(var.value.0.as_str()) {
+                    return Err(ParseError::InvalidToken {
+                        location: var.loc,
+                        message: if mutable {
+                            "constants cannot be mutably borrowed".to_string()
+                        } else {
+                            "borrowing constants is not yet supported".to_string()
+                        },
+                    });
+                }
                 return Ok(Exp_::BorrowLocal(mutable, var));
             }
         }
@@ -598,6 +627,13 @@ fn parse_call(
 // }
 
 fn parse_call_or_term_(tokens: &mut Lexer) -> Result<Exp_, ParseError<Loc, anyhow::Error>> {
+    // `vector<T; N>(args)` — vector pack expression.
+    if is_vector_pack_unpack_prefix(tokens) {
+        let (ty, n) = parse_vector_pack_prefix(tokens)?;
+        let args = parse_call_or_term(tokens)?;
+        return Ok(Exp_::VecPack(ty, n, Box::new(args)));
+    }
+
     let is_module_call = tokens.peek() == Tok::NameValue && tokens.lookahead()? == Tok::ColonColon;
     if is_module_call {
         let f = parse_qualified_function_name(tokens)?;
@@ -620,13 +656,11 @@ fn parse_call_or_term_(tokens: &mut Lexer) -> Result<Exp_, ParseError<Loc, anyho
         };
     }
     match tokens.peek() {
-        Tok::VecPack(_)
-        | Tok::VecLen
+        Tok::VecLen
         | Tok::VecImmBorrow
         | Tok::VecMutBorrow
         | Tok::VecPushBack
         | Tok::VecPopBack
-        | Tok::VecUnpack(_)
         | Tok::VecSwap
         | Tok::Freeze
         | Tok::ToU8
@@ -709,22 +743,46 @@ fn parse_term_(tokens: &mut Lexer) -> Result<Exp_, ParseError<Loc, anyhow::Error
             tokens.advance()?;
             let v = parse_var(tokens)?;
             consume_token(tokens, Tok::RParen)?;
+            if is_constant_name(v.value.0.as_str()) {
+                return Err(ParseError::InvalidToken {
+                    location: v.loc,
+                    message: "constants cannot be moved; use copy(...) to load a constant"
+                        .to_string(),
+                });
+            }
             Ok(Exp_::Move(v))
         }
         Tok::Copy => {
             tokens.advance()?;
             let v = parse_var(tokens)?;
             consume_token(tokens, Tok::RParen)?;
-            Ok(Exp_::Copy(v))
+            // `copy(C)` (uppercase) loads a named constant; `copy(c)` copies a local.
+            Ok(if is_constant_name(v.value.0.as_str()) {
+                Exp_::Constant(ConstantName(v.value.0))
+            } else {
+                Exp_::Copy(v)
+            })
         }
         Tok::AmpMut => {
             tokens.advance()?;
             let v = parse_var(tokens)?;
+            if is_constant_name(v.value.0.as_str()) {
+                return Err(ParseError::InvalidToken {
+                    location: v.loc,
+                    message: "constants cannot be mutably borrowed".to_string(),
+                });
+            }
             Ok(Exp_::BorrowLocal(true, v))
         }
         Tok::Amp => {
             tokens.advance()?;
             let v = parse_var(tokens)?;
+            if is_constant_name(v.value.0.as_str()) {
+                return Err(ParseError::InvalidToken {
+                    location: v.loc,
+                    message: "borrowing constants is not yet supported".to_string(),
+                });
+            }
             Ok(Exp_::BorrowLocal(false, v))
         }
         Tok::AccountAddressValue
@@ -789,14 +847,66 @@ fn parse_module_name(tokens: &mut Lexer) -> Result<ModuleName, ParseError<Loc, a
 //     "vec_*<" <type_actuals: TypeActuals> ">" =>? { ... },
 //     "freeze" => Builtin::Freeze,
 // }
+//
+// VectorPack (expression):
+//     "vector" "<" <ty: Type> ";" <n: U64> ">" <args: CallOrTerm>
+//         => Exp_::VecPack(ty, n, args)
+//
+// VectorUnpack (statement):
+//     "vector" "<" <ty: Type> ";" <n: U64> ">"
+//         "(" <lvs: Comma<LValue>> ")" "=" <e: Exp> ";"
+//         => Statement_::VecUnpack(ty, n, lvs, e)
+//
+// Pack and unpack share the prefix `vector<T; N>` and disambiguate by
+// position: pack lives in expression position, unpack lives in statement
+// position with `=`. See `parse_vector_pack_prefix`, the dispatch in
+// `parse_call_or_term_`, and `parse_vector_unpack_statement` below.
+
+fn parse_u64_literal(tokens: &mut Lexer) -> Result<u64, ParseError<Loc, anyhow::Error>> {
+    if tokens.peek() != Tok::U64Value {
+        return Err(ParseError::InvalidToken {
+            location: current_token_loc(tokens),
+            message: "expected unsigned integer literal".to_string(),
+        });
+    }
+    let mut s = tokens.content();
+    if s.ends_with("u64") {
+        s = &s[..s.len() - 3];
+    }
+    let n = u64::from_str(s).map_err(|_| ParseError::InvalidToken {
+        location: current_token_loc(tokens),
+        message: format!("invalid u64 literal: {}", s),
+    })?;
+    tokens.advance()?;
+    Ok(n)
+}
+
+// Returns true when the upcoming tokens are the prefix of a vector pack or
+// unpack form: `vector<` (a `NameBeginTyValue` whose content is `"vector<"`).
+// Used to dispatch in expression and statement positions before committing
+// to parsing.
+fn is_vector_pack_unpack_prefix(tokens: &Lexer) -> bool {
+    tokens.peek() == Tok::NameBeginTyValue && tokens.content() == "vector<"
+}
+
+// Parses `vector < <Type> ; <U64> >`, returning (element type, arity).
+// Caller has confirmed via `is_vector_pack_unpack_prefix` that the upcoming
+// tokens are `vector<...`.
+fn parse_vector_pack_prefix(
+    tokens: &mut Lexer,
+) -> Result<(Type, u64), ParseError<Loc, anyhow::Error>> {
+    debug_assert!(is_vector_pack_unpack_prefix(tokens));
+    tokens.advance()?; // consume `vector<` (a single NameBeginTyValue token)
+    let ty = parse_type(tokens)?;
+    consume_token(tokens, Tok::Semicolon)?;
+    let arity = parse_u64_literal(tokens)?;
+    adjust_token(tokens, &[Tok::Greater])?;
+    consume_token(tokens, Tok::Greater)?;
+    Ok((ty, arity))
+}
 
 fn parse_builtin(tokens: &mut Lexer) -> Result<Builtin, ParseError<Loc, anyhow::Error>> {
     match tokens.peek() {
-        Tok::VecPack(num) => {
-            tokens.advance()?;
-            let type_actuals = parse_type_actuals(tokens)?;
-            Ok(Builtin::VecPack(type_actuals, num))
-        }
         Tok::VecLen => {
             tokens.advance()?;
             let type_actuals = parse_type_actuals(tokens)?;
@@ -821,11 +931,6 @@ fn parse_builtin(tokens: &mut Lexer) -> Result<Builtin, ParseError<Loc, anyhow::
             tokens.advance()?;
             let type_actuals = parse_type_actuals(tokens)?;
             Ok(Builtin::VecPopBack(type_actuals))
-        }
-        Tok::VecUnpack(num) => {
-            tokens.advance()?;
-            let type_actuals = parse_type_actuals(tokens)?;
-            Ok(Builtin::VecUnpack(type_actuals, num))
         }
         Tok::VecSwap => {
             tokens.advance()?;
@@ -877,6 +982,12 @@ fn parse_lvalue_(tokens: &mut Lexer) -> Result<LValue_, ParseError<Loc, anyhow::
     match tokens.peek() {
         Tok::NameValue => {
             let l = parse_var(tokens)?;
+            if is_constant_name(l.value.0.as_str()) {
+                return Err(ParseError::InvalidToken {
+                    location: l.loc,
+                    message: "cannot assign to a constant".to_string(),
+                });
+            }
             Ok(LValue_::Var(l))
         }
         Tok::Star => {
@@ -913,7 +1024,7 @@ fn parse_field_bindings(
     let f = parse_field(tokens)?;
     if tokens.peek() == Tok::Colon {
         tokens.advance()?; // consume the colon
-        let v = parse_var(tokens)?;
+        let v = parse_binding_var(tokens)?;
         Ok((f, v))
     } else {
         Ok((
@@ -948,6 +1059,33 @@ fn parse_assign_(tokens: &mut Lexer) -> Result<Statement_, ParseError<Loc, anyho
     consume_token(tokens, Tok::Equal)?;
     let e = parse_exp(tokens)?;
     Ok(Statement_::Assign(lvalues, e))
+}
+
+// `vector<T; N>(lvalues) = expr;` — vector unpack statement form. Mirrors
+// the shape of struct unpack `Foo<T> { f: var } = expr` (see `parse_unpack_`):
+// same prefix `vector<T; N>` lives in pack/expression position too, but here
+// the parens hold LValues (var / `_` / `*ref`) and the bracket count = arity.
+fn parse_vector_unpack_statement(
+    tokens: &mut Lexer,
+) -> Result<Statement_, ParseError<Loc, anyhow::Error>> {
+    let (ty, n) = parse_vector_pack_prefix(tokens)?;
+    consume_token(tokens, Tok::LParen)?;
+    let lparen_end = tokens.previous_end_loc();
+    let lvalues = parse_comma_list(tokens, &[Tok::RParen], parse_lvalue, true)?;
+    consume_token(tokens, Tok::RParen)?;
+
+    if lvalues.len() as u64 != n {
+        return Err(ParseError::InvalidToken {
+            location: make_loc(tokens.file_hash(), lparen_end, tokens.previous_end_loc()),
+            message: format!(
+                "vector unpack arity mismatch: expected {n} lvalues, got {}",
+                lvalues.len()
+            ),
+        });
+    }
+    consume_token(tokens, Tok::Equal)?;
+    let rhs = parse_exp(tokens)?;
+    Ok(Statement_::VecUnpack(ty, n, lvalues, Box::new(rhs)))
 }
 
 fn parse_unpack_(
@@ -1064,7 +1202,8 @@ fn parse_statement_(tokens: &mut Lexer) -> Result<Statement_, ParseError<Loc, an
             // This could be: an LValue for an assignment, a NameAndTypeActuals
             // (with no type_actuals) for an unpack, or a module-qualified
             // function call / variant unpack of the form `M::foo(...)` /
-            // `M::Variant { ... } = e`.
+            // `M::Variant { ... } = e`. Vector unpack `vector<T; N>(lvs) = e`
+            // is dispatched via the `Tok::NameBeginTyValue` arm below.
             match tokens.lookahead()? {
                 Tok::LBrace => {
                     let name = parse_name(tokens)?;
@@ -1113,6 +1252,12 @@ fn parse_statement_(tokens: &mut Lexer) -> Result<Statement_, ParseError<Loc, an
         }
         Tok::Star | Tok::Underscore => parse_assign_(tokens),
         Tok::NameBeginTyValue => {
+            // `vector<T; N>(lvs) = e;` — vector unpack statement form.
+            // Distinguished from struct unpack `Foo<T> { f: x } = e;` by the
+            // `vector<` content of the lex token.
+            if is_vector_pack_unpack_prefix(tokens) {
+                return parse_vector_unpack_statement(tokens);
+            }
             let (name, tys) = parse_name_and_type_actuals(tokens)?;
             parse_unpack_(tokens, name, tys)
         }
@@ -1120,13 +1265,11 @@ fn parse_statement_(tokens: &mut Lexer) -> Result<Statement_, ParseError<Loc, an
             consume_token(tokens, Tok::VariantSwitch)?;
             parse_variant_switch_(tokens)
         }
-        Tok::VecPack(_)
-        | Tok::VecLen
+        Tok::VecLen
         | Tok::VecImmBorrow
         | Tok::VecMutBorrow
         | Tok::VecPushBack
         | Tok::VecPopBack
-        | Tok::VecUnpack(_)
         | Tok::VecSwap
         | Tok::Freeze
         | Tok::ToU8
@@ -1246,7 +1389,7 @@ fn parse_block(tokens: &mut Lexer) -> Result<Block, ParseError<Loc, anyhow::Erro
 
 fn parse_declaration(tokens: &mut Lexer) -> Result<(Var, Type), ParseError<Loc, anyhow::Error>> {
     consume_token(tokens, Tok::Let)?;
-    let v = parse_var(tokens)?;
+    let v = parse_binding_var(tokens)?;
     consume_token(tokens, Tok::Colon)?;
     let t = parse_type(tokens)?;
     consume_token(tokens, Tok::Semicolon)?;
@@ -1533,7 +1676,7 @@ fn parse_name_and_type_actuals(
 // }
 
 fn parse_arg_decl(tokens: &mut Lexer) -> Result<(Var, Type), ParseError<Loc, anyhow::Error>> {
-    let v = parse_var(tokens)?;
+    let v = parse_binding_var(tokens)?;
     consume_token(tokens, Tok::Colon)?;
     let t = parse_type(tokens)?;
     Ok((v, t))
@@ -1913,6 +2056,107 @@ fn parse_variant_decl(
     ))
 }
 
+// ConstantDecl: Constant = {
+//     "const" <name: Name> ":" <ty: Type> "=" <value: ConstantValue> ";"
+// }
+// Constants take no module-member modifiers. The declared type is not checked
+// against the value here — that is the bytecode verifier's job.
+fn parse_constant_decl(
+    tokens: &mut Lexer,
+    modifiers: Modifiers,
+) -> Result<Constant, ParseError<Loc, anyhow::Error>> {
+    let Modifiers {
+        visibility,
+        native,
+        entry,
+    } = modifiers;
+    if let Some((vis, loc)) = visibility {
+        let modifier = match vis {
+            FunctionVisibility::Public => "public",
+            FunctionVisibility::Friend => "public(friend)",
+            FunctionVisibility::Internal => unreachable!("not a parseable visibility"),
+        };
+        check_no_modifier(Some(loc), modifier, "constant")?;
+    };
+    check_no_modifier(native, "native", "constant")?;
+    check_no_modifier(entry, "entry", "constant")?;
+
+    consume_token(tokens, Tok::Const)?;
+    let name_loc = current_token_loc(tokens);
+    let name = ConstantName(parse_name(tokens)?);
+    if !is_constant_name(name.0.as_str()) {
+        return Err(ParseError::InvalidToken {
+            location: name_loc,
+            message: "constant names must begin with an uppercase letter".to_string(),
+        });
+    }
+    consume_token(tokens, Tok::Colon)?;
+    let signature = parse_type(tokens)?;
+    consume_token(tokens, Tok::Equal)?;
+    let value = parse_constant_value(tokens)?;
+    consume_token(tokens, Tok::Semicolon)?;
+    Ok(Constant {
+        name,
+        signature,
+        value,
+        is_error_constant: false,
+    })
+}
+
+// ConstantValue: MoveValue = {
+//     <i: U8 | U16 | U32 | U64 | U128 | U256>  // integer literals require a suffix
+//     "true" | "false"
+//     <a: AccountAddress>
+//     <b: ByteArray>                           // h"..", lowered to vector<u8>
+//     "vector" "(" <elems: Comma<ConstantValue>> ")"
+// }
+// Each value is self-describing, so the parsed `MoveValue` is independent of the constant's
+// declared type.
+fn parse_constant_value(tokens: &mut Lexer) -> Result<MoveValue, ParseError<Loc, anyhow::Error>> {
+    // `vector(elem, ...)` — element values are self-describing; there is no
+    // element-type annotation.
+    if tokens.peek() == Tok::NameValue && tokens.content() == "vector" {
+        tokens.advance()?; // consume `vector`
+        consume_token(tokens, Tok::LParen)?;
+        let elems = parse_comma_list(tokens, &[Tok::RParen], parse_constant_value, true)?;
+        consume_token(tokens, Tok::RParen)?;
+        return Ok(MoveValue::Vector(elems));
+    }
+    // `@addr` — named or literal address, mirroring address expressions.
+    if tokens.peek() == Tok::At {
+        tokens.advance()?;
+        return Ok(MoveValue::Address(parse_account_address(tokens)?));
+    }
+    // A bare integer (no suffix) lexes as `U64Value`; constant values must be
+    // self-describing, so require an explicit suffix.
+    if tokens.peek() == Tok::U64Value && !tokens.content().ends_with("u64") {
+        return Err(ParseError::InvalidToken {
+            location: current_token_loc(tokens),
+            message: "integer constant value requires a type suffix (e.g. 7u64)".to_string(),
+        });
+    }
+    // Reuse the expression literal parser for scalars and byte arrays so the
+    // numeric parsing (and its overflow behavior) is shared with expressions.
+    let val = parse_copyable_val(tokens)?;
+    Ok(copyable_val_to_move_value(val.value))
+}
+
+fn copyable_val_to_move_value(val: CopyableVal_) -> MoveValue {
+    match val {
+        CopyableVal_::Address(a) => MoveValue::Address(a),
+        CopyableVal_::U8(i) => MoveValue::U8(i),
+        CopyableVal_::U16(i) => MoveValue::U16(i),
+        CopyableVal_::U32(i) => MoveValue::U32(i),
+        CopyableVal_::U64(i) => MoveValue::U64(i),
+        CopyableVal_::U128(i) => MoveValue::U128(i),
+        CopyableVal_::U256(i) => MoveValue::U256(i),
+        CopyableVal_::Bool(b) => MoveValue::Bool(b),
+        CopyableVal_::ByteArray(bytes) => {
+            MoveValue::Vector(bytes.into_iter().map(MoveValue::U8).collect())
+        }
+    }
+}
+
 // ModuleIdent: ModuleIdent = {
 //     <a: AccountAddress> "::" <m: ModuleName> => ModuleIdent::new(m, a),
 // }
@@ -2006,6 +2250,7 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
 
     let mut structs: Vec<StructDefinition> = vec![];
     let mut enums: Vec<EnumDefinition> = vec![];
+    let mut constants: Vec<Constant> = vec![];
     let mut functions: Vec<(FunctionName, Function)> = vec![];
     while tokens.peek() != Tok::RBrace {
         let decl_start_loc = tokens.start_loc();
@@ -2018,6 +2263,9 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
             Tok::Enum => {
                 enums.push(parse_enum_decl(tokens, decl_start_loc, modifiers)?);
             }
+            Tok::Const => {
+                constants.push(parse_constant_decl(tokens, modifiers)?);
+            }
             // `fun` is detected by content (matching the existing `entry`
             // pattern); only function decls start with that keyword.
             Tok::NameValue if tokens.content() == "fun" => {
@@ -2026,7 +2274,7 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
             _ => {
                 return Err(ParseError::InvalidToken {
                     location: current_token_loc(tokens),
-                    message: "expected 'struct', 'enum', or 'fun' declaration".to_string(),
+                    message: "expected 'const', 'struct', 'enum', or 'fun' declaration".to_string(),
                 });
             }
         }
@@ -2045,7 +2293,7 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
         vec![],
         structs,
         enums,
-        vec![],
+        constants,
         functions,
     ))
 }

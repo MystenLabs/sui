@@ -376,19 +376,34 @@ mod test {
 
     #[test]
     fn test_sui_bitmap_unique_deserialize() {
+        // Malformed bitmap with 10 array containers all keyed at 0 (one entry
+        // each, all the value 1). roaring 0.10 accepted this and surfaced
+        // duplicates via iter(), which `deserialize_sui_bitmap` then dedup'd.
+        // roaring >=0.11 rejects unsorted/duplicate container keys at parse
+        // time, so the wrapper now propagates that error instead.
         let raw = "OjAAAAoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWAAAAFoAAABcAAAAXgAAAGAAAABiAAAAZAAAAGYAAABoAAAAagAAAAEAAQABAAEAAQABAAEAAQABAAEA";
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(raw)
             .unwrap();
 
-        let bitmap = roaring::RoaringBitmap::deserialize_from(&bytes[..]).unwrap();
-        assert_eq!(bitmap.len(), 10);
-        let bitmap_values: Vec<u32> = bitmap.iter().collect();
-        assert_eq!(bitmap_values, vec![1; 10]);
+        assert!(roaring::RoaringBitmap::deserialize_from(&bytes[..]).is_err());
+        assert!(deserialize_sui_bitmap(&bytes[..]).is_err());
+    }
 
-        let sui_bitmap = deserialize_sui_bitmap(&bytes[..]).unwrap();
-        assert_eq!(sui_bitmap.len(), 1);
-        let bitmap_values: Vec<u32> = sui_bitmap.iter().collect();
-        assert_eq!(bitmap_values, vec![1]);
+    #[test]
+    fn test_sui_bitmap_rejects_cardinality_bomb() {
+        // Roaring's run-container encoding lets a few hundred bytes claim
+        // billions of set bits — iterating such a bitmap into a BTreeSet
+        // would OOM a validator. `deserialize_sui_bitmap`'s cardinality cap
+        // bails out before the iteration loop runs.
+        let mut bomb = roaring::RoaringBitmap::new();
+        bomb.insert_range(0..(MAX_VALIDATOR_COUNT as u32 + 1));
+        let mut bytes = Vec::new();
+        bomb.serialize_into(&mut bytes).unwrap();
+
+        // Sanity-check that the well-formed bomb deserializes at the
+        // library layer — so the wrapper, not roaring, must reject it.
+        assert!(roaring::RoaringBitmap::deserialize_from(&bytes[..]).is_ok());
+        assert!(deserialize_sui_bitmap(&bytes[..]).is_err());
     }
 }

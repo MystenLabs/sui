@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_check/parser/struct_native_with_fields.move:3:21
   │
 3 │     native struct S { f: u64 }
@@ -14,7 +14,7 @@ error[E01002]: unexpected token
   │                     Unexpected '{'
   │                     Expected ';'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_check/parser/struct_native_with_fields.move:5:1
   │
 5 │ 

@@ -137,10 +137,12 @@ impl Linearizer {
                 .cloned()
                 .collect::<Vec<_>>();
             // Get the blocks from dag state which should not fail.
-            let blocks = dag_state
-                .get_blocks(&block_refs)
-                .into_iter()
-                .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
+            let block_opts = dag_state.get_blocks(&block_refs);
+            let blocks = block_opts.iter().map(|block_opt| {
+                block_opt
+                    .as_ref()
+                    .expect("We should have all blocks in dag state.")
+            });
             median_timestamp_by_stake(context, blocks).unwrap_or_else(|e| {
                 panic!(
                     "Cannot compute median timestamp for leader block {:?} ancestors: {}",
@@ -288,9 +290,9 @@ impl Linearizer {
 /// Computes the median timestamp of the blocks weighted by the stake of their authorities.
 /// This function assumes each block comes from a different authority of the same round.
 /// Error is returned if no blocks are provided or total stake is less than quorum threshold.
-pub(crate) fn median_timestamp_by_stake(
+pub(crate) fn median_timestamp_by_stake<'a>(
     context: &Context,
-    blocks: impl Iterator<Item = VerifiedBlock>,
+    blocks: impl IntoIterator<Item = &'a VerifiedBlock>,
 ) -> Result<BlockTimestampMs, String> {
     let mut total_stake = 0;
     let mut timestamps = vec![];
@@ -387,11 +389,12 @@ mod tests {
                     .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
                     .cloned()
                     .collect::<Vec<_>>();
-                let blocks = dag_state
-                    .read()
-                    .get_blocks(&block_refs)
-                    .into_iter()
-                    .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
+                let block_opts = dag_state.read().get_blocks(&block_refs);
+                let blocks = block_opts.iter().map(|block_opt| {
+                    block_opt
+                        .as_ref()
+                        .expect("We should have all blocks in dag state.")
+                });
 
                 median_timestamp_by_stake(&context, blocks).unwrap()
             };
@@ -509,13 +512,10 @@ mod tests {
 
         let expected_ts = median_timestamp_by_stake(
             &context,
-            subdag.blocks.iter().filter_map(|block| {
-                if block.round() == subdag.leader.round - 1 {
-                    Some(block.clone())
-                } else {
-                    None
-                }
-            }),
+            subdag
+                .blocks
+                .iter()
+                .filter(|block| block.round() == subdag.leader.round - 1),
         )
         .unwrap();
         assert_eq!(subdag.timestamp_ms, expected_ts);
@@ -605,11 +605,12 @@ mod tests {
                     .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
                     .cloned()
                     .collect::<Vec<_>>();
-                let blocks = dag_state
-                    .read()
-                    .get_blocks(&block_refs)
-                    .into_iter()
-                    .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
+                let block_opts = dag_state.read().get_blocks(&block_refs);
+                let blocks = block_opts.iter().map(|block_opt| {
+                    block_opt
+                        .as_ref()
+                        .expect("We should have all blocks in dag state.")
+                });
 
                 median_timestamp_by_stake(&context, blocks).unwrap()
             };
@@ -708,11 +709,12 @@ mod tests {
                     .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
                     .cloned()
                     .collect::<Vec<_>>();
-                let blocks = dag_state
-                    .read()
-                    .get_blocks(&block_refs)
-                    .into_iter()
-                    .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
+                let block_opts = dag_state.read().get_blocks(&block_refs);
+                let blocks = block_opts.iter().map(|block_opt| {
+                    block_opt
+                        .as_ref()
+                        .expect("We should have all blocks in dag state.")
+                });
 
                 median_timestamp_by_stake(&context, blocks).unwrap()
             };
@@ -913,12 +915,12 @@ mod tests {
         let context = Arc::new(context);
 
         // No blocks provided
-        let err = median_timestamp_by_stake(&context, vec![].into_iter()).unwrap_err();
+        let err = median_timestamp_by_stake(&context, &[] as &[VerifiedBlock]).unwrap_err();
         assert_eq!(err, "No blocks provided");
 
         // Blocks provided but total stake is less than quorum threshold
         let block = VerifiedBlock::new_for_test(TestBlock::new(5, 0).build());
-        let err = median_timestamp_by_stake(&context, vec![block].into_iter()).unwrap_err();
+        let err = median_timestamp_by_stake(&context, &[block]).unwrap_err();
         assert_eq!(err, "Total stake 1 < quorum threshold 3");
     }
 }

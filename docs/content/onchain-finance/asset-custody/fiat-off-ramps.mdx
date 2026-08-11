@@ -1,0 +1,65 @@
+---
+title: Fiat Off-Ramps
+description: >-
+  Convert Sui-native tokens to fiat currency using third-party off-ramp
+  providers integrated with the Sui network.
+keywords:
+  - fiat
+  - off-ramp
+  - payments
+  - stablecoins
+  - USDC
+  - SUI
+  - bank transfer
+  - cash out
+goal:
+  description: >-
+    Reader can choose and integrate a fiat off-ramp provider for their Sui app
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What fiat off-ramp providers support Sui?
+answer: >-
+  Several third-party providers offer fiat off-ramp integration with Sui,
+  including Banxa, Coinbase, Meld, and Onramper. 
+---
+
+Fiat off-ramp providers enable you to trade Sui-native tokens (SUI, WAL, DEEP, and others) for fiat currency that can be withdrawn to a user's bank account, card, or payment method. Embedding an off-ramp provider into your app allows users to convert their Sui assets to traditional currency without leaving your interface. Verify current provider capabilities before integrating.
+
+The following table summarizes providers with live Sui off-ramp integration as of August 2026. All columns refer to Sui chain and Sui asset support specifically.
+
+:::info
+
+Off-ramp coverage is evolving. Provider asset support and regional availability change frequently. Confirm current capabilities with your chosen provider before launching an integration.
+
+:::
+
+| **Provider** | **Supported assets** | **Documentation** |
+|---|---|---|
+| [Banxa](https://banxa.com/) | SUI | [Banxa docs](https://docs.banxa.com/products/hosted-checkout/docs/reference/supported-cryptocurrencies-and-blockchains) |
+| [Bridge.xyz](https://bridge.xyz) | USDSui | [Bridge docs](https://apidocs.bridge.xyz/platform/issuance/designing-your-stablecoin#supported-chains) |
+| [Coinbase](https://coinbase.com/) | SUI, USDC, WAL, DEEP | [Coinbase CDP docs](https://docs.cdp.coinbase.com/onramp/offramp/offramp-overview) |
+| [Alchemy Pay](https://alchemypay.org/) | AUSD, SUI, USD | [Alchemy Pay docs](https://alchemypay.readme.io/docs/api-integration-3) |
+| [CoinVoyage](https://www.coinvoyage.io/) | Sui Dollar | [CoinVoyage docs](https://docs.coinvoyage.io/sdk/paykit-headless#sui-payment-signatures) |
+| [Onramper](https://onramper.com/) | SUI | [Onramper docs](https://docs.onramper.com/docs/network-support) |
+| [Meld](https://www.meld.io) | SUI, USDC, CETUS, NAVI | [Meld docs](https://www.meld.io/coverage/service-providers?cryptoCurrencies=SUI) |
+
+See [Fiat On-Ramps](/onchain-finance/asset-custody/fiat-on-ramps) for the full on-ramp provider list.
+
+## Asset limitations
+
+When you choose off-ramp providers, be aware of the following limitations:
+
+- **USDC off-ramp on Sui:** USDC off-ramp coverage on Sui is limited. If your users need to off-ramp USDC, confirm provider support directly.
+
+- **SUI sell limits:** Off-ramp providers might enforce sell limits. Confirm limitations with the provider directly. 
+
+- **KYC requirements:** Off-ramp flows likely require Know Your Customer (KYC) verification. Factor this into your user experience design.

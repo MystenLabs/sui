@@ -10,7 +10,7 @@ entry fun foo() {
     let e_mut: &mut u64;
     let e_val: u64;
 label b0:
-    v = vec_pack_0<u64>();
+    v = vector<u64; 0>();
     v_imm = &v;
     v_len = vec_len<u64>(copy(v_imm));
     assert(move(v_len) == 0, 1);
@@ -41,7 +41,7 @@ label b0:
     assert(move(v_len) == 0, 6);
     _ = move(v_mut);
 
-    vec_unpack_0<u64>(move(v));
+    vector<u64; 0>() = move(v);
     return;
 }
 

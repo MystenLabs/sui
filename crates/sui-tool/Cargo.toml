@@ -6,8 +6,12 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
+backoff.workspace = true
 num_cpus.workspace = true
 bcs.workspace = true
 clap = { version = "4.1.4", features = ["derive"] }
@@ -33,6 +37,9 @@ mysten-metrics.workspace = true
 
 anemo-cli.workspace = true
 anemo.workspace = true
+base64.workspace = true
+reqwest = { workspace = true, features = ["blocking"] }
+rustyline = { version = "14" }
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 typed-store.workspace = true
@@ -50,3 +57,12 @@ sui-types.workspace = true
 sui-package-dump.workspace = true
 sui-tls.workspace = true
 bin-version.workspace = true
+
+[target.'cfg(not(windows))'.dependencies]
+tideconsole = {git = "https://github.com/mystenlabs/tidehunter.git", rev = "852bfddd56581942ffa47365227e03775a498f9f", package = "tideconsole", optional = true}
+rhai = { version = "1", optional = true }
+rustyline = { version = "14", optional = true }
+parking_lot = { workspace = true, optional = true }
+
+[features]
+tideconsole = ["dep:tideconsole", "dep:rhai", "dep:rustyline", "dep:parking_lot"]

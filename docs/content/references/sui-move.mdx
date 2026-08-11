@@ -1,9 +1,36 @@
 ---
 title: Move References
 description: Learn more about Move.
-keywords: [ move, move reference, move book ]
+keywords:
+  - move
+  - move reference
+  - move book
 pagination_prev: null
+goal:
+  description: >-
+    Reader can find links to Move language references, the Move Book, and Sui
+    framework docs
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - min_words: 100
+      label: Needs more reference content
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Move References in Sui?
+  - Where can I find the move references reference?
+  - How does move references work on Sui?
+answer: Learn more about Move.
 ---
+
+:::info
+The content below is auto-generated from the Move framework using the `sui move summary` command (available in Sui v1.70 and later). To regenerate this content, run `sui move summary` in the relevant framework package directory and update the snippet source accordingly. This content should be regenerated as part of each release cycle to stay current.
+:::
 
 <ImportContent source="move-summary" mode="snippet" />
 

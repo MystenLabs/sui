@@ -6,9 +6,13 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
+backoff.workspace = true
 bin-version.workspace = true
 clap.workspace = true
 http.workspace = true
@@ -23,6 +27,7 @@ tracing.workspace = true
 sui-sdk.workspace = true
 sui-rpc-api.workspace = true
 sui-config.workspace = true
+sui-futures.workspace = true
 sui-keys.workspace = true
 shared-crypto.workspace = true
 

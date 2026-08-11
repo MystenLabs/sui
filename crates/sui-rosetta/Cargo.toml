@@ -6,6 +6,9 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 axum.workspace = true
 axum-extra.workspace = true
@@ -34,6 +37,7 @@ sui-sdk-types.workspace = true
 shared-crypto.workspace = true
 lru.workspace = true
 tonic.workspace = true
+prost.workspace = true
 prost-types.workspace = true
 chrono.workspace = true
 
@@ -44,6 +48,7 @@ telemetry-subscribers.workspace = true
 enum_dispatch.workspace = true
 
 [dev-dependencies]
+sui-types = { workspace = true, features = ["testing"] }
 sui-swarm-config.workspace = true
 sui-sdk.workspace = true
 sui-move-build.workspace = true

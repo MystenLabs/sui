@@ -244,7 +244,7 @@ impl LeaderSwapTable {
         context: Arc<Context>,
         // Ignore linter warning in simtests.
         // TODO: maybe override protocol configs in tests for swap_stake_threshold, and call new().
-        #[allow(unused_variables)] swap_stake_threshold: u64,
+        #[cfg_attr(msim, allow(unused_variables))] swap_stake_threshold: u64,
         commit_index: CommitIndex,
         reputation_scores: ReputationScores,
     ) -> Self {
@@ -270,7 +270,7 @@ impl LeaderSwapTable {
         assert_eq!(authorities_by_score.len(), context.committee.size());
         authorities_by_score.shuffle(&mut rng);
         // Stable sort the authorities by score descending. Order of authorities with the same score is preserved.
-        authorities_by_score.sort_by(|a1, a2| a2.1.cmp(&a1.1));
+        authorities_by_score.sort_by_key(|a| std::cmp::Reverse(a.1));
 
         // Calculating the good nodes
         let good_nodes = Self::retrieve_first_nodes(

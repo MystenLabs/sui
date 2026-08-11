@@ -5,16 +5,14 @@ use crate::{
     execution_mode::ExecutionMode,
     static_programmable_transactions::{env, typing::ast as T},
 };
-use sui_types::error::ExecutionError;
-
 pub mod defining_ids_in_types;
 pub mod memory_safety;
 pub mod type_check;
 
 pub fn transaction<Mode: ExecutionMode>(
-    env: &env::Env,
+    env: &env::Env<Mode>,
     tt: &T::Transaction,
-) -> Result<(), ExecutionError> {
+) -> Result<(), Mode::Error> {
     defining_ids_in_types::verify(env, tt)?;
     type_check::verify::<Mode>(env, tt)?;
     memory_safety::verify(env, tt)?;

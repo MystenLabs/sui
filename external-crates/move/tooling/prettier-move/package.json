@@ -2,15 +2,20 @@
     "name": "@mysten/prettier-plugin-move",
     "author": "Mysten Labs <build@mystenlabs.com>",
     "description": "Move Plugin for Prettier",
-    "version": "0.3.5",
+    "version": "0.4.0",
     "license": "Apache-2.0",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/MystenLabs/sui.git",
+        "directory": "external-crates/move/tooling/prettier-move"
+    },
     "keywords": [
         "prettier",
         "move",
         "plugin"
     ],
     "bin": {
-        "prettier-move": "./bin/prettier-move.js"
+        "prettier-move": "bin/prettier-move.js"
     },
     "main": "./out/index.js",
     "scripts": {

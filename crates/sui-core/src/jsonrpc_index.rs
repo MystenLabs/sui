@@ -949,9 +949,7 @@ impl IndexStore {
                 };
 
                 // only process coin types
-                let (coin_type, coin) = object
-                    .coin_type_maybe()
-                    .and_then(|coin_type| object.as_coin_maybe().map(|coin| (coin_type, coin)))?;
+                let (coin_type, coin) = object.coin_type_maybe().zip(object.as_coin_maybe())?;
 
                 let key = CoinIndexKey2::new(
                     *owner,
@@ -989,9 +987,7 @@ impl IndexStore {
                 };
 
                 // only process coin types
-                let (coin_type, coin) = object
-                    .coin_type_maybe()
-                    .and_then(|coin_type| object.as_coin_maybe().map(|coin| (coin_type, coin)))?;
+                let (coin_type, coin) = object.coin_type_maybe().zip(object.as_coin_maybe())?;
 
                 let key = CoinIndexKey2::new(
                     *owner,
@@ -2005,13 +2001,10 @@ impl IndexStore {
 
     pub fn insert_genesis_objects(&self, object_index_changes: ObjectIndexChanges) -> SuiResult {
         let mut batch = self.tables.owner_index.batch();
-        batch.insert_batch(
-            &self.tables.owner_index,
-            object_index_changes.new_owners.into_iter(),
-        )?;
+        batch.insert_batch(&self.tables.owner_index, object_index_changes.new_owners)?;
         batch.insert_batch(
             &self.tables.dynamic_field_index,
-            object_index_changes.new_dynamic_fields.into_iter(),
+            object_index_changes.new_dynamic_fields,
         )?;
         batch.write()?;
         Ok(())
@@ -2284,7 +2277,6 @@ mod tests {
     use move_core_types::account_address::AccountAddress;
     use prometheus::Registry;
     use std::collections::BTreeMap;
-    use std::env::temp_dir;
     use sui_types::base_types::{ObjectInfo, ObjectType, SuiAddress};
     use sui_types::digests::TransactionDigest;
     use sui_types::effects::TransactionEvents;
@@ -2301,8 +2293,13 @@ mod tests {
         // and verified from both db and cache.
         // This tests make sure we are invalidating entries in the cache and always reading latest
         // balance.
-        let index_store =
-            IndexStore::new_without_init(temp_dir(), &Registry::default(), Some(128), false);
+        let dir = tempfile::tempdir().unwrap();
+        let index_store = IndexStore::new_without_init(
+            dir.path().to_path_buf(),
+            &Registry::default(),
+            Some(128),
+            false,
+        );
         let address: SuiAddress = AccountAddress::random().into();
         let mut written_objects = BTreeMap::new();
         let mut input_objects = BTreeMap::new();
@@ -2437,7 +2434,13 @@ mod tests {
         use sui_types::base_types::ObjectID;
         use typed_store::Map;
 
-        let index_store = IndexStore::new(temp_dir(), &Registry::default(), Some(128), false);
+        let dir = tempfile::tempdir().unwrap();
+        let index_store = IndexStore::new(
+            dir.path().to_path_buf(),
+            &Registry::default(),
+            Some(128),
+            false,
+        );
         let db = &index_store.tables.transactions_by_move_function;
         db.insert(
             &(

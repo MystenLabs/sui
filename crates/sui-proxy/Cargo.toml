@@ -6,6 +6,9 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 axum.workspace = true
 axum-extra.workspace = true
@@ -33,6 +36,10 @@ reqwest.workspace = true
 hyper.workspace = true
 sui-tls.workspace = true
 sui-types.workspace = true
+sui-rpc.workspace = true
+sui-sdk-types.workspace = true
+prost-types.workspace = true
+bcs.workspace = true
 mysten-metrics.workspace = true
 multiaddr.workspace = true
 prometheus.workspace = true

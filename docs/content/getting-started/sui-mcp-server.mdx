@@ -1,0 +1,129 @@
+---
+title: Sui MCP Server
+description: >-
+  Connect the Sui documentation MCP server to your IDE so AI coding assistants
+  can search Sui developer documentation without leaving your editor.
+keywords:
+  - MCP
+  - Model Context Protocol
+  - AI coding
+  - Claude Code
+  - Cursor
+  - VS Code
+  - IDE
+  - documentation search
+  - Sui development tools
+goal:
+  description: >-
+    Reader can connect the Sui MCP server to Claude Code, Cursor, or VS Code
+    and use it to search Sui documentation from within their editor
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I set up the Sui MCP server in my IDE?
+  - How do I use the Sui MCP server with Claude Code?
+  - How do I use the Sui MCP server with Cursor?
+  - How do I use the Sui MCP server with VS Code?
+  - What tools does the Sui MCP server provide?
+answer: >-
+  The Sui MCP server at sui.mcp.kapa.ai provides semantic search across Sui
+  developer documentation. Connect it to Claude Code, Cursor, or VS Code to
+  search docs directly from your editor.
+---
+
+The Sui MCP server provides AI coding assistants with direct access to Sui developer documentation and other important source material such as blogs, GitHub source code, and example apps. The Sui MCP server does not use data cached longer than a few hours, so your agent has access to the most up to date content when referencing the MCP server. Other agents may cache source information for several weeks before crawling an updated version, leading to instances where a feature may be released on Mainnet but your agent isn't aware of it. 
+
+You connect the server to your IDE so your AI assistant can search and retrieve Sui documentation without leaving your editor.
+
+The server is hosted at `https://sui.mcp.kapa.ai` and exposes 2 tools:
+
+- **`search_sui_knowledge_sources`:** Searches across all Sui documentation and returns ranked results with source URLs and content.
+
+- **`get_sui_knowledge_documents`:** Fetches full documents by exact URL for deeper context.
+
+## Connect the Sui MCP server
+
+<Tabs groupId="ide">
+
+<TabItem value="claude-code" label="Claude Code">
+
+Run the following command in your terminal:
+
+```sh
+$ claude mcp add --transport http sui-docs https://sui.mcp.kapa.ai
+```
+
+Start Claude Code and run `/mcp` to verify the connection. Authenticate through your browser when prompted ([Kapa MCP docs](https://docs.kapa.ai/integrations/mcp/overview)).
+
+</TabItem>
+
+<TabItem value="cursor" label="Cursor">
+
+Create or update the `.cursor/mcp.json` file in your project root with the following configuration:
+
+```json
+{
+  "mcpServers": {
+    "sui-docs": {
+      "type": "http",
+      "url": "https://sui.mcp.kapa.ai"
+    }
+  }
+}
+```
+
+Restart Cursor to load the new MCP server. Authenticate through your browser when prompted ([Kapa MCP docs](https://docs.kapa.ai/integrations/mcp/overview)).
+
+</TabItem>
+
+<TabItem value="vscode" label="VS Code">
+
+Create or update the `.vscode/mcp.json` file in your project root with the following configuration (requires VS Code 1.102 or later with GitHub Copilot):
+
+```json
+{
+  "servers": {
+    "sui-docs": {
+      "type": "http",
+      "url": "https://sui.mcp.kapa.ai"
+    }
+  }
+}
+```
+
+Restart VS Code to load the new MCP server. Authenticate through your browser when prompted ([Kapa MCP docs](https://docs.kapa.ai/integrations/mcp/overview)).
+
+</TabItem>
+
+</Tabs>
+
+## Authentication
+
+The Sui MCP server uses OAuth authentication through Google or GitHub. When you connect for the first time, your IDE opens a browser window for authentication. After you authenticate, the server associates your identity with rate limits ([Kapa MCP overview](https://docs.kapa.ai/integrations/mcp/overview)).
+
+## Rate limits
+
+The server enforces per-user rate limits ([Kapa MCP overview](https://docs.kapa.ai/integrations/mcp/overview)):
+
+| **Tool** | **Per-user daily limit** |
+|---|---|
+| `search_sui_knowledge_sources` | 300 requests per day |
+| `get_sui_knowledge_documents` | 300 requests per day |
+
+## Verify the connection
+
+After configuring the MCP server, verify that your IDE can access it:
+
+1. Open your AI assistant in the IDE.
+2. Ask a question about Sui development (for example, "How do programmable transaction blocks work on Sui?").
+3. Confirm that the assistant references Sui documentation in its response.
+
+If the connection fails, check that the URL `https://sui.mcp.kapa.ai` is accessible from your network and that you completed the browser authentication step.

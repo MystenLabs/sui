@@ -1,0 +1,84 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+task 0, lines 3-22:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::prim_call'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x2::prim_call,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 6)],
+}
+
+task 1, lines 24-45:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::struct_whole_call'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x3::struct_whole_call,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 8)],
+}
+
+task 2, lines 47-68:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::struct_field_call'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x4::struct_field_call,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 8)],
+}
+
+task 3, lines 70-86:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000005::struct_field_direct'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x5::struct_field_direct,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 8)],
+}
+
+task 4, lines 88-111:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::enum_whole_call'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x6::enum_whole_call,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 8)],
+}
+
+task 5, lines 113-131:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000007::enum_variant_field'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x7::enum_variant_field,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 8)],
+}
+
+task 6, lines 133-147:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000008::vec_elem_borrow'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x8::vec_elem_borrow,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 8)],
+}
+
+task 7, lines 149-168:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000009::vec_whole_call'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x9::vec_whole_call,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 7)],
+}

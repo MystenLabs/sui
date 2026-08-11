@@ -1,0 +1,16 @@
+// One infinite loop followed by another: L1 (just node 1, self-looping with a break to L2)
+// then L2 (just node 2, self-looping forever with no exit). L1 alone has an outgoing edge to
+// node 2, so its SCC isn't terminal — it can escape to L2. L2 is the only terminal SCC.
+// One impossible edge return_ -> 2 makes post-domination total: pd(0)=1, pd(1)=2, pd(2)=return_.
+//
+//        0
+//        |
+//     ->1
+//    |  | \____
+//     --       |
+//             ->2
+//              \_|
+
+code,0,1
+cond,1,1,2
+code,2,2

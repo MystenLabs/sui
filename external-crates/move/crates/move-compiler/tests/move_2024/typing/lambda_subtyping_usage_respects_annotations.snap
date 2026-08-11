@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
    ┌─ tests/move_2024/typing/lambda_subtyping_usage_respects_annotations.move:15:10
    │
 14 │     macro fun return_imm($f: || -> &u64) {
@@ -16,7 +16,7 @@ error[E04006]: invalid subtype
    │          Invalid mutation. Expected a mutable reference
    │          Expected: '&mut _'
 
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
    ┌─ tests/move_2024/typing/lambda_subtyping_usage_respects_annotations.move:20:24
    │
  3 │     macro fun pass_imm($f: |&u64|) {
@@ -28,7 +28,7 @@ error[E04006]: invalid subtype
    │                        Invalid mutation. Expected a mutable reference
    │                        Expected: '&mut _'
 
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
    ┌─ tests/move_2024/typing/lambda_subtyping_usage_respects_annotations.move:21:30
    │
 21 │         pass_mut!(|x: &u64| *x = 0u64);

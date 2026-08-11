@@ -21,7 +21,7 @@ use crate::{
     block_sync_service::BlockSyncService,
     block_verifier::BlockVerifier,
     commit::{CommitRange, TrustedCommit},
-    commit_vote_monitor::CommitVoteMonitor,
+    commit_vote_monitor::{CommitVoteMonitor, is_commit_lagging},
     context::Context,
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
@@ -29,10 +29,9 @@ use crate::{
     network::{BlockStream, ExtendedSerializedBlock, PeerId, ValidatorNetworkService},
     round_tracker::RoundTracker,
     synchronizer::SynchronizerHandle,
+    task::spawn_blocking,
     transaction_vote_tracker::TransactionVoteTracker,
 };
-
-pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
 
 /// Authority's network service implementation, agnostic to the actual networking stack used.
 pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
@@ -176,18 +175,20 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         }
 
         // Reject blocks failing parsing and validations.
-        let (verified_block, reject_txn_votes) = self
-            .block_verifier
-            .verify_and_vote(signed_block, serialized_block.block)
-            .tap_err(|e| {
-                self.context
-                    .metrics
-                    .node_metrics
-                    .invalid_blocks
-                    .with_label_values(&[peer_hostname.as_str(), "handle_send_block", e.name()])
-                    .inc();
-                info!("Invalid block from {}: {}", peer, e);
-            })?;
+        let block_verifier = self.block_verifier.clone();
+        let serialized = serialized_block.block.clone();
+        let (verified_block, reject_txn_votes) =
+            spawn_blocking(move || block_verifier.verify_and_vote(signed_block, serialized))
+                .await?
+                .tap_err(|e| {
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .invalid_blocks
+                        .with_label_values(&[peer_hostname.as_str(), "handle_send_block", e.name()])
+                        .inc();
+                    info!("Invalid block from {}: {}", peer, e);
+                })?;
         let excluded_ancestors = self
             .parse_excluded_ancestors(peer, &verified_block, serialized_block.excluded_ancestors)
             .tap_err(|e| {
@@ -243,12 +244,11 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         // it is ok to reject after block verifications instead of before.
         let last_commit_index = self.dag_state.read().last_commit_index();
         let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
-        // The threshold to ignore block should be larger than commit_sync_batch_size,
-        // to avoid excessive block rejections and synchronizations.
-        if last_commit_index
-            + self.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER
-            < quorum_commit_index
-        {
+        if is_commit_lagging(
+            self.context.as_ref(),
+            last_commit_index,
+            quorum_commit_index,
+        ) {
             self.context
                 .metrics
                 .node_metrics
@@ -340,6 +340,12 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
     ) -> ConsensusResult<BlockStream> {
         fail_point_async!("consensus-rpc-response");
 
+        // Subscribe before snapshotting past blocks below. This can duplicate
+        // a block in both the subscription stream and snapshot, which is fine.
+        // Otherwise, it is possible to miss a block if it is broadcasted after snapshotting
+        // but before subscribing.
+        let broadcast_rx = self.rx_block_broadcast.resubscribe();
+
         // Find past proposed blocks as the initial blocks to send to the peer.
         //
         // If there are cached blocks in the range which the peer requested, send all of them.
@@ -351,8 +357,10 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         let past_proposed_blocks = {
             let dag_state = self.dag_state.read();
 
-            let mut proposed_blocks =
-                dag_state.get_cached_blocks(self.context.own_index, last_received + 1);
+            // Saturate so an out-of-range round from the peer cannot wrap to 0 and
+            // replay the entire block cache.
+            let mut proposed_blocks = dag_state
+                .get_cached_blocks(self.context.own_index, last_received.saturating_add(1));
             if proposed_blocks.is_empty() {
                 let last_proposed_block = dag_state
                     .get_last_proposed_block()
@@ -373,10 +381,11 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             )
         };
 
+        // Ok to not batch own proposed blocks, which is < 20/s.
         const MAX_BLOCKS_PER_POLL: usize = 1;
         let broadcasted_blocks = BroadcastedBlockStream::new(
             PeerId::Validator(peer),
-            self.rx_block_broadcast.resubscribe(),
+            broadcast_rx,
             MAX_BLOCKS_PER_POLL,
             self.subscription_counter.clone(),
         );
@@ -500,13 +509,17 @@ impl SubscriptionCounter {
         }
     }
 
-    fn increment(&self, peer: &PeerId) -> Result<(), ConsensusError> {
+    fn increment(&self, peer: &PeerId) {
         let mut counter = self.counter.lock();
         counter.count += 1;
-        *counter
-            .subscriptions_by_peer
-            .entry(peer.clone())
-            .or_insert(0) += 1;
+        let peer_count = {
+            let count = counter
+                .subscriptions_by_peer
+                .entry(peer.clone())
+                .or_default();
+            *count += 1;
+            *count
+        };
 
         match peer {
             PeerId::Validator(authority) => {
@@ -519,27 +532,29 @@ impl SubscriptionCounter {
                     .set(1);
             }
             PeerId::Observer(_) => {
-                self.context
-                    .metrics
-                    .node_metrics
-                    .subscribed_by
-                    .with_label_values(&["observer"])
-                    .inc();
+                // Only count the first subscription from each peer.
+                if peer_count == 1 {
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .subscribed_by
+                        .with_label_values(&["observer"])
+                        .inc();
+                }
             }
         }
-
-        Ok(())
     }
 
-    fn decrement(&self, peer: &PeerId) -> Result<(), ConsensusError> {
+    fn decrement(&self, peer: &PeerId) {
         let mut counter = self.counter.lock();
-        counter.count -= 1;
-        *counter
+        counter.count = counter.count.saturating_sub(1);
+        let peer_count = counter
             .subscriptions_by_peer
             .entry(peer.clone())
-            .or_insert(0) -= 1;
+            .or_default();
+        *peer_count = peer_count.saturating_sub(1);
 
-        if counter.subscriptions_by_peer[peer] == 0 {
+        if *peer_count == 0 {
             match peer {
                 PeerId::Validator(authority) => {
                     let peer_hostname = &self.context.committee.authority(*authority).hostname;
@@ -560,8 +575,6 @@ impl SubscriptionCounter {
                 }
             }
         }
-
-        Ok(())
     }
 }
 
@@ -572,7 +585,7 @@ type BroadcastedBlockStream = BroadcastStream<ExtendedBlock>;
 /// Adapted from `tokio_stream::wrappers::BroadcastStream`. The main difference is that
 /// this tolerates lags with only logging, without yielding errors.
 pub(crate) struct BroadcastStream<T> {
-    peer: PeerId,
+    peer: Option<PeerId>,
     // Stores the receiver across poll_next() calls.
     inner: ReusableBoxFuture<
         'static,
@@ -584,7 +597,7 @@ pub(crate) struct BroadcastStream<T> {
     // Maximum number of items to return per poll.
     max_items_per_poll: usize,
     // Counts total subscriptions / active BroadcastStreams.
-    subscription_counter: Arc<SubscriptionCounter>,
+    subscription_counter: Option<Arc<SubscriptionCounter>>,
 }
 
 impl<T: 'static + Clone + Send> BroadcastStream<T> {
@@ -595,17 +608,23 @@ impl<T: 'static + Clone + Send> BroadcastStream<T> {
         subscription_counter: Arc<SubscriptionCounter>,
     ) -> Self {
         assert!(max_items_per_poll > 0, "max_items_per_poll must be > 0");
-        if let Err(err) = subscription_counter.increment(&peer) {
-            match err {
-                ConsensusError::Shutdown => {}
-                _ => panic!("Unexpected error: {err}"),
-            }
-        }
+        subscription_counter.increment(&peer);
         Self {
-            peer,
+            peer: Some(peer),
             inner: ReusableBoxFuture::new(make_recv_future(rx)),
             max_items_per_poll,
-            subscription_counter,
+            subscription_counter: Some(subscription_counter),
+        }
+    }
+
+    /// Creates a stream without subscription tracking.
+    pub fn new_untracked(rx: broadcast::Receiver<T>, max_items_per_poll: usize) -> Self {
+        assert!(max_items_per_poll > 0, "max_items_per_poll must be > 0");
+        Self {
+            peer: None,
+            inner: ReusableBoxFuture::new(make_recv_future(rx)),
+            max_items_per_poll,
+            subscription_counter: None,
         }
     }
 }
@@ -632,10 +651,7 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
                             Err(broadcast::error::TryRecvError::Empty) => break,
                             Err(broadcast::error::TryRecvError::Closed) => break,
                             Err(broadcast::error::TryRecvError::Lagged(n)) => {
-                                warn!(
-                                    "Block BroadcastedBlockStream {} lagged by {} messages",
-                                    self.peer, n
-                                );
+                                warn!("BroadcastStream {:?} lagged by {} messages", self.peer, n);
                                 break;
                             }
                         }
@@ -645,14 +661,11 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
                     return task::Poll::Ready(Some(items));
                 }
                 Err(broadcast::error::RecvError::Closed) => {
-                    info!("Block BroadcastedBlockStream {} closed", self.peer);
+                    info!("BroadcastStream {:?} closed", self.peer);
                     return task::Poll::Ready(None);
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
-                    warn!(
-                        "Block BroadcastedBlockStream {} lagged by {} messages",
-                        self.peer, n
-                    );
+                    warn!("BroadcastStream {:?} lagged by {} messages", self.peer, n);
                     // Re-arm the future and loop to await the next item.
                     self.inner.set(make_recv_future(rx));
                     continue;
@@ -664,11 +677,8 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
 
 impl<T> Drop for BroadcastStream<T> {
     fn drop(&mut self) {
-        if let Err(err) = self.subscription_counter.decrement(&self.peer) {
-            match err {
-                ConsensusError::Shutdown => {}
-                _ => panic!("Unexpected error: {err}"),
-            }
+        if let (Some(counter), Some(peer)) = (&self.subscription_counter, &self.peer) {
+            counter.decrement(peer);
         }
     }
 }
@@ -682,8 +692,6 @@ async fn make_recv_future<T: Clone>(
     let result = rx.recv().await;
     (result, rx)
 }
-
-// TODO: add a unit test for BroadcastStream.
 
 #[cfg(test)]
 mod tests {
@@ -847,7 +855,7 @@ mod tests {
         async fn stream_blocks(
             &self,
             _peer: crate::network::PeerId,
-            _highest_round_per_authority: Vec<u64>,
+            _highest_round_per_authority: Vec<Round>,
             _timeout: Duration,
         ) -> ConsensusResult<crate::network::ObserverBlockStream> {
             unimplemented!("Unimplemented")

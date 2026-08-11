@@ -1,6 +1,48 @@
 ---
 title: Passkey
-description: Sui supports the passkey signature scheme that enables you to sign in to apps and sign transactions using a private key stored securely on a passkey authenticator. It uses the WebAuthn standard.
+description: >-
+  Sui supports the passkey signature scheme that enables you to sign in to apps
+  and sign transactions using a private key stored securely on a passkey
+  authenticator. It uses the WebAuthn standard.
+keywords:
+  - passkey
+  - WebAuthn
+  - authentication
+  - cryptography
+  - multisig
+  - biometric
+goal:
+  description: >-
+    Reader understands sui supports the passkey signature scheme that enables
+    you to sign in to apps
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Passkey authentication
+    stage: Auth
+questions:
+  - What is Passkey in Sui?
+  - How does passkey work on Sui?
+  - What are the security considerations for passkey?
+answer: >-
+  Sui supports the passkey signature scheme that enables you to sign in to apps
+  and sign transactions using a private key stored securely on a passkey
+  authenticator. It uses the WebAuthn standard.
 ---
 
 The passkey signature scheme provides a secure and user-friendly alternative for submitting transactions on Sui. It is built on the WebAuthn standard and allows you to authenticate and sign transactions using hardware security keys such as YubiKeys, mobile devices such as smartphones and tablets, and platform-based authenticators such as Face ID and Touch ID.
@@ -32,3 +74,9 @@ See the [TypeScript SDK documentation](https://sdk.mystenlabs.com/typescript/cry
 - Cloud-synced passkey improves accessibility but also creates risks if a cloud provider is compromised or if you lose access to your cloud account. If you prefer full self-custody, you can use hardware-based passkey that does not rely on cloud synchronization.
 
 - You cannot transfer a passkey between different authenticators. For example, a passkey created on a security key cannot move to another device unless it syncs through a cloud provider. To avoid losing access, you should set up authentication on multiple devices.
+
+:::caution
+
+Passkey recovery and availability depend on the vendor. A synced passkey might replicate across the vendor's ecosystem (for example, iCloud Keychain or Google Password Manager), so its security and recoverability are only as strong as the associated vendor account and its second factors. Compromise or lockout of that account can expose or strand the key. Do not rely on a single passkey as the sole custody mechanism for high-value or administrative accounts; place privileged keys under multisig or hardware custody and maintain independent recovery paths. See [User and operator key management](/develop/security/best-practices#user-and-operator-key-management) for details.
+
+:::

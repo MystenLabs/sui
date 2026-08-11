@@ -3,7 +3,7 @@
 
 use crate::{
     effects::{SignedTransactionEffects, TransactionEvents},
-    transaction::{CertifiedTransaction, SignedTransaction, Transaction},
+    transaction::{SignedTransaction, Transaction},
 };
 
 /// This enum represents all possible states of a response returned from
@@ -13,22 +13,17 @@ use crate::{
 /// now performed by the authority aggregator as an aggregated signature,
 /// instead of in SafeClient.
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum PlainTransactionInfoResponse {
     Signed(SignedTransaction),
-    ExecutedWithCert(
-        CertifiedTransaction,
-        SignedTransactionEffects,
-        TransactionEvents,
-    ),
-    ExecutedWithoutCert(Transaction, SignedTransactionEffects, TransactionEvents),
+    Executed(Transaction, SignedTransactionEffects, TransactionEvents),
 }
 
 impl PlainTransactionInfoResponse {
     pub fn is_executed(&self) -> bool {
         match self {
             PlainTransactionInfoResponse::Signed(_) => false,
-            PlainTransactionInfoResponse::ExecutedWithCert(_, _, _)
-            | PlainTransactionInfoResponse::ExecutedWithoutCert(_, _, _) => true,
+            PlainTransactionInfoResponse::Executed(_, _, _) => true,
         }
     }
 }

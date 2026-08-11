@@ -10,6 +10,7 @@ use sui_protocol_config::ProtocolVersion;
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::CheckpointDigest;
 
+use crate::schema::cp_digests;
 use crate::schema::kv_checkpoints;
 use crate::schema::kv_genesis;
 
@@ -23,6 +24,13 @@ pub struct StoredCheckpoint {
     pub checkpoint_summary: Vec<u8>,
     /// BCS serialized AuthorityQuorumSignInfo
     pub validator_signatures: Vec<u8>,
+}
+
+#[derive(Insertable, Debug, Clone, FieldCount, Queryable, Selectable)]
+#[diesel(table_name = cp_digests)]
+pub struct StoredCpDigest {
+    pub cp_sequence_number: i64,
+    pub cp_digest: Vec<u8>,
 }
 
 #[derive(Insertable, Selectable, Queryable, Debug, Clone)]

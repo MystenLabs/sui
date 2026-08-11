@@ -27,9 +27,12 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{PublicKey, Signature, SuiKeyPair, SuiSignature, SuiSignatureInner};
 use tokio::process::Command;
 
-// TODO create specific error code or some metadata method to improve on this.
-/// Ledgers do not support key generation, so we use the JSON RPC method not found error code to identify when create is not supported by the signer.
+// TODO: Remove this legacy Ledger fallback after supported ledger-signer versions return
+// CREATE_KEY_UNSUPPORTED_USE_EXISTING_ERROR_CODE for create_key.
+/// Legacy Ledger signers returned method-not-found when asked to create keys.
 const JSON_RPC_METHOD_NOT_FOUND_ERROR_CODE: i32 = -32601;
+/// Signers return this when asked to create a key, so generate can fall back to indexing an existing key.
+const CREATE_KEY_UNSUPPORTED_USE_EXISTING_ERROR_CODE: i32 = -32013;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExternalExecError {
@@ -450,14 +453,15 @@ impl AccountKeystore for External {
                 })
                 .map_err(|e| anyhow!("Failed to parse key response from external signer: {}", e))?,
             Err(create_error) => {
-                let create_not_supported = matches!(
+                let should_use_existing_key = matches!(
                     &create_error,
                     ExternalExecError::JsonRpc(JsonRpcError::RemoteError(error))
-                        if error.code == JSON_RPC_METHOD_NOT_FOUND_ERROR_CODE
+                        if error.code == CREATE_KEY_UNSUPPORTED_USE_EXISTING_ERROR_CODE
+                            || error.code == JSON_RPC_METHOD_NOT_FOUND_ERROR_CODE
                 );
 
-                // return here if we failed to create a key for a reason other than the method not being found, otherwise attempt to fallback to adding an existing key.
-                if !create_not_supported {
+                // Ledger signers cannot generate keys, so fall back to adding an existing key.
+                if !should_use_existing_key {
                     return Err(anyhow!(
                         "Failed to create a new key on the external signer: {create_error}"
                     ));
@@ -751,7 +755,10 @@ impl AccountKeystore for External {
 
 #[cfg(test)]
 mod tests {
-    use super::{External, ExternalExecError, MockCommandRunner, StdCommandRunner, StoredKey};
+    use super::{
+        CREATE_KEY_UNSUPPORTED_USE_EXISTING_ERROR_CODE, External, ExternalExecError,
+        JSON_RPC_METHOD_NOT_FOUND_ERROR_CODE, MockCommandRunner, StdCommandRunner, StoredKey,
+    };
     use crate::external::ProvisionMode;
     use crate::key_identity::KeyIdentity;
     use crate::keystore::{ALIASES_FILE_EXTENSION, AccountKeystore, GenerateOptions, GeneratedKey};
@@ -780,6 +787,8 @@ mod tests {
     const PROVISION_MODE_NOT_SUPPORTED_ERROR_CODE: i32 = -32012;
     const PROVISION_MODE_NOT_SUPPORTED_MESSAGE: &str =
         "Provision mode is not supported by yubikey-signer";
+    const CREATE_KEY_UNSUPPORTED_USE_EXISTING_MESSAGE: &str =
+        "create_key is not supported; use an existing key";
 
     fn unsupported_action_error(method: &str) -> ExternalExecError {
         RemoteError {
@@ -1052,11 +1061,36 @@ mod tests {
 
     #[tokio::test]
     async fn test_generate_fallback_add_first_unindexed_key() {
+        assert_generate_fallback_add_first_unindexed_key(
+            CREATE_KEY_UNSUPPORTED_USE_EXISTING_ERROR_CODE,
+            CREATE_KEY_UNSUPPORTED_USE_EXISTING_MESSAGE,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_generate_fallback_add_first_unindexed_key_legacy_method_not_found() {
+        assert_generate_fallback_add_first_unindexed_key(
+            JSON_RPC_METHOD_NOT_FOUND_ERROR_CODE,
+            "Unsupported action create_key",
+        )
+        .await;
+    }
+
+    async fn assert_generate_fallback_add_first_unindexed_key(
+        create_key_error_code: i32,
+        create_key_error_message: &'static str,
+    ) {
         let mut mock = MockCommandRunner::new();
         let key_id = "key-123";
         mock.expect_run().returning(move |_, method, params| {
             if method == "create_key" && params == JsonValue::Null {
-                return Err(unsupported_action_error("create_key"));
+                return Err(RemoteError {
+                    code: create_key_error_code,
+                    message: create_key_error_message.to_string(),
+                    data: None,
+                }
+                .into());
             }
             if method == "keys" && params == json![null] {
                 return Ok(json!({

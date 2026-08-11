@@ -1,0 +1,35 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+task 1, lines 13-30:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4772800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 32-36:
+//# programmable
+// Result(0) is `&mut TxContext`. gen_mut_id<TxContext>'s single &mut T slot
+// is auto-injected, so passing Result(0) is one arg too many.
+//> 0: test::m::tx_context_mut_id();
+//> test::m::gen_mut_id<sui::tx_context::TxContext>(Result(0));
+Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 1 argument calling function 'test::m::gen_mut_id', but found 2"), command: Some(1) } }
+
+task 3, lines 38-41:
+//# programmable
+// the same shape through immutable references
+//> 0: test::m::tx_context_imm_id();
+//> test::m::gen_imm_id<sui::tx_context::TxContext>(Result(0));
+Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 1 argument calling function 'test::m::gen_imm_id', but found 2"), command: Some(1) } }
+
+task 4, lines 43-46:
+//# programmable
+// a generic identity's own result cannot be fed back into it either
+//> 0: test::m::gen_mut_id<sui::tx_context::TxContext>();
+//> test::m::gen_mut_id<sui::tx_context::TxContext>(Result(0));
+Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 1 argument calling function 'test::m::gen_mut_id', but found 2"), command: Some(1) } }

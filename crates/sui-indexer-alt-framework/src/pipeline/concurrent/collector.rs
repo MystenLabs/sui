@@ -175,11 +175,7 @@ pub(super) fn collector<H: Handler>(
                 let mut watermark = Vec::new();
                 let mut batch_len = 0;
 
-                loop {
-                    let Some(mut entry) = pending.first_entry() else {
-                        break;
-                    };
-
+                while let Some(mut entry) = pending.first_entry() {
                     if watermark.len() >= max_watermark_updates {
                         break;
                     }
@@ -260,11 +256,11 @@ mod tests {
     use std::time::Duration;
 
     use async_trait::async_trait;
-    use sui_pg_db::Connection;
-    use sui_pg_db::Db;
     use tokio::sync::mpsc;
 
     use crate::metrics::tests::test_metrics;
+    use crate::mocks::store::FallibleMockConnection;
+    use crate::mocks::store::FallibleMockStore;
     use crate::pipeline::Processor;
     use crate::pipeline::concurrent::BatchStatus;
     use crate::types::full_checkpoint_content::Checkpoint;
@@ -291,7 +287,7 @@ mod tests {
 
     #[async_trait]
     impl Handler for TestHandler {
-        type Store = Db;
+        type Store = FallibleMockStore;
         type Batch = Vec<Entry>;
 
         const MIN_EAGER_ROWS: usize = 10;
@@ -317,7 +313,7 @@ mod tests {
         async fn commit<'a>(
             &self,
             _batch: &Self::Batch,
-            _conn: &mut Connection<'a>,
+            _conn: &mut FallibleMockConnection<'a>,
         ) -> anyhow::Result<usize> {
             tokio::time::sleep(Duration::from_millis(1000)).await;
             Ok(0)

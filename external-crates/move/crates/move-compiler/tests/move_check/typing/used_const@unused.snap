@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/typing/used_const.move:13:7
    │
 13 │     #[test(p = @42)]
@@ -14,7 +14,7 @@ warning[W10007]: issue with attribute value
    │       Arguments are no longer supported in `#[test]` attributes
    │       Ignoring these arguments
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/typing/used_const.move:15:5
    │  
 15 │ ╭     public fun baz(p: u64) {

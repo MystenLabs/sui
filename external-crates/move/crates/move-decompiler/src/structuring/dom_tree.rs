@@ -8,10 +8,12 @@ use petgraph::{
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-#[derive(Debug)]
-pub struct DominatorTree(Node);
+#[derive(Debug, Clone)]
+pub struct DominatorTree {
+    tree: Node,
+}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Node {
     value: NodeIndex,
     children: Vec<Node>,
@@ -36,21 +38,20 @@ impl DominatorTree {
         let all_nodes: HashSet<NodeIndex> = graph.node_indices().collect();
 
         for &node in &all_nodes {
-            if let Some(idom) = dominators.immediate_dominator(node) {
+            if let Some(parent) = dominators.immediate_dominator(node) {
                 // Skip the root
-                if idom != node {
-                    child_map.entry(idom).or_default().push(node);
+                if parent != node {
+                    child_map.entry(parent).or_default().push(node);
                 }
             }
         }
 
-        // Build tree recursively from root
         let tree = build_node(root, &mut child_map);
-        DominatorTree(tree)
+        DominatorTree { tree }
     }
 
     pub fn get(&self, target: NodeIndex) -> &'_ Node {
-        let mut queue = VecDeque::from([&self.0]);
+        let mut queue = VecDeque::from([&self.tree]);
 
         while let Some(node) = queue.pop_front() {
             if node.value == target {

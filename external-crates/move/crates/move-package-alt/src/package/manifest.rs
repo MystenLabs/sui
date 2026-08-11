@@ -63,6 +63,24 @@ pub enum ManifestErrorKind {
 
     #[error("{0}")]
     FlavorRejectedManifest(String),
+
+    #[error(
+        "On-chain dependency `{name}` in `[dependencies]` must use `on-chain = true`. \
+         Specify the address in `[dep-replacements]` with `on-chain = \"0x...\"`."
+    )]
+    OnChainDepWithAddress { name: PackageName },
+
+    #[error(
+        "On-chain dependency `{name}` in `[dep-replacements]` must specify an address: \
+         `on-chain = \"0x...\"`."
+    )]
+    OnChainReplacementWithoutAddress { name: PackageName },
+
+    #[error(
+        "On-chain dependency `{name}` requires an address. Add a `[dep-replacements]` entry \
+         with `on-chain = \"0x...\"`."
+    )]
+    OnChainDepMissingReplacement { name: PackageName },
 }
 
 pub type ManifestResult<T> = Result<T, ManifestError>;

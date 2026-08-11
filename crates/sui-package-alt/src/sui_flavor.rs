@@ -26,6 +26,8 @@ use sui_sdk::wallet_context::WalletContext;
 use tokio::sync::OnceCell;
 use tracing::warn;
 
+use sui_sdk::digests::chain_ids_match;
+
 use crate::{mainnet_environment, testnet_environment};
 
 const EDITION: &str = "2024";
@@ -154,6 +156,10 @@ impl MoveFlavor for SuiFlavor {
         IndexMap::from([(testnet.name, testnet.id), (mainnet.name, mainnet.id)])
     }
 
+    fn environment_ids_match(&self, a: &EnvironmentID, b: &EnvironmentID) -> bool {
+        chain_ids_match(a, b)
+    }
+
     async fn implicit_dependencies(
         &self,
         _: &EnvironmentID,
@@ -263,7 +269,7 @@ fn validate_modern_manifest_does_not_use_legacy_system_names(
     for name in dep_names {
         if legacy_names.contains_key(&name) {
             return Err(format!(
-                "Dependency `{name}` is a legacy system name and cannot be used. See https://docs.sui.io/guides/developer/sui-101/move-package-management#system-dependencies"
+                "Dependency `{name}` is a legacy system name and cannot be used. See https://docs.sui.io/guides/developer/packages/move-package-management#system-dependencies"
             ));
         }
     }

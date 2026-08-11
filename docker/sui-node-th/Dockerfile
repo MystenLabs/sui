@@ -3,7 +3,7 @@
 # Single-stage builder + minimal runtime. Layer cache short-circuits when the
 # COPY inputs are byte-identical to a previous build.
 #
-FROM rust:1.92-bullseye AS builder
+FROM rust:1.96.1-bullseye AS builder
 RUN apt-get update \
  && apt-get install -y --no-install-recommends cmake clang \
  && rm -rf /var/lib/apt/lists/*
@@ -24,7 +24,7 @@ ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
 ENV USE_TIDEHUNTER=1
 RUN cargo build --locked --profile ${PROFILE} \
-    --features typed-store/tidehunter \
+    --features typed-store/tidehunter,sui-tool/tideconsole \
     --bin sui-node --bin sui --bin sui-tool --bin stress
 
 # Production Image

@@ -6,6 +6,9 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -33,6 +36,15 @@ env:
   RUST_BACKTRACE: short
   # RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
+  # sccache role selection: trusted refs → RW role; same-repo pull_request → RO
+  # role (read-only, cannot poison the cache); forks / extensions / everything else
+  # → empty → setup-sccache falls back to a local cache. Forks are skipped because
+  # GitHub caps fork id-token to none (role-to-assume would hard-fail OIDC); this
+  # skip is a fail-safe, NOT a security boundary — the RO role still trusts
+  # pull_request (Decision A). The extensions branch is deliberately untrusted
+  # (dormant; see AWS_OIDC_MIGRATION_INVENTORY.md). No workflow_dispatch here, so no
+  # override-ref clause. Keep in sync with the sui-sccache-{rw,ro}-github trusts.
+  SCCACHE_ROLE: ${{ (contains(fromJSON('["refs/heads/main","refs/heads/devnet","refs/heads/testnet","refs/heads/mainnet"]'), github.ref) || (startsWith(github.ref, 'refs/heads/releases/sui-') && endsWith(github.ref, '-release'))) && 'arn:aws:iam::011083325127:role/sui-sccache-rw-github' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false) && 'arn:aws:iam::011083325127:role/sui-sccache-ro-github' || '' }}
 
 jobs:
   diff:
@@ -47,6 +59,9 @@ jobs:
         id: diff
 
   external-crates-test:
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the sccache role on trusted refs
     needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
@@ -65,8 +80,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       - uses: ./.github/actions/setup-sccache
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - name: Set Swap Space
@@ -99,6 +113,9 @@ jobs:
       - run: 'echo "No build required" '
 
   clippy:
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the sccache role on trusted refs
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ubuntu-ghcloud]
@@ -106,8 +123,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       - uses: ./.github/actions/setup-sccache
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           key-prefix: ubuntu-ghcloud
       - run: rustup component add clippy
 

@@ -1,0 +1,15 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# The version-matrix fixture for legacy releases (< v1.63), whose manifests predate both the
+# `implicit-dependencies` key and the `[environments]` section. Its only module returns a literal, so
+# it needs nothing from the framework. The edition is `2024.beta`, which the whole legacy range
+# accepts (plain `2024` is rejected before ~v1.35).
+[package]
+name = "matrix_fixture"
+# Required by manifests before ~v1.20.
+version = "0.0.1"
+edition = "legacy"
+
+[addresses]
+matrix_fixture = "0x0"

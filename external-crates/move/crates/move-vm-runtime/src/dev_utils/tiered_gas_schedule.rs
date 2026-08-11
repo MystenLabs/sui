@@ -11,12 +11,9 @@ use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     partial_vm_error,
 };
-use move_core_types::{
-    gas_algebra::{
-        AbstractMemorySize, GasQuantity, InternalGas, InternalGasUnit, NumArgs, NumBytes, ToUnit,
-        ToUnitFractional,
-    },
-    language_storage::ModuleId,
+use move_core_types::gas_algebra::{
+    AbstractMemorySize, GasQuantity, InternalGas, InternalGasUnit, NumArgs, NumBytes, ToUnit,
+    ToUnitFractional,
 };
 
 use crate::{
@@ -522,8 +519,6 @@ impl<'b> GasMeter for GasStatus<'b> {
 
     fn charge_call(
         &mut self,
-        _module_id: &ModuleId,
-        _func_name: &str,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
         _num_locals: NumArgs,
     ) -> PartialVMResult<()> {
@@ -539,8 +534,6 @@ impl<'b> GasMeter for GasStatus<'b> {
 
     fn charge_call_generic(
         &mut self,
-        _module_id: &ModuleId,
-        _func_name: &str,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
         _num_locals: NumArgs,
     ) -> PartialVMResult<()> {

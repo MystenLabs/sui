@@ -1,0 +1,33 @@
+// Tests auto-import completions when a module's name is taken by a member alias
+{
+  "AutoImport": {
+    "project": "tests/import-conflict",
+    "file_tests": {
+      "conflict.move": [
+        // module and function auto-imports fall back to fully qualified paths instead
+        // of inserting a module import conflicting with the member alias
+        {
+          "use_line": 9,
+          "use_col": 9
+        },
+        // same fallback when the module's name is taken by a module alias
+        {
+          "use_line": 16,
+          "use_col": 9
+        },
+        // type auto-imports fall back to fully qualified paths when the type's name
+        // is taken by another member alias
+        {
+          "use_line": 23,
+          "use_col": 17
+        },
+        // module and function auto-imports fall back to fully qualified paths when
+        // the module's name is taken by a named address
+        {
+          "use_line": 28,
+          "use_col": 9
+        }
+      ]
+    }
+  }
+}

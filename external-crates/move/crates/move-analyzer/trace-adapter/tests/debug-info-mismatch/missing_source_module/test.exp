@@ -1,0 +1,17 @@
+warnings:
+  <none>
+current frame stack:
+  function: test (m.move:5)
+    scope 0 :
+warnings:
+  Source debug info for 0x1::m2 is unavailable; showing disassembly for this module.
+current frame stack:
+  function: test (m.move:5)
+    scope 0 :
+  function: missing_from_source (m2.mvb:2)
+    scope 0 :
+warnings:
+  <none>
+current frame stack:
+  function: test (m.move:6)
+    scope 0 :

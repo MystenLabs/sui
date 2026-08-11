@@ -1,0 +1,10 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# `--help` is forwarded to `prettier-move` (rather than intercepted by clap)
+# so the user sees prettier-move's full help.
+
+chmod +x stubs/prettier-move
+export PATH="$PWD/stubs:$(dirname "$(command -v sui)")"
+
+sui move --client.config $CONFIG format --help

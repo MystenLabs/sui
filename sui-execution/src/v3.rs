@@ -25,6 +25,7 @@ use sui_types::{
 
 use move_bytecode_verifier_meter::Meter;
 use move_vm_runtime_v3::move_vm::MoveVM;
+use mysten_common::debug_fatal;
 use sui_adapter_v3::adapter::{new_move_vm, run_metered_move_bytecode_verifier};
 use sui_adapter_v3::execution_engine::{
     execute_genesis_state_update, execute_transaction_to_effects,
@@ -72,6 +73,10 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
+        _system_object_versions: std::collections::BTreeMap<
+            sui_types::base_types::ObjectID,
+            sui_types::base_types::SequenceNumber,
+        >,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -104,6 +109,9 @@ impl executor::Executor for Executor {
                 execution_params,
                 trace_builder_opt,
             );
+        if let Err(error) = &result {
+            log_execution_error(protocol_config, transaction_digest, error);
+        }
         (
             inner_temp_store,
             gas_status,
@@ -123,6 +131,10 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
+        _system_object_versions: std::collections::BTreeMap<
+            sui_types::base_types::ObjectID,
+            sui_types::base_types::SequenceNumber,
+        >,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -137,23 +149,28 @@ impl executor::Executor for Executor {
         Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
     ) {
-        execute_transaction_to_effects::<execution_mode::Normal>(
-            store,
-            input_objects,
-            gas,
-            gas_status,
-            transaction_kind,
-            transaction_signer,
-            transaction_digest,
-            &self.0,
-            epoch_id,
-            epoch_timestamp_ms,
-            protocol_config,
-            metrics,
-            enable_expensive_checks,
-            execution_params,
-            trace_builder_opt,
-        )
+        let (inner_temp_store, gas_status, effects, timings, result) =
+            execute_transaction_to_effects::<execution_mode::Normal>(
+                store,
+                input_objects,
+                gas,
+                gas_status,
+                transaction_kind,
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                metrics,
+                enable_expensive_checks,
+                execution_params,
+                trace_builder_opt,
+            );
+        if let Err(error) = &result {
+            log_execution_error(protocol_config, transaction_digest, error);
+        }
+        (inner_temp_store, gas_status, effects, timings, result)
     }
 
     fn dev_inspect_transaction(
@@ -216,6 +233,9 @@ impl executor::Executor for Executor {
                 &mut None,
             )
         };
+        if let Err(error) = &result {
+            log_execution_error(protocol_config, transaction_digest, error);
+        }
         (inner_temp_store, gas_status, effects, result)
     }
 
@@ -279,5 +299,49 @@ impl verifier::Verifier for Verifier<'_> {
         meter: &mut dyn Meter,
     ) -> SuiResult<()> {
         run_metered_move_bytecode_verifier(modules, &self.config, meter, self.metrics)
+    }
+}
+
+fn log_execution_error(
+    protocol_config: &ProtocolConfig,
+    transaction_digest: TransactionDigest,
+    error: &ExecutionError,
+) {
+    use sui_types::execution_status::ExecutionErrorKind as K;
+
+    match error.kind() {
+        K::InvariantViolation | K::VMInvariantViolation => {
+            if protocol_config.debug_fatal_on_move_invariant_violation() {
+                debug_fatal!(
+                    "INVARIANT VIOLATION! Txn Digest: {}, Source: {:?}",
+                    transaction_digest,
+                    error.source()
+                );
+            } else {
+                tracing::error!(
+                    kind = ?error.kind(),
+                    tx_digest = ?transaction_digest,
+                    "INVARIANT VIOLATION! Source: {:?}",
+                    error.source(),
+                );
+            }
+        }
+        K::SuiMoveVerificationError | K::VMVerificationOrDeserializationError => {
+            tracing::debug!(
+                kind = ?error.kind(),
+                tx_digest = ?transaction_digest,
+                "Verification Error. Source: {:?}",
+                error.source(),
+            );
+        }
+        K::PublishUpgradeMissingDependency | K::PublishUpgradeDependencyDowngrade => {
+            tracing::debug!(
+                kind = ?error.kind(),
+                tx_digest = ?transaction_digest,
+                "Publish/Upgrade Error. Source: {:?}",
+                error.source(),
+            );
+        }
+        _ => (),
     }
 }

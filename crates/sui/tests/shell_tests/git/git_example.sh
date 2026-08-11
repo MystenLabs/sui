@@ -15,4 +15,6 @@ HASH=$(git -C a log --pretty=format:%H)
 
 sui move --client.config "$CONFIG" cache-package testnet 4c78adac \
 "{ git = \"file://$(pwd)/a\", rev = \"${HASH}\", subdir = \".\" }" 2>&1 \
-| sed "s|$(pwd)|<ROOT>|g" | grep -v "output from \`git"
+| sed "s|$(pwd)|<ROOT>|g" \
+| sed 's/"path":"[^"]*"/"path":"<PATH>"/' \
+| grep -v "output from \`git"

@@ -13,8 +13,8 @@ use crate::{
     commit::{CommitRange, TrustedCommit},
     error::ConsensusResult,
     network::{
-        BlockStream, NodeId, ObserverBlockStream, ObserverNetworkService, PeerId,
-        ValidatorNetworkService,
+        BlockStream, NodeId, ObserverBlockStream, ObserverNetworkService, ObserverStreamItem,
+        PeerId, ValidatorNetworkService,
     },
 };
 
@@ -121,7 +121,7 @@ impl ObserverNetworkService for Mutex<TestService> {
     async fn handle_stream_blocks(
         &self,
         peer: NodeId,
-        highest_round_per_authority: Vec<u64>,
+        highest_round_per_authority: Vec<Round>,
     ) -> ConsensusResult<ObserverBlockStream> {
         use futures::stream;
 
@@ -146,11 +146,15 @@ impl ObserverNetworkService for Mutex<TestService> {
                 .collect::<Vec<_>>()
         };
 
-        let block_stream = stream::iter(
-            blocks_to_send
-                .into_iter()
-                .map(|extended_block| vec![extended_block.block]),
-        );
+        let block_stream =
+            stream::iter(
+                blocks_to_send
+                    .into_iter()
+                    .map(|extended_block| ObserverStreamItem {
+                        blocks: vec![extended_block.block],
+                        auxiliary_data: Default::default(),
+                    }),
+            );
 
         Ok(Box::pin(block_stream))
     }

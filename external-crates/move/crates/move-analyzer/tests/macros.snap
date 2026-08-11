@@ -154,7 +154,7 @@ Use: '$v', start: 34, end: 36
 Def: '$v', line: 18, def char: 34
 TypeDef: no info
 On Hover:
-let $v: &vector<u64>
+$v: &vector<$T>
 
 -- test 13 -------------------
 use line: 19, use_ndx: 3

@@ -1,8 +1,51 @@
 ---
 title: Optimize Indexer Runtime and Performance
 sidebar_label: Optimize Runtime and Performance
-description: Learn how to optimize Sui custom indexer performance through runtime configuration, resource monitoring, and debugging tools. Covers ingestion settings, database tuning, Tokio console debugging, Prometheus metrics, and data pruning strategies.
-keywords: [ sui indexer performance, indexer optimization, tokio console debugging, prometheus metrics, database tuning, checkpoint ingestion, data pruning, indexer configuration, performance monitoring, sui blockchain indexing ]
+description: >-
+  Learn how to optimize Sui custom indexer performance through runtime
+  configuration, resource monitoring, and debugging tools. Covers ingestion
+  settings, database tuning, Tokio console debugging, Prometheus metrics, and
+  data pruning strategies.
+keywords:
+  - sui indexer performance
+  - indexer optimization
+  - tokio console debugging
+  - prometheus metrics
+  - database tuning
+  - checkpoint ingestion
+  - data pruning
+  - indexer configuration
+  - performance monitoring
+  - sui blockchain indexing
+goal:
+  description: >-
+    Reader can optimize Sui custom indexer performance through runtime
+    configuration, resource monitoring, and debugging tools.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Optimize Indexer Runtime and Performance in Sui?
+  - How do I monitor indexer runtime and performance?
+  - How do I troubleshoot indexer runtime and performance?
+answer: >-
+  Configuration and resource monitoring deliver performant custom indexers. For
+  example:.
 ---
 
 Configuration and resource monitoring deliver performant custom indexers. For example:
@@ -24,6 +67,8 @@ The indexing framework provides multiple levels of configuration to optimize per
 Control how checkpoint data is fetched and distributed:
 
 ```rust
+use std::num::NonZeroUsize;
+
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
 
 let ingestion_config = IngestionConfig {
@@ -43,7 +88,7 @@ let ingestion_config = IngestionConfig {
 
     // gRPC streaming configuration (applies when --streaming-url is provided)
     // Initial batch size after streaming connection failure (default: 10)
-    streaming_backoff_initial_batch_size: 20,
+    streaming_backoff_initial_batch_size: NonZeroUsize::new(20).unwrap(),
 
     // Maximum batch size after repeated streaming failures (default: 10000)
     streaming_backoff_max_batch_size: 20000,
@@ -53,6 +98,9 @@ let ingestion_config = IngestionConfig {
 
     // Timeout for streaming operations (peek/next) in ms (default: 5000)
     streaming_statement_timeout_ms: 10000,
+
+    // Minimum boundary (in checkpoints) for an ingestion cohort (default: 25000)
+    min_cohort_boundary: 25000,
 };
 ```
 
@@ -62,6 +110,7 @@ let ingestion_config = IngestionConfig {
 - `retry_interval_ms`: Lower values reduce latency for live data, higher values reduce unnecessary retries.
 - `streaming_backoff_initial_batch_size`: Number of checkpoints to process through polling after the initial streaming failure. Lower values restore streaming faster, higher values reduce connection attempts.
 - `streaming_backoff_max_batch_size`: Maximum checkpoints to process through polling after repeated failures. The batch size increases exponentially from the initial size up to this maximum. Higher values reduce connection attempts during prolonged outages.
+- `min_cohort_boundary`: Minimum absolute distance from the tip for an ingestion cohort's boundary. Pipelines are grouped into cohorts based on how far behind the tip they are. The closest pipeline seeds a cohort whose boundary is `max(2 * its_distance_from_tip, min_cohort_boundary)`, and all pipelines within that boundary join the same cohort. A higher value prevents nearly caught-up pipelines from being fragmented into many small cohorts, reducing ingestion overhead. A lower value gives finer-grained grouping when pipelines have widely different lag. Default: `25000`.
 - `streaming_connection_timeout_ms`: Time to wait for streaming connection establishment. Increase for slower networks.
 - `streaming_statement_timeout_ms`: Time to wait for streaming data operations. Increase if checkpoints are large or network is slow.
 

@@ -1,0 +1,81 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 13-15:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 1
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 300000000000000u64,
+    },
+}
+
+task 2, lines 16-21:
+//# programmable --sender A --inputs 100000000000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
+//> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
+// Create a second SUI coin owned by A (will be smashed in as a secondary).
+mutated: object(0,0)
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100000000000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 22-24:
+//# programmable --sender A --inputs 1000000000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 26:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 28-32:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+100000000000
+
+task 6, lines 33-35:
+//# programmable --sender A --gas-payment object(0,0) --gas-payment object(3,0) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(500000000) --inputs 100000 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(6,0)
+mutated: object(0,0)
+deleted: object(3,0)
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 500000000)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 7, lines 37-39:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 8, lines 40-43:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+99500000000
+
+task 9, line 44:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 4
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299900494894360u64,
+    },
+}

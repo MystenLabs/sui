@@ -189,6 +189,7 @@ fn big_vec_unpacks() {
             max_function_parameters: Some(128),
             max_basic_blocks: Some(1024),
             max_push_size: Some(10000),
+            max_generic_instantiation_type_nodes_per_function: None,
             ..Default::default()
         },
         &module,

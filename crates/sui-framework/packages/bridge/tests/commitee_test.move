@@ -20,7 +20,7 @@ use bridge::committee::{
     voting_power,
     execute_blocklist,
     make_committee_member,
-    make_bridge_committee
+    make_bridge_committee,
 };
 use bridge::crypto;
 use bridge::message;
@@ -31,7 +31,7 @@ use sui::vec_map;
 use sui_system::governance_test_utils::{
     advance_epoch_with_reward_amounts,
     create_sui_system_state_for_testing,
-    create_validator_for_testing
+    create_validator_for_testing,
 };
 use sui_system::sui_system::{Self, SuiSystemState};
 

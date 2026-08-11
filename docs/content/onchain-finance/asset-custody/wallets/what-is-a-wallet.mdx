@@ -1,7 +1,51 @@
 ---
 title: What Is a Wallet?
-description: Learn what Sui wallets are, how they work, and which wallet types and options are available on Sui.
-keywords: [ wallet, wallets, self-custodial, zkLogin, Slush, Phantom, Ledger, key pair, transaction fees, gas, staking ]
+description: >-
+  Learn what Sui wallets are, how they work, and which wallet types and options
+  are available on Sui.
+keywords:
+  - wallet
+  - wallets
+  - self-custodial
+  - zkLogin
+  - Slush
+  - Phantom
+  - Ledger
+  - key pair
+  - transaction fees
+  - gas
+  - staking
+goal:
+  description: >-
+    Reader understands what Sui wallets are, how they work, and which wallet
+    types and options are available on Sui
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: What is a wallet
+    stage: Wallets & Funding
+questions:
+  - What is a Wallet in Sui?
+  - How does a wallet work on Sui?
+  - Why should I use a wallet?
+answer: >-
+  A wallet stores the cryptographic keys that prove ownership of your onchain
+  assets and signs the transactions you submit to the Sui network.
 ---
 
 A wallet stores the cryptographic keys that prove ownership of your onchain assets and signs the transactions you submit to the Sui network.
@@ -16,6 +60,12 @@ Keeping those private keys secure is the central responsibility of any wallet. H
 - A **cold wallet** keeps private keys on a device that is never connected to the internet, such as a hardware device. Cold wallets are harder to use for routine transactions but are much harder to compromise remotely. 
 
 Both hot and cold wallets can be **self-custodial**, meaning you hold the private keys yourself and no third party can access or authorize transactions on your behalf. The alternative is a **custodial wallet**, where a third party (such as an exchange or a developer backend) holds the keys and manages accounts on your behalf.
+
+:::tip
+
+Match the wallet to the value it protects. Keep only spending balances in a hot wallet, and use a hardware or multisig wallet for large balances or privileged funds. Avoid blind signing: confirm the human-readable transaction intent before approving, and prefer wallets that display clear, decoded transaction details. See [user and operator key management](/develop/security/best-practices#user-and-operator-key-management).
+
+:::
 
 ## Sui wallets
 

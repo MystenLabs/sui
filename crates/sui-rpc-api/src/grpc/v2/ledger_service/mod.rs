@@ -16,15 +16,34 @@ use sui_rpc::proto::sui::rpc::v2::GetServiceInfoRequest;
 use sui_rpc::proto::sui::rpc::v2::GetServiceInfoResponse;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionResponse;
+use sui_rpc::proto::sui::rpc::v2::ListCheckpointsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListCheckpointsResponse;
+use sui_rpc::proto::sui::rpc::v2::ListEventsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListEventsResponse;
+use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListTransactionsResponse;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerService;
+use tonic::codegen::BoxStream;
 
+mod bitmap_scan;
+mod chunked_scan;
+mod event_scan;
 pub(crate) mod get_checkpoint;
 mod get_epoch;
 mod get_object;
 mod get_service_info;
-mod get_transaction;
+pub(crate) mod get_transaction;
+mod ledger_read;
+mod list_checkpoints;
+mod list_events;
+mod list_transactions;
+mod object_set;
+mod query_end;
+mod stream;
 pub use get_epoch::protocol_config_to_proto;
 pub use get_object::validate_get_object_requests;
+
+use stream::serve_list_stream;
 
 #[tonic::async_trait]
 impl LedgerService for RpcService {
@@ -50,9 +69,14 @@ impl LedgerService for RpcService {
         &self,
         request: tonic::Request<BatchGetObjectsRequest>,
     ) -> Result<tonic::Response<BatchGetObjectsResponse>, tonic::Status> {
-        get_object::batch_get_objects(self, request.into_inner())
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        let service = self.clone();
+        tokio::task::spawn_blocking(move || {
+            get_object::batch_get_objects(&service, request.into_inner())
+        })
+        .await
+        .map_err(|e| tonic::Status::internal(format!("batch_get_objects task failed: {e}")))?
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 
     async fn get_transaction(
@@ -68,9 +92,14 @@ impl LedgerService for RpcService {
         &self,
         request: tonic::Request<BatchGetTransactionsRequest>,
     ) -> Result<tonic::Response<BatchGetTransactionsResponse>, tonic::Status> {
-        get_transaction::batch_get_transactions(self, request.into_inner())
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        let service = self.clone();
+        tokio::task::spawn_blocking(move || {
+            get_transaction::batch_get_transactions(&service, request.into_inner())
+        })
+        .await
+        .map_err(|e| tonic::Status::internal(format!("batch_get_transactions task failed: {e}")))?
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 
     async fn get_checkpoint(
@@ -89,5 +118,41 @@ impl LedgerService for RpcService {
         get_epoch::get_epoch(self, request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
+    }
+
+    async fn list_checkpoints(
+        &self,
+        request: tonic::Request<ListCheckpointsRequest>,
+    ) -> Result<tonic::Response<BoxStream<ListCheckpointsResponse>>, tonic::Status> {
+        serve_list_stream(
+            "list_checkpoints",
+            self.config.ledger_history().list_checkpoints().timeout,
+            list_checkpoints::list_checkpoints(self.clone(), request.into_inner()),
+        )
+        .await
+    }
+
+    async fn list_transactions(
+        &self,
+        request: tonic::Request<ListTransactionsRequest>,
+    ) -> Result<tonic::Response<BoxStream<ListTransactionsResponse>>, tonic::Status> {
+        serve_list_stream(
+            "list_transactions",
+            self.config.ledger_history().list_transactions().timeout,
+            list_transactions::list_transactions(self.clone(), request.into_inner()),
+        )
+        .await
+    }
+
+    async fn list_events(
+        &self,
+        request: tonic::Request<ListEventsRequest>,
+    ) -> Result<tonic::Response<BoxStream<ListEventsResponse>>, tonic::Status> {
+        serve_list_stream(
+            "list_events",
+            self.config.ledger_history().list_events().timeout,
+            list_events::list_events(self.clone(), request.into_inner()),
+        )
+        .await
     }
 }

@@ -29,6 +29,7 @@ use crate::api::scalars::uint53::UInt53;
 use crate::api::types::address;
 use crate::api::types::address::Address;
 use crate::api::types::address::AddressKey;
+use crate::api::types::checkpoint;
 use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
 use crate::api::types::checkpoint::filter::CheckpointFilter;
@@ -38,6 +39,7 @@ use crate::api::types::epoch::CEpoch;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::event::CEvent;
 use crate::api::types::event::Event;
+use crate::api::types::event::EventConnection;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::move_object::MoveObject;
 use crate::api::types::move_package;
@@ -62,6 +64,7 @@ use crate::api::types::signature_verify::SignatureVerifyResult;
 use crate::api::types::simulation_result::SimulationResult;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::transaction_effects::TransactionEffects;
@@ -198,20 +201,29 @@ impl Query {
         Ok(Base58::encode(chain_id.wait().await.as_bytes()))
     }
 
-    /// Fetch a checkpoint by its sequence number, or the latest checkpoint if no sequence number is provided.
+    /// Fetch a checkpoint by its sequence number or digest, or the latest checkpoint if neither is provided.
+    ///
+    /// It is an error to specify both `sequenceNumber` and `digest`.
     ///
     /// Returns `null` if the checkpoint does not exist in the store, either because it never existed or because it was pruned.
     async fn checkpoint(
         &self,
         ctx: &Context<'_>,
         sequence_number: Option<UInt53>,
-    ) -> Option<Result<Checkpoint, RpcError>> {
+        digest: Option<Digest>,
+    ) -> Option<Result<Checkpoint, RpcError<checkpoint::Error>>> {
         async {
             let scope = self.scope(ctx)?;
-            Ok(Checkpoint::with_sequence_number(
-                scope,
-                sequence_number.map(|s| s.into()),
-            ))
+            match (sequence_number, digest) {
+                (Some(_), Some(_)) => Err(bad_user_input(checkpoint::Error::BothBoundsSet)),
+                (None, Some(digest)) => Checkpoint::by_digest(ctx, scope, digest.into())
+                    .await
+                    .map_err(upcast),
+                (sequence_number, None) => Ok(Checkpoint::with_sequence_number(
+                    scope,
+                    sequence_number.map(|s| s.into()),
+                )),
+            }
         }
         .await
         .transpose()
@@ -300,7 +312,7 @@ impl Query {
         last: Option<u64>,
         before: Option<CEvent>,
         filter: Option<EventFilter>,
-    ) -> Option<Result<Connection<String, Event>, RpcError>> {
+    ) -> Option<Result<EventConnection, RpcError>> {
         Some(
             async {
                 let scope = self.scope(ctx)?;
@@ -708,7 +720,7 @@ impl Query {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+    ) -> Option<Result<TransactionConnection, RpcError>> {
         Some(
             async {
                 let scope = self.scope(ctx)?;

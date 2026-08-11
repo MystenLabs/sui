@@ -6,32 +6,30 @@
 import React from "react";
 
 /**
- * We glob-import every MDX file under @site/snippets/**.
- * Docusaurus (Webpack 5) supports require.context at build time.
+ * Glob-imports every MDX file under docs/snippets at build time via
+ * Webpack's require.context.
  */
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const req = require.context("../../../../content/snippets", true, /\.mdx$/);
+const req = (require as any).context(
+  "../../../../docs/snippets",
+  true,
+  /\.mdx$/,
+);
 
 type SnippetModule = { default: React.ComponentType<any> };
-
 const SNIPPETS: Record<string, React.ComponentType<any>> = {};
 req.keys().forEach((k: string) => {
-  const mod = req<SnippetModule>(k);
-  const keyWithExt = k.replace(/^\.\//, ""); // e.g. "sub/foo.mdx"
-  const keyNoExt = keyWithExt.replace(/\.mdx$/, ""); // e.g. "sub/foo"
+  const mod = req(k) as SnippetModule;
+  const keyWithExt = k.replace(/^\.\//, "");
+  const keyNoExt = keyWithExt.replace(/\.mdx$/, "");
   SNIPPETS[keyWithExt] = mod.default;
   SNIPPETS[keyNoExt] = mod.default;
 });
 
 type Props = {
-  /** Path under snippets/, e.g. "subfolder-of-snippet/file" or "subfolder-of-snippet/file.mdx" */
   source: string;
 } & Record<string, any>;
 
-/**
- * Renders the MDX snippet inline, inheriting parent MDX providers
- * (so code blocks, custom components, etc. all work).
- */
 export default function Snippet({ source, ...rest }: Props) {
   const Comp =
     SNIPPETS[source] ||
@@ -45,7 +43,5 @@ export default function Snippet({ source, ...rest }: Props) {
       </div>
     );
   }
-
-  // Render the snippet's MDX component inline
   return <Comp {...rest} />;
 }

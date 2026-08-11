@@ -53,6 +53,7 @@ mysten-common.workspace = true
 sui-move-build.workspace = true
 
 [target.'cfg(msim)'.dependencies]
+consensus-config.workspace = true
 prost.workspace = true
 sui-framework.workspace = true
 sui-framework-snapshot.workspace = true

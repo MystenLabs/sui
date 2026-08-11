@@ -1,0 +1,111 @@
+/*
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+*/
+.wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Trigger button: inherits code-block button styling from the theme.
+  These are minimal overrides for layout. */
+.triggerBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 0;
+}
+
+.label {
+  line-height: 1;
+}
+
+/* Chevron rotation */
+.chevron {
+  transition: transform 0.2s ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+/* Dropdown panel */
+.dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 240px;
+  z-index: 100;
+  background: var(--prism-background-color);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+[data-theme="light"] .dropdown {
+  background: #ffffff;
+  border-color: #d0d7de;
+  box-shadow: 0 8px 24px rgba(140, 149, 159, 0.2);
+}
+
+/* Individual menu items */
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  color: var(--prism-color);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: background-color 0.15s ease;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.item:last-child {
+  border-bottom: none;
+}
+
+.item:hover {
+  background: var(--ifm-color-emphasis-100);
+}
+
+[data-theme="light"] .item {
+  color: #24292f;
+  border-color: #d0d7de;
+}
+
+[data-theme="light"] .item:hover {
+  background: #f6f8fa;
+}
+
+.item svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.itemTitle {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  margin-bottom: 3px;
+}
+
+.itemDesc {
+  font-size: 12px;
+  opacity: 0.65;
+  line-height: 1.4;
+}
+
+/* Force the Docusaurus code block button group to always be visible.
+  By default it hides with opacity:0 and only shows on hover. */
+:global(.buttonGroup_node_modules),
+:global([class*="buttonGroup_"]) {
+  opacity: 1 !important;
+  transition: none !important;
+}

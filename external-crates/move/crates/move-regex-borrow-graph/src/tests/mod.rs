@@ -8,6 +8,8 @@ mod graph_tests;
 #[cfg(test)]
 mod regex_prop_tests;
 #[cfg(test)]
+mod regex_semantic_tests;
+#[cfg(test)]
 mod regex_tests;
 
 pub mod graph_file_test_harness;

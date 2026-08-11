@@ -8,6 +8,7 @@ use crate::e2e_tests::test_utils::{
     BridgeTestClusterBuilder, TestClusterWrapperBuilder, get_signatures,
     initiate_bridge_erc20_to_sui, initiate_bridge_eth_to_sui, initiate_bridge_eth_to_sui_v2,
     initiate_bridge_sui_to_eth, initiate_bridge_sui_to_eth_v2, send_eth_tx_and_get_tx_receipt,
+    wait_for_eth_coin_owned_by,
 };
 use crate::encoding::TOKEN_TRANSFER_MESSAGE_VERSION_V2;
 use crate::eth_transaction_builder::build_eth_transaction;
@@ -58,29 +59,18 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         .await
         .unwrap();
     let events = bridge_test_cluster
-        .new_bridge_events(HashSet::from_iter([
-            TokenTransferApproved.get().unwrap().clone(),
-            TokenTransferClaimed.get().unwrap().clone(),
-        ]))
+        .new_bridge_events(
+            HashSet::from_iter([
+                TokenTransferApproved.get().unwrap().clone(),
+                TokenTransferClaimed.get().unwrap().clone(),
+            ]),
+            2,
+        )
         .await;
     // There are exactly 1 approved and 1 claimed event
     assert_eq!(events.len(), 2);
 
-    let eth_coin = bridge_test_cluster
-        .grpc_client()
-        .get_owned_objects(sui_address, None, None, None)
-        .await
-        .unwrap()
-        .items
-        .iter()
-        .find(|o| {
-            o.struct_tag()
-                .unwrap()
-                .to_canonical_string(true)
-                .contains("ETH")
-        })
-        .expect("Recipient should have received ETH coin now")
-        .clone();
+    let eth_coin = wait_for_eth_coin_owned_by(&bridge_test_cluster, sui_address, None).await;
     let (_ty, balance) = Coin::extract_balance_if_coin(&eth_coin).unwrap().unwrap();
     assert_eq!(balance, sui_amount);
     info!(
@@ -103,11 +93,14 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     .await
     .unwrap();
     let events = bridge_test_cluster
-        .new_bridge_events(HashSet::from_iter([
-            SuiToEthTokenBridgeV1.get().unwrap().clone(),
-            TokenTransferApproved.get().unwrap().clone(),
-            TokenTransferClaimed.get().unwrap().clone(),
-        ]))
+        .new_bridge_events(
+            HashSet::from_iter([
+                SuiToEthTokenBridgeV1.get().unwrap().clone(),
+                TokenTransferApproved.get().unwrap().clone(),
+                TokenTransferClaimed.get().unwrap().clone(),
+            ]),
+            2,
+        )
         .await;
     // There are exactly 1 deposit and 1 approved event
     assert_eq!(events.len(), 2);
@@ -200,28 +193,17 @@ async fn test_bridge_from_eth_to_sui_to_eth_v2() {
         .await
         .unwrap();
     let events = bridge_test_cluster
-        .new_bridge_events(HashSet::from_iter([
-            TokenTransferApproved.get().unwrap().clone(),
-            TokenTransferClaimed.get().unwrap().clone(),
-        ]))
+        .new_bridge_events(
+            HashSet::from_iter([
+                TokenTransferApproved.get().unwrap().clone(),
+                TokenTransferClaimed.get().unwrap().clone(),
+            ]),
+            2,
+        )
         .await;
     assert_eq!(events.len(), 2);
 
-    let eth_coin = bridge_test_cluster
-        .grpc_client()
-        .get_owned_objects(sui_address, None, None, None)
-        .await
-        .unwrap()
-        .items
-        .iter()
-        .find(|o| {
-            o.struct_tag()
-                .unwrap()
-                .to_canonical_string(true)
-                .contains("ETH")
-        })
-        .expect("Recipient should have received ETH coin now")
-        .clone();
+    let eth_coin = wait_for_eth_coin_owned_by(&bridge_test_cluster, sui_address, None).await;
     let (_ty, balance) = Coin::extract_balance_if_coin(&eth_coin).unwrap().unwrap();
     assert_eq!(balance, sui_amount);
     info!(
@@ -243,11 +225,14 @@ async fn test_bridge_from_eth_to_sui_to_eth_v2() {
     .await
     .unwrap();
     let events = bridge_test_cluster
-        .new_bridge_events(HashSet::from_iter([
-            SuiToEthTokenBridgeV2.get().unwrap().clone(),
-            TokenTransferApproved.get().unwrap().clone(),
-            TokenTransferClaimed.get().unwrap().clone(),
-        ]))
+        .new_bridge_events(
+            HashSet::from_iter([
+                SuiToEthTokenBridgeV2.get().unwrap().clone(),
+                TokenTransferApproved.get().unwrap().clone(),
+                TokenTransferClaimed.get().unwrap().clone(),
+            ]),
+            2,
+        )
         .await;
     assert_eq!(events.len(), 2);
     info!(

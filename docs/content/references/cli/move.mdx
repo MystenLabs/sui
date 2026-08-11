@@ -1,7 +1,45 @@
 ---
 title: Sui Move CLI
-description: The Sui CLI move command provides commands for working with Move source code directly from a terminal or console.
-keywords: [ sui move, sui move help, move, move reference, move commands, sui move commands, use move cli, cli move, create a move project, interact with move project, move project, move project cli ]
+description: >-
+  The Sui CLI move command provides commands for working with Move source code
+  directly from a terminal or console.
+keywords:
+  - sui move
+  - sui move help
+  - move
+  - move reference
+  - move commands
+  - sui move commands
+  - use move cli
+  - cli move
+  - create a move project
+  - interact with move project
+  - move project
+  - move project cli
+goal:
+  description: 'Reader can look up move cli command syntax, flags, and usage examples'
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - pattern: '```'
+      min: 1
+      label: Has command examples
+    - pattern: 'sui '
+      min: 2
+      label: Shows CLI command usage
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Sui Move CLI in Sui?
+  - What are the available sui move cli commands?
+  - What flags does sui move cli support?
+answer: >-
+  The Sui CLI move command provides commands for working with Move source code
+  directly from a terminal or console.
 ---
 
 The Sui CLI `move` command provides several commands for working with Move source code. A typical usage of `sui move` is to compile and test the Move code, or to generate a new Move project by using `sui move new project_name`, which creates the needed directories and the `Move.toml` file.
@@ -32,7 +70,8 @@ $ ls -l smart_contract_test
 ```
 ```sh
 Move.toml
-Sources
+sources
+tests
 ```
 Display the contents of Move.toml file.
 
@@ -43,13 +82,9 @@ $ cat smart_contract_test/Move.toml
 ```sh
 [package]
 name = "smart_contract_test"
-version = "0.0.1"
+edition = "2024"
 
 [dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
-
-[addresses]
-smart_contract_test = "0x0"
 ```
 
 ### Build a Move project
@@ -60,7 +95,6 @@ Use `sui move build` at the root of your Move project to build the package.
 $ sui move build
 ```
 ```sh
-UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING smart_contract_test
@@ -74,7 +108,6 @@ Use `sui move test` to run the tests in a Move package.
 $ sui move test
 ```
 ```sh
-UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING smart_contract_test
@@ -82,15 +115,15 @@ Running Move unit tests
 Test result: OK. Total tests: 0; passed: 0; failed: 0
 ```
 
+### Lint a Move project
+
+Use `sui move lint` to run the Move linter on a package and check for potential issues. The linter runs both generic Move lints and Sui-specific object-model lints.
+
+```sh
+$ sui move lint
+```
+
 ### Get test coverage for a module
-
-
-:::caution
-
-This command currently only works on debug builds of the CLI. Build the CLI from source to use it.
-
-:::
-
 
 This example uses [`first_package`](https://github.com/MystenLabs/sui/tree/main/examples/move/first_package) Move package.
 

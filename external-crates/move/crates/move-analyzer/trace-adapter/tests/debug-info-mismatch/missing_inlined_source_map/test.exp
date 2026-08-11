@@ -1,0 +1,114 @@
+warnings:
+  <none>
+current frame stack:
+  function: test (m.move:6)
+    scope 0 :
+warnings:
+  Source debug info for 0x1::m::bad_inline_map references inlined source debug info that is unavailable; showing disassembly for this frame.
+current frame stack:
+  function: test (m.move:6)
+    scope 0 :
+  function: bad_inline_map (m.mvb:5)
+    scope 0 :
+warnings:
+  <none>
+current frame stack:
+  function: test (m.move:6)
+    scope 0 :
+  function: bad_inline_map (m.mvb:6)
+    scope 0 :
+warnings:
+  <none>
+current frame stack:
+  function: test (m.move:6)
+    scope 0 :
+  function: bad_inline_map (m.mvb:6)
+    scope 0 :
+  function: bar_before (m.move:19)
+    scope 0 :
+warnings:
+  <none>
+current frame stack:
+  function: test (m.move:6)
+    scope 0 :
+  function: bad_inline_map (m.mvb:6)
+    scope 0 :
+  function: bar_before (m.move:19)
+    scope 0 :
+  function: __inlined__ (m_valid.move:2)
+    scope 0 :
+warnings:
+  <none>
+current frame stack:
+  function: test (m.move:6)
+    scope 0 :
+  function: bad_inline_map (m.mvb:6)
+    scope 0 :
+  function: bar_before (m.move:19)
+    scope 0 :
+  function: __inlined__ (m_valid.move:2)
+    scope 0 :
+warnings:
+  <none>
+current frame stack:
+  function: test (m.move:6)
+    scope 0 :
+  function: bad_inline_map (m.mvb:6)
+    scope 0 :
+  function: bar_before (m.move:21)
+    scope 0 :
+warnings:
+  <none>
+current frame stack:
+  function: test (m.move:6)
+    scope 0 :
+  function: bad_inline_map (m.mvb:7)
+    scope 0 :
+warnings:
+  <none>
+current frame stack:
+  function: test (m.move:6)
+    scope 0 :
+  function: bad_inline_map (m.mvb:8)
+    scope 0 :
+warnings:
+  <none>
+current frame stack:
+  function: test (m.move:6)
+    scope 0 :
+  function: bad_inline_map (m.mvb:8)
+    scope 0 :
+  function: baz_after (m.move:25)
+    scope 0 :
+warnings:
+  <none>
+current frame stack:
+  function: test (m.move:6)
+    scope 0 :
+  function: bad_inline_map (m.mvb:8)
+    scope 0 :
+  function: baz_after (m.move:25)
+    scope 0 :
+  function: __inlined__ (m_valid.move:2)
+    scope 0 :
+warnings:
+  <none>
+current frame stack:
+  function: test (m.move:6)
+    scope 0 :
+  function: bad_inline_map (m.mvb:8)
+    scope 0 :
+  function: baz_after (m.move:27)
+    scope 0 :
+warnings:
+  <none>
+current frame stack:
+  function: test (m.move:6)
+    scope 0 :
+  function: bad_inline_map (m.mvb:9)
+    scope 0 :
+warnings:
+  <none>
+current frame stack:
+  function: test (m.move:7)
+    scope 0 :

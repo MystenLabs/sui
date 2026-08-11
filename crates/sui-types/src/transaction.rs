@@ -22,8 +22,8 @@ use crate::crypto::{
     DefaultHash, Ed25519SuiSignature, EmptySignInfo, RandomnessRound, Signature, Signer,
     SuiSignatureInner, ToFromBytes, default_hash,
 };
-use crate::digests::{AdditionalConsensusStateDigest, CertificateDigest, SenderSignedDataDigest};
-use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
+use crate::digests::{AdditionalConsensusStateDigest, SenderSignedDataDigest};
+use crate::digests::{ChainIdentifier, ConsensusCommitDigest};
 use crate::execution::{ExecutionTimeObservationKey, SharedInput};
 use crate::funds_accumulator::{FUNDS_ACCUMULATOR_MODULE_NAME, WITHDRAWAL_SPLIT_FUNC_NAME};
 use crate::gas_coin::GAS;
@@ -507,6 +507,7 @@ pub enum EndOfEpochTransactionKind {
     DisplayRegistryCreate,
     AddressAliasStateCreate,
     WriteAccumulatorStorageCost(WriteAccumulatorStorageCost),
+    ForwardingAddressRegistryCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -568,6 +569,10 @@ impl EndOfEpochTransactionKind {
 
     pub fn new_address_alias_state_create() -> Self {
         Self::AddressAliasStateCreate
+    }
+
+    pub fn new_forwarding_address_registry_create() -> Self {
+        Self::ForwardingAddressRegistryCreate
     }
 
     pub fn new_bridge_create(chain_identifier: ChainIdentifier) -> Self {
@@ -638,6 +643,7 @@ impl EndOfEpochTransactionKind {
                     mutability: SharedObjectMutability::Mutable,
                 }]
             }
+            Self::ForwardingAddressRegistryCreate => vec![],
         }
     }
 
@@ -679,6 +685,7 @@ impl EndOfEpochTransactionKind {
             Self::WriteAccumulatorStorageCost(_) => {
                 Either::Left(vec![SharedInputObject::SUI_SYSTEM_OBJ].into_iter())
             }
+            Self::ForwardingAddressRegistryCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -700,21 +707,21 @@ impl EndOfEpochTransactionKind {
                 }
             }
             Self::DenyListStateCreate => {
-                if !config.enable_coin_deny_list_v1() {
+                if !config.enable_coin_deny_list() {
                     return Err(UserInputError::Unsupported(
                         "coin deny list not enabled".to_string(),
                     ));
                 }
             }
             Self::BridgeStateCreate(_) => {
-                if !config.enable_bridge() {
+                if !config.bridge() {
                     return Err(UserInputError::Unsupported(
                         "bridge not enabled".to_string(),
                     ));
                 }
             }
             Self::BridgeCommitteeInit(_) => {
-                if !config.enable_bridge() {
+                if !config.bridge() {
                     return Err(UserInputError::Unsupported(
                         "bridge not enabled".to_string(),
                     ));
@@ -767,6 +774,13 @@ impl EndOfEpochTransactionKind {
                 if !config.enable_accumulators() {
                     return Err(UserInputError::Unsupported(
                         "accumulators not enabled".to_string(),
+                    ));
+                }
+            }
+            Self::ForwardingAddressRegistryCreate => {
+                if !config.create_forwarding_address_registry() {
+                    return Err(UserInputError::Unsupported(
+                        "forwarding address registry not enabled".to_string(),
                     ));
                 }
             }
@@ -851,7 +865,7 @@ impl CallArg {
                 },
 
                 ObjectArg::Receiving(_) => {
-                    if !config.receiving_objects_supported() {
+                    if !config.receive_objects() {
                         return Err(UserInputError::Unsupported(format!(
                             "receiving objects is not supported at {:?}",
                             config.version
@@ -2081,7 +2095,9 @@ impl TransactionKind {
         Ok(input_objects)
     }
 
-    fn get_funds_withdrawals<'a>(&'a self) -> impl Iterator<Item = &'a FundsWithdrawalArg> + 'a {
+    pub fn get_funds_withdrawals<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = &'a FundsWithdrawalArg> + 'a {
         let TransactionKind::ProgrammableTransaction(pt) = &self else {
             return Either::Left(iter::empty());
         };
@@ -2703,6 +2719,10 @@ impl TransactionData {
                 | Owner::ConsensusAddressOwner {
                     start_version: initial_shared_version,
                     ..
+                }
+                | Owner::Party {
+                    start_version: initial_shared_version,
+                    ..
                 } => ObjectArg::SharedObject {
                     id: upgrade_capability.0,
                     initial_shared_version,
@@ -2876,9 +2896,9 @@ pub trait TransactionDataAPI {
     ) -> UserInputResult<(Vec<ObjectRef>, Vec<ObjectID>, Vec<ObjectRef>)>;
 
     /// Processes funds withdraws and returns a map from funds account object ID to (total
-    /// reserved amount, type tag). This method aggregates all withdraw operations for the same
-    /// account by merging their reservations. Each account object ID is derived from the type
-    /// parameter of each withdraw operation.
+    /// reserved amount, type tag, owner address). This method aggregates all withdraw operations
+    /// for the same account by merging their reservations. Each account object ID is derived from
+    /// the owner address and the type parameter of each withdraw operation.
     ///
     /// This method is used at signing time, and can reject a transaction if it contains
     /// invalid reservations.
@@ -2886,7 +2906,7 @@ pub trait TransactionDataAPI {
         &self,
         chain_identifier: ChainIdentifier,
         coin_resolver: &dyn CoinReservationResolverTrait,
-    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>>;
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag, SuiAddress)>>;
 
     /// Like `process_funds_withdrawals_for_signing`, but excludes the implicit gas payment
     /// withdrawal. This is used during gas selection estimation to avoid double-counting the
@@ -2895,7 +2915,7 @@ pub trait TransactionDataAPI {
         &self,
         chain_identifier: ChainIdentifier,
         coin_resolver: &dyn CoinReservationResolverTrait,
-    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>>;
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag, SuiAddress)>>;
 
     /// Like `process_funds_withdrawals_for_signing`, but must only be called on a certified
     /// transaction, i.e. one that is known to be valid.
@@ -2913,8 +2933,6 @@ pub trait TransactionDataAPI {
     ) -> Vec<ParsedObjectRefWithdrawal>;
 
     fn validity_check(&self, context: &TxValidityCheckContext<'_>) -> SuiResult;
-
-    fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult;
 
     /// Check if the transaction is compliant with sponsorship.
     fn check_sponsorship(&self) -> UserInputResult;
@@ -3048,7 +3066,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         &self,
         chain_identifier: ChainIdentifier,
         coin_resolver: &dyn CoinReservationResolverTrait,
-    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag, SuiAddress)>> {
         self.accumulate_funds_withdrawals(chain_identifier, coin_resolver, true)
     }
 
@@ -3056,7 +3074,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         &self,
         chain_identifier: ChainIdentifier,
         coin_resolver: &dyn CoinReservationResolverTrait,
-    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag, SuiAddress)>> {
         self.accumulate_funds_withdrawals(chain_identifier, coin_resolver, false)
     }
 
@@ -3444,13 +3462,6 @@ impl TransactionDataAPI for TransactionDataV1 {
             }
         }
 
-        self.validity_check_no_gas_check(config)?;
-        Ok(())
-    }
-
-    // Keep all the logic for validity here, we need this for dry run where the gas
-    // may not be provided and created "on the fly"
-    fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult {
         self.kind().validity_check(config)?;
 
         if config.enable_gasless() && self.is_gasless_transaction() {
@@ -3458,12 +3469,14 @@ impl TransactionDataAPI for TransactionDataV1 {
                 debug_fatal!("gasless transaction is not a ProgrammableTransaction");
                 return Err(UserInputError::Unsupported(
                     "Gasless transactions must be programmable transactions".to_string(),
-                ));
+                )
+                .into());
             };
             pt.validate_gasless_transaction(config)?;
         }
 
-        self.check_sponsorship()
+        self.check_sponsorship()?;
+        Ok(())
     }
 
     /// Check if the transaction is sponsored (namely gas owner != sender)
@@ -3545,7 +3558,7 @@ impl TransactionDataV1 {
         chain_identifier: ChainIdentifier,
         coin_resolver: &dyn CoinReservationResolverTrait,
         include_gas_payment: bool,
-    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag, SuiAddress)>> {
         let mut withdraws: Vec<_> = self.get_funds_withdrawals().collect();
 
         for withdraw in self.parsed_coin_reservations(chain_identifier) {
@@ -3558,7 +3571,8 @@ impl TransactionDataV1 {
             withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
         }
 
-        let mut withdraw_map: BTreeMap<AccumulatorObjId, (u64, TypeTag)> = BTreeMap::new();
+        let mut withdraw_map: BTreeMap<AccumulatorObjId, (u64, TypeTag, SuiAddress)> =
+            BTreeMap::new();
         for withdraw in withdraws {
             let reserved_amount = match &withdraw.reservation {
                 Reservation::MaxAmountU64(amount) => {
@@ -3581,9 +3595,9 @@ impl TransactionDataV1 {
                     }
                 })?;
 
-            let (current_amount, _) = withdraw_map
+            let (current_amount, _, _) = withdraw_map
                 .entry(account_id)
-                .or_insert_with(|| (0, type_tag));
+                .or_insert_with(|| (0, type_tag, account_address));
             *current_amount = current_amount.checked_add(reserved_amount).ok_or(
                 UserInputError::InvalidWithdrawReservation {
                     error: "Balance withdraw reservation overflow".to_string(),
@@ -3836,7 +3850,7 @@ impl SenderSignedData {
         for sig in &self.inner().tx_signatures {
             match sig {
                 GenericSignature::MultiSig(_) => {
-                    if !config.supports_upgraded_multisig() {
+                    if !config.upgraded_multisig_supported() {
                         return Err(SuiErrorKind::UserInputError {
                             error: UserInputError::Unsupported(
                                 "upgraded multisig format not enabled on this network".to_string(),
@@ -4290,58 +4304,8 @@ impl SignedTransaction {
 pub type CertifiedTransaction = Envelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 
 impl CertifiedTransaction {
-    pub fn certificate_digest(&self) -> CertificateDigest {
-        let mut digest = DefaultHash::default();
-        bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
-        let hash = digest.finalize();
-        CertificateDigest::new(hash.into())
-    }
-
     pub fn gas_price(&self) -> u64 {
         self.data().transaction_data().gas_price()
-    }
-
-    // TODO: Eventually we should remove all calls to verify_signature
-    // and make sure they all call verify to avoid repeated verifications.
-    pub fn verify_signatures_authenticated(
-        &self,
-        committee: &Committee,
-        verify_params: &VerifyParams,
-        zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
-    ) -> SuiResult {
-        verify_sender_signed_data_message_signatures(
-            self.data(),
-            committee.epoch(),
-            verify_params,
-            zklogin_inputs_cache,
-            vec![],
-        )?;
-        self.auth_sig().verify_secure(
-            self.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            committee,
-        )
-    }
-
-    pub fn try_into_verified_for_testing(
-        self,
-        committee: &Committee,
-        verify_params: &VerifyParams,
-    ) -> SuiResult<VerifiedCertificate> {
-        self.verify_signatures_authenticated(
-            committee,
-            verify_params,
-            Arc::new(VerifiedDigestCache::new_empty()),
-        )?;
-        Ok(VerifiedCertificate::new_from_verified(self))
-    }
-
-    pub fn verify_committee_sigs_only(&self, committee: &Committee) -> SuiResult {
-        self.auth_sig().verify_secure(
-            self.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            committee,
-        )
     }
 }
 

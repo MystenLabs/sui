@@ -445,7 +445,7 @@ impl StateSyncConfig {
 ///   node's info will not be shared through discovery.
 /// * Trusted is the same as Private, except it allows sharing the node's info
 ///   only to other preconfigured peers (i.e. those in `allowlisted_peers` and
-///   `seed_peers`).
+///   `seed_peers`, or active Sui validators).
 /// * If not set, defaults to Public.
 ///
 /// AccessType is useful when a network of nodes want to stay private. To achieve this,
@@ -561,7 +561,10 @@ impl DiscoveryConfig {
     }
 
     pub fn mailbox_capacity(&self) -> usize {
-        const MAILBOX_CAPACITY: usize = 1_024;
+        // Sized with headroom for bursts of PeerAddressChange messages: a
+        // single GetKnownPeers response can enqueue one message per trusted
+        // peer, and multiple concurrent query tasks can stack their batches.
+        const MAILBOX_CAPACITY: usize = 2_048;
 
         self.mailbox_capacity.unwrap_or(MAILBOX_CAPACITY)
     }

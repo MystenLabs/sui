@@ -107,19 +107,17 @@ pub struct CheckpointTimeoutConfig {
     pub warning_timeout: Duration,
 }
 
-// We use a thread local so that the config can be overridden on a per-test basis. This means
-// that get_scheduling_timeout() can be called multiple times in a multithreaded context, but
-// the function is still very cheap to call so this is okay.
-thread_local! {
-    static SCHEDULING_TIMEOUT: once_cell::sync::OnceCell<CheckpointTimeoutConfig> =
-        const { once_cell::sync::OnceCell::new() };
-}
+// The config can be overridden on a per-test basis. get_scheduling_timeout() can be called
+// multiple times in a multithreaded context, but the function is still very cheap to call so
+// this is okay.
+static SCHEDULING_TIMEOUT: std::sync::OnceLock<CheckpointTimeoutConfig> =
+    std::sync::OnceLock::new();
 
 #[cfg(msim)]
 pub fn init_checkpoint_timeout_config(config: CheckpointTimeoutConfig) {
-    SCHEDULING_TIMEOUT.with(|s| {
-        s.set(config).expect("SchedulingTimeoutConfig already set");
-    });
+    SCHEDULING_TIMEOUT
+        .set(config)
+        .expect("SchedulingTimeoutConfig already set");
 }
 
 fn get_scheduling_timeout() -> CheckpointTimeoutConfig {
@@ -145,7 +143,7 @@ fn get_scheduling_timeout() -> CheckpointTimeoutConfig {
         }
     }
 
-    SCHEDULING_TIMEOUT.with(|s| *s.get_or_init(inner))
+    *SCHEDULING_TIMEOUT.get_or_init(inner)
 }
 
 pub(super) fn assert_not_forked(

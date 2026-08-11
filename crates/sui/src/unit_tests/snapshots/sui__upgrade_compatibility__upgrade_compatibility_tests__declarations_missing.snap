@@ -2,7 +2,7 @@
 source: crates/sui/src/upgrade_compatibility/../unit_tests/upgrade_compatibility_tests.rs
 expression: normalize_path(err.to_string())
 ---
-error[Compatibility E01001]: missing public declaration
+error[EUC01001]: missing public declaration
   ┌─ /fixtures/upgrade_errors/declaration_errors_v2/sources/enum.move:4:8
   │
 4 │ module upgrades::enum_ {
@@ -11,7 +11,7 @@ error[Compatibility E01001]: missing public declaration
   = Enums are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
   = Add missing enum 'EnumToBeRemoved' back to the module 'enum_'.
 
-error[Compatibility E01001]: missing public declaration
+error[EUC01001]: missing public declaration
   ┌─ /fixtures/upgrade_errors/declaration_errors_v2/sources/func.move:4:8
   │
 4 │ module upgrades::func_ {
@@ -20,7 +20,7 @@ error[Compatibility E01001]: missing public declaration
   = Public functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
   = Add missing public function 'fun_to_be_removed' back to the module 'func_'.
 
-error[Compatibility E01001]: missing public declaration
+error[EUC01001]: missing public declaration
   ┌─ /fixtures/upgrade_errors/declaration_errors_v2/sources/func.move:7:9
   │
 7 │     fun fun_to_lose_public(): u64 {
@@ -29,7 +29,7 @@ error[Compatibility E01001]: missing public declaration
   = Functions are part of a module's public interface and cannot be removed or changed during an upgrade.
   = Restore the original function's 'public' visibility for function 'fun_to_lose_public'.
 
-error[Compatibility E01001]: missing public declaration
+error[EUC01001]: missing public declaration
   ┌─ /fixtures/upgrade_errors/declaration_errors_v2/sources/struct.move:4:8
   │
 4 │ module upgrades::struct_ {
@@ -38,7 +38,7 @@ error[Compatibility E01001]: missing public declaration
   = Structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
   = Add missing struct 'StructToBeRemoved' back to the module 'struct_'.
 
-error[Compatibility E01006]: module missing
+error[EUC01006]: module missing
   ┌─ /fixtures/upgrade_errors/declaration_errors_v2/Move.toml:1:1
   │  
 1 │ ╭ [package]

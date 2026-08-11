@@ -422,38 +422,11 @@ mod base_committer_builder {
     pub(crate) struct BaseCommitterBuilder {
         context: Arc<Context>,
         dag_state: Arc<RwLock<DagState>>,
-        wave_length: u32,
-        leader_offset: u32,
-        round_offset: u32,
     }
 
     impl BaseCommitterBuilder {
         pub(crate) fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
-            Self {
-                context,
-                dag_state,
-                wave_length: DEFAULT_WAVE_LENGTH,
-                leader_offset: 0,
-                round_offset: 0,
-            }
-        }
-
-        #[allow(unused)]
-        pub(crate) fn with_wave_length(mut self, wave_length: u32) -> Self {
-            self.wave_length = wave_length;
-            self
-        }
-
-        #[allow(unused)]
-        pub(crate) fn with_leader_offset(mut self, leader_offset: u32) -> Self {
-            self.leader_offset = leader_offset;
-            self
-        }
-
-        #[allow(unused)]
-        pub(crate) fn with_round_offset(mut self, round_offset: u32) -> Self {
-            self.round_offset = round_offset;
-            self
+            Self { context, dag_state }
         }
 
         pub(crate) fn build(self) -> BaseCommitter {

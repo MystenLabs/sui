@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{DBMetrics, StorageType, util::ensure_database_type};
+use crate::{DBMetrics, StorageType, rocks::MetricConf, util::ensure_database_type};
 use bincode::Options;
 use mysten_metrics::RegistryID;
 use prometheus::{HistogramTimer, Registry};
@@ -9,10 +9,11 @@ use serde::de::DeserializeOwned;
 use std::env;
 use std::path::Path;
 use std::sync::Arc;
+use tidehunter::compressed_batch::BatchCodec;
 use tidehunter::config::Config;
 use tidehunter::db::Db;
 use tidehunter::iterators::db_iterator::DbIterator;
-use tidehunter::key_shape::{KeyShape, KeySpace};
+use tidehunter::key_shape::KeyShape;
 use tidehunter::metrics::Metrics;
 pub use tidehunter::{
     Decision, WalPosition,
@@ -30,17 +31,41 @@ pub struct ThConfig {
     pub prefix: Option<Vec<u8>>,
 }
 
-pub fn open(path: &Path, key_shape: KeyShape, db_name: String) -> (Arc<Db>, RegistryID) {
+pub fn open(path: &Path, key_shape: KeyShape, metric_conf: &MetricConf) -> (Arc<Db>, RegistryID) {
     std::fs::create_dir_all(path).expect("failed to open tidehunter db");
     let registry_service = &DBMetrics::get().registry_serivce;
-    let registry = new_db_registry(db_name);
+    let registry = new_db_registry(metric_conf.db_name.clone());
     let registry_id = registry_service.add(registry.clone());
     let metrics = Metrics::new_in(&registry);
     ensure_database_type(path, StorageType::TideHunter).expect("failed to open tidehunter db");
-    let db = Db::open(path, key_shape, Arc::new(thdb_config()), metrics)
+    // `Db::open` reconciles the declared shape against the persisted registry
+    // (matching by name; supports reorder/add/remove). Callers resolve each
+    // column family's handle by name via `Db::ks`.
+    let db = Db::open(path, key_shape, Arc::new(thdb_config(metric_conf)), metrics)
         .expect("failed to open tidehunter db");
+    destroy_undeclared_key_spaces(&db, path);
     db.start_periodic_snapshot();
     (db, registry_id)
+}
+
+/// Destroys key spaces that exist in the database but are no longer declared
+/// in the `KeyShape`, i.e. tables that were removed from the DBMap struct.
+/// `Db::open` retains such key spaces internally (data preserved, not
+/// exposed); destroying them persists a registry tombstone so their data is
+/// dropped and disk space is reclaimed through the regular GC cadences.
+fn destroy_undeclared_key_spaces(db: &Db, path: &Path) {
+    let registry = Db::load_key_shape(path).expect("failed to load tidehunter key shape registry");
+    for ks in registry.iter_ks() {
+        if ks.destroyed() || db.try_ks(ks.name()).is_some() {
+            continue;
+        }
+        tracing::warn!(
+            "destroying tidehunter key space '{}': present in database but not declared",
+            ks.name()
+        );
+        db.destroy_key_space(ks.name())
+            .expect("failed to destroy tidehunter key space");
+    }
 }
 
 fn new_db_registry(name: String) -> Registry {
@@ -48,14 +73,17 @@ fn new_db_registry(name: String) -> Registry {
     Registry::new_custom(None, Some(labels)).expect("failed to create registry")
 }
 
-pub fn add_key_space(builder: &mut KeyShapeBuilder, name: &str, config: &ThConfig) -> KeySpace {
+pub fn add_key_space(builder: &mut KeyShapeBuilder, name: &str, config: &ThConfig) {
+    // `add_key_space_config_indexing` returns `&mut KeyShapeBuilder`; the
+    // canonical handle is no longer assigned here. It is resolved by name from
+    // the `KeySpaces` returned by `open` (see the DBMapUtils derive macro).
     builder.add_key_space_config_indexing(
         name,
         config.key_indexing.clone(),
         config.mutexes,
         config.key_type,
         config.config.clone(),
-    )
+    );
 }
 
 fn parse_env_usize(name: &str, minimum: usize) -> Option<usize> {
@@ -69,11 +97,21 @@ fn parse_env_usize(name: &str, minimum: usize) -> Option<usize> {
     })
 }
 
-fn default_max_dirty_keys() -> usize {
+fn parse_env_bool(name: &str) -> Option<bool> {
+    env::var(name).ok().map(|value| {
+        let parsed = value
+            .parse::<bool>()
+            .unwrap_or_else(|_| panic!("Failed to parse {name}"));
+        println!("Using {name} from env variable {parsed}");
+        parsed
+    })
+}
+
+pub fn default_max_dirty_keys() -> usize {
     parse_env_usize("TH_DEFAULT_MAX_DIRTY_KEYS", 1).unwrap_or(1024)
 }
 
-fn thdb_config() -> Config {
+fn thdb_config(metric_conf: &MetricConf) -> Config {
     let frag_size = if let Ok(frag_size) = env::var("TH_FRAG_SIZE") {
         let frag_size = frag_size.parse().expect("Failed to parse TH_FRAG_SIZE");
         assert!(frag_size > 0, "TH_FRAG_SIZE must be more then 0");
@@ -98,6 +136,11 @@ fn thdb_config() -> Config {
     #[cfg(not(debug_assertions))]
     let max_maps = 8; // 8Gb of mapped space for prod
     let max_maps = parse_env_usize("TH_MAX_MAPS", 1).unwrap_or(max_maps);
+    let max_maps = if metric_conf.db_name.starts_with("perpetual") {
+        max_maps * 2
+    } else {
+        max_maps
+    };
     let max_index_maps = Some(parse_env_usize("TH_MAX_INDEX_MAPS", 3).unwrap_or(3));
     #[cfg(debug_assertions)]
     let commit_pool_size = 0;
@@ -107,20 +150,33 @@ fn thdb_config() -> Config {
     let num_flusher_threads = 1;
     #[cfg(not(debug_assertions))]
     let num_flusher_threads = 4;
-    Config {
+    let batch_codec = metric_conf
+        .enable_th_batch_compression
+        .then_some(BatchCodec::Lz4);
+    let mut config = Config {
         frag_size,
         // run snapshot every 64 Gb written to wal
-        snapshot_written_bytes: 64 * 1024 * 1024 * 1024,
+        snapshot_written_bytes: parse_env_usize("TH_SNAPSHOT_WRITTEN_BYTES", 1)
+            .unwrap_or(64 * 1024 * 1024 * 1024) as u64,
         // force unloading dirty index entries if behind 60 Gb of wal
-        snapshot_unload_threshold: 60 * 1024 * 1024 * 1024,
+        snapshot_unload_threshold: parse_env_usize("TH_SNAPSHOT_UNLOAD_THRESHOLD", 1)
+            .unwrap_or(60 * 1024 * 1024 * 1024) as u64,
         unload_jitter_pct: 30,
         max_dirty_keys: default_max_dirty_keys(),
         max_maps,
         max_index_maps,
         commit_pool_size,
         num_flusher_threads,
+        batch_codec,
+        relocation_max_reclaim_pct: 100,
         ..Config::default()
+    };
+
+    if parse_env_bool("TH_AUTOSHARD").unwrap_or(false) {
+        config.with_index_auto_sharding();
     }
+
+    config
 }
 
 #[cfg(not(debug_assertions))]
@@ -134,7 +190,7 @@ pub fn default_mutex_count() -> usize {
 }
 
 pub fn default_value_cache_size() -> usize {
-    1000
+    parse_env_usize("TH_DEFAULT_VALUE_CACHE_SIZE", 1).unwrap_or(1000)
 }
 
 pub(crate) fn apply_range_bounds(

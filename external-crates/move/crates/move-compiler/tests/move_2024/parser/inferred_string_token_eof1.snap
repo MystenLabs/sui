@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E01019]: invalid string literal
+error[EC01019]: invalid string literal
   ┌─ tests/move_2024/parser/inferred_string_token_eof1.move:3:9
   │
 3 │         "
   │         ^ Missing closing quote (") after string
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_2024/parser/inferred_string_token_eof1.move:4:1
   │
 4 │ 

@@ -11,6 +11,7 @@ const npm2yarn = require("@docusaurus/remark-plugin-npm2yarn");
 
 const effortRemarkPlugin = require("./src/plugins/effort");
 const betaRemarkPlugin = require("./src/plugins/betatag");
+const graphqlFrontmatterPlugin = require("./src/plugins/graphql-frontmatter");
 
 const lightCodeTheme = require("prism-react-renderer").themes.github;
 const darkCodeTheme = require("prism-react-renderer").themes.nightOwl;
@@ -93,6 +94,7 @@ const config = {
   clientModules: [
     require.resolve("./src/client/pushfeedback-toc.js"),
     require.resolve("./src/client/webmcp.js"),
+    require.resolve("./src/client/kapa-sidebar.js"),
   ],
   plugins: [
     function llmsTxtDirectivePlugin() {
@@ -240,6 +242,12 @@ const config = {
                         "./src/shared/plugins/inject-code/stepLoader.js",
                       ),
                     },
+                    {
+                      loader: path.resolve(
+                        __dirname,
+                        "./src/shared/plugins/inject-code/includeSectionLoader.js",
+                      ),
+                    },
                   ],
                 },
               ],
@@ -318,6 +326,7 @@ const config = {
             [npm2yarn, { sync: true, converters: ["yarn", "pnpm"] }],
             effortRemarkPlugin,
             betaRemarkPlugin,
+            graphqlFrontmatterPlugin,
             [remarkGlossary, { glossaryFile: path.resolve(__dirname, "static/glossary.json") }],
           ],
           rehypePlugins: [katex],
@@ -344,19 +353,17 @@ const config = {
       "data-project-name": "Sui Knowledge",
       "data-project-color": "#298DFF",
       "data-button-hide": "true",
+      "data-view-mode": "sidebar",
       "data-modal-title": "Ask Sui AI",
       "data-modal-ask-ai-input-placeholder": "Ask me anything about Sui!",
       "data-modal-example-questions":"How do I deploy to Sui?,What is Mysticeti?,What are object ownership types for Sui Move?,What are programmable transaction blocks (PTBs)?",
-      "data-modal-body-bg-color": "#E0E2E6",
-      "data-source-link-bg-color": "#FFFFFF",
-      "data-source-link-border": "#298DFF",
-      "data-answer-feedback-button-bg-color": "#FFFFFF",
-      "data-answer-copy-button-bg-color" : "#FFFFFF",
-      "data-thread-clear-button-bg-color" : "#FFFFFF",
+      "data-modal-overlay-hidden": "true",
+      "data-modal-lock-scroll": "false",
       "data-modal-image": "/img/logo.svg",
       "data-mcp-enabled": "true",
       "data-mcp-server-url": "https://sui.mcp.kapa.ai",
       "data-mcp-button-text": "Use Sui MCP Server",
+      "data-chat-disclaimer": "**New:** Install [Sui Agent Skills](https://docs.sui.io/skills) to supercharge your AI coding agent with Sui expertise.",
       async: true,
     },
   ],
@@ -382,6 +389,40 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       image: "img/sui-doc-og.png",
+      mermaid: {
+        theme: {
+          light: "base",
+          dark: "base",
+        },
+        options: {
+          themeVariables: {
+            primaryColor: "#000000",
+            primaryTextColor: "#FFFFFF",
+            primaryBorderColor: "#6C7584",
+            secondaryColor: "#6C7584",
+            secondaryTextColor: "#FFFFFF",
+            tertiaryColor: "#298DFF",
+            tertiaryTextColor: "#FFFFFF",
+            lineColor: "#298DFF",
+            background: "#FFFFFF",
+            mainBkg: "#000000",
+            secondBkg: "#6C7584",
+            noteBkgColor: "#E6F1FB",
+            noteTextColor: "#000000",
+            noteBorderColor: "#298DFF",
+            activationBkgColor: "#298DFF",
+            activationBorderColor: "#185FA5",
+            fontSize: "14px",
+            fontFamily: "Inter, sans-serif",
+            signalColor: "#298DFF",
+            signalTextColor: "#298DFF",
+            labelBoxBkgColor: "#000000",
+            labelBoxBorderColor: "#6C7584",
+            labelTextColor: "#FFFFFF",
+            loopTextColor: "#FFFFFF",
+          },
+        },
+      },
       docs: {
         sidebar: {
           autoCollapseCategories: true,
@@ -400,7 +441,9 @@ const config = {
             label: "Getting Started",
             to: "getting-started",
             items: [
+              { to: "/skills", label: "Skills" },
               { type: "doc", docId: "getting-started/onboarding/index", label: "Hello, World!" },
+              { type: "doc", docId: "getting-started/examples/index", label: "Example Apps" },
               { type: "doc", docId: "getting-started/tooling", label: "Developer Tools" },
               { type: "doc", docId: "getting-started/dev-cheat-sheet", label: "Developer Cheat Sheet" },
               { type: "doc", docId: "getting-started/sui-for-ethereum", label: "Ethereum -> Sui" },
@@ -437,8 +480,8 @@ const config = {
               { type: "doc", docId: "onchain-finance/examples-patterns/index", label: "Example Asset Patterns" },
               { type: "doc", docId: "onchain-finance/closed-loop-token/index", label: "Closed Loop Token" },
               { type: "doc", docId: "onchain-finance/pas/index", label: "Permissioned Asset Standard" },
-              { type: "doc", docId: "onchain-finance/deepbookv3/deepbook", label: "DeepBookV3" },
-              { type: "doc", docId: "onchain-finance/deepbook-margin/deepbook-margin", label: "DeepBook Margin" },
+              { type: "doc", docId: "onchain-finance/deepbook/index", label: "DeepBook" },
+              { type: "doc", docId: "onchain-finance/oracles/index", label: "Oracles" },
               { type: "doc", docId: "onchain-finance/kiosk/index", label: "Kiosk" },
               { type: "doc", docId: "onchain-finance/payment-kit", label: "Payment Kit" },
             ],
@@ -448,10 +491,13 @@ const config = {
             label: "Sui Stack",
             to: "sui-stack",
             items: [
-              { type: "doc", docId: "sui-stack/on-chain-primitives/randomness-onchain", label: "Onchain Randomness" },
               { type: "doc", docId: "sui-stack/on-chain-primitives/access-time", label: "Onchain Time" },
+              { type: "doc", docId: "sui-stack/on-chain-primitives/randomness-onchain", label: "Onchain Randomness" },
               { type: "doc", docId: "sui-stack/sagat", label: "Sagat" },
-              { type: "doc", docId: "sui-stack/indexer-walrus", label: "Walrus" },
+              { type: "doc", docId: "sui-stack/walrus/index", label: "Walrus" },
+              { type: "doc", docId: "sui-stack/seal/index", label: "Seal" },
+              { type: "doc", docId: "sui-stack/suins/index", label: "SuiNS" },
+              { type: "doc", docId: "sui-stack/enoki/solitaire", label: "Enoki" },
               { type: "doc", docId: "sui-stack/nautilus/index", label: "Nautilus" },
               { type: "doc", docId: "sui-stack/zklogin-integration/index", label: "zkLogin" },
               { type: "doc", docId: "sui-stack/suiplay0x1/index", label: "SuiPlay0X1" },

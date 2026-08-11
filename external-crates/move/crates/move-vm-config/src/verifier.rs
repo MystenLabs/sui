@@ -38,7 +38,14 @@ pub struct VerifierConfig {
     pub disable_entry_point_signature_check: bool,
     /// If true, the verifier will run only the regex reference safety check.
     pub switch_to_regex_reference_safety: bool,
+    /// Reject system-package functions with an `&mut TxContext` parameter
+    /// that return any `&mut _` unless the parameter list also contains a
+    /// non-`TxContext` `&mut U`. User packages are exempt. See
+    /// `sui_verifier::tx_context_restrictions_verifier`.
+    pub framework_tx_context_mut_restrictions: bool,
     pub disallow_jump_orphans: bool,
+    pub max_generic_instantiation_type_nodes_per_function: Option<usize>,
+    pub max_generic_instantiation_type_nodes_per_module: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -91,7 +98,10 @@ impl Default for VerifierConfig {
             deprecate_global_storage_ops: true,
             disable_entry_point_signature_check: false,
             switch_to_regex_reference_safety: false,
+            framework_tx_context_mut_restrictions: false,
             disallow_jump_orphans: true,
+            max_generic_instantiation_type_nodes_per_function: Some(10_000),
+            max_generic_instantiation_type_nodes_per_module: Some(500_000),
         }
     }
 }

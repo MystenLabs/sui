@@ -1,7 +1,43 @@
 ---
 title: Indexer Pipeline Architecture
-description: The `sui-indexer-alt-framework` provides two distinct pipeline architectures. Understand the differences between the sequential and concurrent pipelines that the `sui-indexer-alt-framework` provides to decide which best suits your project needs.
-keywords: [ indexer, index data, sui-indexer, custom indexer, sequential pipeline, concurrent pipeline ]
+description: >-
+  The `sui-indexer-alt-framework` provides two distinct pipeline architectures.
+  Understand the differences between the sequential and concurrent pipelines
+  that the `sui-indexer-alt-framework` provides to decide which best suits your
+  project needs.
+keywords:
+  - indexer
+  - index data
+  - sui-indexer
+  - custom indexer
+  - sequential pipeline
+  - concurrent pipeline
+goal:
+  description: >-
+    Reader understands the `sui-indexer-alt-framework` provides two distinct
+    pipeline architectures
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Indexer Pipeline Architecture in Sui?
+  - When to use each pipeline?
+  - How does indexer pipeline architecture work on Sui?
+answer: >-
+  The `sui-indexer-alt-framework` provides two distinct pipeline architectures.
+  Understand their differences to choose the right approach.
 ---
 
 The `sui-indexer-alt-framework` provides two distinct pipeline architectures. Understand their differences to choose the right approach.
@@ -216,7 +252,7 @@ Sequential pipelines provide a more straightforward yet powerful architecture fo
 
 The sequential pipeline is significantly simpler than the concurrent pipeline's six-component architecture: it has a `Processor`, a `Collector`, and a `Committer`.
 
-![Sequential pipeline diagram](../images/sequential.png)
+![Sequential pipeline diagram](../images/architecture_sequential-pipeline_v1.png)
 
 The `Broadcaster` and `Processor` components use identical backpressure mechanisms, adaptive parallel processing, and `processor()` implementations to the concurrent pipeline. The `Processor` component is described in detail in the [Common pipeline components](#processor) section.
 
@@ -246,7 +282,7 @@ The sequential `Committer` receives fully-assembled batches from the `Collector`
 
 Sequential pipelines use two layers of backpressure to prevent memory overflow and ordering-related deadlocks:
 
-![Backpressure sequential pipeline architecture](../images/backpressure-sequential.png)
+![Backpressure sequential pipeline architecture](../images/architecture_sequential-backpressure_v1.png)
 
 #### Channel-based backpressure
 
@@ -313,7 +349,7 @@ Concurrent pipelines transform raw checkpoint data into indexed database records
 
 ### Architecture overview
 
-![Concurrent Pipeline Diagram](../images/concurrent.png)
+![Concurrent Pipeline Diagram](../images/architecture_concurrent-pipeline_v1.png)
 
 Key design principles:
 
@@ -445,7 +481,7 @@ The framework automatically creates and manages a `Watermark` table in your data
 
 With the component architecture detailed, you can examine how the pipeline prevents memory overflow through cascading backpressure using inter-component channels.
 
-![Concurrent Backpressure Pipeline](../images/backpressure-concurrent.png)
+![Concurrent Backpressure Pipeline](../images/architecture_concurrent-backpressure_v1.png)
 
 #### Channel-level blocking with fixed sizes
 

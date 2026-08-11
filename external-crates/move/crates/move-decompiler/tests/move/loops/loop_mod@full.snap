@@ -5,6 +5,10 @@ source: crates/move-decompiler/tests/tests.rs
 
 module loops::loop_mod;
 
+// -- uses -- 
+
+use 0x0::loop_mod;
+
 // -- functions -- 
 
 public fun do_0(l0: &mut bool) {}
@@ -19,15 +23,15 @@ public fun do_4(l0: &mut bool) {}
 
 public fun loop_0(l0: &mut bool) {
     while (*l0) {
-        0x0::loop_mod::do_0(l0)
+        loop_mod::do_0(l0)
     };
-    0x0::loop_mod::do_1(l0)
+    loop_mod::do_1(l0)
 }
 
 public fun loop_1(l0: &mut bool) {
-    0x0::loop_mod::do_0(l0);
+    loop_mod::do_0(l0);
     while (*l0) {
-        0x0::loop_mod::do_1(l0)
+        loop_mod::do_1(l0)
     };
-    0x0::loop_mod::do_2(l0)
+    loop_mod::do_2(l0)
 }

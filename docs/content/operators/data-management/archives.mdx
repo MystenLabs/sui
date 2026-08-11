@@ -1,8 +1,42 @@
 ---
 title: Sui Archive Data
 sidebar_label: Archive Data
-description: The archive is a historical record of all transactions on Sui. Enable archiving on your Full nodes as a best practice.
-keywords: [ archive, archive data, full node archive, node archive, fallback, archival fallback ] 
+description: >-
+  The archive is a historical record of all transactions on Sui. Enable
+  archiving on your Full nodes as a best practice.
+keywords:
+  - archive
+  - archive data
+  - full node archive
+  - node archive
+  - fallback
+  - archival fallback
+goal:
+  description: >-
+    Operator understands the archive is a historical record of all transactions
+    on Sui.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more operational depth
+    - pattern: '```'
+      min: 1
+      label: Has configuration or command examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is the Sui archive and why should I enable it?
+  - How do I enable archiving on a Sui full node?
+  - What data does the Sui archive contain?
+answer: >-
+  The archive is a historical record of all transactions on Sui. Enable
+  archiving on your Full nodes as a best practice.
 ---
 
 A Sui archive is a history of all transaction data on Sui. In some cases, peer nodes might not catch up with all transactions and effects through synchronization if they lag behind the current epoch by more than the latest few epochs. In such cases, instead of relying on synchronization, peer nodes can fall back to downloading the relevant information from an archive.
@@ -11,7 +45,7 @@ A Sui archive is a history of all transaction data on Sui. In some cases, peer n
 Starting with the 1.51 release, the default archive bucket for Mainnet switches to a requester-pays model. See the following section for a configuration example.
 :::
 
-`https://checkpoints.mainnet.sui.io` retains only the most recent 30 days of checkpoints and is not suitable for full-history Mainnet backfill. For standing up a new fullnode, always start it from a snapshot.
+`https://checkpoints.mainnet.sui.io` and `https://checkpoints.testnet.sui.io` retain only the most recent 30 days of checkpoints and are not suitable for full-retention backfill. For full checkpoint retention, use `gs://mysten-mainnet-checkpoints-use4` for Mainnet or `gs://mysten-testnet-checkpoints-use4` for Testnet with Requester Pays enabled. For standing up a new fullnode, always start it from a snapshot.
 
 ## Set up archival fallback {#set-up-archival-fallback}
 
@@ -26,8 +60,8 @@ state-archive-read-config:
     # How many objects to read ahead when catching up
     concurrency: 5
     remote-store-options:
-      - ["aws_access_key_id", <YOUR_AWS_ACCESS_KEY_ID|PATH_TO_AWS_ACCESS_KEY>]
-      - ["aws_secret_access_key", <AWS_SECRET_ACCESS_KEY|PATH_TO_AWS_SECRET_ACCESS_KEY>]
+      # Required for this Requester Pays bucket
+      - ["aws_request_payer", "true"]
 ```
 
 </TabItem>
@@ -42,3 +76,36 @@ state-archive-read-config:
 
 </TabItem>
 </Tabs>
+
+:::info
+
+Mainnet archival fallback requires AWS credentials for the S3 Requester Pays bucket. Run the node on EC2 with an instance profile that grants access to the bucket; the archive client retrieves these credentials from EC2 instance metadata. Do not put access keys in `fullnode.yaml`: the node configuration can be exposed through administrative diagnostics. Other AWS credential providers, including environment variables, ECS task roles, and IRSA, are not loaded by this configuration. State sync explicitly rejects `checkpoints.mainnet.sui.io` as an archive source. Testnet uses a public HTTPS endpoint that does not require credentials.
+
+:::
+
+### Verify archival fallback
+
+After adding the configuration and restarting your node, check the node logs for archive-related messages. You can also monitor the `checkpoints_synced_from_archive` Prometheus metric to confirm the node is fetching data from the archive:
+
+```sh
+$ curl -s http://localhost:9184/metrics | grep checkpoints_synced_from_archive
+```
+
+If the counter increases over time, the archival fallback is active.
+
+### When to use each archive source {#archive-sources}
+
+| Source | Retention | Credentials | Use case |
+|--------|-----------|-------------|----------|
+| `https://s3.us-west-2.amazonaws.com/mysten-mainnet-checkpoints` | Full history | AWS credentials | Mainnet archival fallback and full-retention backfill |
+| `https://checkpoints.testnet.sui.io` | 30 days | None | Testnet archival fallback |
+| `gs://mysten-mainnet-checkpoints-use4` | Full history | GCS credentials and `x-goog-user-project` billing header | Mainnet checkpoint ingestion for indexers (GCS Requester Pays) |
+| `gs://mysten-testnet-checkpoints-use4` | Full history | GCS credentials and `x-goog-user-project` billing header | Testnet checkpoint ingestion for indexers (GCS Requester Pays) |
+
+:::caution
+
+Do not use `https://checkpoints.mainnet.sui.io` for Mainnet archival fallback. State sync rejects this endpoint. Use the S3 or GCS bucket instead. When you use a GCS Requester Pays bucket, configure credentials and pass your billing project in the `x-goog-user-project` header; see [Requester Pays checkpoint buckets](/operators/data-management/indexer-stack-setup#requester-pays).
+
+:::
+
+For starting a new full node, always use a [snapshot](/operators/snapshots) rather than syncing from the archive.

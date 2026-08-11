@@ -14,6 +14,8 @@ removal
 -  [Function `back`](#sui_linked_table_back)
 -  [Function `push_front`](#sui_linked_table_push_front)
 -  [Function `push_back`](#sui_linked_table_push_back)
+-  [Function `insert_before`](#sui_linked_table_insert_before)
+-  [Function `insert_after`](#sui_linked_table_insert_after)
 -  [Function `borrow`](#sui_linked_table_borrow)
 -  [Function `borrow_mut`](#sui_linked_table_borrow_mut)
 -  [Function `prev`](#sui_linked_table_prev)
@@ -256,14 +258,11 @@ that key <code>k: K</code>.
     <b>let</b> old_head = <a href="../sui/table.md#sui_table">table</a>.head.swap_or_fill(k);
     <b>if</b> (<a href="../sui/table.md#sui_table">table</a>.tail.is_none()) <a href="../sui/table.md#sui_table">table</a>.tail.fill(k);
     <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a> = option::none();
-    <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_next">next</a> = <b>if</b> (old_head.is_some()) {
-        <b>let</b> old_head_k = old_head.destroy_some();
-        field::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, old_head_k).<a href="../sui/linked_table.md#sui_linked_table_prev">prev</a> = option::some(k);
-        option::some(old_head_k)
-    } <b>else</b> {
-        option::none()
-    };
-    field::add(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, k, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a> { <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>, <a href="../sui/linked_table.md#sui_linked_table_next">next</a>, value });
+    <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_next">next</a> = old_head.map!(|old_head_k| {
+        df::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, old_head_k).<a href="../sui/linked_table.md#sui_linked_table_prev">prev</a> = option::some(k);
+        old_head_k
+    });
+    df::add(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, k, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a> { <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>, <a href="../sui/linked_table.md#sui_linked_table_next">next</a>, value });
     <a href="../sui/table.md#sui_table">table</a>.size = <a href="../sui/table.md#sui_table">table</a>.size + 1;
 }
 </code></pre>
@@ -298,15 +297,96 @@ that key <code>k: K</code>.
 ) {
     <b>if</b> (<a href="../sui/table.md#sui_table">table</a>.head.is_none()) <a href="../sui/table.md#sui_table">table</a>.head.fill(k);
     <b>let</b> old_tail = <a href="../sui/table.md#sui_table">table</a>.tail.swap_or_fill(k);
-    <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a> = <b>if</b> (old_tail.is_some()) {
-        <b>let</b> old_tail_k = old_tail.destroy_some();
-        field::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, old_tail_k).<a href="../sui/linked_table.md#sui_linked_table_next">next</a> = option::some(k);
-        option::some(old_tail_k)
-    } <b>else</b> {
-        option::none()
-    };
+    <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a> = old_tail.map!(|old_tail_k| {
+        df::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, old_tail_k).<a href="../sui/linked_table.md#sui_linked_table_next">next</a> = option::some(k);
+        old_tail_k
+    });
     <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_next">next</a> = option::none();
-    field::add(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, k, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a> { <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>, <a href="../sui/linked_table.md#sui_linked_table_next">next</a>, value });
+    df::add(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, k, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a> { <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>, <a href="../sui/linked_table.md#sui_linked_table_next">next</a>, value });
+    <a href="../sui/table.md#sui_table">table</a>.size = <a href="../sui/table.md#sui_table">table</a>.size + 1;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_linked_table_insert_before"></a>
+
+## Function `insert_before`
+
+Inserts a key-value pair immediately before the entry with key <code>anchor: K</code>.
+If <code>anchor</code> is the front of the table, the newly inserted pair becomes the new front.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">sui::dynamic_field::EFieldDoesNotExist</a></code> if the table does not have an entry
+with the key <code>anchor: K</code>.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldAlreadyExists">sui::dynamic_field::EFieldAlreadyExists</a></code> if the table already has an entry
+with the key <code>k: K</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/linked_table.md#sui_linked_table_insert_before">insert_before</a>&lt;K: <b>copy</b>, <a href="../sui/linked_table.md#sui_linked_table_drop">drop</a>, store, V: store&gt;(<a href="../sui/table.md#sui_table">table</a>: &<b>mut</b> <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">sui::linked_table::LinkedTable</a>&lt;K, V&gt;, anchor: K, k: K, value: V)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/linked_table.md#sui_linked_table_insert_before">insert_before</a>&lt;K: <b>copy</b> + <a href="../sui/linked_table.md#sui_linked_table_drop">drop</a> + store, V: store&gt;(
+    <a href="../sui/table.md#sui_table">table</a>: &<b>mut</b> <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;,
+    anchor: K,
+    k: K,
+    value: V,
+) {
+    <b>let</b> anchor_node = df::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, anchor);
+    <b>let</b> old_prev = anchor_node.<a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>.swap_or_fill(k);
+    old_prev.fold!(
+        <a href="../sui/table.md#sui_table">table</a>.head = option::some(k),
+        |old_prev| df::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, old_prev).<a href="../sui/linked_table.md#sui_linked_table_next">next</a> = option::some(k),
+    );
+    df::add(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, k, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a> { <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>: old_prev, <a href="../sui/linked_table.md#sui_linked_table_next">next</a>: option::some(anchor), value });
+    <a href="../sui/table.md#sui_table">table</a>.size = <a href="../sui/table.md#sui_table">table</a>.size + 1;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_linked_table_insert_after"></a>
+
+## Function `insert_after`
+
+Inserts a key-value pair immediately after the entry with key <code>anchor: K</code>.
+If <code>anchor</code> is the back of the table, the newly inserted pair becomes the new back.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">sui::dynamic_field::EFieldDoesNotExist</a></code> if the table does not have an entry
+with the key <code>anchor: K</code>.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldAlreadyExists">sui::dynamic_field::EFieldAlreadyExists</a></code> if the table already has an entry
+with the key <code>k: K</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/linked_table.md#sui_linked_table_insert_after">insert_after</a>&lt;K: <b>copy</b>, <a href="../sui/linked_table.md#sui_linked_table_drop">drop</a>, store, V: store&gt;(<a href="../sui/table.md#sui_table">table</a>: &<b>mut</b> <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">sui::linked_table::LinkedTable</a>&lt;K, V&gt;, anchor: K, k: K, value: V)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/linked_table.md#sui_linked_table_insert_after">insert_after</a>&lt;K: <b>copy</b> + <a href="../sui/linked_table.md#sui_linked_table_drop">drop</a> + store, V: store&gt;(
+    <a href="../sui/table.md#sui_table">table</a>: &<b>mut</b> <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;,
+    anchor: K,
+    k: K,
+    value: V,
+) {
+    <b>let</b> anchor_node = df::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, anchor);
+    <b>let</b> old_next = anchor_node.<a href="../sui/linked_table.md#sui_linked_table_next">next</a>.swap_or_fill(k);
+    old_next.fold!(
+        <a href="../sui/table.md#sui_table">table</a>.tail = option::some(k),
+        |old_next| df::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, old_next).<a href="../sui/linked_table.md#sui_linked_table_prev">prev</a> = option::some(k),
+    );
+    df::add(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, k, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a> { <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>: option::some(anchor), <a href="../sui/linked_table.md#sui_linked_table_next">next</a>: old_next, value });
     <a href="../sui/table.md#sui_table">table</a>.size = <a href="../sui/table.md#sui_table">table</a>.size + 1;
 }
 </code></pre>
@@ -334,7 +414,7 @@ that key <code>k: K</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow">borrow</a>&lt;K: <b>copy</b> + <a href="../sui/linked_table.md#sui_linked_table_drop">drop</a> + store, V: store&gt;(<a href="../sui/table.md#sui_table">table</a>: &<a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;, k: K): &V {
-    &field::borrow&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<a href="../sui/table.md#sui_table">table</a>.id, k).value
+    &df::borrow&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<a href="../sui/table.md#sui_table">table</a>.id, k).value
 }
 </code></pre>
 
@@ -364,7 +444,7 @@ that key <code>k: K</code>.
     <a href="../sui/table.md#sui_table">table</a>: &<b>mut</b> <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;,
     k: K,
 ): &<b>mut</b> V {
-    &<b>mut</b> field::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, k).value
+    &<b>mut</b> df::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, k).value
 }
 </code></pre>
 
@@ -392,7 +472,7 @@ that key <code>k: K</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>&lt;K: <b>copy</b> + <a href="../sui/linked_table.md#sui_linked_table_drop">drop</a> + store, V: store&gt;(<a href="../sui/table.md#sui_table">table</a>: &<a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;, k: K): &Option&lt;K&gt; {
-    &field::borrow&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<a href="../sui/table.md#sui_table">table</a>.id, k).<a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>
+    &df::borrow&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<a href="../sui/table.md#sui_table">table</a>.id, k).<a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>
 }
 </code></pre>
 
@@ -420,7 +500,7 @@ that key <code>k: K</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/linked_table.md#sui_linked_table_next">next</a>&lt;K: <b>copy</b> + <a href="../sui/linked_table.md#sui_linked_table_drop">drop</a> + store, V: store&gt;(<a href="../sui/table.md#sui_table">table</a>: &<a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;, k: K): &Option&lt;K&gt; {
-    &field::borrow&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<a href="../sui/table.md#sui_table">table</a>.id, k).<a href="../sui/linked_table.md#sui_linked_table_next">next</a>
+    &df::borrow&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<a href="../sui/table.md#sui_table">table</a>.id, k).<a href="../sui/linked_table.md#sui_linked_table_next">next</a>
 }
 </code></pre>
 
@@ -448,14 +528,10 @@ that key <code>k: K</code>. Note: this is also what happens when the table is em
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/linked_table.md#sui_linked_table_remove">remove</a>&lt;K: <b>copy</b> + <a href="../sui/linked_table.md#sui_linked_table_drop">drop</a> + store, V: store&gt;(<a href="../sui/table.md#sui_table">table</a>: &<b>mut</b> <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;, k: K): V {
-    <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt; { <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>, <a href="../sui/linked_table.md#sui_linked_table_next">next</a>, value } = field::remove(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, k);
+    <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt; { <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>, <a href="../sui/linked_table.md#sui_linked_table_next">next</a>, value } = df::remove(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, k);
     <a href="../sui/table.md#sui_table">table</a>.size = <a href="../sui/table.md#sui_table">table</a>.size - 1;
-    <b>if</b> (<a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>.is_some()) {
-        field::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, *<a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>.<a href="../sui/borrow.md#sui_borrow">borrow</a>()).<a href="../sui/linked_table.md#sui_linked_table_next">next</a> = <a href="../sui/linked_table.md#sui_linked_table_next">next</a>
-    };
-    <b>if</b> (<a href="../sui/linked_table.md#sui_linked_table_next">next</a>.is_some()) {
-        field::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, *<a href="../sui/linked_table.md#sui_linked_table_next">next</a>.<a href="../sui/borrow.md#sui_borrow">borrow</a>()).<a href="../sui/linked_table.md#sui_linked_table_prev">prev</a> = <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>
-    };
+    <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>.do!(|<a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>| df::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>).<a href="../sui/linked_table.md#sui_linked_table_next">next</a> = <a href="../sui/linked_table.md#sui_linked_table_next">next</a>);
+    <a href="../sui/linked_table.md#sui_linked_table_next">next</a>.do!(|<a href="../sui/linked_table.md#sui_linked_table_next">next</a>| df::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, <a href="../sui/linked_table.md#sui_linked_table_next">next</a>).<a href="../sui/linked_table.md#sui_linked_table_prev">prev</a> = <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>);
     <b>if</b> (<a href="../sui/table.md#sui_table">table</a>.head.<a href="../sui/borrow.md#sui_borrow">borrow</a>() == &k) <a href="../sui/table.md#sui_table">table</a>.head = <a href="../sui/linked_table.md#sui_linked_table_next">next</a>;
     <b>if</b> (<a href="../sui/table.md#sui_table">table</a>.tail.<a href="../sui/borrow.md#sui_borrow">borrow</a>() == &k) <a href="../sui/table.md#sui_table">table</a>.tail = <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>;
     value
@@ -484,8 +560,7 @@ Aborts with <code><a href="../sui/linked_table.md#sui_linked_table_ETableIsEmpty
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/linked_table.md#sui_linked_table_pop_front">pop_front</a>&lt;K: <b>copy</b> + <a href="../sui/linked_table.md#sui_linked_table_drop">drop</a> + store, V: store&gt;(<a href="../sui/table.md#sui_table">table</a>: &<b>mut</b> <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;): (K, V) {
-    <b>assert</b>!(<a href="../sui/table.md#sui_table">table</a>.head.is_some(), <a href="../sui/linked_table.md#sui_linked_table_ETableIsEmpty">ETableIsEmpty</a>);
-    <b>let</b> head = *<a href="../sui/table.md#sui_table">table</a>.head.<a href="../sui/borrow.md#sui_borrow">borrow</a>();
+    <b>let</b> head = <a href="../sui/table.md#sui_table">table</a>.head.destroy_or!(<b>abort</b> <a href="../sui/linked_table.md#sui_linked_table_ETableIsEmpty">ETableIsEmpty</a>);
     (head, <a href="../sui/table.md#sui_table">table</a>.<a href="../sui/linked_table.md#sui_linked_table_remove">remove</a>(head))
 }
 </code></pre>
@@ -512,8 +587,7 @@ Aborts with <code><a href="../sui/linked_table.md#sui_linked_table_ETableIsEmpty
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/linked_table.md#sui_linked_table_pop_back">pop_back</a>&lt;K: <b>copy</b> + <a href="../sui/linked_table.md#sui_linked_table_drop">drop</a> + store, V: store&gt;(<a href="../sui/table.md#sui_table">table</a>: &<b>mut</b> <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;): (K, V) {
-    <b>assert</b>!(<a href="../sui/table.md#sui_table">table</a>.tail.is_some(), <a href="../sui/linked_table.md#sui_linked_table_ETableIsEmpty">ETableIsEmpty</a>);
-    <b>let</b> tail = *<a href="../sui/table.md#sui_table">table</a>.tail.<a href="../sui/borrow.md#sui_borrow">borrow</a>();
+    <b>let</b> tail = <a href="../sui/table.md#sui_table">table</a>.tail.destroy_or!(<b>abort</b> <a href="../sui/linked_table.md#sui_linked_table_ETableIsEmpty">ETableIsEmpty</a>);
     (tail, <a href="../sui/table.md#sui_table">table</a>.<a href="../sui/linked_table.md#sui_linked_table_remove">remove</a>(tail))
 }
 </code></pre>
@@ -540,7 +614,7 @@ Returns true iff there is a value associated with the key <code>k: K</code> in t
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/linked_table.md#sui_linked_table_contains">contains</a>&lt;K: <b>copy</b> + <a href="../sui/linked_table.md#sui_linked_table_drop">drop</a> + store, V: store&gt;(<a href="../sui/table.md#sui_table">table</a>: &<a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;, k: K): bool {
-    field::exists_with_type&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<a href="../sui/table.md#sui_table">table</a>.id, k)
+    df::exists_with_type&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<a href="../sui/table.md#sui_table">table</a>.id, k)
 }
 </code></pre>
 
@@ -616,7 +690,7 @@ Aborts with <code><a href="../sui/linked_table.md#sui_linked_table_ETableNotEmpt
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/linked_table.md#sui_linked_table_destroy_empty">destroy_empty</a>&lt;K: <b>copy</b> + <a href="../sui/linked_table.md#sui_linked_table_drop">drop</a> + store, V: store&gt;(<a href="../sui/table.md#sui_table">table</a>: <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;) {
-    <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a> { id, size, head: _, tail: _ } = <a href="../sui/table.md#sui_table">table</a>;
+    <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a> { id, size, .. } = <a href="../sui/table.md#sui_table">table</a>;
     <b>assert</b>!(size == 0, <a href="../sui/linked_table.md#sui_linked_table_ETableNotEmpty">ETableNotEmpty</a>);
     id.delete()
 }
@@ -644,7 +718,7 @@ Usable only if the value type <code>V</code> has the <code><a href="../sui/linke
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/linked_table.md#sui_linked_table_drop">drop</a>&lt;K: <b>copy</b> + <a href="../sui/linked_table.md#sui_linked_table_drop">drop</a> + store, V: <a href="../sui/linked_table.md#sui_linked_table_drop">drop</a> + store&gt;(<a href="../sui/table.md#sui_table">table</a>: <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;) {
-    <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a> { id, size: _, head: _, tail: _ } = <a href="../sui/table.md#sui_table">table</a>;
+    <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a> { id, .. } = <a href="../sui/table.md#sui_table">table</a>;
     id.delete()
 }
 </code></pre>

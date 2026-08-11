@@ -62,13 +62,13 @@ async fn test_notify_read_executed_transactions_to_checkpoint() {
 /// Verifies that calling `notify_barrier_executed` with an `AccumulatorSettlement`
 /// key resolves `notify_read_tx_key_to_digest`, which is the mechanism used by the
 /// scheduler to detect that the barrier transaction has already been executed
-/// (e.g. by the checkpoint executor) and skip the settlement wait.
+/// (e.g. by the checkpoint executor).
 ///
 /// Unlike `insert_tx_key`, `notify_barrier_executed` is in-memory-only (no DB
 /// persistence), so it won't leave stale entries that survive a crash while
 /// the effects may not.
 #[tokio::test]
-async fn test_notify_barrier_executed_resolves_settlement_wait() {
+async fn test_notify_barrier_executed_resolves_tx_key_wait() {
     let authority_state = TestAuthorityBuilder::new().build().await;
     let store = authority_state.epoch_store_for_testing();
 
@@ -77,19 +77,13 @@ async fn test_notify_barrier_executed_resolves_settlement_wait() {
     let key = TransactionKey::AccumulatorSettlement(epoch, checkpoint_height);
     let barrier_digest = TransactionDigest::random();
 
-    // Spawn a task that races wait_for_settlement_transactions against
-    // notify_read_tx_key_to_digest, simulating the scheduler's select! pattern.
     let store_clone = authority_state.epoch_store_for_testing();
     let handle = tokio::spawn(async move {
         let keys = [key];
-        tokio::select! {
-            _txns = store_clone.wait_for_settlement_transactions(key) => {
-                false // resolved via checkpoint builder notification
-            }
-            result = store_clone.notify_read_tx_key_to_digest(&keys) => {
-                result.is_ok() // resolved via barrier tx execution
-            }
-        }
+        store_clone
+            .notify_read_tx_key_to_digest(&keys)
+            .await
+            .is_ok()
     });
 
     // Give the spawned task time to register with notify_read_tx_key_to_digest.
@@ -106,6 +100,6 @@ async fn test_notify_barrier_executed_resolves_settlement_wait() {
 
     assert!(
         resolved_via_tx_key,
-        "select! should resolve on notify_read_tx_key_to_digest, not wait_for_settlement_transactions"
+        "notify_read_tx_key_to_digest should resolve after notify_barrier_executed"
     );
 }

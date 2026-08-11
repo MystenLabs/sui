@@ -1,0 +1,107 @@
+---
+title: Composing DeepBook Transactions
+sidebar_label: Composing Transactions
+description: >-
+  Compose DeepBook operations in one programmable transaction block: fund and
+  order atomically, borrow and repay a flash loan through the hot-potato
+  pattern, and lend, trade, and stake in a single atomic transaction.
+keywords:
+  - deepbook
+  - ptb
+  - programmable transaction block
+  - flash loan
+  - hot potato
+  - atomic
+  - compose
+  - lend trade stake
+goal:
+  description: >-
+    Reader composes multiple DeepBook operations into single atomic programmable
+    transaction blocks, understanding the hot-potato and atomicity guarantees.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I compose DeepBook operations in one PTB?
+  - How does the flash loan hot potato work?
+  - 'How do I lend, trade, and stake atomically?'
+  - What makes a composed transaction abort?
+answer: >-
+  A programmable transaction block runs multiple commands atomically, so
+  DeepBook operations compose: deposit and place an order together, borrow and
+  repay a flash loan in the same block through the FlashLoan hot potato, or lend
+  to a margin pool, place an order, and stake in one transaction. If any command
+  aborts, the whole block rolls back, so partial states never commit.
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Compose DeepBook PTBs
+    stage: Advanced
+---
+
+A [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks) runs a sequence of commands as one atomic transaction: either every command applies or none does, and one command's result can feed the next. That makes DeepBook operations composable. The samples below build three compositions and run compile-checked against `@mysten/deepbook-v3` and `@mysten/sui`, referencing pools and coins by SDK key rather than hardcoding onchain IDs. For the reusable CLI and SDK templates behind them, see the [PTB and CLI cookbook](/onchain-finance/deepbook/deepbookv3-sdk/ptb-cli-cookbook).
+
+:::caution
+
+The third composition supplies to a margin lending pool. Lending and margin trading carry risks the spot path does not. Read [Margin Risks](/onchain-finance/deepbook/deepbook-margin/margin-risks) before supplying or borrowing.
+
+:::
+
+Two guarantees do the work in every composition:
+
+- **Atomicity.** If any command in the block aborts, the whole block rolls back. A composition never half-applies.
+- **Hot potato.** A value with no `store`, `copy`, `drop`, or `key` ability cannot be kept, dropped, or transferred, so you have to consume it before the block ends. DeepBook's flash loan returns one, which is what forces repayment in the same transaction.
+
+## Fund and order atomically
+
+Deposit into a `BalanceManager` and place an order in the same block, so both settle together. The [cookbook](/onchain-finance/deepbook/deepbookv3-sdk/ptb-cli-cookbook#deepbook-deposit-and-place-an-order-in-one-ptb) has the CLI form; the compile-checked SDK version:
+
+<ImportContent source="examples/deepbook-spot/src/compose.ts" mode="code" tag="fund-order" />
+
+**Observe:** the deposit and the resting order appear in the same transaction's effects. If the pool rejects the order (for example off-tick), the deposit rolls back with it.
+
+## Flash loan round trip
+
+Borrow, use, and repay in one block. `borrowBaseAsset` returns the borrowed coin and the `FlashLoan` hot potato; `returnBaseAsset` consumes it. The [cookbook](/onchain-finance/deepbook/deepbookv3-sdk/ptb-cli-cookbook#deepbook-flash-loan-borrow-and-repay) and [Flash Loans SDK](/onchain-finance/deepbook/deepbookv3-sdk/flash-loans) cover the quote variants.
+
+<ImportContent source="examples/deepbook-spot/src/compose.ts" mode="code" tag="flash-loan" />
+
+**Observe:** the block commits only if you return the hot potato. The no-op use step is where a call into another protocol goes: borrow from DeepBook, act on the borrowed funds through any Move call, and repay before the block ends, all under the same atomicity rule. That is the generalization point for cross-protocol composition.
+
+## Lend, trade, and stake in one transaction
+
+Deploy capital three ways in one block: supply to a margin pool, rest a maker order, and stake DEEP for governance rebates. The legs are independent, but composing them makes them atomic.
+
+Supplying needs a `SupplierCap`, a reusable owned object. Mint it once, persist its ID, and reuse it; minting a fresh cap each run fragments your supply position, so gate creation on an existing ID (the same reuse pattern as a `BalanceManager`).
+
+<ImportContent source="examples/deepbook-margin/src/supply.ts" mode="code" tag="create-cap" />
+
+With the cap in hand, compose the three legs. Before running it, read your preconditions and size the legs to them: the lend leg pulls its coin from the wallet (keep a SUI gas reserve), and the trade and stake legs both draw DEEP from the `BalanceManager`, so it must hold enough for the order and the stake together.
+
+<ImportContent source="examples/deepbook-margin/src/compose.ts" mode="code" tag="lend-trade-stake" />
+
+**Observe:** one transaction records the supply to the margin pool, the resting order, and the stake. `getUserSupplyAmount` reflects the new supply, `accountOpenOrders` lists the order, and the staked DEEP moves into the pool's governance for the next epoch. If any leg aborts, none of the three apply.
+
+## When a composition aborts
+
+A composed block fails as a unit, so a late command's failure discards the earlier commands' work. The common causes, several of which surface the same way outside compositions:
+
+- **You do not return the hot potato.** A borrowed `FlashLoan` that you never pass to a return call cannot be dropped or stored, so the block aborts. This is the mechanism that makes flash loans safe, not an edge case.
+- **A later leg reverts, discarding an earlier one.** In the fund-and-order composition, depositing less than the order needs to lock aborts the order leg with `balance_manager` abort code 3 (`EBalanceManagerBalanceTooLow`), and the deposit that ran first rolls back with it, so nothing settles. An off-tick or below-minimum order, or a zero-amount stake (the contract requires a positive stake), aborts the same way. Size and validate each leg, and make a funding leg cover what a later leg consumes, before composing.
+- **A build-time balance shortfall.** When a fund or lend leg sources coins with `coinWithBalance`, requesting more than the wallet holds throws before submission: `Insufficient balance of <coin> for owner <address>. Required: X, Available: Y`. Size each leg to the actual balance.
+- **A stale object version.** Building a second transaction against an object a prior transaction just changed, without waiting for finality, fails with a version-unavailable error. Within a single PTB this does not arise, because the commands share one execution; across chained transactions, wait for each to finalize before building the next.

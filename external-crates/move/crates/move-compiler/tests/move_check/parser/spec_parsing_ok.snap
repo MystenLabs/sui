@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_ok.move:11:5
    │  
 11 │ ╭     spec module {
@@ -17,7 +17,7 @@ warning[W00001]: DEPRECATED. will be removed
 24 │ │     }
    │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_ok.move:34:5
    │  
 34 │ ╭     spec SomeCoin {
@@ -27,7 +27,7 @@ warning[W00001]: DEPRECATED. will be removed
 38 │ │     }
    │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_ok.move:40:5
    │  
 40 │ ╭     spec with_aborts_if {
@@ -35,7 +35,7 @@ warning[W00001]: DEPRECATED. will be removed
 42 │ │     }
    │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_ok.move:47:5
    │  
 47 │ ╭     spec with_ensures {
@@ -43,7 +43,7 @@ warning[W00001]: DEPRECATED. will be removed
 49 │ │     }
    │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_ok.move:54:5
    │  
 54 │ ╭     spec using_block {
@@ -51,7 +51,7 @@ warning[W00001]: DEPRECATED. will be removed
 56 │ │     }
    │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_ok.move:61:5
    │  
 61 │ ╭     spec using_lambda
@@ -60,7 +60,7 @@ warning[W00001]: DEPRECATED. will be removed
 64 │ │     }
    │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_ok.move:69:5
    │  
 69 │ ╭     spec using_index_and_range {
@@ -68,7 +68,7 @@ warning[W00001]: DEPRECATED. will be removed
 71 │ │     }
    │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_ok.move:76:5
    │  
 76 │ ╭     spec using_implies {
@@ -77,7 +77,7 @@ warning[W00001]: DEPRECATED. will be removed
 79 │ │     }
    │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_ok.move:84:5
    │  
 84 │ ╭     spec with_emits {
@@ -87,7 +87,7 @@ warning[W00001]: DEPRECATED. will be removed
 88 │ │     }
    │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
     ┌─ tests/move_check/parser/spec_parsing_ok.move:93:5
     │  
  93 │ ╭     spec module {
@@ -99,7 +99,7 @@ warning[W00001]: DEPRECATED. will be removed
 100 │ │     }
     │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
     ┌─ tests/move_check/parser/spec_parsing_ok.move:104:5
     │  
 104 │ ╭     spec some_generic {
@@ -108,7 +108,7 @@ warning[W00001]: DEPRECATED. will be removed
 107 │ │     }
     │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
     ┌─ tests/move_check/parser/spec_parsing_ok.move:109:5
     │  
 109 │ ╭     spec schema ModuleInvariant<X, Y> {
@@ -117,7 +117,7 @@ warning[W00001]: DEPRECATED. will be removed
 112 │ │     }
     │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
     ┌─ tests/move_check/parser/spec_parsing_ok.move:114:5
     │  
 114 │ ╭     spec some_generic {
@@ -125,7 +125,7 @@ warning[W00001]: DEPRECATED. will be removed
 116 │ │     }
     │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
     ┌─ tests/move_check/parser/spec_parsing_ok.move:118:5
     │  
 118 │ ╭     spec module {
@@ -135,7 +135,7 @@ warning[W00001]: DEPRECATED. will be removed
 122 │ │     }
     │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
     ┌─ tests/move_check/parser/spec_parsing_ok.move:124:5
     │  
 124 │ ╭     spec module {
@@ -147,7 +147,7 @@ warning[W00001]: DEPRECATED. will be removed
 130 │ │     }
     │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
     ┌─ tests/move_check/parser/spec_parsing_ok.move:132:5
     │  
 132 │ ╭     spec module {

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ tests/move_check/warning_suppression/expect_all.move:3:10
   │
 3 │ #[expect(all)]
@@ -13,7 +13,7 @@ warning[W10007]: issue with attribute value
   │
   = Use '#[allow(all)]' instead
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_check/warning_suppression/expect_all.move:4:26
   │
 4 │ module 0x42::m { fun var(a: u64) { } }
@@ -21,7 +21,7 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ tests/move_check/warning_suppression/expect_all.move:7:10
   │
 7 │ #[expect(unused)]
@@ -29,7 +29,7 @@ warning[W10007]: issue with attribute value
   │
   = Use '#[allow(unused)]' instead
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_check/warning_suppression/expect_all.move:8:26
   │
 8 │ module 0x42::n { fun foo(a: u64) { } }

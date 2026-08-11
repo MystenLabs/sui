@@ -11,7 +11,7 @@ use move_vm_runtime::runtime::MoveRuntime;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::TypeTag;
 use sui_types::base_types::ObjectID;
-use sui_types::error::{SuiErrorKind, SuiResult};
+use sui_types::error::{ExecutionError, SuiErrorKind, SuiResult};
 use sui_types::execution::TypeLayoutStore;
 use sui_types::storage::{BackingPackageStore, PackageObject};
 use sui_types::{error::SuiError, layout_resolver::LayoutResolver};
@@ -59,8 +59,9 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
             ),
             self.protocol_config.binary_config(None),
         );
-        let tag_linkage = ExecutableLinkage::type_linkage(config, ids, &resolver)?;
-        let link_context = tag_linkage.linkage_context()?;
+        let tag_linkage =
+            ExecutableLinkage::type_linkage::<_, ExecutionError>(config, ids, &resolver)?;
+        let link_context = tag_linkage.linkage_context::<ExecutionError>()?;
         let data_store = TransactionPackageStore::new(&null_resolver);
         let Ok(vm) = self.vm.make_vm(data_store, link_context) else {
             return Err(SuiErrorKind::FailObjectLayout {

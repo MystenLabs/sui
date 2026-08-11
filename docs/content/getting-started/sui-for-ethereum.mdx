@@ -1,8 +1,49 @@
 ---
 title: Ethereum -> Sui
 description: Build your first app on Sui if you have EVM experience
-keywords: [ ethereum, solidity, EVM,  ]
+keywords:
+  - ethereum
+  - solidity
+  - EVM
 pagination_prev: null
+goal:
+  description: >-
+    Ethereum developer can map their existing mental model to Sui's
+    object-centric equivalents and start building
+  requires:
+    - has_tables: true
+      min: 2
+      label: Has comparison tables
+    - headings:
+        - pattern: Object model|Objects
+        - pattern: Ownership
+        - pattern: Access control
+      label: Covers core concept categories
+    - pattern: '```move'
+      min: 1
+      label: Has Move code example
+    - min_words: 800
+      label: Needs more comparison depth
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - pattern: Ethereum
+      min: 3
+      label: References Ethereum for comparison
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How is Sui different from Ethereum?
+  - How do I migrate from Ethereum to Sui?
+  - How do I transition from Ethereum to Sui?
+answer: >-
+  If you have worked with Ethereum Virtual Machine (EVM) before, the biggest
+  difference when developing on Sui is the programming language. Sui uses
+  **Move** and EVM uses **Solidity**.
 ---
 
 If you have worked with Ethereum Virtual Machine (EVM) before, the biggest difference when developing on Sui is the programming language. Sui uses **Move** and EVM uses **Solidity**.
@@ -75,7 +116,9 @@ In Move, PTBs solve this problem. PTBs give builders the ability to chain contra
 
 Builders on Sui leverage PTBs to provide experiences that would otherwise be intractable. A good example is a DeFi aggregator that routes token swaps across multiple DeFi protocols with the best price. On Sui, the aggregator would use a single PTB with the guarantee that the transaction would execute at the displayed price or it would revert completely. The PTB is one of the most powerful Sui features. Experience shows builders who are most successful on Sui are the ones who learn to leverage this feature early and often, leaning into it rather than treating it just as a way to batch transactions.
 
-See [Programmable Transaction Blocks](/develop/transactions/ptbs/prog-txn-blocks) for details on PTBs.
+{/* TODO: Import code from MystenLabs/sui-typescript — show a basic PTB example using Transaction, splitCoins, and transferObjects. TypeScript PTB that splits a coin from the gas coin and transfers the split amount to a recipient address */}
+
+See [Building Programmable Transaction Blocks](/develop/transactions/ptbs/building-ptb) for the full guide on constructing PTBs with the TypeScript SDK, including `moveCall`, chaining results, and gas management.
 
 ## More comparison
 

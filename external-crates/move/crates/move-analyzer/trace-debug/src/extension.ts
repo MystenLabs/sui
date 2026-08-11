@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { StackFrame } from '@vscode/debugadapter';
+import { addSourceToTrace, MANIFEST_FILE_NAME } from './add_source';
 import {
     WorkspaceFolder,
     DebugConfiguration,
@@ -87,6 +88,11 @@ const TRACE_FILE_LANGUAGE_ID = TRACE_FILE_URI_SCHEME;
 const TRACE_CUSTOM_EDITOR_ID = 'mtrace.viewer';
 
 /**
+ * Custom debug-adapter event carrying a warning for the user.
+ */
+const MOVE_WARNING_EVENT = 'moveWarning';
+
+/**
  * Provider of on-hover information during debug session.
  */
 class MoveEvaluatableExpressionProvider {
@@ -127,6 +133,8 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     let previousSourcePath: string | undefined;
+    // Keys are opaque; each diagnostic kind chooses its own de-duplication scope.
+    const shownDebugWarnings = new Set<string>();
     const decorationType = vscode.window.createTextEditorDecorationType({
         color: 'grey',
         backgroundColor: 'rgba(220, 220, 220, 0.3)' // grey with 30% opacity
@@ -194,10 +202,28 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(vscode.debug.onDidTerminateDebugSession(() => {
         // reset all decorations when the debug session is terminated
         // to avoid showing lines for code that was optimized away
+        shownDebugWarnings.clear();
         const editor = vscode.window.activeTextEditor;
         if (editor) {
             editor.setDecorations(decorationType, []);
         }
+    }));
+
+    context.subscriptions.push(vscode.debug.onDidReceiveDebugSessionCustomEvent(event => {
+        if (event.event !== MOVE_WARNING_EVENT) {
+            return;
+        }
+        const message = typeof event.body?.message === 'string'
+            ? event.body.message
+            : undefined;
+        const key = typeof event.body?.key === 'string'
+            ? event.body.key
+            : undefined;
+        if (!message || !key || shownDebugWarnings.has(key)) {
+            return;
+        }
+        shownDebugWarnings.add(key);
+        vscode.window.showWarningMessage(message);
     }));
 
     // register custom command to toggle disassembly view
@@ -215,6 +241,28 @@ export function activate(context: vscode.ExtensionContext) {
             session.customRequest('toggleSource');
         }
     }));
+
+    // register custom command to add source-level debugging artifacts to a trace
+    // (used from the trace viewer before a debug session is started)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('move.addSourceToTrace', addSourceToTraceCommand)
+    );
+
+    // surface the "add source" command as a CodeLens at the top of a trace, and
+    // refresh it when a debug session starts/ends (the lens is hidden while debugging)
+    const addSourceCodeLensProvider = new AddSourceCodeLensProvider();
+    context.subscriptions.push(
+        vscode.languages.registerCodeLensProvider(
+            [
+                { scheme: TRACE_FILE_URI_SCHEME },
+                { language: TRACE_FILE_LANGUAGE_ID }
+            ],
+            addSourceCodeLensProvider
+        )
+    );
+    context.subscriptions.push(
+        vscode.debug.onDidChangeActiveDebugSession(() => addSourceCodeLensProvider.refresh())
+    );
 
     // send custom request to the debug adapter when the active text editor changes
     context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(async editor => {
@@ -256,7 +304,7 @@ export function activate(context: vscode.ExtensionContext) {
     // When opening compressed trace file in the "default" editor,
     // close the editor and open another one showing decompressed
     // content.
-    vscode.workspace.onDidOpenTextDocument(async doc => {
+    context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(async doc => {
         if (doc.uri.scheme === 'file' && doc.uri.fsPath.endsWith('.json.zst')) {
             // Close binary trace file after it was opened
             await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
@@ -267,7 +315,7 @@ export function activate(context: vscode.ExtensionContext) {
             await vscode.window.showTextDocument(mtraceDoc, { preview: false });
             vscode.commands.executeCommand('vscode.open', mtraceUri);
         }
-    });
+    }));
 }
 
 /**
@@ -292,23 +340,62 @@ class MoveTraceViewProvider implements vscode.CustomReadonlyEditorProvider {
             // Do not fire custom editor for trace files already displayed
             // correctly via mtrace scheme.
             vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+            return;
         }
 
         webviewPanel.webview.options = { enableScripts: true };
 
+        // For traces containing external events, offer an "add source" button in the
+        // viewer that runs the `move.addSourceToTrace` command for this trace. This is
+        // needed because we cannot use CodeLens in a webview.
+        const canAddSource = isExternalEventsTrace(document.uri.fsPath);
+        if (canAddSource) {
+            webviewPanel.webview.onDidReceiveMessage(message => {
+                if (message?.type === 'addSource') {
+                    vscode.commands.executeCommand('move.addSourceToTrace', document.uri);
+                }
+            });
+        }
+
         try {
             const traceContent = await decompressTraceFileForPreview(document.uri.fsPath);
-            webviewPanel.webview.html = this.renderHtml(traceContent);
+            webviewPanel.webview.html = this.renderHtml(traceContent, canAddSource);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             webviewPanel.webview.html = `<pre style="color:red;">Failed to load trace: ${msg}</pre>`;
         }
     }
 
-    private renderHtml(decodedText: string): string {
+    private renderHtml(decodedText: string, canAddSource: boolean): string {
+        const addSourceTooltip = 'Copy a built package\'s source and source maps into this '
+            + 'trace to enable source-level debugging.';
+        const addSourceButton = canAddSource
+            ? `<button id="add-source" title="${addSourceTooltip}">Add Source to Trace</button>
+          <script>
+            const vscode = acquireVsCodeApi();
+            document.getElementById('add-source').onclick =
+                () => vscode.postMessage({ type: 'addSource' });
+          </script>`
+            : '';
+        // the `--vscode-*` variables below make the button match the editor theme
         return `
         <html>
+          <head>
+            <style>
+              button {
+                color: var(--vscode-button-foreground);
+                background-color: var(--vscode-button-background);
+                font-family: var(--vscode-font-family);
+                border: none;
+                margin: 8px;
+                padding: 6px 14px;
+                cursor: pointer;
+              }
+              button:hover { background-color: var(--vscode-button-hoverBackground); }
+            </style>
+          </head>
           <body>
+            ${addSourceButton}
             <pre>${decodedText.replace(/</g, '&lt;')}</pre>
           </body>
         </html>
@@ -451,7 +538,7 @@ async function findTraceInfo(editor: vscode.TextEditor): Promise<string | undefi
 async function findPkgRoot(active_file_path: string): Promise<string | undefined> {
     const containsManifest = (dir: string): boolean => {
         const filesInDir = fs.readdirSync(dir);
-        return filesInDir.includes('Move.toml');
+        return filesInDir.includes(MANIFEST_FILE_NAME);
     };
 
     const activeFileDir = path.dirname(active_file_path);
@@ -577,8 +664,7 @@ async function getTracedFunctionInfo(traceFilePath: string): Promise<TracedFunct
   *
  */
 async function constructTraceInfo(tracePath: string): Promise<string | undefined> {
-    if (tracePath.endsWith(TRACE_FILE_EXT) &&
-        path.basename(tracePath, TRACE_FILE_EXT) === EXT_EVENTS_TRACE_FILE_NAME) {
+    if (isExternalEventsTrace(tracePath)) {
         return undefined;
     }
     const tracedFunctionInfo = await getTracedFunctionInfo(tracePath);
@@ -696,6 +782,89 @@ function traceViewTabUri(): vscode.Uri | undefined {
         }
     }
     return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Adding source-level debugging artifacts to a trace
+// ---------------------------------------------------------------------------
+
+/**
+ * Checks if a trace file contains external events, as opposed to a trace of a
+ * single Move function execution (e.g. one generated from a unit test). Traces
+ * containing external events are stored in a file with a fixed base name
+ * (`EXT_EVENTS_TRACE_FILE_NAME`).
+ *
+ * @param tracePath path to the trace file.
+ * @returns `true` if the trace file contains external events, `false` otherwise.
+ */
+function isExternalEventsTrace(tracePath: string): boolean {
+    return tracePath.endsWith(TRACE_FILE_EXT)
+        && path.basename(tracePath, TRACE_FILE_EXT) === EXT_EVENTS_TRACE_FILE_NAME;
+}
+
+/**
+ * Handler for the `move.addSourceToTrace` command. If the given trace contains
+ * external events, adds source-level debugging artifacts to it (see
+ * `addSourceToTrace` in `./add_source`). Meant to be invoked before a debug
+ * session is started, so that the artifacts are picked up when the session is
+ * launched.
+ *
+ * @param traceUri URI of the trace, always passed by the invoking UI element
+ * (the trace viewer button or the CodeLens).
+ */
+async function addSourceToTraceCommand(traceUri: vscode.Uri): Promise<void> {
+    const tracePath = traceUri.fsPath;
+    if (!isExternalEventsTrace(tracePath)) {
+        vscode.window.showErrorMessage(
+            'Adding source is only supported for traces containing external events'
+        );
+        return;
+    }
+    try {
+        await addSourceToTrace(tracePath);
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`Failed to add source to trace: ${msg}`);
+    }
+}
+
+/**
+ * Provides a CodeLens pinned at the top of a trace containing external events that
+ * lets the user add source-level debugging artifacts to the trace (via the
+ * `move.addSourceToTrace` command). The lens is only shown while no debug session
+ * is active, so that the artifacts are picked up when a session is launched (no
+ * restart needed).
+ */
+class AddSourceCodeLensProvider implements vscode.CodeLensProvider {
+    private readonly onDidChangeEmitter = new vscode.EventEmitter<void>();
+    readonly onDidChangeCodeLenses = this.onDidChangeEmitter.event;
+
+    /**
+     * Requests a refresh of the provided lenses. Used when a debug session starts or
+     * ends, as that changes whether the lens should be shown.
+     */
+    refresh(): void {
+        this.onDidChangeEmitter.fire();
+    }
+
+    /**
+     * Called by VSCode whenever it needs the lenses for a document
+     * (and again after `onDidChangeCodeLenses` fires).
+     */
+    provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
+        if (vscode.debug.activeDebugSession || !isExternalEventsTrace(document.uri.fsPath)) {
+            return [];
+        }
+        // a lens is rendered above the line its range starts on, so an empty
+        // range at position (0, 0) is all that is needed to pin the lens above
+        // the first line of the trace (it does not refer to any actual text)
+        const lensRange = new vscode.Range(0, 0, 0, 0);
+        return [new vscode.CodeLens(lensRange, {
+            title: '$(add) Add Source to Trace (enable source-level debugging)',
+            command: 'move.addSourceToTrace',
+            arguments: [document.uri]
+        })];
+    }
 }
 
 // ---------------------------------------------------------------------------

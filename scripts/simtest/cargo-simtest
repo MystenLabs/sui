@@ -58,9 +58,9 @@ if [[ -n "$LOCAL_MSIM_PATH" ]]; then
 else
   cargo_patch_args=(
     --config 'patch.crates-io.tokio.git = "https://github.com/MystenLabs/mysten-sim.git"'
-    --config 'patch.crates-io.tokio.rev =  "53016c1a9038154b1e47b96f0a314efa7e7d809b"'
+    --config 'patch.crates-io.tokio.rev =  "6b8e1e8cdce408e73d46538773fc85a56c082db7"'
     --config 'patch.crates-io.futures-timer.git = "https://github.com/MystenLabs/mysten-sim.git"'
-    --config 'patch.crates-io.futures-timer.rev =  "53016c1a9038154b1e47b96f0a314efa7e7d809b"'
+    --config 'patch.crates-io.futures-timer.rev =  "6b8e1e8cdce408e73d46538773fc85a56c082db7"'
   )
 fi
 
@@ -95,11 +95,6 @@ fi
 # Must supply a new temp dir - the test is deterministic and can't choose one randomly itself.
 TMPDIR="$(mktemp -d)"
 export TMPDIR
-
-# Set the example move package for the simtest static initializer
-# https://github.com/MystenLabs/sui/blob/7bc276d534c6c758ac2cfefe96431c2b1318ca01/crates/sui-proc-macros/src/lib.rs#L52
-root_dir=$(git rev-parse --show-toplevel)
-export SIMTEST_STATIC_INIT_MOVE=$root_dir"/examples/move/basics"
 
 # Apply msim cfg flags via RUSTFLAGS env var rather than `--config build.rustflags`.
 # Cargo's RUSTFLAGS env var has *higher* priority than `--config build.rustflags`,

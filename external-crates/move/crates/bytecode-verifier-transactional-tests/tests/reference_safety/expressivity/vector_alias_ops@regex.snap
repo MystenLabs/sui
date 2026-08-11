@@ -1,0 +1,24 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, lines 26-43:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::push_with_elem_borrow_invalid'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::push_with_elem_borrow_invalid,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 11)],
+}
+
+task 2, lines 45-61:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::swap_with_elem_borrow_invalid'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x4::swap_with_elem_borrow_invalid,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 14)],
+}

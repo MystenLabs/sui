@@ -46,16 +46,24 @@ impl Processor for ProtocolConfigsPipeline {
             );
         };
 
-        let configs = protocol_config
-            .attr_map()
-            .into_iter()
-            .map(|(k, v)| (k, v.map(|v| v.to_string())))
-            .collect();
-        let flags = protocol_config.feature_map();
+        // The lossless `configs` map carries every attribute (scalar and non-scalar) at this
+        // protocol version. Unset fields render as `NullValue`; we keep them so downstream
+        // readers see the stable keyset. Feature flags merge in alongside attributes so the
+        // map is a single complete view.
+        let mut configs = protocol_config
+            .render::<prost_types::Value>(&mut mysten_common::rpc_format::Unmetered)
+            .context("rendering protocol config to prost Value")?;
+        for (k, v) in protocol_config.feature_map() {
+            let old = configs.insert(k, prost_types::Value::from(v));
+            debug_assert!(
+                old.is_none(),
+                "feature flags and attributes can't have keys which are the same",
+            );
+        }
 
         let entry = tables::make_entry(
             tables::protocol_configs::encode_key(protocol_version.as_u64()),
-            tables::protocol_configs::encode(&configs, &flags)?,
+            tables::protocol_configs::encode(&configs),
             None,
         );
 

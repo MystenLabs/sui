@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
   ┌─ tests/move_check/feature_gate/dot_call.move:4:5
   │
 4 │     public use fun imm as S.f;
@@ -13,7 +13,7 @@ error[E13001]: feature is not supported in specified edition
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
    ┌─ tests/move_check/feature_gate/dot_call.move:13:9
    │
 13 │         use fun mut as S.g;
@@ -21,7 +21,7 @@ error[E13001]: feature is not supported in specified edition
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
    ┌─ tests/move_check/feature_gate/dot_call.move:14:9
    │
 14 │         s.imm();
@@ -29,7 +29,7 @@ error[E13001]: feature is not supported in specified edition
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
    ┌─ tests/move_check/feature_gate/dot_call.move:15:9
    │
 15 │         s.f();
@@ -37,7 +37,7 @@ error[E13001]: feature is not supported in specified edition
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
    ┌─ tests/move_check/feature_gate/dot_call.move:16:9
    │
 16 │         s.mut();
@@ -45,7 +45,7 @@ error[E13001]: feature is not supported in specified edition
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
    ┌─ tests/move_check/feature_gate/dot_call.move:17:9
    │
 17 │         s.g();
@@ -53,7 +53,7 @@ error[E13001]: feature is not supported in specified edition
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
    ┌─ tests/move_check/feature_gate/dot_call.move:18:9
    │
 18 │         s.val();

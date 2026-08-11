@@ -54,40 +54,39 @@ impl CheckpointFetcher for LedgerGrpcReader {
     }
 }
 
-/// Recover the gap `lo..=hi` by reading checkpoints from kv-rpc, processing them through the
-/// existing streaming pipeline, and broadcasting in order. Each chunk waits for the kv-rpc
-/// indexer to reach the chunk's upper bound before fetching, so partial progress is broadcast
-/// as the indexer catches up rather than waiting for the entire gap to be available.
+/// Recover the gap `lo..=hi_inclusive` by reading checkpoints from kv-rpc, processing them
+/// through the existing streaming pipeline, and broadcasting in order. Each chunk waits for the
+/// kv-rpc indexer to reach the chunk's upper bound before fetching, so partial progress is
+/// broadcast as the indexer catches up rather than waiting for the entire gap to be available.
 pub(crate) async fn recover_gap<F: CheckpointFetcher>(
     fetcher: &F,
     watermarks_rx: &watch::Receiver<Arc<Watermarks>>,
     sender: &broadcast::Sender<Arc<ProcessedCheckpoint>>,
     lo: u64,
-    hi: u64,
+    hi_inclusive: u64,
     chunk_size: usize,
 ) -> anyhow::Result<()> {
-    if lo > hi {
+    if lo > hi_inclusive {
         return Ok(());
     }
 
     let mask = checkpoint_field_mask();
     let chunk_size = chunk_size.max(1) as u64;
     let mut cursor = lo;
+    let mut watermarks_rx = watermarks_rx.clone();
 
-    while cursor <= hi {
-        let chunk_hi = (cursor + chunk_size - 1).min(hi);
+    while cursor <= hi_inclusive {
+        let chunk_hi_inclusive = (cursor + chunk_size - 1).min(hi_inclusive);
 
-        wait_for_pipelines_catching_up_at(chunk_hi, watermarks_rx).await?;
+        wait_for_pipelines_catching_up_at(chunk_hi_inclusive, &mut watermarks_rx).await?;
 
-        let chunk = fetch_chunk(fetcher, &mask, cursor..=chunk_hi).await?;
-
-        for proto in chunk {
-            let processed = process_checkpoint(proto)?;
+        let processed = fetch_and_process(fetcher, &mask, cursor..=chunk_hi_inclusive).await?;
+        for cp in processed {
             // Ignore send errors: no active subscribers is a normal state during recovery.
-            let _ = sender.send(Arc::new(processed));
+            let _ = sender.send(cp);
         }
 
-        cursor = chunk_hi + 1;
+        cursor = chunk_hi_inclusive + 1;
     }
 
     Ok(())
@@ -98,23 +97,23 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
 /// (Postgres, serves package resolution from the DB). Recovered checkpoints don't go
 /// through `index_and_broadcast`, so subscribers resolving their packages fall through
 /// to the DB and need `kv_packages` to be ready.
-async fn wait_for_pipelines_catching_up_at(
+pub(crate) async fn wait_for_pipelines_catching_up_at(
     target: u64,
-    watermarks_rx: &watch::Receiver<Arc<Watermarks>>,
+    watermarks_rx: &mut watch::Receiver<Arc<Watermarks>>,
 ) -> anyhow::Result<()> {
-    let mut rx = watermarks_rx.clone();
-    rx.wait_for(|w| {
-        let pipelines = w.per_pipeline();
-        let caught_up = |name| {
-            pipelines
-                .get(name)
-                .is_some_and(|p| p.hi().checkpoint() >= target)
-        };
-        caught_up(LEDGER_GRPC_PIPELINE) && caught_up(KV_PACKAGES_PIPELINE)
-    })
-    .await
-    .ok()
-    .context("Watermark task shut down before pipelines caught up")?;
+    watermarks_rx
+        .wait_for(|w| {
+            let pipelines = w.per_pipeline();
+            let caught_up = |name| {
+                pipelines
+                    .get(name)
+                    .is_some_and(|p| p.hi().checkpoint() >= target)
+            };
+            caught_up(LEDGER_GRPC_PIPELINE) && caught_up(KV_PACKAGES_PIPELINE)
+        })
+        .await
+        .ok()
+        .context("Watermark task shut down before pipelines caught up")?;
     Ok(())
 }
 
@@ -130,6 +129,20 @@ async fn fetch_chunk<F: CheckpointFetcher>(
     try_join_all(futures).await
 }
 
+/// Fetch every checkpoint in `range` from kv-rpc in parallel and parse each into a
+/// `ProcessedCheckpoint`, returning them in input order.
+pub(super) async fn fetch_and_process<F: CheckpointFetcher>(
+    fetcher: &F,
+    mask: &FieldMask,
+    range: RangeInclusive<u64>,
+) -> anyhow::Result<Vec<Arc<ProcessedCheckpoint>>> {
+    fetch_chunk(fetcher, mask, range)
+        .await?
+        .into_iter()
+        .map(|p| process_checkpoint(p).map(Arc::new))
+        .collect()
+}
+
 /// Fetch one checkpoint via `GetCheckpoint`, retrying every error as transient with exponential
 /// backoff and no overall deadline.
 ///
@@ -142,7 +155,7 @@ async fn fetch_chunk<F: CheckpointFetcher>(
 /// retention bump, etc.).
 ///
 /// TODO: Emit metrics so ops can alert on stuck recovery.
-async fn fetch_one_with_retry<F: CheckpointFetcher>(
+pub(super) async fn fetch_one_with_retry<F: CheckpointFetcher>(
     fetcher: &F,
     mask: &FieldMask,
     seq: u64,
@@ -174,146 +187,27 @@ async fn fetch_one_with_retry<F: CheckpointFetcher>(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    use std::sync::Mutex;
     use std::time::Duration;
 
-    use sui_rpc::proto::sui::rpc::v2 as grpc;
-    use sui_sdk_types::Bitmap;
-    use sui_sdk_types::Bls12381Signature;
-    use sui_sdk_types::ValidatorAggregatedSignature as SdkValidatorAggregatedSignature;
-    use sui_types::crypto::AggregateAuthoritySignature;
-    use sui_types::gas::GasCostSummary;
-    use sui_types::messages_checkpoint::CheckpointContents as NativeCheckpointContents;
-    use sui_types::messages_checkpoint::CheckpointSummary as NativeCheckpointSummary;
     use tokio::time::timeout;
 
     use super::*;
-
-    /// Build a fully deserializable test `ProtoCheckpoint` with empty contents and a zero
-    /// signature. `process_checkpoint` parses (but does not verify) the signature, so the
-    /// all-zero bytes are accepted.
-    fn make_test_proto_checkpoint(seq: u64) -> ProtoCheckpoint {
-        let contents = NativeCheckpointContents::new_with_digests_only_for_tests(vec![]);
-        let summary = NativeCheckpointSummary {
-            epoch: 0,
-            sequence_number: seq,
-            network_total_transactions: 0,
-            content_digest: *contents.digest(),
-            previous_digest: None,
-            epoch_rolling_gas_cost_summary: GasCostSummary::default(),
-            timestamp_ms: 0,
-            checkpoint_commitments: vec![],
-            end_of_epoch_data: None,
-            version_specific_data: vec![],
-        };
-        // Use the default `AggregateAuthoritySignature` bytes rather than all-zeros: the
-        // proto → sui_types conversion in `process_checkpoint` calls
-        // `AggregateAuthoritySignature::from_bytes` and expects the BLS encoding to round-trip,
-        // which all-zero bytes do not satisfy.
-        let default_bls_bytes: [u8; 48] = AggregateAuthoritySignature::default()
-            .as_ref()
-            .try_into()
-            .expect("BLS aggregate signature is 48 bytes");
-        let sdk_sig = SdkValidatorAggregatedSignature {
-            epoch: 0,
-            signature: Bls12381Signature::new(default_bls_bytes),
-            bitmap: Bitmap::default(),
-        };
-
-        let mut summary_bcs = grpc::Bcs::default();
-        summary_bcs.value = Some(bcs::to_bytes(&summary).unwrap().into());
-        let mut summary_proto = grpc::CheckpointSummary::default();
-        summary_proto.bcs = Some(summary_bcs);
-
-        let mut contents_bcs = grpc::Bcs::default();
-        contents_bcs.value = Some(bcs::to_bytes(&contents).unwrap().into());
-        let mut contents_proto = grpc::CheckpointContents::default();
-        contents_proto.bcs = Some(contents_bcs);
-
-        let mut cp = ProtoCheckpoint::default();
-        cp.sequence_number = Some(seq);
-        cp.summary = Some(summary_proto);
-        cp.contents = Some(contents_proto);
-        cp.signature = Some(sdk_sig.into());
-        cp
-    }
-
-    /// Per-key behavior of the mock fetcher.
-    #[derive(Debug, Clone)]
-    enum FetcherBehavior {
-        /// Always return `Ok(Some(make_test_proto_checkpoint(seq)))`.
-        Success,
-        /// Return `Err` for the first N calls, then `Ok(Some(...))` afterward.
-        ErrorThenSuccess(usize),
-        /// Return `Ok(None)` for the first N calls, then `Ok(Some(...))` afterward.
-        NoneThenSuccess(usize),
-    }
-
-    struct MockFetcher {
-        state: Mutex<HashMap<u64, (FetcherBehavior, usize)>>,
-    }
-
-    impl MockFetcher {
-        fn new(setup: HashMap<u64, FetcherBehavior>) -> Self {
-            Self {
-                state: Mutex::new(setup.into_iter().map(|(k, v)| (k, (v, 0))).collect()),
-            }
-        }
-
-        fn calls_for(&self, seq: u64) -> usize {
-            self.state.lock().unwrap().get(&seq).map_or(0, |(_, c)| *c)
-        }
-    }
-
-    impl CheckpointFetcher for MockFetcher {
-        async fn fetch_checkpoint(
-            &self,
-            seq: u64,
-            _mask: &FieldMask,
-        ) -> anyhow::Result<Option<ProtoCheckpoint>> {
-            let (behavior, calls) = {
-                let mut state = self.state.lock().unwrap();
-                let entry = state
-                    .get_mut(&seq)
-                    .unwrap_or_else(|| panic!("MockFetcher: unconfigured key {seq}"));
-                entry.1 += 1;
-                (entry.0.clone(), entry.1)
-            };
-
-            match behavior {
-                FetcherBehavior::Success => Ok(Some(make_test_proto_checkpoint(seq))),
-                FetcherBehavior::ErrorThenSuccess(n) => {
-                    if calls <= n {
-                        Err(anyhow!("simulated transient error for cp {seq}"))
-                    } else {
-                        Ok(Some(make_test_proto_checkpoint(seq)))
-                    }
-                }
-                FetcherBehavior::NoneThenSuccess(n) => {
-                    if calls <= n {
-                        Ok(None)
-                    } else {
-                        Ok(Some(make_test_proto_checkpoint(seq)))
-                    }
-                }
-            }
-        }
-    }
+    use crate::task::streaming::test_utils::FetcherBehavior;
+    use crate::task::streaming::test_utils::MockFetcher;
 
     fn fetcher(setup: &[(u64, FetcherBehavior)]) -> MockFetcher {
-        MockFetcher::new(setup.iter().cloned().collect::<HashMap<_, _>>())
+        MockFetcher::from_setup(setup)
     }
 
     fn recovery_watermarks(
-        hi: u64,
+        hi_inclusive: u64,
     ) -> (
         watch::Sender<Arc<Watermarks>>,
         watch::Receiver<Arc<Watermarks>>,
     ) {
         watch::channel(Arc::new(Watermarks::for_test(&[
-            (LEDGER_GRPC_PIPELINE, hi),
-            (KV_PACKAGES_PIPELINE, hi),
+            (LEDGER_GRPC_PIPELINE, hi_inclusive),
+            (KV_PACKAGES_PIPELINE, hi_inclusive),
         ])))
     }
 
@@ -324,7 +218,7 @@ mod tests {
     fn drain_broadcast(receiver: &mut broadcast::Receiver<Arc<ProcessedCheckpoint>>) -> Vec<u64> {
         let mut received = Vec::new();
         while let Ok(cp) = receiver.try_recv() {
-            received.push(cp.sequence_number);
+            received.push(cp.summary.sequence_number);
         }
         received
     }

@@ -1,0 +1,19 @@
+// Two parallel loops sharing a post-block. Neither loop's header dominates
+// the post-block (block 3), so the NMG dom check (Algorithm 2 line 8) keeps
+// block 3 in succ_nodes for both loops and out of either loop's loop_nodes.
+// The structurer emits both Reduced loops as siblings inside an if/else,
+// with Block(3) as the trailing sibling - no gotos, no synthetic sinks.
+//
+// 0 → 1, 4
+// 1 → 2, 3     (loop A head; back-edge from 2)
+// 2 → 1
+// 4 → 5, 3     (loop B head; back-edge from 5)
+// 5 → 4
+// 3 → return
+
+cond,0,1,4
+cond,1,2,3
+code,2,1
+cond,4,5,3
+code,5,4
+code,3

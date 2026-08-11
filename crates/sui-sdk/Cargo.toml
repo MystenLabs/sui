@@ -8,11 +8,8 @@ edition = "2024"
 
 # This needs to be specified, in addition to the same setting
 # in the workspace Cargo.toml.
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = [
-  'cfg(msim)',
-  'cfg(fail_points)',
-] }
+[lints]
+workspace = true
 
 [dependencies]
 anyhow.workspace = true

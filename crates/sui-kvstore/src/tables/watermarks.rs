@@ -5,19 +5,23 @@
 //!
 //! A row in the `v1` schema has one cell per [`WatermarkV1`] field (u64 big-endian), plus a
 //! schema-version tag cell and an optional BCS-encoded [`WatermarkV0`] cell:
-//! - `ehi` / `chi` / `th` / `tmhi` / `rl` / `ph` / `ptm`: per-field u64 BE cells. `chi`
-//!   (checkpoint_hi_inclusive) is absent when the committer has not observed a checkpoint
-//!   yet (`Option<u64>::None`).
+//! - `ehi` / `chi` / `th` / `tmhi` / `rl` / `ph` / `ptm` / `b`: per-field u64 BE
+//!   cells. `chi` (checkpoint_hi_inclusive) is absent when the committer has not
+//!   observed a checkpoint yet (`Option<u64>::None`).
 //! - `v`: u64 BE schema version. Rows in the current schema carry `v = SCHEMA_V1`;
 //!   `create_pipeline_watermark_if_absent` keys off this cell to detect row existence,
 //!   and a future format migration can bump it to branch read behavior.
 //! - `w` (v0): BCS-encoded [`WatermarkV0`], kept in sync alongside the per-field cells so
 //!   existing BCS consumers keep working.
-
+//! - `b` (bitmap-only): replay-floor checkpoint for the currently-active bitmap bucket.
+//!   `init_watermark` resumes from just before this checkpoint so the active bucket is
+//!   rebuilt after a crash. `0` means no bucket transition has been observed yet. Absent
+//!   on non-bitmap pipelines and older rows.
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
 use bytes::Bytes;
+use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 
 use crate::WatermarkV0;
 use crate::WatermarkV1;
@@ -38,6 +42,9 @@ pub mod col {
     /// Per-pipeline chain id (raw 32 bytes). Independent of the `v1` schema cells —
     /// written by `accepts_chain_id` and ignored by watermark decoding.
     pub const CHAIN_ID: &str = "cid";
+    /// Bitmap-only: u64 BE replay-floor checkpoint for the active bucket.
+    /// See module docs.
+    pub const BUCKET_START_CP: &str = "b";
 }
 
 /// Current schema version written into the `v` cell.
@@ -52,6 +59,42 @@ pub fn encode_key(pipeline: &str) -> Vec<u8> {
 /// Single `(w, BCS)` cell. Used by tests that seed v0-format data.
 pub fn encode_v0(v0: &WatermarkV0) -> Result<(&'static str, Bytes)> {
     Ok((col::WATERMARK_V0, Bytes::from(bcs::to_bytes(v0)?)))
+}
+
+fn u64_be(v: u64) -> Bytes {
+    Bytes::copy_from_slice(&v.to_be_bytes())
+}
+
+/// Cells for a committer-watermark write: the v1 committer fields + the BCS v0 cell + an
+/// optional bitmap `b` cell. Used by `BigTableClient::set_committer_watermark_cells`.
+/// Reader/pruner columns are written separately by `ConcurrentConnection`.
+pub fn encode_committer_cells(
+    watermark: &CommitterWatermark,
+    bucket_start_cp: Option<u64>,
+) -> Result<Vec<(&'static str, Bytes)>> {
+    let v0 = WatermarkV0 {
+        epoch_hi_inclusive: watermark.epoch_hi_inclusive,
+        checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
+        tx_hi: watermark.tx_hi,
+        timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
+    };
+    let mut cells = vec![
+        (col::EPOCH_HI, u64_be(watermark.epoch_hi_inclusive)),
+        (
+            col::CHECKPOINT_HI,
+            u64_be(watermark.checkpoint_hi_inclusive),
+        ),
+        (col::TX_HI, u64_be(watermark.tx_hi)),
+        (
+            col::TIMESTAMP_MS_HI,
+            u64_be(watermark.timestamp_ms_hi_inclusive),
+        ),
+        (col::WATERMARK_V0, Bytes::from(bcs::to_bytes(&v0)?)),
+    ];
+    if let Some(cp) = bucket_start_cp {
+        cells.push((col::BUCKET_START_CP, u64_be(cp)));
+    }
+    Ok(cells)
 }
 
 fn decode_u64_be(val: &Bytes, col_name: &str) -> Result<u64> {
@@ -70,7 +113,8 @@ fn decode_u64_be(val: &Bytes, col_name: &str) -> Result<u64> {
 /// Strict read of the v1 cells. Returns `Ok(None)` if the schema-version `v` cell is absent
 /// (v0-only row or row does not exist). Bails on unknown schema versions, and on missing
 /// required field cells when `v` is present (which would indicate data corruption since all
-/// field cells are written atomically with `v`). `chi` is the only optional field.
+/// required field cells are written atomically with `v`). `chi` and the bitmap-only `b`
+/// field are optional.
 pub fn decode_v1(row: &[(Bytes, Bytes)]) -> Result<Option<WatermarkV1>> {
     let mut schema_version: Option<&Bytes> = None;
     let mut epoch_hi: Option<&Bytes> = None;
@@ -80,6 +124,7 @@ pub fn decode_v1(row: &[(Bytes, Bytes)]) -> Result<Option<WatermarkV1>> {
     let mut reader_lo: Option<&Bytes> = None;
     let mut pruner_hi: Option<&Bytes> = None;
     let mut pruner_timestamp_ms: Option<&Bytes> = None;
+    let mut bucket_start_cp: Option<&Bytes> = None;
     for (col, val) in row {
         match col.as_ref() {
             b if b == col::SCHEMA_VERSION.as_bytes() => schema_version = Some(val),
@@ -90,6 +135,7 @@ pub fn decode_v1(row: &[(Bytes, Bytes)]) -> Result<Option<WatermarkV1>> {
             b if b == col::READER_LO.as_bytes() => reader_lo = Some(val),
             b if b == col::PRUNER_HI.as_bytes() => pruner_hi = Some(val),
             b if b == col::PRUNER_TIMESTAMP_MS.as_bytes() => pruner_timestamp_ms = Some(val),
+            b if b == col::BUCKET_START_CP.as_bytes() => bucket_start_cp = Some(val),
             _ => {}
         }
     }
@@ -114,6 +160,9 @@ pub fn decode_v1(row: &[(Bytes, Bytes)]) -> Result<Option<WatermarkV1>> {
         reader_lo: decode_required(reader_lo, col::READER_LO)?,
         pruner_hi: decode_required(pruner_hi, col::PRUNER_HI)?,
         pruner_timestamp_ms: decode_required(pruner_timestamp_ms, col::PRUNER_TIMESTAMP_MS)?,
+        bucket_start_cp: bucket_start_cp
+            .map(|v| decode_u64_be(v, col::BUCKET_START_CP))
+            .transpose()?,
     }))
 }
 

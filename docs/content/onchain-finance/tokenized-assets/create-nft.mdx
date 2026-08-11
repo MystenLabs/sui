@@ -1,41 +1,55 @@
 ---
 title: Create a Non-Fungible Token
-description: Create NFTs on Sui using the native object model, without needing a dedicated token standard.
-keywords: [ERC-721, NFT, non-fungible token, digital collectibles, tokenized assets, fungible token, asset tokenization, Move, mint, kiosk, soulbound, gaming assets, object model]
+description: >-
+  Create NFTs on Sui using the native object model, without needing a dedicated
+  token standard.
+keywords:
+  - ERC-721
+  - NFT
+  - non-fungible token
+  - digital collectibles
+  - tokenized assets
+  - fungible token
+  - asset tokenization
+  - Move
+  - mint
+  - kiosk
+  - soulbound
+  - gaming assets
+  - object model
+goal:
+  description: >-
+    Reader can create NFTs on Sui using the native object model, without needing
+    a dedicated token standard
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I create an NFT on Sui?
+  - What are the common use cases for NFTs on Sui?
+  - How do I set up Object Display for an NFT?
+answer: >-
+  On Sui, every object is unique and has an owner, properties that other
+  blockchains like Ethereum require a dedicated standard such as
+  [ERC-721](https://erc721.org/) to achieve.
 ---
 
 On Sui, every object is unique and has an owner, properties that other blockchains like Ethereum require a dedicated standard such as [ERC-721](https://erc721.org/) to achieve.
 
 ```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    primaryColor: '#000000'
-    primaryTextColor: '#FFFFFF'
-    primaryBorderColor: '#6C7584'
-    secondaryColor: '#6C7584'
-    secondaryTextColor: '#FFFFFF'
-    tertiaryColor: '#298DFF'
-    tertiaryTextColor: '#FFFFFF'
-    lineColor: '#298DFF'
-    background: '#FFFFFF'
-    mainBkg: '#000000'
-    secondBkg: '#6C7584'
-    noteBkgColor: '#E6F1FB'
-    noteTextColor: '#000000'
-    noteBorderColor: '#298DFF'
-    activationBkgColor: '#298DFF'
-    activationBorderColor: '#185FA5'
-    fontSize: '14px'
-    fontFamily: 'Inter, sans-serif'
-    signalColor: '#298DFF'
-    signalTextColor: '#298DFF'
-    labelBoxBkgColor: '#000000'
-    labelBoxBorderColor: '#6C7584'
-    labelTextColor: '#FFFFFF'
-    loopTextColor: '#FFFFFF'
----
+
 sequenceDiagram
     participant C as Caller
     participant S as Smart contract

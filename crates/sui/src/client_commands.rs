@@ -8,14 +8,15 @@ use crate::{
     upgrade_compatibility::check_compatibility,
     verifier_meter::{AccumulatingMeter, Accumulator},
 };
-use futures::TryStreamExt;
+use futures::{StreamExt, TryStreamExt};
 use std::{
-    collections::{BTreeMap, BTreeSet, btree_map::Entry},
+    collections::{BTreeMap, BTreeSet},
     fmt::{Debug, Display, Formatter, Write},
     fs,
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
+    time::Duration,
 };
 use sui_rpc::proto::sui::rpc::v2::{self as proto};
 
@@ -37,7 +38,7 @@ use move_core_types::{
     identifier::Identifier,
     language_storage::{ModuleId, StructTag, TypeTag},
 };
-use move_package_alt::{PackageLoader, schema::ModeName};
+use move_package_alt::{PackageLoader, read_publication, schema::ModeName};
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
@@ -48,20 +49,21 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    BalanceChange as RpcBalanceChange, BcsEvent, Coin, DryRunTransactionBlockResponse,
+    BalanceChange as RpcBalanceChange, BcsEvent, Coin as RpcCoin, DryRunTransactionBlockResponse,
     ObjectChange as RpcObjectChange, SuiEvent, SuiTransactionBlock, SuiTransactionBlockEffects,
     SuiTransactionBlockEvents, SuiTransactionBlockResponse,
 };
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
-use sui_move_build::{BuildConfig, CompiledPackage, PackageDependencies};
+use sui_move_build::{CompiledPackage, PackageDependencies};
 use sui_package_management::LockCommand;
 use sui_rpc_api::{
     Client,
     client::{ExecutedTransaction, SimulateTransactionResponse},
 };
 use sui_sdk::{
-    SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0, SUI_TESTNET_URL,
+    SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0, SUI_TESTNET_URL,
+    digests::chain_id_base58,
     sui_client_config::{SuiClientConfig, SuiEnv},
     sui_sdk_types::bcs::ToBcs,
     wallet_context::WalletContext,
@@ -69,7 +71,7 @@ use sui_sdk::{
 use sui_types::{
     SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
     base_types::{FullObjectID, ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress},
-    coin::{COIN_MODULE_NAME, COIN_STRUCT_NAME},
+    coin::{COIN_MODULE_NAME, COIN_STRUCT_NAME, Coin},
     crypto::{EmptySignInfo, SignatureScheme},
     digests::TransactionDigest,
     effects::TransactionEffectsAPI,
@@ -77,7 +79,7 @@ use sui_types::{
     event::EventID,
     execution_status::{ExecutionFailure, ExecutionStatus},
     gas::GasCostSummary,
-    gas_coin::GasCoin,
+    gas_coin::{GAS, GasCoin},
     message_envelope::Envelope,
     metrics::BytecodeVerifierMetrics,
     move_package::{MovePackage, UpgradeCap},
@@ -87,8 +89,8 @@ use sui_types::{
     signature::GenericSignature,
     sui_sdk_types_conversions::type_tag_sdk_to_core,
     transaction::{
-        Argument, Command, FundsWithdrawalArg, GasData, InputObjectKind, ObjectArg,
-        SenderSignedData, SharedObjectMutability, Transaction, TransactionData, TransactionDataAPI,
+        Argument, Command, FundsWithdrawalArg, GasData, ObjectArg, SenderSignedData,
+        SharedObjectMutability, Transaction, TransactionData, TransactionDataAPI,
         TransactionExpiration, TransactionKind,
     },
 };
@@ -112,9 +114,15 @@ use move_package_alt::{
 use move_symbol_pool::Symbol;
 use sui_keys::key_derive;
 use sui_package_alt::{BuildParams, SuiFlavor, find_environment};
-use sui_source_validation::{BytecodeSourceVerifier, ValidationMode};
-use sui_types::digests::ChainIdentifier;
+use sui_source_verification::{ToolchainSource, VerifiedMetadata, verify_built, verify_source};
 use tracing::{debug, info};
+
+/// Concurrency level for fetching coin metadata for balances.
+const NUM_CONCURRENCY_REQS: usize = 8;
+/// Rate limit for RPC calls to avoid being throttled by the server. This is equivalent to 20rps.
+const RATE_LIMIT_MILLIS: u64 = 50;
+/// Handed to users whose CLI has fallen behind the network's protocol version.
+const CLI_INSTALL_DOCS: &str = "https://docs.sui.io/guides/developer/getting-started/sui-install";
 
 pub(crate) static USER_AGENT: &str =
     concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
@@ -187,9 +195,18 @@ pub enum SuiClientCommands {
         processing: TxProcessingArgs,
     },
 
-    /// Query the chain identifier from the rpc endpoint.
+    /// Query the chain identifier from the rpc endpoint. Prints it in both encodings: the full
+    /// Base58-encoded genesis checkpoint digest (as returned by the gRPC and GraphQL APIs) and
+    /// the legacy hex short form. Either can be used as a chain ID in the `[environments]`
+    /// section of `Move.toml`.
+    ///
+    /// Use --format=[base58|hex] to print only the specified format.
     #[clap(name = "chain-identifier")]
-    ChainIdentifier,
+    ChainIdentifier {
+        /// The format for chain identifier output, either base58 or hex.
+        #[clap(long, required = false)]
+        format: Option<ChainIdentifierFormat>,
+    },
 
     /// Query a dynamic field by its address.
     #[clap(name = "dynamic-field")]
@@ -395,19 +412,20 @@ pub enum SuiClientCommands {
         amount: Option<u64>,
 
         /// Send all coins of the specified type to the recipient's address balance.
-        /// Conflicts with --amount and --stateless.
-        #[clap(long, conflicts_with_all = ["amount", "stateless"])]
+        /// Conflicts with --amount and --from-address-balance.
+        #[clap(long, conflicts_with_all = ["amount", "from_address_balance"])]
         all_coins: bool,
 
         /// The coin type to send (e.g., "0x2::sui::SUI"). Defaults to SUI.
         #[clap(long, value_parser = parse_sui_type_tag)]
         coin_type: Option<TypeTag>,
 
-        /// If set, draws all funds (including gas payment) from the sender's address balances.
-        /// This creates a fully stateless transaction with no owned object inputs.
+        /// Draw the funds from the sender's address balance rather than from their coins. Without
+        /// this, coins are preferred and the address balance is only used if they cannot cover the
+        /// amount. Either way the recipient is paid into their address balance.
         /// Conflicts with --all-coins.
         #[clap(long, conflicts_with = "all_coins")]
-        stateless: bool,
+        from_address_balance: bool,
 
         #[clap(flatten)]
         gas_data: GasDataArgs,
@@ -453,7 +471,7 @@ pub enum SuiClientCommands {
         name = "test-publish",
         after_long_help = "The `test-publish` command is used to publish packages ephemerally, i.e. without recording the published addresses in the main `Published.toml` file. Running `sui client test-publish --pubfile-path <pubfile> --build-env <env>` will build the package for environment <env>, but will publish it on the current network, taking the dependency addresses from <pubfile>. It will also record the publication information for the package in <pubfile>. \n\
                 \n\
-                See https://docs.sui.io/guides/developer/sui-101/move-package-management for more information."
+                See https://docs.sui.io/guides/developer/packages/move-package-management for more information."
     )]
     TestPublish(TestPublishArgs),
 
@@ -465,7 +483,7 @@ pub enum SuiClientCommands {
         name = "test-upgrade",
         after_long_help = "The `test-upgrade` command is used to upgrade ephemeral packages, for packages published using `test-publish` command. This does not write publication info to `Published.toml` file. Running `sui client test-upgrade --pubfile-path <pubfile> --build-env <env>` will build the package for environment <env>, but will publish it on the current network, taking the dependency addresses from <pubfile>. It will also record the publication information for the package in <pubfile>. \n\
             \n\
-            See https://docs.sui.io/guides/developer/sui-101/move-package-management for more information."
+            See https://docs.sui.io/guides/developer/packages/move-package-management for more information."
     )]
     TestUpgrade(TestUpgradeArgs),
 
@@ -605,29 +623,34 @@ pub enum SuiClientCommands {
         build_config: MoveBuildConfig,
     },
 
-    /// Verify local Move packages against on-chain packages, and optionally their dependencies.
+    /// Verify that a local Move source package compiles to an on-chain package's bytecode and
+    /// linkage, rebuilding it with the toolchain version it was published with.
     #[clap(name = "verify-source")]
     VerifySource {
         /// Path to directory containing a Move package
-        #[clap(name = "package_path", global = true, default_value = ".")]
+        #[clap(name = "package_path", default_value = ".")]
         package_path: PathBuf,
 
         /// Package build options
         #[clap(flatten)]
         build_config: MoveBuildConfig,
 
-        /// Verify on-chain dependencies.
+        /// Override the toolchain (compiler) version used to rebuild the package, instead of
+        /// reading it from the package's publish metadata.
         #[clap(long)]
-        verify_deps: bool,
+        toolchain_version: Option<String>,
 
-        /// Don't verify source (only valid if --verify-deps is enabled).
-        #[clap(long)]
-        skip_source: bool,
+        /// Rebuild with the `sui` binary at this path instead of downloading a release. Skips
+        /// toolchain-version resolution and the download; cannot be combined with
+        /// `--toolchain-version`.
+        #[clap(long, value_name = "PATH", conflicts_with = "toolchain_version")]
+        toolchain: Option<PathBuf>,
 
-        /// If specified, override the addresses for the package's own modules with this address.
-        /// Only works for unpublished modules (whose addresses are currently 0x0).
-        #[clap(long)]
-        address_override: Option<ObjectID>,
+        /// Compare the modules already compiled under `<package_path>/build` against the on-chain
+        /// package with this id, without rebuilding. Only module bytecode is compared, not linkage.
+        /// Intended for tooling such as the debugger.
+        #[clap(long, hide = true, value_name = "ON_CHAIN_ID")]
+        verify_only: Option<ObjectID>,
     },
 
     /// Remove an existing address by its alias or hexadecimal string.
@@ -713,10 +736,10 @@ pub struct TxProcessingArgs {
     /// private key corresponding to this address is not in keystore.
     #[arg(long, required = false, value_parser)]
     pub sender: Option<SuiAddress>,
-    /// Submit the transaction without signatures for forked networks that support sender
-    /// impersonation. This is only intended for local forked-network testing.
+    /// Do not sign the transaction. This is only intended for local forked networks that
+    /// support sender impersonation.
     #[arg(long)]
-    pub forking_mode: bool,
+    pub skip_signing: bool,
 }
 
 #[derive(Args, Debug, Default)]
@@ -795,6 +818,14 @@ pub struct UpgradeArgs {
     pub processing: TxProcessingArgs,
 }
 
+/// The format for chain identifier output, either base58 or hex.
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ChainIdentifierFormat {
+    Base58,
+    Hex,
+}
+
 /// Returns the pubfile path, or a default based on the environment alias if not specified
 fn get_pubfile_path_or_default(pubfile_path: Option<&PathBuf>, alias: &str) -> PathBuf {
     pubfile_path
@@ -819,6 +850,18 @@ pub struct TestUpgradeArgs {
 #[derive(serde::Deserialize, Debug)]
 struct FaucetResponse {
     error: Option<String>,
+}
+
+/// The protocol limits that bound how many coins a single transaction can drain.
+struct CoinLimits {
+    /// Maximum number of objects a gas payment may contain.
+    max_gas_payment_objects: usize,
+    /// Maximum number of arguments a single command may take. A command's target does not count
+    /// towards this, and the limit is exclusive.
+    max_arguments: usize,
+    /// Maximum number of object inputs a transaction may have. The gas payment does not count
+    /// towards this.
+    max_input_objects: usize,
 }
 
 impl SuiClientCommands {
@@ -866,68 +909,19 @@ impl SuiClientCommands {
                 let _ = context.cache_chain_id().await?;
 
                 let client = context.grpc_client()?;
-                let coin_type = if let Some(ty) = coin_type {
-                    let ty = ty.parse::<TypeTag>()?;
-                    sui_types::coin::Coin::type_(ty)
-                } else {
-                    StructTag {
-                        address: SUI_FRAMEWORK_ADDRESS,
-                        name: COIN_STRUCT_NAME.to_owned(),
-                        module: COIN_MODULE_NAME.to_owned(),
-                        type_params: vec![],
-                    }
-                };
+                let coin_type = coin_type
+                    .map(|coin_type| coin_type.parse::<StructTag>())
+                    .transpose()?;
+                let mut balances =
+                    balance_outputs_for_address(&client, address, coin_type.as_ref()).await?;
 
-                let objects: Vec<Coin> = client
-                    .list_owned_objects(address, Some(coin_type))
-                    .try_filter_map(|o| async move {
-                        let Ok(Some((coin_type, balance))) =
-                            sui_types::coin::Coin::extract_balance_if_coin(&o)
-                        else {
-                            return Ok(None);
-                        };
-                        Ok(Some(Coin {
-                            coin_type: coin_type.to_canonical_string(true),
-                            coin_object_id: o.id(),
-                            version: o.version(),
-                            digest: o.digest(),
-                            balance,
-                            previous_transaction: o.previous_transaction,
-                        }))
-                    })
-                    .try_collect()
-                    .await?;
-
-                fn canonicalize_type(type_: &str) -> Result<String, anyhow::Error> {
-                    Ok(TypeTag::from_str(type_)
-                        .context("Cannot parse coin type")?
-                        .to_canonical_string(/* with_prefix */ true))
+                if with_coins {
+                    attach_owned_coin_objects(&client, address, coin_type.as_ref(), &mut balances)
+                        .await?;
                 }
 
-                let mut coins_by_type = BTreeMap::new();
-                for c in objects {
-                    let coins = match coins_by_type.entry(canonicalize_type(&c.coin_type)?) {
-                        Entry::Vacant(entry) => {
-                            let ty = StructTag::from_str(&c.coin_type)?;
-                            let metadata = client.get_coin_info(&ty).await.ok();
-
-                            &mut entry.insert((metadata, vec![])).1
-                        }
-                        Entry::Occupied(entry) => &mut entry.into_mut().1,
-                    };
-
-                    coins.push(c);
-                }
-                let sui_type_tag = canonicalize_type(SUI_COIN_TYPE)?;
-
-                // show SUI first
-                let ordered_coins_sui_first = coins_by_type
-                    .remove(&sui_type_tag)
-                    .into_iter()
-                    .chain(coins_by_type.into_values())
-                    .collect();
-
-                SuiClientCommandResult::Balance(ordered_coins_sui_first, with_coins)
+                order_balance_outputs_sui_first(&mut balances);
+                SuiClientCommandResult::Balance(balances, with_coins)
             }
 
             SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
@@ -947,7 +941,6 @@ impl SuiClientCommands {
                 verify_no_test_mode(&args.build_config)?;
                 verify_no_pubfile_path(&args.build_config, "upgrade")?;
                 verify_no_build_env(&args.build_config, "upgrade")?;
-                let _ = context.cache_chain_id().await?;
                 upgrade_command(args, context, false).await?
             }
 
@@ -960,7 +953,6 @@ impl SuiClientCommands {
                 verify_no_test_mode(&args.build_config)?;
                 verify_no_pubfile_path(&args.build_config, "publish")?;
                 verify_no_build_env(&args.build_config, "publish")?;
-                let _ = context.cache_chain_id().await?;
                 let mut root_package = load_root_pkg_for_publish_upgrade(
                     context,
                     &args.build_config,
@@ -1023,8 +1015,13 @@ impl SuiClientCommands {
                 let _ = context.cache_chain_id().await?;
                 let protocol_version =
                     protocol_version.map_or(ProtocolVersion::MAX, ProtocolVersion::new);
-                let protocol_config =
-                    ProtocolConfig::get_for_version(protocol_version, Chain::Unknown);
+                let protocol_config = protocol_config_for_version(protocol_version, Chain::Unknown)
+                    .map_err(|e| {
+                        anyhow!(
+                            "Cannot meter bytecode: {e}. Either pass a supported \
+                             --protocol-version, or install a newer CLI - {CLI_INSTALL_DOCS}"
+                        )
+                    })?;
 
                 let registry = &Registry::new();
                 let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
@@ -1048,8 +1045,16 @@ impl SuiClientCommands {
 
                     (_, package_path) => {
                         let package_path = package_path.unwrap_or_else(|| PathBuf::from("."));
+                        // Meter what `sui client publish` would actually send, so build the
+                        // package the same way that command does.
+                        let root_pkg = load_root_pkg_for_publish_upgrade(
+                            context,
+                            &build_config,
+                            &package_path,
+                        )
+                        .await?;
                         let package =
-                            compile_package_simple(client, build_config, &package_path, None)
+                            compile_package(client, &root_pkg, build_config, &package_path, false)
                                 .await?;
                         let name = package
                             .package
@@ -1382,7 +1387,7 @@ impl SuiClientCommands {
                 amount,
                 all_coins,
                 coin_type,
-                stateless,
+                from_address_balance,
                 gas_data,
                 processing,
             } => {
@@ -1391,11 +1396,21 @@ impl SuiClientCommands {
                 let _ = context.cache_chain_id().await?;
                 let client = context.grpc_client()?;
 
-                let sui_type_tag =
-                    TypeTag::from_str(SUI_COIN_TYPE).expect("SUI_COIN_TYPE should be valid");
-                let coin_type_tag = coin_type.unwrap_or_else(|| sui_type_tag.clone());
+                let coin_type_tag = coin_type.unwrap_or_else(GAS::type_tag);
 
-                let is_sui = coin_type_tag == sui_type_tag;
+                let is_sui = coin_type_tag == GAS::type_tag();
+
+                if all_coins {
+                    return send_all_coins(
+                        context,
+                        signer,
+                        recipient,
+                        coin_type_tag,
+                        gas_data,
+                        processing,
+                    )
+                    .await;
+                }
 
                 let TypeTag::Struct(coin_struct_tag) = &coin_type_tag else {
                     bail!("coin type must be a struct type, got {coin_type_tag}");
@@ -1404,12 +1419,13 @@ impl SuiClientCommands {
                 let coin_balance = balance_info.coin_balance();
                 let address_balance = balance_info.address_balance();
 
-                let (amount, use_address_balance) = if all_coins {
-                    // --all-coins uses all coin balance (cannot be combined with --stateless)
-                    ensure!(coin_balance > 0, "No coins available to send");
-                    (coin_balance, false)
-                } else if let Some(amount) = amount {
-                    let use_address_balance = if stateless {
+                let (amount, use_address_balance) = if let Some(amount) = amount {
+                    let use_address_balance = if from_address_balance {
+                        ensure!(
+                            address_balance >= amount,
+                            "Insufficient address balance to send {amount} MIST. \
+                            Address balance: {address_balance}, Coin balance: {coin_balance}"
+                        );
                         true
                     } else if coin_balance >= amount {
                         false
@@ -1417,11 +1433,8 @@ impl SuiClientCommands {
                         true
                     } else {
                         bail!(
-                            "Insufficient balance to send {} MIST. \
-                            Coin balance: {}, Address balance: {}",
-                            amount,
-                            coin_balance,
-                            address_balance
+                            "Insufficient balance to send {amount} MIST. \
+                            Coin balance: {coin_balance}, Address balance: {address_balance}"
                         );
                     };
                     (amount, use_address_balance)
@@ -1455,27 +1468,23 @@ impl SuiClientCommands {
 
                     let tx_kind = TransactionKind::programmable(builder.finish());
 
-                    if stateless {
-                        dry_run_or_execute_or_serialize_with_address_balance_gas(
-                            signer, tx_kind, context, gas_data, processing,
-                        )
-                        .await?
-                    } else {
-                        dry_run_or_execute_or_serialize(
-                            signer,
-                            tx_kind,
-                            context,
-                            vec![],
-                            gas_data,
-                            processing,
-                        )
-                        .await?
-                    }
+                    // Gas is a separate concern from where the funds come from: the withdrawal
+                    // never touches the gas coin, so ordinary selection pays from the sender's
+                    // address balance whenever it can cover the budget, and their coins otherwise.
+                    dry_run_or_execute_or_serialize(
+                        signer,
+                        tx_kind,
+                        context,
+                        vec![],
+                        gas_data,
+                        processing,
+                    )
+                    .await?
                 } else {
                     ensure!(
                         is_sui,
                         "Non-SUI coin transfers using coins require explicit coin selection. \
-                        Use --stateless to transfer from address balance instead."
+                        Use --from-address-balance to transfer from your address balance instead."
                     );
                     let amount_arg = builder.pure(amount)?;
                     let coin_arg =
@@ -1554,7 +1563,7 @@ impl SuiClientCommands {
 
             SuiClientCommands::Gas { address } => {
                 let address = context.get_identity_address(address)?;
-                let coins = context
+                let coins: Vec<GasCoin> = context
                     .gas_objects(address)
                     .await?
                     .iter()
@@ -1562,7 +1571,17 @@ impl SuiClientCommands {
                     .map(|(_val, object)| GasCoin::try_from(object).unwrap())
                     .collect();
                 let _ = context.cache_chain_id().await?;
-                SuiClientCommandResult::Gas(coins)
+
+                // SUI the address holds directly. No gas object accounts for it, so it is
+                // invisible in the coin list even though it is spendable. The balance API is
+                // keyed by the coin type (`0x2::sui::SUI`), not the object type `Coin<SUI>`.
+                let address_balance = context
+                    .grpc_client()?
+                    .get_balance(address, &GAS::type_())
+                    .await?
+                    .address_balance();
+
+                SuiClientCommandResult::Gas(GasOutput::new(&coins, address_balance))
             }
             SuiClientCommands::Faucet { address, url } => {
                 let address = context.get_identity_address(address)?;
@@ -1584,9 +1603,33 @@ impl SuiClientCommands {
                 let _ = context.cache_chain_id().await?;
                 SuiClientCommandResult::NoOutput
             }
-            SuiClientCommands::ChainIdentifier => {
-                let ci = context.cache_chain_id().await?;
-                SuiClientCommandResult::ChainIdentifier(ci)
+            SuiClientCommands::ChainIdentifier { format } => {
+                // Keep populating the client.yaml chain-id cache, as other commands rely on it.
+                let hex = context.cache_chain_id().await?;
+                let base58 = chain_id_base58(&context.get_chain_identifier().await?);
+
+                match format {
+                    Some(ChainIdentifierFormat::Hex) => {
+                        return Ok(SuiClientCommandResult::ChainIdentifier(
+                            ChainIdentifierOutput {
+                                base58: "".to_string(),
+                                hex,
+                            },
+                        ));
+                    }
+                    Some(ChainIdentifierFormat::Base58) => {
+                        return Ok(SuiClientCommandResult::ChainIdentifier(
+                            ChainIdentifierOutput {
+                                base58,
+                                hex: "".to_string(),
+                            },
+                        ));
+                    }
+                    None => SuiClientCommandResult::ChainIdentifier(ChainIdentifierOutput {
+                        base58,
+                        hex,
+                    }),
+                }
             }
             SuiClientCommands::SplitCoin {
                 coin_id,
@@ -1826,50 +1869,58 @@ impl SuiClientCommands {
             SuiClientCommands::VerifySource {
                 package_path,
                 build_config,
-                verify_deps,
-                skip_source,
-                address_override,
+                toolchain_version,
+                toolchain,
+                verify_only,
             } => {
-                let mode = match (!skip_source, verify_deps, address_override) {
-                    (false, false, _) => {
-                        bail!("Source skipped and not verifying deps: Nothing to verify.")
-                    }
-
-                    (false, true, _) => ValidationMode::deps(),
-                    (true, false, None) => ValidationMode::root(),
-                    (true, true, None) => ValidationMode::root_and_deps(),
-                    (true, false, Some(at)) => ValidationMode::root_at(*at),
-                    (true, true, Some(at)) => ValidationMode::root_and_deps_at(*at),
-                };
-
-                let environment = find_environment(
-                    &package_path,
-                    build_config.environment.clone(),
-                    context,
-                    false,
-                )
-                .await?;
-
-                let mut root_pkg =
-                    load_root_pkg_for_publish_upgrade(context, &build_config, &package_path)
-                        .await?;
-                let build_config = BuildConfig {
-                    config: build_config,
-                    run_bytecode_verifier: true,
-                    print_diags_to_stderr: true,
-                    environment: environment.clone(),
-                    flavor: SuiFlavor::with_client(context),
-                };
-                let compiled_package = build_config
-                    .build_async_from_root_pkg(&mut root_pkg)
+                if let Some(on_chain_id) = verify_only {
+                    // Compare the existing build against a caller-supplied on-chain id, without
+                    // rebuilding. This path resolves no publication and no toolchain, so it has no
+                    // metadata to report.
+                    let client = context.grpc_client()?;
+                    verify_built(&package_path, on_chain_id, &client).await?;
+                    SuiClientCommandResult::VerifySource(None)
+                } else {
+                    // Resolve the environment the way the rest of the CLI does, and read the address
+                    // and toolchain from the package's own publication, so they are exactly what the
+                    // package system would resolve when linking against this package.
+                    let environment = find_environment(
+                        &package_path,
+                        build_config.environment.clone(),
+                        context,
+                        false,
+                    )
                     .await?;
 
-                let client = context.grpc_client()?;
-                BytecodeSourceVerifier::new(&client)
-                    .verify(&compiled_package, mode, &environment)
-                    .await?;
+                    let flavor = SuiFlavor::with_client(context);
+                    let publication =
+                        read_publication::<SuiFlavor>(&package_path, &environment, &flavor)
+                            .await?
+                            .with_context(|| {
+                                format!(
+                                    "package at {} records no publication for environment `{}`; \
+                                     nothing to verify against",
+                                    package_path.display(),
+                                    environment.name(),
+                                )
+                            })?;
 
-                SuiClientCommandResult::VerifySource
+                    let client = context.grpc_client()?;
+                    let toolchain = match toolchain {
+                        Some(path) => ToolchainSource::Binary(path),
+                        None => ToolchainSource::Version(toolchain_version),
+                    };
+                    let metadata = verify_source(
+                        &package_path,
+                        &publication,
+                        toolchain,
+                        &environment,
+                        &client,
+                        Some(context.config.path()),
+                    )
+                    .await?;
+                    SuiClientCommandResult::VerifySource(Some(metadata))
+                }
             }
             SuiClientCommands::PartyTransfer {
                 to,
@@ -1991,27 +2042,6 @@ fn check_dep_verification_flags(
     }
 }
 
-async fn compile_package_simple(
-    _client: Client,
-    _build_config: MoveBuildConfig,
-    _package_path: &Path,
-    _chain_id: Option<String>,
-) -> Result<CompiledPackage, anyhow::Error> {
-    // build_config.implicit_dependencies = implicit_deps(latest_system_packages());
-    // let config = BuildConfig {
-    //     config: resolve_lock_file_path(build_config, Some(package_path))?,
-    //     run_bytecode_verifier: false,
-    //     print_diags_to_stderr: false,
-    //     chain_id: chain_id.clone(),
-    // };
-    // let resolution_graph = config.resolution_graph(package_path, chain_id.clone())?;
-    // let mut compiled_package =
-    //     build_from_resolution_graph(resolution_graph, false, false, chain_id)?;
-    // pkg_tree_shake(read_api, false, &mut compiled_package).await?;
-    todo!()
-    // Ok(compiled_package)
-}
-
 pub(crate) async fn upgrade_package(
     mut client: Client,
     root_pkg: &RootPackage<SuiFlavor>,
@@ -2117,8 +2147,8 @@ pub(crate) fn check_for_unpublished_deps(
         ",
             package_dependencies
                 .unpublished
-                .into_iter()
-                .map(|n| n.to_string())
+                .values()
+                .map(|dep| dep.name.to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         );
@@ -2214,14 +2244,14 @@ impl Display for SuiClientCommandResult {
                 table.with(style);
                 write!(f, "{}", table)?
             }
-            SuiClientCommandResult::Balance(coins, with_coins) => {
-                if coins.is_empty() {
-                    return write!(f, "No coins found for this address.");
+            SuiClientCommandResult::Balance(balances, with_coins) => {
+                if balances.is_empty() {
+                    return write!(f, "No balances found for this address.");
                 }
                 let mut builder = TableBuilder::default();
-                pretty_print_balance(coins, &mut builder, *with_coins);
+                pretty_print_balance(balances, &mut builder, *with_coins);
                 let mut table = builder.build();
-                table.with(TablePanel::header("Balance of coins owned by this address"));
+                table.with(TablePanel::header("Balances owned by this address"));
                 table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
                     1,
                     TableStyle::modern().get_horizontal(),
@@ -2236,25 +2266,27 @@ impl Display for SuiClientCommandResult {
                 table.with(style);
                 write!(f, "{}", table)?
             }
-            SuiClientCommandResult::Gas(gas_coins) => {
-                let gas_coins = gas_coins
-                    .iter()
-                    .map(GasCoinOutput::from)
-                    .collect::<Vec<_>>();
-                if gas_coins.is_empty() {
+            SuiClientCommandResult::Gas(gas) => {
+                let gas_coins = &gas.gas_coins;
+                if gas_coins.is_empty() && gas.address_mist_balance == 0 {
                     write!(f, "No gas coins are owned by this address")?;
                     return Ok(());
                 }
 
                 let mut builder = TableBuilder::default();
                 builder.set_header(vec!["gasCoinId", "mistBalance (MIST)", "suiBalance (SUI)"]);
-                for coin in &gas_coins {
+                for coin in gas_coins {
                     builder.push_record(vec![
                         coin.gas_coin_id.to_string(),
                         coin.mist_balance.to_string(),
                         coin.sui_balance.to_string(),
                     ]);
                 }
+                builder.push_record(vec![
+                    "address balance".to_string(),
+                    gas.address_mist_balance.to_string(),
+                    gas.address_sui_balance.to_string(),
+                ]);
                 let mut table = builder.build();
                 table.with(TableStyle::rounded());
                 if gas_coins.len() > 10 {
@@ -2269,8 +2301,9 @@ impl Display for SuiClientCommandResult {
                     table.with(TableStyle::rounded().horizontals([
                         HorizontalLine::new(1, TableStyle::modern().get_horizontal()),
                         HorizontalLine::new(2, TableStyle::modern().get_horizontal()),
+                        // +1 for the address balance row appended after the gas coins.
                         HorizontalLine::new(
-                            gas_coins.len() + 2,
+                            gas_coins.len() + 3,
                             TableStyle::modern().get_horizontal(),
                         ),
                     ]));
@@ -2372,9 +2405,6 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
             }
-            SuiClientCommandResult::ChainIdentifier(ci) => {
-                writeln!(writer, "{}", ci)?;
-            }
             SuiClientCommandResult::Switch(response) => {
                 write!(writer, "{}", response)?;
             }
@@ -2406,8 +2436,20 @@ impl Display for SuiClientCommandResult {
                 table.with(TableStyle::rounded());
                 write!(f, "{}", table)?
             }
-            SuiClientCommandResult::VerifySource => {
+            SuiClientCommandResult::VerifySource(metadata) => {
                 writeln!(writer, "Source verification succeeded!")?;
+                if let Some(metadata) = metadata {
+                    writeln!(writer, "  original ID:       {}", metadata.original_id)?;
+                    writeln!(writer, "  published at:      {}", metadata.published_at)?;
+                    if let Some(version) = &metadata.toolchain_version {
+                        writeln!(writer, "  toolchain version: {version}")?;
+                    }
+                    writeln!(
+                        writer,
+                        "  binary:            {}",
+                        metadata.binary_path.display()
+                    )?;
+                }
             }
             SuiClientCommandResult::VerifyBytecodeMeter {
                 success,
@@ -2507,6 +2549,9 @@ impl Display for SuiClientCommandResult {
             }
             SuiClientCommandResult::DevInspect(response) => {
                 writeln!(f, "{}", Pretty(response))?;
+            }
+            SuiClientCommandResult::ChainIdentifier(ci) => {
+                write!(f, "{}", ci)?;
             }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
@@ -2747,13 +2792,7 @@ fn convert_number_to_string(value: Value) -> Value {
 impl Debug for SuiClientCommandResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let s = unwrap_err_to_string(|| match self {
-            SuiClientCommandResult::Gas(gas_coins) => {
-                let gas_coins = gas_coins
-                    .iter()
-                    .map(GasCoinOutput::from)
-                    .collect::<Vec<_>>();
-                Ok(serde_json::to_string_pretty(&gas_coins)?)
-            }
+            SuiClientCommandResult::Gas(gas) => Ok(serde_json::to_string_pretty(gas)?),
             SuiClientCommandResult::Object(object, json_content) => {
                 let object = ObjectOutput::from_object_with_json(object, json_content.clone());
                 Ok(serde_json::to_string_pretty(&object)?)
@@ -2820,6 +2859,25 @@ impl SuiClientCommandResult {
 pub struct AddressesOutput {
     pub active_address: SuiAddress,
     pub addresses: Vec<(String, SuiAddress)>,
+}
+
+/// The chain identifier in both supported encodings: the full Base58-encoded genesis checkpoint
+/// digest (as returned by the gRPC and GraphQL APIs) and the legacy hex short form (its first
+/// 4 bytes). Either can be used as a chain ID in the `[environments]` section of `Move.toml`.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChainIdentifierOutput {
+    pub base58: String,
+    pub hex: String,
+}
+
+/// Balance data prepared for both human-readable and JSON CLI output.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BalanceOutput {
+    pub metadata: Option<proto::GetCoinInfoResponse>,
+    pub balance: proto::Balance,
+    pub coins: Vec<RpcCoin>,
 }
 
 #[derive(Serialize)]
@@ -2890,6 +2948,26 @@ impl From<&GasCoin> for GasCoinOutput {
     }
 }
 
+/// The gas coins owned by an address, together with the SUI the address holds directly rather
+/// than in a coin object. The two are disjoint, so neither on its own is the address' full SUI.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GasOutput {
+    pub gas_coins: Vec<GasCoinOutput>,
+    pub address_mist_balance: u64,
+    pub address_sui_balance: String,
+}
+
+impl GasOutput {
+    pub fn new(gas_coins: &[GasCoin], address_mist_balance: u64) -> Self {
+        Self {
+            gas_coins: gas_coins.iter().map(GasCoinOutput::from).collect(),
+            address_mist_balance,
+            address_sui_balance: format_balance(address_mist_balance as u128, 9, 2, None),
+        }
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ObjectsOutput {
@@ -2925,14 +3003,14 @@ pub enum SuiClientCommandResult {
     ActiveAddress(Option<SuiAddress>),
     ActiveEnv(Option<String>),
     Addresses(AddressesOutput),
-    Balance(Vec<(Option<proto::GetCoinInfoResponse>, Vec<Coin>)>, bool),
-    ChainIdentifier(String),
+    Balance(Vec<BalanceOutput>, bool),
+    ChainIdentifier(ChainIdentifierOutput),
     ComputeTransactionDigest(TransactionData),
     DynamicFieldQuery(proto::ListDynamicFieldsResponse),
     DryRun(SimulateTransactionResponse),
     DevInspect(SimulateTransactionResponse),
     Envs(Vec<SuiEnv>, Option<String>),
-    Gas(Vec<GasCoin>),
+    Gas(GasOutput),
     NewAddress(NewAddressOutput),
     NewEnv(SuiEnv),
     NoOutput,
@@ -2952,7 +3030,7 @@ pub enum SuiClientCommandResult {
         max_function_ticks: Option<u128>,
         used_ticks: Accumulator,
     },
-    VerifySource,
+    VerifySource(Option<VerifiedMetadata>),
 }
 
 #[derive(Serialize, Clone)]
@@ -2972,6 +3050,23 @@ impl Display for SwitchResponse {
         if let Some(env) = &self.env {
             writeln!(writer, "Active environment switched to [{env}]")?;
         }
+        write!(f, "{}", writer)
+    }
+}
+
+impl Display for ChainIdentifierOutput {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+
+        if self.base58.is_empty() {
+            writeln!(writer, "{}", self.hex)?;
+        } else if self.hex.is_empty() {
+            writeln!(writer, "{}", self.base58)?;
+        } else {
+            writeln!(writer, "Base58: {}", self.base58)?;
+            writeln!(writer, "Hex: {}", self.hex)?;
+        }
+
         write!(f, "{}", writer)
     }
 }
@@ -3031,18 +3126,127 @@ pub async fn request_tokens_from_faucet(
     Ok(())
 }
 
-fn pretty_print_balance(
-    coins_by_type: &Vec<(Option<proto::GetCoinInfoResponse>, Vec<Coin>)>,
-    builder: &mut TableBuilder,
-    with_coins: bool,
-) {
-    let format_decmials = 2;
+/// Fetch aggregate balances from gRPC and attach coin metadata for display.
+async fn balance_outputs_for_address(
+    client: &Client,
+    address: SuiAddress,
+    coin_type: Option<&StructTag>,
+) -> Result<Vec<BalanceOutput>, anyhow::Error> {
+    let balances = if let Some(coin_type) = coin_type {
+        vec![client.get_balance(address, coin_type).await?]
+    } else {
+        client.list_balances(address).try_collect().await?
+    };
+
+    tokio_stream::StreamExt::throttle(
+        futures::stream::iter(balances),
+        Duration::from_millis(RATE_LIMIT_MILLIS),
+    )
+    .map(|balance| async move {
+        let metadata = coin_metadata_for_balance(client, &balance).await?;
+        Ok(BalanceOutput {
+            metadata,
+            balance,
+            coins: Vec::new(),
+        })
+    })
+    .buffered(NUM_CONCURRENCY_REQS)
+    .try_collect()
+    .await
+}
+
+/// Best-effort metadata lookup for a balance returned by the balance API.
+async fn coin_metadata_for_balance(
+    client: &Client,
+    balance: &proto::Balance,
+) -> Result<Option<proto::GetCoinInfoResponse>, anyhow::Error> {
+    let ty = StructTag::from_str(balance.coin_type()).with_context(|| {
+        format!(
+            "Cannot parse coin type returned by balance API: {}",
+            balance.coin_type()
+        )
+    })?;
+    Ok(client.get_coin_info(&ty).await.ok())
+}
+
+/// Add owned coin object details without changing aggregate balance totals.
+async fn attach_owned_coin_objects(
+    client: &Client,
+    address: SuiAddress,
+    coin_type: Option<&StructTag>,
+    balances: &mut [BalanceOutput],
+) -> Result<(), anyhow::Error> {
+    let coin_object_type = coin_object_type_filter(coin_type);
+    let coins: Vec<RpcCoin> = client
+        .list_owned_objects(address, Some(coin_object_type))
+        .try_filter_map(|o| async move {
+            let Ok(Some((coin_type, balance))) = Coin::extract_balance_if_coin(&o) else {
+                return Ok(None);
+            };
+            Ok(Some(RpcCoin {
+                coin_type: coin_type.to_canonical_string(true),
+                coin_object_id: o.id(),
+                version: o.version(),
+                digest: o.digest(),
+                balance,
+                previous_transaction: o.previous_transaction,
+            }))
+        })
+        .try_collect()
+        .await?;
+
+    let mut coins_by_type: BTreeMap<String, Vec<RpcCoin>> = BTreeMap::new();
+    for coin in coins {
+        coins_by_type
+            .entry(coin.coin_type.clone())
+            .or_default()
+            .push(coin);
+    }
+
+    for balance in balances.iter_mut() {
+        if let Some(coins) = coins_by_type.remove(balance.balance.coin_type()) {
+            balance.coins = coins;
+        }
+    }
+
+    Ok(())
+}
+
+/// Build the object type filter expected by `list_owned_objects`.
+fn coin_object_type_filter(coin_type: Option<&StructTag>) -> StructTag {
+    if let Some(coin_type) = coin_type {
+        Coin::type_(coin_type.clone().into())
+    } else {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: COIN_STRUCT_NAME.to_owned(),
+            module: COIN_MODULE_NAME.to_owned(),
+            type_params: vec![],
+        }
+    }
+}
+
+/// Keep SUI first while preserving the balance API's order for other coin types.
+fn order_balance_outputs_sui_first(balances: &mut Vec<BalanceOutput>) {
+    // The balance API reports the coin type (`0x2::sui::SUI`), not the object type `Coin<SUI>`.
+    let sui_type_tag = GAS::type_().to_canonical_string(/* with_prefix */ true);
+    if let Some(index) = balances
+        .iter()
+        .position(|balance| balance.balance.coin_type() == sui_type_tag.as_str())
+    {
+        let sui_balance = balances.remove(index);
+        balances.insert(0, sui_balance);
+    }
+}
+
+fn pretty_print_balance(balances: &[BalanceOutput], builder: &mut TableBuilder, with_coins: bool) {
+    let format_decimals = 2;
     let mut table_builder = TableBuilder::default();
     if !with_coins {
-        table_builder.set_header(vec!["coin", "balance (raw)", "balance", ""]);
+        table_builder.set_header(vec!["coin", "balance (raw)", "balance"]);
     }
-    for (metadata, coins) in coins_by_type {
-        let (name, symbol, coin_decimals) = if let Some(metadata) = metadata {
+    for balance_output in balances {
+        let (name, symbol, coin_decimals) = if let Some(metadata) = &balance_output.metadata {
             (
                 metadata.metadata().name(),
                 metadata.metadata().symbol(),
@@ -3052,32 +3256,50 @@ fn pretty_print_balance(
             ("unknown", "unknown_symbol", 9)
         };
 
-        let balance = coins.iter().map(|x| x.balance as u128).sum::<u128>();
+        let balance = balance_output.balance.balance() as u128;
+        let address_balance = balance_output.balance.address_balance();
         let mut inner_table = TableBuilder::default();
-        inner_table.set_header(vec!["coinId", "balance (raw)", "balance", ""]);
+        inner_table.set_header(vec!["coinId", "balance (raw)", "balance"]);
 
         if with_coins {
-            let coin_numbers = if coins.len() != 1 { "coins" } else { "coin" };
+            let coin_numbers = if balance_output.coins.len() != 1 {
+                "coins"
+            } else {
+                "coin"
+            };
             let balance_formatted = format!(
                 "({} {})",
-                format_balance(balance, coin_decimals, format_decmials, Some(symbol)),
+                format_balance(balance, coin_decimals, format_decimals, Some(symbol)),
                 symbol
             );
             let summary = format!(
                 "{}: {} {coin_numbers}, Balance: {} {}",
                 name,
-                coins.len(),
+                balance_output.coins.len(),
                 balance,
                 balance_formatted
             );
-            for c in coins {
+            for c in &balance_output.coins {
                 inner_table.push_record(vec![
                     c.coin_object_id.to_string().as_str(),
                     c.balance.to_string().as_str(),
                     format_balance(
                         c.balance as u128,
                         coin_decimals,
-                        format_decmials,
+                        format_decimals,
+                        Some(symbol),
+                    )
+                    .as_str(),
+                ]);
+            }
+            if address_balance != 0 {
+                inner_table.push_record(vec![
+                    "address balance",
+                    address_balance.to_string().as_str(),
+                    format_balance(
+                        address_balance as u128,
+                        coin_decimals,
+                        format_decimals,
                         Some(symbol),
                     )
                     .as_str(),
@@ -3099,7 +3321,7 @@ fn pretty_print_balance(
             table_builder.push_record(vec![
                 name,
                 balance.to_string().as_str(),
-                format_balance(balance, coin_decimals, format_decmials, Some(symbol)).as_str(),
+                format_balance(balance, coin_decimals, format_decimals, Some(symbol)).as_str(),
             ]);
         }
     }
@@ -3258,6 +3480,176 @@ pub async fn max_gas_budget(client: &Client) -> Result<u64, anyhow::Error> {
     )
 }
 
+/// Queries the protocol config for the limits that bound how many coins fit in one transaction.
+async fn coin_limits(client: &Client) -> Result<CoinLimits, anyhow::Error> {
+    let cfg = client.get_protocol_config(None).await?;
+    let attributes = cfg.attributes();
+    let limit = |name: &str| -> Result<usize, anyhow::Error> {
+        attributes
+            .get(name)
+            .and_then(|s| s.parse().ok())
+            .with_context(|| format!("Could not find {name} in the protocol config."))
+    };
+
+    Ok(CoinLimits {
+        max_gas_payment_objects: limit("max_gas_payment_objects")?,
+        max_arguments: limit("max_arguments")?,
+        max_input_objects: limit("max_input_objects")?,
+    })
+}
+
+/// Warn about, and drop, any coins past what one transaction can hold.
+fn truncate_to_max_coins(coin_refs: &mut Vec<ObjectRef>, max_coins: usize) {
+    if coin_refs.len() <= max_coins {
+        return;
+    }
+
+    let remaining = coin_refs.len() - max_coins;
+    coin_refs.truncate(max_coins);
+    eprintln!(
+        "Warning: a transaction sends at most {max_coins} coins, so {remaining} of your coins \
+         will not be sent. Run the command again to send the rest."
+    );
+}
+
+/// Send every `Coin<T>` object owned by `signer` to `recipient`'s address balance. The signer's
+/// own address balance is left untouched: only their coin objects are drained.
+///
+/// Every coin is merged into one, which is then sent by value. SUI is what pays for gas, so its
+/// coins go into the gas payment, where gas smashing merges them into the gas coin.
+/// Coins of any other type are ordinary inputs, merged into the last of them.
+async fn send_all_coins(
+    context: &mut WalletContext,
+    signer: SuiAddress,
+    recipient: SuiAddress,
+    coin_type_tag: TypeTag,
+    gas_data: GasDataArgs,
+    processing: TxProcessingArgs,
+) -> Result<SuiClientCommandResult, anyhow::Error> {
+    let client = context.grpc_client()?;
+
+    // For SUI the coins being sent are also what pays for gas, which a sponsor's gas coin cannot do:
+    // it is the sponsor's amount that would end up with the recipient.
+    let is_sui = coin_type_tag == GAS::type_tag();
+    ensure!(
+        !is_sui || gas_data.gas_sponsor.is_none(),
+        "--all-coins cannot be used with a gas sponsor for SUI coin type, because the coins being \
+         sent are the ones paying for gas."
+    );
+
+    let coins: Vec<Object> = client
+        .list_owned_objects(signer, Some(Coin::type_(coin_type_tag.clone())))
+        .try_collect()
+        .await?;
+    ensure!(
+        !coins.is_empty(),
+        "No {coin_type_tag} coins available to send"
+    );
+
+    let mut coin_refs: Vec<ObjectRef> =
+        coins.iter().map(|c| c.compute_object_reference()).collect();
+
+    // Coins that do not fit in the gas payment are merged in with `MergeCoins`. Each such coin is a
+    // transaction input, so the merged set is bounded by the input-object limit; the sources are
+    // split across as many `MergeCoins` commands as it takes to stay under the per-command argument
+    // limit. Gas payment coins are validated separately and do not count against the input limit.
+    let limits = coin_limits(&client).await?;
+    let smashed = if is_sui {
+        limits.max_gas_payment_objects
+    } else {
+        0
+    };
+    truncate_to_max_coins(&mut coin_refs, smashed + limits.max_input_objects);
+
+    // Whatever is left in `coin_refs` is the gas payment, which is empty unless the coin is SUI.
+    let merged_refs = coin_refs.split_off(std::cmp::min(coin_refs.len(), smashed));
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let mut merged_args = merged_refs
+        .iter()
+        .map(|r| builder.obj(ObjectArg::ImmOrOwnedObject(*r)))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Gas smashing has already merged the gas payment into the gas coin, so that is what the rest
+    // merge into; without one, the last coin takes the role. `MergeCoins` only borrows its target,
+    // so either way it is still ours to send afterwards.
+    let target = if is_sui {
+        Argument::GasCoin
+    } else {
+        merged_args
+            .pop()
+            .context("non-SUI path always has at least one coin to merge into")?
+    };
+
+    // `MergeCoins` counts only its source list against `max_arguments` (strict `<`), so at most
+    // `max_arguments - 1` sources fit per command; batch the rest across commands, all merging into
+    // the same target.
+    let max_sources = limits.max_arguments.saturating_sub(1).max(1);
+    for sources in merged_args.chunks(max_sources) {
+        builder.command(Command::MergeCoins(target, sources.to_vec()));
+    }
+
+    // Moving the coin into `coin::send_funds` by value is understood by the execution layer: when
+    // it is the gas coin, that consumes it and refunds the unused gas budget into the recipient's
+    // address balance, so no dust is left behind. Passing the SUI coins as an explicit gas payment
+    // also keeps the fullnode from performing gas selection, which would otherwise pull in the
+    // signer's address balance as well.
+    let recipient_arg = builder.pure(recipient)?;
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::from_str("coin")?,
+        Identifier::from_str("send_funds")?,
+        vec![coin_type_tag],
+        vec![target, recipient_arg],
+    );
+    let tx_kind = TransactionKind::programmable(builder.finish());
+
+    dry_run_or_execute_or_serialize(signer, tx_kind, context, coin_refs, gas_data, processing).await
+}
+
+/// Ask the fullnode to pick the gas payment for a transaction, and return it along with the
+/// budget and expiration it resolved.
+///
+/// The fullnode applies the same rules as the TypeScript SDK: it pays from `gas_owner`'s address
+/// balance when the transaction never touches the gas coin and that balance covers the budget
+/// (empty payment, `ValidDuring` expiration), pays from their SUI coins otherwise, and when the
+/// transaction *does* use the gas coin it prepends an address balance reservation so both sources
+/// are available. Coins already used as inputs are excluded.
+async fn select_gas_with_fullnode(
+    client: &Client,
+    signer: SuiAddress,
+    tx_kind: &TransactionKind,
+    gas_owner: SuiAddress,
+    gas_budget: u64,
+    gas_price: u64,
+) -> Result<(Vec<ObjectRef>, u64, TransactionExpiration), anyhow::Error> {
+    // An empty payment is what asks the fullnode to perform selection.
+    let tx_data = TransactionData::new_with_gas_coins_allow_sponsor(
+        tx_kind.clone(),
+        signer,
+        vec![],
+        gas_budget,
+        gas_price,
+        gas_owner,
+    );
+
+    debug!("Selecting gas payment");
+    let resolved = client
+        .simulate_transaction(&tx_data, true, true)
+        .await
+        .context("Gas selection failed")?
+        .transaction
+        .transaction;
+    debug!("Finished selecting gas payment");
+
+    let gas_data = resolved.gas_data();
+    Ok((
+        gas_data.payment.clone(),
+        gas_data.budget,
+        *resolved.expiration(),
+    ))
+}
+
 /// Dry run, execute, or serialize a transaction.
 ///
 /// This basically extracts the logical code for each command that deals with dry run, executing,
@@ -3269,51 +3661,6 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     gas_payment: Vec<ObjectRef>,
     gas_data: GasDataArgs,
     processing: TxProcessingArgs,
-) -> Result<SuiClientCommandResult, anyhow::Error> {
-    dry_run_or_execute_or_serialize_impl(
-        signer,
-        tx_kind,
-        context,
-        gas_payment,
-        gas_data,
-        processing,
-        false,
-    )
-    .await
-}
-
-/// Dry run, execute, or serialize a transaction with address balance gas support.
-///
-/// When `use_address_balance_gas` is true, the transaction uses the sender's address balance
-/// for gas payment instead of selecting a gas coin. This requires adding a ValidDuring
-/// expiration for replay protection.
-pub(crate) async fn dry_run_or_execute_or_serialize_with_address_balance_gas(
-    signer: SuiAddress,
-    tx_kind: TransactionKind,
-    context: &mut WalletContext,
-    gas_data: GasDataArgs,
-    processing: TxProcessingArgs,
-) -> Result<SuiClientCommandResult, anyhow::Error> {
-    dry_run_or_execute_or_serialize_impl(
-        signer,
-        tx_kind,
-        context,
-        vec![],
-        gas_data,
-        processing,
-        true,
-    )
-    .await
-}
-
-async fn dry_run_or_execute_or_serialize_impl(
-    signer: SuiAddress,
-    tx_kind: TransactionKind,
-    context: &mut WalletContext,
-    gas_payment: Vec<ObjectRef>,
-    gas_data: GasDataArgs,
-    processing: TxProcessingArgs,
-    use_address_balance_gas: bool,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
     let GasDataArgs {
         gas_budget,
@@ -3328,7 +3675,7 @@ async fn dry_run_or_execute_or_serialize_impl(
         serialize_unsigned_transaction,
         serialize_signed_transaction,
         sender,
-        forking_mode,
+        skip_signing,
     } = processing;
 
     ensure!(
@@ -3377,12 +3724,15 @@ async fn dry_run_or_execute_or_serialize_impl(
         Some(gas_budget) => gas_budget,
         None => {
             debug!("Estimating gas budget");
+            // Estimate against an empty gas payment so the fullnode simulates with a mock gas
+            // coin. Passing the real payment here would have it checked against the very budget
+            // we are trying to compute.
             let budget = estimate_gas_budget(
                 context,
                 signer,
                 tx_kind.clone(),
                 gas_price,
-                gas_payment.clone(),
+                vec![],
                 gas_sponsor,
             )
             .await?;
@@ -3391,47 +3741,16 @@ async fn dry_run_or_execute_or_serialize_impl(
         }
     };
 
-    let (gas_payment, expiration) = if use_address_balance_gas {
-        let current_epoch = context.get_current_epoch().await?;
-        let chain_id = context.get_chain_identifier().await?;
+    let gas_owner = gas_sponsor.unwrap_or(signer);
 
-        let expiration = TransactionExpiration::ValidDuring {
-            min_epoch: Some(current_epoch),
-            max_epoch: Some(current_epoch.saturating_add(1)),
-            min_timestamp: None,
-            max_timestamp: None,
-            chain: chain_id,
-            nonce: rand::random(),
-        };
-        (vec![], expiration)
-    } else if !gas_payment.is_empty() {
-        (gas_payment, TransactionExpiration::None)
+    let (gas_payment, gas_budget, expiration) = if !gas_payment.is_empty() {
+        (gas_payment, gas_budget, TransactionExpiration::None)
     } else {
-        let input_objects: Vec<_> = tx_kind
-            .input_objects()?
-            .iter()
-            .filter_map(|o| match o {
-                InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => Some(*id),
-                _ => None,
-            })
-            .collect();
-
-        let gas_payment = client
-            .transaction_builder()
-            .select_gas(
-                gas_sponsor.unwrap_or(signer),
-                None,
-                gas_budget,
-                input_objects,
-                gas_price,
-            )
-            .await?;
-
-        (vec![gas_payment], TransactionExpiration::None)
+        select_gas_with_fullnode(&client, signer, &tx_kind, gas_owner, gas_budget, gas_price)
+            .await?
     };
 
     debug!("Preparing transaction data");
-    let gas_owner = gas_sponsor.unwrap_or(signer);
     let tx_data = TransactionData::new_with_gas_data_and_expiration(
         tx_kind,
         signer,
@@ -3452,7 +3771,7 @@ async fn dry_run_or_execute_or_serialize_impl(
     } else if tx_digest {
         Ok(SuiClientCommandResult::ComputeTransactionDigest(tx_data))
     } else {
-        let signatures = if forking_mode {
+        let signatures = if skip_signing {
             vec![]
         } else {
             let mut signatures = vec![
@@ -3558,7 +3877,7 @@ async fn check_protocol_version_and_warn(client: &Client) -> Result<(), anyhow::
                 "[warning] CLI's protocol version is {cli_protocol_version}, but the active \
                 network's protocol version is {on_chain_protocol_version}. \
                 \n Consider installing the latest version of the CLI - \
-                https://docs.sui.io/guides/developer/getting-started/sui-install \n\n \
+                {CLI_INSTALL_DOCS} \n\n \
                 If publishing/upgrading returns a dependency verification error, then install the \
                 latest CLI version."
             )
@@ -3568,6 +3887,32 @@ async fn check_protocol_version_and_warn(client: &Client) -> Result<(), anyhow::
     }
 
     Ok(())
+}
+
+/// `ProtocolConfig::get_for_version` panics on a version this binary does not implement, which is
+/// the routine state of a CLI that has not been updated since the last protocol upgrade. Check the
+/// bounds first so the caller can report a normal CLI error instead.
+fn protocol_config_for_version(
+    version: ProtocolVersion,
+    chain: Chain,
+) -> Result<ProtocolConfig, anyhow::Error> {
+    if version > ProtocolVersion::MAX_ALLOWED {
+        bail!(
+            "protocol version {} is newer than the maximum version {} supported by this CLI",
+            version.as_u64(),
+            ProtocolVersion::MAX_ALLOWED.as_u64(),
+        );
+    }
+
+    if version < ProtocolVersion::MIN {
+        bail!(
+            "protocol version {} is older than the minimum version {} supported by this CLI",
+            version.as_u64(),
+            ProtocolVersion::MIN.as_u64(),
+        );
+    }
+
+    Ok(ProtocolConfig::get_for_version(version, chain))
 }
 
 /// Fetch move packages
@@ -3695,6 +4040,7 @@ pub(crate) async fn pkg_tree_shake(
             // println!("{}", pkgs_to_keep.contains(pkg_name));
             pkgs_to_keep.contains(pkg_name)
         })
+        .map(|(pkg_name, dep)| (pkg_name, dep.published_at))
         .collect();
 
     info!("Pkgs to keep {pkgs_to_keep:#?}");
@@ -3918,7 +4264,8 @@ async fn upgrade_command(
         .sender
         .unwrap_or(context.infer_sender(&payment.gas).await?);
     let client = context.grpc_client()?;
-    let chain_id = client.get_chain_identifier().await?.to_string();
+    let chain_identifier = client.get_chain_identifier().await?;
+    let chain_id = chain_identifier.to_string();
 
     // For upgrade, we want to force the root package to have `0x0` as its address
     build_config.root_as_zero = true;
@@ -3984,14 +4331,9 @@ async fn upgrade_command(
 
     if !skip_verify_compatibility {
         let protocol_version = client.get_protocol_config(None).await?.protocol_version();
+        let protocol_config =
+            protocol_config_for_version(protocol_version.into(), chain_identifier.chain())?;
 
-        let protocol_config = ProtocolConfig::get_for_version(
-            protocol_version.into(),
-            match ChainIdentifier::from_chain_short_id(&chain_id) {
-                Some(chain_id) => chain_id.chain(),
-                None => Chain::Unknown,
-            },
-        );
         check_compatibility(
             client.clone(),
             package_id,
@@ -4207,5 +4549,126 @@ fn find_faucet_url(address: SuiAddress, rpc: &str) -> anyhow::Result<String> {
         Ok("http://127.0.0.1:9123/v2/gas".to_string())
     } else {
         bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn protocol_config_out_of_range_errors_instead_of_panicking() {
+        let too_new = ProtocolVersion::MAX_ALLOWED + 1;
+        let err = protocol_config_for_version(too_new, Chain::Unknown)
+            .expect_err("a version past MAX_ALLOWED is not supported");
+        assert!(
+            err.to_string().contains("newer than the maximum version"),
+            "unexpected error: {err}"
+        );
+
+        let too_old = ProtocolVersion::MIN - 1;
+        let err = protocol_config_for_version(too_old, Chain::Unknown)
+            .expect_err("a version below MIN is not supported");
+        assert!(
+            err.to_string().contains("older than the minimum version"),
+            "unexpected error: {err}"
+        );
+
+        assert!(protocol_config_for_version(ProtocolVersion::MAX, Chain::Unknown).is_ok());
+        assert!(protocol_config_for_version(ProtocolVersion::MIN, Chain::Unknown).is_ok());
+    }
+
+    fn gas_result(coins: usize, address_mist_balance: u64) -> SuiClientCommandResult {
+        let gas_coins = (0..coins)
+            .map(|i| GasCoinOutput {
+                gas_coin_id: ObjectID::from_single_byte(i as u8),
+                mist_balance: 1_000_000_000,
+                sui_balance: format_balance(1_000_000_000, 9, 2, None),
+            })
+            .collect();
+        SuiClientCommandResult::Gas(GasOutput {
+            gas_coins,
+            address_mist_balance,
+            address_sui_balance: format_balance(address_mist_balance as u128, 9, 2, None),
+        })
+    }
+
+    #[test]
+    fn gas_table_reports_address_balance_alongside_coins() {
+        let table = gas_result(2, 5_000_000_000).to_string();
+        assert!(table.contains("suiBalance (SUI)"), "{table}");
+        assert!(table.contains("address balance"), "{table}");
+        assert!(table.contains("5000000000"), "{table}");
+        assert!(table.contains("5.00"), "{table}");
+    }
+
+    /// Past 10 coins the table grows a header/footer panel, whose separator row index has to
+    /// account for the address balance row appended after the coins.
+    #[test]
+    fn gas_table_with_panel_keeps_address_balance_above_the_footer() {
+        let table = gas_result(11, 7).to_string();
+        let lines: Vec<&str> = table.lines().collect();
+
+        let address_row = lines
+            .iter()
+            .position(|l| l.contains("address balance"))
+            .expect("address balance row is rendered");
+        let footer = lines
+            .iter()
+            .rposition(|l| l.contains("Showing 11 gas coins"))
+            .expect("footer panel is rendered");
+
+        assert!(
+            address_row < footer,
+            "address balance must sit inside the table, above the footer:\n{table}"
+        );
+        // The separator has to fall between the last data row and the footer panel.
+        assert!(
+            lines[address_row + 1].contains('├') || lines[address_row + 1].contains('┼'),
+            "expected a separator under the address balance row:\n{table}"
+        );
+    }
+
+    /// The balance API is keyed by coin type, while object listing is keyed by the `Coin<T>`
+    /// object type. Mixing them up silently yields an empty balance rather than an error.
+    #[test]
+    fn balance_api_is_keyed_by_coin_type_not_object_type() {
+        assert_eq!(
+            GAS::type_().to_canonical_string(true),
+            "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+        );
+        assert_ne!(
+            GAS::type_().to_canonical_string(true),
+            GasCoin::type_().to_canonical_string(true)
+        );
+
+        let sui_balance = |coin_type: String| BalanceOutput {
+            metadata: None,
+            balance: proto::Balance::default().with_coin_type(coin_type),
+            coins: Vec::new(),
+        };
+
+        let mut balances = vec![
+            sui_balance("0x2::other::COIN".to_string()),
+            sui_balance(GAS::type_().to_canonical_string(true)),
+        ];
+        order_balance_outputs_sui_first(&mut balances);
+        assert_eq!(
+            balances[0].balance.coin_type(),
+            GAS::type_().to_canonical_string(true),
+            "SUI should be ordered first"
+        );
+    }
+
+    /// An address with no coins but a non-zero address balance still has spendable SUI.
+    #[test]
+    fn gas_table_shown_when_only_an_address_balance_exists() {
+        assert_eq!(
+            gas_result(0, 0).to_string(),
+            "No gas coins are owned by this address"
+        );
+
+        let table = gas_result(0, 42).to_string();
+        assert!(table.contains("address balance"), "{table}");
     }
 }

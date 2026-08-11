@@ -5,25 +5,27 @@ expression: item
 {
   "data": {
     "checkpoints": {
-      "sequenceNumber": "[seq]",
-      "digest": "[digest]",
-      "contentDigest": "[contentDigest]",
-      "timestamp": "[timestamp]",
-      "networkTotalTransactions": "[networkTotalTransactions]",
-      "rollingGasSummary": {
-        "computationCost": 0,
-        "storageCost": 0,
-        "storageRebate": 0,
-        "nonRefundableStorageFee": 0
-      },
-      "epoch": {
-        "epochId": 0
-      },
-      "validatorSignatures": {
-        "signature": "[signature]",
-        "signersMap": [
-          0
-        ]
+      "node": {
+        "sequenceNumber": "[seq]",
+        "digest": "[digest]",
+        "contentDigest": "[contentDigest]",
+        "timestamp": "[timestamp]",
+        "networkTotalTransactions": "[networkTotalTransactions]",
+        "rollingGasSummary": {
+          "computationCost": 0,
+          "storageCost": 0,
+          "storageRebate": 0,
+          "nonRefundableStorageFee": 0
+        },
+        "epoch": {
+          "epochId": 0
+        },
+        "validatorSignatures": {
+          "signature": "[signature]",
+          "signersMap": [
+            0
+          ]
+        }
       }
     }
   }

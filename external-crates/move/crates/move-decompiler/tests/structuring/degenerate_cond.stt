@@ -1,0 +1,12 @@
+// A `cond` whose two arms point at the same label models the bytecode that compilation
+// produces for source-level `if (test_thing) {}` (empty then-body, optimizer forwards the
+// empty arm to the join). The translate.rs and testing.rs construction sites both normalize
+// this to a `Code` with a single fall-through edge, so structuring never sees a
+// dom-tree-leaf Condition with shared successors.
+//
+//   0  (cond, both arms -> 1)
+//   |
+//   1  (sink)
+
+cond,0,1,1
+code,1

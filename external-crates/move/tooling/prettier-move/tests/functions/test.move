@@ -3,6 +3,10 @@ module test::functions {
     fun empty() {
     }
 
+    fun commented() {
+        // empty comments are kept
+    }
+
     public fun pub() {
     }
 

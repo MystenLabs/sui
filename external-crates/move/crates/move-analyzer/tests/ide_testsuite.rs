@@ -72,6 +72,13 @@ enum TestSuite {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+enum TestSuites {
+    Single(TestSuite),
+    Many(Vec<TestSuite>),
+}
+
+#[derive(Serialize, Deserialize)]
 struct UseDefTest {
     use_line: u32,
     use_ndx: usize,
@@ -106,7 +113,6 @@ struct HintTest {
 struct AccessChainQuickFixTest {
     err_line: u32,
     err_col: u32,
-    err_msg: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -377,18 +383,38 @@ impl AccessChainQuickFixTest {
         };
         writeln!(output, "-- test {test_idx} -------------------")?;
         let mut code_actions = vec![];
-
-        access_chain_autofix_actions_for_error(
-            symbols,
-            compiled_pkg_info,
-            Url::from_file_path(use_file_path).unwrap(),
-            err_pos,
-            self.err_msg.clone(),
-            None,
-            &mut code_actions,
-        );
+        // Just like in the real usage scenario, use compiler-produced diagnostics
+        // (collect and offer them to the quick-fix handler)
+        let diagnostics = compiled_pkg_info
+            .lsp_diags
+            .get(use_file_path)
+            .into_iter()
+            .flatten()
+            .filter(|diag| diag.range.start == err_pos)
+            .cloned()
+            .collect::<Vec<_>>();
+        for diagnostic in diagnostics {
+            access_chain_autofix_actions_for_error(
+                symbols,
+                compiled_pkg_info,
+                Url::from_file_path(use_file_path).unwrap(),
+                diagnostic.range.start,
+                diagnostic.message.clone(),
+                Some(diagnostic),
+                &mut code_actions,
+            );
+        }
         for action in code_actions {
             writeln!(output, "CODE ACTION: {}", action.title)?;
+            if let Some(edit) = action.edit
+                && let Some(changes) = edit.changes
+            {
+                for text_edits in changes.values() {
+                    for text_edit in text_edits {
+                        writeln!(output, "    EDIT: '{}'", text_edit.new_text)?;
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -582,12 +608,12 @@ fn completion_test<F: MoveFlavor + Default>(
 
     // Generate fresh symbols with cursor position using shared cache
     let cursor_path = use_file_path.to_path_buf();
-    let symbols = test_symbols_for_autocomplete::<F>(
+    let (_, symbols) = test_symbols_with_cursor::<F>(
         packages_info,
         ide_files_root,
         project_path.to_path_buf(),
         &cursor_path,
-        use_pos,
+        Some(use_pos),
     )?;
 
     let items = compute_completions_with_symbols(&symbols, &cursor_path, use_pos, auto_import);
@@ -679,16 +705,16 @@ fn test_symbols_with_optional_modifications<F: MoveFlavor + Default>(
     Ok((compiled_pkg_info, symbols))
 }
 
-/// Compute symbols for a specific cursor position in autocomplete tests.
-/// This generates fresh CompilerAutocompleteInfo for the cursor position
-/// while leveraging cached CompilerAnalysisInfo and dependencies.
-fn test_symbols_for_autocomplete<F: MoveFlavor + Default>(
+/// Compute symbols for a specific cursor position needed by tests that use autocomplete
+/// information for the target file. This generates fresh CompilerAutocompleteInfo for
+/// the cursor position while leveraging cached CompilerAnalysisInfo and dependencies.
+fn test_symbols_with_cursor<F: MoveFlavor + Default>(
     packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
     project_path: PathBuf,
     cursor_path: &PathBuf,
-    cursor_pos: Position,
-) -> anyhow::Result<Symbols> {
+    cursor_pos: Option<Position>,
+) -> anyhow::Result<(CompiledPkgInfo, Symbols)> {
     let move_flavor = Arc::new(F::default());
     // Single compilation with cursor position (no retry loop)
     let (compiled_pkg_info_opt, _) = get_compiled_pkg::<F>(
@@ -703,15 +729,13 @@ fn test_symbols_for_autocomplete<F: MoveFlavor + Default>(
 
     let compiled_pkg_info =
         compiled_pkg_info_opt.ok_or_else(|| anyhow::anyhow!("PACKAGE COMPILATION FAILED"))?;
-
-    // Compute symbols with cursor position
     let symbols = compute_symbols(
         packages_info,
-        compiled_pkg_info,
-        Some((cursor_path, cursor_pos)),
+        compiled_pkg_info.clone(),
+        cursor_pos.map(|pos| (cursor_path, pos)),
     );
 
-    Ok(symbols)
+    Ok((compiled_pkg_info, symbols))
 }
 
 fn use_def_test_suite<F: MoveFlavor + Default>(
@@ -981,14 +1005,6 @@ fn access_chain_quick_fix_test_suite<F: MoveFlavor + Default>(
     let packages_info = Arc::new(Mutex::new(CachedPackages::new()));
     let ide_files_root: VfsPath = MemoryFS::new().into();
 
-    // Compile once at suite level
-    let (mut compiled_pkg_info, mut symbols) = test_symbols_with_optional_modifications::<F>(
-        packages_info.clone(),
-        ide_files_root.clone(),
-        project_path.clone(),
-        None,
-    )?;
-
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
 
@@ -1002,6 +1018,17 @@ fn access_chain_quick_fix_test_suite<F: MoveFlavor + Default>(
 
         fpath.push(format!("sources/{file}"));
         let cpath = canonicalize_path(fpath.clone());
+
+        // Compile per file to get autocomplete/alias info for that file. The exact cursor position
+        // is computed later for each diagnostic triggering a quick fix action, so it does not
+        // need to happen per test.
+        let (mut compiled_pkg_info, mut symbols) = test_symbols_with_cursor::<F>(
+            packages_info.clone(),
+            ide_files_root.clone(),
+            project_path.clone(),
+            &cpath,
+            None,
+        )?;
 
         for (idx, test) in tests.iter().enumerate() {
             test.test(idx, &mut compiled_pkg_info, &mut symbols, writer, &cpath)?;
@@ -1107,9 +1134,9 @@ fn rename_test_suite<F: MoveFlavor + Default>(
 fn move_ide_testsuite<F: MoveFlavor + Default>(test_path: &Path) -> datatest_stable::Result<()> {
     let suite_file = io::BufReader::new(File::open(test_path)?);
     let stripped = StripComments::new(suite_file);
-    let suite: TestSuite = serde_json::from_reader(stripped)?;
+    let suites: TestSuites = serde_json::from_reader(stripped)?;
 
-    let output = match suite {
+    let run_suite = |suite| match suite {
         TestSuite::UseDef {
             project,
             file_tests,
@@ -1142,7 +1169,18 @@ fn move_ide_testsuite<F: MoveFlavor + Default>(test_path: &Path) -> datatest_sta
             project,
             file_tests,
         } => rename_test_suite::<F>(project, file_tests),
-    }?;
+    };
+
+    let output = match suites {
+        TestSuites::Single(suite) => run_suite(suite)?,
+        TestSuites::Many(suites) => {
+            let mut output = String::new();
+            for suite in suites {
+                output.push_str(&run_suite(suite)?);
+            }
+            output
+        }
+    };
 
     insta_assert! {
         input_path: test_path,

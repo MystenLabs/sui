@@ -17,10 +17,7 @@ use crate::{
         },
     },
     diag,
-    diagnostics::{
-        Diagnostic, Diagnostics,
-        codes::{DiagnosticInfo, Severity, custom},
-    },
+    diagnostics::{Diagnostic, Diagnostics},
     expansion::ast::ModuleIdent,
     hlir::ast::{
         BaseType, BaseType_, Exp, LValue, LValue_, Label, ModuleCall, SingleType, SingleType_,
@@ -35,10 +32,7 @@ use crate::{
     sui_mode::{
         SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME,
         info::TransferKind,
-        linters::{
-            LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode, PUBLIC_SHARE_FUN,
-            SHARE_FUN, TRANSFER_MOD_NAME, type_abilities,
-        },
+        linters::{PUBLIC_SHARE_FUN, SHARE_FUN, SuiLintCode, TRANSFER_MOD_NAME, type_abilities},
     },
 };
 use move_core_types::account_address::AccountAddress;
@@ -50,14 +44,6 @@ const SHARE_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
     (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, PUBLIC_SHARE_FUN),
     (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, SHARE_FUN),
 ];
-
-const SHARE_OWNED_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Sui as u8,
-    LinterDiagnosticCode::ShareOwned as u8,
-    "possible owned object share",
-);
 
 //**************************************************************************************************
 // types
@@ -124,17 +110,27 @@ impl SimpleAbsInt for ShareOwnedVerifierAI<'_> {
     type State = State;
     type ExecutionContext = ExecutionContext;
 
-    fn finish(&mut self, _final_states: BTreeMap<Label, State>, diags: Diagnostics) -> Diagnostics {
+    fn finish(
+        &mut self,
+        _final_states: BTreeMap<Label, crate::cfgir::absint::BlockStates<State>>,
+        diags: Diagnostics,
+    ) -> Diagnostics {
         diags
     }
 
-    fn start_command(&self, _: &mut State) -> ExecutionContext {
+    fn start_command(&self, _label: Label, _idx: usize, _: &mut State) -> ExecutionContext {
         ExecutionContext {
             diags: Diagnostics::new(),
         }
     }
 
-    fn finish_command(&self, context: ExecutionContext, _state: &mut State) -> Diagnostics {
+    fn finish_command(
+        &self,
+        _label: Label,
+        _idx: usize,
+        context: ExecutionContext,
+        _state: &mut State,
+    ) -> Diagnostics {
         let ExecutionContext { diags } = context;
         diags
     }
@@ -313,7 +309,7 @@ impl ShareOwnedVerifierAI<'_> {
             TransferKind::PrivateTransfer(loc) => (loc, "Transferred as an owned object here"),
         };
         let d = diag!(
-            SHARE_OWNED_DIAG,
+            SuiLintCode::ShareOwned.diag_info(),
             (*loc, msg),
             (f.arguments[0].exp.loc, uid_msg),
             (*not_fresh_loc, not_fresh_msg),

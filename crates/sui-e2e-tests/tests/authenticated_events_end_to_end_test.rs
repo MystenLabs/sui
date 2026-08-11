@@ -32,7 +32,7 @@ async fn setup_test_cluster_with_auth_events() -> TestCluster {
 async fn setup_test_cluster_with_auth_events_disabled() -> TestCluster {
     let _guard: sui_protocol_config::OverrideGuard =
         ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-            cfg.disable_authenticated_event_streams_for_testing();
+            cfg.set_enable_authenticated_event_streams_for_testing(false);
             cfg
         });
 
@@ -90,7 +90,7 @@ async fn load_event_stream_head_by_object_id(
     state: &sui_core::authority::AuthorityState,
     object_id: ObjectID,
 ) -> Option<EventStreamHead> {
-    let obj = state.get_object(&object_id).await?;
+    let obj = state.get_object(&object_id)?;
     let mo = obj.data.try_as_move()?;
     let field = mo.to_rust::<Field<ar::AccumulatorKey, EventStreamHead>>()?;
     Some(field.value)

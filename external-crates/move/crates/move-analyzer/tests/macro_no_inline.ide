@@ -1,0 +1,138 @@
+// Tests smart IDE features inside macro definitions before macro inlining.
+[
+  // Go-to-def and hover for names in non-inlined macro bodies.
+  {
+    "UseDef": {
+      "project": "tests/macros",
+      "file_tests": {
+        "macro_no_inline.move": [
+          // Function call inside a macro body.
+          {
+            "use_line": 17,
+            "use_ndx": 0
+          },
+          // Local binding used as a call argument.
+          {
+            "use_line": 17,
+            "use_ndx": 1
+          },
+          // Local binding definition.
+          {
+            "use_line": 16,
+            "use_ndx": 0
+          },
+          // Local binding from a struct macro parameter.
+          {
+            "use_line": 22,
+            "use_ndx": 0
+          },
+          // Local bound from a macro parameter used as a field base.
+          {
+            "use_line": 23,
+            "use_ndx": 0
+          },
+          // Struct field selected inside a macro body.
+          {
+            "use_line": 23,
+            "use_ndx": 1
+          },
+          // Local binding receiving a lambda parameter call.
+          {
+            "use_line": 34,
+            "use_ndx": 0
+          },
+          // Local binding from a generic macro parameter.
+          {
+            "use_line": 40,
+            "use_ndx": 0
+          },
+          // Method call on a local bound from a macro parameter.
+          {
+            "use_line": 42,
+            "use_ndx": 2
+          },
+          // Local binding inferred from a method call.
+          {
+            "use_line": 42,
+            "use_ndx": 0
+          }
+        ]
+      }
+    }
+  },
+  // References whose use sites are inside non-inlined macro bodies.
+  {
+    "References": {
+      "project": "tests/macros",
+      "file_tests": {
+        "macro_no_inline.move": [
+          // Function referenced from a macro body.
+          {
+            "use_line": 10,
+            "use_ndx": 0
+          },
+          // Struct referenced by macro parameter types.
+          {
+            "use_line": 6,
+            "use_ndx": 0
+          },
+          // Field referenced from a macro body.
+          {
+            "use_line": 7,
+            "use_ndx": 0
+          }
+        ]
+      }
+    }
+  },
+  // Inlay type hints for locals inferred in non-inlined macro bodies.
+  {
+    "Hint": {
+      "project": "tests/macros",
+      "file_tests": {
+        "macro_no_inline.move": [
+          // Local from arithmetic over a macro parameter.
+          {
+            "use_line": 16,
+            "use_col": 19
+          },
+          // Local from a lambda macro parameter call.
+          {
+            "use_line": 34,
+            "use_col": 19
+          },
+          // Local from a generic macro parameter.
+          {
+            "use_line": 40,
+            "use_col": 14
+          },
+          // Numeric local in a generic macro body.
+          {
+            "use_line": 41,
+            "use_col": 18
+          },
+          // Local inferred from a method call.
+          {
+            "use_line": 42,
+            "use_col": 14
+          }
+        ]
+      }
+    }
+  },
+  // Dot completion inside a non-inlined macro body.
+  {
+    "AutoCompletion": {
+      "project": "tests/macros",
+      "file_tests": {
+        "macro_no_inline.move": [
+          // Field completion for a macro parameter.
+          {
+            "use_line": 29,
+            "use_col": 10
+          }
+        ]
+      }
+    }
+  }
+]

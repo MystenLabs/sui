@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_default_config::DefaultConfig;
+use std::num::NonZeroUsize;
+
+use serde::Deserialize;
+use serde::Serialize;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline;
@@ -16,9 +19,8 @@ pub trait Merge: Sized {
     fn merge(self, other: Self) -> anyhow::Result<Self>;
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct IndexerConfig {
     /// How checkpoints are read by the indexer.
     pub ingestion: IngestionLayer,
@@ -46,25 +48,24 @@ pub struct IndexerConfig {
 // configuration files can be combined into one final configuration. Having a separate type for
 // reading configs also allows us to detect and warn against unrecognised fields.
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct IngestionLayer {
     pub ingest_concurrency: Option<ConcurrencyConfig>,
     pub retry_interval_ms: Option<u64>,
-    pub streaming_backoff_initial_batch_size: Option<usize>,
+    pub streaming_backoff_initial_batch_size: Option<NonZeroUsize>,
     pub streaming_backoff_max_batch_size: Option<usize>,
     pub streaming_connection_timeout_ms: Option<u64>,
     pub streaming_statement_timeout_ms: Option<u64>,
+    pub min_cohort_boundary: Option<u64>,
 
     /// Deprecated: accepted (and ignored) so old configs don't fail to parse. Replaced by
     /// per-pipeline `ingestion.subscriber-channel-size`.
     pub checkpoint_buffer_size: Option<usize>,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct SequentialLayer {
     pub committer: Option<CommitterLayer>,
     pub ingestion: Option<PipelineIngestionLayer>,
@@ -76,9 +77,8 @@ pub struct SequentialLayer {
     pub pipeline_depth: Option<usize>,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
     pub ingestion: Option<PipelineIngestionLayer>,
@@ -92,25 +92,22 @@ pub struct ConcurrentLayer {
     pub committer_channel_size: Option<usize>,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct PipelineIngestionLayer {
     pub subscriber_channel_size: Option<usize>,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct PrunerLayer {
     pub interval_ms: Option<u64>,
     pub delay_ms: Option<u64>,
@@ -119,9 +116,8 @@ pub struct PrunerLayer {
     pub prune_concurrency: Option<u64>,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "snake_case", deny_unknown_fields)]
 pub struct PipelineLayer {
     // Sequential pipelines
     pub sum_displays: Option<SequentialLayer>,
@@ -129,6 +125,7 @@ pub struct PipelineLayer {
     // All concurrent pipelines
     pub cp_bloom_blocks: Option<ConcurrentLayer>,
     pub cp_blooms: Option<ConcurrentLayer>,
+    pub cp_digests: Option<ConcurrentLayer>,
     pub cp_sequence_numbers: Option<ConcurrentLayer>,
     pub ev_emit_mod: Option<ConcurrentLayer>,
     pub ev_struct_inst: Option<ConcurrentLayer>,
@@ -215,6 +212,7 @@ impl IngestionLayer {
             streaming_statement_timeout_ms: self
                 .streaming_statement_timeout_ms
                 .unwrap_or(base.streaming_statement_timeout_ms),
+            min_cohort_boundary: self.min_cohort_boundary.unwrap_or(base.min_cohort_boundary),
         })
     }
 }
@@ -314,6 +312,7 @@ impl PipelineLayer {
         PipelineLayer {
             cp_blooms: Some(Default::default()),
             cp_bloom_blocks: Some(Default::default()),
+            cp_digests: Some(Default::default()),
             sum_displays: Some(Default::default()),
             cp_sequence_numbers: Some(Default::default()),
             ev_emit_mod: Some(Default::default()),
@@ -365,6 +364,7 @@ impl Merge for IngestionLayer {
             streaming_statement_timeout_ms: other
                 .streaming_statement_timeout_ms
                 .or(self.streaming_statement_timeout_ms),
+            min_cohort_boundary: other.min_cohort_boundary.or(self.min_cohort_boundary),
             checkpoint_buffer_size: other.checkpoint_buffer_size.or(self.checkpoint_buffer_size),
         })
     }
@@ -445,6 +445,7 @@ impl Merge for PipelineLayer {
         Ok(PipelineLayer {
             cp_blooms: self.cp_blooms.merge(other.cp_blooms)?,
             cp_bloom_blocks: self.cp_bloom_blocks.merge(other.cp_bloom_blocks)?,
+            cp_digests: self.cp_digests.merge(other.cp_digests)?,
             sum_displays: self.sum_displays.merge(other.sum_displays)?,
             cp_sequence_numbers: self.cp_sequence_numbers.merge(other.cp_sequence_numbers)?,
             ev_emit_mod: self.ev_emit_mod.merge(other.ev_emit_mod)?,
@@ -489,6 +490,7 @@ impl From<IngestionConfig> for IngestionLayer {
             streaming_backoff_max_batch_size: Some(config.streaming_backoff_max_batch_size),
             streaming_connection_timeout_ms: Some(config.streaming_connection_timeout_ms),
             streaming_statement_timeout_ms: Some(config.streaming_statement_timeout_ms),
+            min_cohort_boundary: Some(config.min_cohort_boundary),
             checkpoint_buffer_size: None,
         }
     }

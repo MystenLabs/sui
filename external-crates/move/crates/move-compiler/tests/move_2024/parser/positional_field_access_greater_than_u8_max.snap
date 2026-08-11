@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E03010]: unbound field
+error[EC03010]: unbound field
   ┌─ tests/move_2024/parser/positional_field_access_greater_than_u8_max.move:5:9
   │
 5 │         y.256
   │         ^^^^^ Unbound field '256' in '0x42::M::Foo'
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
   ┌─ tests/move_2024/parser/positional_field_access_greater_than_u8_max.move:5:9
   │
 2 │     public struct Foo(u64)
@@ -24,7 +24,7 @@ error[E06001]: unused value without 'drop'
 5 │         y.256
   │         ^^^^^ Invalid return
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_2024/parser/positional_field_access_greater_than_u8_max.move:5:11
   │
 5 │         y.256

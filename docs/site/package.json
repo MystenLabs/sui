@@ -5,8 +5,8 @@
   "scripts": {
     "docusaurus": "docusaurus",
     "update-cli-docs": "node src/shared/js/update-cli-output.js",
-    "prebuild": "node scripts/generate-import-context.js; node scripts/generate-resolved-pages.js; node scripts/convert-awesome-sui.mjs; node scripts/convert-awesome-sui-gaming.mjs; node src/shared/js/convert-release-notes.cjs",
-    "prestart": "node scripts/convert-awesome-sui.mjs;  node scripts/convert-awesome-sui-gaming.mjs; node src/shared/js/convert-release-notes.cjs",
+    "prebuild": "node scripts/fetch-external-docs.js --force; node scripts/transform-external-docs.js; node scripts/generate-skills.mjs; node scripts/generate-import-context.js; node scripts/generate-resolved-pages.js; node scripts/convert-awesome-sui.mjs; node scripts/convert-awesome-sui-gaming.mjs; node src/shared/js/convert-release-notes.cjs",
+    "prestart": "node scripts/fetch-external-docs.js; node scripts/transform-external-docs.js; node scripts/generate-skills.mjs; node scripts/convert-awesome-sui.mjs;  node scripts/convert-awesome-sui-gaming.mjs; node src/shared/js/convert-release-notes.cjs",
     "start": "rm -r ../content/references/framework; node scripts/grpc-download.js; docusaurus graphql-to-doc:beta && node scripts/remove-no-desc.mjs ../content/references/sui-api/sui-graphql/beta/reference; node scripts/getopenrpcspecs.js; node scripts/massagegraphql.js; docusaurus start",
     "build": "bash scripts/build-and-check.sh",
     "swizzle": "docusaurus swizzle",
@@ -19,11 +19,16 @@
     "typecheck": "tsc",
     "fire:deploy-dev": "firebase deploy --only hosting:dev",
     "ampli": "ampli",
-    "test:markdown": "node scripts/test-markdown-export.js"
+    "test:markdown": "node scripts/test-markdown-export.js",
+    "docs:audit": "node scripts/audit-docs.mjs",
+    "docs:audit:summary": "node scripts/audit-docs.mjs --summary",
+    "docs:audit:failures": "node scripts/audit-docs.mjs --only-failures --summary",
+    "docs:validate-frontmatter": "node scripts/validate-frontmatter.mjs --summary"
   },
   "dependencies": {
     "@amplitude/analytics-browser": "^2.5.3",
     "@docusaurus/plugin-content-docs": "3.9.2",
+    "ajv": "^8.17.1",
     "@emotion/react": "^11.11.4",
     "@emotion/styled": "^11.11.0",
     "@graphql-markdown/docusaurus": "^1.24.0",

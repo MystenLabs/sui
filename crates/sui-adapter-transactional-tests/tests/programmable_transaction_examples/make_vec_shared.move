@@ -3,7 +3,7 @@
 
 // tests shared object scenarios as part of programmable transactions
 
-//# init --addresses t2=0x0 --accounts A B --shared-object-deletion true
+//# init --addresses t2=0x0 --accounts A B --enable-feature-flags shared_object_deletion
 
 //# publish
 

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:23:12
    │
 23 │         f: X,
@@ -13,7 +13,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:27:14
    │
 27 │         Some(X),
@@ -21,7 +21,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:28:20
    │
 28 │         Other { y: X },
@@ -29,7 +29,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:38:24
    │
 38 │     public fun lol(_: &X) { }
@@ -37,7 +37,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:40:32
    │
 40 │     public fun quux(x: 0x7::l::X) {
@@ -45,7 +45,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:41:17
    │
 41 │         0x7::l::foo();
@@ -53,7 +53,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:42:11
    │
 42 │         x.bar();
@@ -61,7 +61,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:47:12
    │
 47 │         l::foo(); 
@@ -69,7 +69,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:52:34
    │
 52 │     public fun dep_meth_call(x: &X) {
@@ -77,7 +77,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:53:11
    │
 53 │         x.bar();
@@ -85,7 +85,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:58:11
    │
 58 │         x.lol();
@@ -93,7 +93,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:59:11
    │
 59 │         x.rofl();
@@ -101,7 +101,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:66:33
    │
 66 │         let _ = T::Some(0x7::l::make_x());
@@ -109,7 +109,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_inter_module_calls.move:67:39
    │
 67 │         let _ = T::Other { y: 0x7::l::make_x()};

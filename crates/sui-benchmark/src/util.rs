@@ -66,6 +66,7 @@ pub async fn publish_basics_package(
         let transaction = TestTransactionBuilder::new(sender, current_gas, gas_price)
             .publish_examples("basics")
             .await
+            .ensure_unique()
             .build_and_sign(keypair);
         tracing::info!(
             "Publishing basics package with tx digest {:?} (attempt {})",

@@ -24,7 +24,7 @@ use sui_types::{
     object::Owner,
     object::{Data, Object},
     storage::{
-        BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage, WriteKind,
+        BackingPackageStore, ObjectChange, ParentSync, RuntimeObjectResolver, Storage, WriteKind,
     },
     transaction::InputObjects,
     TypeTag,
@@ -543,6 +543,9 @@ impl TemporaryStore<'_> {
                         "ConsensusAddressOwner does not exist for this execution version"
                     )
                 }
+                Owner::Party { .. } => {
+                    unimplemented!("Party does not exist for this execution version")
+                }
             }
         }
 
@@ -578,6 +581,9 @@ impl TemporaryStore<'_> {
                                 "ConsensusAddressOwner does not exist for this execution version"
                             )
                         }
+                        Owner::Party { .. } => {
+                            unimplemented!("Party does not exist for this execution version")
+                        }
                     }
                 }
                 WriteKind::Create | WriteKind::Unwrap => {
@@ -607,6 +613,9 @@ impl TemporaryStore<'_> {
                             unimplemented!(
                                 "ConsensusAddressOwner does not exist for this execution version"
                             )
+                        }
+                        Owner::Party { .. } => {
+                            unimplemented!("Party does not exist for this execution version")
                         }
                     }
                 }
@@ -950,7 +959,7 @@ impl TemporaryStore<'_> {
     }
 }
 
-impl ChildObjectResolver for TemporaryStore<'_> {
+impl RuntimeObjectResolver for TemporaryStore<'_> {
     fn read_child_object(
         &self,
         parent: &ObjectID,

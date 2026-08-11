@@ -1,12 +1,62 @@
 ---
 title: Build a Custom Indexer
-description: Build a custom indexer using the `sui-indexer-alt-framework` module. The example indexer demonstrates a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL.
-keywords: [ indexer, custom indexer, indexer framework, indexer pipeline ]
+description: >-
+  Build a custom indexer using the `sui-indexer-alt-framework` module. The
+  example indexer demonstrates a sequential pipeline that extracts transaction
+  digests from Sui checkpoints and stores them in a local PostgreSQL database,
+  the default example storage backend.
+keywords:
+  - indexer
+  - custom indexer
+  - indexer framework
+  - indexer pipeline
+goal:
+  description: >-
+    Reader can build a custom indexer using the `sui-indexer-alt-framework`
+    module.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Build a custom indexer
+    stage: History
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Build a custom indexer
+    stage: Ship
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Build a custom indexer
+    stage: Ship
+questions:
+  - How do I build a custom Sui indexer?
+  - What is the sui-indexer-alt-framework?
+  - Where can I find custom indexer examples?
+answer: Build a custom indexer using the `sui-indexer-alt-framework` module.
 ---
 
-This guide provide a practical example for building a custom indexer. Refer to [Custom Indexing Framework](/develop/accessing-data/custom-indexer/custom-indexers) and [Indexer Pipeline Architecture](/develop/accessing-data/custom-indexer/pipeline-architecture) for a conceptual overview of the indexer framework.
+Build a custom indexer using the `sui-indexer-alt-framework` module.
 
-To build a complete custom indexer, use the `sui-indexer-alt-framework`. The steps that follow demonstrate how to create a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL. You can find the [source code for the framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-framework) in the Sui repo on GitHub.
+This guide provides a practical example for building a custom indexer. Refer to [Custom Indexing Framework](/develop/accessing-data/custom-indexer/custom-indexers) and [Indexer Pipeline Architecture](/develop/accessing-data/custom-indexer/pipeline-architecture) for a conceptual overview of the indexer framework.
+
+To build a complete custom indexer, use the `sui-indexer-alt-framework`. The steps that follow demonstrate how to create a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL database. PostgreSQL is the default example backend, not a requirement of the framework. You can find the [source code for the framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-framework) in the Sui repo on GitHub.
 
 :::tip
 
@@ -43,20 +93,22 @@ $ diesel --version
 
 The following steps show how to create an indexer that:
 
-- Connects to Sui Testnet: Uses the remote checkpoint store at https://checkpoints.testnet.sui.io as a fallback source. Testnet still provides full checkpoint history.
+- Connects to Sui checkpoint sources: Uses the durable Requester Pays GCS bucket for production backfill, then fullnode gRPC polling and streaming for steady-state ingestion. The public-good HTTPS checkpoint store is for recent-data testing only.
 - Processes checkpoints: Streams checkpoint data continuously.
 - Extracts transaction data: Pulls transaction digests from each checkpoint.
-- Stores in local PostgreSQL: Commits data to a local PostgreSQL database.
+- Stores in local PostgreSQL: Commits data to a local PostgreSQL database as the default example storage layer. For other storage systems, implement the framework's `Store` and `Connection` traits.
 - Implements sequential pipeline: Uses in-order processing with batching for optimal consistency and performance.
 
 In the end, you have a working indexer that demonstrates all core framework concepts and can serve as a foundation for more complex custom indexers.
 
 :::info
 
-Sui provides checkpoint stores for both Mainnet and Testnet.
+Sui provides checkpoint data through multiple sources:
 
-- Testnet: `https://checkpoints.testnet.sui.io` with full history
-- Mainnet: `https://checkpoints.mainnet.sui.io` for the most recent 30 days only
+- **GCS buckets (production backfill and recovery):** `gs://mysten-testnet-checkpoints-use4` for Testnet or `gs://mysten-mainnet-checkpoints-use4` for Mainnet. These buckets have full checkpoint retention and are Requester Pays enabled, so configure GCS credentials and a billing project before using them.
+- **Fullnode gRPC (production steady state):** Use a production-grade endpoint from an [RPC provider](/develop/accessing-data/rpc-providers) for polling and streaming after the historical backfill reaches the network tip.
+- **Public-good fullnode gRPC (testing only):** `https://fullnode.testnet.sui.io:443`, `https://fullnode.mainnet.sui.io:443`, and `https://fullnode.devnet.sui.io:443`. Do not use these endpoints for production ingestion.
+- **Public HTTPS checkpoint stores (testing only, most recent 30 days):** `https://checkpoints.testnet.sui.io` for Testnet or `https://checkpoints.mainnet.sui.io` for Mainnet. Do not use these public-good endpoints for production ingestion.
 
 :::
 
@@ -275,15 +327,15 @@ Key concepts:
 Save the `handlers.rs` file.
 
 <details>
-  
+
 <summary>
-  
+
 Processor trait definition
-  
+
 </summary>
-  
+
 <ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/processor.rs" mode="code" trait="Processor" />
-  
+
 </details>
 
 ##step Implement the `Handler`
@@ -313,27 +365,27 @@ You can override the default batch limits by implementing constants in your `Han
 The `handlers.rs` file is now complete. Save the file.
 
 <details>
-  
+
 <summary>
-  
+
 Complete `handler.rs` file
-  
+
 </summary>
-  
+
 <ImportContent source="examples/rust/basic-sui-indexer/src/handlers.rs" mode="code" />
-  
+
 </details>
 
 <details>
-  
+
 <summary>
-  
+
 Handler trait definition
-  
+
 </summary>
-  
+
 <ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/sequential/mod.rs" mode="code" trait="Handler" />
-  
+
 </details>
 
 ##step Create `.env` file
@@ -342,25 +394,25 @@ The main function you create in the next step needs the value you stored to the 
 
 <Tabs>
 <TabItem label="Bash/zsh" value="bash">
-  
+
 ```sh
 echo "DATABASE_URL=$PSQL_URL" > .env
 ```
-  
+
 </TabItem>
 <TabItem label="fish" value="fish">
-  
+
 ```sh
 echo "DATABASE_URL=$PSQL_URL" > .env
 ```
-  
+
 </TabItem>
 <TabItem label="PowerShell" value="powershell">
-  
+
 ```sh
 "DATABASE_URL=$env:PSQL_URL" | Out-File -Encoding UTF8 .env
 ```
-  
+
 </TabItem>
 </Tabs>
 
@@ -385,27 +437,46 @@ Your indexer is now complete. The next steps walk you through running the indexe
 
 ##step Run your indexer
 
-Use the `cargo run` command to run your indexer against Testnet. For normal operation, prefer full node gRPC as your primary source and use the remote checkpoint store only as a fallback or for backfill (see [Checkpoint Data Sources](/develop/accessing-data/custom-indexer/indexer-data-integration#checkpoint-data-sources) for details):
+Use the `cargo run` command to run your indexer against Testnet. Production operation has separate backfill and steady-state phases. See [Checkpoint Data Sources](/develop/accessing-data/custom-indexer/indexer-data-integration#checkpoint-data-sources) for details on each source.
 
-**Recommended: gRPC streaming from a full node (with remote checkpoint store fallback):**
-
-```sh
-$ cargo run -- --remote-store-url https://checkpoints.testnet.sui.io --streaming-url https://fullnode.testnet.sui.io:443
-```
-
-**Using remote checkpoint storage:**
+Before using a Requester Pays GCS bucket, configure credentials and a billing project. Pass the billing project in the `x-goog-user-project` header:
 
 ```sh
-$ cargo run -- --remote-store-url https://checkpoints.testnet.sui.io
+$ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/gcp-credentials.json
+$ export GOOGLE_CLOUD_PROJECT=your-billing-project
 ```
 
-**Using a GCS checkpoint bucket directly:**
+**Phase 1: backfill from the full-retention GCS checkpoint bucket:**
 
 ```sh
-$ cargo run -- --remote-store-gcs mysten-mainnet-checkpoints-use4
+$ cargo run -- \
+    --remote-store-gcs mysten-testnet-checkpoints-use4 \
+    --remote-store-header "x-goog-user-project:${GOOGLE_CLOUD_PROJECT}"
 ```
 
-The public HTTPS checkpoint endpoints retain only the most recent 30 days of checkpoints. For Mainnet backfills older than 30 days, use `gs://mysten-mainnet-checkpoints-use4` through `--remote-store-gcs mysten-mainnet-checkpoints-use4`. This bucket is Requester Pays enabled and should be accessed through the indexing framework's `--remote-store-gcs` option rather than `--remote-store-url`. See [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays) and [Running a Remote Store](/operators/data-management/remote-store-setup).
+After the indexer reaches the network tip, stop it and restart it with fullnode gRPC. Existing pipelines resume from their committed watermarks. For production, obtain a production-grade fullnode gRPC endpoint from an RPC provider:
+
+**Phase 2: use fullnode gRPC polling and streaming for steady state:**
+
+```sh
+$ export FULLNODE_GRPC_URL=https://your-rpc-provider.example:443
+
+$ cargo run -- \
+    --rpc-api-url "$FULLNODE_GRPC_URL" \
+    --streaming-url "$FULLNODE_GRPC_URL"
+```
+
+For testing only, you can instead use the public-good Testnet endpoint `https://fullnode.testnet.sui.io:443`. The public-good Mainnet, Testnet, and Devnet fullnode endpoints are not intended for production use.
+
+**Testing only: public HTTPS checkpoint store (most recent 30 days):**
+
+```sh
+$ cargo run -- \
+    --remote-store-url https://checkpoints.testnet.sui.io \
+    --first-checkpoint RECENT_CHECKPOINT
+```
+
+The public HTTPS checkpoint stores (`https://checkpoints.testnet.sui.io` and `https://checkpoints.mainnet.sui.io`) retain only the most recent 30 days of checkpoints. Use them only for testing. When using one with a fresh database, set `--first-checkpoint` to a checkpoint that is still within the retained range; otherwise, the indexer starts at checkpoint 0 and retries missing checkpoints indefinitely. For production backfills, use `--remote-store-gcs` with `mysten-testnet-checkpoints-use4` for Testnet or `mysten-mainnet-checkpoints-use4` for Mainnet. See [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays) and [Running a Remote Store](/operators/data-management/remote-store-setup) for more information.
 
 :::info
 
@@ -438,7 +509,5 @@ $ SELECT * FROM transaction_digests LIMIT 5;
 ```
 
 To confirm your data is accurate, copy any transaction digest from your database and verify it on SuiScan: [https://suiscan.xyz/testnet/home](https://suiscan.xyz/testnet/home)
-
-You've built a working custom indexer. 🎉 
 
 The key concepts covered here apply to any custom indexer: define your data structure, implement the `Processor` and `Handler` traits, and let the framework handle the infrastructure.

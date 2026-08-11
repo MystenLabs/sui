@@ -16,7 +16,10 @@ use crate::{
 use im::ordmap::OrdMap;
 use lsp_types::Position;
 use move_command_line_common::files::FileHash;
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use move_compiler::{
     expansion::ast::ModuleIdent,
@@ -97,6 +100,8 @@ pub fn run_typing_analysis(
         compiler_analysis_info,
         type_params: BTreeMap::new(),
         expression_scope: OrdMap::new(),
+        current_macro_call_loc: None,
+        macro_by_value_lvalue_locs: BTreeSet::new(),
     };
 
     process_typed_modules(

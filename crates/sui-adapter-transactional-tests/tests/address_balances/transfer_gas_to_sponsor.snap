@@ -1,0 +1,32 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 15-16:
+//# programmable --sender A --sponsor B --inputs @B
+//> TransferObjects([Gas], Input(0))
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 18-21:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, line 22:
+//# view-object 0,1
+Owner: Account Address ( B )
+Version: 2
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,1),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299999998012000u64,
+    },
+}

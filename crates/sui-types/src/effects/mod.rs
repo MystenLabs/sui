@@ -4,17 +4,12 @@
 pub use self::effects_v2::TransactionEffectsV2;
 use crate::accumulator_event::AccumulatorEvent;
 use crate::base_types::{ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
-use crate::committee::{Committee, EpochId};
-use crate::crypto::{
-    AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, EmptySignInfo,
-    default_hash,
-};
+use crate::committee::EpochId;
+use crate::crypto::{AuthoritySignInfo, EmptySignInfo, default_hash};
 use crate::digests::{
     ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
 };
-use crate::error::SuiResult;
 use crate::event::Event;
-use crate::execution::SharedInput;
 use crate::execution_status::{ExecutionStatus, MoveLocation};
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
@@ -28,8 +23,8 @@ pub use object_change::{
     EffectsObjectChange, ObjectIn, ObjectOut,
 };
 use serde::{Deserialize, Serialize};
-use shared_crypto::intent::{Intent, IntentScope};
-use std::collections::{BTreeMap, BTreeSet};
+use shared_crypto::intent::IntentScope;
+use std::collections::BTreeMap;
 pub use test_effects_builder::TestEffectsBuilder;
 
 mod effects_v1;
@@ -129,8 +124,7 @@ impl TransactionEffects {
         status: ExecutionStatus,
         executed_epoch: EpochId,
         gas_used: GasCostSummary,
-        shared_objects: Vec<SharedInput>,
-        loaded_per_epoch_config_objects: BTreeSet<ObjectID>,
+        unchanged_consensus_objects: Vec<(ObjectID, UnchangedConsensusKind)>,
         transaction_digest: TransactionDigest,
         lamport_version: SequenceNumber,
         changed_objects: BTreeMap<ObjectID, EffectsObjectChange>,
@@ -142,8 +136,7 @@ impl TransactionEffects {
             status,
             executed_epoch,
             gas_used,
-            shared_objects,
-            loaded_per_epoch_config_objects,
+            unchanged_consensus_objects,
             transaction_digest,
             lamport_version,
             changed_objects,
@@ -448,28 +441,10 @@ pub struct TransactionEffectsDebugSummary {
 pub type TransactionEffectsEnvelope<S> = Envelope<TransactionEffects, S>;
 pub type UnsignedTransactionEffects = TransactionEffectsEnvelope<EmptySignInfo>;
 pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo>;
-pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
 
 pub type TrustedSignedTransactionEffects = TrustedEnvelope<TransactionEffects, AuthoritySignInfo>;
 pub type VerifiedTransactionEffectsEnvelope<S> = VerifiedEnvelope<TransactionEffects, S>;
 pub type VerifiedSignedTransactionEffects = VerifiedTransactionEffectsEnvelope<AuthoritySignInfo>;
-pub type VerifiedCertifiedTransactionEffects =
-    VerifiedTransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
-
-impl CertifiedTransactionEffects {
-    pub fn verify_authority_signatures(&self, committee: &Committee) -> SuiResult {
-        self.auth_sig().verify_secure(
-            self.data(),
-            Intent::sui_app(IntentScope::TransactionEffects),
-            committee,
-        )
-    }
-
-    pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedCertifiedTransactionEffects> {
-        self.verify_authority_signatures(committee)?;
-        Ok(VerifiedCertifiedTransactionEffects::new_from_verified(self))
-    }
-}
 
 #[cfg(test)]
 #[path = "../unit_tests/effects_tests.rs"]

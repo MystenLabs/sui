@@ -112,7 +112,32 @@ export function printStructDefinition(
     ]);
 }
 
-type Ability = { name: 'key' | 'store' | 'drop'; text: Doc };
+type Ability = {
+    name: 'key' | 'copy' | 'store' | 'drop';
+    text: Doc;
+    /** trailing comment followed by a hardline — used between abilities */
+    trailingBreak: Doc | null;
+    /** trailing comment deferred to the end of the line — used on the last ability */
+    trailingInline: Doc | null;
+};
+
+/**
+ * Join sorted abilities with commas, keeping each trailing comment after the
+ * comma that follows its ability (`copy, drop, // comment` — not
+ * `copy, drop // comment` with the comma swallowed onto the next line). The
+ * last ability defers its comment to the end of the line so the tokens that
+ * follow (`{`, `;`) are not pushed onto the next line.
+ */
+function joinAbilities(abilities: Ability[]): Doc {
+    return abilities.map((ability, i) => {
+        const isLast = i === abilities.length - 1;
+        if (isLast) {
+            return [ability.text, ability.trailingInline || ''];
+        }
+
+        return [ability.text, ',', ability.trailingBreak ? ability.trailingBreak : ' '];
+    });
+}
 
 /**
  * Print `ability_decls` node.
@@ -125,10 +150,7 @@ export function printAbilityDeclarations(
     const abilities = formatAndSortAbilities(path, options, print);
     return [
         ' has ',
-        join(
-            ', ',
-            abilities.map((ability) => ability.text),
-        ),
+        joinAbilities(abilities),
         path.next?.namedChildren[0]?.type === StructDefinition.PositionalFields ? ' ' : '',
     ];
 }
@@ -142,14 +164,7 @@ export function printPostfixAbilityDeclarations(
     print: printFn,
 ): Doc {
     const abilities = formatAndSortAbilities(path, options, print);
-    return group([
-        ' has ',
-        join(
-            ', ',
-            abilities.map((ability) => ability.text),
-        ),
-        ';',
-    ]);
+    return group([' has ', joinAbilities(abilities), ';']);
 }
 
 /**
@@ -241,17 +256,28 @@ function formatAndSortAbilities(
     options: MoveOptions,
     print: printFn,
 ): Ability[] {
-    const abilities: Ability[] = path.map(
-        (path) => ({
+    const abilities: Ability[] = path.map((path) => {
+        const trailing = path.node.trailingComment;
+        const isBlock = trailing?.type == 'block_comment';
+
+        return {
             name: path.node.text as Ability['name'],
-            text: [
-                printLeadingComment(path, options),
-                path.node.text,
-                printTrailingComment(path, true),
-            ] as Doc,
-        }),
-        'nonFormattingChildren',
-    );
+            text: [printLeadingComment(path, options), path.node.text] as Doc,
+            // between abilities the padding space baked into the block
+            // comment separates it from the next ability; on the last
+            // ability the caller appends `;`/`{`, so it is stripped
+            trailingBreak: trailing
+                ? isBlock
+                    ? ([' ', trailing.text] as Doc)
+                    : printTrailingComment(path, true)
+                : null,
+            trailingInline: trailing
+                ? isBlock
+                    ? ([' ', trailing.text.trimEnd()] as Doc)
+                    : printTrailingComment(path)
+                : null,
+        };
+    }, 'nonFormattingChildren');
 
     // alphabetical but `key` always goes first
     const priority = {

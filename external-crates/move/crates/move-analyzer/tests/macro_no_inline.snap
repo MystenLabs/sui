@@ -1,0 +1,137 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== macro_no_inline.move ========================================================
+-- test 0 -------------------
+use line: 17, use_ndx: 0
+Use: 'helper', start: 8, end: 14
+Def: 'helper', line: 9, def char: 8
+TypeDef: no info
+On Hover:
+fun Macros::macro_no_inline::helper(
+	x: u64,
+	y: u64
+): u64
+
+-- test 1 -------------------
+use line: 17, use_ndx: 1
+Use: 'result', start: 15, end: 21
+Def: 'result', line: 15, def char: 12
+TypeDef: no info
+On Hover:
+let result: u64
+
+-- test 2 -------------------
+use line: 16, use_ndx: 0
+Use: 'result', start: 12, end: 18
+Def: 'result', line: 15, def char: 12
+TypeDef: no info
+On Hover:
+let result: u64
+
+-- test 3 -------------------
+use line: 22, use_ndx: 0
+Use: 's', start: 12, end: 13
+Def: 's', line: 21, def char: 12
+TypeDef: 'MyStruct', line: 5, char: 18
+On Hover:
+let s: Macros::macro_no_inline::MyStruct
+
+-- test 4 -------------------
+use line: 23, use_ndx: 0
+Use: 's', start: 8, end: 9
+Def: 's', line: 21, def char: 12
+TypeDef: 'MyStruct', line: 5, char: 18
+On Hover:
+let s: Macros::macro_no_inline::MyStruct
+
+-- test 5 -------------------
+use line: 23, use_ndx: 1
+Use: 'val', start: 10, end: 13
+Def: 'val', line: 6, def char: 8
+TypeDef: no info
+On Hover:
+Macros::macro_no_inline::MyStruct
+val: u64
+
+-- test 6 -------------------
+use line: 34, use_ndx: 0
+Use: 'result', start: 12, end: 18
+Def: 'result', line: 33, def char: 12
+TypeDef: no info
+On Hover:
+let result: u64
+
+-- test 7 -------------------
+use line: 40, use_ndx: 0
+Use: 'v', start: 12, end: 13
+Def: 'v', line: 39, def char: 12
+TypeDef: no info
+On Hover:
+let v: &vector<unknown type (unresolved)>
+
+-- test 8 -------------------
+use line: 42, use_ndx: 2
+Use: 'length', start: 18, end: 24
+Def: 'length', line: 31, def char: 18
+TypeDef: no info
+On Hover:
+public fun vector::length<Element>(
+	v: &vector<Element>
+): u64
+
+ Return the length of the vector.
+
+-- test 9 -------------------
+use line: 42, use_ndx: 0
+Use: 'n', start: 12, end: 13
+Def: 'n', line: 41, def char: 12
+TypeDef: no info
+On Hover:
+let n: u64
+
+== macro_no_inline.move ========================================================
+-- test 0 -------------------
+use line: 10, use_ndx: 0
+References:
+  'helper' at macro_no_inline.move:10:9
+  'helper' at macro_no_inline.move:17:9
+
+-- test 1 -------------------
+use line: 6, use_ndx: 0
+References:
+  'MyStruct' at macro_no_inline.move:6:19
+  'MyStruct' at macro_no_inline.move:21:31
+  'MyStruct' at macro_no_inline.move:27:36
+
+-- test 2 -------------------
+use line: 7, use_ndx: 0
+References:
+  'val' at macro_no_inline.move:7:9
+  'val' at macro_no_inline.move:23:11
+
+== macro_no_inline.move ========================================================
+-- test 0 -------------------
+INLAY TYPE HINT : u64
+-- test 1 -------------------
+INLAY TYPE HINT : u64
+-- test 2 -------------------
+INLAY TYPE HINT : &vector<unknown type (unresolved)>
+-- test 3 -------------------
+INLAY TYPE HINT : u64
+-- test 4 -------------------
+INLAY TYPE HINT : u64
+== macro_no_inline.move ========================================================
+-- test 0 -------------------
+use line: 29, use_col: 10
+Method 'completes_struct!()'
+    INSERT TEXT: 'completes_struct!()'
+    TARGET     : '(Macros::macro_no_inline::completes_struct)'
+    TYPE       : 'fun (MyStruct)'
+Method 'uses_struct!()'
+    INSERT TEXT: 'uses_struct!()'
+    TARGET     : '(Macros::macro_no_inline::uses_struct)'
+    TYPE       : 'fun (MyStruct): u64'
+Field 'val'
+    INSERT TEXT: 'val'
+    TYPE       : 'u64'

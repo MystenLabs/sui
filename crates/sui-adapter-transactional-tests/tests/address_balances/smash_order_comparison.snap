@@ -1,0 +1,136 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 17 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 27-30:
+//# programmable --sender A --inputs 100000000000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
+//> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
+mutated: object(0,0)
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100000000000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 32-37:
+//# programmable --sender B --inputs 100000000000 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
+//> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
+// Create identical 1_000_000_000 coins, one per sender.
+mutated: object(0,1)
+accumulators_written: (object(2,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 100000000000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 38-40:
+//# programmable --sender A --inputs 1000000000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 42-44:
+//# programmable --sender B --inputs 1000000000 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(4,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 46-48:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 6, line 49:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+100000000000
+
+task 7, line 51:
+//# view-funds sui::balance::Balance<sui::sui::SUI> B
+100000000000
+
+task 8, line 53:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 1000000000u64,
+    },
+}
+
+task 9, lines 55-59:
+//# view-object 4,0
+Owner: Account Address ( B )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 1000000000u64,
+    },
+}
+
+task 10, lines 60-66:
+//# programmable --sender A --gas-budget 500000000 --gas-payment object(3,0) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(500000000) --inputs 100 @C
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+// ===== Case B: smash [AB, Coin] =====
+// Reservation = 500_000_000 from B's address balance is the smash target.
+// Coin (object 4,0, value 1_000_000_000) is the secondary; will be deleted.
+created: object(10,0)
+mutated: object(3,0)
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 500000000)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11, lines 67-69:
+//# programmable --sender B --gas-budget 500000000 --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(500000000) --gas-payment object(4,0) --inputs 100 @C
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(11,0)
+deleted: object(4,0)
+accumulators_written: (object(2,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 998990020)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, lines 71-75:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 13, line 76:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+99500000000
+
+task 14, lines 78-81:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 4
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 1498002020u64,
+    },
+}
+
+task 15, line 82:
+//# view-funds sui::balance::Balance<sui::sui::SUI> B
+100998990020
+
+task 16, line 84:
+//# view-object 4,0
+No object at id 4,0

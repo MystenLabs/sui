@@ -1,0 +1,398 @@
+---
+title: JSON-RPC Migration Guide
+description: >-
+  Choose between gRPC and GraphQL RPC when migrating from the deprecated
+  JSON-RPC API. Includes a method mapping, decision criteria, and common
+  migration gotchas.
+keywords:
+  - json-rpc
+  - migration
+  - grpc
+  - graphql
+  - deprecation
+  - sui rpc
+  - json-rpc migration
+  - sui rpc migration
+  - replace json-rpc
+goal:
+  description: >-
+    Reader can choose between gRPC and GraphQL RPC when migrating from the
+    deprecated JSON-RPC API.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Transaction indexing (migration)
+    stage: History
+    eval: partial
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Index payment history
+    stage: Ship
+    eval: partial
+builder_paths_source:
+  dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
+  snapshot: '2026-07-10'
+questions:
+  - What is JSON-RPC Migration Guide in Sui?
+  - How does json-rpc migration guide work on Sui?
+  - How do I migrate to json-rpc migration guide?
+answer: >-
+  Choose between gRPC and GraphQL RPC when migrating from the deprecated
+  JSON-RPC API. Includes a method mapping, decision criteria, and common
+  migration gotchas.
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<ImportContent source="json-rpc-deprecation" mode="snippet" />
+
+JSON-RPC is deprecated and is being decommissioned on the following timeline:
+
+| Milestone | Target date |
+| --- | --- |
+| Disable JSON-RPC on Sui Foundation's mainnet full nodes | Week of July 27, 2026 |
+| Sui Foundation stops publishing JSON-RPC snapshots for full nodes | End of August 2026 |
+| Implicit fallback from JSON-RPC to archival service disconnected | End of September 2026 |
+| Full decommission of JSON-RPC from full nodes, including code removal | Mid-October 2026 |
+
+The 2 replacements are [gRPC](/develop/accessing-data/grpc) for real-time full node access, archival service access and transaction execution, and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) for rich, structured queries over live and historical blockchain data.
+
+## Choose your replacement
+
+You can use one API or both. Most exchanges and indexers end up using both: gRPC for the live data path and transaction submission, GraphQL for ad hoc queries, support tools, and joined reads.
+
+Use **gRPC** for:
+
+- Backend services, indexers, and exchange pipelines.
+
+- Streaming finalized checkpoints, transactions, and events with `SubscriptionService`. Use `SubscribeCheckpoints`, `SubscribeTransactions`, or `SubscribeEvents` with server-side filters to receive only the data your application needs.
+
+- Paginated, filtered queries over historical checkpoints, transactions, and events through the `LedgerService` list APIs (`ListCheckpoints`, `ListTransactions`, `ListEvents`). These APIs accept the same filter types as the subscription APIs, so you can backfill historical data and then continue from the same point with a live subscription.
+
+- Low-latency point lookups against the current state and recent history of a full node, through `LedgerService` and `StateService`.
+
+- Generated, typed clients in TypeScript, Go, Rust, Python, and other languages.
+
+- Workloads where protocol overhead, message size, and tail latency matter.
+
+Use **GraphQL RPC** for:
+
+- Frontends, developer tools, scripts, and dynamic-language clients.
+
+- Filterable queries over historical transactions, and events.
+
+- Paginated queries over object and package history.
+
+- Filtering over live objects by type.
+
+- Queries that join multiple resources in a single request, such as an address with its owned objects, balances, and recent transactions.
+
+- Consistent results pinned to the chain state at a specific checkpoint for queries that span multiple different types, or multiple pages.
+
+If you only need to read live state from a single full node, gRPC is usually enough. If you need cross-resource filtering, deep pagination, or want one request to return data assembled from several sources, GraphQL is usually a better fit. For deeper detail on when each API applies, see [What is gRPC](/develop/accessing-data/grpc/what-is-grpc) and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc).
+
+## Method mapping
+
+The following table maps common JSON-RPC method families to their gRPC service and GraphQL equivalents. Method names on the gRPC side use the protobuf service in the [Sui Full Node gRPC reference](/references/fullnode-protocol). GraphQL equivalents reference the GraphQL field or field path on the schema. Use this table to plan the migration, then consult the linked references for the exact request and response shapes.
+
+| JSON-RPC method | gRPC service and operation | GraphQL field |
+| --- | --- | --- |
+| `sui_getCheckpoint`, `sui_getLatestCheckpointSequenceNumber` | `LedgerService.GetCheckpoint` | `Query.checkpoint` |
+| `sui_getCheckpoints` | `LedgerService.ListCheckpoints` for paginated, filtered queries over a checkpoint range. Use `SubscriptionService.SubscribeCheckpoints` for an ordered live stream, or `LedgerService.GetCheckpoint` for single-checkpoint lookups. | `Query.checkpoints` |
+| `sui_getTransactionBlock` | `LedgerService.GetTransaction` | `Query.transaction` |
+| `sui_multiGetTransactionBlocks` | `LedgerService.BatchGetTransactions` | `Query.multiGetTransactions` |
+| `sui_getTotalTransactionBlocks` | `LedgerService.GetCheckpoint` on the latest or target checkpoint, then read `summary.total_network_transactions` | `Checkpoint.networkTotalTransactions` |
+| `sui_getObject`, `sui_tryGetPastObject` | `LedgerService.GetObject` (current state and recent history) | `Query.object` |
+| `sui_multiGetObjects` | `LedgerService.BatchGetObjects` | `Query.multiGetObjects` |
+| `suix_getBalance`, `suix_getAllBalances` | `StateService.GetBalance`, `StateService.ListBalances` | `Address.balance`, `Address.balances` |
+| `suix_getCoins`, `suix_getAllCoins` | `StateService.ListOwnedObjects` with a type filter: `0x2::coin::Coin<T>` for one coin type, or the bare `0x2::coin::Coin` for all coin types | `Address.objects` with `filter: { type: "0x2::coin::Coin<T>" }` for one coin type, or `filter: { type: "0x2::coin::Coin" }` for all coin types |
+| `suix_getCoinMetadata` | `StateService.GetCoinInfo` | `Query.coinMetadata` |
+| `suix_getOwnedObjects` | `StateService.ListOwnedObjects` | `Address.objects` |
+| `suix_getDynamicFields` | `StateService.ListDynamicFields` | `Object.dynamicFields` |
+| `suix_getDynamicFieldObject` | Derive the dynamic field's object ID locally from the parent object ID and the field name, then call `LedgerService.GetObject`. `ListDynamicFields` is not needed when you already know the field name. | `Object.dynamicObjectField` |
+| `suix_queryTransactionBlocks` | `LedgerService.ListTransactions` with a `TransactionFilter` for paginated, filtered queries over a checkpoint range. Use `SubscriptionService.SubscribeTransactions` with the same filter for a live stream of matching transactions. | `Query.transactions` with a `TransactionFilter` |
+| `suix_queryEvents` (deprecated) | `LedgerService.ListEvents` with an `EventFilter` for paginated, filtered queries over a checkpoint range. Use `SubscriptionService.SubscribeEvents` with the same filter for a live stream. For a single transaction's events, use `LedgerService.GetTransaction` with `events` in the field mask. See [Emitting Events](/develop/accessing-data/using-events#querying-events-with-grpc) for examples and migration guidance. | `Query.events` with an `EventFilter`. See [Emitting Events](/develop/accessing-data/using-events#querying-events-with-graphql) for examples. |
+| `sui_subscribeEvent`, `sui_subscribeTransaction` (WebSocket) | `SubscriptionService.SubscribeEvents` with an `EventFilter`, or `SubscriptionService.SubscribeTransactions` with a `TransactionFilter`. Use `SubscriptionService.SubscribeCheckpoints` if you need entire checkpoints. All 3 support server-side filtering. | No streaming subscription. Poll `Query.events` with an `EventFilter`, or `Query.transactions` with a `TransactionFilter`. |
+| `suix_getReferenceGasPrice` | `LedgerService.GetEpoch` (read `reference_gas_price` from the response) | `Epoch.referenceGasPrice` |
+| `suix_getStakes`, `suix_getStakesByIds` | No direct gRPC method. Read owned `StakedSui` objects through `StateService.ListOwnedObjects` filtered by type, then fetch full contents through `LedgerService.GetObject`. | `Address.objects` with `filter: { type: "0x3::staking_pool::StakedSui" }` |
+| `suix_getValidatorsApy` | No direct gRPC method and no APY field. Read validator-set data and compute APY client-side. See [issue #23832](https://github.com/MystenLabs/sui/issues/23832) for the recommended computation. | No direct APY field. Read validator-set data through `Epoch.validatorSet` and compute APY client-side. See [issue #23832](https://github.com/MystenLabs/sui/issues/23832) for the recommended computation. |
+| `sui_executeTransactionBlock` | `TransactionExecutionService.ExecuteTransaction` | `Mutation.executeTransaction` |
+| `sui_dryRunTransactionBlock`, `sui_devInspectTransactionBlock` | `TransactionExecutionService.SimulateTransaction` | `Query.simulateTransaction` |
+| `unsafe_paySui`, `unsafe_pay`, `unsafe_payAllSui`, `unsafe_transferSui`, `unsafe_transferObject`, `unsafe_moveCall`, `unsafe_splitCoin`, `unsafe_mergeCoins`, `unsafe_batchTransaction` | Build a [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks) with the SDK, then execute it through `TransactionExecutionService.ExecuteTransaction` | Build a PTB with the SDK, then submit through `Mutation.executeTransaction` |
+| `sui_getNormalizedMoveModule`, `sui_getNormalizedMoveFunction`, `sui_getNormalizedMoveStruct` | `MovePackageService` | `Query.package`, then `MovePackage.module`, `MoveModule.function`, and `MoveModule.struct` |
+
+The JSON-RPC `unsafe_*` builder methods do not have a one-to-one replacement on either side. Build transactions with [PTBs](/develop/transactions/ptbs/prog-txn-blocks) using the [TypeScript SDK](https://sdk.mystenlabs.com/typescript) or the [Rust SDK](https://github.com/MystenLabs/sui-rust-sdk), then submit the resulting bytes through `TransactionExecutionService.ExecuteTransaction`.
+
+## Migration gotchas
+
+### No implicit archival fallback in full node gRPC
+
+JSON-RPC sometimes resolved requests for older data through fallback paths that were transparent to the caller. Full node gRPC does not do this. A full node serves only the data within its retention window, and `LedgerService` returns "not found" for anything older.
+
+The 3 interfaces differ in how they reach pruned history:
+
+- **Full node gRPC** serves the complete RPC surface (transaction execution, point lookups, checkpoint subscriptions), but only within the full node's retention window.
+
+- **The Archival Service** is a separate gRPC service that serves unpruned point lookups for checkpoints, transactions, and objects. It is scoped to those point lookups, so it does not serve the rest of the full node RPC surface, such as transaction execution or live state queries. Reuse the same `LedgerService` methods, but point the client at an Archival Service endpoint such as `archive.mainnet.sui.io:443` or your provider's archival URL. See [Archival Store](/develop/accessing-data/archival-store).
+
+- **GraphQL** is a unified interface that serves both recent data and, when the operator configures archival access, unpruned point lookups, with no client-side fallback.
+
+### Typed requests replace positional JSON-RPC params
+
+JSON-RPC accepts a positional array of arguments. gRPC uses typed protobuf messages, and GraphQL uses named, typed arguments and selection sets. When you port a call, do not translate positional indices directly. Read the schema and pass each value by name, including the response shape selector. For gRPC, use a `FieldMask` to fetch only the fields you need rather than the entire response. See [field masks](/develop/accessing-data/grpc/using-grpc#field-masks) for the rules.
+
+### WebSocket subscriptions are replaced by gRPC streaming
+
+JSON-RPC offered WebSocket subscriptions for events and transactions, which have been deprecated since mid-2024. Sui does not carry those forward. Use `SubscriptionService` over gRPC server streaming instead: `SubscribeEvents` with an `EventFilter` replaces `sui_subscribeEvent`, `SubscribeTransactions` with a `TransactionFilter` replaces `sui_subscribeTransaction`, and `SubscribeCheckpoints` delivers entire checkpoints. All 3 support server-side filtering. Subscriptions begin at the current tip and do not support resumption. To avoid gaps, open the subscription and immediately drain live frames into durable, bounded storage while a separate worker backfills with the corresponding `LedgerService` list API (`ListEvents`, `ListTransactions`, or `ListCheckpoints`). Do not leave the subscription unread during backfill. Process the durable live spool after backfill reaches the subscription boundary, and restart from the last durably processed cursor if the spool fills or the stream ends. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
+
+### Public load balancer URLs are not production endpoints
+
+The public URLs at `https://fullnode.<network>.sui.io` and `https://graphql.<network>.sui.io/graphql` are rate-limited and intended for development and public-good access. Do not point a production exchange, indexer, or wallet backend at them. Run your own [Sui full node](/operators/full-node/sui-full-node) or contract with a provider for a dedicated gRPC or GraphQL endpoint.
+
+### Object and coin queries behave differently
+
+GraphQL and gRPC expose richer typing for objects and coins than JSON-RPC. A few practical points:
+
+- **Coin selection.** Replace `suix_getCoins` with an owned-objects query filtered by coin type: `Address.objects` with `filter: { type: "0x2::coin::Coin<...>" }` in GraphQL, or `StateService.ListOwnedObjects` with the same type filter on gRPC. To list coins of every type (the `suix_getAllCoins` case), filter by the bare `0x2::coin::Coin` type without a type parameter. For transaction building, prefer [gas smashing](/develop/transaction-payment/gas-smashing) or [address-balance gas payments](/onchain-finance/asset-custody/address-balances/using-address-balances) rather than constructing coin lists by hand.
+
+- **Balances cover both representations.** Read `Balance.totalBalance` to get the sum across coin objects and the address-balance accumulator. Read `Balance.coinBalance` and `Balance.addressBalance` separately to reconcile against your own ledger.
+
+- **Object and package versions.** GraphQL can scrub through the version history of an object or package, which has no JSON-RPC analog. Use `Query.objectVersions`, or `IObject.objectVersionsAfter` and `IObject.objectVersionsBefore` from an object, to page through an object's versions. Use `Query.packageVersions` for the published versions of a package.
+
+- **Checkpoint-scoped consistency.** GraphQL can pin a query to the chain state at a specific checkpoint through `Checkpoint.query`, so a read that spans multiple types or multiple pages sees one consistent snapshot. JSON-RPC has no equivalent.
+
+### Pagination uses typed cursors
+
+JSON-RPC cursors are opaque strings. GraphQL passes cursors through the `after` (or `before`) field on a connection, with the page size in `first` (or `last`). gRPC paging uses fields on the typed request and response messages. Do not try to reuse a JSON-RPC `nextCursor` value in a GraphQL or gRPC request. Fetch a fresh cursor from the new API and persist it as the resume point.
+
+### Negative filters (MatchNone) work differently
+
+JSON-RPC object queries supported `MatchAll`, `MatchAny`, and `MatchNone` filter combinators to include or exclude results by type.
+
+- **gRPC** transaction and event filters support negation through the `negated` field on each literal. Set `negated: true` on a literal to exclude matching items. For example, to match all transactions except those from a specific sender, use `{ negated: true, predicate: { oneofKind: 'sender', sender: { address: '0x...' } } }`. Negated literals combine with other literals in the same term using AND logic.
+- **GraphQL** uses flat filter fields (`type`, `sender`, `emittingModule`) without boolean combinators or negation. Use multiple queries or client-side filtering for exclusion patterns.
+
+### Retention windows
+
+A full node retains a configurable window of recent data and prunes older history. Your application sees this as "not found" responses. For long-running queries, replays, or audits, plan to fall back to the [Archival Service](/develop/accessing-data/archival-store) for data outside the full node's retention.
+
+### Ecosystem tools use different migration paths
+
+Not all tools in the Sui ecosystem require manual migration:
+
+- **Sui CLI**: No changes needed. The CLI already uses gRPC internally. The `rpc` field in `~/.sui/sui_config/client.yaml` points at the same `fullnode.*.sui.io:443` URLs, which serve both JSON-RPC and gRPC.
+
+- **dApp Kit**: The currently published `@mysten/dapp-kit` client factory requires `SuiJsonRpcClient` and does not accept `SuiGrpcClient`. Continue using its JSON-RPC client until a dApp Kit release explicitly adds transport-agnostic client support; do not substitute `SuiGrpcClient` in `createClient`.
+
+- **Kiosk SDK** (`@mysten/kiosk`): Continue using a supported JSON-RPC or GraphQL client for Kiosk object and event queries. The currently published Kiosk SDK does not accept `SuiGrpcClient`; migrate only after a Kiosk release explicitly adds gRPC support.
+
+- **Walrus site-builder**: The site-builder manages its own Sui connection through `sites-config.yaml`. Check the [Walrus documentation](https://docs.wal.app/) for gRPC migration status, as the transport is controlled by the Walrus team.
+
+## Examples for high-traffic paths
+
+Each pattern below links to the canonical worked example and includes an inline snippet you can expand. The canonical docs remain the source of truth for the full request and response shapes.
+
+### Transaction lookup
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#get-a-transaction@json-rpc}
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#get-a-transaction@graphql}
+
+</TabItem>
+<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#get-a-transaction@grpc-sdk}
+
+</TabItem>
+<TabItem value="grpcurl" label="gRPC (grpcurl)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#get-a-transaction@grpcurl}
+
+</TabItem>
+</Tabs>
+
+### Balances
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#get-balances@json-rpc}
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#get-balances@graphql}
+
+</TabItem>
+<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#get-balances@grpc-sdk}
+
+</TabItem>
+<TabItem value="grpcurl" label="gRPC (grpcurl)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#get-balances@grpcurl}
+
+</TabItem>
+</Tabs>
+
+### Coins
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#list-owned-coins@json-rpc}
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#list-owned-coins@graphql}
+
+</TabItem>
+<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#list-owned-coins@grpc-sdk}
+
+</TabItem>
+<TabItem value="grpcurl" label="gRPC (grpcurl)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#list-owned-coins@grpcurl}
+
+</TabItem>
+</Tabs>
+
+### Events
+
+#### Filtered event queries (GraphQL only)
+
+- **gRPC:** Use `LedgerService.ListEvents` with an `EventFilter` for paginated historical queries. For live updates, use `SubscriptionService.SubscribeEvents` with the same filter types. Events also arrive as part of transaction data in `LedgerService.GetTransaction` responses. See [Querying events with gRPC](/develop/accessing-data/using-events#querying-events-with-grpc).
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#query-events@json-rpc}
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#query-events@graphql}
+
+</TabItem>
+</Tabs>
+
+#### Events from a known transaction
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#events-from-a-known-transaction@json-rpc}
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#events-from-a-known-transaction@graphql}
+
+</TabItem>
+<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#events-from-a-known-transaction@grpc-sdk}
+
+</TabItem>
+</Tabs>
+
+### Checkpoints
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#look-up-a-single-checkpoint@json-rpc}
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#look-up-a-single-checkpoint@graphql}
+
+</TabItem>
+<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#look-up-a-single-checkpoint@grpc-sdk}
+
+</TabItem>
+<TabItem value="grpcurl" label="gRPC (grpcurl)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#look-up-a-single-checkpoint@grpcurl}
+
+</TabItem>
+</Tabs>
+
+For real-time checkpoint streaming, use gRPC `SubscriptionService.SubscribeCheckpoints`. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data) and the [gRPC migration cookbook](/develop/accessing-data/grpc/grpc-migration-cookbook#stream-checkpoints).
+
+### Submit a transaction
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#execute-a-transaction@json-rpc}
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#execute-a-transaction@graphql}
+
+</TabItem>
+<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#execute-a-transaction@grpc-sdk}
+
+</TabItem>
+</Tabs>
+
+### Sign and execute (end-to-end)
+
+Replace `signAndExecuteTransactionBlock` with the gRPC equivalent. The SDK handles gas coin selection, gas budget estimation, signing, and execution in a single call.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#sign-and-execute-a-transaction-end-to-end@json-rpc}
+
+</TabItem>
+<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#sign-and-execute-a-transaction-end-to-end@grpc-sdk}
+
+</TabItem>
+</Tabs>
+
+For manual gas resolution (sponsored transactions, custom gas coin selection), see [Manual gas resolution](/develop/accessing-data/grpc/grpc-migration-cookbook#manual-gas-resolution).
+
+### Validator APY
+
+JSON-RPC provided `suix_getValidatorsApy`. Neither gRPC nor GraphQL has a direct APY field. Validator APY is derived from staking pool exchange rate history stored in dynamic fields on each validator's system-state object. The legacy method used a compounding calculation across up to 30 epoch samples with outlier filtering.
+
+To compute APY after migration, query the validator set and each validator's exchange rate history, then apply a compounding formula client-side. See the [GraphQL migration cookbook](/develop/accessing-data/graphql/graphql-migration-cookbook#get-validator-apy) for the query pattern and [issue #23832](https://github.com/MystenLabs/sui/issues/23832) for the recommended computation.

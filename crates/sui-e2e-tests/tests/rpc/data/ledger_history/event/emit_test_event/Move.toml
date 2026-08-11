@@ -1,0 +1,12 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "emit_test_event"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../../../../../sui-framework/packages/sui-framework" }
+
+[addresses]
+emit_test_event = "0x0"

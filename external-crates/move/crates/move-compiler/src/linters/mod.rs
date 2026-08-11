@@ -4,12 +4,13 @@
 use move_symbol_pool::Symbol;
 
 use crate::{
-    cfgir::visitor::CFGIRVisitor,
+    cfgir::visitor::{AbstractInterpreterVisitor, CFGIRVisitor},
     command_line::compiler::Visitor,
     diagnostics::{
-        codes::{DiagnosticInfo, DiagnosticsID, Severity, custom},
+        codes::{DiagnosticOrigin, DiagnosticsID},
         filter::FilterName,
     },
+    shared::known_attributes::DiagnosticAttribute,
     typing::visitor::TypingVisitor,
 };
 
@@ -25,6 +26,7 @@ pub mod unnecessary_conditional;
 pub mod unnecessary_unit;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
+pub mod unused_return_value;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
@@ -36,6 +38,7 @@ pub enum LintLevel {
     All,
 }
 
+/// Categories shared by every lint origin.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum LinterDiagnosticCategory {
@@ -44,32 +47,44 @@ pub enum LinterDiagnosticCategory {
     Suspicious,
     Deprecated,
     Style,
-    Sui = 99,
+    Security,
+    Conventions,
 }
 
+/// Declares a lint code enum and its `(category, code, filter_name)` table for one lint source.
+/// Codes are positional and published; append only, never reorder or insert.
 macro_rules! lints {
     (
+        $enum_name:ident,
+        $origin:expr,
+        $filters_const:ident,
         $(
-            ($enum_name:ident, $category:expr, $filter_name:expr, $code_msg:expr)
+            ($lint_name:ident, $category:ident, $filter_name:expr, $code_msg:expr)
         ),* $(,)?
     ) => {
         #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
         #[repr(u8)]
-        pub enum StyleCodes {
+        pub enum $enum_name {
             DontStartAtZeroPlaceholder,
             $(
-                $enum_name,
+                $lint_name,
             )*
         }
 
-        impl StyleCodes {
+        impl $enum_name {
+            pub(crate) const ORIGIN: $crate::diagnostics::codes::DiagnosticOrigin = $origin;
+
             const fn category_code_and_message(&self) -> (u8, u8, &'static str) {
                 let code = *self as u8;
                 debug_assert!(code > 0);
                 match self {
                     Self::DontStartAtZeroPlaceholder =>
                         panic!("ICE do not use placeholder error code"),
-                    $(Self::$enum_name => ($category as u8, code, $code_msg),)*
+                    $(Self::$lint_name => (
+                        $crate::linters::LinterDiagnosticCategory::$category as u8,
+                        code,
+                        $code_msg,
+                    ),)*
                 }
             }
 
@@ -79,15 +94,21 @@ macro_rules! lints {
                 match self {
                     Self::DontStartAtZeroPlaceholder =>
                         panic!("ICE do not use placeholder error code"),
-                    $(Self::$enum_name => ($category as u8, code, $filter_name),)*
+                    $(Self::$lint_name => (
+                        $crate::linters::LinterDiagnosticCategory::$category as u8,
+                        code,
+                        $filter_name,
+                    ),)*
                 }
             }
 
-            const fn diag_info(&self) -> DiagnosticInfo {
+            pub(crate) const fn diag_info(
+                &self,
+            ) -> $crate::diagnostics::codes::DiagnosticInfo {
                 let (category, code, msg) = self.category_code_and_message();
-                custom(
-                    LINT_WARNING_PREFIX,
-                    Severity::Warning,
+                $crate::diagnostics::codes::custom(
+                    Self::ORIGIN,
+                    $crate::diagnostics::codes::Severity::Warning,
                     category,
                     code,
                     msg,
@@ -95,112 +116,116 @@ macro_rules! lints {
             }
         }
 
-        const STYLE_WARNING_FILTERS: &[(u8, u8, &str)] = &[
+        const $filters_const: &[(u8, u8, &str)] = &[
             $(
-                StyleCodes::$enum_name.category_code_and_filter_name(),
+                $enum_name::$lint_name.category_code_and_filter_name(),
             )*
         ];
     }
 }
+pub(crate) use lints;
 
 lints!(
+    StyleCodes,
+    DiagnosticOrigin::Lint,
+    CORE_LINT_WARNING_FILTERS,
     (
         ConstantNaming,
-        LinterDiagnosticCategory::Style,
+        Style,
         "constant_naming",
         "constant should follow naming convention"
     ),
     (
         WhileTrueToLoop,
-        LinterDiagnosticCategory::Style,
+        Style,
         "while_true",
         "unnecessary 'while (true)', replace with 'loop'"
     ),
     (
         MeaninglessMath,
-        LinterDiagnosticCategory::Complexity,
+        Complexity,
         "unnecessary_math",
         "math operator can be simplified"
     ),
-    (
-        UnneededReturn,
-        LinterDiagnosticCategory::Style,
-        "unneeded_return",
-        "unneeded return"
-    ),
+    (UnneededReturn, Style, "unneeded_return", "unneeded return"),
     (
         AbortWithoutConstant,
-        LinterDiagnosticCategory::Style,
+        Style,
         "abort_without_constant",
         "'abort' or 'assert' without named constant"
     ),
     (
         LoopWithoutExit,
-        LinterDiagnosticCategory::Suspicious,
+        Suspicious,
         "loop_without_exit",
         "'loop' without 'break' or 'return'"
     ),
     (
         UnnecessaryConditional,
-        LinterDiagnosticCategory::Complexity,
+        Complexity,
         "unnecessary_conditional",
         "'if' expression can be removed"
     ),
     (
         SelfAssignment,
-        LinterDiagnosticCategory::Suspicious,
+        Suspicious,
         "self_assignment",
         "assignment preserves the same value"
     ),
     (
         RedundantRefDeref,
-        LinterDiagnosticCategory::Complexity,
+        Complexity,
         "redundant_ref_deref",
         "redundant reference/dereference"
     ),
     (
         UnnecessaryUnit,
-        LinterDiagnosticCategory::Style,
+        Style,
         "unnecessary_unit",
         "unit `()` expression can be removed or simplified"
     ),
     (
         EqualOperands,
-        LinterDiagnosticCategory::Suspicious,
+        Suspicious,
         "always_equal_operands",
         "redundant, always-equal operands for binary operation"
     ),
     (
         CombinableComparisons,
-        LinterDiagnosticCategory::Complexity,
+        Complexity,
         "combinable_comparisons",
         "comparison operations condition can be simplified"
     ),
+    (
+        UnusedReturnValue,
+        Suspicious,
+        "unused_return_value",
+        "return value of a non-mutating call is discarded"
+    ),
 );
 
-pub const ALLOW_ATTR_CATEGORY: &str = "lint";
-pub const LINT_WARNING_PREFIX: &str = "Lint ";
+pub(crate) fn filters_from_table(
+    origin: DiagnosticOrigin,
+    table: &[(u8, u8, &'static str)],
+) -> Vec<(FilterName, Vec<DiagnosticsID>)> {
+    let mut filters = vec![(
+        Symbol::from(crate::diagnostics::filter::FILTER_ALL),
+        vec![DiagnosticsID::all(origin)],
+    )];
+    filters.extend(table.iter().map(|(category, code, filter_name)| {
+        (
+            Symbol::from(*filter_name),
+            vec![DiagnosticsID::exact(origin, *category, *code)],
+        )
+    }));
+    filters
+}
 
 pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
-    let mut filters: Vec<(FilterName, Vec<DiagnosticsID>)> = vec![(
-        Symbol::from(crate::diagnostics::filter::FILTER_ALL),
-        vec![DiagnosticsID::all(Some(LINT_WARNING_PREFIX))],
-    )];
-    filters.extend(
-        STYLE_WARNING_FILTERS
-            .iter()
-            .map(|(category, code, filter_name)| {
-                (
-                    Symbol::from(*filter_name),
-                    vec![DiagnosticsID::exact(
-                        Some(LINT_WARNING_PREFIX),
-                        *category,
-                        *code,
-                    )],
-                )
-            }),
-    );
-    (Some(ALLOW_ATTR_CATEGORY.into()), filters)
+    (
+        Some(DiagnosticAttribute::LINT_SYMBOL),
+        filters_from_table(StyleCodes::ORIGIN, CORE_LINT_WARNING_FILTERS),
+    )
 }
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
@@ -220,6 +245,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 unnecessary_unit::UnnecessaryUnit.visitor(),
                 equal_operands::EqualOperands.visitor(),
                 combinable_comparisons::CombinableComparisons.visitor(),
+                unused_return_value::UnusedReturnValue.visitor(),
             ]
         }
     }

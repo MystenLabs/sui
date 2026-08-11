@@ -5,10 +5,9 @@
 //! Detects and reports instances where a non-mutable reference to `TxContext` is used in public function signatures.
 //! Promotes best practices for future-proofing smart contract code by allowing mutation of the transaction context.
 
-use super::{LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode};
+use super::SuiLintCode;
 use crate::{
     diag,
-    diagnostics::codes::{DiagnosticInfo, Severity, custom},
     expansion::ast::{ModuleIdent, Visibility},
     naming::ast::TypeInner,
     parser::ast::FunctionName,
@@ -16,14 +15,6 @@ use crate::{
     typing::{ast as T, visitor::simple_visitor},
 };
 use move_ir_types::location::Loc;
-
-const REQUIRE_MUTABLE_TX_CONTEXT_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Sui as u8,
-    LinterDiagnosticCode::PreferMutableTxContext as u8,
-    "prefer '&mut TxContext' over '&TxContext'",
-);
 
 simple_visitor!(
     PreferMutableTxContext,
@@ -59,7 +50,7 @@ fn report_non_mutable_tx_context(context: &mut Context, loc: Loc) {
         "'public' functions should prefer '&mut {0}' over '&{0}' for better upgradability.",
         TX_CONTEXT_TYPE_NAME
     );
-    let mut diag = diag!(REQUIRE_MUTABLE_TX_CONTEXT_DIAG, (loc, msg));
+    let mut diag = diag!(SuiLintCode::PreferMutableTxContext.diag_info(), (loc, msg));
     diag.add_note(
         "When upgrading, the public function cannot be modified to take '&mut TxContext' instead \
          of '&TxContext'. As such, it is recommended to consider using '&mut TxContext' to \

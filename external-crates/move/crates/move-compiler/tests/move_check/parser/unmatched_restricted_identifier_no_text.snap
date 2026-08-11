@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01012]: invalid identifier escape
+error[EC01012]: invalid identifier escape
   ┌─ tests/move_check/parser/unmatched_restricted_identifier_no_text.move:4:9
   │
 4 │     fun `

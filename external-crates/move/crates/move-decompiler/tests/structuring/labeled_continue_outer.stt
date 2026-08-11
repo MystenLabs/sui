@@ -1,0 +1,27 @@
+// Nested loops where the inner body has a branch that jumps to the outer header — exercises
+// the labeled `continue 'outer_label` form. With OtherLoop collapsed to Latch and iterative
+// resolution at outer-loop time, node 5's jump to 1 (outer header) becomes `continue 'loop_1`,
+// emitted *inside* the inner loop body. The inner label is needed because an unlabeled
+// `continue` would target the inner loop.
+//
+//         0
+//         |
+//      ┌─→1───→6 (exit when outer cond false)
+//      │  │
+//      │ ┌2←┐
+//      │ │  │
+//      │ ┌3─┘ (inner back-edge: 3 → 2)
+//      │ │
+//      └─┘ (4's jump: 4 → 1, an OtherLoop edge from inner body to outer header)
+//
+// Inner header = 2, inner latch = 3 (back-edge 3 → 2), inner body = {2, 3}.
+// Outer header = 1, outer latch = 4 (back-edge 4 → 1).
+// The structuring sees 4 → 1 inside inner's natural exit path; after the inner loop is
+// emitted, outer's insert_breaks reclassifies that raw Jump as continue 'loop_1.
+
+code,0,1
+cond,1,2,6
+cond,2,3,4
+code,3,2
+code,4,1
+code,6

@@ -1,0 +1,8 @@
+{"version":1}
+{"OpenFrame":{"frame":{"binary_member_index":0,"frame_id":0,"function_name":"test","is_native":false,"locals_types":[],"module":{"address":"0x1","name":"m"},"parameters":[],"return_types":[],"type_instantiation":[]},"gas_left":100}}
+{"Instruction":{"gas_left":99,"instruction":"CALL","pc":0,"type_parameters":[]}}
+{"OpenFrame":{"frame":{"binary_member_index":0,"frame_id":1,"function_name":"missing_from_source","is_native":false,"locals_types":[],"module":{"address":"0x1","name":"m2"},"parameters":[],"return_types":[],"type_instantiation":[]},"gas_left":98}}
+{"Instruction":{"gas_left":97,"instruction":"UNKNOWN","pc":0,"type_parameters":[]}}
+{"CloseFrame":{"frame_id":1,"gas_left":96,"return_":[]}}
+{"Instruction":{"gas_left":95,"instruction":"UNKNOWN","pc":1,"type_parameters":[]}}
+{"CloseFrame":{"frame_id":0,"gas_left":95,"return_":[]}}

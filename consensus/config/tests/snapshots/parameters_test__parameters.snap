@@ -30,7 +30,6 @@ commit_sync_request_timeout:
 commit_sync_probe_timeout:
   secs: 2
   nanos: 0
-use_fifo_compaction: true
 tonic:
   keepalive_interval:
     secs: 10

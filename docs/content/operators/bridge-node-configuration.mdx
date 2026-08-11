@@ -1,8 +1,51 @@
 ---
 title: Sui Bridge Validator Node Configuration
 sidebar_label: Bridge Node Configuration
-description: Correct configuration of your node ensures optimal performance and valid metrics data.
-keywords: [ bridge validator node, bridge node, bridge, bridge committee, metric data, metrics, metadata, committee registration, waf, web application firewall, bridge client, bridgeclient, bridge node monitoring, build bridge node, run bridge node ]
+description: >-
+  Correct configuration of your node ensures optimal performance and valid
+  metrics data.
+keywords:
+  - bridge validator node
+  - bridge node
+  - bridge
+  - bridge committee
+  - metric data
+  - metrics
+  - metadata
+  - committee registration
+  - waf
+  - web application firewall
+  - bridge client
+  - bridgeclient
+  - bridge node monitoring
+  - build bridge node
+  - run bridge node
+goal:
+  description: >-
+    Operator can configure their node for optimal performance and valid metrics
+    data
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more operational depth
+    - pattern: '```'
+      min: 1
+      label: Has configuration or command examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I configure a Sui Bridge validator node?
+  - What are the configuration requirements for bridge nodes?
+  - How do I monitor my bridge node performance?
+answer: >-
+  Correct configuration of your node ensures optimal performance and valid
+  metrics data.
 ---
 
 Running a bridge validator node (bridge node) requires registering your node with the bridge committee. Correct configuration of your node ensures optimal performance and valid metrics data. Follow this topic to make sure your bridge node is set up properly.
@@ -59,6 +102,17 @@ where `<PATH-TO-WRITE>` is the location to write the key pair to.
 :::info
 
 Create a new key pair in a secure environment (for example, on the same machine where your node runs) to avoid key compromise.
+
+:::
+
+:::caution
+
+Treat bridge node key custody as a production requirement. Before you go live, confirm the following:
+
+- **Generate keys securely.** Create the `BridgeAuthorityKey`, network key, and any admin keys in a secure environment, offline where possible, and never reuse a key across roles. See [user and operator key management](/develop/security/best-practices#user-and-operator-key-management).
+- **Separate keys by role.** Keep the bridge authority key, network key, and administrative/account keys distinct. Provide a dedicated `bridge-client-key-path` rather than defaulting to the validator key, so a compromise of one key does not expose the others.
+- **Document rotation and recovery.** Maintain a written procedure for rotating and recovering each key, including who holds custody and how compromised keys are replaced.
+- **Treat WAF and rate limiting as required.** The [WAF protection](#web-application-firewall-waf-protection-for-bridge-node) and rate limiting described later on this page are production requirements, not optional hardening.
 
 :::
 

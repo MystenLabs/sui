@@ -8,7 +8,7 @@ source: crates/sui/tests/shell_tests.rs
 
 # Publishing a package and then doing a test-publish succeed
 
-chain_id=$(sui client --client.config $CONFIG chain-identifier)
+chain_id=$(sui client --client.config $CONFIG chain-identifier --format=hex)
 
 echo "[environments]" >> a/Move.toml
 echo "localnet = \"$chain_id\"" >> a/Move.toml

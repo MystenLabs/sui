@@ -1,0 +1,59 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 12-16:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 3465600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 17-20:
+//# programmable --sender A --inputs 100000000000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
+//> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
+mutated: object(0,0)
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100000000000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 22:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 24-26:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+100000000000
+
+task 5, lines 27-28:
+//# programmable --sender A --gas-payment object(0,0) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(500000000)
+//> test::boom::boom()
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::boom::boom (function index 0) at offset 1, Abort Code: 7
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("boom") }, function: 0, instruction: 1, function_name: Some("boom") }, 7) at command Some(0)
+
+task 6, lines 30-34:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, line 35:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+99500000000
+
+task 8, line 37:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299900497002120u64,
+    },
+}

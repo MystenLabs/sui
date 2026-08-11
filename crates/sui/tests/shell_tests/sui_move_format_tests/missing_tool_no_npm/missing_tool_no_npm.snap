@@ -1,0 +1,26 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Neither `prettier-move` nor `npm` are on PATH. `sui move format` should
+# bail with the Node.js install hint and a non-zero exit code.
+
+# Strip PATH down to the sui binary's directory so neither `prettier-move`
+# nor `npm` (which the host may have in /usr/local/bin, NVM dirs, ...) can
+# leak through.
+export PATH="$(dirname "$(command -v sui)")"
+
+sui move --client.config $CONFIG format -c
+
+----- results -----
+success: false
+exit_code: 1
+----- stdout -----
+`prettier-move` is not installed and `npm` was not found on PATH.
+Install Node.js 18+ (which provides `npm`) from https://nodejs.org, then install `prettier-move` with:
+    npm i -g prettier @mysten/prettier-plugin-move
+
+----- stderr -----

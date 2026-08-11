@@ -1,0 +1,8 @@
+[package]
+name = "a"
+edition = "2024"
+implicit-dependencies = false
+
+[dependencies]
+sui = { local = "../../system-packages/sui-framework" }
+std = { local = "../../system-packages/move-stdlib" }

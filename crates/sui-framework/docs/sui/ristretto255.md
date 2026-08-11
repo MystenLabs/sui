@@ -3,7 +3,7 @@ title: Module `sui::ristretto255`
 ---
 
 Group operations of BLS12-381.
-Only available in devnet.
+Only available in devnet and testnet.
 
 
 -  [Struct `Scalar`](#sui_ristretto255_Scalar)

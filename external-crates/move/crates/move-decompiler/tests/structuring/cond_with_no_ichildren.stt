@@ -1,0 +1,31 @@
+// A Condition node whose arms are both shared with another path -- neither arm is in the
+// Condition's dominator subtree, so `structure_acyclic`'s "no ichildren -> must be Code"
+// assertion fires for node 1 and node 2.
+//
+//        0 (cond) ── true ──> 1 (cond)
+//        │ false               │ true ─> 3
+//        ▼                     │ false ─> 4
+//        2 (cond) ── true ─────┘
+//        │ false
+//        ▼
+//        (same 3/4 from node 2's perspective)
+//
+// CFG:
+//   0 -> 1  (cond conseq)
+//   0 -> 2  (cond alt)
+//   1 -> 3  (cond conseq)
+//   1 -> 4  (cond alt)
+//   2 -> 3  (cond conseq)
+//   2 -> 4  (cond alt)
+//   3 sink
+//   4 sink
+//
+// For node 1: arms are 3 and 4. Each of 3 and 4 has two predecessors (1 and 2), so neither
+// is dominated immediately by 1. ichildren(1) = {}. Node 1 is not a back-edge source. Its
+// input is Condition. The assertion fires.
+
+cond,0,1,2
+cond,1,3,4
+cond,2,3,4
+code,3
+code,4

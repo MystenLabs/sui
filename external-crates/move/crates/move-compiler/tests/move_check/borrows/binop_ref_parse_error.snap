@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_check/borrows/binop_ref_parse_error.move:5:15
   │
 5 │         id(x).*x;

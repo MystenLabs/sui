@@ -1,0 +1,33 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Tests that `sui move lint` enables Sui mode and runs the Sui-specific linters (here
+# `self_transfer`), not just the generic Move linters. `COLOR_MODE=NONE` disables ANSI
+# color codes in the compiler diagnostics so the snapshot is stable.
+COLOR_MODE=NONE sui move --client.config $CONFIG lint -p example
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING example
+
+----- stderr -----
+warning[WSL06002]: non-composable transfer to sender
+   ┌─ ./sources/example.move:15:5
+   │
+14 │ public fun mint(ctx: &mut TxContext) {
+   │            ---- Returning an object from a function, allows a caller to use the object and enables composability via programmable transactions.
+15 │     transfer::public_transfer(Obj { id: object::new(ctx) }, ctx.sender())
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │     │                                                       │
+   │     │                                                       Transaction sender address coming from here
+   │     Transfer of an object to transaction sender address
+   │
+   = This warning can be suppressed with '#[allow(lint(self_transfer))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

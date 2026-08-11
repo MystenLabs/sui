@@ -3,7 +3,7 @@
 
 // Tests gasless transaction validation rejects invalid transactions.
 
-//# init --addresses test=0x0 --accounts A B --enable-gasless --enable-accumulators
+//# init --addresses test=0x0 --accounts A B --enable-gasless
 
 //# publish --sender A
 #[allow(deprecated_usage)]

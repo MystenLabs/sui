@@ -45,7 +45,7 @@ pub struct Graph<Loc, Lbl: Ord> {
 impl<Loc, Lbl> Path<Loc, Lbl> {
     /// An empty path
     pub fn is_epsilon(&self) -> bool {
-        self.labels.is_empty() && !self.is_dot_star()
+        !self.ends_in_dot_star && self.labels.is_empty()
     }
 
     /// A path with a single label (and not dot-star)
@@ -53,7 +53,7 @@ impl<Loc, Lbl> Path<Loc, Lbl> {
     where
         Lbl: Eq,
     {
-        !self.is_dot_star() && self.labels.len() == 1 && &self.labels[0] == lbl
+        !self.ends_in_dot_star && self.labels.len() == 1 && &self.labels[0] == lbl
     }
 
     /// A path that starts with the specified label
@@ -66,7 +66,7 @@ impl<Loc, Lbl> Path<Loc, Lbl> {
 
     /// A path with no labels and ends with dot-star
     pub fn is_dot_star(&self) -> bool {
-        self.labels.is_empty() && self.ends_in_dot_star
+        self.ends_in_dot_star && self.labels.is_empty()
     }
 
     pub fn abstract_size(&self) -> usize {

@@ -1,6 +1,106 @@
 {
   "redirects": [
     {
+      "source": "/onchain-finance/deepbookv3",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbookv3/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbookv3-sdk",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbookv3-sdk/",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbook-margin",
+      "destination": "/onchain-finance/deepbook/deepbook-margin",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbook-margin/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbook-margin-sdk",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbook-margin-sdk/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbook-predict",
+      "destination": "/onchain-finance/deepbook/deepbook-predict",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbook-predict/",
+      "destination": "/onchain-finance/deepbook/deepbook-predict",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbookv3/:path*",
+      "destination": "/onchain-finance/deepbook/deepbookv3/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbookv3/:path*/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbookv3-sdk/:path*",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbookv3-sdk/:path*/",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbook-margin/:path*",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbook-margin/:path*/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbook-margin-sdk/:path*",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbook-margin-sdk/:path*/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbook-predict/:path*",
+      "destination": "/onchain-finance/deepbook/deepbook-predict/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbook-predict/:path*/",
+      "destination": "/onchain-finance/deepbook/deepbook-predict/:path*",
+      "permanent": true
+    },
+    {
       "source": "/concepts/sui-move-concepts",
       "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
@@ -16,8 +116,133 @@
       "permanent": true
     },
     {
+      "source": "/standards/deepbookv3",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
+      "permanent": true
+    },
+    {
       "source": "/standards/deepbookv3/:path*",
-      "destination": "/onchain-finance/deepbookv3/:path*",
+      "destination": "/onchain-finance/deepbook/deepbookv3/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3/:path*/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook",
+      "destination": "/onchain-finance/deepbook",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook/",
+      "destination": "/onchain-finance/deepbook",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3-sdk",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3-sdk/",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3-sdk/:path*",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3-sdk/:path*/",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3-indexer",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbookv3-indexer",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3-indexer/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbookv3-indexer",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin",
+      "destination": "/onchain-finance/deepbook/deepbook-margin",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin-indexer",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/deepbook-margin-indexer",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin-indexer/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/deepbook-margin-indexer",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin/:path*",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin/:path*/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin-sdk",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin-sdk/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin-sdk/:path*",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin-sdk/:path*/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv2",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv2/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv2/:path*",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv2/:path*/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
       "permanent": true
     },
     {
@@ -67,7 +292,7 @@
     },
     {
       "source": "/learn/index",
-      "destination": "/onchain-finance/deepbookv3/deepbook",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
       "permanent": true
     },
     {
@@ -202,7 +427,7 @@
     },
     {
       "source": "/explore/index",
-      "destination": "/onchain-finance/deepbookv3/deepbook",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
       "permanent": true
     },
     {
@@ -282,7 +507,7 @@
     },
     {
       "source": "/build/index",
-      "destination": "/onchain-finance/deepbookv3/deepbook",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
       "permanent": true
     },
     {
@@ -497,7 +722,7 @@
     },
     {
       "source": "/standards/deepbookv2/:path*",
-      "destination": "/onchain-finance/deepbookv3/deepbook",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
       "permanent": true
     },
     {
@@ -577,7 +802,12 @@
     },
     {
       "source": "/apps/deepbook",
-      "destination": "/onchain-finance/deepbookv3/deepbook",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
+      "permanent": true
+    },
+    {
+      "source": "/apps/deepbook/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
       "permanent": true
     },
     {
@@ -612,7 +842,7 @@
     },
     {
       "source": "/tutorials/apps/simple-dex",
-      "destination": "/onchain-finance/deepbookv3/deepbook",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
       "permanent": true
     },
     {
@@ -852,12 +1082,17 @@
     },
     {
       "source": "/apps/deepbook/reference/fees",
-      "destination": "/onchain-finance/deepbookv3/deepbook",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
+      "permanent": true
+    },
+    {
+      "source": "/apps/deepbook/reference/fees/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/apps/dexes",
-      "destination": "/onchain-finance/deepbookv3/deepbook",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
       "permanent": true
     },
     {
@@ -1047,7 +1282,7 @@
     },
     {
       "source": "/build/devex/swap-fees",
-      "destination": "/onchain-finance/deepbookv3/deepbook",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
       "permanent": true
     },
     {
@@ -1232,7 +1467,12 @@
     },
     {
       "source": "/deepbook",
-      "destination": "/onchain-finance/deepbookv3/deepbook",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
+      "permanent": true
+    },
+    {
+      "source": "/deepbook/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
       "permanent": true
     },
     {
@@ -1262,7 +1502,7 @@
     },
     {
       "source": "/exchange-integration-guide",
-      "destination": "/references/exchange-integration-guide",
+      "destination": "/operators/exchange-integration",
       "permanent": true
     },
     {
@@ -1772,7 +2012,12 @@
     },
     {
       "source": "/guides/developer/cryptography/zklogin-integration/zklogin-example",
-      "destination": "/sui-stack/zklogin-integration/zklogin-example",
+      "destination": "/sui-stack/zklogin-integration/zklogin-demo",
+      "permanent": true
+    },
+    {
+      "source": "/sui-stack/zklogin-integration/zklogin-example",
+      "destination": "/sui-stack/zklogin-integration/zklogin-demo",
       "permanent": true
     },
     {
@@ -1817,7 +2062,12 @@
     },
     {
       "source": "/guides/developer/accessing-data/custom-indexer/indexer-walrus",
-      "destination": "/sui-stack/indexer-walrus",
+      "destination": "/sui-stack/walrus/indexer-walrus",
+      "permanent": true
+    },
+    {
+      "source": "/sui-stack/indexer-walrus",
+      "destination": "/sui-stack/walrus/indexer-walrus",
       "permanent": true
     },
     {
@@ -1838,6 +2088,16 @@
     {
       "source": "/concepts/cryptography/system/checkpoint-verification",
       "destination": "/develop/sui-architecture/checkpoint-verification",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/cryptography/system/validator-signatures",
+      "destination": "/develop/transactions/transaction-auth/auth-overview",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/cryptography/system/intents-for-validators",
+      "destination": "/develop/transactions/transaction-auth/intent-signing",
       "permanent": true
     },
     {
@@ -2307,197 +2567,362 @@
     },
     {
       "source": "/standards/deepbook",
-      "destination": "/onchain-finance/deepbookv3/deepbook",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin",
-      "destination": "/onchain-finance/deepbook-margin/deepbook-margin",
+      "destination": "/onchain-finance/deepbook/deepbook-margin",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin-indexer",
-      "destination": "/onchain-finance/deepbook-margin/deepbook-margin-indexer",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/deepbook-margin-indexer",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin-sdk",
-      "destination": "/onchain-finance/deepbook-margin-sdk/deepbook-margin-sdk",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin-sdk/maintainer",
-      "destination": "/onchain-finance/deepbook-margin-sdk/maintainer",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk/maintainer",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin-sdk/maintainer/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk/maintainer",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin-sdk/margin-manager",
-      "destination": "/onchain-finance/deepbook-margin-sdk/margin-manager",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk/margin-manager",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin-sdk/margin-manager/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk/margin-manager",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin-sdk/margin-pool",
-      "destination": "/onchain-finance/deepbook-margin-sdk/margin-pool",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk/margin-pool",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin-sdk/margin-pool/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk/margin-pool",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin-sdk/orders",
-      "destination": "/onchain-finance/deepbook-margin-sdk/orders",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk/orders",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin-sdk/orders/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk/orders",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin-sdk/tpsl",
-      "destination": "/onchain-finance/deepbook-margin-sdk/tpsl",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk/tpsl",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin-sdk/tpsl/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin-sdk/tpsl",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin/contract-information",
-      "destination": "/onchain-finance/deepbook-margin/contract-information",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin/contract-information/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin/contract-information/interest-rates",
-      "destination": "/onchain-finance/deepbook-margin/contract-information/interest-rates",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information/interest-rates",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin/contract-information/interest-rates/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information/interest-rates",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin/contract-information/maintainer",
-      "destination": "/onchain-finance/deepbook-margin/contract-information/maintainer",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information/maintainer",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin/contract-information/maintainer/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information/maintainer",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin/contract-information/margin-manager",
-      "destination": "/onchain-finance/deepbook-margin/contract-information/margin-manager",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information/margin-manager",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin/contract-information/margin-manager/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information/margin-manager",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin/contract-information/margin-pool",
-      "destination": "/onchain-finance/deepbook-margin/contract-information/margin-pool",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information/margin-pool",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin/contract-information/margin-pool/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information/margin-pool",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin/contract-information/orders",
-      "destination": "/onchain-finance/deepbook-margin/contract-information/orders",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information/orders",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin/contract-information/orders/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information/orders",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin/contract-information/risk-ratio",
-      "destination": "/onchain-finance/deepbook-margin/contract-information/risk-ratio",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information/risk-ratio",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin/contract-information/risk-ratio/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information/risk-ratio",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin/contract-information/supply-referral",
-      "destination": "/onchain-finance/deepbook-margin/contract-information/supply-referral",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information/supply-referral",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin/contract-information/supply-referral/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information/supply-referral",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin/contract-information/tpsl",
-      "destination": "/onchain-finance/deepbook-margin/contract-information/tpsl",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information/tpsl",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin/contract-information/tpsl/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/contract-information/tpsl",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin/design",
-      "destination": "/onchain-finance/deepbook-margin/design",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/design",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin/design/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/design",
       "permanent": true
     },
     {
       "source": "/standards/deepbook-margin/margin-risks",
-      "destination": "/onchain-finance/deepbook-margin/margin-risks",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/margin-risks",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbook-margin/margin-risks/",
+      "destination": "/onchain-finance/deepbook/deepbook-margin/margin-risks",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3-indexer",
-      "destination": "/onchain-finance/deepbookv3/deepbookv3-indexer",
+      "destination": "/onchain-finance/deepbook/deepbookv3/deepbookv3-indexer",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3-sdk",
-      "destination": "/onchain-finance/deepbookv3-sdk/deepbookv3-sdk",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3-sdk/balance-manager",
-      "destination": "/onchain-finance/deepbookv3-sdk/balance-manager",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/balance-manager",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3-sdk/balance-manager/",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/balance-manager",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3-sdk/flash-loans",
-      "destination": "/onchain-finance/deepbookv3-sdk/flash-loans",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/flash-loans",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3-sdk/flash-loans/",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/flash-loans",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3-sdk/orders",
-      "destination": "/onchain-finance/deepbookv3-sdk/orders",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/orders",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3-sdk/orders/",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/orders",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3-sdk/pools",
-      "destination": "/onchain-finance/deepbookv3-sdk/pools",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/pools",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3-sdk/pools/",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/pools",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3-sdk/staking-governance",
-      "destination": "/onchain-finance/deepbookv3-sdk/staking-governance",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/staking-governance",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3-sdk/staking-governance/",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/staking-governance",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3-sdk/swaps",
-      "destination": "/onchain-finance/deepbookv3-sdk/swaps",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/swaps",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3-sdk/swaps/",
+      "destination": "/onchain-finance/deepbook/deepbookv3-sdk/swaps",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3/contract-information",
-      "destination": "/onchain-finance/deepbookv3/contract-information",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3/contract-information/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3/contract-information/balance-manager",
-      "destination": "/onchain-finance/deepbookv3/contract-information/balance-manager",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/balance-manager",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3/contract-information/balance-manager/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/balance-manager",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3/contract-information/ewma",
-      "destination": "/onchain-finance/deepbookv3/contract-information/ewma",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/ewma",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3/contract-information/ewma/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/ewma",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3/contract-information/flash-loans",
-      "destination": "/onchain-finance/deepbookv3/contract-information/flash-loans",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/flash-loans",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3/contract-information/flash-loans/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/flash-loans",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3/contract-information/orders",
-      "destination": "/onchain-finance/deepbookv3/contract-information/orders",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/orders",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3/contract-information/orders/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/orders",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3/contract-information/permissionless-pool",
-      "destination": "/onchain-finance/deepbookv3/contract-information/permissionless-pool",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/permissionless-pool",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3/contract-information/permissionless-pool/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/permissionless-pool",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3/contract-information/query-the-pool",
-      "destination": "/onchain-finance/deepbookv3/contract-information/query-the-pool",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/query-the-pool",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3/contract-information/query-the-pool/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/query-the-pool",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3/contract-information/referral",
-      "destination": "/onchain-finance/deepbookv3/contract-information/referral",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/referral",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3/contract-information/referral/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/referral",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3/contract-information/staking-governance",
-      "destination": "/onchain-finance/deepbookv3/contract-information/staking-governance",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/staking-governance",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3/contract-information/staking-governance/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/staking-governance",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3/contract-information/swaps",
-      "destination": "/onchain-finance/deepbookv3/contract-information/swaps",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/swaps",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3/contract-information/swaps/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/contract-information/swaps",
       "permanent": true
     },
     {
       "source": "/standards/deepbookv3/design",
-      "destination": "/onchain-finance/deepbookv3/design",
+      "destination": "/onchain-finance/deepbook/deepbookv3/design",
+      "permanent": true
+    },
+    {
+      "source": "/standards/deepbookv3/design/",
+      "destination": "/onchain-finance/deepbook/deepbookv3/design",
       "permanent": true
     },
     {
@@ -2581,13 +3006,313 @@
       "permanent": true
     },
     {
-      "source": "/onchain-finance/deepbook",
-      "destination": "/onchain-finance/deepbookv3/deepbook",
+      "source": "/concepts/data-access/indexer-runtime-perf",
+      "destination": "/develop/accessing-data/custom-indexer/indexer-runtime-perf",
       "permanent": true
     },
     {
-      "source": "/concepts/data-access/indexer-runtime-perf",
-      "destination": "/develop/accessing-data/custom-indexer/indexer-runtime-perf",
+      "source": "/build/programming-with-objects/",
+      "destination": "/develop/objects",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/transactions/prog-txn-blocks/",
+      "destination": "/develop/transactions/ptbs/prog-txn-blocks",
+      "permanent": true
+    },
+    {
+      "source": "/build/objects",
+      "destination": "/develop/sui-architecture/object-model",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/archival-store",
+      "destination": "/develop/accessing-data/archival-store",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/cryptography/nautilus",
+      "destination": "/sui-stack/nautilus",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/cryptography/transaction-auth/multisig",
+      "destination": "/develop/transactions/transaction-auth/multisig",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/custom-indexing-framework",
+      "destination": "/develop/accessing-data/custom-indexer",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/data-access/graphql-indexer",
+      "destination": "/develop/accessing-data/graphql",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/dynamic-fields",
+      "destination": "/develop/objects/dynamic-fields",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/dynamic-fields/transfers/transfer-to-object",
+      "destination": "/develop/objects/transfers/transfer-to-object",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/graphql-indexer",
+      "destination": "/develop/accessing-data/graphql",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/graphql-rpc",
+      "destination": "/develop/accessing-data/graphql/graphql-rpc",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/grpc-overview",
+      "destination": "/develop/accessing-data/grpc",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/object-model",
+      "destination": "/develop/sui-architecture/object-model",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/object-ownership",
+      "destination": "/develop/objects/object-ownership",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/object-ownership/address-owned",
+      "destination": "/develop/objects/object-ownership/address-owned",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/sui-architecture/indexer-functions",
+      "destination": "/develop/accessing-data/custom-indexer",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/sui-architecture/transaction-lifecycle",
+      "destination": "/develop/transactions/transaction-lifecycle",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/sui-move-concepts/packages",
+      "destination": "/develop/write-move/package-overview",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/sui-move-concepts/packages/custom-policies",
+      "destination": "/develop/publish-upgrade-packages/custom-policies",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/tokenomics/gas-pricing",
+      "destination": "/develop/transaction-payment/gas-in-sui",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/tokenomics/proof-of-stake",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/tokenomics/storage-fund",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/tokenomics/sui-coin",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/transactions/sponsored-transactions",
+      "destination": "/develop/transaction-payment/sponsor-txn",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/transfers/custom-rules",
+      "destination": "/develop/objects/transfers/custom-rules",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/transfers/transfer-to-object",
+      "destination": "/develop/objects/transfers/transfer-to-object",
+      "permanent": true
+    },
+    {
+      "source": "/contribute",
+      "destination": "/references/contribute/contribution-process",
+      "permanent": true
+    },
+    {
+      "source": "/contribute/research-papers",
+      "destination": "/references/research-papers",
+      "permanent": true
+    },
+    {
+      "source": "/develop/sui-architecture/index",
+      "destination": "/develop/sui-architecture",
+      "permanent": true
+    },
+    {
+      "source": "/doc-updates/sui-migration-guide",
+      "destination": "/getting-started",
+      "permanent": true
+    },
+    {
+      "source": "/explore/devnet",
+      "destination": "/develop/sui-architecture/networks",
+      "permanent": true
+    },
+    {
+      "source": "/explore/wallet-browser",
+      "destination": "/onchain-finance/asset-custody/wallets",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer",
+      "destination": "/develop",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/accessing-data/custom-indexing-framework",
+      "destination": "/develop/accessing-data/custom-indexer",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/advanced/asset-tokenization",
+      "destination": "/onchain-finance/tokenized-assets/asset-tokenization",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/advanced/custom-indexer",
+      "destination": "/develop/accessing-data/custom-indexer",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/advanced/local-fee-markets",
+      "destination": "/develop/transaction-payment/local-fee-markets",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/advanced/randomness-onchain",
+      "destination": "/sui-stack/on-chain-primitives/randomness-onchain",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/getting-started/data-serving",
+      "destination": "/develop/accessing-data/data-serving",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/getting-started/graphql-rpc",
+      "destination": "/develop/accessing-data/graphql/graphql-rpc",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/nft-index",
+      "destination": "/onchain-finance/tokenized-assets",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/nft",
+      "destination": "/onchain-finance/tokenized-assets",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/nft/nft-soulbound",
+      "destination": "/onchain-finance/examples-patterns/soulbound-tokens",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/sui-101/access-time",
+      "destination": "/sui-stack/on-chain-primitives/access-time",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/sui-101/building-ptb",
+      "destination": "/develop/transactions/ptbs/building-ptb",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/sui-101/coin-mgt",
+      "destination": "/onchain-finance/fungible-tokens",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/sui-101/shared-owned",
+      "destination": "/develop/objects/object-ownership/shared",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/sui-101/sponsor-txn",
+      "destination": "/develop/transaction-payment/sponsor-txn",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/sui-101/using-events",
+      "destination": "/develop/accessing-data/using-events",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/sui-101/working-with-ptbs",
+      "destination": "/develop/transactions/ptbs",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/sui-101/move-package-management",
+      "destination": "/develop/manage-packages/move-package-management",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/sui-101/sign-and-send-txn",
+      "destination": "/develop/transactions/transaction-auth/auth-overview",
+      "permanent": true
+    },
+    {
+      "source": "/learn/architecture/consensus",
+      "destination": "/develop/sui-architecture/consensus",
+      "permanent": true
+    },
+    {
+      "source": "/learn/cryptography/sui-wallet-specs",
+      "destination": "/onchain-finance/asset-custody/wallets",
+      "permanent": true
+    },
+    {
+      "source": "/learn/sui-glossary",
+      "destination": "/references/sui-glossary",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/display",
+      "destination": "/develop/objects/display",
+      "permanent": true
+    },
+    {
+      "source": "/references/framework/sui_sui/sui_sui/:path*",
+      "destination": "/references/framework/sui_sui",
+      "permanent": true
+    },
+    {
+      "source": "/references/framework/sui_sui/transferx",
+      "destination": "/references/framework/sui_sui",
+      "permanent": true
+    },
+    {
+      "source": "/references/sui-api/beta-graph-ql",
+      "destination": "/references/sui-graphql",
+      "permanent": true
+    },
+    {
+      "source": "/sui-jsonrpc",
+      "destination": "/references/sui-api",
       "permanent": true
     }
   ],

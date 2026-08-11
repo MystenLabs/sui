@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02004]: invalid one-time witness declaration
+error[ESC02004]: invalid one-time witness declaration
   ┌─ tests/sui_mode/one_time_witness/many_fields_invalid.move:5:12
   │
 5 │     struct M has drop { some_field: bool, some_field2: bool }

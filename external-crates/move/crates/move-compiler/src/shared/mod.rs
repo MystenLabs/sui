@@ -387,6 +387,16 @@ impl CompilationEnv {
         )
     }
 
+    pub fn ide_diagnostic_reporter(&self) -> DiagnosticReporter<'_> {
+        DiagnosticReporter::new(
+            &self.flags,
+            &self.known_filter_names,
+            Arc::new(RwLock::new(Diagnostics::new())),
+            Arc::clone(&self.ide_information),
+            FilterStack::root(self.root_scope.clone()),
+        )
+    }
+
     pub fn has_warnings_or_errors(&self) -> bool {
         !self.diags.read().unwrap().is_empty()
     }

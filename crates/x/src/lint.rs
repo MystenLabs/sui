@@ -106,6 +106,7 @@ pub fn run(args: Args) -> crate::Result<()> {
     let package_linters: &[&dyn PackageLinter] = &[
         &CrateNamesPaths,
         &IrrelevantBuildDeps,
+        &WorkspaceLintsOptIn,
         // This one seems to be broken
         // &UnpublishedPackagesOnlyUsePathDependencies::new(),
         &PublishedPackagesDontDependOnUnpublishedPackages,
@@ -142,6 +143,46 @@ pub fn run(args: Args) -> crate::Result<()> {
     handle_lint_results_exclude_external_crate_checks(results)
 }
 
+/// Enforces that every workspace member inherits `[workspace.lints]` from the root
+/// Cargo.toml via `[lints] workspace = true`. `cargo clippy` / `cargo xclippy` rely on
+/// this table for the project-wide lint set, so a member that doesn't opt in would
+/// silently be linted with no lints at all.
+#[derive(Debug)]
+struct WorkspaceLintsOptIn;
+
+impl Linter for WorkspaceLintsOptIn {
+    fn name(&self) -> &'static str {
+        "workspace-lints-opt-in"
+    }
+}
+
+impl PackageLinter for WorkspaceLintsOptIn {
+    fn run<'l>(
+        &self,
+        ctx: &PackageContext<'l>,
+        out: &mut LintFormatter<'l, '_>,
+    ) -> Result<RunStatus<'l>, SystemError> {
+        let manifest_path = ctx.metadata().manifest_path();
+        let contents = std::fs::read_to_string(manifest_path)
+            .map_err(|err| SystemError::io("reading manifest", err))?;
+        let manifest: toml::Value = toml::from_str(&contents)
+            .map_err(|err| SystemError::de("deserializing manifest", err))?;
+        let opted_in = manifest
+            .get("lints")
+            .and_then(|lints| lints.get("workspace"))
+            .and_then(|workspace| workspace.as_bool())
+            == Some(true);
+        if !opted_in {
+            out.write(
+                LintLevel::Error,
+                "missing `[lints] workspace = true` in Cargo.toml: all workspace members \
+                 must inherit `[workspace.lints]` so clippy applies the project lint set",
+            );
+        }
+        Ok(RunStatus::Executed)
+    }
+}
+
 /// Define custom handler so we can skip certain lints on certain files. This is a temporary till we upstream this logic
 pub fn handle_lint_results_exclude_external_crate_checks(
     results: LintResults,
@@ -154,7 +195,8 @@ pub fn handle_lint_results_exclude_external_crate_checks(
             (path.starts_with(EXTERNAL_CRATE_DIR)
                 || path.starts_with(CREATE_DAPP_TEMPLATE_DIR)
                 || path.to_string().contains("/generated/")
-                || path.to_string().contains("/proto/"))
+                || path.to_string().contains("/proto/")
+                || path.file_name() == Some("codegen.rs"))
                 && source.name() == "license-header"
         },
         // ignore check to skip buck related code paths, meta (fb) derived starlark, etc.

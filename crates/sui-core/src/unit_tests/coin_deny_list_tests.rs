@@ -37,7 +37,7 @@ async fn test_regulated_coin_v1_creation() {
     let mut metadata_object = None;
     let mut regulated_metadata_object = None;
     for (oref, _owner) in env.publish_effects.created() {
-        let object = env.authority.get_object(&oref.0).await.unwrap();
+        let object = env.authority.get_object(&oref.0).unwrap();
         if object.is_package() {
             continue;
         }
@@ -344,7 +344,6 @@ impl TestEnv {
     async fn get_latest_object_ref(&self, id: &ObjectID) -> ObjectRef {
         self.authority
             .get_object(id)
-            .await
             .unwrap()
             .compute_object_reference()
     }
@@ -355,7 +354,7 @@ impl TestEnv {
         let mut regulated_metadata_object = None;
         let mut package_id = None;
         for (oref, _owner) in self.publish_effects.created() {
-            let object = self.authority.get_object(&oref.0).await.unwrap();
+            let object = self.authority.get_object(&oref.0).unwrap();
             if object.is_package() {
                 package_id = Some(object.id());
                 continue;
@@ -422,7 +421,7 @@ async fn new_authority_and_publish(path: &str) -> TestEnv {
 
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-    protocol_config.enable_accumulators_for_testing();
+    protocol_config.set_enable_accumulators_for_testing(true);
 
     let authority = TestAuthorityBuilder::new()
         .with_starting_objects(&[gas_object])

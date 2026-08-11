@@ -15,6 +15,8 @@ Tests projects are established as following
     - linkage table should be empty
 - A_v2 is a package upgrade of A (now at version 2).
     - linkage table should be empty
+- A_ALT is another package with declared package name a.
+    - linkage table should be empty
 - B_A is a normal package that depends on A, and source code references A.
     - linkage table should contain package A's ID
 - B_A1 is a package that depends on A, but source code does not reference any code from A.
@@ -44,3 +46,7 @@ Tests projects are established as following
     - linkage table should contain package K's ID
 - M has a code dependency on L_depends_on K package, and a dependency on K_v2 but no code references K_v2
     - linkage table should contain package K's ID and L's ID
+- DuplicateDirect depends on A and A_ALT, and references both packages.
+    - linkage table should contain both A's ID and A_ALT's ID
+- DuplicateSingle depends on A and A_ALT, but only references A.
+    - linkage table should contain A's ID and not A_ALT's ID

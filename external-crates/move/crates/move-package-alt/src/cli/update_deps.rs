@@ -37,7 +37,7 @@ impl UpdateDeps {
     pub async fn execute(&self) -> anyhow::Result<()> {
         let path = self.path.clone().unwrap_or(PathBuf::from("."));
 
-        let envs = RootPackage::<Vanilla>::environments(&path, &Vanilla)?;
+        let envs = RootPackage::<Vanilla>::environments(&path, &Vanilla::new())?;
 
         let Some(chain_id) = envs.get(&self.environment) else {
             bail!("Environment {} not found", self.environment);
@@ -46,7 +46,7 @@ impl UpdateDeps {
         let environment = Environment::new(self.environment.clone(), chain_id.clone());
 
         let mut root_package: RootPackage<Vanilla> =
-            PackageLoader::new(&path, environment, Vanilla)
+            PackageLoader::new(&path, environment, Vanilla::new())
                 .modes(self.modes.clone())
                 .force_repin(true)
                 .load()

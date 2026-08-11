@@ -1,8 +1,48 @@
 ---
 title: Custom Upgrade Policies
-description: Custom upgrade policies are used to upgrade live packages while addressing the security risks of single key ownership upgrades.
-keywords: [ upgrade policies, custom upgrade policies, immutable policy, dependency policy, additive policy, compatible policy, create an upgrade policy, isolate a policy ]
+description: >-
+  Custom upgrade policies are used to upgrade live packages while addressing the
+  security risks of single key ownership upgrades.
+keywords:
+  - upgrade policies
+  - custom upgrade policies
+  - immutable policy
+  - dependency policy
+  - additive policy
+  - compatible policy
+  - create an upgrade policy
+  - isolate a policy
+goal:
+  description: >-
+    Reader understands custom upgrade policies are used to upgrade live packages
+    while addressing the security risks of single
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What are custom upgrade policies in Sui?
+  - How do I create a custom upgrade policy for a Move package?
+  - What is the difference between UpgradeCap and UpgradeTicket?
+answer: >-
+  Protecting the ability to upgrade a package onchain using a single key can
+  pose a security risk for several reasons:.
 ---
+
+<AgentPrompt
+  prompt={"Create an operator runbook for package upgrades and admin actions: required caps, signer/custody steps, exact commands, verification, and rollback/communication plan."}
+/>
 
 Protecting the ability to upgrade a package onchain using a single key can pose a security risk for several reasons:
 
@@ -130,6 +170,12 @@ When writing custom upgrade policies, prefer:
 - Locking in the policy of the `UpgradeCap`, so that the policy cannot be made less restrictive later.
 
 These best practices help uphold informed user consent and bounded risk by making it clear what a package's upgrade policy is at the moment a user locks value into it, ensuring that the policy does not evolve to be more permissive with time without the package user realizing and choosing to accept the new terms.
+
+:::tip Custody and runbook
+
+Treat the `UpgradeCap` owner as a privileged admin. Hold it under a multisig or timelock rather than a single key, emit an event on every upgrade, monitor onchain for upgrades to packages you depend on, and document an emergency process (including when to make the package immutable). See [Security Best Practices](/develop/security/best-practices) for more.
+
+:::
 
 ## Example: Day of the week upgrade policy {#example-upgrade}
 

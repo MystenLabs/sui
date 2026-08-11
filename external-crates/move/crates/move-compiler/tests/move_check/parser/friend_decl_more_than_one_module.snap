@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
   ┌─ tests/move_check/parser/friend_decl_more_than_one_module.move:6:15
   │
 6 │     use 0x42::A;
@@ -13,7 +13,7 @@ warning[W09001]: unused alias
   │
   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_check/parser/friend_decl_more_than_one_module.move:7:14
   │
 7 │     friend A 0x42::B;

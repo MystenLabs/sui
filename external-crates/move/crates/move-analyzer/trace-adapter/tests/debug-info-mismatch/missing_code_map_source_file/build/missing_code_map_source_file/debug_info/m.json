@@ -1,0 +1,67 @@
+{
+  "version": 2,
+  "definition_location": {
+    "file_hash": "6c326f46702c424e8eb6b6cc4507d892901e8c3619e307d9302525f7f9916d26",
+    "start": 37,
+    "end": 38
+  },
+  "module_name": ["0x1", "m"],
+  "struct_map": {},
+  "enum_map": {},
+  "function_map": {
+    "0": {
+      "location": {
+        "file_hash": "6c326f46702c424e8eb6b6cc4507d892901e8c3619e307d9302525f7f9916d26",
+        "start": 45,
+        "end": 116
+      },
+      "definition_location": {
+        "file_hash": "6c326f46702c424e8eb6b6cc4507d892901e8c3619e307d9302525f7f9916d26",
+        "start": 49,
+        "end": 53
+      },
+      "type_parameters": [],
+      "parameters": [],
+      "locals": [],
+      "nops": {},
+      "code_map": {
+        "0": {
+          "file_hash": "6c326f46702c424e8eb6b6cc4507d892901e8c3619e307d9302525f7f9916d26",
+          "start": 66,
+          "end": 83
+        },
+        "1": {
+          "file_hash": "6c326f46702c424e8eb6b6cc4507d892901e8c3619e307d9302525f7f9916d26",
+          "start": 92,
+          "end": 112
+        }
+      },
+      "is_native": false
+    },
+    "1": {
+      "location": {
+        "file_hash": "6c326f46702c424e8eb6b6cc4507d892901e8c3619e307d9302525f7f9916d26",
+        "start": 124,
+        "end": 171
+      },
+      "definition_location": {
+        "file_hash": "6c326f46702c424e8eb6b6cc4507d892901e8c3619e307d9302525f7f9916d26",
+        "start": 128,
+        "end": 142
+      },
+      "type_parameters": [],
+      "parameters": [],
+      "locals": [],
+      "nops": {},
+      "code_map": {
+        "0": {
+          "file_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "start": 0,
+          "end": 0
+        }
+      },
+      "is_native": false
+    }
+  },
+  "constant_map": {}
+}

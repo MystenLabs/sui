@@ -1,21 +1,62 @@
 ---
 title: Object Display
-description: The Sui Object Display standard is a template engine that enables onchain management of offchain representation (display) for a type.
-keywords: [ Object Display, object, display, display properties, object properties, sui::display, Sui utility objects, Unique objects with dynamic representation, objects with unique static content ]
+description: >-
+  The Sui Object Display standard is a template engine that enables onchain
+  management of offchain representation (display) for a type.
+keywords:
+  - Object Display
+  - object
+  - display
+  - display properties
+  - object properties
+  - 'sui::display'
+  - Sui utility objects
+  - Unique objects with dynamic representation
+  - objects with unique static content
 pagination_prev: null
+goal:
+  description: >-
+    Reader understands the Object Display standard (V2 via
+    sui::display_registry) for managing offchain representation of a type
+    onchain
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Object Display in Sui?
+  - What topics does Object Display cover?
+  - How does object display work on Sui?
+answer: >-
+  Object Display V2 is the current Object Display standard. Use the
+  `sui::display_registry` APIs when creating or updating displays from Move
+  code.
 ---
 
-:::caution
+Object Display is a template engine that controls how Sui objects appear in wallets, explorers, and other offchain applications. You define a set of key-value pairs where both keys and values are format strings. The keys represent display properties (for example, `name`, `description`, `image_url`, `link`), and the values are templates that reference fields on your object using `{field_name}` syntax.
 
-Object Display V2 will be available in Sui v1.68. Check the [release schedule](https://www.sui.io/networkinfo) to learn when v1.68 is available on Devnet, Testnet, and Mainnet.
+When a client (wallet, explorer, marketplace) renders your object, it reads the Display definition from the chain and substitutes the template variables with the object's actual field values. This enables onchain management of offchain representation without modifying the object's struct definition.
 
-Sui Object Display V2 will replace Object Display V1. [Learn more](/develop/objects/display/display-overview).
+### Common use cases
 
-Object Display V1 will continue being supported by RPCs that already had support for it (JSON-RPC, GraphQL) until **end of July**. After that, onchain Object Display V1 code will be decommissioned and will start aborting.
+- **NFTs and collectibles:** Define `name`, `description`, `image_url`, and `project_url` so wallets display rich previews.
+- **Gaming items:** Use dynamic templates that reference evolving object fields (level, rarity, stats) for composable and dynamic displays.
+- **Marketplace listings:** Set standardized metadata fields so aggregators can index and display your objects consistently.
 
-**Recommendation:** Use the `sui::display_registry` APIs when creating a display from Move code. For the intermediate phase, use the `migrate_v1_to_v2` function to migrate a legacy display and receive the V2 `Display<T>` and `DisplayCap<T>`.
+### What happens without a Display
 
-All existing V1 displays will be migrated to V2 in a **system snapshot migration**. You do not need to do anything upfront. After the snapshot, you can claim the capability when you are ready (see [Migrating to V2](/develop/objects/display/using-display#migrating-to-v2)).
+If no Display is defined for a type, clients fall back to rendering raw object data (struct fields and values). The object remains fully functional on Sui, but wallets and explorers cannot show human-readable names, images, or descriptions.
+
+:::info
+
+Object Display V2 is the current Object Display standard. Use the `sui::display_registry` APIs when creating or updating displays from Move code.
+
+Object Display V1 is legacy. Existing V1 displays were migrated to V2 in a system snapshot migration. If you need to manage a migrated display, claim its `DisplayCap<T>` when you are ready (see [Migrating to V2](/develop/objects/display/using-display#migrating-to-v2)).
 
 :::
 

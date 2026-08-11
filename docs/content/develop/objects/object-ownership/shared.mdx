@@ -1,10 +1,50 @@
 ---
 title: Shared Objects
-description: Anyone can access shared objects on the Sui network, so care must be taken to secure access, if needed.
-keywords: [ shared objects, sharing objects, objects that are shared, public objects, accessing shared objects, accessing public objects ]
+description: >-
+  Anyone can access shared objects on the Sui network, so care must be taken to
+  secure access, if needed.
+keywords:
+  - shared objects
+  - sharing objects
+  - objects that are shared
+  - public objects
+  - accessing shared objects
+  - accessing public objects
+goal:
+  description: >-
+    Reader understands anyone can access shared objects on the Sui network, so
+    care must be taken to secure access, if needed
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Shared objects
+    stage: Move Contract
+questions:
+  - What is Shared Objects in Sui?
+  - How do I create shared objects?
+  - When to use shared objects?
+answer: >-
+  A shared object is a public, mutable object that is accessible to anyone on
+  the network. They are designed such that multiple users or smart contracts can
+  interact with the same object concurrently.
 ---
 
-A shared object is a public, mutable object that is accessible to anyone on the network. They are designed such that multiple users or smart contracts can interact with the same object concurrently.
+A [shared object](/develop/objects/object-ownership) is a public, mutable object that any address on the network can reference in a transaction. Multiple users and smart contracts can interact with the same shared object concurrently. Shared objects go through consensus ordering, which adds latency compared to [address-owned objects](/develop/objects/object-ownership/address-owned) but enables concurrent multi-party access.
 
 ## Create shared objects
 
@@ -107,3 +147,31 @@ public fun collect_profits(
     transfer::public_transfer(profits, ctx.sender())
 }
 ```
+
+## Security considerations
+
+Anyone can submit a transaction that references a shared object. The Sui runtime does not enforce access control on shared objects. Your Move code must verify authorization for every privileged operation. Learn more in ([Security Best Practices](/develop/security/best-practices)).
+
+## Performance considerations
+
+Transactions that touch shared objects take longer to finalize than address-owned-object transactions because they require consensus. 
+
+When many transactions write to the same shared object in the same checkpoint, they are sequenced rather than executed in parallel. This reduces throughput for that object. If your use case requires high write throughput, consider splitting state across multiple shared objects (for example, sharding an order book by price range) or using address-owned objects where possible.
+
+## Query shared objects offchain
+
+You can read shared objects offchain using the same methods as any other Sui object. Use the object's ID to query its current state:
+
+- **GraphQL RPC:** Use the `object` query with the shared object's ID. See the [GraphQL RPC reference](/develop/accessing-data/graphql/graphql-rpc) for the full schema.
+- **gRPC:** Use the `GetObject` method. See the [gRPC reference](/develop/accessing-data/grpc) for details.
+- **Event subscriptions:** Subscribe to events emitted by the shared object to react to state changes in real time.
+
+## When to use address-owned objects instead
+
+Prefer address-owned objects over shared objects when:
+
+- Only one user needs to write to the object at a time.
+- You need the lowest possible transaction latency.
+- You want to avoid consensus overhead and potential contention.
+
+Shared objects are the right choice when multiple parties must read and write the same mutable state. For read-only data that never changes, use [immutable objects](/develop/objects/object-ownership/immutable) instead.

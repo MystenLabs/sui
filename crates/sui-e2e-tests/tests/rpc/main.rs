@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod client;
+mod restore;
 mod v2;
 
 async fn transfer_coin(context: &sui_sdk::wallet_context::WalletContext) -> sui_sdk_types::Digest {

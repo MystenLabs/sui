@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02004]: invalid one-time witness declaration
+error[ESC02004]: invalid one-time witness declaration
   ┌─ tests/sui_mode/one_time_witness/wrong_field_type_with_init.move:6:12
   │
 6 │     struct M has drop { value: u64 }

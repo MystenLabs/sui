@@ -4,13 +4,12 @@
 use crate::base_types::AuthorityName;
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
-    AuthorityKeyPair, AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait,
-    AuthoritySignature, AuthorityStrongQuorumSignInfo, EmptySignInfo, Signer,
+    AuthorityKeyPair, AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignature,
+    AuthorityStrongQuorumSignInfo, EmptySignInfo, Signer,
 };
 use crate::error::SuiResult;
 use crate::executable_transaction::CertificateProof;
 use crate::messages_checkpoint::CheckpointSequenceNumber;
-use crate::transaction::SenderSignedData;
 use fastcrypto::traits::KeyPair;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -169,16 +168,6 @@ where
 
     pub fn epoch(&self) -> EpochId {
         self.auth_signature.epoch
-    }
-}
-
-impl Envelope<SenderSignedData, AuthoritySignInfo> {
-    pub fn verify_committee_sigs_only(&self, committee: &Committee) -> SuiResult {
-        self.auth_signature.verify_secure(
-            self.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            committee,
-        )
     }
 }
 

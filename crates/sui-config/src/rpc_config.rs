@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::net::SocketAddr;
+use std::time::Duration;
 
 #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -54,20 +55,72 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub index_initialization: Option<RpcIndexInitConfig>,
 
-    /// Enable indexing of authenticated events
-    ///
-    /// This controls whether authenticated events are indexed and whether the authenticated
-    /// events API endpoints are available. When disabled, authenticated events are not indexed
-    /// and API calls will return an unsupported error.
-    ///
-    /// Defaults to `false`, with authenticated events indexing and API disabled
+    /// Tunables for the ledger-history list APIs (`list_transactions`,
+    /// `list_events`, `list_checkpoints`). These scan the historical inverted
+    /// indexes, unlike the live object-set listings (`list_owned_objects`,
+    /// `list_dynamic_fields`), so they carry their own time and scan-cost bounds.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub authenticated_events_indexing: Option<bool>,
+    pub ledger_history: Option<LedgerHistoryConfig>,
+
+    /// Number of consecutive checkpoints a filtered subscription may go without
+    /// producing an item before the server emits a progress-only frame,
+    /// so sparse subscribers always learn their resume point. Defaults to 25
+    /// (~5 seconds at mainnet checkpoint cadence).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subscription_watermark_interval: Option<u32>,
+
+    /// Maximum number of concurrent RPC subscriptions. Defaults to 1024.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subscription_max_subscribers: Option<usize>,
+
+    /// Number of parallel shard tasks that evaluate subscription filters and
+    /// deliver updates. Each subscriber lives on one shard; per-checkpoint
+    /// filter evaluation parallelizes across shards. Defaults to the host's
+    /// available parallelism.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subscription_shards: Option<u32>,
 
     /// Configuration for rendering Objects based on the Display standard
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display: Option<DisplayConfig>,
+
+    /// Maximum age of an RPC connection, in seconds. When a connection
+    /// reaches this age the server sends GOAWAY and stops accepting new
+    /// streams on it; in-flight requests are allowed to complete within
+    /// `max-connection-age-grace-secs`. Bounding connection lifetime is the
+    /// server-side backstop that reclaims streams wedged behind HTTP/2
+    /// flow-control windows that a stalled peer never reopens.
+    ///
+    /// Defaults to 4 hours. Set to `0` to disable (connections then live
+    /// forever).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_connection_age_secs: Option<u64>,
+
+    /// Grace period, in seconds, that in-flight requests are given to
+    /// complete after a connection begins shutting down (its
+    /// `max-connection-age-secs` expired, or the node is stopping). When
+    /// the grace period expires the connection is closed even if streams
+    /// are still open. Set to `0` to close immediately at shutdown.
+    ///
+    /// Defaults to 10 minutes. Has no effect while
+    /// `max-connection-age-secs` is disabled and the node is running.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_connection_age_grace_secs: Option<u64>,
+
+    /// Server-side timeout for gRPC requests, in milliseconds. Requests
+    /// that carry a `grpc-timeout` header are bounded by the smaller of the
+    /// two values. The timeout covers a unary request's full execution and
+    /// a streaming request's time to first response; it does not bound the
+    /// lifetime of an established stream.
+    ///
+    /// Defaults to 60 seconds. Set to `0` to disable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grpc_timeout_ms: Option<u64>,
 }
+
+const DEFAULT_MAX_CONNECTION_AGE: Duration = Duration::from_secs(4 * 60 * 60);
+const DEFAULT_MAX_CONNECTION_AGE_GRACE: Duration = Duration::from_secs(10 * 60);
+const DEFAULT_GRPC_TIMEOUT: Duration = Duration::from_secs(60);
 
 impl RpcConfig {
     pub fn enable_indexing(&self) -> bool {
@@ -96,8 +149,52 @@ impl RpcConfig {
         self.index_initialization.as_ref()
     }
 
-    pub fn authenticated_events_indexing(&self) -> bool {
-        self.authenticated_events_indexing.unwrap_or(false)
+    pub fn ledger_history(&self) -> &LedgerHistoryConfig {
+        const DEFAULT_LEDGER_HISTORY_CONFIG: LedgerHistoryConfig = LedgerHistoryConfig {
+            list_transactions: None,
+            list_events: None,
+            list_checkpoints: None,
+            bitmap_bucket_scan_budget: None,
+            chunk_bucket_scan_budget: None,
+            max_bitmap_filter_literals: None,
+        };
+
+        self.ledger_history
+            .as_ref()
+            .unwrap_or(&DEFAULT_LEDGER_HISTORY_CONFIG)
+    }
+
+    /// Maximum age of an RPC connection; `None` means unlimited.
+    pub fn max_connection_age(&self) -> Option<Duration> {
+        match self.max_connection_age_secs {
+            Some(0) => None,
+            Some(secs) => Some(Duration::from_secs(secs)),
+            None => Some(DEFAULT_MAX_CONNECTION_AGE),
+        }
+    }
+
+    /// Grace period for in-flight requests once a connection begins
+    /// shutting down; `Duration::ZERO` closes immediately.
+    pub fn max_connection_age_grace(&self) -> Duration {
+        self.max_connection_age_grace_secs
+            .map(Duration::from_secs)
+            .unwrap_or(DEFAULT_MAX_CONNECTION_AGE_GRACE)
+    }
+
+    /// Server-side default deadline for gRPC requests; `None` means no
+    /// server-imposed deadline (client `grpc-timeout` headers still apply).
+    pub fn grpc_timeout(&self) -> Option<Duration> {
+        match self.grpc_timeout_ms {
+            Some(0) => None,
+            Some(ms) => Some(Duration::from_millis(ms)),
+            None => Some(DEFAULT_GRPC_TIMEOUT),
+        }
+    }
+
+    /// Validate cross-field invariants. Call once at startup to fail fast on a
+    /// misconfiguration rather than surfacing it per-request.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        self.ledger_history().validate()
     }
 
     pub fn display(&self) -> &DisplayConfig {
@@ -228,5 +325,240 @@ impl DisplayConfig {
 
     pub fn max_output_size(&self) -> usize {
         self.max_output_size.unwrap_or(1024 * 1024)
+    }
+}
+
+#[cfg(test)]
+mod connection_lifecycle_tests {
+    use super::*;
+
+    /// These defaults are availability-relevant: connection age plus grace
+    /// is the server-side backstop that reclaims streams wedged behind
+    /// HTTP/2 flow-control windows, and the gRPC deadline bounds requests
+    /// from clients that set none. Pin them so they cannot silently regress
+    /// to disabled.
+    #[test]
+    fn connection_lifecycle_defaults_are_enabled() {
+        let config = RpcConfig::default();
+        assert_eq!(
+            config.max_connection_age(),
+            Some(Duration::from_secs(4 * 60 * 60))
+        );
+        assert_eq!(
+            config.max_connection_age_grace(),
+            Duration::from_secs(10 * 60)
+        );
+        assert_eq!(config.grpc_timeout(), Some(Duration::from_secs(60)));
+    }
+
+    #[test]
+    fn zero_disables_age_and_timeout() {
+        let config = RpcConfig {
+            max_connection_age_secs: Some(0),
+            max_connection_age_grace_secs: Some(0),
+            grpc_timeout_ms: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(config.max_connection_age(), None);
+        // A zero grace is a valid setting: close immediately at shutdown.
+        assert_eq!(config.max_connection_age_grace(), Duration::ZERO);
+        assert_eq!(config.grpc_timeout(), None);
+    }
+
+    #[test]
+    fn explicit_values_are_used() {
+        let config = RpcConfig {
+            max_connection_age_secs: Some(60),
+            max_connection_age_grace_secs: Some(5),
+            grpc_timeout_ms: Some(1_500),
+            ..Default::default()
+        };
+        assert_eq!(config.max_connection_age(), Some(Duration::from_secs(60)));
+        assert_eq!(config.max_connection_age_grace(), Duration::from_secs(5));
+        assert_eq!(config.grpc_timeout(), Some(Duration::from_millis(1_500)));
+    }
+}
+
+const DEFAULT_LEDGER_HISTORY_METHOD_TIMEOUT_MS: u64 = 5_000;
+const DEFAULT_BITMAP_BUCKET_SCAN_BUDGET: usize = 1_024;
+const DEFAULT_CHUNK_BUCKET_SCAN_BUDGET: usize = 256;
+const DEFAULT_MAX_BITMAP_FILTER_LITERALS: usize = 10;
+// A chunk never evaluates more buckets than the whole request is allowed, so the
+// per-chunk cap must not exceed the per-request budget. Enforced for the
+// defaults here; the accessors clamp configured values the same way.
+const _: () = assert!(DEFAULT_CHUNK_BUCKET_SCAN_BUDGET <= DEFAULT_BITMAP_BUCKET_SCAN_BUDGET);
+
+/// Built-in per-endpoint defaults. These differ per endpoint (e.g. checkpoints
+/// page smaller than transactions, and scan a narrower chunk).
+struct LedgerHistoryMethodDefaults {
+    default_limit_items: u32,
+    max_limit_items: u32,
+    chunk_max: usize,
+}
+
+const LIST_TRANSACTIONS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
+    default_limit_items: 50,
+    max_limit_items: 500,
+    chunk_max: 32,
+};
+const LIST_EVENTS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
+    default_limit_items: 50,
+    max_limit_items: 1_000,
+    chunk_max: 32,
+};
+const LIST_CHECKPOINTS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
+    default_limit_items: 10,
+    max_limit_items: 50,
+    chunk_max: 16,
+};
+
+/// Per-endpoint tunables for one ledger-history list API. Every field is optional
+/// and falls back to a built-in default; see [`ResolvedLedgerHistoryMethodConfig`].
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct LedgerHistoryMethodConfig {
+    /// Per-request wall-clock timeout, in milliseconds. Defaults to `5000`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout_ms: Option<u64>,
+
+    /// Page size used when a request omits `limit_items`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_limit_items: Option<u32>,
+
+    /// Upper bound a request's `limit_items` is clamped to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_limit_items: Option<u32>,
+
+    /// Maximum items materialized per internal scan chunk.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chunk_max: Option<usize>,
+}
+
+/// A [`LedgerHistoryMethodConfig`] with all defaults applied.
+#[derive(Clone, Copy, Debug)]
+pub struct ResolvedLedgerHistoryMethodConfig {
+    pub timeout: Duration,
+    pub default_limit_items: u32,
+    pub max_limit_items: u32,
+    pub chunk_max: usize,
+}
+
+impl LedgerHistoryMethodConfig {
+    fn resolve(
+        this: Option<&LedgerHistoryMethodConfig>,
+        defaults: LedgerHistoryMethodDefaults,
+    ) -> ResolvedLedgerHistoryMethodConfig {
+        ResolvedLedgerHistoryMethodConfig {
+            timeout: Duration::from_millis(
+                this.and_then(|c| c.timeout_ms)
+                    .unwrap_or(DEFAULT_LEDGER_HISTORY_METHOD_TIMEOUT_MS),
+            ),
+            default_limit_items: this
+                .and_then(|c| c.default_limit_items)
+                .unwrap_or(defaults.default_limit_items),
+            max_limit_items: this
+                .and_then(|c| c.max_limit_items)
+                .unwrap_or(defaults.max_limit_items),
+            chunk_max: this.and_then(|c| c.chunk_max).unwrap_or(defaults.chunk_max),
+        }
+    }
+}
+
+/// Tunables for the ledger-history list APIs. Per-endpoint knobs live in
+/// the three [`LedgerHistoryMethodConfig`] fields; the remaining knobs are global across
+/// all three. Every field is optional and falls back to a built-in default.
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct LedgerHistoryConfig {
+    /// Per-endpoint tunables for `list_transactions`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_transactions: Option<LedgerHistoryMethodConfig>,
+
+    /// Per-endpoint tunables for `list_events`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_events: Option<LedgerHistoryMethodConfig>,
+
+    /// Per-endpoint tunables for `list_checkpoints`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_checkpoints: Option<LedgerHistoryMethodConfig>,
+
+    /// Total evaluated-bucket budget for one filtered request, shared by all
+    /// three list APIs. Exhausting it ends the query with `SCAN_LIMIT` and a
+    /// resume cursor, bounding the worst-case scan cost of a sparse filter.
+    ///
+    /// Defaults to `1024` if not specified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bitmap_bucket_scan_budget: Option<usize>,
+
+    /// Per-chunk evaluated-bucket cap. A chunk that hits this while the request
+    /// budget remains emits a progress watermark and resumes in the next chunk,
+    /// so a long sparse scan reports incremental progress. Clamped to
+    /// `bitmap_bucket_scan_budget`.
+    ///
+    /// Defaults to `256` if not specified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chunk_bucket_scan_budget: Option<usize>,
+
+    /// Maximum total filter literals (bitmap dimensions) accepted in one filtered
+    /// request, across all DNF terms. Each literal becomes one bitmap leaf, so
+    /// this bounds a single filter's scan fanout. Must not exceed
+    /// `bitmap_bucket_scan_budget` (see [`LedgerHistoryConfig::validate`]).
+    ///
+    /// Defaults to `10` if not specified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_bitmap_filter_literals: Option<usize>,
+}
+
+impl LedgerHistoryConfig {
+    pub fn list_transactions(&self) -> ResolvedLedgerHistoryMethodConfig {
+        LedgerHistoryMethodConfig::resolve(
+            self.list_transactions.as_ref(),
+            LIST_TRANSACTIONS_DEFAULTS,
+        )
+    }
+
+    pub fn list_events(&self) -> ResolvedLedgerHistoryMethodConfig {
+        LedgerHistoryMethodConfig::resolve(self.list_events.as_ref(), LIST_EVENTS_DEFAULTS)
+    }
+
+    pub fn list_checkpoints(&self) -> ResolvedLedgerHistoryMethodConfig {
+        LedgerHistoryMethodConfig::resolve(
+            self.list_checkpoints.as_ref(),
+            LIST_CHECKPOINTS_DEFAULTS,
+        )
+    }
+
+    pub fn bitmap_bucket_scan_budget(&self) -> usize {
+        self.bitmap_bucket_scan_budget
+            .unwrap_or(DEFAULT_BITMAP_BUCKET_SCAN_BUDGET)
+    }
+
+    pub fn chunk_bucket_scan_budget(&self) -> usize {
+        self.chunk_bucket_scan_budget
+            .unwrap_or(DEFAULT_CHUNK_BUCKET_SCAN_BUDGET)
+            .min(self.bitmap_bucket_scan_budget())
+    }
+
+    pub fn max_bitmap_filter_literals(&self) -> usize {
+        self.max_bitmap_filter_literals
+            .unwrap_or(DEFAULT_MAX_BITMAP_FILTER_LITERALS)
+    }
+
+    /// Reject configurations that cannot make forward progress. Each filter
+    /// literal becomes one bitmap leaf that must fetch at least one bucket to
+    /// emit its first watermark; if the per-request budget is below the literal
+    /// cap a `SCAN_LIMIT` can fire before any merged watermark reaches the wire,
+    /// leaving the client a cursorless `QueryEnd` it cannot resume from. Mirrors
+    /// the archival/BigTable side's `LedgerHistoryConfig::validate`.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.bitmap_bucket_scan_budget() >= self.max_bitmap_filter_literals(),
+            "ledger_history.bitmap_bucket_scan_budget ({}) must be >= \
+             max_bitmap_filter_literals ({}) so every filter leaf gets at least one \
+             bucket before SCAN_LIMIT",
+            self.bitmap_bucket_scan_budget(),
+            self.max_bitmap_filter_literals(),
+        );
+        Ok(())
     }
 }

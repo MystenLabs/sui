@@ -1,0 +1,13 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+{
+  "UseDef": {
+    "project": "tests/macros",
+    "file_tests": {
+      "method_macro_receiver.move": [
+        { "use_line": 17, "use_ndx": 1 }
+      ]
+    }
+  }
+}

@@ -5,7 +5,7 @@ use std::{
     collections::BTreeMap,
     net::{SocketAddr, SocketAddrV4, SocketAddrV6},
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, Weak},
     time::{Duration, Instant},
 };
 
@@ -15,13 +15,15 @@ use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use consensus_types::block::{BlockRef, Round};
 use fastcrypto::{encoding::Encoding, traits::ToFromBytes};
 use futures::{Stream, StreamExt as _, stream};
-use mysten_network::{
-    Multiaddr,
-    callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler},
-    multiaddr::Protocol,
-};
+use mysten_network::{Multiaddr, multiaddr::Protocol};
 use parking_lot::RwLock;
-use sui_http::ServerHandle;
+use sui_http::{
+    ServerHandle,
+    middleware::{
+        callback::{CallbackLayer, MakeCallbackHandler, RequestBody, ResponseHandler},
+        grpc_timeout::GrpcTimeout,
+    },
+};
 use sui_tls::AllowPublicKeys;
 use tokio_stream::{Iter, iter};
 use tonic::{Request, Response, Streaming, codec::CompressionEncoding};
@@ -56,6 +58,25 @@ use crate::{
 // Maximum bytes size in a single fetch_blocks()response.
 // TODO: put max RPC response size in protocol config.
 pub(crate) const MAX_FETCH_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
+
+pub(crate) fn max_fetch_blocks_response_bytes(
+    context: &Context,
+    block_refs: &[BlockRef],
+    fetch_after_rounds: &[Round],
+) -> usize {
+    // Mirror the server-side limit selection in `block_sync_service::fetch_blocks`:
+    // live sync (both inputs non-empty) is capped by `max_blocks_per_sync`,
+    // every other mode by `max_blocks_per_fetch`.
+    let max_response_num_blocks = if !fetch_after_rounds.is_empty() && !block_refs.is_empty() {
+        context.parameters.max_blocks_per_sync
+    } else {
+        context.parameters.max_blocks_per_fetch
+    };
+
+    max_response_num_blocks
+        .saturating_mul(context.protocol_config.max_transactions_in_block_bytes() as usize)
+        .saturating_mul(2)
+}
 
 const DEFAULT_GRPC_SERVER_TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -151,6 +172,8 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
         let mut client = self.get_client(peer, timeout).await?;
+        let max_allowed_bytes =
+            max_fetch_blocks_response_bytes(&self.context, &block_refs, &fetch_after_rounds);
         let mut request = Request::new(FetchBlocksRequest {
             block_refs: block_refs
                 .iter()
@@ -179,13 +202,6 @@ impl ValidatorNetworkClient for TonicValidatorClient {
             })?
             .into_inner();
 
-        // Allow twice the max total size of transactions in the fetched blocks.
-        let max_allowed_bytes = block_refs.len()
-            * self
-                .context
-                .protocol_config
-                .max_transactions_in_block_bytes() as usize
-            * 2;
         let mut blocks = vec![];
         let mut total_fetched_bytes = 0;
         loop {
@@ -358,13 +374,30 @@ impl ValidatorNetworkClient for TonicValidatorClient {
 }
 
 // Tonic channel wrapped with layers.
-pub(crate) type Channel = mysten_network::callback::Callback<
-    tower_http::trace::Trace<
-        tonic_rustls::Channel,
-        tower_http::classify::SharedClassifier<tower_http::classify::GrpcErrorsAsFailures>,
+pub(crate) type Channel = sui_http::middleware::callback::Callback<
+    tower::util::MapRequest<
+        tower_http::trace::Trace<
+            tonic_rustls::Channel,
+            tower_http::classify::SharedClassifier<tower_http::classify::GrpcErrorsAsFailures>,
+        >,
+        ReboxRequestFn,
     >,
     MetricsCallbackMaker,
 >;
+
+/// The callback middleware hands the wrapped service a request body of type
+/// `RequestBody`, but `tonic_rustls::Channel` is monomorphic on
+/// `tonic::body::Body`, so the body must be reboxed before it reaches the
+/// channel. A fn pointer (rather than a closure) keeps `Channel` nameable as a
+/// type alias.
+pub(crate) type ReboxRequestFn =
+    fn(http::Request<RequestBody<tonic::body::Body, ()>>) -> http::Request<tonic::body::Body>;
+
+pub(crate) fn rebox_request(
+    request: http::Request<RequestBody<tonic::body::Body, ()>>,
+) -> http::Request<tonic::body::Body> {
+    request.map(tonic::body::Body::new)
+}
 
 /// Manages a pool of connections to peers to avoid constantly reconnecting,
 /// which can be expensive.
@@ -490,6 +523,7 @@ impl ChannelPool {
                 self.context.metrics.network_metrics.outbound.clone(),
                 self.context.parameters.tonic.excessive_message_size,
             )))
+            .map_request(rebox_request as ReboxRequestFn)
             .layer(
                 TraceLayer::new_for_grpc()
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
@@ -507,12 +541,26 @@ impl ChannelPool {
 /// Proxies Tonic requests to NetworkService with actual handler implementation.
 struct TonicServiceProxy<S: ValidatorNetworkService> {
     context: Arc<Context>,
-    service: Arc<S>,
+    // TonicServiceProxy is cloned into per-connection server tasks, which complete on the
+    // network's schedule during graceful shutdown, and can briefly outlive the node if it is
+    // dropped without stop(). Hold the service weakly so lingering connections cannot extend
+    // the life of the authority service and its state; requests racing shutdown fail with
+    // `unavailable` instead.
+    service: Weak<S>,
 }
 
 impl<S: ValidatorNetworkService> TonicServiceProxy<S> {
     fn new(context: Arc<Context>, service: Arc<S>) -> Self {
-        Self { context, service }
+        Self {
+            context,
+            service: Arc::downgrade(&service),
+        }
+    }
+
+    fn service(&self) -> Result<Arc<S>, tonic::Status> {
+        self.service
+            .upgrade()
+            .ok_or_else(|| tonic::Status::unavailable("Consensus authority is shutting down"))
     }
 }
 
@@ -534,7 +582,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
             block,
             excluded_ancestors: vec![],
         };
-        self.service
+        self.service()?
             .handle_send_block(peer_index, block)
             .await
             .map_err(|e| tonic::Status::invalid_argument(format!("{e:?}")))?;
@@ -570,7 +618,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
             }
         };
         let stream = self
-            .service
+            .service()?
             .handle_subscribe_blocks(peer_index, first_request.last_received_round)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?
@@ -614,7 +662,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         let fetch_after_rounds = inner.fetch_after_rounds;
         let fetch_missing_ancestors = inner.fetch_missing_ancestors;
         let blocks = self
-            .service
+            .service()?
             .handle_fetch_blocks(
                 peer_index,
                 block_refs,
@@ -646,7 +694,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         };
         let request = request.into_inner();
         let (commits, certifier_blocks) = self
-            .service
+            .service()?
             .handle_fetch_commits(peer_index, (request.start..=request.end).into())
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
@@ -696,7 +744,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         }
 
         let blocks = self
-            .service
+            .service()?
             .handle_fetch_latest_blocks(peer_index, authorities)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
@@ -722,7 +770,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
             return Err(tonic::Status::internal("PeerInfo not found"));
         };
         let (highest_received, highest_accepted) = self
-            .service
+            .service()?
             .handle_get_latest_rounds(peer_index)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
@@ -744,7 +792,6 @@ pub(crate) struct TonicManager {
     network_keypair: NetworkKeyPair,
     own_address: SocketAddr,
     validator_client: Arc<TonicValidatorClient>,
-    #[allow(dead_code)]
     observer_client: Arc<TonicObserverClient>,
     server: Option<ServerHandle>,
     observer_server: Option<ServerHandle>,
@@ -907,9 +954,7 @@ impl TonicManager {
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
                     .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
             )
-            .layer_fn(|service| {
-                mysten_network::grpc_timeout::GrpcTimeout::new(service, DEFAULT_GRPC_SERVER_TIMEOUT)
-            });
+            .layer_fn(|service| GrpcTimeout::new(service, Some(DEFAULT_GRPC_SERVER_TIMEOUT)));
 
         let consensus_service_server = ConsensusServiceServer::new(service)
             .max_encoding_message_size(config.message_size_limit)
@@ -1038,9 +1083,7 @@ impl TonicManager {
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
                     .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
             )
-            .layer_fn(|service| {
-                mysten_network::grpc_timeout::GrpcTimeout::new(service, DEFAULT_GRPC_SERVER_TIMEOUT)
-            });
+            .layer_fn(|service| GrpcTimeout::new(service, Some(DEFAULT_GRPC_SERVER_TIMEOUT)));
 
         let observer_service = tonic::service::Routes::new(observer_service_server)
             .into_axum_router()
@@ -1288,10 +1331,14 @@ impl SizedResponse for http::response::Parts {
 }
 
 impl MakeCallbackHandler for MetricsCallbackMaker {
-    type Handler = MetricsResponseCallback;
+    type RequestHandler = ();
+    type ResponseHandler = MetricsResponseCallback;
 
-    fn make_handler(&self, request: &http::request::Parts) -> Self::Handler {
-        self.handle_request(request)
+    fn make_handler(
+        &self,
+        request: &http::request::Parts,
+    ) -> (Self::RequestHandler, Self::ResponseHandler) {
+        ((), self.handle_request(request))
     }
 }
 
@@ -1300,7 +1347,10 @@ impl ResponseHandler for MetricsResponseCallback {
         MetricsResponseCallback::on_response(self, response)
     }
 
-    fn on_error<E>(&mut self, err: &E) {
+    fn on_service_error<E>(&mut self, err: &E)
+    where
+        E: std::fmt::Display + 'static,
+    {
         MetricsResponseCallback::on_error(self, err)
     }
 }
@@ -1423,6 +1473,7 @@ mod tests {
     use super::*;
     use crate::{context::Clock, metrics::initialise_metrics};
     use consensus_config::{ConsensusProtocolConfig, Parameters, local_committee_and_keys};
+    use consensus_types::block::BlockDigest;
     use prometheus::Registry;
 
     fn create_test_context_and_client() -> (Arc<Context>, TonicValidatorClient) {
@@ -1446,6 +1497,40 @@ mod tests {
         let client = TonicValidatorClient::new(context.clone(), network_keypair);
 
         (context, client)
+    }
+
+    #[tokio::test]
+    async fn test_max_fetch_blocks_response_bytes_uses_response_mode_limit() {
+        let (mut context, _keys) = Context::new_for_test(4);
+        context.parameters.max_blocks_per_fetch = 11;
+        context.parameters.max_blocks_per_sync = 7;
+        let context = Arc::new(context);
+        let bytes_per_block =
+            context.protocol_config.max_transactions_in_block_bytes() as usize * 2;
+
+        let block_ref = BlockRef::new(1, AuthorityIndex::new_for_test(0), BlockDigest::MIN);
+        let fetch_after_rounds = vec![0; context.committee.size()];
+
+        // Commit-sync mode (block_refs only): always sized to max_blocks_per_fetch,
+        // independent of how many block_refs the caller actually requested.
+        assert_eq!(
+            max_fetch_blocks_response_bytes(&context, &[block_ref; 3], &[]),
+            context.parameters.max_blocks_per_fetch * bytes_per_block
+        );
+        assert_eq!(
+            max_fetch_blocks_response_bytes(&context, &[block_ref; 20], &[]),
+            context.parameters.max_blocks_per_fetch * bytes_per_block
+        );
+        // Periodic-sync mode (fetch_after_rounds only): max_blocks_per_fetch.
+        assert_eq!(
+            max_fetch_blocks_response_bytes(&context, &[], &fetch_after_rounds),
+            context.parameters.max_blocks_per_fetch * bytes_per_block
+        );
+        // Live-sync mode (both inputs non-empty): max_blocks_per_sync.
+        assert_eq!(
+            max_fetch_blocks_response_bytes(&context, &[block_ref], &fetch_after_rounds),
+            context.parameters.max_blocks_per_sync * bytes_per_block
+        );
     }
 
     #[tokio::test]

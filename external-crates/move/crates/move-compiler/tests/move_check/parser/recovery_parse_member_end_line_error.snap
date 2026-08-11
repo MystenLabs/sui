@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_check/parser/recovery_parse_member_end_line_error.move:6:5
   │
 6 │     public fun wrong_return(): u64 {
@@ -14,7 +14,7 @@ error[E01002]: unexpected token
   │     Unexpected 'public'
   │     Expected '('
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/parser/recovery_parse_member_end_line_error.move:6:36
   │    
 6 │         public fun wrong_return(): u64 {

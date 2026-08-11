@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04036]: non-exhaustive pattern
+error[EC04036]: non-exhaustive pattern
    ┌─ tests/move_2024/matching/invalid_raw_variant_name.move:10:12
    │
 10 │     match (e) {
    │            ^ Pattern 'E::Z { z: _ }' not covered
 
-error[E03019]: invalid pattern
+error[EC03019]: invalid pattern
    ┌─ tests/move_2024/matching/invalid_raw_variant_name.move:11:30
    │
 11 │         E::X { x: y } | E::Y(y) | Z { z: y } => *y
@@ -21,7 +21,7 @@ error[E03019]: invalid pattern
    │
    = Both sides of an or-pattern must bind the same variables.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/matching/invalid_raw_variant_name.move:11:30
    │
  4 │     X { x: u64 },
@@ -32,7 +32,7 @@ error[E04007]: incompatible types
 11 │         E::X { x: y } | E::Y(y) | Z { z: y } => *y
    │                              ^ Invalid pattern field type
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/matching/invalid_raw_variant_name.move:11:35
    │
 11 │         E::X { x: y } | E::Y(y) | Z { z: y } => *y

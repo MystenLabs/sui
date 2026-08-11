@@ -56,12 +56,15 @@
 //! the recovery target, the next live message is itself a gap, and detection
 //! fires again.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context as _;
+#[cfg(any(feature = "staging", test))]
+use async_stream::stream;
 use backoff::ExponentialBackoff;
+#[cfg(any(feature = "staging", test))]
+use futures::Stream;
 use futures::StreamExt;
 use move_core_types::account_address::AccountAddress;
 use sui_futures::service::Service;
@@ -74,15 +77,11 @@ use sui_rpc::proto::sui::rpc::v2::Checkpoint as ProtoCheckpoint;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction as ProtoExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsResponse;
-use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
 use sui_rpc::proto::sui::rpc::v2::subscription_service_client::SubscriptionServiceClient;
 use sui_sdk_types::ValidatorAggregatedSignature;
-use sui_types::base_types::ObjectID;
-use sui_types::base_types::SequenceNumber;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::crypto::ToFromBytes;
 use sui_types::effects::TransactionEffects;
-use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSummary;
@@ -99,14 +98,31 @@ use tracing::info;
 use tracing::warn;
 
 use crate::config::SubscriptionConfig;
-use crate::scope::ExecutionObjectMap;
+#[cfg(any(feature = "staging", test))]
+use crate::error::RpcError;
 use crate::task::watermark::Watermarks;
 
 use super::StreamingPackageStore;
 use super::SubscriptionReadiness;
+#[cfg(any(feature = "staging", test))]
+use super::checkpoint_resume::scan_checkpoints;
+#[cfg(any(feature = "staging", test))]
+use super::gap_recovery::CheckpointFetcher;
 use super::gap_recovery::recover_gap;
 use super::processed_checkpoint::ProcessedCheckpoint;
 use super::processed_checkpoint::ProcessedTransaction;
+
+#[cfg(feature = "staging")]
+mod staging {
+    pub(super) use std::collections::BTreeMap;
+
+    pub(super) use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
+    pub(super) use sui_types::base_types::ObjectID;
+    pub(super) use sui_types::base_types::SequenceNumber;
+}
+
+#[cfg(feature = "staging")]
+use staging::*;
 
 // TODO: Make these configurable via SubscriptionConfig.
 const MAX_GRPC_MESSAGE_SIZE_BYTES: usize = 128 * 1024 * 1024;
@@ -157,12 +173,167 @@ pub(super) fn checkpoint_field_mask() -> FieldMask {
     ])
 }
 
+/// Handle on the checkpoint broadcast that subscription resolvers consume from. Registered in
+/// the GraphQL context as a nominal type so its members do not clash with other context entries
+/// that may be added later.
+#[cfg(any(feature = "staging", test))]
+pub(crate) struct SubscriptionBroadcast {
+    /// Receiver created with the channel and never `.recv()`'d. Subscribers call `resubscribe()`
+    /// on it to get their own receivers; we also read `broadcaster.len()` to count how many
+    /// checkpoints the live stream has broadcast since channel creation, which combined with
+    /// `first_live_checkpoint` gives the current network tip without a separate atomic.
+    broadcaster: CheckpointBroadcaster,
+    /// Sequence number of the first checkpoint the live upstream stream broadcast through this
+    /// channel. Distinct from any `resume_from` arg passed by subscribers (those refer to the
+    /// kv-rpc resume fallback, not the live broadcast).
+    first_live_checkpoint: u64,
+}
+
+#[cfg(any(feature = "staging", test))]
+impl SubscriptionBroadcast {
+    pub(crate) fn new(broadcaster: CheckpointBroadcaster, first_live_checkpoint: u64) -> Self {
+        Self {
+            broadcaster,
+            first_live_checkpoint,
+        }
+    }
+
+    /// Direct access to the broadcast receiver template. Subscribers should call
+    /// `.resubscribe()` to get their own receiver.
+    #[cfg(feature = "staging")]
+    pub(crate) fn broadcaster(&self) -> &CheckpointBroadcaster {
+        &self.broadcaster
+    }
+
+    /// Sequence number of the most recently broadcast checkpoint. Derived from the tokio-managed
+    /// `broadcaster.len()` plus the immutable `first_live_checkpoint`, so there is no separate
+    /// shared counter that could race with the broadcast `send`.
+    pub(crate) fn network_tip(&self) -> u64 {
+        self.first_live_checkpoint
+            .saturating_add(self.broadcaster.len() as u64)
+            .saturating_sub(1)
+    }
+
+    /// Subscribe to broadcasted checkpoints, optionally resuming from `resume_from + 1`.
+    ///
+    /// Linear "catch up, then follow": Phase 1 scans toward the tip and pins a `handoff` near it,
+    /// Phase 2 follows the live broadcast from `handoff + 1`, so the phases meet with no gap. Any
+    /// anomaly disconnects (the client reconnects from its last cursor), logged by reason.
+    pub(crate) fn subscribe<F: CheckpointFetcher + Clone + Send + 'static>(
+        self: Arc<Self>,
+        resume_from: Option<u64>,
+        fetcher: F,
+        config: &SubscriptionConfig,
+    ) -> impl Stream<Item = Result<Arc<ProcessedCheckpoint>, RpcError>> + 'static {
+        // Resubscribe and pin the handoff once the scan is within this many checkpoints of the tip.
+        // Half the buffer leaves room for checkpoints arriving during the handoff, so it won't lag.
+        let handoff_threshold = config.broadcast_buffer as u64 / 2;
+
+        let config = config.clone();
+
+        stream! {
+            let mut last_yielded: Option<u64> = resume_from;
+            let mut receiver = self.broadcaster.resubscribe();
+            // `resubscribe` is future-only (delivers `handoff + 1`), so Phase 1 stops exactly at
+            // `handoff` rather than chasing the tip.
+            let mut handoff: Option<u64> = None;
+
+            // Phase 1: scan toward the tip; within `handoff_threshold`, resubscribe + pin, stop at it.
+            if let Some(start_after) = last_yielded {
+                for await item in scan_checkpoints(fetcher, self.clone(), start_after, &config) {
+                    let processed = item?;
+                    let seq = processed.summary.sequence_number;
+                    last_yielded = Some(seq);
+                    yield Ok(processed);
+
+                    if handoff.is_none()
+                        && self.network_tip().saturating_sub(seq) <= handoff_threshold
+                    {
+                        receiver = self.broadcaster.resubscribe();
+                        handoff = Some(self.network_tip());
+                    }
+
+                    if handoff.is_some_and(|h| seq >= h) {
+                        break;
+                    }
+                }
+            }
+
+            // Phase 2: follow live from the pinned receiver, or a fresh one if Phase 1 was skipped.
+            // Tags the disconnect log: a `Lagged` before the first live item is catch-up overflow.
+            let mut delivered_live = false;
+            loop {
+                match receiver.recv().await {
+                    Ok(processed) => match last_yielded {
+                        // Already covered by the scan (resubscribe/tip race): skip.
+                        Some(ly) if processed.summary.sequence_number <= ly => continue,
+                        // Unreachable under pin-and-meet (live is contiguous with the scan; a real
+                        // lag surfaces as `Lagged`). Disconnect defensively rather than emit a hole.
+                        Some(ly) if processed.summary.sequence_number > ly + 1 => {
+                            warn!(
+                                last_yielded = ly,
+                                received = processed.summary.sequence_number,
+                                "Unexpected gap between scan and live; disconnecting"
+                            );
+                            yield Err(reconnect_error());
+                            return;
+                        }
+                        _ => {
+                            last_yielded = Some(processed.summary.sequence_number);
+                            delivered_live = true;
+                            yield Ok(processed);
+                        }
+                    },
+                    Err(broadcast::error::RecvError::Lagged(missed)) if !delivered_live => {
+                        warn!(missed, "Subscriber fell behind during catch-up (likely kv-rpc lag)");
+                        yield Err(reconnect_error());
+                        return;
+                    }
+                    // Slow subscriber (Lagged after going live) or closed channel: disconnect.
+                    Err(e) => {
+                        yield Err(broadcast_error(e));
+                        return;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Convert a broadcast `RecvError` into an `RpcError` to be yielded to the subscriber.
+#[cfg(any(feature = "staging", test))]
+pub(crate) fn broadcast_error(e: broadcast::error::RecvError) -> RpcError {
+    match e {
+        broadcast::error::RecvError::Lagged(missed_count) => {
+            warn!(missed_count, "Subscription lagged, disconnecting");
+            anyhow::anyhow!(
+                "Subscription too slow: missed {missed_count} checkpoints. \
+                 Please reconnect and resume from your last seen checkpoint."
+            )
+            .into()
+        }
+        broadcast::error::RecvError::Closed => {
+            warn!("Checkpoint broadcast channel closed");
+            anyhow::anyhow!("Checkpoint stream has been shut down. Please reconnect.").into()
+        }
+    }
+}
+
+/// General error for a subscription interrupted by a gap or catch-up overflow. The specific reason
+/// is logged at the call site; clients only see that they should reconnect and resume.
+#[cfg(any(feature = "staging", test))]
+pub(crate) fn reconnect_error() -> RpcError {
+    anyhow::anyhow!(
+        "Subscription interrupted. Please reconnect and resume from your last seen checkpoint."
+    )
+    .into()
+}
+
 /// Background service that connects to a fullnode's gRPC SubscribeCheckpoints endpoint,
 /// processes incoming checkpoints, and broadcasts them to subscription resolvers.
 pub(crate) struct CheckpointStreamTask {
     uri: Uri,
     sender: broadcast::Sender<Arc<ProcessedCheckpoint>>,
-    broadcaster: CheckpointBroadcaster,
     streaming_packages: Arc<StreamingPackageStore>,
     package_eviction_tx: UnboundedSender<(u64, Vec<AccountAddress>)>,
     readiness: Arc<SubscriptionReadiness>,
@@ -177,6 +348,10 @@ pub(crate) struct CheckpointStreamTask {
 }
 
 impl CheckpointStreamTask {
+    /// Returns the task and the anchor receiver created with the broadcast channel. The
+    /// receiver must outlive `run()` (which consumes the task), so the caller holds onto it
+    /// and pairs it with the first streamed checkpoint (from `SubscriptionReadiness`) to
+    /// build a `SubscriptionBroadcast` once readiness fires.
     pub(crate) fn new(
         uri: Uri,
         config: &SubscriptionConfig,
@@ -185,23 +360,19 @@ impl CheckpointStreamTask {
         readiness: Arc<SubscriptionReadiness>,
         ledger_grpc_reader: LedgerGrpcReader,
         watermarks_rx: watch::Receiver<Arc<Watermarks>>,
-    ) -> Self {
+    ) -> (Self, CheckpointBroadcaster) {
         let (sender, broadcaster) = broadcast::channel(config.broadcast_buffer);
-        Self {
+        let task = Self {
             uri,
             sender,
-            broadcaster,
             streaming_packages,
             package_eviction_tx,
             readiness,
             ledger_grpc_reader,
             watermarks_rx,
             gap_recovery_chunk_size: config.gap_recovery_chunk_size,
-        }
-    }
-
-    pub(crate) fn broadcaster(&self) -> CheckpointBroadcaster {
-        self.broadcaster.resubscribe()
+        };
+        (task, broadcaster)
     }
 
     /// Connect to the fullnode's gRPC SubscribeCheckpoints endpoint.
@@ -232,7 +403,7 @@ impl CheckpointStreamTask {
     pub(crate) fn run(self) -> Service {
         Service::new().spawn_aborting(async move {
             let mut last_broadcast: Option<u64> = None;
-            let mut first_recorded = false;
+            let mut first_live_recorded = false;
 
             loop {
                 info!("Connecting to checkpoint stream at {}...", self.uri);
@@ -242,7 +413,7 @@ impl CheckpointStreamTask {
                 .await?;
                 info!("Connected to checkpoint stream at {}", self.uri);
 
-                self.consume_stream(stream, &mut last_broadcast, &mut first_recorded)
+                self.consume_stream(stream, &mut last_broadcast, &mut first_live_recorded)
                     .await?;
                 warn!("Checkpoint stream ended, reconnecting");
             }
@@ -260,7 +431,7 @@ impl CheckpointStreamTask {
         &self,
         mut stream: S,
         last_broadcast: &mut Option<u64>,
-        first_recorded: &mut bool,
+        first_live_recorded: &mut bool,
     ) -> anyhow::Result<()>
     where
         S: futures::Stream<Item = Result<SubscribeCheckpointsResponse, tonic::Status>> + Unpin,
@@ -281,9 +452,9 @@ impl CheckpointStreamTask {
                 .sequence_number
                 .context("Checkpoint without sequence_number")?;
 
-            if !*first_recorded {
-                self.readiness.record_first_checkpoint(seq);
-                *first_recorded = true;
+            if !*first_live_recorded {
+                self.readiness.record_first_live_checkpoint(seq);
+                *first_live_recorded = true;
             }
 
             // Gap detection: synchronously fill any hole between last_broadcast and this
@@ -400,38 +571,63 @@ pub(super) fn process_checkpoint(
     let timestamp_ms = summary.timestamp_ms;
     let cp_sequence_number = sequence_number;
     let tx_lo = summary.network_total_transactions - checkpoint.transactions.len() as u64;
+    #[cfg(feature = "staging")]
     let checkpoint_objects = deserialize_checkpoint_objects(&checkpoint)?;
-    let transactions = checkpoint
-        .transactions
-        .iter()
-        .enumerate()
-        .map(|(i, proto)| {
-            process_transaction(
-                proto,
-                &checkpoint_objects,
-                timestamp_ms,
-                cp_sequence_number,
-                tx_lo + i as u64,
-            )
-        })
-        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    // Seed the checkpoint-wide execution-objects map with every existing object version
+    // carried by the proto. Tombstones for deleted/wrapped outputs are added below from each
+    // transaction's effects because the proto doesn't carry deleted-object payloads.
+    #[cfg(feature = "staging")]
+    let mut execution_objects: BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>> =
+        checkpoint_objects
+            .iter()
+            .map(|(k, v)| (*k, Some(v.clone())))
+            .collect();
+
+    let mut transactions = Vec::with_capacity(checkpoint.transactions.len());
+    for (i, proto) in checkpoint.transactions.iter().enumerate() {
+        #[cfg(feature = "staging")]
+        add_tombstones(&mut execution_objects, proto)?;
+        transactions.push(process_transaction(
+            proto,
+            timestamp_ms,
+            cp_sequence_number,
+            tx_lo + i as u64,
+        )?);
+    }
 
     Ok(ProcessedCheckpoint {
-        sequence_number,
         summary,
         contents,
         signature,
         transactions,
+        #[cfg(feature = "staging")]
+        execution_objects: Arc::new(execution_objects),
     })
 }
 
 fn process_transaction(
     proto: &ProtoExecutedTransaction,
-    checkpoint_objects: &BTreeMap<(ObjectID, SequenceNumber), NativeObject>,
     timestamp_ms: u64,
     cp_sequence_number: u64,
     tx_sequence_number: u64,
 ) -> anyhow::Result<ProcessedTransaction> {
+    let contents = hydrate_executed_transaction(proto, timestamp_ms, cp_sequence_number)?;
+    Ok(ProcessedTransaction {
+        tx_sequence_number,
+        contents: Arc::new(contents),
+    })
+}
+
+/// Deserialize a proto `ExecutedTransaction` (from a streamed checkpoint or the scanning API) into
+/// native transaction contents, tagging it with the checkpoint `timestamp_ms` and `cp_sequence_number`
+/// the proto belongs to (the proto carries these on `timestamp`/`checkpoint` for scanned txs, and the
+/// caller supplies them from the checkpoint summary for streamed txs).
+fn hydrate_executed_transaction(
+    proto: &ProtoExecutedTransaction,
+    timestamp_ms: u64,
+    cp_sequence_number: u64,
+) -> anyhow::Result<NativeTransactionContents> {
     let transaction_data: TransactionData = proto
         .transaction
         .as_ref()
@@ -476,11 +672,7 @@ fn process_transaction(
         })
         .collect::<anyhow::Result<_>>()?;
 
-    let digest = *effects.transaction_digest();
-
-    let execution_objects = build_execution_objects(checkpoint_objects, proto)?;
-
-    let contents = NativeTransactionContents::ExecutedTransaction(
+    Ok(NativeTransactionContents::ExecutedTransaction(
         sui_indexer_alt_reader::kv_loader::ExecutedTransactionData {
             effects: Box::new(effects),
             events,
@@ -492,14 +684,7 @@ fn process_transaction(
             timestamp_ms: Some(timestamp_ms),
             cp_sequence_number: Some(cp_sequence_number),
         },
-    );
-
-    Ok(ProcessedTransaction {
-        tx_sequence_number,
-        digest,
-        contents,
-        execution_objects,
-    })
+    ))
 }
 
 /// Extract package objects from a streamed checkpoint. Returned packages will be
@@ -526,6 +711,7 @@ fn extract_packages(checkpoint: &ProtoCheckpoint) -> Vec<Arc<Package>> {
 }
 
 /// Deserialize all objects from the checkpoint-level ObjectSet.
+#[cfg(feature = "staging")]
 fn deserialize_checkpoint_objects(
     checkpoint: &ProtoCheckpoint,
 ) -> anyhow::Result<BTreeMap<(ObjectID, SequenceNumber), NativeObject>> {
@@ -543,48 +729,125 @@ fn deserialize_checkpoint_objects(
     Ok(map)
 }
 
-/// Build an ExecutionObjectMap for a single transaction by filtering checkpoint-level objects
-/// using the transaction's `changed_objects` from effects.
-///
-/// Includes both input objects (previous version) and output objects (new version) so that
-/// both `inputState` and `outputState` can resolve from streaming.
-/// Objects with `DoesNotExist` output state become tombstones (None).
-fn build_execution_objects(
-    checkpoint_objects: &BTreeMap<(ObjectID, SequenceNumber), NativeObject>,
+/// Add tombstones (`None` entries) to a checkpoint-wide execution-objects map for any
+/// `DoesNotExist` outputs in this transaction's effects. The proto's `objects` field doesn't
+/// carry payloads for deleted/wrapped objects, so tombstones must come from effects; without
+/// them, `execution_output_object_latest` would return the pre-deletion version of an object
+/// that no longer exists at end-of-checkpoint.
+#[cfg(feature = "staging")]
+fn add_tombstones(
+    map: &mut BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>>,
     proto_tx: &ProtoExecutedTransaction,
-) -> anyhow::Result<ExecutionObjectMap> {
-    let mut map = BTreeMap::new();
+) -> anyhow::Result<()> {
+    let Some(effects) = &proto_tx.effects else {
+        return Ok(());
+    };
 
-    if let Some(effects) = &proto_tx.effects {
-        let lamport_version = SequenceNumber::from_u64(
-            effects
-                .lamport_version
-                .context("Effects should have lamport_version")?,
-        );
+    let lamport_version = SequenceNumber::from_u64(
+        effects
+            .lamport_version
+            .context("Effects should have lamport_version")?,
+    );
 
-        for changed_obj in &effects.changed_objects {
-            let object_id: ObjectID = changed_obj
-                .object_id
-                .as_ref()
-                .and_then(|id| id.parse().ok())
-                .context("ChangedObject should have valid object_id")?;
-
-            // Input object (previous version, before the transaction).
-            if let Some(input_version) = changed_obj.input_version {
-                let input_version = SequenceNumber::from_u64(input_version);
-                if let Some(obj) = checkpoint_objects.get(&(object_id, input_version)) {
-                    map.insert((object_id, input_version), Some(obj.clone()));
-                }
-            }
-
-            // Output object (new version, after the transaction).
-            if changed_obj.output_state() == OutputObjectState::DoesNotExist {
-                map.insert((object_id, lamport_version), None);
-            } else if let Some(obj) = checkpoint_objects.get(&(object_id, lamport_version)) {
-                map.insert((object_id, lamport_version), Some(obj.clone()));
-            }
+    for changed_obj in &effects.changed_objects {
+        if changed_obj.output_state() != OutputObjectState::DoesNotExist {
+            continue;
         }
+        let object_id: ObjectID = changed_obj
+            .object_id
+            .as_ref()
+            .and_then(|id| id.parse().ok())
+            .context("ChangedObject should have valid object_id")?;
+        map.insert((object_id, lamport_version), None);
     }
 
-    Ok(Arc::new(map))
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::task::streaming::test_utils::MockFetcher;
+    use crate::task::streaming::test_utils::make_test_proto_checkpoint;
+    use crate::task::streaming::test_utils::test_broadcast;
+
+    /// Drain `n` items from the (pinned) stream, returning their sequence numbers. The stream
+    /// is borrowed via `Pin<&mut _>` so multiple `drain_n` calls can interleave with other test
+    /// operations (e.g., bumping the broadcast tip between phases).
+    async fn drain_n<S>(mut stream: std::pin::Pin<&mut S>, n: usize) -> Vec<u64>
+    where
+        S: Stream<Item = Result<Arc<ProcessedCheckpoint>, RpcError>>,
+    {
+        use futures::StreamExt;
+        let mut out = Vec::with_capacity(n);
+        for _ in 0..n {
+            let item = stream.as_mut().next().await.unwrap().unwrap();
+            out.push(item.summary.sequence_number);
+        }
+        out
+    }
+
+    /// Send `seq` through the broadcast channel after processing it.
+    fn send(tx: &broadcast::Sender<Arc<ProcessedCheckpoint>>, seq: u64) {
+        let processed = process_checkpoint(make_test_proto_checkpoint(seq)).unwrap();
+        tx.send(Arc::new(processed)).ok();
+    }
+
+    #[tokio::test]
+    async fn subscribe_no_resume_yields_live_only() {
+        use futures::FutureExt;
+
+        let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
+        // Fetcher is unused since resume_from is None.
+        let fetcher = MockFetcher::success_for_range(0..=0);
+
+        let stream = broadcast.subscribe(None, fetcher, &SubscriptionConfig::default());
+        tokio::pin!(stream);
+
+        // Poll once so the receiver gets pinned at tail=0 before any sends.
+        let _ = stream.as_mut().next().now_or_never();
+
+        send(&tx, 1);
+        send(&tx, 2);
+        send(&tx, 3);
+
+        let yielded = drain_n(stream.as_mut(), 3).await;
+        assert_eq!(yielded, vec![1, 2, 3]);
+    }
+
+    #[tokio::test]
+    async fn subscribe_resume_before_tip_yields_scan_then_live() {
+        let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
+        for seq in 1..=5 {
+            send(&tx, seq);
+        }
+        assert_eq!(broadcast.network_tip(), 5);
+
+        // resume_from = 2 → Phase 1 yields 3, 4, 5; then Phase 2 picks up live items.
+        let fetcher = MockFetcher::success_for_range(3..=5);
+        let stream = broadcast.subscribe(Some(2), fetcher, &SubscriptionConfig::default());
+        tokio::pin!(stream);
+
+        // Phase 1 catches up via scan.
+        assert_eq!(drain_n(stream.as_mut(), 3).await, vec![3, 4, 5]);
+
+        // Live items broadcast after Phase 1 are picked up by the mid-phase receiver.
+        send(&tx, 6);
+        send(&tx, 7);
+        assert_eq!(drain_n(stream.as_mut(), 2).await, vec![6, 7]);
+    }
+
+    #[tokio::test]
+    async fn subscribe_yields_error_when_channel_closes() {
+        let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
+        let fetcher = MockFetcher::success_for_range(0..=0);
+        let stream = broadcast.subscribe(None, fetcher, &SubscriptionConfig::default());
+        tokio::pin!(stream);
+
+        // Dropping the sender closes the channel; subscriber should yield an error and end.
+        drop(tx);
+
+        assert!(stream.next().await.unwrap().is_err());
+        assert!(stream.next().await.is_none());
+    }
 }

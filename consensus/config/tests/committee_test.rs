@@ -11,13 +11,9 @@ use rand::{SeedableRng as _, rngs::StdRng};
 
 // Committee is not sent over network or stored on disk itself, but some of its fields are.
 // So this test can still be useful to detect accidental format changes.
-#[test]
-fn committee_snapshot_matches() {
-    let epoch = 100;
-
-    let mut authorities: Vec<_> = vec![];
+fn test_authorities(num_of_authorities: u64) -> Vec<Authority> {
+    let mut authorities = Vec::new();
     let mut rng = StdRng::from_seed([9; 32]);
-    let num_of_authorities = 10;
     for i in 1..=num_of_authorities {
         let authority_keypair = fastcrypto::bls12381::min_sig::BLS12381KeyPair::generate(&mut rng);
         let protocol_keypair = ProtocolKeyPair::generate(&mut rng);
@@ -31,8 +27,19 @@ fn committee_snapshot_matches() {
             network_key: network_keypair.public(),
         });
     }
+    authorities
+}
 
-    let committee = Committee::new(epoch, authorities);
+#[test]
+fn committee_snapshot_matches() {
+    let committee = Committee::new(100, test_authorities(10));
 
     assert_yaml_snapshot!("committee", committee)
+}
+
+#[test]
+fn committee_v3_snapshot_matches() {
+    let committee = Committee::new_v3(100, test_authorities(10), 5, 5);
+
+    assert_yaml_snapshot!("committee_v3", committee)
 }

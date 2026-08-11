@@ -772,9 +772,7 @@ async fn test_authority_txn_validation_pushback() {
         .with_authority_overload_config(overload_config)
         .build()
         .await;
-    authority_state
-        .insert_genesis_objects(&[gas_object1.clone(), gas_object2.clone()])
-        .await;
+    authority_state.insert_genesis_objects(&[gas_object1.clone(), gas_object2.clone()]);
 
     // Create a validator service around the `authority_state`.
     let consensus_adapter = Arc::new(ConsensusAdapter::new(

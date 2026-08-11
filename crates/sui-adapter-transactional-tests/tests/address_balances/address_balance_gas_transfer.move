@@ -3,7 +3,7 @@
 
 // Tests using the GasCoin when using --address-balance-gas.
 
-//# init --addresses test=0x0 --accounts A B C  --enable-address-balance-gas-payments --enable-accumulators
+//# init --addresses test=0x0 --accounts A B C 
 
 //# programmable --sender A --inputs 10000000000 @A
 // First send funds to A's address balance so we can pay for gas from it

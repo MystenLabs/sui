@@ -5,22 +5,24 @@ expression: item
 {
   "data": {
     "events": {
-      "sender": {
-        "address": "[address]"
-      },
-      "transaction": {
-        "digest": "[digest]"
-      },
-      "contents": {
-        "type": {
-          "repr": "[pkg]::emit_test_event::TestEvent"
+      "node": {
+        "sender": {
+          "address": "[address]"
         },
-        "json": {
-          "value": "1"
-        }
-      },
-      "sequenceNumber": "[seq]",
-      "timestamp": "[timestamp]"
+        "transaction": {
+          "digest": "[digest]"
+        },
+        "contents": {
+          "type": {
+            "repr": "[pkg]::emit_test_event::TestEvent"
+          },
+          "json": {
+            "value": "1"
+          }
+        },
+        "sequenceNumber": "[seq]",
+        "timestamp": "[timestamp]"
+      }
     }
   }
 }

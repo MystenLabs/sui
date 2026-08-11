@@ -11,7 +11,6 @@ use backoff::Error as BE;
 use backoff::ExponentialBackoff;
 use backoff::backoff::Constant;
 use clap::ArgGroup;
-use mysten_network::callback::CallbackLayer;
 use object_store::ClientOptions;
 use object_store::ObjectStore;
 use object_store::aws::AmazonS3Builder;
@@ -24,6 +23,7 @@ use reqwest::header::HeaderMap;
 use reqwest::header::HeaderName;
 use reqwest::header::HeaderValue;
 use sui_futures::future::with_slow_future_monitor;
+use sui_http::middleware::callback::CallbackLayer;
 use sui_rpc::Client;
 use sui_rpc::client::HeadersInterceptor;
 use sui_types::digests::ChainIdentifier;
@@ -38,7 +38,7 @@ use crate::ingestion::Result as IngestionResult;
 use crate::ingestion::byte_count::ByteCountMakeCallbackHandler;
 use crate::ingestion::decode;
 use crate::ingestion::store_client::StoreIngestionClient;
-use crate::metrics::CheckpointLagMetricReporter;
+use crate::metrics::CohortMetrics;
 use crate::metrics::IngestionMetrics;
 use crate::types::full_checkpoint_content::Checkpoint;
 
@@ -52,8 +52,13 @@ const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);
 /// slow remote stores without interrupting the ingestion process.
 const SLOW_OPERATION_WARNING_THRESHOLD: Duration = Duration::from_secs(60);
 
+/// The `cohort` metric label for the base client, before it has been rebound to a specific cohort via
+/// [`IngestionClient::for_cohort`]. It keeps checkpoint fetches made before the indexer starts (e.g.
+/// the factory's tip probe) out of any real cohort's series.
+const DEFAULT_COHORT_LABEL: &str = "";
+
 #[async_trait]
-pub(crate) trait IngestionClientTrait: Send + Sync {
+pub trait IngestionClientTrait: Send + Sync {
     async fn chain_id(&self) -> anyhow::Result<ChainIdentifier>;
 
     async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult;
@@ -78,16 +83,15 @@ pub struct IngestionClientArgs {
     #[arg(long, group = "source")]
     pub remote_store_gcs: Option<String>,
 
-    /// GCP project ID for requester-pays GCS buckets. When set, the
-    /// `x-goog-user-project` header is included in every request so that
-    /// charges are billed to this project instead of the bucket owner.
-    #[arg(long, requires = "remote_store_gcs")]
-    pub remote_store_gcs_project_id: Option<String>,
-
     /// Fetch checkpoints from Azure Blob Storage. Provide the container name.
     /// (env: AZURE_STORAGE_ACCOUNT_NAME, AZURE_STORAGE_ACCESS_KEY)
     #[arg(long, group = "source")]
     pub remote_store_azure: Option<String>,
+
+    /// Default header to include in remote store requests, as `<name>:<value>`.
+    /// Can be provided multiple times.
+    #[arg(long = "remote-store-header", value_parser = parse_remote_store_header)]
+    pub remote_store_headers: Vec<(HeaderName, HeaderValue)>,
 
     /// Path to the local ingestion directory.
     #[arg(long, group = "source")]
@@ -122,8 +126,8 @@ impl Default for IngestionClientArgs {
             remote_store_url: None,
             remote_store_s3: None,
             remote_store_gcs: None,
-            remote_store_gcs_project_id: None,
             remote_store_azure: None,
+            remote_store_headers: vec![],
             local_ingestion_path: None,
             rpc_api_url: None,
             rpc_username: None,
@@ -137,18 +141,32 @@ impl Default for IngestionClientArgs {
 impl IngestionClientArgs {
     fn client_options(&self) -> ClientOptions {
         let mut options = ClientOptions::default();
+
         options = if self.checkpoint_timeout_ms == 0 {
             options.with_timeout_disabled()
         } else {
             let timeout = Duration::from_millis(self.checkpoint_timeout_ms);
             options.with_timeout(timeout)
         };
+
         options = if self.checkpoint_connection_timeout_ms == 0 {
             options.with_connect_timeout_disabled()
         } else {
             let timeout = Duration::from_millis(self.checkpoint_connection_timeout_ms);
             options.with_connect_timeout(timeout)
         };
+
+        options = if !self.remote_store_headers.is_empty() {
+            let mut headers = HeaderMap::new();
+            for (name, value) in &self.remote_store_headers {
+                headers.append(name.clone(), value.clone());
+            }
+
+            options.with_default_headers(headers)
+        } else {
+            options
+        };
+
         options
     }
 }
@@ -168,10 +186,14 @@ pub type CheckpointResult = Result<Checkpoint, CheckpointError>;
 #[derive(Clone)]
 pub struct IngestionClient {
     client: Arc<dyn IngestionClientTrait>,
-    /// Wrap the metrics in an `Arc` to keep copies of the client cheap.
+    /// The metrics registry this client's cohort view is bound against, and the handle its peers
+    /// reuse (see [`Self::metrics`]). Also owns the global `total_ingested_bytes` counter wired into
+    /// the checkpoint source.
     metrics: Arc<IngestionMetrics>,
-    checkpoint_lag_reporter: Arc<CheckpointLagMetricReporter>,
-    chain_id: OnceCell<ChainIdentifier>,
+    /// This client's cohort-labeled metric handles, rebound per cohort by [`Self::for_cohort`].
+    cohort_metrics: Arc<CohortMetrics>,
+    /// Shared so cloning an uninitialized client does not create an independent cache.
+    chain_id: Arc<OnceCell<ChainIdentifier>>,
 }
 
 #[derive(Clone, Debug)]
@@ -203,21 +225,8 @@ impl IngestionClient {
                 .map(Arc::new)?;
             IngestionClient::with_store(store, metrics.clone())?
         } else if let Some(bucket) = args.remote_store_gcs.as_ref() {
-            let mut client_options = args.client_options();
-            if let Some(project_id) = &args.remote_store_gcs_project_id {
-                let header_value = HeaderValue::from_str(project_id)
-                    .expect("invalid project ID for requester-pays header");
-                let headers = HeaderMap::from_iter([
-                    (
-                        HeaderName::from_static("x-goog-user-project"),
-                        header_value.clone(),
-                    ),
-                    (HeaderName::from_static("userproject"), header_value),
-                ]);
-                client_options = client_options.with_default_headers(headers);
-            }
             let store = GoogleCloudStorageBuilder::from_env()
-                .with_client_options(client_options)
+                .with_client_options(args.client_options())
                 .with_retry(retry)
                 .with_bucket_name(bucket)
                 .build()
@@ -260,7 +269,7 @@ impl IngestionClient {
             store,
             Some(metrics.total_ingested_bytes.clone()),
         ));
-        Ok(Self::new_impl(client, metrics))
+        Ok(Self::from_trait(client, metrics))
     }
 
     /// An ingestion client that fetches checkpoints from a fullnode, over gRPC.
@@ -270,9 +279,13 @@ impl IngestionClient {
         password: Option<String>,
         metrics: Arc<IngestionMetrics>,
     ) -> IngestionResult<Self> {
-        let byte_count_layer = CallbackLayer::new(ByteCountMakeCallbackHandler::new(
-            metrics.total_ingested_bytes.clone(),
-        ));
+        let byte_count_layer = tower::ServiceBuilder::new()
+            .layer(CallbackLayer::new(ByteCountMakeCallbackHandler::new(
+                metrics.total_ingested_bytes.clone(),
+            )))
+            // Rebox the callback middleware's wrapped request body back into the
+            // body type that the underlying tonic channel is monomorphic on.
+            .map_request(|request: http::Request<_>| request.map(tonic::body::Body::new));
         let client = Client::new(url.to_string())?
             .with_max_decoding_message_size(MAX_GRPC_MESSAGE_SIZE_BYTES)
             .request_layer(byte_count_layer);
@@ -283,24 +296,48 @@ impl IngestionClient {
         } else {
             client
         };
-        Ok(Self::new_impl(Arc::new(client), metrics))
+        Ok(Self::from_trait(Arc::new(client), metrics))
     }
 
-    pub(crate) fn new_impl(
+    /// The metrics handle this client reports against. Callers constructing peer services (e.g. an
+    /// [`IngestionService`]) against the same client should reuse this Arc rather than building a
+    /// second [`IngestionMetrics`] from the same registry, which would double-register the metric
+    /// vectors.
+    ///
+    /// [`IngestionService`]: crate::ingestion::IngestionService
+    pub fn metrics(&self) -> &Arc<IngestionMetrics> {
+        &self.metrics
+    }
+
+    /// This client's cohort-labeled metric view, bound to the cohort it was created for.
+    pub(crate) fn cohort_metrics(&self) -> &Arc<CohortMetrics> {
+        &self.cohort_metrics
+    }
+
+    /// Wrap an arbitrary [`IngestionClientTrait`] implementation in an [`IngestionClient`]. Use
+    /// this when the source of checkpoints is not one of the built-in remote object stores or gRPC
+    /// endpoints — for example, when embedding the indexer in a fullnode that already has
+    /// checkpoint data on hand.
+    pub fn from_trait(
         client: Arc<dyn IngestionClientTrait>,
         metrics: Arc<IngestionMetrics>,
     ) -> Self {
-        let checkpoint_lag_reporter = CheckpointLagMetricReporter::new(
-            metrics.ingested_checkpoint_timestamp_lag.clone(),
-            metrics.latest_ingested_checkpoint_timestamp_lag_ms.clone(),
-            metrics.latest_ingested_checkpoint.clone(),
-        );
+        let cohort_metrics = CohortMetrics::new(&metrics, DEFAULT_COHORT_LABEL);
         IngestionClient {
             client,
             metrics,
-            checkpoint_lag_reporter,
-            chain_id: OnceCell::new(),
+            cohort_metrics,
+            chain_id: Arc::new(OnceCell::new()),
         }
+    }
+
+    /// A clone of this client that reports its cohort-labeled metrics under `cohort`, so services
+    /// minted for different cohorts don't overwrite each other. The checkpoint source and chain-id
+    /// cache are shared; only the cohort metric view is rebound.
+    pub(crate) fn for_cohort(&self, cohort: usize) -> Self {
+        let mut client = self.clone();
+        client.cohort_metrics = CohortMetrics::new(&self.metrics, &cohort.to_string());
+        client
     }
 
     /// Fetch checkpoint data by sequence number.
@@ -319,7 +356,7 @@ impl IngestionClient {
             self.checkpoint(checkpoint).await.map_err(|e| match e {
                 IE::NotFound(checkpoint) => {
                     debug!(checkpoint, "Checkpoint not found, retrying...");
-                    self.metrics.total_ingested_not_found_retries.inc();
+                    self.cohort_metrics.total_ingested_not_found_retries.inc();
                     BE::transient(e)
                 }
                 e => BE::permanent(e),
@@ -357,12 +394,12 @@ impl IngestionClient {
                             // upstream checkpoint data source. If the upstream checkpoint data
                             // source is corrected, then the indexer will automatically recover
                             // the next time the read is attempted.
-                            CheckpointError::Fetch(e) => self.metrics.inc_retry(
+                            CheckpointError::Fetch(e) => self.cohort_metrics.inc_retry(
                                 cp_sequence_number,
                                 "fetch",
                                 IE::FetchError(cp_sequence_number, e),
                             ),
-                            CheckpointError::Decode(e) => self.metrics.inc_retry(
+                            CheckpointError::Decode(e) => self.cohort_metrics.inc_retry(
                                 cp_sequence_number,
                                 e.reason(),
                                 IE::DecodeError(cp_sequence_number, e.into()),
@@ -370,7 +407,7 @@ impl IngestionClient {
                         })
                 }
             },
-            &self.metrics.ingested_checkpoint_latency,
+            &self.cohort_metrics.ingested_checkpoint_latency,
         );
 
         let client = self.client.clone();
@@ -386,22 +423,23 @@ impl IngestionClient {
                             .map_err(|e| BE::transient(IE::ChainIdError(cp_sequence_number, e)))
                     }
                 },
-                &self.metrics.ingested_chain_id_latency,
+                &self.cohort_metrics.ingested_chain_id_latency,
             )
         });
 
         let (checkpoint, chain_id) = tokio::try_join!(checkpoint_data_fut, chain_id_fut)?;
 
-        self.checkpoint_lag_reporter
+        self.cohort_metrics
+            .checkpoint_lag
             .report_lag(cp_sequence_number, checkpoint.summary.timestamp_ms);
 
-        self.metrics.total_ingested_checkpoints.inc();
+        self.cohort_metrics.total_ingested_checkpoints.inc();
 
-        self.metrics
+        self.cohort_metrics
             .total_ingested_transactions
             .inc_by(checkpoint.transactions.len() as u64);
 
-        self.metrics.total_ingested_events.inc_by(
+        self.cohort_metrics.total_ingested_events.inc_by(
             checkpoint
                 .transactions
                 .iter()
@@ -409,7 +447,7 @@ impl IngestionClient {
                 .sum(),
         );
 
-        self.metrics
+        self.cohort_metrics
             .total_ingested_objects
             .inc_by(checkpoint.object_set.len() as u64);
 
@@ -471,9 +509,24 @@ where
     Ok(data)
 }
 
+fn parse_remote_store_header(header: &str) -> Result<(HeaderName, HeaderValue), String> {
+    let (name, value) = header
+        .split_once(':')
+        .ok_or_else(|| "remote store header must be in `<name>:<value>` format".to_string())?;
+
+    let name = HeaderName::from_bytes(name.as_bytes())
+        .map_err(|err| format!("invalid remote store header name `{name}`: {err}"))?;
+    let value = HeaderValue::from_str(value)
+        .map_err(|err| format!("invalid remote store header value for `{name}`: {err}"))?;
+
+    Ok((name, value))
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
     use std::time::Duration;
 
     use clap::Parser;
@@ -524,6 +577,7 @@ pub(crate) mod tests {
         pub fetch_failures: DashMap<u64, usize>,
         pub decode_failures: DashMap<u64, usize>,
         pub latest_checkpoint: u64,
+        pub chain_id_calls: AtomicUsize,
     }
 
     impl MockIngestionClient {
@@ -543,6 +597,7 @@ pub(crate) mod tests {
     #[async_trait]
     impl IngestionClientTrait for MockIngestionClient {
         async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
+            self.chain_id_calls.fetch_add(1, Ordering::Relaxed);
             Ok(Self::mock_chain_id())
         }
 
@@ -586,7 +641,9 @@ pub(crate) mod tests {
         let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
         let metrics = IngestionMetrics::new(None, &registry);
         let mock_client = Arc::new(MockIngestionClient::default());
-        let client = IngestionClient::new_impl(mock_client.clone(), metrics);
+        // Bind to cohort 0, matching production where the broadcaster always runs under a cohort's
+        // client rather than the unlabeled base client.
+        let client = IngestionClient::from_trait(mock_client.clone(), metrics).for_cohort(0);
         (client, mock_client)
     }
 
@@ -639,6 +696,80 @@ pub(crate) mod tests {
         assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
     }
 
+    #[test]
+    fn test_args_remote_store_headers() {
+        let args = TestArgs::try_parse_from([
+            "cmd",
+            "--remote-store-gcs",
+            "bucket",
+            "--remote-store-header",
+            "x-goog-user-project:my-project",
+            "--remote-store-header",
+            "authorization:Bearer abc:def",
+        ])
+        .unwrap();
+
+        assert_eq!(args.ingestion.remote_store_headers.len(), 2);
+        assert_eq!(
+            args.ingestion.remote_store_headers[0].0,
+            HeaderName::from_static("x-goog-user-project")
+        );
+        assert_eq!(
+            args.ingestion.remote_store_headers[0].1,
+            HeaderValue::from_static("my-project")
+        );
+        assert_eq!(
+            args.ingestion.remote_store_headers[1].0,
+            HeaderName::from_static("authorization")
+        );
+        assert_eq!(
+            args.ingestion.remote_store_headers[1].1,
+            HeaderValue::from_static("Bearer abc:def")
+        );
+    }
+
+    #[test]
+    fn test_args_remote_store_header_requires_delimiter() {
+        let err = TestArgs::try_parse_from([
+            "cmd",
+            "--remote-store-gcs",
+            "bucket",
+            "--remote-store-header",
+            "x-goog-user-project",
+        ])
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_args_remote_store_header_rejects_invalid_name() {
+        let err = TestArgs::try_parse_from([
+            "cmd",
+            "--remote-store-gcs",
+            "bucket",
+            "--remote-store-header",
+            "bad name:value",
+        ])
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_args_remote_store_header_rejects_invalid_value() {
+        let err = TestArgs::try_parse_from([
+            "cmd",
+            "--remote-store-gcs",
+            "bucket",
+            "--remote-store-header",
+            "x-test:bad\nvalue",
+        ])
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    }
+
     #[tokio::test]
     async fn test_checkpoint_checkpoint_success() {
         let (client, mock) = setup_test();
@@ -648,11 +779,59 @@ pub(crate) mod tests {
         let result = client.checkpoint(1).await.unwrap();
         assert_eq!(result.checkpoint.summary.sequence_number(), &1);
         assert_eq!(result.chain_id, MockIngestionClient::mock_chain_id());
-        assert_eq!(client.metrics.total_ingested_checkpoints.get(), 1);
-        assert_eq!(client.metrics.total_ingested_transactions.get(), 1);
-        assert_eq!(client.metrics.total_ingested_events.get(), 1);
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_transactions
+                .with_label_values(&["0"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_events
+                .with_label_values(&["0"])
+                .get(),
+            1
+        );
         // 1 created object + 2 gas object versions (input + output)
-        assert_eq!(client.metrics.total_ingested_objects.get(), 3);
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_objects
+                .with_label_values(&["0"])
+                .get(),
+            3
+        );
+    }
+
+    #[tokio::test]
+    async fn test_clones_share_chain_id_cache() {
+        let (client, mock_client) = setup_test();
+        mock_client.insert_checkpoints(1..=2);
+
+        let first = client.clone();
+        let second = client.clone();
+        let (first, second) = tokio::join!(first.checkpoint(1), second.checkpoint(2));
+
+        assert_eq!(
+            first.unwrap().chain_id,
+            MockIngestionClient::mock_chain_id()
+        );
+        assert_eq!(
+            second.unwrap().chain_id,
+            MockIngestionClient::mock_chain_id()
+        );
+        assert_eq!(mock_client.chain_id_calls.load(Ordering::Relaxed), 1);
     }
 
     #[tokio::test]
@@ -662,10 +841,38 @@ pub(crate) mod tests {
         // Try to fetch non-existent checkpoint
         let result = client.checkpoint(1).await;
         assert!(matches!(result, Err(IE::NotFound(1))));
-        assert_eq!(client.metrics.total_ingested_checkpoints.get(), 0);
-        assert_eq!(client.metrics.total_ingested_transactions.get(), 0);
-        assert_eq!(client.metrics.total_ingested_events.get(), 0);
-        assert_eq!(client.metrics.total_ingested_objects.get(), 0);
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_transactions
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_events
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_objects
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
     }
 
     #[tokio::test]
@@ -684,13 +891,41 @@ pub(crate) mod tests {
         let retries = client
             .metrics
             .total_ingested_transient_retries
-            .with_label_values(&["fetch"])
+            .with_label_values(&["fetch", "0"])
             .get();
         assert_eq!(retries, 2);
-        assert_eq!(client.metrics.total_ingested_checkpoints.get(), 1);
-        assert_eq!(client.metrics.total_ingested_transactions.get(), 0);
-        assert_eq!(client.metrics.total_ingested_events.get(), 0);
-        assert_eq!(client.metrics.total_ingested_objects.get(), 0);
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_transactions
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_events
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_objects
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
     }
 
     #[tokio::test]
@@ -709,13 +944,41 @@ pub(crate) mod tests {
         let retries = client
             .metrics
             .total_ingested_transient_retries
-            .with_label_values(&["deserialization"])
+            .with_label_values(&["deserialization", "0"])
             .get();
         assert_eq!(retries, 2);
-        assert_eq!(client.metrics.total_ingested_checkpoints.get(), 1);
-        assert_eq!(client.metrics.total_ingested_transactions.get(), 0);
-        assert_eq!(client.metrics.total_ingested_events.get(), 0);
-        assert_eq!(client.metrics.total_ingested_objects.get(), 0);
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_transactions
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_events
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_objects
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
     }
 
     #[tokio::test]
@@ -731,12 +994,44 @@ pub(crate) mod tests {
         assert_eq!(result.chain_id, MockIngestionClient::mock_chain_id());
 
         // Verify that exactly 1 retry was recorded
-        let retries = client.metrics.total_ingested_not_found_retries.get();
+        let retries = client
+            .metrics
+            .total_ingested_not_found_retries
+            .with_label_values(&["0"])
+            .get();
         assert_eq!(retries, 1);
-        assert_eq!(client.metrics.total_ingested_checkpoints.get(), 1);
-        assert_eq!(client.metrics.total_ingested_transactions.get(), 0);
-        assert_eq!(client.metrics.total_ingested_events.get(), 0);
-        assert_eq!(client.metrics.total_ingested_objects.get(), 0);
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_transactions
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_events
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_objects
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
     }
 
     #[tokio::test]
@@ -748,9 +1043,37 @@ pub(crate) mod tests {
         let result = client.wait_for(1, Duration::from_millis(50)).await.unwrap();
         assert_eq!(result.checkpoint.summary.sequence_number(), &1);
         assert_eq!(result.chain_id, MockIngestionClient::mock_chain_id());
-        assert_eq!(client.metrics.total_ingested_checkpoints.get(), 1);
-        assert_eq!(client.metrics.total_ingested_transactions.get(), 0);
-        assert_eq!(client.metrics.total_ingested_events.get(), 0);
-        assert_eq!(client.metrics.total_ingested_objects.get(), 0);
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_transactions
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_events
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            client
+                .metrics
+                .total_ingested_objects
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
     }
 }

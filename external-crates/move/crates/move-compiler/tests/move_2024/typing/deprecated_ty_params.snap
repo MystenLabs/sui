@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
   ┌─ tests/move_2024/typing/deprecated_ty_params.move:9:19
   │
 9 │         let _ = Y<X>();
@@ -13,7 +13,7 @@ warning[W04037]: deprecated usage
   │
   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecated_ty_params.move:10:15
    │
 10 │         let Y<X>() = Y<X>();
@@ -21,7 +21,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecated_ty_params.move:10:24
    │
 10 │         let Y<X>() = Y<X>();
@@ -29,7 +29,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecated_ty_params.move:16:11
    │
 16 │         g<X>();
@@ -37,7 +37,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecated_ty_params.move:17:13
    │
 17 │         g<Y<X>>();
@@ -45,7 +45,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecated_ty_params.move:18:19
    │
 18 │         g<Y<Y<Y<Y<X>>>>>();

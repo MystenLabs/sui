@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W02021]: duplicate alias
+warning[WC02021]: duplicate alias
    ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:13:23
    │
 13 │     use sui::object::{Self, ID, UID};
@@ -13,7 +13,7 @@ warning[W02021]: duplicate alias
    │
    = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
    ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:13:23
    │
 13 │     use sui::object::{Self, ID, UID};
@@ -21,7 +21,7 @@ warning[W09001]: unused alias
    │
    = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W02021]: duplicate alias
+warning[WC02021]: duplicate alias
    ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:13:29
    │
 13 │     use sui::object::{Self, ID, UID};
@@ -29,7 +29,7 @@ warning[W02021]: duplicate alias
    │
    = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
    ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:13:29
    │
 13 │     use sui::object::{Self, ID, UID};
@@ -37,7 +37,7 @@ warning[W09001]: unused alias
    │
    = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W02021]: duplicate alias
+warning[WC02021]: duplicate alias
    ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:13:33
    │
 13 │     use sui::object::{Self, ID, UID};
@@ -45,7 +45,7 @@ warning[W02021]: duplicate alias
    │
    = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
    ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:13:33
    │
 13 │     use sui::object::{Self, ID, UID};
@@ -53,7 +53,7 @@ warning[W09001]: unused alias
    │
    = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W02021]: duplicate alias
+warning[WC02021]: duplicate alias
    ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:14:14
    │
 14 │     use sui::transfer;
@@ -61,7 +61,7 @@ warning[W02021]: duplicate alias
    │
    = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
    ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:14:14
    │
 14 │     use sui::transfer;
@@ -69,7 +69,7 @@ warning[W09001]: unused alias
    │
    = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W02021]: duplicate alias
+warning[WC02021]: duplicate alias
    ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:15:27
    │
 15 │     use sui::tx_context::{Self, TxContext};
@@ -77,7 +77,7 @@ warning[W02021]: duplicate alias
    │
    = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
    ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:15:27
    │
 15 │     use sui::tx_context::{Self, TxContext};
@@ -85,7 +85,7 @@ warning[W09001]: unused alias
    │
    = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W02021]: duplicate alias
+warning[WC02021]: duplicate alias
    ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:15:33
    │
 15 │     use sui::tx_context::{Self, TxContext};
@@ -93,7 +93,7 @@ warning[W02021]: duplicate alias
    │
    = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
    ┌─ tests/sui_mode/move_2024/expansion/unnecessary_alias_default.move:15:33
    │
 15 │     use sui::tx_context::{Self, TxContext};

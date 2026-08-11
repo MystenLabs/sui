@@ -7,3 +7,4 @@ target/
 build/
 storage/
 docker/
+!docker/stress/entrypoint.sh

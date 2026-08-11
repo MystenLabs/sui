@@ -38,6 +38,11 @@ pub use read_store::DynamicFieldIndexInfo;
 pub use read_store::DynamicFieldIteratorItem;
 pub use read_store::DynamicFieldKey;
 pub use read_store::EpochInfo;
+pub use read_store::LedgerBitmapBucket;
+pub use read_store::LedgerBitmapBucketIter;
+pub use read_store::LedgerBitmapBucketIterator;
+pub use read_store::LedgerTxSeqDigest;
+pub use read_store::LedgerTxSeqDigestIterator;
 pub use read_store::OwnedObjectInfo;
 pub use read_store::ReadStore;
 pub use read_store::RpcIndexes;
@@ -177,12 +182,12 @@ pub enum ObjectChange {
     Delete(DeleteKindWithOldVersion),
 }
 
-pub trait StorageView: Storage + ParentSync + ChildObjectResolver {}
-impl<T: Storage + ParentSync + ChildObjectResolver> StorageView for T {}
+pub trait StorageView: Storage + ParentSync + RuntimeObjectResolver {}
+impl<T: Storage + ParentSync + RuntimeObjectResolver> StorageView for T {}
 
 /// An abstraction of the (possibly distributed) store for objects. This
 /// API only allows for the retrieval of objects, not any state changes
-pub trait ChildObjectResolver {
+pub trait RuntimeObjectResolver: BackingPackageStore {
     /// `child` must have an `ObjectOwner` ownership equal to `owner`.
     fn read_child_object(
         &self,
@@ -203,6 +208,36 @@ pub trait ChildObjectResolver {
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<Object>>;
+
+    /// Get's the package at the given version. Returns `Some(package)` only if the `package_id` is
+    /// a `MovePackage` with the given `package_version`. Returns `None` in all other cases.
+    ///
+    /// Since the has the _possibility_ of doing unsequenced reads of object IDs it is important
+    /// here that:
+    /// * If the package object does not exist; or
+    /// * If the package object exists but is not a Move package; or
+    /// * If the package object exists and is a Move package, but the version is not the supplied version.
+    ///
+    /// All return the same error.
+    ///
+    /// To be extra careful, we simply return `None` in all cases unless the object is a package
+    /// with the exact version supplied, and let the caller decide how to handle it.
+    fn get_package_at_version(
+        &self,
+        package_id: &ObjectID,
+        package_version: SequenceNumber,
+    ) -> Option<MovePackage> {
+        let move_pkg = self
+            .get_package_object(package_id)
+            .ok()
+            .flatten()?
+            .into_move_package();
+        if move_pkg.version() == package_version {
+            Some(move_pkg)
+        } else {
+            None
+        }
+    }
 }
 
 pub struct DenyListResult {
@@ -261,6 +296,14 @@ impl PackageObject {
 
     pub fn move_package(&self) -> &MovePackage {
         self.package_object.data.try_as_package().unwrap()
+    }
+
+    pub fn into_move_package(self) -> MovePackage {
+        self.package_object
+            .into_inner()
+            .data
+            .try_into_package()
+            .unwrap()
     }
 }
 
@@ -473,14 +516,14 @@ impl<S: ParentSync> ParentSync for &mut S {
     }
 }
 
-impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
+impl<S: RuntimeObjectResolver> RuntimeObjectResolver for std::sync::Arc<S> {
     fn read_child_object(
         &self,
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::read_child_object(
+        RuntimeObjectResolver::read_child_object(
             self.as_ref(),
             parent,
             child,
@@ -494,7 +537,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::get_object_received_at_version(
+        RuntimeObjectResolver::get_object_received_at_version(
             self.as_ref(),
             owner,
             receiving_object_id,
@@ -504,14 +547,14 @@ impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
     }
 }
 
-impl<S: ChildObjectResolver> ChildObjectResolver for &S {
+impl<S: RuntimeObjectResolver> RuntimeObjectResolver for &S {
     fn read_child_object(
         &self,
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
+        RuntimeObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
     }
     fn get_object_received_at_version(
         &self,
@@ -520,7 +563,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &S {
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::get_object_received_at_version(
+        RuntimeObjectResolver::get_object_received_at_version(
             *self,
             owner,
             receiving_object_id,
@@ -530,14 +573,14 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &S {
     }
 }
 
-impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
+impl<S: RuntimeObjectResolver> RuntimeObjectResolver for &mut S {
     fn read_child_object(
         &self,
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
+        RuntimeObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
     }
     fn get_object_received_at_version(
         &self,
@@ -546,7 +589,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::get_object_received_at_version(
+        RuntimeObjectResolver::get_object_received_at_version(
             *self,
             owner,
             receiving_object_id,
@@ -714,7 +757,7 @@ impl Display for DeleteKind {
 }
 
 pub trait BackingStore:
-    BackingPackageStore + ChildObjectResolver + ObjectStore + ParentSync
+    BackingPackageStore + RuntimeObjectResolver + ObjectStore + ParentSync
 {
     fn as_object_store(&self) -> &dyn ObjectStore;
 }
@@ -722,7 +765,7 @@ pub trait BackingStore:
 impl<T> BackingStore for T
 where
     T: BackingPackageStore,
-    T: ChildObjectResolver,
+    T: RuntimeObjectResolver,
     T: ObjectStore,
     T: ParentSync,
 {
@@ -883,7 +926,7 @@ impl BackingPackageStore for TrackingBackingStore<'_> {
     }
 }
 
-impl ChildObjectResolver for TrackingBackingStore<'_> {
+impl RuntimeObjectResolver for TrackingBackingStore<'_> {
     fn read_child_object(
         &self,
         parent: &ObjectID,

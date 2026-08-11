@@ -77,6 +77,7 @@ pub mod move_package;
 pub mod multisig;
 pub mod multisig_legacy;
 pub mod nitro_attestation;
+pub mod node_role;
 pub mod object;
 pub mod passkey_authenticator;
 pub mod programmable_transaction_builder;
@@ -93,6 +94,7 @@ pub mod supported_protocol_versions;
 pub mod test_checkpoint_data_builder;
 pub mod traffic_control;
 pub mod transaction;
+pub mod transaction_deny_rules;
 pub mod transaction_driver_types;
 pub mod transaction_executor;
 pub mod transfer;
@@ -142,6 +144,7 @@ built_in_ids! {
     SUI_DENY_LIST_ADDRESS / SUI_DENY_LIST_OBJECT_ID = 0x403;
     SUI_ACCUMULATOR_ROOT_ADDRESS / SUI_ACCUMULATOR_ROOT_OBJECT_ID = 0xacc;
     SUI_ADDRESS_ALIAS_STATE_ADDRESS / SUI_ADDRESS_ALIAS_STATE_OBJECT_ID = 0xa;
+    SUI_FORWARDING_ADDRESS_REGISTRY_ADDRESS / SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID = 0xfa;
 }
 
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
@@ -187,8 +190,8 @@ pub fn parse_sui_fq_name(s: &str) -> anyhow::Result<(ModuleId, String)> {
 /// brackets). Parsing succeeds if and only if `s` matches this format exactly, with no remaining
 /// input. This function is intended for use within the authority codebase.
 pub fn parse_sui_struct_tag(s: &str) -> anyhow::Result<StructTag> {
-    use move_core_types::parsing::types::ParsedStructType;
-    ParsedStructType::parse(s)?.into_struct_tag(&resolve_address)
+    use move_core_types::parsing::types::ParsedDatatype;
+    ParsedDatatype::parse(s)?.into_struct_tag(&resolve_address)
 }
 
 /// Parse `s` as a type: Either a struct type (see `parse_sui_struct_tag`), a primitive type, or a

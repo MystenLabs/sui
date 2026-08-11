@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01001]: invalid character
+error[EC01001]: invalid character
   ┌─ tests/move_check/parser/trojan_source.move:3:24
   │
 3 │         agent == b"user‮ ⁦// Check if user⁩ ⁦"

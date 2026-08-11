@@ -38,7 +38,7 @@ use sui_types::{
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
-    storage::ChildObjectResolver,
+    storage::{BackingPackageStore, PackageObject, RuntimeObjectResolver},
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
@@ -57,7 +57,16 @@ type Set<K> = IndexSet<K>;
 pub struct InMemoryTestStore(pub RefCell<InMemoryStorage>);
 impl<'a> NativeExtensionMarker<'a> for &'a InMemoryTestStore {}
 
-impl ChildObjectResolver for InMemoryTestStore {
+impl BackingPackageStore for InMemoryTestStore {
+    fn get_package_object(
+        &self,
+        package_id: &ObjectID,
+    ) -> sui_types::error::SuiResult<Option<PackageObject>> {
+        self.0.borrow().get_package_object(package_id)
+    }
+}
+
+impl RuntimeObjectResolver for InMemoryTestStore {
     fn read_child_object(
         &self,
         parent: &ObjectID,
@@ -239,6 +248,9 @@ pub fn end_transaction(
                     .entry(ty)
                     .or_default()
                     .insert(id);
+            }
+            Owner::Party { .. } => {
+                unimplemented!("Party does not exist for this execution version")
             }
         }
     }
@@ -869,6 +881,9 @@ fn transaction_effects(
             Owner::Immutable => frozen.push(id),
             Owner::ConsensusAddressOwner { owner, .. } => {
                 transferred_to_account.push((pack_id(id), Value::address(owner.into())))
+            }
+            Owner::Party { .. } => {
+                unimplemented!("Party does not exist for this execution version")
             }
         }
     }

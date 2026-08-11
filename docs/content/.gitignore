@@ -3,3 +3,6 @@ references/awesome-sui.mdx
 references/awesome-sui/
 references/awesome-sui-gaming.mdx
 references/awesome-sui-gaming/
+sui-stack/messaging/*.mdx
+!sui-stack/messaging/index.mdx
+!sui-stack/messaging/chat-app.mdx

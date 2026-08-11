@@ -4,7 +4,6 @@
 use crate::authority::StableSyncAuthoritySigner;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::SubmitToConsensus;
-use crate::epoch::reconfiguration::ReconfigurationInitiator;
 use async_trait::async_trait;
 use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
@@ -37,29 +36,40 @@ pub trait CertifiedCheckpointOutput: Sync + Send + 'static {
 }
 
 pub struct SubmitCheckpointToConsensus<T> {
-    pub sender: T,
-    pub signer: StableSyncAuthoritySigner,
-    pub authority: AuthorityName,
-    pub next_reconfiguration_timestamp_ms: u64,
+    sender: T,
+    signer: StableSyncAuthoritySigner,
+    authority: AuthorityName,
+    log_checkpoint_output: LogCheckpointOutput,
+}
+
+impl<T> SubmitCheckpointToConsensus<T> {
+    pub fn new(
+        sender: T,
+        signer: StableSyncAuthoritySigner,
+        authority: AuthorityName,
+        metrics: Arc<CheckpointMetrics>,
+    ) -> Self {
+        Self {
+            sender,
+            signer,
+            authority,
+            log_checkpoint_output: LogCheckpointOutput::new(metrics),
+        }
+    }
+}
+
+pub struct LogCheckpointOutput {
     pub metrics: Arc<CheckpointMetrics>,
 }
 
-pub struct LogCheckpointOutput;
-
 impl LogCheckpointOutput {
-    pub fn boxed() -> Box<dyn CheckpointOutput> {
-        Box::new(Self)
-    }
-
-    pub fn boxed_certified() -> Box<dyn CertifiedCheckpointOutput> {
-        Box::new(Self)
+    pub fn new(metrics: Arc<CheckpointMetrics>) -> Self {
+        Self { metrics }
     }
 }
 
 #[async_trait]
-impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
-    for SubmitCheckpointToConsensus<T>
-{
+impl<T: SubmitToConsensus> CheckpointOutput for SubmitCheckpointToConsensus<T> {
     #[instrument(level = "debug", skip_all)]
     async fn checkpoint_created(
         &self,
@@ -68,26 +78,12 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
         epoch_store: &Arc<AuthorityPerEpochStore>,
         checkpoint_store: &Arc<CheckpointStore>,
     ) -> SuiResult {
-        LogCheckpointOutput
+        self.log_checkpoint_output
             .checkpoint_created(summary, contents, epoch_store, checkpoint_store)
             .await?;
 
         let checkpoint_timestamp = summary.timestamp_ms;
         let checkpoint_seq = summary.sequence_number;
-        self.metrics.checkpoint_creation_latency.observe(
-            summary
-                .timestamp()
-                .elapsed()
-                .unwrap_or_default()
-                .as_secs_f64(),
-        );
-        self.metrics.checkpoint_creation_latency_ms.observe(
-            summary
-                .timestamp()
-                .elapsed()
-                .unwrap_or_default()
-                .as_millis() as u64,
-        );
 
         let highest_verified_checkpoint = checkpoint_store
             .get_highest_verified_checkpoint()?
@@ -95,9 +91,7 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
 
         if Some(checkpoint_seq) > highest_verified_checkpoint {
             debug!(
-                "Sending checkpoint signature at sequence {checkpoint_seq} to consensus, timestamp {checkpoint_timestamp}.
-                {}ms left till end of epoch at timestamp {}",
-                self.next_reconfiguration_timestamp_ms.saturating_sub(checkpoint_timestamp), self.next_reconfiguration_timestamp_ms
+                "Sending checkpoint signature at sequence {checkpoint_seq} to consensus, timestamp {checkpoint_timestamp}",
             );
 
             let summary = SignedCheckpointSummary::new(
@@ -116,28 +110,20 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
             let transaction = ConsensusTransaction::new_checkpoint_signature_message_v2(message);
             self.sender
                 .submit_to_consensus(&[transaction], epoch_store)?;
-            self.metrics
+            self.log_checkpoint_output
+                .metrics
                 .last_sent_checkpoint_signature
                 .set(checkpoint_seq as i64);
         } else {
             debug!(
                 "Checkpoint at sequence {checkpoint_seq} is already certified, skipping signature submission to consensus",
             );
-            self.metrics
+            self.log_checkpoint_output
+                .metrics
                 .last_skipped_checkpoint_signature_submission
                 .set(checkpoint_seq as i64);
         }
 
-        if checkpoint_timestamp >= self.next_reconfiguration_timestamp_ms
-            && !epoch_store.protocol_config().timestamp_based_epoch_close()
-        {
-            // close_epoch is ok if called multiple times
-            info!(
-                "Closing epoch at sequence {checkpoint_seq} at timestamp {checkpoint_timestamp}. next_reconfiguration_timestamp_ms {}",
-                self.next_reconfiguration_timestamp_ms
-            );
-            self.sender.close_epoch(epoch_store);
-        }
         Ok(())
     }
 }
@@ -151,6 +137,21 @@ impl CheckpointOutput for LogCheckpointOutput {
         _epoch_store: &Arc<AuthorityPerEpochStore>,
         _checkpoint_store: &Arc<CheckpointStore>,
     ) -> SuiResult {
+        self.metrics.checkpoint_creation_latency.observe(
+            summary
+                .timestamp()
+                .elapsed()
+                .unwrap_or_default()
+                .as_secs_f64(),
+        );
+        self.metrics.checkpoint_creation_latency_ms.observe(
+            summary
+                .timestamp()
+                .elapsed()
+                .unwrap_or_default()
+                .as_millis() as u64,
+        );
+
         trace!(
             "Including following transactions in checkpoint {}: {:?}",
             summary.sequence_number, contents

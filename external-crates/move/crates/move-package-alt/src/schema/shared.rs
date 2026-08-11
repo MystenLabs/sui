@@ -58,11 +58,24 @@ pub struct LocalDepInfo {
     pub local: PathBuf,
 }
 
-/// An on-chain dependency `{on-chain = true}`
+/// An on-chain dependency placeholder: `{on-chain = true}`.
+///
+/// Used in the `[dependencies]` section of a manifest to declare that a dependency should be
+/// fetched from the chain rather than from source.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
-pub struct OnChainDepInfo {
+pub struct OnChainPlaceholder {
     #[serde(rename = "on-chain")]
     pub on_chain: ConstTrue,
+}
+
+/// An on-chain dependency with a specific address: `{on-chain = "0x1234"}`.
+///
+/// Used in `[dep-replacements]` (to specify which address to fetch from) and in lockfiles
+/// (to record the pinned address).
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub struct OnChainAddress {
+    #[serde(rename = "on-chain")]
+    pub on_chain: PublishedID,
 }
 
 /// The constant `true`

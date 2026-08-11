@@ -157,7 +157,7 @@ impl Handle {
 
     // For testing.
     pub fn new_stub() -> Self {
-        let (sender, mut receiver) = mpsc::channel(1);
+        let (sender, mut receiver) = mpsc::channel(100);
         // Keep receiver open until all senders are closed.
         tokio::spawn(async move {
             loop {
@@ -632,7 +632,8 @@ impl RandomnessEventLoop {
             };
 
         // Try to verify the aggregated signature all at once. (Should work in the happy path.)
-        if ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig).is_err() {
+        if ThresholdBls12381MinSig::verify(&vss_pk.c0(), &round.signature_message(), &sig).is_err()
+        {
             // If verifiation fails, some of the inputs must be invalid. We have to go through
             // one-by-one to find which.
             // TODO: add test for individual sig verification.
@@ -676,7 +677,7 @@ impl RandomnessEventLoop {
                 }
             };
             if let Err(e) =
-                ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig)
+                ThresholdBls12381MinSig::verify(&vss_pk.c0(), &round.signature_message(), &sig)
             {
                 error!(
                     "error while verifying randomness partial signatures after removing invalid partials: {e:?}"
@@ -736,7 +737,7 @@ impl RandomnessEventLoop {
         }
 
         if let Err(e) =
-            ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig)
+            ThresholdBls12381MinSig::verify(&vss_pk.c0(), &round.signature_message(), &sig)
         {
             info!("received invalid full signature from peer {peer_id}: {e:?}");
             if let Some(sender) = self.mailbox_sender.upgrade() {
@@ -777,9 +778,18 @@ impl RandomnessEventLoop {
         }
 
         let sig_bytes = bcs::to_bytes(&sig).expect("signature serialization should not fail");
-        self.randomness_tx
-            .try_send((epoch, round, sig_bytes))
-            .expect("RandomnessRoundReceiver mailbox should not overflow or be closed");
+        if let Err(e) = self.randomness_tx.try_send((epoch, round, sig_bytes)) {
+            match e {
+                // Receiver is torn down during node shutdown; dropping the round is harmless.
+                mpsc::error::TrySendError::Closed(_) => {
+                    info!("dropping completed randomness round {round}: receiver channel closed");
+                }
+                // Mailbox capacity is huge (default 1M); a full mailbox means a real bug.
+                mpsc::error::TrySendError::Full(_) => {
+                    panic!("RandomnessRoundReceiver mailbox should not overflow");
+                }
+            }
+        }
     }
 
     fn maybe_ignore_byzantine_peer(&mut self, epoch: EpochId, peer_id: PeerId) {
@@ -1068,7 +1078,7 @@ impl RandomnessEventLoop {
             &dkg_output.vss_pk
         };
 
-        ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig)
+        ThresholdBls12381MinSig::verify(&vss_pk.c0(), &round.signature_message(), &sig)
             .map_err(|e| anyhow::anyhow!("invalid full signature: {e:?}"))?;
 
         self.process_valid_full_signature(self.epoch, round, sig);

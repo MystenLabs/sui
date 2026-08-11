@@ -11,7 +11,7 @@ use sui_types::{
         CoinReservationResolver, CoinReservationResolverTrait, ParsedObjectRefWithdrawal,
     },
     error::{UserInputError, UserInputResult},
-    storage::ChildObjectResolver,
+    storage::RuntimeObjectResolver,
     transaction::FundsWithdrawalArg,
 };
 
@@ -23,9 +23,9 @@ pub struct CachingCoinReservationResolver {
 }
 
 impl CachingCoinReservationResolver {
-    pub fn new(child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>) -> Self {
+    pub fn new(runtime_object_resolver: Arc<dyn RuntimeObjectResolver + Send + Sync>) -> Self {
         Self {
-            inner: CoinReservationResolver::new(child_object_resolver),
+            inner: CoinReservationResolver::new(runtime_object_resolver),
             cache: MokaCache::builder().max_capacity(1000).build(),
         }
     }

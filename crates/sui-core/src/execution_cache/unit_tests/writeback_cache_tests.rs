@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::default_registry;
-use rand::{Rng, SeedableRng, rngs::StdRng};
+#[cfg(not(tidehunter))]
+use rand::Rng;
+use rand::{SeedableRng, rngs::StdRng};
+#[cfg(not(tidehunter))]
+use std::time::{Duration, Instant};
 use std::{
     collections::{BTreeMap, BTreeSet},
     future::Future,
@@ -11,7 +15,6 @@ use std::{
         Arc,
         atomic::{AtomicU32, Ordering},
     },
-    time::{Duration, Instant},
 };
 use sui_framework::BuiltInFramework;
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -19,7 +22,7 @@ use sui_types::{
     base_types::{FullObjectRef, SuiAddress, random_object_ref},
     crypto::{AccountKeyPair, deterministic_random_account_key, get_key_pair_from_rng},
     object::{MoveObject, OBJECT_START_VERSION, Owner},
-    storage::ChildObjectResolver,
+    storage::RuntimeObjectResolver,
 };
 use sui_types::{
     effects::{TestEffectsBuilder, TransactionEffectsAPI},
@@ -161,8 +164,6 @@ impl Scenario {
             markers: Default::default(),
             wrapped: Default::default(),
             deleted: Default::default(),
-            locks_to_delete: Default::default(),
-            new_locks_to_init: Default::default(),
             written: Default::default(),
         }
     }
@@ -217,9 +218,6 @@ impl Scenario {
     pub fn with_child(&mut self, short_id: u32, owner: u32) {
         let owner_id = self.id_map.get(&owner).expect("no such object");
         let object = Self::new_child(*owner_id);
-        self.outputs
-            .new_locks_to_init
-            .push(object.compute_object_reference());
         let id = object.id();
         assert!(self.id_map.insert(short_id, id).is_none());
         self.outputs.written.insert(id, object.clone());
@@ -230,9 +228,6 @@ impl Scenario {
         // for every id in short_ids, create an object with that id if it doesn't exist
         for short_id in short_ids {
             let object = Self::new_object();
-            self.outputs
-                .new_locks_to_init
-                .push(object.compute_object_reference());
             let id = object.id();
             assert!(self.id_map.insert(*short_id, id).is_none());
             self.outputs.written.insert(id, object.clone());
@@ -271,14 +266,8 @@ impl Scenario {
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("object not found");
             let object = self.objects.get(id).cloned().expect("object not found");
-            self.outputs
-                .locks_to_delete
-                .push(object.compute_object_reference());
             let object = Self::inc_version_by(object, delta);
             self.objects.insert(*id, object.clone());
-            self.outputs
-                .new_locks_to_init
-                .push(object.compute_object_reference());
             self.outputs.written.insert(object.id(), object);
         }
     }
@@ -290,7 +279,6 @@ impl Scenario {
             let id = self.id_map.get(short_id).expect("object not found");
             let object = self.objects.remove(id).expect("object not found");
             let mut object_ref = object.compute_object_reference();
-            self.outputs.locks_to_delete.push(object_ref);
             // in the authority this would be set to the lamport version of the tx
             object_ref.1.increment();
             self.outputs.deleted.push(object_ref.into());
@@ -304,7 +292,6 @@ impl Scenario {
             let id = self.id_map.get(short_id).expect("object not found");
             let object = self.objects.get(id).cloned().expect("object not found");
             let mut object_ref = object.compute_object_reference();
-            self.outputs.locks_to_delete.push(object_ref);
             // in the authority this would be set to the lamport version of the tx
             object_ref.1.increment();
             self.outputs.wrapped.push(object_ref.into());
@@ -313,16 +300,16 @@ impl Scenario {
 
     pub fn with_received(&mut self, short_ids: &[u32]) {
         // for every id in short_ids, assert than an object with that id exists, that
-        // it has a new lock (which proves it was mutated) and then write a received
-        // marker for it
+        // it was written at its current version (which proves it was mutated) and then
+        // write a received marker for it
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("object not found");
             let object = self.objects.get(id).cloned().expect("object not found");
             self.outputs
-                .new_locks_to_init
-                .iter()
-                .find(|o| **o == object.compute_object_reference())
-                .expect("received object must have new lock");
+                .written
+                .get(id)
+                .filter(|o| o.compute_object_reference() == object.compute_object_reference())
+                .expect("received object must have been written");
             self.outputs.markers.push((
                 object.compute_full_object_reference().into(),
                 MarkerValue::Received,
@@ -1173,12 +1160,11 @@ async fn test_transaction_cache_race() {
 // Regression test for the race described in Mark's original report: an account at
 // version V is deleted by a settlement tx that writes a tombstone at V+1, but the
 // barrier tx that bumps the root from V to V+1 has not yet run. In that window a
-// reader observes (live object at V, tombstone at V+1, root at V). Before the MVCC
-// fix, `get_latest_account_amount` would read the latest account (the tombstone),
-// fall through to re-read the root (still V), and return (0, V) — even though the
-// correct balance at V was non-zero.
+// reader observes (live object at V, tombstone at V+1, root at V). The consistent
+// read must cap the account read at the root version instead of reading the latest
+// account tombstone.
 #[tokio::test]
-async fn test_get_latest_account_amount_race_with_pending_settlement() {
+async fn test_get_consistent_latest_account_amount_race_with_pending_settlement() {
     use crate::accumulators::funds_read::AccountFundsRead;
     use sui_types::{
         SUI_ACCUMULATOR_ROOT_OBJECT_ID, accumulator_root::AccumulatorValue, balance::Balance,
@@ -1230,11 +1216,15 @@ async fn test_get_latest_account_amount_race_with_pending_settlement() {
     // V to V+1.
     cache.write_object_entry(account_id.inner(), v.next(), ObjectEntry::Deleted);
 
-    // The read must observe the pre-settlement balance at V: settlement must appear
-    // atomic to readers. Before the fix this returned (0, V) because the latest
-    // account read produced None (the tombstone at V+1) while the root had not
-    // advanced past V.
-    let (balance, version) = AccountFundsRead::get_latest_account_amount(&*cache, &account_id);
+    assert_eq!(
+        AccountFundsRead::get_latest_account_amount(&*cache, &account_id),
+        0
+    );
+
+    // The consistent read must observe the pre-settlement balance at V: settlement
+    // must appear atomic to readers that need the root version paired with the amount.
+    let (balance, version) =
+        AccountFundsRead::get_consistent_latest_account_amount_and_version(&*cache, &account_id);
     assert_eq!(version, v);
     assert_eq!(balance, expected_balance as u128);
 }

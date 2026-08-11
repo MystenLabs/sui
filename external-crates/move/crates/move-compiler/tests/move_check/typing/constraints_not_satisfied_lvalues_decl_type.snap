@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/constraints_not_satisfied_lvalues_decl_type.move:6:17
   │
 2 │     struct CupC<T: copy> { f: T }

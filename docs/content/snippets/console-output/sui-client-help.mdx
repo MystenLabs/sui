@@ -1,6 +1,6 @@
-```sh
 Client for interacting with the Sui network
 
+```sh
 Usage: sui client [OPTIONS] [COMMAND]
 
 Commands:
@@ -17,8 +17,8 @@ Commands:
   execute-combined-signed-tx  Execute a combined serialized SenderSignedData string
   faucet                      Request gas coin from faucet. By default, it will use the active
                                   address and the active network
-  gas                         Obtain all gas objects owned by the address. An address' alias can
-                                  be used instead of the address
+  gas                         Obtain all gas objects and the total SUI balance for the address. An
+                                  address' alias can be used instead of the address
   merge-coin                  Merge two coin objects into one coin
   new-address                 Generate new address and keypair with keypair scheme flag {ed25519
                                   | secp256k1 | secp256r1} with optional derivation path, default to
@@ -36,6 +36,9 @@ Commands:
   pay-all-sui                 Pay all residual SUI coins to the recipient with input coins,
                                   after deducting the gas cost. The input coins also include the
                                   coin for gas payment, so no extra gas coin is required
+  send-funds                  Send funds to an address balance using the sui::coin::send_funds
+                                  API. This sends funds to the recipient's address balance (not as a
+                                  coin object)
   pay-sui                     Pay SUI coins to recipients following specified amounts, with
                                   input coins. Length of recipients must be the same as that of
                                   amounts. The input coins also include the coin for gas payment, so
@@ -58,8 +61,8 @@ Commands:
                                   is specified, only the amount is transferred; otherwise the entire
                                   object is transferred
   verify-bytecode-meter       Run the bytecode verifier on the package
-  verify-source               Verify local Move packages against onchain packages, and
-                                  optionally their dependencies
+  verify-source               Verify local Move packages against onchain packages by rebuilding
+                                  with the original publishing toolchain
   remove-address              Remove an existing address by its alias or hexadecimal string
   replay-transaction          Replay a given transaction to view transaction effects
                                   (deprecated; use `sui replay` instead)

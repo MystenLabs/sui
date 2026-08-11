@@ -35,6 +35,9 @@ pub struct VerifyParams {
     pub oidc_provider_jwks: ImHashMap<JwkId, JWK>,
     pub supported_providers: Vec<OIDCProvider>,
     pub zk_login_env: ZkLoginEnv,
+    // zkLogin circuit verify mode: 0 = v1 circuit only, 1 = v2 circuit with
+    // fallback to v1, 2 = v2 circuit only.
+    pub zklogin_circuit_mode: u64,
     pub verify_legacy_zklogin_address: bool,
     pub accept_zklogin_in_multisig: bool,
     pub accept_passkey_in_multisig: bool,
@@ -48,6 +51,7 @@ impl VerifyParams {
         oidc_provider_jwks: ImHashMap<JwkId, JWK>,
         supported_providers: Vec<OIDCProvider>,
         zk_login_env: ZkLoginEnv,
+        zklogin_circuit_mode: u64,
         verify_legacy_zklogin_address: bool,
         accept_zklogin_in_multisig: bool,
         accept_passkey_in_multisig: bool,
@@ -59,6 +63,7 @@ impl VerifyParams {
             oidc_provider_jwks,
             supported_providers,
             zk_login_env,
+            zklogin_circuit_mode,
             verify_legacy_zklogin_address,
             accept_zklogin_in_multisig,
             accept_passkey_in_multisig,

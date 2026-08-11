@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/expansion/friend_decl_qualified_duplicates.move:6:5
   │
 5 │     friend 0x42::A;

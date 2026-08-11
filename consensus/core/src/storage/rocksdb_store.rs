@@ -12,10 +12,12 @@ use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, Round, TransactionIndex};
 use mysten_common::ZipDebugEqIteratorExt;
 use sui_macros::fail_point;
+#[cfg(not(tidehunter))]
+use typed_store::rocks::{DBMapTableConfigMap, default_db_options};
 use typed_store::{
     DBMapUtils, Map as _,
     metrics::SamplingInterval,
-    rocks::{DBMap, DBMapTableConfigMap, MetricConf, default_db_options},
+    rocks::{DBMap, MetricConf},
 };
 
 use super::{CommitInfo, Store, WriteBatch};
@@ -56,30 +58,19 @@ impl RocksDBStore {
 
     /// Creates a new instance of RocksDB storage.
     #[cfg(not(tidehunter))]
-    pub fn new(path: &str, use_fifo_compaction: bool) -> Self {
+    pub fn new(path: &str) -> Self {
         // Consensus data has high write throughput (all transactions) and is rarely read
         // (only during recovery and when helping peers catch up).
         let db_options =
-            default_db_options().optimize_db_for_write_throughput(2, use_fifo_compaction);
+            default_db_options().optimize_db_for_write_throughput(2, /* unlimited */ true);
         let mut metrics_conf = MetricConf::new("consensus");
         metrics_conf.read_sample_interval = SamplingInterval::new(Duration::from_secs(60), 0);
-        let cf_options = if use_fifo_compaction {
-            default_db_options().optimize_for_no_deletion()
-        } else {
-            default_db_options().optimize_for_write_throughput()
-        };
-        // BLOCKS_CF only receives inserts (no deletions) and is dropped with the DB at epoch
-        // boundary. Use Universal compaction (or FIFO when enabled) which handles this
-        // pattern better than Level compaction.
-        let blocks_cf_options = if use_fifo_compaction {
-            default_db_options().optimize_for_no_deletion()
-        } else {
-            default_db_options().optimize_for_write_throughput_no_deletion()
-        };
+        let cf_options = default_db_options().optimize_for_no_deletion();
         let column_family_options = DBMapTableConfigMap::new(BTreeMap::from([
             (
                 Self::BLOCKS_CF.to_string(),
-                blocks_cf_options
+                cf_options
+                    .clone()
                     // Using larger block is ok since there is not much point reads on the cf.
                     .set_block_options(512, 128 << 10),
             ),
@@ -101,7 +92,7 @@ impl RocksDBStore {
     }
 
     #[cfg(tidehunter)]
-    pub fn new(path: &str, _use_fifo_compaction: bool) -> Self {
+    pub fn new(path: &str) -> Self {
         tracing::warn!("Consensus store using tidehunter");
         use typed_store::tidehunter_util::{
             KeyIndexing, KeySpaceConfig, KeyType, ThConfig, default_mutex_count,
@@ -118,7 +109,7 @@ impl RocksDBStore {
                 ThConfig::new_with_config_indexing(
                     index_index_digest_key.clone(),
                     mutexes,
-                    u32_prefix.clone(),
+                    u32_prefix,
                     KeySpaceConfig::new(),
                 ),
             ),
@@ -127,36 +118,37 @@ impl RocksDBStore {
                 ThConfig::new_with_config_indexing(
                     index_index_digest_key.clone(),
                     mutexes,
-                    u64_prefix.clone(),
+                    u64_prefix,
                     KeySpaceConfig::new(),
                 ),
             ),
             (
                 Self::COMMITS_CF.to_string(),
-                ThConfig::new_with_indexing(index_digest_key.clone(), mutexes, u32_prefix.clone()),
+                ThConfig::new_with_indexing(index_digest_key.clone(), mutexes, u32_prefix),
             ),
             (
                 Self::COMMIT_VOTES_CF.to_string(),
                 ThConfig::new_with_config_indexing(
                     commit_vote_key,
                     mutexes,
-                    u32_prefix.clone(),
+                    u32_prefix,
                     KeySpaceConfig::new(),
                 ),
             ),
             (
                 Self::COMMIT_INFO_CF.to_string(),
-                ThConfig::new_with_indexing(index_digest_key.clone(), mutexes, u32_prefix.clone()),
+                ThConfig::new_with_indexing(index_digest_key.clone(), mutexes, u32_prefix),
             ),
             (
                 Self::FINALIZED_COMMITS_CF.to_string(),
-                ThConfig::new_with_indexing(index_digest_key.clone(), mutexes, u32_prefix.clone()),
+                ThConfig::new_with_indexing(index_digest_key.clone(), mutexes, u32_prefix),
             ),
         ];
         Self::open_tables_read_write(
             path.into(),
             MetricConf::new("consensus")
-                .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
+                .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0))
+                .with_th_batch_compression(),
             configs.into_iter().collect(),
         )
     }
@@ -286,7 +278,7 @@ impl Store for RocksDBStore {
         }
         let results = self.read_blocks(refs.as_slice())?;
         let mut blocks = Vec::with_capacity(refs.len());
-        for (r, block) in refs.into_iter().zip_debug_eq(results.into_iter()) {
+        for (r, block) in refs.into_iter().zip_debug_eq(results) {
             blocks.push(
                 block.unwrap_or_else(|| panic!("Storage inconsistency: block {:?} not found!", r)),
             );
@@ -319,7 +311,7 @@ impl Store for RocksDBStore {
         let refs_slice = refs.make_contiguous();
         let results = self.read_blocks(refs_slice)?;
         let mut blocks = vec![];
-        for (r, block) in refs.into_iter().zip_debug_eq(results.into_iter()) {
+        for (r, block) in refs.into_iter().zip_debug_eq(results) {
             blocks.push(
                 block.unwrap_or_else(|| panic!("Storage inconsistency: block {:?} not found!", r)),
             );

@@ -128,7 +128,11 @@ fn rvalue(env: &mut Env, rv: &mut RValue) {
         }
         RValue::Primitive { op: _, args }
         | RValue::Data { op: _, args }
-        | RValue::Call { target: _, args } => {
+        | RValue::Call {
+            target: _,
+            type_arguments: _,
+            args,
+        } => {
             for arg in args {
                 if let Trivial::Register(reg) = arg
                     && let Some(imm) = env.immediates.remove(&reg.name)

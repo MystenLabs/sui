@@ -3,7 +3,7 @@
 
 use crate::ObjectID;
 use crate::base_types::SuiAddress;
-use crate::error::{ExecutionError, ExecutionErrorTrait};
+use crate::error::{BoxError, ExecutionError, ExecutionErrorMetadata, ExecutionErrorTrait};
 use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
 use move_core_types::language_storage::ModuleId;
 use serde::{Deserialize, Serialize};
@@ -53,6 +53,14 @@ impl Display for ExecutionFailure {
 }
 
 impl ExecutionErrorTrait for ExecutionFailure {
+    fn new(
+        failure: ExecutionFailure,
+        _source: Option<BoxError>,
+        _metadata: ExecutionErrorMetadata,
+    ) -> Self {
+        failure
+    }
+
     fn with_command_index(self, command: CommandIndex) -> Self {
         Self {
             command: Some(command),
@@ -64,9 +72,6 @@ impl ExecutionErrorTrait for ExecutionFailure {
     }
     fn command(&self) -> Option<CommandIndex> {
         self.command
-    }
-    fn source_ref(&self) -> Option<&(dyn Error + 'static)> {
-        None
     }
 }
 

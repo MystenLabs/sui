@@ -1,7 +1,41 @@
 ---
 title: Encrypt Enclave Secrets with Seal
-description: The Seal-Nautilus pattern provides secure secret management for enclave applications.
-keywords: [ seal, encryption, encrypt secrets, pcr, nautilus, secure ]
+description: >-
+  The Seal-Nautilus pattern provides secure secret management for enclave
+  applications.
+keywords:
+  - seal
+  - encryption
+  - encrypt secrets
+  - pcr
+  - nautilus
+  - secure
+goal:
+  description: >-
+    Reader understands the Seal-Nautilus pattern provides secure secret
+    management for enclave applications and knows when to use it
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Encrypt Enclave Secrets with Seal in Sui?
+  - How does encrypt enclave secrets with seal work on Sui?
+  - What are the security considerations for encrypt enclave secrets with seal?
+answer: >-
+  The Seal-Nautilus pattern provides secure secret management for enclave
+  applications, where you can encrypt any secrets for an enclave binary.
 ---
 
 The Seal-Nautilus pattern provides secure secret management for enclave applications, where you can encrypt any secrets for an enclave binary.
@@ -66,6 +100,12 @@ The admin builds and runs the enclave with the exposed `/get_attestation` endpoi
 1. The enclave can now serve `/process_data` requests.
 
 ## Security guarantees
+
+:::caution
+
+Treat the secret lifecycle carefully when adapting this example. The `/admin` endpoints are bound to localhost on the EC2 host, so anyone with host access can drive key loading; in production, restrict and audit that access. Cached Seal keys live only in enclave memory, which means they are lost on restart and must be reloaded through the 2-step flow, so plan for restart and zeroization behavior rather than persisting secrets. The `seal_approve` signature commits to the wallet public key and a timestamp; for replay protection, combine a fresh timestamp with a nonce and domain separation so a captured PTB cannot be reused. See the [Nautilus](/develop/security/best-practices#nautilus) section of the Security Best Practices guide.
+
+:::
 
 The enclave generates 3 keys on startup, all kept only in enclave memory:
 

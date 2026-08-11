@@ -5,17 +5,14 @@ use crate::ZipDebugEqIteratorExt;
 use crate::debug_fatal;
 
 use futures::future::{Either, join_all};
-use mysten_metrics::spawn_monitored_task;
 use parking_lot::Mutex;
 use parking_lot::MutexGuard;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
 use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::mem;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::task::{Context, Poll};
@@ -25,31 +22,47 @@ use tokio::time::Instant;
 use tokio::time::interval_at;
 use tracing::warn;
 
-type Registrations<V> = Vec<oneshot::Sender<V>>;
+use crate::sync::oneshot as blocking_oneshot;
 
-/// Wrapper that ensures a spawned task is aborted when dropped
-struct TaskAbortOnDrop {
-    handle: Option<tokio::task::JoinHandle<()>>,
+/// A registered waiter: async waiters hold a tokio oneshot, blocking waiters (see
+/// [`NotifyRead::register_one_blocking`]) hold a [`blocking_oneshot`] whose receiver
+/// blocks the OS thread.
+enum NotifySender<V> {
+    Async(oneshot::Sender<V>),
+    Blocking(blocking_oneshot::Sender<V>),
 }
 
-impl TaskAbortOnDrop {
-    fn new(handle: tokio::task::JoinHandle<()>) -> Self {
-        Self {
-            handle: Some(handle),
+impl<V> NotifySender<V> {
+    fn send(self, value: V) {
+        match self {
+            NotifySender::Async(sender) => {
+                sender.send(value).ok();
+            }
+            NotifySender::Blocking(sender) => {
+                sender.send(value).ok();
+            }
+        }
+    }
+
+    fn is_closed(&self) -> bool {
+        match self {
+            NotifySender::Async(sender) => sender.is_closed(),
+            NotifySender::Blocking(sender) => sender.is_closed(),
         }
     }
 }
 
-impl Drop for TaskAbortOnDrop {
-    fn drop(&mut self) {
-        if let Some(handle) = self.handle.take() {
-            handle.abort();
-        }
-    }
-}
+type Registrations<V> = Vec<NotifySender<V>>;
 
 /// Interval duration for logging waiting keys when reads take too long
 const LONG_WAIT_LOG_INTERVAL_SECS: u64 = 10;
+
+/// Minimum interval between stall reports for a given task name, across every
+/// read blocked on it.
+const STALL_LOG_INTERVAL_SECS: u64 = 30;
+
+/// Number of this read's own keys included in a stall report.
+const MAX_SAMPLED_KEYS: usize = 32;
 
 pub const CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME: &str =
     "CheckpointBuilder::notify_read_executed_effects";
@@ -57,6 +70,8 @@ pub const CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME: &str =
 pub struct NotifyRead<K, V> {
     pending: Vec<Mutex<HashMap<K, Registrations<V>>>>,
     count_pending: AtomicUsize,
+    // Last stall report per task name.
+    last_stall_log: Mutex<HashMap<&'static str, Instant>>,
 }
 
 impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
@@ -66,6 +81,25 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
         Self {
             pending,
             count_pending,
+            last_stall_log: Default::default(),
+        }
+    }
+
+    /// Returns true if this caller should emit the stall report for `task_name`.
+    /// Any number of reads may be blocked at once; only one of them logs.
+    fn throttle_stall_log(&self, task_name: &'static str) -> bool {
+        let now = Instant::now();
+        let mut last_log = self.last_stall_log.lock();
+        match last_log.get(task_name) {
+            Some(last)
+                if now.duration_since(*last) < Duration::from_secs(STALL_LOG_INTERVAL_SECS) =>
+            {
+                false
+            }
+            _ => {
+                last_log.insert(task_name, now);
+                true
+            }
         }
     }
 
@@ -79,7 +113,7 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
             .count_pending
             .fetch_sub(registrations.len(), Ordering::Relaxed);
         for registration in registrations {
-            registration.send(value.clone()).ok();
+            registration.send(value.clone());
         }
         rem
     }
@@ -87,8 +121,20 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
     pub fn register_one(&self, key: &K) -> Registration<'_, K, V> {
         self.count_pending.fetch_add(1, Ordering::Relaxed);
         let (sender, receiver) = oneshot::channel();
-        self.register(key, sender);
+        self.register(key, NotifySender::Async(sender));
         Registration {
+            this: self,
+            registration: Some((key.clone(), receiver)),
+        }
+    }
+
+    /// Register a waiter whose receiver blocks the OS thread (see
+    /// [`BlockingRegistration::wait`]). Must not be awaited from async code.
+    pub fn register_one_blocking(&self, key: &K) -> BlockingRegistration<'_, K, V> {
+        self.count_pending.fetch_add(1, Ordering::Relaxed);
+        let (sender, receiver) = blocking_oneshot::channel();
+        self.register(key, NotifySender::Blocking(sender));
+        BlockingRegistration {
             this: self,
             registration: Some((key.clone(), receiver)),
         }
@@ -99,7 +145,7 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
         let mut registrations = vec![];
         for key in keys.iter() {
             let (sender, receiver) = oneshot::channel();
-            self.register(key, sender);
+            self.register(key, NotifySender::Async(sender));
             let registration = Registration {
                 this: self,
                 registration: Some((key.clone(), receiver)),
@@ -109,7 +155,7 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
         registrations
     }
 
-    fn register(&self, key: &K, sender: oneshot::Sender<V>) {
+    fn register(&self, key: &K, sender: NotifySender<V>) {
         self.pending(key)
             .entry(key.clone())
             .or_default()
@@ -129,6 +175,30 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
 
     pub fn num_pending(&self) -> usize {
         self.count_pending.load(Ordering::Relaxed)
+    }
+
+    /// Blocking version of [`Self::read`] for a single key: returns `fetch(key)` if the
+    /// value is already available, and otherwise blocks the calling OS thread until the
+    /// key is notified.
+    ///
+    /// Must not be called from an async context. Under msim it may only be called from
+    /// a blocking-pool thread (e.g. inside `spawn_blocking`), where the wait yields the
+    /// thread's quantum between readiness checks.
+    pub fn read_one_blocking(
+        &self,
+        task_name: &'static str,
+        key: &K,
+        fetch: impl FnOnce(&K) -> Option<V>,
+    ) -> V {
+        let _metrics_scope = mysten_metrics::monitored_scope(task_name);
+        let registration = self.register_one_blocking(key);
+        // As in `read`, fetch after registering so that a concurrent notify cannot be
+        // missed. If the value is already available the registration is dropped, which
+        // de-registers it.
+        if let Some(value) = fetch(key) {
+            return value;
+        }
+        registration.wait()
     }
 
     fn cleanup(&self, key: &K) {
@@ -166,80 +236,69 @@ impl<K: Eq + Hash + Clone + Unpin + std::fmt::Debug + Send + Sync + 'static, V: 
         let registrations = self.register_all(keys);
 
         let results = fetch(keys);
-
-        // Track which keys are still waiting
-        let waiting_keys: HashSet<K> = keys
+        // Snapshot of what was missing at fetch time.
+        let waiting_keys: Vec<K> = keys
             .iter()
             .zip_debug_eq(results.iter())
-            .filter(|&(_key, result)| result.is_none())
+            .filter(|(_key, result)| result.is_none())
             .map(|(key, _result)| key.clone())
             .collect();
-        let has_waiting_keys = !waiting_keys.is_empty();
-        let waiting_keys = Arc::new(Mutex::new(waiting_keys));
 
-        // Spawn logging task if there are waiting keys
-        let _log_handle_guard = if has_waiting_keys {
-            let waiting_keys_clone = waiting_keys.clone();
-            let start_time = Instant::now();
-            let task_name = task_name.to_string();
+        let results = results
+            .into_iter()
+            .zip_debug_eq(registrations)
+            .map(|(a, r)| match a {
+                // Note that Some() clause also drops registration that is already fulfilled
+                Some(ready) => Either::Left(futures::future::ready(ready)),
+                None => Either::Right(r),
+            });
 
-            let handle = spawn_monitored_task!(async move {
-                // Only start logging after the first interval.
-                let start = Instant::now() + Duration::from_secs(LONG_WAIT_LOG_INTERVAL_SECS);
-                let mut interval =
-                    interval_at(start, Duration::from_secs(LONG_WAIT_LOG_INTERVAL_SECS));
+        let join = join_all(results);
+        if waiting_keys.is_empty() {
+            return join.await;
+        }
 
-                loop {
-                    interval.tick().await;
-                    let current_waiting = waiting_keys_clone.lock();
-                    if current_waiting.is_empty() {
-                        break;
-                    }
-                    let keys_vec: Vec<_> = current_waiting.iter().cloned().collect();
-                    drop(current_waiting); // Release lock before logging
+        tokio::pin!(join);
+        let start_time = Instant::now();
+        let mut interval = interval_at(
+            start_time + Duration::from_secs(LONG_WAIT_LOG_INTERVAL_SECS),
+            Duration::from_secs(LONG_WAIT_LOG_INTERVAL_SECS),
+        );
 
+        loop {
+            tokio::select! {
+                values = &mut join => return values,
+                _ = interval.tick() => {
                     let elapsed_secs = start_time.elapsed().as_secs();
 
-                    warn!(
-                        "[{}] Still waiting for {}s for {} keys: {:?}",
-                        task_name,
-                        elapsed_secs,
-                        keys_vec.len(),
-                        keys_vec
-                    );
+                    // Deduplicate logging by task name. When many reads are blocked,
+                    // logs will sample blocked reads per task and the keys we are
+                    // waiting on for those reads.
+                    if self.throttle_stall_log(task_name) {
+                        let mut sample: Vec<&K> = Vec::with_capacity(MAX_SAMPLED_KEYS);
+                        let mut outstanding = 0usize;
+                        for key in &waiting_keys {
+                            if self.pending(key).contains_key(key) {
+                                outstanding += 1;
+                                if sample.len() < MAX_SAMPLED_KEYS {
+                                    sample.push(key);
+                                }
+                            }
+                        }
+
+                        warn!(
+                            "[{task_name}] Still waiting {elapsed_secs}s. {} registrations pending, this read still blocked on {outstanding} of {} key(s): {sample:?}",
+                            self.num_pending(),
+                            waiting_keys.len(),
+                        );
+                    }
 
                     if task_name == CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME && elapsed_secs >= 60 {
                         debug_fatal!("{} is stuck", task_name);
                     }
                 }
-            });
-            Some(TaskAbortOnDrop::new(handle))
-        } else {
-            None
-        };
-
-        let results = results
-            .into_iter()
-            .zip_debug_eq(registrations)
-            .zip_debug_eq(keys.iter())
-            .map(|((a, r), key)| match a {
-                // Note that Some() clause also drops registration that is already fulfilled
-                Some(ready) => Either::Left(futures::future::ready(ready)),
-                None => {
-                    let waiting_keys = waiting_keys.clone();
-                    let key = key.clone();
-                    Either::Right(async move {
-                        let result = r.await;
-                        // Remove this key from the waiting set
-                        waiting_keys.lock().remove(&key);
-                        result
-                    })
-                }
-            });
-
-        // The logging task will be automatically aborted when _log_handle_guard is dropped
-
-        join_all(results).await
+            }
+        }
     }
 }
 
@@ -277,6 +336,41 @@ impl<K: Eq + Hash + Clone, V: Clone> Drop for Registration<'_, K, V> {
         }
     }
 }
+
+/// Blocking counterpart of [`Registration`]: resolved via [`Self::wait`], which blocks
+/// the calling OS thread. Dropping it before waiting de-registers from the pending
+/// list.
+pub struct BlockingRegistration<'a, K: Eq + Hash + Clone, V: Clone> {
+    this: &'a NotifyRead<K, V>,
+    registration: Option<(K, blocking_oneshot::Receiver<V>)>,
+}
+
+impl<K: Eq + Hash + Clone, V: Clone> BlockingRegistration<'_, K, V> {
+    /// Block the calling thread until the key is notified. See
+    /// [`NotifyRead::read_one_blocking`] for the msim constraints.
+    pub fn wait(mut self) -> V {
+        let (_key, receiver) = self
+            .registration
+            .take()
+            .expect("registration is only taken here, and wait consumes self");
+        // No cleanup needed after this point: a successful recv means notify() removed
+        // the registration, and on panic the sender is already gone.
+        receiver
+            .blocking_recv()
+            .expect("Sender never drops when registration is pending")
+    }
+}
+
+impl<K: Eq + Hash + Clone, V: Clone> Drop for BlockingRegistration<'_, K, V> {
+    fn drop(&mut self) {
+        if let Some((key, receiver)) = self.registration.take() {
+            mem::drop(receiver);
+            // Receiver is dropped before cleanup
+            self.this.cleanup(&key)
+        }
+    }
+}
+
 impl<K: Eq + Hash + Clone, V: Clone> Default for NotifyRead<K, V> {
     fn default() -> Self {
         Self::new()
@@ -333,6 +427,47 @@ mod tests {
         assert_eq!(0, notify_read.count_pending.load(Ordering::Relaxed));
 
         // Verify all pending maps are empty (cleanup was performed)
+        for pending in &notify_read.pending {
+            assert!(pending.lock().is_empty());
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    pub async fn test_stall_log_throttle() {
+        let notify_read = NotifyRead::<u64, u64>::new();
+
+        assert!(notify_read.throttle_stall_log("task_a"));
+        assert!(!notify_read.throttle_stall_log("task_a"));
+
+        // A report for one task name must not silence a different one.
+        assert!(notify_read.throttle_stall_log("task_b"));
+        assert!(!notify_read.throttle_stall_log("task_a"));
+
+        tokio::time::advance(Duration::from_secs(STALL_LOG_INTERVAL_SECS + 1)).await;
+        assert!(notify_read.throttle_stall_log("task_a"));
+    }
+
+    #[tokio::test(start_paused = true)]
+    pub async fn test_read_blocked_past_log_interval() {
+        let notify_read = Arc::new(NotifyRead::<u64, u64>::new());
+
+        let reader = notify_read.clone();
+        let handle = tokio::spawn(async move {
+            reader
+                .read("test_task", &[1, 2, 3], |_keys| vec![Some(10), None, None])
+                .await
+        });
+
+        // Outlive several ticks so the read exercises the stall reporting path.
+        tokio::time::advance(Duration::from_secs(LONG_WAIT_LOG_INTERVAL_SECS * 4)).await;
+        assert!(!handle.is_finished());
+
+        notify_read.notify(&2, &20);
+        notify_read.notify(&3, &30);
+
+        // Values are returned in key order, not completion order.
+        assert_eq!(handle.await.unwrap(), vec![10, 20, 30]);
+        assert_eq!(0, notify_read.count_pending.load(Ordering::Relaxed));
         for pending in &notify_read.pending {
             assert!(pending.lock().is_empty());
         }

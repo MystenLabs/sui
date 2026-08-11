@@ -4,7 +4,9 @@
 use crate::accumulators::funds_read::AccountFundsRead;
 use crate::authority::AuthorityStore;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
+use crate::authority::authority_store::ExecutionLockWriteGuard;
+#[cfg(test)]
+use crate::authority::authority_store::SuiLockResult;
 use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::EpochFlag;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
@@ -31,8 +33,8 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{
-    BackingPackageStore, BackingStore, ChildObjectResolver, FullObjectKey, MarkerValue, ObjectKey,
-    ObjectOrTombstone, ObjectStore, PackageObject, ParentSync,
+    BackingPackageStore, BackingStore, FullObjectKey, MarkerValue, ObjectKey, ObjectOrTombstone,
+    ObjectStore, PackageObject, ParentSync, RuntimeObjectResolver,
 };
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::VerifiedTransaction;
@@ -41,7 +43,6 @@ use sui_types::{
     object::Owner,
     storage::InputKey,
 };
-use tracing::instrument;
 use typed_store::rocks::DBBatch;
 
 pub(crate) mod cache_types;
@@ -63,7 +64,7 @@ pub struct ExecutionCacheTraitPointers {
     pub transaction_cache_reader: Arc<dyn TransactionCacheRead>,
     pub cache_writer: Arc<dyn ExecutionCacheWrite>,
     pub backing_store: Arc<dyn BackingStore + Send + Sync>,
-    pub child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
+    pub runtime_object_resolver: Arc<dyn RuntimeObjectResolver + Send + Sync>,
     pub backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
     pub object_store: Arc<dyn ObjectStore + Send + Sync>,
     pub reconfig_api: Arc<dyn ExecutionCacheReconfigAPI>,
@@ -98,7 +99,7 @@ impl ExecutionCacheTraitPointers {
             transaction_cache_reader: cache.clone(),
             cache_writer: cache.clone(),
             backing_store: cache.clone(),
-            child_object_resolver: cache.clone(),
+            runtime_object_resolver: cache.clone(),
             backing_package_store: cache.clone(),
             object_store: cache.clone(),
             reconfig_api: cache.clone(),
@@ -155,6 +156,18 @@ pub type Batch = (Vec<Arc<TransactionOutputs>>, DBBatch);
 pub trait ExecutionCacheCommit: Send + Sync {
     /// Build a DBBatch containing the given transaction outputs.
     fn build_db_batch(&self, epoch: EpochId, digests: &[TransactionDigest]) -> Batch;
+
+    /// Stage the highest-committed-checkpoint watermark into `batch` so it is
+    /// written atomically with that checkpoint's transaction outputs. Called by
+    /// CheckpointExecutor between [`Self::build_db_batch`] and
+    /// [`Self::commit_transaction_outputs`]. Unlike the checkpoint store's
+    /// separately-bumped `highest_executed` watermark, this stays consistent
+    /// with the durable object set across an unclean stop.
+    fn set_highest_committed_checkpoint_in_batch(
+        &self,
+        batch: &mut Batch,
+        checkpoint: CheckpointSequenceNumber,
+    );
 
     /// Durably commit the outputs of the given transactions to the database.
     /// Will be called by CheckpointExecutor to ensure that transaction outputs are
@@ -275,8 +288,7 @@ pub trait ObjectCacheRead: Send + Sync {
                     .iter()
                     .map(|(_, k)| ObjectKey(k.0.id(), *k.1))
                     .collect::<Vec<_>>(),
-            )
-            .into_iter(),
+            ),
         ) {
             // If the key exists at the specified version, then the object is available.
             if has_key {
@@ -328,14 +340,12 @@ pub trait ObjectCacheRead: Send + Sync {
         version: SequenceNumber,
     ) -> Option<Object>;
 
+    /// Test-only: production code no longer reads owned-object lock status by ref.
+    #[cfg(test)]
     fn get_lock(&self, obj_ref: ObjectRef, epoch_store: &AuthorityPerEpochStore) -> SuiLockResult;
 
     // This method is considered "private" - only used by multi_get_objects_with_more_accurate_error_return
     fn _get_live_objref(&self, object_id: ObjectID) -> SuiResult<ObjectRef>;
-
-    // Check that the given set of objects are live at the given version. This is used as a
-    // safety check before execution, and could potentially be deleted or changed to a debug_assert
-    fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult;
 
     fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState>;
 
@@ -437,29 +447,6 @@ pub trait TransactionCacheRead: Send + Sync {
             .expect("multi-get must return correct number of items")
     }
 
-    #[instrument(level = "trace", skip_all)]
-    fn get_transactions_and_serialized_sizes(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<(VerifiedTransaction, usize)>>> {
-        let txns = self.multi_get_transaction_blocks(digests);
-        txns.into_iter()
-            .map(|txn| {
-                txn.map(|txn| {
-                    // Note: if the transaction is read from the db, we are wasting some
-                    // effort relative to reading the raw bytes from the db instead of
-                    // calling serialized_size. However, transactions should usually be
-                    // fetched from cache.
-                    match txn.serialized_size() {
-                        Ok(size) => Ok(((*txn).clone(), size)),
-                        Err(e) => Err(e),
-                    }
-                })
-                .transpose()
-            })
-            .collect::<Result<Vec<_>, _>>()
-    }
-
     fn multi_get_executed_effects_digests(
         &self,
         digests: &[TransactionDigest],
@@ -491,7 +478,7 @@ pub trait TransactionCacheRead: Send + Sync {
         }
 
         let effects = self.multi_get_effects(&fetch_digests);
-        for (i, effects) in fetch_indices.into_iter().zip_debug_eq(effects.into_iter()) {
+        for (i, effects) in fetch_indices.into_iter().zip_debug_eq(effects) {
             results[i] = effects;
         }
 
@@ -533,6 +520,16 @@ pub trait TransactionCacheRead: Send + Sync {
         &self,
         digest: &TransactionDigest,
     ) -> Option<Vec<ObjectKey>>;
+
+    fn multi_get_unchanged_loaded_runtime_objects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<Vec<ObjectKey>>> {
+        digests
+            .iter()
+            .map(|digest| self.get_unchanged_loaded_runtime_objects(digest))
+            .collect()
+    }
 
     fn take_accumulator_events(&self, digest: &TransactionDigest) -> Option<Vec<AccumulatorEvent>>;
 
@@ -720,7 +717,7 @@ macro_rules! implement_storage_traits {
             }
         }
 
-        impl ChildObjectResolver for $implementor {
+        impl RuntimeObjectResolver for $implementor {
             fn read_child_object(
                 &self,
                 parent: &ObjectID,

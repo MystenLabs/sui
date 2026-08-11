@@ -25,6 +25,7 @@ pub const DEFAULT_ENV_ID: &str = "_test_env_id";
 /// The [Vanilla] implementation of the [MoveFlavor] trait. This implementation supports no
 /// flavor-specific resolvers and stores no additional metadata in the lockfile.
 #[derive(Debug, Default)]
+#[non_exhaustive]
 pub struct Vanilla;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -80,6 +81,11 @@ impl MoveFlavor for Vanilla {
 }
 
 impl Vanilla {
+    /// Create a new `Vanilla` flavor.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     pub fn default_environment() -> Environment {
         Environment::new(DEFAULT_ENV_NAME.to_string(), DEFAULT_ENV_ID.to_string())
     }

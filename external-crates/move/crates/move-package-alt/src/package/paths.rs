@@ -126,6 +126,16 @@ pub fn read_name_from_manifest(dir: impl AsRef<Path>) -> FileResult<String> {
     Ok(f.package.name)
 }
 
+/// Compute a stable identity for a path so that equivalent relative spellings (e.g.
+/// `../a` and `../../packages/a`) collapse to the same value for graph/cache deduplication.
+/// We absolutize but deliberately don't canonicalize — following symlinks would also rewrite
+/// `/var/...` to `/private/var/...` on macOS, breaking tempdir-based tests for no benefit.
+pub(crate) fn canonical_identity(path: &Path) -> PathBuf {
+    std::path::absolute(path)
+        .unwrap_or_else(|_| path.to_path_buf())
+        .clean()
+}
+
 impl PackagePath {
     pub fn new(dir: PathBuf) -> PackagePathResult<Self> {
         let path = dir.clean();
@@ -143,6 +153,12 @@ impl PackagePath {
         }
 
         Ok(result)
+    }
+
+    /// A stable absolute identity for this package, used for graph/cache deduplication.
+    /// See [canonical_identity] for why this isn't `canonicalize`.
+    pub(crate) fn canonical_identity(&self) -> PathBuf {
+        canonical_identity(self.path())
     }
 
     /// Acquire an exclusive lock for the files in this package
@@ -205,12 +221,12 @@ impl PackagePath {
     pub(crate) async fn read_legacy_manifest<F: MoveFlavor>(
         &self,
         default_env: &Environment,
-        is_root: bool,
+        display_warnings: bool,
         _mtx: &PackageSystemLock,
         flavor: &F,
     ) -> FileResult<Option<(FileHandle, ParsedManifest)>> {
         let path = self.manifest_path().to_path_buf();
-        try_load_legacy_manifest::<F>(self, default_env, is_root, flavor)
+        try_load_legacy_manifest::<F>(self, default_env, display_warnings, flavor)
             .await
             .map_err(|err| FileError::LegacyError {
                 file: path,

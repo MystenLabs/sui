@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E02004]: invalid 'module' declaration
+error[EC02004]: invalid 'module' declaration
    ┌─ tests/move_check/expansion/friend_decl_inner_scope_alias_cycle.move:8:5
    │
  8 │     friend Q;

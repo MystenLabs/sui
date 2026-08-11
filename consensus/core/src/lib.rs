@@ -21,8 +21,11 @@ mod core;
 mod core_thread;
 mod dag_state;
 mod error;
+mod flex_committer;
 mod leader_schedule;
+mod leader_schedule_v3;
 mod leader_scoring;
+mod leader_slot_decider;
 mod leader_timeout;
 mod linearizer;
 mod metrics;
@@ -37,6 +40,7 @@ mod stake_aggregator;
 pub mod storage;
 mod subscriber;
 mod synchronizer;
+mod task;
 mod threshold_clock;
 mod transaction;
 mod transaction_vote_tracker;
@@ -61,12 +65,16 @@ pub use block::BlockAPI;
 
 /// Exported API for testing and tools.
 pub use block::{TestBlock, Transaction, VerifiedBlock};
-pub use commit::{CommitAPI, CommitDigest, CommitIndex, CommitRange, CommitRef, CommittedSubDag};
+pub use commit::{
+    CommitAPI, CommitDigest, CommitIndex, CommitRange, CommitRef, CommittedSubDag, TrustedCommit,
+};
 pub use commit_consumer::{CommitConsumerArgs, CommitConsumerMonitor};
 pub use context::Clock;
 pub use metrics::Metrics;
+pub use network::RandomnessSignatureHandler;
 pub use transaction::{
-    BlockStatus, ClientError, TransactionClient, TransactionVerifier, ValidationError,
+    BlockStatus, ClientError, LimitReached, Priority, TransactionClient, TransactionPool,
+    TransactionVerifier, ValidationError,
 };
 
 // Exported API for benchmarking

@@ -33,7 +33,8 @@ use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
     SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
     SUI_COIN_REGISTRY_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID, SUI_DISPLAY_REGISTRY_OBJECT_ID,
-    SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, TypeTag,
+    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID, TypeTag,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     committee::EpochId,
     error::{ExecutionError, VMMemoryLimitExceededSubStatusCode},
@@ -41,8 +42,9 @@ use sui_types::{
     execution_status::ExecutionErrorKind,
     id::UID,
     metrics::ExecutionMetrics,
+    move_package::MovePackage,
     object::{MoveObject, Owner},
-    storage::ChildObjectResolver,
+    storage::RuntimeObjectResolver,
 };
 use tracing::error;
 
@@ -155,7 +157,7 @@ impl TestInventories {
 
 impl<'a> ObjectRuntime<'a> {
     pub fn new(
-        object_resolver: &'a dyn ChildObjectResolver,
+        object_resolver: &'a dyn RuntimeObjectResolver,
         input_objects: BTreeMap<ObjectID, InputObject>,
         is_metered: bool,
         protocol_config: &'a ProtocolConfig,
@@ -243,6 +245,16 @@ impl<'a> ObjectRuntime<'a> {
         Ok(())
     }
 
+    /// Marks `id` as new via `new_id` and, when `parent` has a tracked root version, records the
+    /// same root version for `id`. When `parent` is untracked it must itself be newly created in
+    /// this transaction (and transitively to its root), so no root version is recorded.
+    pub fn new_id_from_hash(&mut self, parent: ObjectID, id: ObjectID) -> PartialVMResult<()> {
+        self.new_id(id)?;
+        self.child_object_store
+            .inherit_root_version_from_parent(parent, id)?;
+        Ok(())
+    }
+
     pub fn delete_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
         // This is defensive because `self.state.deleted_ids` may not indeed
         // be called based on the `was_new` flag
@@ -300,13 +312,14 @@ impl<'a> ObjectRuntime<'a> {
             SUI_COIN_REGISTRY_OBJECT_ID,
             SUI_DISPLAY_REGISTRY_OBJECT_ID,
             SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
+            SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
         ]
         .contains(&id);
         let transfer_result = if self.state.new_ids.contains(&id) {
             TransferResult::New
         } else if let Some(prev_owner) = self.state.input_objects.get(&id) {
             match (&owner, prev_owner) {
-                // don't use == for dummy values in Shared or ConsensusAddressOwner
+                // don't use == for dummy values in Shared, ConsensusAddressOwner, or Party
                 (Owner::Shared { .. }, Owner::Shared { .. }) => TransferResult::SameOwner,
                 (
                     Owner::ConsensusAddressOwner {
@@ -316,7 +329,23 @@ impl<'a> ObjectRuntime<'a> {
                         owner: old_owner, ..
                     },
                 ) if new_owner == old_owner => TransferResult::SameOwner,
-                (new, old) if new == old => TransferResult::SameOwner,
+                (
+                    Owner::Party {
+                        permissions: new_permissions,
+                        ..
+                    },
+                    Owner::Party {
+                        permissions: old_permissions,
+                        ..
+                    },
+                ) if new_permissions == old_permissions => TransferResult::SameOwner,
+                (new @ Owner::AddressOwner(_), old)
+                | (new @ Owner::ObjectOwner(_), old)
+                | (new @ Owner::Immutable, old)
+                    if new == old =>
+                {
+                    TransferResult::SameOwner
+                }
                 _ => TransferResult::OwnerChanged,
             }
         } else if is_framework_obj {
@@ -585,6 +614,15 @@ impl<'a> ObjectRuntime<'a> {
             setting_value_object_type,
             value,
         )
+    }
+
+    pub fn get_package_at_version(
+        &self,
+        package_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Option<MovePackage> {
+        self.child_object_store
+            .get_package_at_version(package_id, version)
     }
 
     // returns None if a child object is still borrowed
@@ -899,7 +937,8 @@ fn check_circular_ownership(
             Owner::AddressOwner(_)
             | Owner::Shared { .. }
             | Owner::Immutable
-            | Owner::ConsensusAddressOwner { .. } => (),
+            | Owner::ConsensusAddressOwner { .. }
+            | Owner::Party { .. } => (),
             Owner::ObjectOwner(new_owner) => {
                 let new_owner: ObjectID = new_owner.into();
                 let mut cur = new_owner;

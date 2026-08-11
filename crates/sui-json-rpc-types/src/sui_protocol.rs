@@ -68,10 +68,34 @@ pub struct ProtocolConfigResponse {
     pub protocol_version: ProtocolVersion,
     pub feature_flags: BTreeMap<String, bool>,
     pub attributes: BTreeMap<String, Option<SuiProtocolConfigValue>>,
+    /// Lossless view of every protocol-config attribute and feature flag, rendered to
+    /// JSON. Unlike `attributes`, this includes non-scalar fields (e.g. lists) and is the
+    /// preferred surface for clients that need to read complex values.
+    #[serde(default)]
+    #[schemars(with = "BTreeMap<String, serde_json::Value>")]
+    pub configs: BTreeMap<String, serde_json::Value>,
 }
 
 impl From<ProtocolConfig> for ProtocolConfigResponse {
     fn from(config: ProtocolConfig) -> Self {
+        // Render emits explicit `Null`s for fields unset at this protocol version; filter them
+        // out so the public `configs` map only carries values that are actually configured.
+        let mut configs = config
+            .render::<serde_json::Value>(&mut mysten_common::rpc_format::Unmetered)
+            .expect("render to serde_json::Value should succeed")
+            .into_iter()
+            .filter(|(_, v)| !v.is_null())
+            .collect::<BTreeMap<String, serde_json::Value>>();
+
+        // Merge feature flags into `configs` so it stands alone as a complete view.
+        for (k, v) in config.feature_map() {
+            let old = configs.insert(k, serde_json::Value::Bool(v));
+            debug_assert!(
+                old.is_none(),
+                "feature flags and attributes can't have keys which are the same"
+            );
+        }
+
         ProtocolConfigResponse {
             protocol_version: config.version,
             attributes: config
@@ -82,6 +106,7 @@ impl From<ProtocolConfig> for ProtocolConfigResponse {
             min_supported_protocol_version: ProtocolVersion::MIN,
             max_supported_protocol_version: ProtocolVersion::MAX,
             feature_flags: config.feature_map(),
+            configs,
         }
     }
 }

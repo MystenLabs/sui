@@ -1,0 +1,9 @@
+//# print-bytecode
+// A function may reference a constant declared later in the module.
+mvir 0x42::M {
+    public fun f(): u64 {
+    label b0:
+        return copy(LATER);
+    }
+    const LATER: u64 = 7u64;
+}

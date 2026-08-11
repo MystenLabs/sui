@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Group operations of BLS12-381.
-/// Only available in devnet.
+/// Only available in devnet and testnet.
 module sui::ristretto255;
 
 use sui::bcs;

@@ -182,12 +182,6 @@ pub(crate) mod universal_committer_builder {
             }
         }
 
-        #[allow(unused)]
-        pub(crate) fn with_wave_length(mut self, wave_length: Round) -> Self {
-            self.wave_length = wave_length;
-            self
-        }
-
         pub(crate) fn with_number_of_leaders(mut self, number_of_leaders: usize) -> Self {
             self.number_of_leaders = number_of_leaders;
             self

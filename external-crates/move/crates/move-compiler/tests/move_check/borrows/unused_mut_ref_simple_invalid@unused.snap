@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09014]: unused mutable reference '&mut' parameter
+warning[WC09014]: unused mutable reference '&mut' parameter
   ┌─ tests/move_check/borrows/unused_mut_ref_simple_invalid.move:3:34
   │
 3 │     public(friend) fun unused(x: &mut u64) {
@@ -15,7 +15,7 @@ warning[W09014]: unused mutable reference '&mut' parameter
   │
   = This warning can be suppressed with '#[allow(unused_mut_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09013]: unused mutable reference '&mut'
+warning[WC09013]: unused mutable reference '&mut'
   ┌─ tests/move_check/borrows/unused_mut_ref_simple_invalid.move:5:17
   │
 5 │         let r = &mut i;
@@ -23,7 +23,7 @@ warning[W09013]: unused mutable reference '&mut'
   │
   = This warning can be suppressed with '#[allow(unused_mut_ref)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09013]: unused mutable reference '&mut'
+warning[WC09013]: unused mutable reference '&mut'
   ┌─ tests/move_check/borrows/unused_mut_ref_simple_invalid.move:7:9
   │
 7 │         &mut 0u64;
@@ -31,7 +31,7 @@ warning[W09013]: unused mutable reference '&mut'
   │
   = This warning can be suppressed with '#[allow(unused_mut_ref)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09014]: unused mutable reference '&mut' parameter
+warning[WC09014]: unused mutable reference '&mut' parameter
    ┌─ tests/move_check/borrows/unused_mut_ref_simple_invalid.move:13:31
    │
 13 │     public(friend) fun ret(x: &mut u64): &u64 {

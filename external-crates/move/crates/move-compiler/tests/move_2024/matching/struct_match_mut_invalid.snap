@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:33:21
    │
 32 │            NBase { mut t } => {
@@ -13,7 +13,7 @@ error[E04003]: built-in operation not supported
 33 │                 t = t + 1u64;
    │                     ^ Invalid argument to '+'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:33:23
    │
 32 │            NBase { mut t } => {
@@ -23,7 +23,7 @@ error[E04007]: incompatible types
    │                       │  
    │                       Incompatible arguments to '+'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:33:25
    │
 32 │            NBase { mut t } => {
@@ -31,7 +31,7 @@ error[E04003]: built-in operation not supported
 33 │                 t = t + 1u64;
    │                         ^^^^ Invalid argument to '+'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:42:21
    │
 41 │            NBase { t: mut x } => {
@@ -39,7 +39,7 @@ error[E04003]: built-in operation not supported
 42 │                 x = x + 1u64;
    │                     ^ Invalid argument to '+'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:42:23
    │
 41 │            NBase { t: mut x } => {
@@ -49,7 +49,7 @@ error[E04007]: incompatible types
    │                       │  
    │                       Incompatible arguments to '+'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:42:25
    │
 41 │            NBase { t: mut x } => {
@@ -57,7 +57,7 @@ error[E04003]: built-in operation not supported
 42 │                 x = x + 1u64;
    │                         ^^^^ Invalid argument to '+'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:51:20
    │
 50 │            PBase(mut x) => {
@@ -65,7 +65,7 @@ error[E04003]: built-in operation not supported
 51 │                x = x + 1u64;
    │                    ^ Invalid argument to '+'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:51:22
    │
 50 │            PBase(mut x) => {
@@ -75,7 +75,7 @@ error[E04007]: incompatible types
    │                      │  
    │                      Incompatible arguments to '+'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:51:24
    │
 50 │            PBase(mut x) => {
@@ -83,7 +83,7 @@ error[E04003]: built-in operation not supported
 51 │                x = x + 1u64;
    │                        ^^^^ Invalid argument to '+'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:60:21
    │
 59 │            NPoly { t : NBase { mut t } } => {
@@ -91,7 +91,7 @@ error[E04003]: built-in operation not supported
 60 │                 t = t + 1u64;
    │                     ^ Invalid argument to '+'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:60:23
    │
 59 │            NPoly { t : NBase { mut t } } => {
@@ -101,7 +101,7 @@ error[E04007]: incompatible types
    │                       │  
    │                       Incompatible arguments to '+'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:60:25
    │
 59 │            NPoly { t : NBase { mut t } } => {
@@ -109,7 +109,7 @@ error[E04003]: built-in operation not supported
 60 │                 t = t + 1u64;
    │                         ^^^^ Invalid argument to '+'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:69:21
    │
 68 │            NPoly { t : NBase { t: mut x } } => {
@@ -117,7 +117,7 @@ error[E04003]: built-in operation not supported
 69 │                 x = x + 1u64;
    │                     ^ Invalid argument to '+'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:69:23
    │
 68 │            NPoly { t : NBase { t: mut x } } => {
@@ -127,7 +127,7 @@ error[E04007]: incompatible types
    │                       │  
    │                       Incompatible arguments to '+'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:69:25
    │
 68 │            NPoly { t : NBase { t: mut x } } => {
@@ -135,7 +135,7 @@ error[E04003]: built-in operation not supported
 69 │                 x = x + 1u64;
    │                         ^^^^ Invalid argument to '+'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:78:21
    │
 77 │            NPoly { t : PBase(mut x) } => {
@@ -143,7 +143,7 @@ error[E04003]: built-in operation not supported
 78 │                 x = x + 1u64;
    │                     ^ Invalid argument to '+'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:78:23
    │
 77 │            NPoly { t : PBase(mut x) } => {
@@ -153,7 +153,7 @@ error[E04007]: incompatible types
    │                       │  
    │                       Incompatible arguments to '+'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:78:25
    │
 77 │            NPoly { t : PBase(mut x) } => {
@@ -161,7 +161,7 @@ error[E04003]: built-in operation not supported
 78 │                 x = x + 1u64;
    │                         ^^^^ Invalid argument to '+'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:87:21
    │
 86 │            PPoly(NBase { t: mut x }) => {
@@ -169,7 +169,7 @@ error[E04003]: built-in operation not supported
 87 │                 x = x + 1u64;
    │                     ^ Invalid argument to '+'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:87:23
    │
 86 │            PPoly(NBase { t: mut x }) => {
@@ -179,7 +179,7 @@ error[E04007]: incompatible types
    │                       │  
    │                       Incompatible arguments to '+'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:87:25
    │
 86 │            PPoly(NBase { t: mut x }) => {
@@ -187,7 +187,7 @@ error[E04003]: built-in operation not supported
 87 │                 x = x + 1u64;
    │                         ^^^^ Invalid argument to '+'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:96:21
    │
 95 │            PPoly(PBase(mut x)) => {
@@ -195,7 +195,7 @@ error[E04003]: built-in operation not supported
 96 │                 x = x + 1u64;
    │                     ^ Invalid argument to '+'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:96:23
    │
 95 │            PPoly(PBase(mut x)) => {
@@ -205,7 +205,7 @@ error[E04007]: incompatible types
    │                       │  
    │                       Incompatible arguments to '+'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:96:25
    │
 95 │            PPoly(PBase(mut x)) => {

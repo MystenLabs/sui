@@ -1,7 +1,43 @@
 ---
 title: Groth16
-description: Zero-knowledge proofs are used to validate statements without revealing information about the proof's inputs. 
-keywords: [ groth16, zero knowledge, zero-knowledge, zero-knowledge proof, zkproof, zero-knowledge succinct non-interactive argument, circom, verification key ]
+description: >-
+  Zero-knowledge proofs are used to validate statements without revealing
+  information about the proof's inputs.
+keywords:
+  - groth16
+  - zero knowledge
+  - zero-knowledge
+  - zero-knowledge proof
+  - zkproof
+  - zero-knowledge succinct non-interactive argument
+  - circom
+  - verification key
+goal:
+  description: >-
+    Reader understands zero-knowledge proofs are used to validate statements
+    without revealing information about the proof's inputs
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Groth16 in Sui?
+  - How does groth16 work on Sui?
+  - Why should I use groth16?
+answer: >-
+  A zero-knowledge proof allows a prover to validate that a statement is true
+  without revealing any information about the inputs.
 ---
 
 A zero-knowledge proof allows a prover to validate that a statement is true without revealing any information about the inputs. For example, a prover can validate that they know the solution to a sudoku puzzle without revealing the solution.
@@ -13,6 +49,12 @@ The Move API in Sui enables you to verify any statement that can be expressed in
 There are high-level languages for expressing these statements, such as [Circom](https://docs.circom.io), used in the following example.
 
 Groth16 requires a trusted setup for each circuit to generate the verification key. The API is not pinning any particular verification key and each user can generate their own parameters or use an existing verification to their apps.
+
+:::danger
+
+The randomly generated proving and verifying keys used in the following example (through `generate_random_parameters_with_reduction` with a fixed seed) are for testing only and are **not secure**. In production, proving and verifying keys must come from a proper trusted setup ceremony. Because the Sui API does not pin any verification key, your contract must pin or verifiably identify the expected verifying key it accepts; otherwise a proof generated against an attacker-chosen key could be accepted as valid.
+
+:::
 
 ## Usage
 

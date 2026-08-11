@@ -1,0 +1,239 @@
+/**
+ * Copyright (c) Mysten Labs, Inc.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Scoped styles for the /skills page.
+ */
+
+.page {
+  background-color: #000000;
+  min-height: 100vh;
+}
+
+/* === Hero === */
+
+.hero {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 5rem 1.5rem 2.5rem;
+  text-align: center;
+}
+
+.heroTitle {
+  color: #ffffff;
+  font-size: 3.25rem;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  margin: 0 0 1.25rem;
+}
+
+.heroTagline {
+  color: #89919f;
+  font-size: 1.15rem;
+  line-height: 1.6;
+  max-width: 660px;
+  margin: 0 auto 2.25rem;
+}
+
+.install {
+  max-width: 560px;
+  margin: 0 auto 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background-color: #131518;
+  border: 1px solid #343940;
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+}
+
+.installCmd {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.9rem;
+  color: #ddf2ff;
+  background: transparent;
+  border: none;
+  padding: 0;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+
+.copyBtn {
+  flex-shrink: 0;
+  border: 1px solid #343940;
+  background: transparent;
+  color: #89919f;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 0.3rem 0.7rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.copyBtn:hover {
+  color: #ffffff;
+  border-color: #5b6470;
+}
+
+.repoLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #5ca9ff;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.repoLink:hover {
+  color: #ddf2ff;
+  text-decoration: none;
+}
+
+/* === Controls === */
+
+.controls {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.chip {
+  border: 1px solid #343940;
+  background: transparent;
+  color: #89919f;
+  padding: 0.4rem 0.95rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.chip:hover {
+  color: #ffffff;
+  border-color: #5b6470;
+}
+
+.chipActive,
+.chipActive:hover {
+  background: #298dff;
+  border-color: #298dff;
+  color: #ffffff;
+}
+
+.chipCount {
+  opacity: 0.6;
+  margin-left: 0.35rem;
+}
+
+.installHint {
+  max-width: 1120px;
+  margin: 1.75rem auto 0;
+  padding: 0 1.5rem;
+  text-align: center;
+  color: #6c7584;
+  font-size: 0.9rem;
+}
+
+.installHint code {
+  background-color: #131518;
+  border: 1px solid #343940;
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  color: #ddf2ff;
+  font-size: 0.825rem;
+}
+
+/* === Grid === */
+
+.grid {
+  max-width: 1120px;
+  margin: 1.5rem auto 6rem;
+  padding: 0 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  background-color: #131518;
+  border: 1px solid #343940;
+  border-radius: 8px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.card:hover {
+  border-color: #298dff;
+  transform: translateY(-2px);
+  text-decoration: none;
+}
+
+.cardCategory {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: #5ca9ff;
+}
+
+.cardTitle {
+  color: #ffffff;
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.cardDesc {
+  color: #89919f;
+  font-size: 0.925rem;
+  line-height: 1.55;
+  flex-grow: 1;
+  margin: 0;
+}
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #343940;
+  padding-top: 0.85rem;
+  margin-top: 0.35rem;
+}
+
+.cardSlug {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.78rem;
+  color: #6c7584;
+}
+
+.cardLink {
+  color: #5ca9ff;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.card:hover .cardLink {
+  color: #ddf2ff;
+}
+
+@media screen and (max-width: 799px) {
+  .heroTitle {
+    font-size: 2.4rem;
+  }
+  .hero {
+    padding: 3rem 1.25rem 2rem;
+  }
+}

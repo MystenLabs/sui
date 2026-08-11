@@ -50,6 +50,7 @@ ecdsa_r1.json
 ecvrf.json
 ed25519.json
 event.json
+forwarding_address.json
 funds_accumulator.json
 groth16.json
 group_ops.json
@@ -74,6 +75,7 @@ prover.json
 random.json
 rangeproofs.json
 ristretto255.json
+scratch.json
 sui.json
 table.json
 table_vec.json
@@ -614,6 +616,11 @@ vector.json
         "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
       },
       {
+        "module_name": "forwarding_address",
+        "datatype_name": "ForwardingAddressRegistry",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
         "module_name": "groth16",
         "datatype_name": "Curve",
         "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
@@ -801,6 +808,21 @@ vector.json
       {
         "module_name": "ristretto255",
         "datatype_name": "G",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "scratch",
+        "datatype_name": "Permit",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "scratch",
+        "datatype_name": "BorrowMarker",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "scratch",
+        "datatype_name": "BorrowMarkerKey",
         "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
       },
       {

@@ -1,8 +1,47 @@
 ---
 title: Sui Full Node Configuration
 sidebar_label: Configuration
-description: Operate a Sui full node to validate blockchain activities, like transactions, checkpoints, and epoch changes.  
-keywords: [ fullnode configuration, full node configuration, sui full nodes, state synchronization, state sync, full node architecture, node hardware requirements, node software requirements, grpc, starting a full node, running a full node ]
+description: >-
+  Operate a Sui full node to validate blockchain activities, like transactions,
+  checkpoints, and epoch changes.
+keywords:
+  - fullnode configuration
+  - full node configuration
+  - sui full nodes
+  - state synchronization
+  - state sync
+  - full node architecture
+  - node hardware requirements
+  - node software requirements
+  - grpc
+  - starting a full node
+  - running a full node
+goal:
+  description: >-
+    Node operator understands operate a Sui full node to validate blockchain
+    activities, like transactions, checkpoints
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more operational depth
+    - pattern: '```'
+      min: 1
+      label: Has configuration or command examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I set up a Sui full node?
+  - What are the hardware requirements for a Sui full node?
+  - How do I configure a Sui full node for production?
+answer: >-
+  Operate a Sui full node to validate blockchain activities, like transactions,
+  checkpoints, and epoch changes.
 ---
 
 :::info
@@ -81,9 +120,26 @@ clang \
 cmake
 ```
 
+### gRPC quickstart checklist {#grpc-quickstart}
+
+Follow these steps to enable indexed gRPC functionality on a full node. The gRPC listener and core methods are available without indexing, but historical list queries require the indexes.
+
+1. Add `rpc.enable-indexing: true` to `fullnode.yaml` (see config below).
+2. In the same configuration update, optionally configure the [ledger history list APIs](#ledger-history-configuration) and [retention window](#gRPC-retention).
+3. If you no longer need legacy JSON-RPC indexing, set `enable-index-processing: false` (see [Disable legacy JSON-RPC indexing](#disable-legacy-json-rpc-indexing)).
+4. Restart the node. The initial gRPC index build takes time depending on your hardware; the node might not serve other traffic during this phase.
+5. Verify connectivity and query the historical range required by your clients. `end_checkpoint` is exclusive. Paginate past any `ITEM_LIMIT` responses and confirm that the stream terminates with `CHECKPOINT_BOUND`. Compare the latest checkpoint returned by `GetCheckpoint` with the node's `last_executed_checkpoint` metric before cutover:
+    ```sh
+    $ grpcurl -plaintext <YOUR_NODE>:9000 sui.rpc.v2.LedgerService/GetCheckpoint
+    $ grpcurl -plaintext -d '{
+        "start_checkpoint": "<FIRST_REQUIRED_CHECKPOINT>",
+        "end_checkpoint": "<LAST_REQUIRED_CHECKPOINT_PLUS_ONE>"
+      }' <YOUR_NODE>:9000 sui.rpc.v2.LedgerService/ListTransactions
+    ```
+
 ### Considerations to enable gRPC
 
-You must enable gRPC support on your full nodes. JSON-RPC is **deprecated**. See [Sui's data serving roadmap](/develop/accessing-data/data-serving#grpc-api) for guidance on the overall transition plan.
+You must enable gRPC support on your full nodes. JSON-RPC is **deprecated**. See [Sui's data serving roadmap](/develop/accessing-data/data-serving) for guidance on the overall transition plan.
 
 To serve the [gRPC API](/develop/accessing-data/grpc), you must enable it on your full node by indexing gRPC-specific data. During the initial gRPC indexing phase, your full node might not be able to handle other traffic, including the [**deprecated** JSON-RPC](/references/sui-api) requests. Plan your rollout carefully (such as using the `rolling upgrade` mechanism), and communicate any downtime to your customers and partners in advance. The time required to sync gRPC indexes depends on your full node's hardware and software configuration.
 
@@ -96,13 +152,77 @@ rpc:
 
 ```
 
-Running gRPC alongside JSON-RPC increases your full node’s storage usage. You can reclaim this storage by disabling JSON-RPC after all your client applications have migrated from JSON-RPC. All applications must gradually migrate to gRPC or [GraphQL RPC](/develop/accessing-data/custom-indexer/custom-indexers). You can also run gRPC and JSON-RPC on separate nodes to optimize resource usage and provide a performant and resilient RPC experience to client applications. Add the following to the `fullnode.yaml` configuration of your full node to selectively disable JSON-RPC on it:
+The `rpc` configuration block supports additional settings. The most important options are:
+
+- `enable-indexing`: Set to `true` to enable gRPC-specific data indexing.
+- `https-address`: The HTTPS address for the RPC server, if TLS termination is handled by the node.
+- `tls`: TLS configuration for the RPC server.
+- `max-json-move-value-size`: Maximum size in bytes for JSON Move values returned by the RPC server.
+
+Refer to the [`RpcConfig` source](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/src/rpc_config.rs) for the complete list of available `rpc` options.
+
+#### Ledger history configuration {#ledger-history-configuration}
+
+The `rpc.ledger-history` block tunes the three historical list APIs: `ListTransactions`, `ListEvents`, and `ListCheckpoints`. These APIs scan inverted indexes to serve filtered queries over past transactions and events. See [Ledger history list APIs](/develop/accessing-data/grpc/using-grpc#ledger-history-list-apis) for developer-facing usage.
+
+```yaml
+rpc:
+  enable-indexing: true
+  ledger-history:
+    list-transactions:
+      timeout-ms: 5000
+      default-limit-items: 50
+      max-limit-items: 500
+      chunk-max: 32
+    list-events:
+      timeout-ms: 5000
+      default-limit-items: 50
+      max-limit-items: 1000
+      chunk-max: 32
+    list-checkpoints:
+      timeout-ms: 5000
+      default-limit-items: 10
+      max-limit-items: 100
+      chunk-max: 16
+    bitmap-bucket-scan-budget: 1024
+    chunk-bucket-scan-budget: 256
+    max-bitmap-filter-literals: 10
+```
+
+**Per-endpoint settings** (configurable for each of `list-transactions`, `list-events`, `list-checkpoints`):
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `timeout-ms` | `5000` | Maximum time in milliseconds for the request. |
+| `default-limit-items` | Varies | Default number of items returned if the client does not specify a limit. |
+| `max-limit-items` | Varies | Maximum number of items the client can request. |
+| `chunk-max` | Varies | Maximum chunks processed per streaming response. |
+
+**Global scan settings:**
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `bitmap-bucket-scan-budget` | `1024` | Total evaluated-bucket budget for one filtered request. When exhausted, the query ends with `SCAN_LIMIT` and a resume cursor. |
+| `chunk-bucket-scan-budget` | `256` | Per-chunk evaluated-bucket cap. Clamped to `bitmap-bucket-scan-budget`. |
+| `max-bitmap-filter-literals` | `10` | Maximum total filter literals accepted in one request. Each literal becomes one bitmap leaf. |
+
+:::caution
+
+`bitmap-bucket-scan-budget` must be greater than or equal to `max-bitmap-filter-literals`. If not, the node rejects the configuration at startup because a filtered request could exhaust its scan budget before any filter leaf produces a result.
+
+:::
+
+#### Disable legacy JSON-RPC indexing {#disable-legacy-json-rpc-indexing}
+
+You can reclaim the storage used by legacy JSON-RPC indexing after all your client applications have migrated from JSON-RPC. JSON-RPC is disabled on Sui Foundation mainnet full nodes the week of July 27, 2026, with full decommission (including code removal) in mid-October 2026. See the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration) for the complete timeline. Add the following to the `fullnode.yaml` configuration of your full node to disable legacy JSON-RPC index processing:
 
 ```sh
 
 enable-index-processing: false
 
 ```
+
+#### Retention window {#gRPC-retention}
 
 You can configure the retention window for the gRPC index on your full node by adding the following to its `fullnode.yaml` configuration:
 
@@ -114,7 +234,83 @@ authority-store-pruning-config:
 
 ```
 
-Adjust the gRPC data retention period based on your full node’s resource profile and whether you've disabled JSON-RPC or not. In any case, test the longer retention period for performance and scalability before using gRPC in your application or offering it to other developers.
+Adjust the gRPC data retention period based on your full node's resource profile and whether you've disabled JSON-RPC or not. In any case, test the longer retention period for performance and scalability before using gRPC in your application or offering it to other developers.
+
+### Network ports {#network-ports}
+
+A Sui full node uses the following ports by default:
+
+| Port | Protocol | Service | Expose publicly? |
+|------|----------|---------|------------------|
+| `9000` | TCP | gRPC and JSON-RPC API | Yes (through TLS proxy on port 443) |
+| `8084` | UDP | P2P (state sync and peer discovery) | Yes (required for peering) |
+| `9184` | TCP | Prometheus metrics | No (binds to `0.0.0.0` by default; restrict in production) |
+| `1337` | TCP | Admin interface | No (binds to `localhost` by default) |
+| `8080` | TCP | Internal validator network | No (validators only) |
+
+:::caution
+
+The default `fullnode.yaml` template binds the metrics port to `0.0.0.0:9184`, which makes it reachable from any network interface. In production, restrict it to localhost:
+
+```yaml
+metrics-address: "127.0.0.1:9184"
+```
+
+:::
+
+### Firewall configuration {#firewall}
+
+Allow only the ports your node needs and block everything else:
+
+- **Inbound:** Allow `8084/UDP` (P2P) from the internet. If serving API traffic, allow `443/TCP` (TLS proxy) or `9000/TCP` (direct, not recommended for production).
+- **Outbound:** Allow all outbound traffic so the node can reach peers and archive endpoints.
+- **Block:** `9184` (metrics) and `1337` (admin) should never be reachable from untrusted networks. Bind metrics to `127.0.0.1` as shown above, and use a firewall rule to block external access to both ports.
+
+### TLS termination {#tls}
+
+Do not expose plain HTTP (port 9000) to the public internet. Use a reverse proxy (nginx, Envoy, or a cloud load balancer) to terminate TLS on port 443 and forward traffic to the node on a private interface. The proxy must support HTTP/2 for gRPC clients.
+
+The node also supports native TLS through the `rpc.https-address` and `rpc.tls` configuration options, but proxy-based termination is easier to manage operationally (certificate rotation, rate limiting, access logs).
+
+### Readiness check {#readiness}
+
+After starting a full node, verify it is healthy before serving traffic:
+
+1. **Check sync progress.** Compare your node's latest checkpoint against a trusted endpoint. A growing gap indicates the node is still catching up.
+
+    ```sh
+    # Your node's sync position
+    $ curl -s http://localhost:9184/metrics | grep highest_synced_checkpoint
+
+    # Compare against a public endpoint
+    $ grpcurl fullnode.mainnet.sui.io:443 sui.rpc.v2.LedgerService/GetCheckpoint \
+        | grep sequenceNumber
+    ```
+
+2. **Verify chain identity.** Check that the node reports the correct `chain_identifier` in its `uptime` metric:
+
+    ```sh
+    $ curl -s http://localhost:9184/metrics | grep uptime
+    ```
+
+3. **Confirm checkpoint execution.** Verify that `last_executed_checkpoint` advances over time.
+
+A node that syncs checkpoints, executes them, and reports the correct chain identifier is ready to serve read traffic. You do not need to execute a test transaction unless the node is expected to submit transactions for clients.
+
+:::tip
+
+When you expose a full node endpoint publicly, harden it before you serve traffic:
+
+- **Enable TLS.** Terminate TLS at a proxy or configure `rpc.https-address` and `rpc.tls`.
+- **Restrict with a firewall.** Follow the [firewall guidance](#firewall) above.
+- **Apply rate limits.** Put a rate limit in front of the public endpoint to protect against abuse and resource-exhaustion attacks.
+- **Keep admin interfaces private.** Bind the admin API (port 1337 by default) to `127.0.0.1` and never expose it to untrusted networks.
+- **Enable monitoring.** Configure [metrics monitoring](/operators/full-node/monitoring) so you can detect lag, abuse, or failures quickly.
+- **Consider archival fallback.** Use the [Archival Fallback](/operators/data-management/archives) to serve historical data the network `seed-peers` no longer retain.
+
+For the full set of operator controls, see [general network security](/develop/security/best-practices#general-network-security).
+
+:::
 
 ## Running a full node {#running-a-full-node}
 
@@ -138,6 +334,70 @@ The Sui repository includes a guide on running a full node through [Docker Compo
 This alone is not suitable for a production environment, but you can use it to get a full node up and running quickly on a virtual machine or local machine for development purposes.
 See [Running a full node](#running-a-full-node) for instructions relevant to production use cases.
 
+Run the commands in this section from the same folder. Replace `branch-name` in URLs with the branch that matches your target network, such as `mainnet`, `testnet`, or `devnet`.
+
+1. Install [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/). Docker Desktop includes Docker Compose.
+
+1. On Linux, install the build prerequisites:
+
+    ```sh
+    $ apt update \
+    && apt install -y --no-install-recommends \
+    tzdata \
+    ca-certificates \
+    build-essential \
+    pkg-config \
+    cmake
+    ```
+
+1. Download the `docker-compose.yaml` file:
+
+    ```sh
+    $ curl -fLO https://raw.githubusercontent.com/MystenLabs/sui/branch-name/docker/fullnode/docker-compose.yaml
+    ```
+
+    The compose file pins a specific `mysten/sui-node` image tag. Update that tag to the version and network you target before you start the node.
+
+1. Download the `fullnode-template.yaml` file:
+
+    ```sh
+    $ curl -fLO https://github.com/MystenLabs/sui/raw/branch-name/crates/sui-config/data/fullnode-template.yaml
+    ```
+
+1. Download the `genesis.blob` file for your target network. Replace `<network>` with `mainnet`, `testnet`, or `devnet`:
+
+    ```sh
+    $ curl -fLO https://github.com/MystenLabs/sui-genesis/raw/main/<network>/genesis.blob
+    ```
+
+1. Start the full node in detached mode:
+
+    ```sh
+    $ docker compose up -d
+    ```
+
+    Use `docker compose` (Compose v2). On hosts that still run the standalone Compose v1 binary, the command is `docker-compose up -d`.
+
+### Building from source
+
+You can also build `sui-node` directly from the Sui repository using [Cargo](https://doc.rust-lang.org/cargo/), the Rust package manager.
+
+1. Install the prerequisites listed in [Software requirements](#software-requirements).
+
+1. Clone the Sui repository, replacing `branch-name` with the branch for your target network:
+
+    ```sh
+    $ git clone https://github.com/MystenLabs/sui.git -b branch-name
+    $ cd sui
+    ```
+
+1. Follow [Setting up a full node](#setting-up-a-full-node) to prepare `fullnode.yaml` and download the genesis blob.
+
+1. Build and run `sui-node` from source:
+
+    ```sh
+    $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
+    ```
 
 ### Setting up a full node
 
@@ -147,18 +407,19 @@ When you are ready to run `sui-node` in your production environment, you can set
     ```sh
     $ cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
     ```
+    The template may include a legacy `enable-event-processing` field. This field is no longer active and has no effect on node behavior. You can safely remove it from your configuration.
 1. Download the genesis blob for the network to use:
     - [Devnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob):
         ```sh
-        $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
+        $ curl -fLO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
         ```
     - [Testnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob):
         ```sh
-        $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob
+        $ curl -fLO https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob
         ```
     - [Mainnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/mainnet/genesis.blob):
         ```sh
-        $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/mainnet/genesis.blob
+        $ curl -fLO https://github.com/MystenLabs/sui-genesis/raw/main/mainnet/genesis.blob
         ```
 1. For Testnet or Mainnet: Edit the `fullnode.yaml` file to include peer nodes for state synchronization. Append the following to the end of the current configuration:
 
@@ -254,3 +515,109 @@ Then update the metrics address in your `fullnode.yaml` file to use port `9180`.
 ```sh
 metrics-address: "0.0.0.0:9180"
 ```
+
+## Full node logging
+
+By default, `sui-node` writes its logs to standard error. When you run the node under systemd and do not override the output settings, `journalctl` captures these logs.
+
+The `RUST_LOG` environment variable controls the log filter. The default level is `info`. You can raise or lower the level for individual components, for example `sui_core=debug`. For more on filter syntax, see [Logging levels](/operators/observability#logging-levels) in the observability guide.
+
+### Recommended systemd unit
+
+The following unit file runs `sui-node` and sends its output to the systemd journal. Adjust the binary path, configuration path, user, and `RUST_LOG` filter for your environment.
+
+```ini title='/etc/systemd/system/sui-node.service'
+[Unit]
+Description=Sui Full Node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=sui
+ExecStart=/usr/local/bin/sui-node --config-path /opt/sui/fullnode.yaml
+Environment=RUST_LOG=info,sui_core=debug,consensus=debug,jsonrpsee=error
+StandardOutput=journal
+StandardError=journal
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+After you create or change the unit file, reload systemd and start the service:
+
+```sh
+$ sudo systemctl daemon-reload
+$ sudo systemctl enable --now sui-node
+```
+
+Follow the live log output with `journalctl`:
+
+```sh
+$ journalctl -u sui-node -f
+```
+
+### Optional file logging
+
+To write logs to a file instead of standard error, set the `RUST_LOG_FILE` environment variable to the target path:
+
+```ini
+Environment=RUST_LOG_FILE=/var/log/sui/sui-node.log
+```
+
+The `sui` user that runs the node must own the log directory and have write permission:
+
+```sh
+$ sudo mkdir -p /var/log/sui
+$ sudo chown sui:sui /var/log/sui
+```
+
+`sui-node` rotates the log file daily and appends a date suffix to the file name. Daily rotation is built in, but the node does not delete, compress, or cap the number of old files. Handle retention and compression with `journald`, `logrotate`, or your operations tooling.
+
+### Optional structured logs
+
+To emit logs as newline-delimited JSON instead of plain text, set `RUST_LOG_JSON`:
+
+```ini
+Environment=RUST_LOG_JSON=1
+```
+
+Structured logs are useful when you forward output to a log aggregation system that parses JSON.
+
+### View and update the log filter at runtime
+
+`sui-node` exposes a private admin API that reports and updates the active log filter without a restart. The admin server binds to `127.0.0.1` on port 1337 by default. You can change the port with the `admin-interface-port` field in the node configuration file.
+
+To view the current filter, send a GET request:
+
+```sh
+$ curl http://127.0.0.1:1337/logging
+```
+
+To update the filter, send a POST request with the new filter string as the request body:
+
+```sh
+$ curl -X POST http://127.0.0.1:1337/logging --data 'info,sui_core=debug'
+```
+
+A runtime update applies until the process restarts. To make a change permanent, also update `RUST_LOG` in the unit file.
+
+:::caution
+
+The admin API has no authentication. Keep it bound to `127.0.0.1` and do not expose port 1337 to untrusted networks.
+
+:::
+
+### Troubleshooting empty logs
+
+If `journalctl` or your log file shows no output, check the following:
+
+- Confirm the systemd unit name. The service might not be named `sui-node`. List the service units with `systemctl list-units --type=service | grep -i sui`.
+
+- Check the service state with `systemctl status <unit>`. Look for a failed start, a crash loop, or a missing binary.
+
+- Verify the `StandardOutput` and `StandardError` settings in the unit file. If they are not set to `journal`, `journalctl` does not capture the output.
+
+- If you expect file logging, confirm the process environment includes `RUST_LOG_FILE`. Run `systemctl show <unit> --property=Environment` to see the effective environment.
+
+- Confirm the log directory exists and the node user can write to it. A missing or unwritable directory prevents file logging.

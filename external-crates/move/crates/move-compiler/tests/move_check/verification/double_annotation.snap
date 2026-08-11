@@ -5,25 +5,25 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/verification/double_annotation.move:3:7
   │
 3 │     #[verify_only]
   │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/verification/double_annotation.move:8:7
   │
 8 │     #[verify_only]
   │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/verification/double_annotation.move:13:7
    │
 13 │     #[verify_only]
    │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/verification/double_annotation.move:18:7
    │
 18 │     #[verify_only]

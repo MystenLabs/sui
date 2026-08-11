@@ -82,9 +82,8 @@ impl ConsensusCommitAPI for consensus_core::CommittedSubDag {
     }
 
     fn rejected_transactions_digest(&self) -> Digest {
-        let bytes = bcs::to_bytes(&self.rejected_transactions_by_block).unwrap();
         let mut hasher = sui_types::crypto::DefaultHash::new();
-        hasher.update(bytes);
+        bcs::serialize_into(&mut hasher, &self.rejected_transactions_by_block).unwrap();
         hasher.finalize().digest.into()
     }
 

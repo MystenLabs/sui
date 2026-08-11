@@ -1,7 +1,34 @@
 ---
 title: Consensus
 description: Overview of the Sui consensus mechanism.
-keywords: [ consensus, mysticeti, delegated proof of stake, proof of stake, dpos ]
+keywords:
+  - consensus
+  - mysticeti
+  - delegated proof of stake
+  - proof of stake
+  - dpos
+goal:
+  description: Reader understands overview of the Sui consensus mechanism
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Consensus in Sui?
+  - How does consensus work on Sui?
+  - Why should I use consensus?
+answer: Overview of the Sui consensus mechanism.
 ---
 
 Consensus is the process by which the majority of nodes on a blockchain network agree on the current state of the network, including which transactions to finalize and commit to the chain's permanent history. This process prevents malicious or faulty nodes from altering the network incorrectly.
@@ -52,9 +79,9 @@ If the total execution cost of transactions in a consensus commit exceeds a thre
 
 ### Transaction throughput
 
-In a controlled environment using 10 nodes, Mysticeti handles 300,000 transactions per second (TPS) before latency crosses the 1-second marker. With 50 nodes, test results show 400,000 TPS before latency exceeds 1 second. In the same tests, other top performing consensus mechanisms do not reach 150,000 TPS and their observed latency starts at about 2 seconds.
+The following figures are benchmark results from controlled testing described in the [MYSTICETI: Reaching the Latency Limits with Uncertified DAGs](/paper/mysticeti.pdf) whitepaper and do not represent production metrics. In a controlled environment using 10 nodes, Mysticeti handles 300,000 transactions per second (TPS) before latency crosses the 1-second marker. With 50 nodes, test results show 400,000 TPS before latency exceeds 1 second. In the same tests, other top performing consensus mechanisms do not reach 150,000 TPS and their observed latency starts at about 2 seconds.
 
-On average, testing shows Mysticeti reaches consensus commitment in about **0.5 seconds** with a sustained throughput of **200,000 TPS**.
+On average, benchmark testing shows Mysticeti reaches consensus commitment in about **0.5 seconds** with a sustained throughput of **200,000 TPS**.
 
 ![Throughput and latency graph](./images/thruput_latency.png)
 

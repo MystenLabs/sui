@@ -11,9 +11,12 @@ use async_graphql::Object;
 use async_graphql::connection::Connection;
 use async_graphql::connection::Edge;
 use futures::future::try_join_all;
+use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::effects::TransactionEffectsAPI;
 
+use crate::api::scalars::digest::Digest;
 use crate::api::scalars::domain::Domain;
 use crate::api::scalars::id::Id;
 use crate::api::scalars::owner_kind::OwnerKind;
@@ -32,12 +35,17 @@ use crate::api::types::name_record::NameRecord;
 use crate::api::types::object;
 use crate::api::types::object::Object;
 use crate::api::types::object::ObjectKey;
+use crate::api::types::object_change::ObjectChange;
 use crate::api::types::object_filter::ObjectFilter;
 use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
+use crate::api::types::transaction_effects::EffectsContents;
+use crate::api::types::transaction_object::TransactionObject;
+use crate::api::types::unchanged_consensus_object::UnchangedConsensusObject;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
 use crate::error::convert;
@@ -69,6 +77,12 @@ pub(crate) enum AddressTransactionRelationship {
         arg(name = "checkpoint", ty = "Option<UInt53>"),
         ty = "Option<Result<Address, RpcError<Error>>>",
         desc = "Fetch the address as it was at a different root version, or checkpoint.\n\nIf no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.",
+    ),
+    field(
+        name = "as_transaction_object",
+        arg(name = "transaction_digest", ty = "Option<Digest>"),
+        ty = "Option<Result<TransactionObject, RpcError>>",
+        desc = "How this addressable entity was referenced by a specific transaction.\n\nReturns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).\n\nThe `transactionDigest` argument may be omitted when the query is scoped under a transaction context (e.g. a parent `Transaction`, `TransactionEffects`, or `Event`); the field then resolves against the in-scope transaction.\n\nPassing an explicit `transactionDigest` other than the in-scope transaction in subscription context is not supported; for arbitrary transaction lookups, use the indexed Query API.",
     ),
     field(
         name = "balance",
@@ -208,6 +222,65 @@ impl Address {
             };
 
             Object::by_key(ctx, self.scope.clone(), key).await
+        }
+        .await
+        .transpose()
+    }
+
+    /// How this address (interpreted as an object ID) was referenced by a specific transaction.
+    ///
+    /// Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
+    ///
+    /// The `transactionDigest` argument may be omitted when the query is scoped under a transaction context (e.g. a parent `Transaction`, `TransactionEffects`, or `Event`); the field then resolves against the in-scope transaction.
+    ///
+    /// Passing an explicit `transactionDigest` other than the in-scope transaction in subscription context is not supported; for arbitrary transaction lookups, use the indexed Query API.
+    pub(crate) async fn as_transaction_object(
+        &self,
+        ctx: &Context<'_>,
+        transaction_digest: Option<Digest>,
+    ) -> Option<Result<TransactionObject, RpcError>> {
+        async {
+            let Some(digest) = transaction_digest
+                .map(Into::into)
+                .or_else(|| self.scope.active_transaction_digest())
+            else {
+                return Ok(None);
+            };
+
+            let contents = EffectsContents::empty(self.scope.clone())
+                .fetch(ctx, digest)
+                .await?;
+
+            let Some(content) = contents.contents.as_ref() else {
+                return Ok(None);
+            };
+
+            let effects = content.effects()?;
+            let address: ObjectID = self.address.into();
+
+            for change in effects.object_changes() {
+                if change.id == address {
+                    return Ok(Some(TransactionObject::Changed(ObjectChange {
+                        scope: self.scope.clone(),
+                        native: change,
+                    })));
+                }
+            }
+
+            let epoch = effects.executed_epoch();
+            for unchanged in effects.unchanged_consensus_objects() {
+                if unchanged.0 == address {
+                    let cons_obj =
+                        UnchangedConsensusObject::from_native(self.scope.clone(), unchanged, epoch);
+                    if let UnchangedConsensusObject::Read(read) = cons_obj {
+                        return Ok(Some(TransactionObject::ConsensusRead(read)));
+                    }
+                    // Address matched as a non-object marker variant; treat as not referenced.
+                    return Ok(None);
+                }
+            }
+
+            Ok(None)
         }
         .await
         .transpose()
@@ -425,7 +498,7 @@ impl Address {
         before: Option<CTransaction>,
         relation: Option<AddressTransactionRelationship>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+    ) -> Option<Result<TransactionConnection, RpcError>> {
         Some(
             async {
                 let pagination: &PaginationConfig = ctx.data()?;
@@ -449,7 +522,7 @@ impl Address {
 
                 // Intersect with user-provided filter
                 let Some(filter) = filter.unwrap_or_default().intersect(address_filter) else {
-                    return Ok(Connection::new(false, false));
+                    return Ok(Connection::new(false, false).into());
                 };
 
                 Transaction::paginate(ctx, self.scope.clone(), page, filter).await

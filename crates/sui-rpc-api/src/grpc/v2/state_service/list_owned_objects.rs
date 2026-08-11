@@ -21,7 +21,7 @@ use sui_types::storage::OwnedObjectInfo;
 const MAX_PAGE_SIZE: usize = 1000;
 const DEFAULT_PAGE_SIZE: usize = 50;
 const MAX_PAGE_SIZE_BYTES: usize = 512 * 1024; // 512KiB
-const READ_MASK_DEFAULT: &str = "object_id,version,object_type";
+const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::OWNED_OBJECT;
 
 #[tracing::instrument(skip(service))]
 pub fn list_owned_objects(
@@ -63,7 +63,9 @@ pub fn list_owned_objects(
         .map(|token| decode_page_token(&token))
         .transpose()?;
     if let Some(token) = &page_token
-        && (token.owner != owner || token.object_type != object_type)
+        && (token.owner != owner
+            || token.object_type != object_type
+            || !cursor_within_type_filter(token, object_type.as_ref()))
     {
         return Err(FieldViolation::new("page_token")
             .with_description("invalid page_token")
@@ -177,6 +179,32 @@ struct PageToken {
     owner: Address,
     object_type: Option<move_core_types::language_storage::StructTag>,
     inner: OwnedObjectInfo,
+}
+
+/// Whether the token's inner cursor position lies within the query's
+/// type filter, mirroring the store's `TypeFilter::Type` matching
+/// contract: a filter with empty type parameters matches every
+/// instantiation of the named type, while one with parameters pins the
+/// exact instantiation. The token's recorded *query* is validated
+/// separately; this checks the resume *position* itself, so a crafted
+/// token cannot seek the scan outside the filtered prefix (the store
+/// also rejects such a cursor, but as an internal error rather than an
+/// invalid argument).
+fn cursor_within_type_filter(
+    token: &PageToken,
+    filter: Option<&move_core_types::language_storage::StructTag>,
+) -> bool {
+    let Some(filter) = filter else {
+        return true;
+    };
+    let cursor_type = &token.inner.object_type;
+    if filter.type_params.is_empty() {
+        cursor_type.address == filter.address
+            && cursor_type.module == filter.module
+            && cursor_type.name == filter.name
+    } else {
+        cursor_type == filter
+    }
 }
 
 fn should_load_object(mask: &FieldMaskTree) -> bool {

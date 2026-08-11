@@ -1,9 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_sdk_types::{EpochId, ValidatorCommittee};
+use sui_types::base_types::TransactionDigest;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::storage::ObjectKey;
 use sui_types::storage::RpcStateReader;
 use sui_types::storage::error::{Error as StorageError, Result};
@@ -81,8 +85,6 @@ impl StateReader {
         sui_types::effects::TransactionEffects,
         Option<sui_types::effects::TransactionEvents>,
     )> {
-        use sui_types::effects::TransactionEffectsAPI;
-
         let transaction_digest = digest.into();
 
         let transaction = (*self
@@ -111,6 +113,82 @@ impl StateReader {
         Ok((transaction, signatures, effects, events))
     }
 
+    /// Fetch transaction reads using checkpoints supplied by the ledger index rows.
+    pub fn multi_get_transaction_reads(
+        &self,
+        items: &[(sui_sdk_types::Digest, u64)],
+    ) -> crate::Result<Vec<TransactionRead>> {
+        let transaction_digests = items
+            .iter()
+            .map(|(digest, _)| (*digest).into())
+            .collect::<Vec<TransactionDigest>>();
+        let transactions = self.inner().multi_get_transactions(&transaction_digests);
+        let effects = self
+            .inner()
+            .multi_get_transaction_effects(&transaction_digests);
+        let events = self.inner().multi_get_events(&transaction_digests);
+        let unchanged_loaded_runtime_objects = self
+            .inner()
+            .multi_get_unchanged_loaded_runtime_objects(&transaction_digests);
+        let timestamps = dedup_checkpoint_timestamps(
+            items.iter().map(|(_, checkpoint)| *checkpoint),
+            |unique| {
+                self.inner()
+                    .multi_get_checkpoint_by_sequence_number(unique)
+                    .into_iter()
+                    .map(|checkpoint| checkpoint.map(|checkpoint| checkpoint.timestamp_ms))
+                    .collect()
+            },
+        );
+
+        let mut reads = Vec::with_capacity(items.len());
+        for (
+            ((((digest, checkpoint), _transaction_digest), transaction), (effects, events)),
+            unchanged_loaded_runtime_objects,
+        ) in items
+            .iter()
+            .copied()
+            .zip_debug_eq(transaction_digests)
+            .zip_debug_eq(transactions)
+            .zip_debug_eq(effects.into_iter().zip_debug_eq(events))
+            .zip_debug_eq(unchanged_loaded_runtime_objects)
+        {
+            let transaction = (*transaction.ok_or(TransactionNotFoundError(digest))?)
+                .clone()
+                .into_inner();
+            let effects = effects.ok_or(TransactionNotFoundError(digest))?;
+            let events = if effects.events_digest().is_some() {
+                events.ok_or(TransactionNotFoundError(digest))?.pipe(Some)
+            } else {
+                None
+            };
+
+            let transaction = transaction.into_data().into_inner();
+            let signatures = transaction.tx_signatures;
+            let transaction = transaction.intent_message.value;
+            let timestamp_ms = timestamps[&checkpoint];
+
+            reads.push(TransactionRead {
+                digest,
+                transaction,
+                signatures,
+                effects,
+                events,
+                timestamp_ms,
+                unchanged_loaded_runtime_objects,
+            });
+        }
+
+        Ok(reads)
+    }
+
+    pub fn multi_get_events(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<sui_types::effects::TransactionEvents>> {
+        self.inner().multi_get_events(digests)
+    }
+
     #[tracing::instrument(skip(self))]
     pub fn get_transaction_read(
         &self,
@@ -119,14 +197,8 @@ impl StateReader {
         let (transaction, signatures, effects, events) = self.get_transaction(digest)?;
 
         let checkpoint = self.inner().get_transaction_checkpoint(&(digest.into()));
-
-        let timestamp_ms = if let Some(checkpoint) = checkpoint {
-            self.inner()
-                .get_checkpoint_by_sequence_number(checkpoint)
-                .map(|checkpoint| checkpoint.timestamp_ms)
-        } else {
-            None
-        };
+        let timestamp_ms =
+            checkpoint.and_then(|checkpoint| self.checkpoint_timestamp_ms(checkpoint));
 
         let unchanged_loaded_runtime_objects = self
             .inner()
@@ -138,10 +210,16 @@ impl StateReader {
             signatures,
             effects,
             events,
-            checkpoint,
             timestamp_ms,
             unchanged_loaded_runtime_objects,
         })
+    }
+
+    /// Timestamp of the checkpoint summary, if it is still in the store.
+    fn checkpoint_timestamp_ms(&self, checkpoint: u64) -> Option<u64> {
+        self.inner()
+            .get_checkpoint_by_sequence_number(checkpoint)
+            .map(|checkpoint| checkpoint.timestamp_ms)
     }
 
     pub fn lookup_address_balance(
@@ -181,6 +259,26 @@ impl StateReader {
     }
 }
 
+fn dedup_checkpoint_timestamps(
+    checkpoints: impl IntoIterator<Item = u64>,
+    fetch: impl FnOnce(&[u64]) -> Vec<Option<u64>>,
+) -> HashMap<u64, Option<u64>> {
+    let unique_checkpoints = checkpoints
+        .into_iter()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    if unique_checkpoints.is_empty() {
+        return HashMap::new();
+    }
+
+    let timestamps = fetch(&unique_checkpoints);
+    unique_checkpoints
+        .into_iter()
+        .zip_debug_eq(timestamps)
+        .collect()
+}
+
 #[derive(Debug)]
 pub struct TransactionRead {
     pub digest: sui_sdk_types::Digest,
@@ -188,8 +286,6 @@ pub struct TransactionRead {
     pub signatures: Vec<sui_types::signature::GenericSignature>,
     pub effects: sui_types::effects::TransactionEffects,
     pub events: Option<sui_types::effects::TransactionEvents>,
-    #[allow(unused)]
-    pub checkpoint: Option<u64>,
     pub timestamp_ms: Option<u64>,
     pub unchanged_loaded_runtime_objects: Option<Vec<ObjectKey>>,
 }
@@ -242,5 +338,50 @@ impl sui_display::v2::Store for DisplayStore<'_> {
         };
 
         Ok(Some((layout, move_object.contents().to_vec())))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    use super::*;
+
+    #[test]
+    fn dedup_checkpoint_timestamps_fetches_sorted_unique_checkpoints_once() {
+        let fetch_calls = Cell::new(0);
+        let timestamps = dedup_checkpoint_timestamps([5, 5, 3, 5, 3], |checkpoints| {
+            fetch_calls.set(fetch_calls.get() + 1);
+            assert_eq!(checkpoints, &[3, 5]);
+            vec![Some(300), Some(500)]
+        });
+
+        assert_eq!(fetch_calls.get(), 1);
+        assert_eq!(timestamps.len(), 2);
+        assert_eq!(timestamps[&3], Some(300));
+        assert_eq!(timestamps[&5], Some(500));
+    }
+
+    #[test]
+    fn dedup_checkpoint_timestamps_skips_fetch_for_empty_input() {
+        let fetch_calls = Cell::new(0);
+        let timestamps = dedup_checkpoint_timestamps([], |_| {
+            fetch_calls.set(fetch_calls.get() + 1);
+            Vec::new()
+        });
+
+        assert_eq!(fetch_calls.get(), 0);
+        assert!(timestamps.is_empty());
+    }
+
+    #[test]
+    fn dedup_checkpoint_timestamps_preserves_missing_summary() {
+        let timestamps = dedup_checkpoint_timestamps([2, 1], |checkpoints| {
+            assert_eq!(checkpoints, &[1, 2]);
+            vec![None, Some(200)]
+        });
+
+        assert_eq!(timestamps[&1], None);
+        assert_eq!(timestamps[&2], Some(200));
     }
 }

@@ -20,7 +20,7 @@ use sui_types::{
     balance::RESOLVED_BALANCE_STRUCT,
     base_types::{ObjectRef, TxContextKind},
     coin::{COIN_MODULE_NAME, REDEEM_FUNDS_FUNC_NAME, RESOLVED_COIN_STRUCT},
-    error::{ExecutionError, SafeIndex, command_argument_error},
+    error::{ExecutionError, ExecutionErrorTrait, SafeIndex, command_argument_error},
     execution_status::{CommandArgumentError, ExecutionErrorKind},
     funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT,
 };
@@ -195,11 +195,11 @@ impl Context {
         self.commands.get(i as usize).map(|c| &c.value.result_type)
     }
 
-    fn fixed_location_type(
+    fn fixed_location_type<Mode: ExecutionMode>(
         &mut self,
-        env: &Env,
+        env: &Env<Mode>,
         location: T::Location,
-    ) -> Result<Option<Type>, ExecutionError> {
+    ) -> Result<Option<Type>, Mode::Error> {
         Ok(Some(match location {
             T::Location::TxContext => env.tx_context_type()?,
             T::Location::GasCoin => env.gas_coin_type()?,
@@ -226,11 +226,11 @@ impl Context {
     }
 
     // Get the fixed type of a location. Returns `None` for Pure and Receiving inputs,
-    fn fixed_type(
+    fn fixed_type<Mode: ExecutionMode>(
         &mut self,
-        env: &Env,
+        env: &Env<Mode>,
         splat_location: SplatLocation,
-    ) -> Result<Option<(T::Location, Type)>, ExecutionError> {
+    ) -> Result<Option<(T::Location, Type)>, Mode::Error> {
         let location = match splat_location {
             SplatLocation::GasCoin => T::Location::GasCoin,
             SplatLocation::Result(i, j) => T::Location::Result(i, j),
@@ -256,13 +256,13 @@ impl Context {
         Ok(Some((location, ty)))
     }
 
-    fn resolve_location(
+    fn resolve_location<Mode: ExecutionMode>(
         &mut self,
-        env: &Env,
+        env: &Env<Mode>,
         splat_location: SplatLocation,
         expected_ty: &Type,
         bytes_constraint: BytesConstraint,
-    ) -> Result<(T::Location, Type), ExecutionError> {
+    ) -> Result<(T::Location, Type), Mode::Error> {
         let location = match splat_location {
             SplatLocation::GasCoin => T::Location::GasCoin,
             SplatLocation::Result(i, j) => T::Location::Result(i, j),
@@ -334,9 +334,9 @@ impl Context {
 }
 
 pub fn transaction<Mode: ExecutionMode>(
-    env: &Env,
+    env: &Env<Mode>,
     lt: L::Transaction,
-) -> Result<T::Transaction, ExecutionError> {
+) -> Result<T::Transaction, Mode::Error> {
     let L::Transaction {
         gas_payment,
         mut inputs,
@@ -363,7 +363,7 @@ pub fn transaction<Mode: ExecutionMode>(
             // computed later
             drop_values: vec![],
             // computed later
-            consumed_shared_objects: vec![],
+            incurs_post_execution_checks: false,
         };
         context.push_result(c)?
     }
@@ -373,15 +373,15 @@ pub fn transaction<Mode: ExecutionMode>(
     // mark unused results to be dropped
     unused_results::transaction(&mut ast)?;
     // track shared object IDs
-    consumed_shared_objects::transaction(&mut ast)?;
+    post_execution_checks::transaction(env.protocol_config, &mut ast)?;
     Ok(ast)
 }
 
 fn command<Mode: ExecutionMode>(
-    env: &Env,
+    env: &Env<Mode>,
     context: &mut Context,
     command: L::Command,
-) -> Result<(T::Command__, T::ResultType), ExecutionError> {
+) -> Result<(T::Command__, T::ResultType), Mode::Error> {
     Ok(match command {
         L::Command::MoveCall(lmc) => {
             let L::MoveCall {
@@ -519,8 +519,8 @@ fn command<Mode: ExecutionMode>(
     })
 }
 
-fn move_call_parameters<'a>(
-    _env: &Env,
+fn move_call_parameters<'a, Mode: ExecutionMode>(
+    _env: &Env<Mode>,
     function: &'a L::LoadedFunction,
 ) -> Vec<(&'a Type, TxContextKind)> {
     function
@@ -531,12 +531,12 @@ fn move_call_parameters<'a>(
         .collect()
 }
 
-fn move_call_arguments(
-    env: &Env,
+fn move_call_arguments<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     function: &L::LoadedFunction,
     args: Vec<SplatLocation>,
-) -> Result<Vec<T::Argument>, ExecutionError> {
+) -> Result<Vec<T::Argument>, Mode::Error> {
     let params = move_call_parameters(env, function);
     assert_invariant!(
         params.len() == function.signature.parameters.len(),
@@ -553,7 +553,7 @@ fn move_call_arguments(
     };
     let num_parameters = params.len();
     if num_args != num_parameters {
-        return Err(ExecutionError::new_with_source(
+        return Err(Mode::Error::new_with_source(
             ExecutionErrorKind::ArityMismatch,
             format!(
                 "Expected {} argument{} calling function '{}::{}', but found {}",
@@ -593,7 +593,7 @@ fn move_call_arguments(
                 }
             })
         })
-        .collect::<Result<Vec<_>, ExecutionError>>()?;
+        .collect::<Result<Vec<_>, Mode::Error>>()?;
 
     assert_invariant!(
         args.next().is_none(),
@@ -602,34 +602,35 @@ fn move_call_arguments(
     Ok(res)
 }
 
-fn one_location(
+fn one_location<E: ExecutionErrorTrait>(
     context: &mut Context,
     command_arg_idx: usize,
     arg: L::Argument,
-) -> Result<SplatLocation, ExecutionError> {
+) -> Result<SplatLocation, E> {
     let locs = locations(context, command_arg_idx, vec![arg])?;
     let Ok([loc]): Result<[SplatLocation; 1], _> = locs.try_into() else {
         return Err(command_argument_error(
             CommandArgumentError::InvalidArgumentArity,
             command_arg_idx,
-        ));
+        )
+        .into());
     };
     Ok(loc)
 }
 
-fn locations<Items: IntoIterator<Item = L::Argument>>(
+fn locations<E: ExecutionErrorTrait, Items: IntoIterator<Item = L::Argument>>(
     context: &mut Context,
     start_idx: usize,
     args: Items,
-) -> Result<Vec<SplatLocation>, ExecutionError>
+) -> Result<Vec<SplatLocation>, E>
 where
     Items::IntoIter: ExactSizeIterator,
 {
-    fn splat_arg(
+    fn splat_arg<E: ExecutionErrorTrait>(
         context: &mut Context,
         res: &mut Vec<SplatLocation>,
         arg: L::Argument,
-    ) -> Result<(), EitherError> {
+    ) -> Result<(), EitherError<E>> {
         match arg {
             L::Argument::GasCoin => res.push(SplatLocation::GasCoin),
             L::Argument::Input(i) => {
@@ -672,9 +673,10 @@ where
     let _args_len = args.len();
     let mut res = vec![];
     for (arg_idx, arg) in args.enumerate() {
-        splat_arg(context, &mut res, arg).map_err(|e| {
+        splat_arg::<E>(context, &mut res, arg).map_err(|e| {
             let Some(idx) = start_idx.checked_add(arg_idx) else {
-                return make_invariant_violation!("usize overflow when calculating argument index");
+                return make_invariant_violation!("usize overflow when calculating argument index")
+                    .into();
             };
             e.into_execution_error(idx)
         })?
@@ -683,13 +685,13 @@ where
     Ok(res)
 }
 
-fn arguments(
-    env: &Env,
+fn arguments<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     start_idx: usize,
     locations: Vec<SplatLocation>,
     expected_tys: impl IntoIterator<Item = Type>,
-) -> Result<Vec<T::Argument>, ExecutionError> {
+) -> Result<Vec<T::Argument>, Mode::Error> {
     #[allow(clippy::disallowed_methods)]
     locations
         .into_iter()
@@ -706,33 +708,34 @@ fn arguments(
         .collect()
 }
 
-fn argument(
-    env: &Env,
+fn argument<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     command_arg_idx: usize,
     location: SplatLocation,
     expected_ty: Type,
-) -> Result<T::Argument, ExecutionError> {
+) -> Result<T::Argument, Mode::Error> {
     let arg__ = argument_(env, context, command_arg_idx, location, &expected_ty)
         .map_err(|e| e.into_execution_error(command_arg_idx))?;
     let arg_ = (arg__, expected_ty);
     Ok(sp(checked_as!(command_arg_idx, u16)?, arg_))
 }
 
-fn argument_(
-    env: &Env,
+fn argument_<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     command_arg_idx: usize,
     location: SplatLocation,
     expected_ty: &Type,
-) -> Result<T::Argument__, EitherError> {
+) -> Result<T::Argument__, EitherError<Mode::Error>> {
     let current_command = context.current_command;
     let bytes_constraint = BytesConstraint {
         command: current_command,
         argument: checked_as!(command_arg_idx, u16)?,
     };
-    let (location, actual_ty) =
-        context.resolve_location(env, location, expected_ty, bytes_constraint)?;
+    let (location, actual_ty) = context
+        .resolve_location(env, location, expected_ty, bytes_constraint)
+        .map_err(EitherError::Execution)?;
     Ok(match (actual_ty, expected_ty) {
         // Reference location types
         (Type::Reference(a_is_mut, a), Type::Reference(b_is_mut, b)) => {
@@ -786,14 +789,14 @@ fn check_type(actual_ty: &Type, expected_ty: &Type) -> Result<(), CommandArgumen
     }
 }
 
-fn constrained_arguments(
-    env: &Env,
+fn constrained_arguments<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     start_idx: usize,
     locations: Vec<SplatLocation>,
     constraint: AbilitySet,
     err_case: CommandArgumentError,
-) -> Result<Vec<T::Argument>, ExecutionError> {
+) -> Result<Vec<T::Argument>, Mode::Error> {
     locations
         .into_iter()
         .enumerate()
@@ -806,14 +809,14 @@ fn constrained_arguments(
         .collect()
 }
 
-fn constrained_argument(
-    env: &Env,
+fn constrained_argument<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     command_arg_idx: usize,
     location: SplatLocation,
     constraint: AbilitySet,
     err_case: CommandArgumentError,
-) -> Result<T::Argument, ExecutionError> {
+) -> Result<T::Argument, Mode::Error> {
     let arg_ = constrained_argument_(
         env,
         context,
@@ -826,16 +829,17 @@ fn constrained_argument(
     Ok(sp(checked_as!(command_arg_idx, u16)?, arg_))
 }
 
-fn constrained_argument_(
-    env: &Env,
+fn constrained_argument_<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     command_arg_idx: usize,
     location: SplatLocation,
     constraint: AbilitySet,
     err_case: CommandArgumentError,
-) -> Result<T::Argument_, EitherError> {
+) -> Result<T::Argument_, EitherError<Mode::Error>> {
     if let Some((location, ty)) =
-        constrained_type(env, context, command_arg_idx, location, constraint)?
+        constrained_type(env, context, command_arg_idx, location, constraint)
+            .map_err(EitherError::Execution)?
     {
         if ty.abilities().has_copy() {
             Ok((T::Argument__::new_copy(location), ty))
@@ -847,13 +851,13 @@ fn constrained_argument_(
     }
 }
 
-fn constrained_type<'a>(
-    env: &'a Env,
+fn constrained_type<'a, Mode: ExecutionMode>(
+    env: &'a Env<Mode>,
     context: &'a mut Context,
     _command_arg_idx: usize,
     location: SplatLocation,
     constraint: AbilitySet,
-) -> Result<Option<(T::Location, Type)>, ExecutionError> {
+) -> Result<Option<(T::Location, Type)>, Mode::Error> {
     let Some((location, ty)) = context.fixed_type(env, location)? else {
         return Ok(None);
     };
@@ -864,24 +868,27 @@ fn constrained_type<'a>(
     })
 }
 
-fn coin_mut_ref_argument(
-    env: &Env,
+fn coin_mut_ref_argument<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     command_arg_idx: usize,
     location: SplatLocation,
-) -> Result<T::Argument, ExecutionError> {
+) -> Result<T::Argument, Mode::Error> {
     let arg_ = coin_mut_ref_argument_(env, context, command_arg_idx, location)
         .map_err(|e| e.into_execution_error(command_arg_idx))?;
     Ok(sp(checked_as!(command_arg_idx, u16)?, arg_))
 }
 
-fn coin_mut_ref_argument_(
-    env: &Env,
+fn coin_mut_ref_argument_<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     _command_arg_idx: usize,
     location: SplatLocation,
-) -> Result<T::Argument_, EitherError> {
-    let Some((location, actual_ty)) = context.fixed_type(env, location)? else {
+) -> Result<T::Argument_, EitherError<Mode::Error>> {
+    let Some((location, actual_ty)) = context
+        .fixed_type(env, location)
+        .map_err(EitherError::Execution)?
+    else {
         // TODO we do not currently bytes in any mode as that would require additional type
         // inference not currently supported
         return Err(CommandArgumentError::TypeMismatch.into());
@@ -904,7 +911,7 @@ fn coin_mut_ref_argument_(
     })
 }
 
-fn check_coin_type(ty: &Type) -> Result<(), EitherError> {
+fn check_coin_type<E: ExecutionErrorTrait>(ty: &Type) -> Result<(), EitherError<E>> {
     if coin_inner_type(ty).is_some() {
         Ok(())
     } else {
@@ -918,10 +925,10 @@ fn check_coin_type(ty: &Type) -> Result<(), EitherError> {
 
 /// Determines which withdrawal inputs need to be converted for compatibility, and appends the
 /// owner address of each such withdrawal as a new pure input.
-fn determine_withdrawal_compatibility_inputs(
-    _env: &Env,
+fn determine_withdrawal_compatibility_inputs<Mode: ExecutionMode>(
+    _env: &Env<Mode>,
     inputs: &mut L::Inputs,
-) -> Result<IndexMap</* input withdrawal */ u16, /* owner address input */ u16>, ExecutionError> {
+) -> Result<IndexMap</* input withdrawal */ u16, /* owner address input */ u16>, Mode::Error> {
     let withdrawal_compatibility_owners: IndexMap<u16, AccountAddress> = inputs
         .iter()
         .enumerate()
@@ -935,7 +942,7 @@ fn determine_withdrawal_compatibility_inputs(
             }
         })
         .map(|(i, owner)| Ok((checked_as!(i, u16)?, owner)))
-        .collect::<Result<_, ExecutionError>>()?;
+        .collect::<Result<_, Mode::Error>>()?;
     withdrawal_compatibility_owners
         .into_iter()
         .map(|(i, owner)| {
@@ -961,15 +968,15 @@ struct WithdrawalCompatibilityRemap {
 /// For each withdrawal input that needs conversion, insert a conversion command to a
 /// `sui::coin::Coin<T>` and swaps references to that input to the conversion result.
 /// Adjusts result indices in subsequent commands accordingly.
-fn withdrawal_compatibility_conversion(
-    env: &Env,
+fn withdrawal_compatibility_conversion<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     withdrawal_compatability_inputs: IndexMap<
         /* input withdrawal */ u16,
         /* owner address input */ u16,
     >,
     commands: &mut [L::Command],
-) -> Result<(), ExecutionError> {
+) -> Result<(), Mode::Error> {
     let mut compatibility_remap = WithdrawalCompatibilityRemap {
         remap: IndexMap::new(),
         lift: 0,
@@ -979,15 +986,16 @@ fn withdrawal_compatibility_conversion(
         compatibility_remap.remap.insert(input, result_idx);
     }
     compatibility_remap.lift = checked_as!(context.commands.len(), u16)?;
-    lift_result_indices(&compatibility_remap, commands)
+    lift_result_indices(&compatibility_remap, commands)?;
+    Ok(())
 }
 
-fn convert_withdrawal_to_coin(
-    env: &Env,
+fn convert_withdrawal_to_coin<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     withdrawal_input: u16,
     owner_input: u16,
-) -> Result</* Result index */ u16, ExecutionError> {
+) -> Result</* Result index */ u16, Mode::Error> {
     assert_invariant!(
         env.protocol_config
             .convert_withdrawal_compatibility_ptb_arguments(),
@@ -1036,7 +1044,7 @@ fn convert_withdrawal_to_coin(
         command: conversion_command__,
         result_type: vec![env.coin_type(inner_ty.clone())?],
         drop_values: vec![],
-        consumed_shared_objects: vec![],
+        incurs_post_execution_checks: false,
     };
     let conversion_idx = checked_as!(context.commands.len(), u16)?;
     context.push_result(conversion_command_)?;
@@ -1264,29 +1272,29 @@ mod unused_results {
 }
 
 //**************************************************************************************************
-// consumed shared object IDs
+// Post-execution checked objects
 //**************************************************************************************************
 
-mod consumed_shared_objects {
+mod post_execution_checks {
 
-    use crate::{
-        sp, static_programmable_transactions::loading::ast as L,
-        static_programmable_transactions::typing::ast as T,
-    };
+    use crate::{sp, static_programmable_transactions::typing::ast as T};
+    use sui_protocol_config::ProtocolConfig;
     use sui_types::{
-        base_types::ObjectID,
         error::{ExecutionError, SafeIndex},
+        object::ObjectPermissions,
     };
 
-    // Shared object (non-party) IDs contained in each location
+    // Taint context for inputs and results that require/incur post-execution checks
     struct Context {
-        // (legacy) shared object IDs that are used as inputs
-        inputs: Vec<Option<ObjectID>>,
-        results: Vec<Vec<Option<Vec<ObjectID>>>>,
+        // Does the input object require a post-execution check?
+        inputs: Vec<bool>,
+        // True if the command incurs post-execution checks
+        results: Vec<bool>,
+        propagate_through_mut_borrow: bool,
     }
 
     impl Context {
-        pub fn new(ast: &T::Transaction) -> Self {
+        pub fn new(protocol_config: &ProtocolConfig, ast: &T::Transaction) -> Self {
             let T::Transaction {
                 gas_payment: _,
                 bytes: _,
@@ -1298,132 +1306,126 @@ mod consumed_shared_objects {
                 original_command_len: _,
                 commands: _,
             } = ast;
+            // Find inputs with post execution checks
             let inputs = objects
                 .iter()
-                .map(|o| match &o.arg {
-                    L::ObjectArg::SharedObject {
-                        id,
-                        kind: L::SharedObjectKind::Legacy,
-                        ..
-                    } => Some(*id),
-                    L::ObjectArg::ImmObject(_)
-                    | L::ObjectArg::OwnedObject(_)
-                    | L::ObjectArg::SharedObject {
-                        kind: L::SharedObjectKind::Party,
-                        ..
-                    } => None,
+                .map(|o| {
+                    o.arg.refined_permissions.can_use_mutably()
+                        && o.arg.refined_permissions != ObjectPermissions::ALL
                 })
                 .collect::<Vec<_>>();
             Self {
                 inputs,
                 results: vec![],
+                propagate_through_mut_borrow: protocol_config.granular_post_execution_checks(),
             }
         }
     }
 
-    /// Finds what shared objects are taken by-value by each command and must be either
-    /// deleted or re-shared.
-    /// MakeMoveVec is the only command that can take shared objects by-value and propagate them
-    /// for another command.
-    pub fn transaction(ast: &mut T::Transaction) -> Result<(), ExecutionError> {
-        let mut context = Context::new(ast);
+    /// Find what commands will consume an object and incur a post execution check
+    /// MakeMoveVec is the only command that can take objects by-value and propagate them
+    /// for another command without directly incurring a check, as such we taint track for
+    /// MakeMoveVec
+    pub fn transaction(
+        protocol_config: &ProtocolConfig,
+        ast: &mut T::Transaction,
+    ) -> Result<(), ExecutionError> {
+        let mut context = Context::new(protocol_config, ast);
 
-        // For each command, find what shared objects are taken by-value and mark them as being
-        // consumed
+        // For each command, find what objects are taken by-value and will incur a post-execution
+        // check
         for c in &mut ast.commands {
-            debug_assert!(c.value.consumed_shared_objects.is_empty());
+            debug_assert!(!c.value.incurs_post_execution_checks);
             command(&mut context, c)?;
-            debug_assert!(context.results.last().unwrap().len() == c.value.result_type.len());
         }
         Ok(())
     }
 
     fn command(context: &mut Context, sp!(_, c): &mut T::Command) -> Result<(), ExecutionError> {
-        let mut acc = vec![];
-        match &c.command {
-            T::Command__::MoveCall(mc) => arguments(context, &mut acc, &mc.arguments)?,
-            T::Command__::TransferObjects(objects, recipient) => {
-                argument(context, &mut acc, recipient)?;
-                arguments(context, &mut acc, objects)?;
-            }
-            T::Command__::SplitCoins(_, coin, amounts) => {
-                arguments(context, &mut acc, amounts)?;
-                argument(context, &mut acc, coin)?;
-            }
-            T::Command__::MergeCoins(_, target, coins) => {
-                arguments(context, &mut acc, coins)?;
-                argument(context, &mut acc, target)?;
-            }
-            T::Command__::MakeMoveVec(_, elements) => arguments(context, &mut acc, elements)?,
-            T::Command__::Publish(_, _, _) => (),
-            T::Command__::Upgrade(_, _, _, x, _) => argument(context, &mut acc, x)?,
-        }
-        let (consumed, result) = match &c.command {
-            // make move vec does not "consume" any by-value shared objects, and can propagate
+        let arg_requires_post_execution_checks = arguments(context, c.command.arguments())?;
+        let (incurs_checks, tainted_result) = match &c.command {
+            // make move vec does not directly "consume" any objects, and can propagate
             // them to a later command
             T::Command__::MakeMoveVec(_, _) => {
                 assert_invariant!(
                     c.result_type.len() == 1,
                     "MakeMoveVec must return a single value"
                 );
-                (vec![], vec![Some(acc)])
+                (false, arg_requires_post_execution_checks)
             }
-            // these commands do not propagate shared objects, and consume any in the acc
+            // these commands do not propagate objects, and directly incur checks
             T::Command__::MoveCall(_)
             | T::Command__::TransferObjects(_, _)
             | T::Command__::SplitCoins(_, _, _)
             | T::Command__::MergeCoins(_, _, _)
             | T::Command__::Publish(_, _, _)
-            | T::Command__::Upgrade(_, _, _, _, _) => (acc, vec![None; c.result_type.len()]),
+            | T::Command__::Upgrade(_, _, _, _, _) => (arg_requires_post_execution_checks, false),
         };
-        c.consumed_shared_objects = consumed;
-        context.results.push(result);
+        c.incurs_post_execution_checks |= incurs_checks;
+        context.results.push(tainted_result);
         Ok(())
     }
 
-    fn arguments(
+    fn arguments<'a>(
         context: &mut Context,
-        acc: &mut Vec<ObjectID>,
-        args: &[T::Argument],
-    ) -> Result<(), ExecutionError> {
+        args: impl IntoIterator<Item = &'a T::Argument>,
+    ) -> Result<bool, ExecutionError> {
         for arg in args {
-            argument(context, acc, arg)?
+            if argument(context, arg)? {
+                return Ok(true);
+            }
         }
-        Ok(())
+        Ok(false)
     }
 
     fn argument(
         context: &mut Context,
-        acc: &mut Vec<ObjectID>,
         sp!(_, (arg_, _)): &T::Argument,
-    ) -> Result<(), ExecutionError> {
-        let T::Argument__::Use(T::Usage::Move(loc)) = arg_ else {
-            // only Move usage can take shared objects by-value since they cannot be copied
-            return Ok(());
-        };
-        match loc {
-            // no shared objects in these locations
+    ) -> Result<bool, ExecutionError> {
+        Ok(match arg_.location() {
+            // no shared/party objects in these locations
             T::Location::TxContext
             | T::Location::GasCoin
             | T::Location::WithdrawalInput(_)
             | T::Location::PureInput(_)
-            | T::Location::ReceivingInput(_) => (),
-            T::Location::ObjectInput(i) => {
-                if let Some(id) = *context.inputs.safe_get(*i as usize)? {
-                    acc.push(id);
+            | T::Location::ReceivingInput(_) => false,
+            T::Location::ObjectInput(i) => match arg_ {
+                T::Argument__::Use(T::Usage::Move(_)) => {
+                    let arg_requires_post_execution_checks = context.inputs.safe_get(i as usize)?;
+                    *arg_requires_post_execution_checks
                 }
-            }
+                T::Argument__::Use(T::Usage::Copy { .. })
+                | T::Argument__::Borrow(_, _)
+                | T::Argument__::Read(_)
+                | T::Argument__::Freeze(_) => {
+                    // not using the object by-value
+                    false
+                }
+            },
 
-            T::Location::Result(i, j) => {
-                if let Some(ids) = context
-                    .results
-                    .safe_get(*i as usize)?
-                    .safe_get(*j as usize)?
-                {
-                    acc.extend(ids.iter().copied());
+            T::Location::Result(i, _) => {
+                match arg_ {
+                    T::Argument__::Use(T::Usage::Move(_)) => {
+                        let tainted = context.results.safe_get(i as usize)?;
+                        *tainted
+                    }
+                    T::Argument__::Borrow(/* mut */ true, _) => {
+                        if context.propagate_through_mut_borrow {
+                            let tainted = context.results.safe_get(i as usize)?;
+                            *tainted
+                        } else {
+                            false
+                        }
+                    }
+                    T::Argument__::Use(T::Usage::Copy { .. })
+                    | T::Argument__::Borrow(false, _)
+                    | T::Argument__::Read(_)
+                    | T::Argument__::Freeze(_) => {
+                        // not using the object by-value
+                        false
+                    }
                 }
             }
-        };
-        Ok(())
+        })
     }
 }

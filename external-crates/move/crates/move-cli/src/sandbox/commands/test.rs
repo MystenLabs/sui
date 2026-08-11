@@ -145,7 +145,7 @@ fn copy_pkg_and_deps(tmp_dir: &Path, pkg_dir: &Path) -> anyhow::Result<PathBuf> 
 /// will need to be fixed.
 fn package_paths(pkg_dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let root_pkg: RootPackage<Vanilla> =
-        PackageLoader::new(pkg_dir, Vanilla::default_environment(), Vanilla)
+        PackageLoader::new(pkg_dir, Vanilla::default_environment(), Vanilla::new())
             .modes(vec!["test".into()])
             .load_sync()?;
 

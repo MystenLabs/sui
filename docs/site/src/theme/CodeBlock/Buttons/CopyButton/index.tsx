@@ -12,6 +12,7 @@ import copy from "copy-text-to-clipboard";
 import { translate } from "@docusaurus/Translate";
 import Button from "@theme/CodeBlock/Buttons/Button";
 import type { Props } from "@theme/CodeBlock/Buttons/CopyButton";
+import OpenInAgentButton from "../../../../shared/components/OpenInAgentButton";
 
 function getNearestCodeText(start: HTMLElement | null): string | null {
   let el: HTMLElement | null = start;
@@ -70,12 +71,54 @@ function useCopyButton(buttonRef: React.RefObject<HTMLElement>) {
   return { copyCode, isCopied };
 }
 
+function OpenInPlayMoveButton({ className }: { className?: string }) {
+  const wrapperRef = useRef<HTMLSpanElement | null>(null);
+  const [isMove, setIsMove] = useState(false);
+
+  useEffect(() => {
+    let el: HTMLElement | null = wrapperRef.current;
+    while (el) {
+      const code = el.querySelector?.("pre code[class*='language-move']") as HTMLElement | null;
+      if (code) {
+        setIsMove(true);
+        return;
+      }
+      el = el.parentElement;
+    }
+  }, []);
+
+  const handleClick = useCallback(() => {
+    const code = getNearestCodeText(wrapperRef.current);
+    if (!code) return;
+    const url = `https://www.playmove.dev/#${encodeURIComponent(code)}`;
+    window.open(url, "_blank", "noopener");
+  }, []);
+
+  return (
+    <span ref={wrapperRef} style={{ display: isMove ? "contents" : "none" }}>
+      <Button
+        aria-label="Open in Move Playground"
+        title="Open in Move Playground"
+        className={clsx(
+          className,
+          "!opacity-50 !hover:opacity-100 text-xs !pb-2 justify-center plausible-event-name=open+move+playground",
+        )}
+        onClick={handleClick}
+      >
+        <span className="p-1">
+          <i className="fa-solid fa-play leading-[0] pr-1" style={{ fontSize: 9 }}></i>Playground
+        </span>
+      </Button>
+    </span>
+  );
+}
+
 export default function CopyButton({ className }: Props): ReactNode {
   const buttonRef = useRef<HTMLSpanElement | null>(null);
   const { copyCode, isCopied } = useCopyButton(buttonRef);
 
   return (
-    <span ref={buttonRef}>
+    <span ref={buttonRef} style={{ display: "contents" }}>
       <Button
         aria-label={ariaLabel(isCopied)}
         title={title()}
@@ -97,6 +140,8 @@ export default function CopyButton({ className }: Props): ReactNode {
           </span>
         </span>
       </Button>
+      <OpenInAgentButton className={className} />
+      <OpenInPlayMoveButton className={className} />
     </span>
   );
 }

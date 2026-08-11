@@ -1,0 +1,18 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module collapse_let_usage {
+    public fun direct_return () {
+        return l0 + 1u64
+    }
+
+    public fun head_call () {
+        return l0 + 1u64 + 100u64
+    }
+
+    public fun not_head () {
+        let l2 = l0 + 1u64;
+        return l1 + l2
+    }
+
+}

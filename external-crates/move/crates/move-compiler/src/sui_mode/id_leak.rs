@@ -23,8 +23,9 @@ use crate::{
         ADDRESS_ALIAS_MODULE_NAME, AUTHENTICATOR_STATE_CREATE, AUTHENTICATOR_STATE_MODULE_NAME,
         BRIDGE_ADDR_VALUE, BRIDGE_CREATE, BRIDGE_MODULE_NAME, CLOCK_MODULE_NAME,
         COIN_REGISTRY_MODULE_NAME, DENY_LIST_CREATE, DENY_LIST_MODULE_NAME, DERIVED_OBJECT_CLAIM,
-        DERIVED_OBJECT_MODULE_NAME, DISPLAY_REGISTRY_MODULE_NAME, ID_LEAK_DIAG, OBJECT_MODULE_NAME,
-        OBJECT_NEW, OBJECT_NEW_UID_FROM_HASH, RANDOMNESS_MODULE_NAME, RANDOMNESS_STATE_CREATE,
+        DERIVED_OBJECT_MODULE_NAME, DISPLAY_REGISTRY_MODULE_NAME, FORWARDING_ADDRESS_CREATE,
+        FORWARDING_ADDRESS_MODULE_NAME, ID_LEAK_DIAG, OBJECT_MODULE_NAME, OBJECT_NEW,
+        OBJECT_NEW_UID_FROM_HASH, RANDOMNESS_MODULE_NAME, RANDOMNESS_STATE_CREATE,
         REGISTRY_CREATE_FUNCTION_NAME, SUI_ADDR_NAME, SUI_ADDR_VALUE, SUI_CLOCK_CREATE,
         SUI_SYSTEM_ADDR_VALUE, SUI_SYSTEM_CREATE, SUI_SYSTEM_MODULE_NAME,
         TEST_SCENARIO_MODULE_NAME, TS_NEW_OBJECT, UID_TYPE_NAME,
@@ -79,6 +80,11 @@ pub const FUNCTIONS_TO_SKIP: &[(AccountAddress, Symbol, Symbol)] = &[
         SUI_ADDR_VALUE,
         ADDRESS_ALIAS_MODULE_NAME,
         ADDRESS_ALIAS_CREATE,
+    ),
+    (
+        SUI_ADDR_VALUE,
+        FORWARDING_ADDRESS_MODULE_NAME,
+        FORWARDING_ADDRESS_CREATE,
     ),
 ];
 
@@ -172,17 +178,27 @@ impl SimpleAbsInt for IDLeakVerifierAI<'_> {
     type State = State;
     type ExecutionContext = ExecutionContext;
 
-    fn finish(&mut self, _final_states: BTreeMap<Label, State>, diags: Diagnostics) -> Diagnostics {
+    fn finish(
+        &mut self,
+        _final_states: BTreeMap<Label, crate::cfgir::absint::BlockStates<State>>,
+        diags: Diagnostics,
+    ) -> Diagnostics {
         diags
     }
 
-    fn start_command(&self, _: &mut State) -> ExecutionContext {
+    fn start_command(&self, _label: Label, _idx: usize, _: &mut State) -> ExecutionContext {
         ExecutionContext {
             diags: Diagnostics::new(),
         }
     }
 
-    fn finish_command(&self, context: ExecutionContext, _state: &mut State) -> Diagnostics {
+    fn finish_command(
+        &self,
+        _label: Label,
+        _idx: usize,
+        context: ExecutionContext,
+        _state: &mut State,
+    ) -> Diagnostics {
         let ExecutionContext { diags } = context;
         diags
     }

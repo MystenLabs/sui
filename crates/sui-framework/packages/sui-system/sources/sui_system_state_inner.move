@@ -617,10 +617,8 @@ public(package) fun update_validator_name(
     validator.update_name(name);
     let validator: &Validator = validator; // Avoid parallel mutable borrow.
 
-    // only run the duplicate check for non-candidates
-    if (!self.validators.is_validator_candidate(validator_address)) {
-        self.validators.assert_no_pending_or_active_duplicates(validator);
-    };
+    // always check for duplicates in active/pending state
+    self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
 /// Update a validator's description.

@@ -80,7 +80,9 @@ async fn main() -> Result<()> {
     let output_root =
         handle_replay_config(&stable_config, &config.replay_experimental, VERSION).await?;
 
-    if let Some(digest) = &stable_config.digest {
+    if let Some(digest) = &stable_config.digest
+        && !stable_config.skip_artifacts
+    {
         print_effects_or_fork(
             digest,
             &output_root,

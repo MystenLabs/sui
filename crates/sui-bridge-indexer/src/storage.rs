@@ -9,7 +9,6 @@ use diesel::{ExpressionMethods, QueryDsl, TextExpressionMethods};
 use diesel::{OptionalExtension, SelectableHelper};
 use diesel_async::AsyncConnection;
 use diesel_async::RunQueryDsl;
-use diesel_async::scoped_futures::ScopedFutureExt;
 
 use crate::ProcessedTxnData;
 use crate::indexer_builder::{IndexerProgressStore, Persistent};
@@ -63,104 +62,97 @@ impl Persistent<ProcessedTxnData> for PgBridgePersistent {
         }
         let connection = &mut self.pool.get().await?;
         connection
-            .transaction(|conn| {
-                async move {
-                    for d in data {
-                        match d {
-                            ProcessedTxnData::TokenTransfer(t) => {
-                                diesel::insert_into(token_transfer::table)
-                                    .values(&t.to_db())
+            .transaction(async |conn| {
+                for d in data {
+                    match d {
+                        ProcessedTxnData::TokenTransfer(t) => {
+                            diesel::insert_into(token_transfer::table)
+                                .values(&t.to_db())
+                                .on_conflict((
+                                    token_transfer::dsl::chain_id,
+                                    token_transfer::dsl::nonce,
+                                    token_transfer::dsl::status,
+                                ))
+                                .do_update()
+                                .set((
+                                    token_transfer::chain_id.eq(excluded(token_transfer::chain_id)),
+                                    token_transfer::nonce.eq(excluded(token_transfer::nonce)),
+                                    token_transfer::status.eq(excluded(token_transfer::status)),
+                                    token_transfer::block_height
+                                        .eq(excluded(token_transfer::block_height)),
+                                    token_transfer::timestamp_ms
+                                        .eq(excluded(token_transfer::timestamp_ms)),
+                                    token_transfer::txn_hash.eq(excluded(token_transfer::txn_hash)),
+                                    token_transfer::txn_sender
+                                        .eq(excluded(token_transfer::txn_sender)),
+                                    token_transfer::gas_usage
+                                        .eq(excluded(token_transfer::gas_usage)),
+                                    token_transfer::data_source
+                                        .eq(excluded(token_transfer::data_source)),
+                                    token_transfer::is_finalized
+                                        .eq(excluded(token_transfer::is_finalized)),
+                                ))
+                                .filter(token_transfer::is_finalized.eq(false))
+                                .execute(conn)
+                                .await?;
+
+                            if let Some(d) = t.to_data_maybe() {
+                                diesel::insert_into(token_transfer_data::table)
+                                    .values(&d)
                                     .on_conflict((
-                                        token_transfer::dsl::chain_id,
-                                        token_transfer::dsl::nonce,
-                                        token_transfer::dsl::status,
+                                        token_transfer_data::dsl::chain_id,
+                                        token_transfer_data::dsl::nonce,
                                     ))
                                     .do_update()
                                     .set((
-                                        token_transfer::chain_id
-                                            .eq(excluded(token_transfer::chain_id)),
-                                        token_transfer::nonce.eq(excluded(token_transfer::nonce)),
-                                        token_transfer::status.eq(excluded(token_transfer::status)),
-                                        token_transfer::block_height
-                                            .eq(excluded(token_transfer::block_height)),
-                                        token_transfer::timestamp_ms
-                                            .eq(excluded(token_transfer::timestamp_ms)),
-                                        token_transfer::txn_hash
-                                            .eq(excluded(token_transfer::txn_hash)),
-                                        token_transfer::txn_sender
-                                            .eq(excluded(token_transfer::txn_sender)),
-                                        token_transfer::gas_usage
-                                            .eq(excluded(token_transfer::gas_usage)),
-                                        token_transfer::data_source
-                                            .eq(excluded(token_transfer::data_source)),
-                                        token_transfer::is_finalized
-                                            .eq(excluded(token_transfer::is_finalized)),
+                                        token_transfer_data::chain_id
+                                            .eq(excluded(token_transfer_data::chain_id)),
+                                        token_transfer_data::nonce
+                                            .eq(excluded(token_transfer_data::nonce)),
+                                        token_transfer_data::block_height
+                                            .eq(excluded(token_transfer_data::block_height)),
+                                        token_transfer_data::timestamp_ms
+                                            .eq(excluded(token_transfer_data::timestamp_ms)),
+                                        token_transfer_data::txn_hash
+                                            .eq(excluded(token_transfer_data::txn_hash)),
+                                        token_transfer_data::sender_address
+                                            .eq(excluded(token_transfer_data::sender_address)),
+                                        token_transfer_data::destination_chain
+                                            .eq(excluded(token_transfer_data::destination_chain)),
+                                        token_transfer_data::recipient_address
+                                            .eq(excluded(token_transfer_data::recipient_address)),
+                                        token_transfer_data::token_id
+                                            .eq(excluded(token_transfer_data::token_id)),
+                                        token_transfer_data::amount
+                                            .eq(excluded(token_transfer_data::amount)),
+                                        token_transfer_data::is_finalized
+                                            .eq(excluded(token_transfer_data::is_finalized)),
+                                        token_transfer_data::message_timestamp_ms.eq(excluded(
+                                            token_transfer_data::message_timestamp_ms,
+                                        )),
                                     ))
-                                    .filter(token_transfer::is_finalized.eq(false))
-                                    .execute(conn)
-                                    .await?;
-
-                                if let Some(d) = t.to_data_maybe() {
-                                    diesel::insert_into(token_transfer_data::table)
-                                        .values(&d)
-                                        .on_conflict((
-                                            token_transfer_data::dsl::chain_id,
-                                            token_transfer_data::dsl::nonce,
-                                        ))
-                                        .do_update()
-                                        .set((
-                                            token_transfer_data::chain_id
-                                                .eq(excluded(token_transfer_data::chain_id)),
-                                            token_transfer_data::nonce
-                                                .eq(excluded(token_transfer_data::nonce)),
-                                            token_transfer_data::block_height
-                                                .eq(excluded(token_transfer_data::block_height)),
-                                            token_transfer_data::timestamp_ms
-                                                .eq(excluded(token_transfer_data::timestamp_ms)),
-                                            token_transfer_data::txn_hash
-                                                .eq(excluded(token_transfer_data::txn_hash)),
-                                            token_transfer_data::sender_address
-                                                .eq(excluded(token_transfer_data::sender_address)),
-                                            token_transfer_data::destination_chain.eq(excluded(
-                                                token_transfer_data::destination_chain,
-                                            )),
-                                            token_transfer_data::recipient_address.eq(excluded(
-                                                token_transfer_data::recipient_address,
-                                            )),
-                                            token_transfer_data::token_id
-                                                .eq(excluded(token_transfer_data::token_id)),
-                                            token_transfer_data::amount
-                                                .eq(excluded(token_transfer_data::amount)),
-                                            token_transfer_data::is_finalized
-                                                .eq(excluded(token_transfer_data::is_finalized)),
-                                            token_transfer_data::message_timestamp_ms.eq(excluded(
-                                                token_transfer_data::message_timestamp_ms,
-                                            )),
-                                        ))
-                                        .filter(token_transfer_data::is_finalized.eq(false))
-                                        .execute(conn)
-                                        .await?;
-                                }
-                            }
-                            ProcessedTxnData::GovernanceAction(a) => {
-                                diesel::insert_into(schema::governance_actions::table)
-                                    .values(&a.to_db())
-                                    .on_conflict_do_nothing()
-                                    .execute(conn)
-                                    .await?;
-                            }
-                            ProcessedTxnData::Error(e) => {
-                                diesel::insert_into(sui_error_transactions::table)
-                                    .values(&e.to_db())
-                                    .on_conflict_do_nothing()
+                                    .filter(token_transfer_data::is_finalized.eq(false))
                                     .execute(conn)
                                     .await?;
                             }
                         }
+                        ProcessedTxnData::GovernanceAction(a) => {
+                            diesel::insert_into(schema::governance_actions::table)
+                                .values(&a.to_db())
+                                .on_conflict_do_nothing()
+                                .execute(conn)
+                                .await?;
+                        }
+                        ProcessedTxnData::Error(e) => {
+                            diesel::insert_into(sui_error_transactions::table)
+                                .values(&e.to_db())
+                                .on_conflict_do_nothing()
+                                .execute(conn)
+                                .await?;
+                        }
                     }
-                    Ok(())
                 }
-                .scope_boxed()
+                Ok(())
             })
             .await
     }

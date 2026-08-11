@@ -1,0 +1,22 @@
+// Chained guarded forward-jumps to a single far join — the pyth `update_*` short-circuit
+// shape (`fresh = !stale_a && !stale_b; if (fresh) ...`). Each check, on failure, does
+// some work and jumps forward to the join J; on success it falls through to the next check.
+//
+//   0 (cond check_a) ─true─> 1 (fail_a; goto 6)
+//   │ false
+//   v
+//   2 (cond check_b) ─true─> 3 (fail_b; goto 6)
+//   │ false
+//   v
+//   4 (rest; goto 6)
+//   6 (join, sink)
+//
+// J=6 has preds {1, 3, 4}; J.idom = 0 (every path from 0 reaches it), so J is owned by
+// node 0's scope, NOT node 2's. The question is whether the structurer recovers nested
+// if/else here or leaves the inner jump as a goto.
+cond,0,1,2
+code,1,6
+cond,2,3,4
+code,3,6
+code,4,6
+code,6

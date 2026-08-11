@@ -1,0 +1,31 @@
+// A jump to the outer loop's header from *inside* the inner loop's body. Here the labeled
+// `continue 'loop_1` is essential — an unlabeled `continue` at that position would target the
+// inner loop, not the outer.
+//
+//         0
+//         |
+//      ┌─→1───→5 (outer exit on cond1 false)
+//      │  │
+//      │  2←──┐ (inner header)
+//      │  │   │
+//      │  3───┘ (inner latch: 3 → 2; alt branch: 3 → 1, back to outer)
+//      │  ↓
+//      └──4 (4 → 1 outer back-edge)
+//
+// Outer header = 1, outer latches = {3, 4} (both dominated by 1 and target it).
+// Inner header = 2, inner latch  = {3}     (only 3 dominated by 2 targets 2).
+// Inner body = {2, 3}.  Node 3 is inside the inner body and its alt branch jumps to outer 1.
+//
+// Inner's insert_breaks classifies 3's JumpIf as `(Continue, Latch)` — leaving the Jump(1) raw
+// because 1 is not this loop's header/succ. When the outer loop is structured later, it
+// descends into the inner Loop body and reclassifies that Jump(1) as Continue('loop_1).
+// `strip_loop_labels` (running later, on the Exp form) keeps `'loop_1` because that use sits
+// inside a nested loop, but can strip `'loop_2` since its only use is at the inner loop's
+// top level.
+
+code,0,1
+cond,1,2,5
+cond,2,3,4
+cond,3,2,1
+code,4,1
+code,5

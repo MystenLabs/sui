@@ -4,15 +4,19 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use move_command_line_common::files::FileHash;
-use move_compiler::shared::ide as CI;
+use move_compiler::{expansion::ast as E, parser::ast as P, shared::ide as CI, typing::ast as T};
 use move_ir_types::location::Loc;
 
 /// Compiler information used during symbolication analysis.
 /// This is cached and used during typing analysis.
 #[derive(Default, Debug, Clone)]
 pub struct CompilerAnalysisInfo {
-    /// Macro call information
-    pub macro_info: BTreeMap<Loc, CI::MacroCallInfo>,
+    /// Macro call information keyed by expanded expression location.
+    /// Multiple expansions can share locations from macro definitions.
+    pub macro_info: BTreeMap<Loc, Vec<CI::MacroCallInfo>>,
+    /// Typed macro function bodies keyed by defining module and function name
+    /// whose location is the location of the function definition.
+    pub macro_function_bodies: BTreeMap<(E::ModuleIdent, P::FunctionName), T::Sequence>,
     /// Expanded lambda expressions
     pub expanded_lambdas: BTreeSet<Loc>,
     /// Ellipsis-generated binders (to filter from IDE)
@@ -36,8 +40,12 @@ impl CompilerAnalysisInfo {
         Self::default()
     }
 
-    pub fn get_macro_info(&self, loc: &Loc) -> Option<&CI::MacroCallInfo> {
-        self.macro_info.get(loc)
+    pub fn get_macro_info(&self, loc: &Loc, root_call_loc: Loc) -> Option<&CI::MacroCallInfo> {
+        let entries = self.macro_info.get(loc)?;
+        // Macro-expanded expressions can share locations because locations
+        // inside an expanded macro body come from the macro definition. Only
+        // use metadata from the expansion tree currently being traversed.
+        entries.iter().find(|e| e.root_call_loc == root_call_loc)
     }
 
     pub fn is_expanded_lambda(&self, loc: &Loc) -> bool {
@@ -73,18 +81,19 @@ impl CompilerAutocompleteInfo {
     }
 }
 
-/// Process compiler IDE annotations into analysis and autocomplete info.
+/// Process compiler IDE information into analysis and autocomplete info.
 /// Returns (analysis_info, autocomplete_info)
-pub fn process_ide_annotations(
-    annotations: impl IntoIterator<Item = (Loc, CI::IDEAnnotation)>,
-) -> (CompilerAnalysisInfo, CompilerAutocompleteInfo) {
+pub fn process_ide_info(ide_info: CI::IDEInfo) -> (CompilerAnalysisInfo, CompilerAutocompleteInfo) {
     let mut analysis = CompilerAnalysisInfo::default();
     let mut autocomplete = CompilerAutocompleteInfo::default();
+    analysis
+        .macro_function_bodies
+        .extend(ide_info.macro_function_bodies().clone());
 
-    for (loc, entry) in annotations {
+    for (loc, entry) in ide_info {
         match entry {
             CI::IDEAnnotation::MacroCallInfo(info) => {
-                analysis.macro_info.insert(loc, *info);
+                analysis.macro_info.entry(loc).or_default().push(*info);
             }
             CI::IDEAnnotation::ExpandedLambda => {
                 analysis.expanded_lambdas.insert(loc);

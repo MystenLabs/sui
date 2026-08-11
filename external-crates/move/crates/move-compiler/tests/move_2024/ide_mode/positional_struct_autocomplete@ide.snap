@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-note[I15001]: IDE dot autocomplete
+note[NC15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/positional_struct_autocomplete.move:10:23
    │
 10 │         let _tmp1 = _s.;
    │                       ^ Possible dot names: '0'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/positional_struct_autocomplete.move:10:24
    │
 10 │         let _tmp1 = _s.;
@@ -20,25 +20,25 @@ error[E01002]: unexpected token
    │                        Unexpected ';'
    │                        Expected an identifier or a decimal number
 
-note[I15001]: IDE dot autocomplete
+note[NC15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/positional_struct_autocomplete.move:11:23
    │
 11 │         let _tmp2 = _s.0.;
    │                       ^ Possible dot names: '0'
 
-note[I15001]: IDE dot autocomplete
+note[NC15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/positional_struct_autocomplete.move:11:24
    │
 11 │         let _tmp2 = _s.0.;
    │                        ^ Possible dot names: '0'
 
-note[I15001]: IDE dot autocomplete
+note[NC15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/positional_struct_autocomplete.move:11:25
    │
 11 │         let _tmp2 = _s.0.;
    │                         ^ Possible dot names: '0'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/positional_struct_autocomplete.move:11:26
    │
 11 │         let _tmp2 = _s.0.;

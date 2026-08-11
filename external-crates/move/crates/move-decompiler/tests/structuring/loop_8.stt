@@ -1,4 +1,6 @@
-// loop { continue }
+// A self-back-edge whose two arms target the same successor (itself). The construction-site
+// normalization turns it into `code,0,0` (self-looping code), so the block body's
+// condition-computation is preserved inside the loop instead of being dropped.
 
 cond,0,0,0
 

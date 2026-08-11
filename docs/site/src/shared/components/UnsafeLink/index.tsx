@@ -12,11 +12,8 @@ type Props = {
 };
 
 /**
- * Renders either a Docusaurus <Link> for internal paths
- * or an <a target="_blank"> for external URLs.
- * This bypasses the broken-link checker since it’s a component,
- * not a raw markdown link. Should never have an external link
- * using this, but jic.
+ * Renders either an internal anchor or an external <a target="_blank">.
+ * Bypasses the broken-link checker since it's a component, not raw markdown.
  */
 export default function UnsafeLink({ href, children, className }: Props) {
   const isExternal = /^https?:\/\//.test(href);

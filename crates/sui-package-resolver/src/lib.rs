@@ -1390,7 +1390,7 @@ impl<'l> ResolutionContext<'l> {
 
                     let params_count = params.len();
                     let data_count = self.datatypes.len();
-                    frontier.extend(params.into_iter());
+                    frontier.extend(params);
 
                     let type_params = if let Some(def) = self.datatypes.get(&key) {
                         &def.type_params
@@ -1734,7 +1734,7 @@ impl<'l> ResolutionContext<'l> {
                 AbilitySet::polymorphic_abilities(
                     def.abilities,
                     def.type_params.iter().map(|p| p.is_phantom),
-                    param_abilities?.into_iter(),
+                    param_abilities?,
                 )
                 // This error is unexpected because the only reason it would fail is because of a
                 // type parameter arity mismatch, which we check for above.
@@ -3081,8 +3081,8 @@ mod tests {
                     .dependency_ids
                     .published
                     .values()
-                    .map(|dep_id| {
-                        let storage_id = AccountAddress::from(*dep_id);
+                    .map(|dep| {
+                        let storage_id = AccountAddress::from(dep.published_at);
                         let runtime_id = package_runtime_id(
                             &packages_by_storage_id
                                 .get(&storage_id)

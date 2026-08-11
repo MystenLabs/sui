@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_default_config::DefaultConfig;
+use std::num::NonZeroUsize;
+
+use serde::Deserialize;
+use serde::Serialize;
 use sui_indexer_alt_framework as framework;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::pipeline;
@@ -9,16 +12,16 @@ use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use tracing::warn;
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct IndexerConfig {
     pub ingestion: IngestionConfig,
     pub committer: CommitterLayer,
     pub pipeline: PipelineLayer,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
     pub collect_interval_ms: Option<u64>,
@@ -41,8 +44,8 @@ impl CommitterLayer {
     }
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
     pub ingestion: Option<PipelineIngestionLayer>,
@@ -55,8 +58,8 @@ pub struct ConcurrentLayer {
     pub committer_channel_size: Option<usize>,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct PipelineIngestionLayer {
     pub subscriber_channel_size: Option<usize>,
 }
@@ -96,8 +99,8 @@ impl PipelineIngestionLayer {
     }
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct PipelineLayer {
     pub checkpoint_blob: ConcurrentLayer,
     pub epochs: ConcurrentLayer,
@@ -106,16 +109,16 @@ pub struct PipelineLayer {
 
 /// This type is identical to [`framework::ingestion::IngestionConfig`], but is set-up to be
 /// serialized and deserialized by `serde`.
-#[DefaultConfig]
-#[derive(Clone, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct IngestionConfig {
     pub ingest_concurrency: framework::config::ConcurrencyConfig,
     pub retry_interval_ms: u64,
-    pub streaming_backoff_initial_batch_size: usize,
+    pub streaming_backoff_initial_batch_size: NonZeroUsize,
     pub streaming_backoff_max_batch_size: usize,
     pub streaming_connection_timeout_ms: u64,
     pub streaming_statement_timeout_ms: u64,
+    pub min_cohort_boundary: u64,
 
     /// Deprecated: accepted (and ignored) so old configs don't fail to parse. Replaced by
     /// per-pipeline `ingestion.subscriber-channel-size`.
@@ -137,6 +140,7 @@ impl From<framework::ingestion::IngestionConfig> for IngestionConfig {
             streaming_backoff_max_batch_size: config.streaming_backoff_max_batch_size,
             streaming_connection_timeout_ms: config.streaming_connection_timeout_ms,
             streaming_statement_timeout_ms: config.streaming_statement_timeout_ms,
+            min_cohort_boundary: config.min_cohort_boundary,
             checkpoint_buffer_size: None,
         }
     }
@@ -159,6 +163,7 @@ impl From<IngestionConfig> for framework::ingestion::IngestionConfig {
             streaming_backoff_max_batch_size: config.streaming_backoff_max_batch_size,
             streaming_connection_timeout_ms: config.streaming_connection_timeout_ms,
             streaming_statement_timeout_ms: config.streaming_statement_timeout_ms,
+            min_cohort_boundary: config.min_cohort_boundary,
         }
     }
 }

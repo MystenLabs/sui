@@ -46,15 +46,15 @@ details.dark\:border-sui-gray-65 {
   @apply hidden;
 }
 
-/* Chevron icon (matches Docusaurus' simple chevron behavior) */
-.theme-doc-markdown details > summary::before,
-.markdown details > summary::before {
-  @apply absolute content-[""] inline-block w-3 h-3 mr-4 top-0 -left-2 mask-arrow border-[.38rem] border-solid origin-[calc(.38rem/2)_50%];
+/* Arrow color — uses Docusaurus's built-in border-triangle and rotation */
+.theme-doc-markdown details,
+.markdown details {
+  --docusaurus-details-decoration-color: #4B515B;
 }
 
-.theme-doc-markdown details[open] > summary::before,
-.markdown details[open] > summary::before {
-  @apply rotate-90 -top-2 left-0 transition-all duration-300 ease-in-out;
+[data-theme='dark'] .theme-doc-markdown details,
+[data-theme='dark'] .markdown details {
+  --docusaurus-details-decoration-color: rgba(143, 203, 255, 0.6);
 }
 
 details > div > div {

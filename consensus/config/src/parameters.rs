@@ -105,10 +105,6 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_commit_sync_probe_timeout")]
     pub commit_sync_probe_timeout: Duration,
 
-    /// Whether to use FIFO compaction for RocksDB.
-    #[serde(default = "Parameters::default_use_fifo_compaction")]
-    pub use_fifo_compaction: bool,
-
     /// Tonic network settings.
     #[serde(default = "TonicParameters::default")]
     pub tonic: TonicParameters,
@@ -226,10 +222,6 @@ impl Parameters {
         // while keeping the total number of inflight fetches and unprocessed fetched commits limited.
         32
     }
-
-    pub(crate) fn default_use_fifo_compaction() -> bool {
-        true
-    }
 }
 
 impl Default for Parameters {
@@ -253,7 +245,6 @@ impl Default for Parameters {
             commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
             commit_sync_request_timeout: Parameters::default_commit_sync_request_timeout(),
             commit_sync_probe_timeout: Parameters::default_commit_sync_probe_timeout(),
-            use_fifo_compaction: Parameters::default_use_fifo_compaction(),
             tonic: TonicParameters::default(),
             observer: ObserverParameters::default(),
             internal: InternalParameters::default(),

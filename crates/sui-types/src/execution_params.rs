@@ -4,6 +4,7 @@
 use std::collections::HashSet;
 
 use mysten_common::assert_reachable;
+use nonempty::NonEmpty;
 use once_cell::sync::Lazy;
 
 use crate::{
@@ -11,7 +12,56 @@ use crate::{
     execution_status::ExecutionErrorKind, transaction::CheckedInputObjects,
 };
 
-pub type ExecutionOrEarlyError = Result<(), ExecutionErrorKind>;
+/// Execution inputs computed before running a transaction: whether to fail it early (and with
+/// which errors), plus context for gas charging. An execution input only - never serialized into
+/// `TransactionEffects`, so adding fields here does not change effects or their digests.
+#[derive(Debug, Clone)]
+pub struct ExecutionOrEarlyError {
+    early_errors: Option<NonEmpty<ExecutionErrorKind>>,
+    /// Accumulator (settlement) root version assigned to this transaction. Gates the mainnet
+    /// address-balance gas-smash short-circuit. Populated only for mainnet committed execution;
+    /// `None` elsewhere, leaving that gate inert.
+    accumulator_version: Option<SequenceNumber>,
+}
+
+impl ExecutionOrEarlyError {
+    /// Execute the transaction normally (no predetermined early error).
+    pub fn ok(accumulator_version: Option<SequenceNumber>) -> Self {
+        Self {
+            early_errors: None,
+            accumulator_version,
+        }
+    }
+
+    /// Skip execution and fail the transaction with `errors`.
+    pub fn failed(
+        errors: NonEmpty<ExecutionErrorKind>,
+        accumulator_version: Option<SequenceNumber>,
+    ) -> Self {
+        Self {
+            early_errors: Some(errors),
+            accumulator_version,
+        }
+    }
+
+    pub fn is_ok(&self) -> bool {
+        self.early_errors.is_none()
+    }
+
+    /// The predetermined early errors, if any.
+    pub fn early_errors(&self) -> Option<&NonEmpty<ExecutionErrorKind>> {
+        self.early_errors.as_ref()
+    }
+
+    /// Consume self, returning the predetermined early errors, if any.
+    pub fn into_early_errors(self) -> Option<NonEmpty<ExecutionErrorKind>> {
+        self.early_errors
+    }
+
+    pub fn accumulator_version(&self) -> Option<SequenceNumber> {
+        self.accumulator_version
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FundsWithdrawStatus {
@@ -27,7 +77,7 @@ pub enum FundsWithdrawStatus {
 }
 
 /// Determine if a transaction is predetermined to fail execution.
-/// If so, return the error kind, otherwise return `None`.
+/// Returns all matching error kinds, or `None` if there is no early failure.
 /// When we pass this to the execution engine, we will not execute the transaction
 /// if it is predetermined to fail execution.
 pub fn get_early_execution_error(
@@ -35,30 +85,31 @@ pub fn get_early_execution_error(
     input_objects: &CheckedInputObjects,
     config_certificate_deny_set: &HashSet<TransactionDigest>,
     funds_withdraw_status: &FundsWithdrawStatus,
-) -> Option<ExecutionErrorKind> {
+) -> Option<NonEmpty<ExecutionErrorKind>> {
+    let mut errors = vec![];
     if is_certificate_denied(transaction_digest, config_certificate_deny_set) {
-        return Some(ExecutionErrorKind::CertificateDenied);
+        errors.push(ExecutionErrorKind::CertificateDenied);
     }
 
     if input_objects
         .inner()
         .contains_consensus_stream_ended_objects()
     {
-        return Some(ExecutionErrorKind::InputObjectDeleted);
+        errors.push(ExecutionErrorKind::InputObjectDeleted);
     }
 
     let cancelled_objects = input_objects.inner().get_cancelled_objects();
     if let Some((cancelled_objects, reason)) = cancelled_objects {
         match reason {
             SequenceNumber::CONGESTED => {
-                return Some(
+                errors.push(
                     ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
                         congested_objects: CongestedObjects(cancelled_objects),
                     },
                 );
             }
             SequenceNumber::RANDOMNESS_UNAVAILABLE => {
-                return Some(ExecutionErrorKind::ExecutionCancelledDueToRandomnessUnavailable);
+                errors.push(ExecutionErrorKind::ExecutionCancelledDueToRandomnessUnavailable);
             }
             _ => panic!("invalid cancellation reason SequenceNumber: {reason}"),
         }
@@ -66,10 +117,10 @@ pub fn get_early_execution_error(
 
     if matches!(funds_withdraw_status, FundsWithdrawStatus::Insufficient) {
         assert_reachable!("insufficient funds for withdraw");
-        return Some(ExecutionErrorKind::InsufficientFundsForWithdraw);
+        errors.push(ExecutionErrorKind::InsufficientFundsForWithdraw);
     }
 
-    None
+    NonEmpty::from_vec(errors)
 }
 
 /// If a transaction digest shows up in this list, when executing such transaction,
@@ -141,8 +192,8 @@ mod tests {
             &FundsWithdrawStatus::Insufficient,
         );
         assert_eq!(
-            result,
-            Some(ExecutionErrorKind::InsufficientFundsForWithdraw)
+            result.unwrap().into_iter().collect::<Vec<_>>(),
+            vec![ExecutionErrorKind::InsufficientFundsForWithdraw],
         );
 
         // Test with sufficient balance
@@ -152,15 +203,15 @@ mod tests {
             &deny_set,
             &FundsWithdrawStatus::MaybeSufficient,
         );
-        assert_eq!(result, None);
+        assert!(result.is_none());
     }
 
     #[test]
-    fn test_early_execution_error_precedence() {
+    fn test_early_execution_error_collects_all() {
         let tx_digest = crate::digests::TransactionDigest::random();
         let input_objects = create_test_input_objects();
 
-        // Test that certificate denial takes precedence over insufficient balance
+        // Certificate denial + insufficient balance collected together.
         let mut deny_set = HashSet::new();
         deny_set.insert(tx_digest);
         let result = get_early_execution_error(
@@ -169,23 +220,26 @@ mod tests {
             &deny_set,
             &FundsWithdrawStatus::Insufficient,
         );
-        assert_eq!(result, Some(ExecutionErrorKind::CertificateDenied));
+        assert_eq!(
+            result.unwrap().into_iter().collect::<Vec<_>>(),
+            vec![
+                ExecutionErrorKind::CertificateDenied,
+                ExecutionErrorKind::InsufficientFundsForWithdraw,
+            ],
+        );
 
-        // Test that deleted input objects take precedence over insufficient balance
-        let input_objects = InputObjects::new(vec![
-            // canceled object
-            ObjectReadResult {
-                input_object_kind: InputObjectKind::SharedMoveObject {
-                    id: ObjectID::random(),
-                    initial_shared_version: SequenceNumber::MIN,
-                    mutability: SharedObjectMutability::Immutable,
-                },
-                object: ObjectReadResultKind::ObjectConsensusStreamEnded(
-                    SequenceNumber::MIN, // doesn't matter
-                    tx_digest,
-                ),
+        // Deleted input objects + insufficient balance.
+        let input_objects = InputObjects::new(vec![ObjectReadResult {
+            input_object_kind: InputObjectKind::SharedMoveObject {
+                id: ObjectID::random(),
+                initial_shared_version: SequenceNumber::MIN,
+                mutability: SharedObjectMutability::Immutable,
             },
-        ]);
+            object: ObjectReadResultKind::ObjectConsensusStreamEnded(
+                SequenceNumber::MIN, // doesn't matter
+                tx_digest,
+            ),
+        }]);
         deny_set.clear();
         let result = get_early_execution_error(
             &tx_digest,
@@ -193,31 +247,37 @@ mod tests {
             &deny_set,
             &FundsWithdrawStatus::Insufficient,
         );
-        assert_eq!(result, Some(ExecutionErrorKind::InputObjectDeleted));
+        assert_eq!(
+            result.unwrap().into_iter().collect::<Vec<_>>(),
+            vec![
+                ExecutionErrorKind::InputObjectDeleted,
+                ExecutionErrorKind::InsufficientFundsForWithdraw,
+            ],
+        );
 
-        // Test that canceled takes precedence over insufficient balance
-        let input_objects = InputObjects::new(vec![
-            // canceled object
-            ObjectReadResult {
-                input_object_kind: InputObjectKind::SharedMoveObject {
-                    id: ObjectID::random(),
-                    initial_shared_version: SequenceNumber::MIN,
-                    mutability: SharedObjectMutability::Immutable,
-                },
-                object: ObjectReadResultKind::CancelledTransactionSharedObject(
-                    SequenceNumber::CONGESTED,
-                ),
+        // Cancelled (congestion) + insufficient balance.
+        let input_objects = InputObjects::new(vec![ObjectReadResult {
+            input_object_kind: InputObjectKind::SharedMoveObject {
+                id: ObjectID::random(),
+                initial_shared_version: SequenceNumber::MIN,
+                mutability: SharedObjectMutability::Immutable,
             },
-        ]);
+            object: ObjectReadResultKind::CancelledTransactionSharedObject(
+                SequenceNumber::CONGESTED,
+            ),
+        }]);
         let result = get_early_execution_error(
             &tx_digest,
             &CheckedInputObjects::new_for_replay(input_objects),
             &deny_set,
             &FundsWithdrawStatus::Insufficient,
         );
+        let result: Vec<_> = result.unwrap().into_iter().collect();
+        assert_eq!(result.len(), 2);
         assert!(matches!(
-            result,
-            Some(ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion { .. })
+            result[0],
+            ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion { .. }
         ));
+        assert_eq!(result[1], ExecutionErrorKind::InsufficientFundsForWithdraw);
     }
 }

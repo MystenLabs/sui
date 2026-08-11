@@ -19,6 +19,7 @@ use sui_kvstore::TransactionData;
 use sui_kvstore::TransactionEventsData;
 use sui_kvstore::WatermarkV1;
 use sui_kvstore::validate_pipeline_name;
+use sui_types::digests::CheckpointDigest;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
@@ -112,6 +113,7 @@ impl BigtableReader {
                 Some(registry),
                 bigtable_args.bigtable_app_profile_id,
                 Default::default(),
+                false,
             )
             .await
             .context("Failed to create BigTable client")?,
@@ -155,6 +157,20 @@ impl BigtableReader {
         .await
     }
 
+    /// Get a single checkpoint by its digest. The underlying KV store only supports single-digest
+    /// lookup, so callers that need to batch should fan out themselves.
+    pub(crate) async fn checkpoint_by_digest(
+        &self,
+        digest: CheckpointDigest,
+    ) -> anyhow::Result<Option<CheckpointData>> {
+        measure(
+            "checkpoint_by_digest",
+            &digest,
+            self.client.clone().get_checkpoint_by_digest(digest),
+        )
+        .await
+    }
+
     /// Multi-get transactions by transaction digest.
     pub(crate) async fn transactions(
         &self,
@@ -164,6 +180,19 @@ impl BigtableReader {
             "transactions",
             &keys,
             self.client.clone().get_transactions(keys),
+        )
+        .await
+    }
+
+    /// Multi-get checkpoint timestamps for transactions by digest.
+    pub(crate) async fn transaction_timestamps(
+        &self,
+        keys: &[TransactionDigest],
+    ) -> anyhow::Result<Vec<(TransactionDigest, u64)>> {
+        measure(
+            "transaction_timestamps",
+            &keys,
+            self.client.clone().get_transaction_timestamps(keys),
         )
         .await
     }

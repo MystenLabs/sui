@@ -56,11 +56,11 @@ VI. [Core Mysten Tools and SDKs](https://github.com/theninthangel/awesome-sui-ga
 | [DeepBook](https://docs.sui.io/standards/deepbook) | A native, on chain central limit order book (CLOB). | Provides an efficient foundation for creating stable and liquid in game currency exchanges or token swaps. |
 
 # IV. User Experience (UX) & Onboarding
-| Technology | Description | Video Game Utilization |
-| --- | --- | --- |
-| [zkLogin (Account Abstraction)](https://docs.sui.io/concepts/cryptography/zklogin) | A Zero Knowledge Proof (ZKP) system that allows users to create and log into a Sui wallet using familiar Web2 credentials (e.g., Google or Facebook). | Removes the friction of seed phrases and complex wallet setup, enabling a seamless, Web2 like onboarding process for mainstream gamers. |
-| [Sponsored Transactions](https://docs.sui.io/guides/developer/sui-101/sponsor-txn) | The ability for a developer or a designated entity to pay the gas fees for an end user's transactions (via Enoki or similar services). | Allows games to be truly "free to start" by covering the gas costs for initial players, removing the barrier of buying SUI tokens.
-| [SuiNS / MVR](https://docs.suins.io/move-registry) | Sui Name Service (SuiNS) provides a human-readable, decentralized identity (sui.id) that replaces complex wallet addresses. Multi-Venue Resolution (MVR) ensures this single identity is consistently recognized and linked across various applications and smart contracts. | Enables gamers to use a simple, memorable username (e.g., GamerTag.sui) as their universal profile, friend identifier, and wallet address, creating a seamless and unified digital identity across all Sui-based games. |
+| Technology                                                                              | Description | Video Game Utilization |
+|-----------------------------------------------------------------------------------------| --- | --- |
+| [zkLogin (Account Abstraction)](https://docs.sui.io/concepts/cryptography/zklogin)      | A Zero Knowledge Proof (ZKP) system that allows users to create and log into a Sui wallet using familiar Web2 credentials (e.g., Google or Facebook). | Removes the friction of seed phrases and complex wallet setup, enabling a seamless, Web2 like onboarding process for mainstream gamers. |
+| [Sponsored Transactions](https://docs.sui.io/guides/developer/transactions/sponsor-txn) | The ability for a developer or a designated entity to pay the gas fees for an end user's transactions (via Enoki or similar services). | Allows games to be truly "free to start" by covering the gas costs for initial players, removing the barrier of buying SUI tokens.
+| [SuiNS / MVR](https://docs.suins.io/move-registry)                                      | Sui Name Service (SuiNS) provides a human-readable, decentralized identity (sui.id) that replaces complex wallet addresses. Multi-Venue Resolution (MVR) ensures this single identity is consistently recognized and linked across various applications and smart contracts. | Enables gamers to use a simple, memorable username (e.g., GamerTag.sui) as their universal profile, friend identifier, and wallet address, creating a seamless and unified digital identity across all Sui-based games. |
 
 # V. Development Tooling Partnerships
 | Partnership/SDK | Description | Video Game Utilization |

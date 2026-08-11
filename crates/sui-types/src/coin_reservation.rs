@@ -45,7 +45,7 @@ use crate::{
     committee::EpochId,
     digests::{ChainIdentifier, ObjectDigest},
     error::{UserInputError, UserInputResult},
-    storage::ChildObjectResolver,
+    storage::RuntimeObjectResolver,
     transaction::FundsWithdrawalArg,
 };
 
@@ -208,13 +208,13 @@ pub fn encode_object_ref(
 /// Resolves coin reservations by looking up the accumulator object to determine
 /// the owner and type of the balance being withdrawn.
 pub struct CoinReservationResolver {
-    child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
+    runtime_object_resolver: Arc<dyn RuntimeObjectResolver + Send + Sync>,
 }
 
 impl CoinReservationResolver {
-    pub fn new(child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>) -> Self {
+    pub fn new(runtime_object_resolver: Arc<dyn RuntimeObjectResolver + Send + Sync>) -> Self {
         Self {
-            child_object_resolver,
+            runtime_object_resolver,
         }
     }
 
@@ -229,7 +229,7 @@ impl CoinReservationResolver {
         accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<Option<(SuiAddress, TypeTag)>> {
         let Some(object) = AccumulatorValue::load_object_by_id(
-            self.child_object_resolver.as_ref(),
+            self.runtime_object_resolver.as_ref(),
             accumulator_version,
             object_id,
         )

@@ -9,6 +9,7 @@ import {
     createFileInfo,
     IFileInfo,
     ILocalInfo,
+    ILoc,
     IDebugInfo,
     readAllDebugInfos,
     computeOptimizedLines,
@@ -18,6 +19,7 @@ import {
     INLINED_FRAME_ID_DIFFERENT_FILE,
     TraceEffectKind,
     TraceEvent,
+    TraceDiagnostic,
     TraceEventKind,
     TraceInstructionKind,
     readTrace,
@@ -130,7 +132,7 @@ interface IRuntimeVariable {
  * Describes a stack frame in the runtime representing a Move function
  * call and its current state during trace viewing session.
  */
-interface IMoveCallStackFrame {
+export interface IMoveCallStackFrame {
     /**
      *  Frame identifier.
      */
@@ -163,6 +165,14 @@ interface IMoveCallStackFrame {
      * Current line in the disassembled bytecode file corresponding to currently viewed instruction.
      */
     bcodeLine?: number; // 1-based
+    /**
+     * Function name location for display before the first source instruction is processed.
+     */
+    srcFunctionNameLoc?: ILoc;
+    /**
+     * Function name location for display before the first bytecode instruction is processed.
+     */
+    bcodeFunctionNameLoc?: ILoc;
     /**
      *  Local variable types by variable frame index.
      */
@@ -210,6 +220,11 @@ interface IMoveCallStackFrame {
      * showing disasembled bytecode.
      */
     disassemblyView: boolean;
+    /**
+     * Force bytecode view due to source being unavailable
+     * or unsafe for this frame.
+     */
+    forceDisassembly: boolean;
 }
 
 /**
@@ -323,6 +338,25 @@ export enum RuntimeEvents {
      *  Finish trace viewing session.
      */
     end = 'end',
+
+    /**
+     * Non-fatal warning about degraded trace-debugging behavior.
+     */
+    warning = 'warning',
+}
+
+/**
+ * Warning surfaced during trace debugging.
+ */
+export interface RuntimeWarning {
+    /**
+     * Opaque key used by the client to de-duplicate UI notifications.
+     */
+    key: string;
+    /**
+     * User-facing warning text.
+     */
+    message: string;
 }
 /**
  * Describes kind of execution result.
@@ -342,6 +376,19 @@ export type ExecutionResult =
     | { kind: ExecutionResultKind.TraceEnd }
     | { kind: ExecutionResultKind.Breakpoint }
     | { kind: ExecutionResultKind.Exception, msg: string };
+
+/**
+ * Returns the line to display for a Move stack frame.
+ */
+export function moveStackFrameDisplayLine(frame: IMoveCallStackFrame): number {
+    // Use actual frame line unless it's set to 0 which happens at frame
+    // creation time. Then try using function name location, which creates
+    // a much better user experience.
+    if (frame.disassemblyModeTriggered) {
+        return frame.bcodeLine || frame.bcodeFunctionNameLoc?.line || 0;
+    }
+    return frame.srcLine || frame.srcFunctionNameLoc?.line || 0;
+}
 
 /**
  * The runtime for viewing traces.
@@ -384,6 +431,14 @@ export class Runtime extends EventEmitter {
      * corresponds to one of the frames on the stack.
      */
     private currentMoveFile: string | undefined = undefined;
+
+    /**
+     * Warnings for synchronous snapshot tests. Warnings
+     * are emitted asynchronously as events and without being
+     * stored would not be available during synchronous execution
+     * until it's too late.
+     */
+    private warningsForTest: string[] = [];
 
     /**
      * Start a trace viewing session and set up the initial state of the runtime.
@@ -575,6 +630,8 @@ export class Runtime extends EventEmitter {
                     currentEvent.bcodeFileHash,
                     currentEvent.localsTypes,
                     currentEvent.localsNames,
+                    currentEvent.srcFunctionNameLoc,
+                    currentEvent.bcodeFunctionNameLoc,
                     currentEvent.optimizedSrcLines,
                     currentEvent.optimizedBcodeLines
                 );
@@ -592,6 +649,7 @@ export class Runtime extends EventEmitter {
             // and we have both source and disassembled bytecode files
             newFrame.disassemblyModeTriggered = disassemblyView && newFrame.bcodeFilePath !== undefined;
             newFrame.disassemblyView = disassemblyView;
+            this.handleOpenFrameDebugInfoMismatch(currentEvent, newFrame);
 
             const frameStack: IMoveCallStack = {
                 frames: [newFrame],
@@ -831,22 +889,31 @@ export class Runtime extends EventEmitter {
                         currentEvent.bcodeFileHash,
                         currentEvent.localsTypes,
                         currentEvent.localsNames,
+                        currentEvent.srcFunctionNameLoc,
+                        currentEvent.bcodeFunctionNameLoc,
                         currentEvent.optimizedSrcLines,
                         currentEvent.optimizedBcodeLines
                     );
-                // when creating a new frame maintain the invariant
-                // that all frames that belong to modules in the same
-                // file get the same view
+                // When creating a new frame, maintain the invariant that all
+                // frames for modules in the same source/bytecode file pair use
+                // the same user-selected view.
+                //
+                // Do not inherit from frames whose source is unavailable. Their
+                // disassembly view is a forced fallback for that specific frame,
+                // not a user-selected view that should propagate to other frames.
                 newFrame.disassemblyModeTriggered = moveCallStack.frames.find(
-                    frame => frame.disassemblyModeTriggered
+                    frame => !frame.forceDisassembly
+                        && frame.disassemblyModeTriggered
                         && frame.bcodeFilePath === newFrame.bcodeFilePath
                         && frame.srcFilePath === newFrame.srcFilePath
                 ) !== undefined;
                 newFrame.disassemblyView = moveCallStack.frames.find(
-                    frame => frame.disassemblyView
+                    frame => !frame.forceDisassembly
+                        && frame.disassemblyView
                         && frame.bcodeFilePath === newFrame.bcodeFilePath
                         && frame.srcFilePath === newFrame.srcFilePath
                 ) !== undefined;
+                this.handleOpenFrameDebugInfoMismatch(currentEvent, newFrame);
 
                 // set values of parameters in the new frame
                 moveCallStack.frames.push(newFrame);
@@ -1174,6 +1241,46 @@ export class Runtime extends EventEmitter {
     }
 
     /**
+     * Emits latent diagnostics attached to the current trace event.
+     */
+    private emitDiagnostics(diagnostics?: TraceDiagnostic[]): void {
+        if (!diagnostics) {
+            return;
+        }
+        for (const diagnostic of diagnostics) {
+            this.warn({ key: diagnostic.key, message: diagnostic.message });
+        }
+    }
+
+    /**
+     * Records a warning for tests and forwards it to the adapter.
+     */
+    private warn(warning: RuntimeWarning): void {
+        this.warningsForTest.push(warning.message);
+        this.sendEvent(RuntimeEvents.warning, warning);
+    }
+
+    /**
+     * Applies OpenFrame fallback behavior for trace/source debug-info mismatches.
+     */
+    private handleOpenFrameDebugInfoMismatch(
+        event: Extract<TraceEvent, { type: TraceEventKind.OpenFrame }>,
+        frame: IMoveCallStackFrame
+    ): void {
+        this.emitDiagnostics(event.diagnostics);
+        frame.forceDisassembly = event.forceDisassembly === true;
+        if (frame.forceDisassembly) {
+            // If bcodeFilePath is unavailable, srcFilePath already points at
+            // the bytecode file or there is no alternate bytecode view. In that
+            // case, do not force disassemblyView because it affects local-name rendering.
+            frame.disassemblyModeTriggered = frame.bcodeFilePath !== undefined;
+            if (frame.disassemblyModeTriggered) {
+                frame.disassemblyView = true;
+            }
+        }
+    }
+
+    /**
      * Handles `Instruction` trace event which represents instruction in the current stack frame.
      *
      * @param instructionEvent `Instruction` trace event.
@@ -1333,6 +1440,9 @@ export class Runtime extends EventEmitter {
             const moveCallStack = eventFrame as IMoveCallStack;
             moveCallStack.frames.forEach(frame => {
                 if (frame.bcodeFilePath === this.currentMoveFile) {
+                    if (frame.forceDisassembly) {
+                        return;
+                    }
                     frame.disassemblyModeTriggered = false;
                     frame.disassemblyView = false;
                 }
@@ -1362,6 +1472,8 @@ export class Runtime extends EventEmitter {
         bcodeFileHash: undefined | string,
         localsTypes: string[],
         localsInfo: ILocalInfo[],
+        srcFunctionNameLoc: undefined | ILoc,
+        bcodeFunctionNameLoc: undefined | ILoc,
         optimizedSrcLines: number[],
         optimizedBcodeLines: undefined | number[]
     ): IMoveCallStackFrame {
@@ -1389,9 +1501,12 @@ export class Runtime extends EventEmitter {
             bcodeFilePath,
             srcFileHash,
             bcodeFileHash,
-            // lines will be updated when next event (Instruction) is processed
+            // Keep execution lines unset until the first instruction is processed; otherwise
+            // same-line detection could skip the first instruction when it shares the function line.
             srcLine: 0,
             bcodeLine: 0,
+            srcFunctionNameLoc,
+            bcodeFunctionNameLoc,
             localsTypes,
             localsInfo,
             locals,
@@ -1403,6 +1518,7 @@ export class Runtime extends EventEmitter {
             // as this function is executed in different contexts
             disassemblyModeTriggered: false,
             disassemblyView: false,
+            forceDisassembly: false,
         };
 
         if (this.trace.events.length <= this.eventIndex + 1 ||
@@ -1429,6 +1545,15 @@ export class Runtime extends EventEmitter {
     //
     // Utility functions for testing and debugging.
     //
+
+    /**
+     * Returns and clears warnings emitted since the last test retrieval.
+     */
+    public takeWarningsForTest(): string[] {
+        const result = this.warningsForTest;
+        this.warningsForTest = [];
+        return result;
+    }
 
     /**
      * Whitespace used for indentation in the string representation of the runtime.
@@ -1495,14 +1620,13 @@ export class Runtime extends EventEmitter {
             const fileName = frame.disassemblyModeTriggered ?
                 path.basename(frame.bcodeFilePath!) :
                 path.basename(frame.srcFilePath);
-            const line = frame.disassemblyModeTriggered ? frame.bcodeLine : frame.srcLine;
             res += tabs + this.singleTab
                 + 'function: '
                 + frame.name
                 + ' ('
                 + fileName
                 + ':'
-                + line
+                + moveStackFrameDisplayLine(frame)
                 + ')\n';
             for (let i = 0; i < frame.locals.length; i++) {
                 res += tabs + this.singleTab + this.singleTab + 'scope ' + i + ' :\n';

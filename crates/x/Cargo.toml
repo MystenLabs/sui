@@ -5,9 +5,13 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
 nexlint.workspace = true
 nexlint-lints.workspace = true
 clap.workspace = true
 camino.workspace = true
+toml.workspace = true

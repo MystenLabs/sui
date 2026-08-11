@@ -8,7 +8,7 @@ entry fun foo() {
     let e_imm: &u64;
     let e_mut: &mut u64;
 label b0:
-    v = vec_pack_0<u64>();
+    v = vector<u64; 0>();
     v_imm = &v;
     v_len = vec_len<u64>(copy(v_imm));
     _ = move(v_imm);
@@ -27,7 +27,7 @@ label b0:
     _ = vec_pop_back<u64>(copy(v_mut));
     _ = move(v_mut);
 
-    vec_unpack_0<u64>(move(v));
+    vector<u64; 0>() = move(v);
     return;
 }
 }

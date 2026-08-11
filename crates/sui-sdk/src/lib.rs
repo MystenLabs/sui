@@ -108,6 +108,7 @@ use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriverApi, ReadApi
 use crate::error::{Error, SuiRpcResult};
 
 pub mod apis;
+pub mod digests;
 pub mod error;
 pub mod json_rpc_error;
 pub mod sui_client_config;

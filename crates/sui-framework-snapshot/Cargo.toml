@@ -7,6 +7,9 @@ description = "Tool to create a bytecode snapshot of the current sui-framework"
 license = "Apache-2.0"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
 bcs.workspace = true

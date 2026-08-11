@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_2024/typing/lambda_return_invalid_simple.move:8:15
   │
 8 │         call!<u64>(|| return &0u64);
@@ -14,7 +14,7 @@ error[E04007]: incompatible types
   │               Invalid type annotation
   │               Expected: 'u64'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_2024/typing/lambda_return_invalid_simple.move:9:15
   │
 9 │         call!<&u64>(|| return 0u64);
@@ -23,7 +23,7 @@ error[E04007]: incompatible types
   │               Invalid type annotation
   │               Expected: '&u64'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/lambda_return_invalid_simple.move:10:15
    │
 10 │         call!<(&u64, u8)>(|| return (&0u64, 1u64, 3u64));

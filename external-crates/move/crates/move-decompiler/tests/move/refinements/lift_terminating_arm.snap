@@ -1,0 +1,15 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module lift_terminating_arm {
+    public fun guard_abort () {
+        assert!(l0 != 0u64, Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] })
+        return l0 + 1u64 + 10u64
+    }
+
+    public fun guard_abort_in_else () {
+        assert!(l0 == 0u64, Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] })
+        return 52u64
+    }
+
+}

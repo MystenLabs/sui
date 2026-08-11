@@ -104,6 +104,7 @@ fn zklogin_sign_personal_message() {
         parsed,
         vec![],
         ZkLoginEnv::Test,
+        0, // v1 circuit mode only
         true,
         true,
         true,

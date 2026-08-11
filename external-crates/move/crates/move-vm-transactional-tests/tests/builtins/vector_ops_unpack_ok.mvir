@@ -4,8 +4,8 @@ mvir 0x5::m {
 entry fun foo() {
     let v: vector<u64>;
 label b0:
-    v = vec_pack_1<u64>(42);
-    _ = vec_unpack_1<u64>(move(v));
+    v = vector<u64; 1>(42);
+    vector<u64; 1>(_) = move(v);
 
     return;
 }
@@ -17,8 +17,8 @@ mvir 0x6::m {
 entry fun foo() {
     let v: vector<u64>;
 label b0:
-    v = vec_pack_2<u64>(42, 43);
-    _, _ = vec_unpack_2<u64>(move(v));
+    v = vector<u64; 2>(42, 43);
+    vector<u64; 2>(_, _) = move(v);
 
     return;
 }
@@ -30,9 +30,9 @@ mvir 0x7::m {
 entry fun foo() {
     let v: vector<u64>;
 label b0:
-    v = vec_pack_1<u64>(42);
+    v = vector<u64; 1>(42);
     vec_push_back<u64>(&mut v, 43);
-    _, _ = vec_unpack_2<u64>(move(v));
+    vector<u64; 2>(_, _) = move(v);
 
     return;
 }
@@ -45,9 +45,9 @@ mvir 0x8::m {
 entry fun foo() {
     let v: vector<u64>;
 label b0:
-    v = vec_pack_1<u64>(42);
+    v = vector<u64; 1>(42);
     _ = vec_pop_back<u64>(&mut v);
-    vec_unpack_0<u64>(move(v));
+    vector<u64; 0>() = move(v);
 
     return;
 }

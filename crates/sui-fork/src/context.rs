@@ -3,84 +3,94 @@
 
 use std::sync::Arc;
 
-use anyhow::Context as _;
 use anyhow::Result;
-use anyhow::anyhow;
+use prometheus::Registry;
 use rand::rngs::OsRng;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
-use tokio::sync::mpsc;
+use tokio::sync::broadcast;
 
 use simulacrum::Simulacrum;
-use sui_protocol_config::Chain;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::messages_checkpoint::VerifiedCheckpoint;
-use sui_types::storage::ReadStore as _;
 
-use crate::store::DataStore;
+use crate::services::ServiceManager;
+use crate::store::ForkStore;
 
-type ForkedSimulacrum = Simulacrum<OsRng, DataStore>;
+type ForkedSimulacrum = Simulacrum<OsRng, ForkStore>;
 
 /// Metadata for a checkpoint created by the forked network.
 ///
-/// The full checkpoint payload is an internal publication detail; callers only
-/// need these fields for RPC responses and finality metadata.
+/// Callers only need these fields for RPC responses and finality metadata, and the checkpoint
+/// itself is re-read from the store by the indexer.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct CreatedCheckpointMetadata {
-    /// Checkpoint numbers
+    /// Sequence number of the created checkpoint.
     pub(crate) sequence_number: CheckpointSequenceNumber,
-    /// Checkpoint timestamp
+
+    /// Timestamp of the created checkpoint, in milliseconds.
     pub(crate) timestamp_ms: u64,
 }
 
-struct CheckpointPublication {
-    metadata: CreatedCheckpointMetadata,
-    payload: Checkpoint,
-}
-
-/// Shared context for the forked network: the simulacrum, chain identifier,
-/// and the producer half of the checkpoint subscription channel.
+/// Shared context for the forked network, holding the simulacrum and the service manager running
+/// the embedded indexer.
 pub struct Context {
     simulacrum: Arc<RwLock<ForkedSimulacrum>>,
-    chain_identifier: Chain,
-    checkpoint_sender: mpsc::Sender<Checkpoint>,
+    services: ServiceManager,
     checkpoint_publication_lock: Mutex<()>,
 }
 
 impl Context {
-    pub(crate) fn new(
-        simulacrum: Simulacrum<OsRng, DataStore>,
-        chain_identifier: Chain,
-        checkpoint_sender: mpsc::Sender<Checkpoint>,
-    ) -> Self {
-        Self {
-            simulacrum: Arc::new(RwLock::new(simulacrum)),
-            chain_identifier,
-            checkpoint_sender,
+    /// Build a `Context` whose Simulacrum is backed by a started [`ServiceManager`].
+    ///
+    /// Starts the embedded `sui-rpc-store` indexer over `checkpoint_sender` before returning, so
+    /// committed local checkpoints get indexed for RPC reads. The indexer's broadcast pipeline owns
+    /// `checkpoint_sender` from here on and is what publishes to subscribers, so their ordering
+    /// follows indexing rather than sealing.
+    pub(crate) async fn new(
+        simulacrum: Simulacrum<OsRng, ForkStore>,
+        mut services: ServiceManager,
+        checkpoint_sender: broadcast::Sender<Arc<Checkpoint>>,
+        registry: &Registry,
+    ) -> Result<Self> {
+        let simulacrum = Arc::new(RwLock::new(simulacrum));
+        services
+            .start_indexer(simulacrum.clone(), checkpoint_sender, registry)
+            .await?;
+        Ok(Self {
+            simulacrum,
+            services,
             checkpoint_publication_lock: Mutex::new(()),
-        }
+        })
     }
 
     pub(crate) fn simulacrum(&self) -> &Arc<RwLock<ForkedSimulacrum>> {
         &self.simulacrum
     }
 
-    pub(crate) fn chain_identifier(&self) -> &Chain {
-        &self.chain_identifier
+    /// Return the service manager, for tests alone, because production reads go through the store
+    /// handles created at startup.
+    #[cfg(test)]
+    pub(crate) fn services(&self) -> &ServiceManager {
+        &self.services
     }
 
-    /// Execute `operation`, create a checkpoint afterward, and publish that
-    /// checkpoint to subscribers.
+    /// Resolve when the embedded rpc-store indexer stops. The server loop uses this as a liveness
+    /// watchdog, so an indexer failure surfaces immediately instead of as a publication timeout on
+    /// the next executed transaction.
+    pub(crate) async fn indexer_stopped(&self) -> anyhow::Result<()> {
+        self.services.indexer_stopped().await
+    }
+
+    /// Execute `operation`, create a checkpoint afterward, and publish that checkpoint to
+    /// subscribers.
     ///
-    /// This is the main entry point for any execution that requires checkpoint
-    /// advancement to ensure the checkpoint is published for the subscription
-    /// service.
+    /// This is the main entry point for any execution that requires checkpoint advancement, and it
+    /// returns only once `sui-rpc-store` has indexed the checkpoint.
     ///
     /// # Panics
     ///
-    /// Panics if Simulacrum creates a checkpoint but the full checkpoint
-    /// payload cannot be assembled from the same store.
+    /// Panics if the indexer cannot index the checkpoint before publishing.
     pub(crate) async fn run_with_new_checkpoint<T, F>(
         &self,
         operation: F,
@@ -94,16 +104,13 @@ impl Context {
             .unwrap_or_else(|never| match never {})
     }
 
-    /// Fallible variant of [`Self::run_with_new_checkpoint`]. If `operation`
-    /// returns an error, no checkpoint is created. The publication lock is
-    /// intentionally held through enqueueing the checkpoint so the
-    /// `sui-rpc-api` subscription broker observes the same order that
-    /// Simulacrum used to create checkpoints.
+    /// Fallible variant of [`Self::run_with_new_checkpoint`]. If `operation` returns an error, no
+    /// checkpoint is created. The publication lock is intentionally held through indexing so
+    /// subscribers observe the same order that Simulacrum used to create checkpoints.
     ///
     /// # Panics
     ///
-    /// Panics if Simulacrum creates a checkpoint but the full checkpoint
-    /// payload cannot be assembled from the same store.
+    /// Panics if the indexer cannot index the checkpoint before publishing.
     pub(crate) async fn try_run_with_new_checkpoint<T, E, F>(
         &self,
         operation: F,
@@ -114,65 +121,36 @@ impl Context {
         F: FnOnce(&mut ForkedSimulacrum) -> std::result::Result<T, E> + Send,
     {
         let _checkpoint_publication_guard = self.checkpoint_publication_lock.lock().await;
-        let (output, publication) = {
+        let (output, metadata) = {
             let mut sim = self.simulacrum.write().await;
             let output = operation(&mut sim)?;
-            let publication = Self::create_checkpoint_publication(&mut sim);
-            (output, publication)
+            let metadata = Self::create_checkpoint(&mut sim);
+            (output, metadata)
         };
 
-        let metadata = publication.metadata;
-        self.publish_checkpoint(publication).await;
+        // Publication is the indexer catching up: it pulls the sealed
+        // checkpoint back out of the store, writes the derived indexes, and
+        // broadcasts to subscribers. Returning before it has caught up would
+        // let an RPC read observe a transaction whose derived state is not
+        // there yet.
+        self.services
+            .wait_for_indexed_checkpoint(metadata.sequence_number)
+            .await
+            .unwrap_or_else(|err| {
+                panic!(
+                    "failed to publish checkpoint {}: {err:#}",
+                    metadata.sequence_number
+                )
+            });
 
         Ok((output, metadata))
     }
 
-    fn create_checkpoint_publication(sim: &mut ForkedSimulacrum) -> CheckpointPublication {
+    fn create_checkpoint(sim: &mut ForkedSimulacrum) -> CreatedCheckpointMetadata {
         let verified = sim.create_checkpoint();
-        let metadata = CreatedCheckpointMetadata {
+        CreatedCheckpointMetadata {
             sequence_number: verified.data().sequence_number,
             timestamp_ms: verified.data().timestamp_ms,
-        };
-
-        let payload = Self::checkpoint_payload(sim, verified).unwrap_or_else(|err| {
-            panic!(
-                "failed to build checkpoint {} after Simulacrum created it: {err}",
-                metadata.sequence_number
-            )
-        });
-
-        CheckpointPublication { metadata, payload }
-    }
-
-    fn checkpoint_payload(
-        sim: &ForkedSimulacrum,
-        verified: VerifiedCheckpoint,
-    ) -> Result<Checkpoint> {
-        let contents = sim
-            .store()
-            .get_checkpoint_contents_by_digest(&verified.content_digest)?
-            .ok_or_else(|| {
-                anyhow!(
-                    "checkpoint contents for sequence {} not found",
-                    verified.data().sequence_number
-                )
-            })?;
-
-        Ok(sim.get_checkpoint_data(verified, contents)?)
-    }
-
-    async fn publish_checkpoint(&self, publication: CheckpointPublication) {
-        if let Err(err) = self
-            .checkpoint_sender
-            .send(publication.payload)
-            .await
-            .context("failed to enqueue checkpoint to subscription service")
-        {
-            tracing::warn!(
-                sequence_number = publication.metadata.sequence_number,
-                ?err,
-                "failed to publish checkpoint to subscribers"
-            );
         }
     }
 }

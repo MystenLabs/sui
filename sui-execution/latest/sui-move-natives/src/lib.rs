@@ -28,6 +28,11 @@ use self::{
     },
     event::EventEmitCostParams,
     object::{BorrowUidCostParams, DeleteImplCostParams, RecordNewIdCostParams},
+    package::PackageVersioningOriginalPackageIdImplCostParams,
+    scratch::{
+        ScratchAddCostParams, ScratchExistsCostParams, ScratchExistsWithTypeCostParams,
+        ScratchReadCostParams, ScratchRemoveCostParams,
+    },
     transfer::{
         TransferFreezeObjectCostParams, TransferInternalCostParams, TransferShareObjectCostParams,
     },
@@ -86,8 +91,10 @@ pub mod event;
 mod funds_accumulator;
 mod object;
 pub mod object_runtime;
+mod package;
 mod protocol_config;
 mod random;
+pub mod scratch;
 pub mod test_scenario;
 mod test_utils;
 pub mod transaction_context;
@@ -108,6 +115,10 @@ pub struct NativesCostTable {
     // Config
     pub config_read_setting_impl_cost_params: ConfigReadSettingImplCostParams,
 
+    // Package versioning
+    pub package_original_package_id_impl_cost_params:
+        PackageVersioningOriginalPackageIdImplCostParams,
+
     // Dynamic field natives
     pub dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams,
     pub dynamic_field_add_child_object_cost_params: DynamicFieldAddChildObjectCostParams,
@@ -116,6 +127,13 @@ pub struct NativesCostTable {
     pub dynamic_field_has_child_object_cost_params: DynamicFieldHasChildObjectCostParams,
     pub dynamic_field_has_child_object_with_ty_cost_params:
         DynamicFieldHasChildObjectWithTyCostParams,
+
+    // Scratch natives
+    pub scratch_add_cost_params: ScratchAddCostParams,
+    pub scratch_read_cost_params: ScratchReadCostParams,
+    pub scratch_remove_cost_params: ScratchRemoveCostParams,
+    pub scratch_exists_cost_params: ScratchExistsCostParams,
+    pub scratch_exists_with_type_cost_params: ScratchExistsWithTypeCostParams,
 
     // Event natives
     pub event_emit_cost_params: EventEmitCostParams,
@@ -230,6 +248,16 @@ impl NativesCostTable {
                     .map(Into::into),
             },
 
+            package_original_package_id_impl_cost_params:
+                PackageVersioningOriginalPackageIdImplCostParams {
+                    package_original_package_id_impl_cost_base: protocol_config
+                        .package_original_package_id_impl_cost_base_as_option()
+                        .map(Into::into),
+                    package_original_package_id_impl_cost_per_byte: protocol_config
+                        .package_original_package_id_impl_cost_per_byte_as_option()
+                        .map(Into::into),
+                },
+
             dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams {
                 dynamic_field_hash_type_and_key_cost_base: protocol_config
                     .dynamic_field_hash_type_and_key_cost_base()
@@ -300,6 +328,38 @@ impl NativesCostTable {
                         .into(),
                 },
 
+            scratch_add_cost_params: ScratchAddCostParams {
+                scratch_add_cost_base: protocol_config
+                    .scratch_add_cost_base_as_option()
+                    .map(Into::into),
+            },
+            scratch_read_cost_params: ScratchReadCostParams {
+                scratch_read_cost_base: protocol_config
+                    .scratch_read_cost_base_as_option()
+                    .map(Into::into),
+                scratch_read_value_cost: protocol_config
+                    .scratch_read_value_cost_as_option()
+                    .map(Into::into),
+            },
+            scratch_remove_cost_params: ScratchRemoveCostParams {
+                scratch_remove_cost_base: protocol_config
+                    .scratch_remove_cost_base_as_option()
+                    .map(Into::into),
+            },
+            scratch_exists_cost_params: ScratchExistsCostParams {
+                scratch_exists_cost_base: protocol_config
+                    .scratch_exists_cost_base_as_option()
+                    .map(Into::into),
+            },
+            scratch_exists_with_type_cost_params: ScratchExistsWithTypeCostParams {
+                scratch_exists_with_type_cost_base: protocol_config
+                    .scratch_exists_with_type_cost_base_as_option()
+                    .map(Into::into),
+                scratch_exists_with_type_type_cost: protocol_config
+                    .scratch_exists_with_type_type_cost_as_option()
+                    .map(Into::into),
+            },
+
             event_emit_cost_params: EventEmitCostParams {
                 event_emit_value_size_derivation_cost_per_byte: protocol_config
                     .event_emit_value_size_derivation_cost_per_byte()
@@ -326,6 +386,9 @@ impl NativesCostTable {
                 object_record_new_uid_cost_base: protocol_config
                     .object_record_new_uid_cost_base()
                     .into(),
+                object_record_new_uid_from_hash_cost_base: protocol_config
+                    .object_record_new_uid_from_hash_cost_base_as_option()
+                    .map(Into::into),
             },
 
             // Crypto
@@ -952,6 +1015,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             make_native!(config::read_setting_impl),
         ),
         (
+            "package",
+            "original_package_id_impl",
+            make_native!(package::original_package_id_impl),
+        ),
+        (
             "dynamic_field",
             "add_child_object",
             make_native!(dynamic_field::add_child_object),
@@ -980,6 +1048,15 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "dynamic_field",
             "has_child_object_with_ty",
             make_native!(dynamic_field::has_child_object_with_ty),
+        ),
+        ("scratch", "add_impl", make_native!(scratch::add_impl)),
+        ("scratch", "read_impl", make_native!(scratch::read_impl)),
+        ("scratch", "remove_impl", make_native!(scratch::remove_impl)),
+        ("scratch", "exists_impl", make_native!(scratch::exists_impl)),
+        (
+            "scratch",
+            "exists_with_type_impl",
+            make_native!(scratch::exists_with_type_impl),
         ),
         (
             "ecdsa_k1",
@@ -1102,6 +1179,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "object",
             "record_new_uid",
             make_native!(object::record_new_uid),
+        ),
+        (
+            "object",
+            "record_new_uid_from_hash",
+            make_native!(object::record_new_uid_from_hash),
         ),
         (
             "test_scenario",
@@ -1305,6 +1387,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "rangeproofs",
             "verify_bulletproofs_ristretto255_internal",
             make_native!(rangeproofs::verify_bulletproofs_ristretto255),
+        ),
+        (
+            "rangeproofs",
+            "verify_bulletproofs_with_dst_ristretto255_internal",
+            make_native!(rangeproofs::verify_bulletproofs_with_dst_ristretto255),
         ),
     ];
     let sui_framework_natives_iter =

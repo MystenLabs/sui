@@ -79,7 +79,9 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, RandomnessRound, get_authority_key_pair,
 };
-use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest, TransactionDigest};
+use sui_types::digests::{
+    ChainIdentifier, CheckpointDigest, ConsensusCommitDigest, TransactionDigest,
+};
 use sui_types::effects::{
     AccumulatorOperation, AccumulatorValue as EffectsAccumulatorValue, TransactionEffects,
     TransactionEffectsAPI, TransactionEvents,
@@ -168,6 +170,9 @@ pub struct SuiTestAdapter {
     object_enumeration: BiBTreeMap<ObjectID, FakeID>,
     /// Mapping from task ID to a transaction digest, for use in named variable substitution.
     digest_enumeration: BTreeMap<u64, TransactionDigest>,
+    /// Mapping from a checkpoint's sequence number to its digest, for use in named variable
+    /// substitution as `@{cp_digest_N}`.
+    cp_digest_enumeration: BTreeMap<u64, CheckpointDigest>,
     /// Tracks the global creation order of each object across all transactions.
     creation_order: BTreeMap<ObjectID, u64>,
     next_fake: (u64, u64),
@@ -254,8 +259,8 @@ impl AdapterInitConfig {
         let SuiInitArgs {
             accounts,
             protocol_version,
+            chain,
             max_gas,
-            shared_object_deletion,
             simulator,
             num_custom_validator_accounts,
             reference_gas_price,
@@ -264,16 +269,12 @@ impl AdapterInitConfig {
             consistent_range,
             data_ingestion_path,
             rest_api_url,
-            enable_accumulators,
-            enable_authenticated_event_streams,
-            allow_references_in_ptbs,
-            enable_non_exclusive_writes,
-            enable_address_balance_gas_payments,
-            enable_coin_reservations,
             file_format_version,
             enable_gasless,
             gasless_max_pure_input_bytes,
             gasless_max_unused_inputs,
+            enable_feature_flags,
+            disable_feature_flags,
         } = sui_args;
 
         let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -281,6 +282,7 @@ impl AdapterInitConfig {
             .map(|v| v.into_iter().collect::<BTreeSet<_>>())
             .unwrap_or_default();
 
+        let chain = chain.unwrap_or(Chain::Unknown);
         let mut protocol_config = if let Some(protocol_version) = protocol_version {
             assert!(
                 protocol_version <= ProtocolVersion::max().as_u64(),
@@ -293,31 +295,10 @@ impl AdapterInitConfig {
                 "Do not set the protocol version to the max {}. It can lead to unanticipated test changes once the max version is bumped. Instead, leave it unset to always use the max version.",
                 protocol_version,
             );
-            ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
+            ProtocolConfig::get_for_version(protocol_version.into(), chain)
         } else {
-            ProtocolConfig::get_for_max_version_UNSAFE()
+            ProtocolConfig::get_for_version(ProtocolVersion::MAX, chain)
         };
-        if enable_accumulators {
-            protocol_config.enable_accumulators_for_testing();
-        }
-        if enable_authenticated_event_streams {
-            protocol_config.enable_authenticated_event_streams_for_testing();
-        }
-        if allow_references_in_ptbs {
-            protocol_config.allow_references_in_ptbs_for_testing();
-        }
-        if enable_non_exclusive_writes {
-            protocol_config.enable_non_exclusive_writes_for_testing();
-        }
-        if let Some(enable) = shared_object_deletion {
-            protocol_config.set_shared_object_deletion_for_testing(enable);
-        }
-        if enable_address_balance_gas_payments {
-            protocol_config.enable_address_balance_gas_payments_for_testing();
-        }
-        if enable_coin_reservations {
-            protocol_config.enable_coin_reservation_for_testing();
-        }
         if enable_gasless {
             protocol_config.enable_gasless_for_testing();
         }
@@ -334,6 +315,12 @@ impl AdapterInitConfig {
                 "gasless-max-unused-inputs requires --enable-gasless"
             );
             protocol_config.set_gasless_max_unused_inputs_for_testing(max_unused);
+        }
+        for flag in enable_feature_flags {
+            protocol_config.set_feature_flag_for_testing(flag, true);
+        }
+        for flag in disable_feature_flags {
+            protocol_config.set_feature_flag_for_testing(flag, false);
         }
         // Older protocol versions use deprecated congestion control modes. Override to use
         // ExecutionTimeEstimate mode which is the only supported mode.
@@ -526,6 +513,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             default_syntax,
             object_enumeration: BiBTreeMap::new(),
             digest_enumeration: BTreeMap::new(),
+            cp_digest_enumeration: BTreeMap::new(),
             creation_order: BTreeMap::new(),
             next_fake: (0, 0),
             // TODO: make this configurable
@@ -877,7 +865,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             }
             SuiSubcommand::CreateCheckpoint(CreateCheckpointCommand { count }) => {
                 for _ in 0..count.unwrap_or(1) {
-                    self.executor.create_checkpoint().await?;
+                    let checkpoint = self.executor.create_checkpoint().await?;
+                    let summary = checkpoint.data();
+                    self.cp_digest_enumeration
+                        .insert(summary.sequence_number, *checkpoint.digest());
                 }
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 Ok(Some(format!("Checkpoint created: {}", latest_chk)))
@@ -1724,6 +1715,10 @@ impl SuiTestAdapter {
             variables.insert(format!("digest_{tid}"), digest.to_string());
         }
 
+        for (seq, digest) in &self.cp_digest_enumeration {
+            variables.insert(format!("cp_digest_{seq}"), digest.to_string());
+        }
+
         variables
     }
 
@@ -2184,11 +2179,7 @@ impl SuiTestAdapter {
     }
 
     async fn dry_run(&mut self, transaction: TransactionData) -> anyhow::Result<TxnSummary> {
-        let digest = transaction.digest();
-        let results = self
-            .executor
-            .dry_run_transaction_block(transaction, digest)
-            .await?;
+        let results = self.executor.dry_run_transaction_block(transaction).await?;
         let DryRunTransactionBlockResponse {
             effects, events, ..
         } = results;
@@ -2833,7 +2824,6 @@ async fn create_validator_fullnode(
         .with_starting_objects(objects)
         .with_shared_network_config(&network_config)
         .insert_genesis_checkpoint()
-        .skip_rpc_index_init()
         .skip_genesis_owner_index()
         .build()
         .await;
@@ -2845,7 +2835,6 @@ async fn create_validator_fullnode(
         .with_shared_network_config(&network_config)
         .with_keypair(&fullnode_key_pair)
         .insert_genesis_checkpoint()
-        .skip_rpc_index_init()
         .skip_genesis_owner_index()
         .build()
         .await;

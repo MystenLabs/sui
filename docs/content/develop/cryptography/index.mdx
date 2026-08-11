@@ -1,11 +1,45 @@
 ---
 title: Cryptography
-description: The system supports multiple cryptography algorithms and primitives and can switch between them rapidly.
-keywords: [ cryptographic primitives, public keys, signatures, aggregated signatures, hash functions, cryptographic algorithms, cryptography on sui, zkLogin, transaction authentication, passkey ]
+description: >-
+  The system supports multiple cryptography algorithms and primitives and can
+  switch between them rapidly.
+keywords:
+  - cryptographic primitives
+  - public keys
+  - signatures
+  - aggregated signatures
+  - hash functions
+  - cryptographic algorithms
+  - cryptography on sui
+  - zkLogin
+  - transaction authentication
+  - passkey
 pagination_prev: null
+goal:
+  description: >-
+    Reader can find the right cryptography subtopic for their use case,
+    including hashing, signatures, passkeys, and zkLogin
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Cryptography in Sui?
+  - What topics does Cryptography cover?
+  - How does cryptography work on Sui?
+answer: >-
+  Cryptographic agility is core to Sui. The system supports multiple
+  cryptography algorithms and primitives and can switch between them rapidly.
 ---
 
 Cryptographic agility is core to Sui. The system supports multiple cryptography algorithms and primitives and can switch between them rapidly.
+
+Sui's cryptographic capabilities extend beyond smart contract primitives. For Bitcoin integration through threshold cryptography, see [Hashi](/sui-stack/hashi) (the Sui native Bitcoin orchestrator). For passwordless authentication using device-native key pairs, see [Passkeys](/develop/cryptography/passkeys). For zero-knowledge authentication with OAuth providers, see [zkLogin](/sui-stack/zklogin-integration).
 
 import DocCardList from '@theme/DocCardList';
 

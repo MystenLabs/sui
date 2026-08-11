@@ -33,7 +33,7 @@ mvir 0x4::vector {
         let r: &mut u64;
     label b0:
         r = vec_mut_borrow<u64>(copy(v), 0);
-        *move(v) = vec_pack_0<u64>();
+        *move(v) = vector<u64; 0>();
         return;
     }
 }

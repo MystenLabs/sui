@@ -18,11 +18,11 @@ use crate::testing::emit_event_harness;
 use crate::testing::graphql_redactions;
 
 fn event_value(item: &Value) -> Option<&str> {
-    item["data"]["events"]["contents"]["json"]["value"].as_str()
+    item["data"]["events"]["node"]["contents"]["json"]["value"].as_str()
 }
 
 fn event_bcs(item: &Value) -> Option<&str> {
-    item["data"]["events"]["eventBcs"].as_str()
+    item["data"]["events"]["node"]["eventBcs"].as_str()
 }
 
 #[tokio::test]
@@ -34,14 +34,16 @@ async fn test_event_subscription() {
         .subscribe_with_variables(
             r#"subscription($pkg: SuiAddress!) {
                 events(filter: { type: $pkg }) {
-                    sender { address }
-                    transaction { digest }
-                    contents {
-                        type { repr }
-                        json
+                    node {
+                        sender { address }
+                        transaction { digest }
+                        contents {
+                            type { repr }
+                            json
+                        }
+                        sequenceNumber
+                        timestamp
                     }
-                    sequenceNumber
-                    timestamp
                 }
             }"#,
             Some(json!({ "pkg": package_id.to_string() })),
@@ -66,8 +68,10 @@ async fn test_event_subscription_sender_filter() {
         .subscribe_with_variables(
             r#"subscription($sender: SuiAddress!) {
                 events(filter: { sender: $sender }) {
-                    sender { address }
-                    contents { type { repr } }
+                    node {
+                        sender { address }
+                        contents { type { repr } }
+                    }
                 }
             }"#,
             Some(json!({ "sender": sender.to_string() })),
@@ -82,6 +86,188 @@ async fn test_event_subscription_sender_filter() {
     });
 }
 
+/// Verifies that `event.transaction.<field>` resolves fully in streaming mode rather
+/// than returning a digest-only stub. Exercises `TransactionContents::fetch`'s streaming
+/// fast path.
+#[tokio::test]
+async fn test_event_subscription_transaction_fields() {
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let package_id = emit_event_harness::publish(&mut cluster.validator).await;
+
+    let mut stream = cluster
+        .subscribe_with_variables(
+            r#"subscription($pkg: SuiAddress!) {
+                events(filter: { type: $pkg }) {
+                    node {
+                        transaction {
+                            digest
+                            sender { address }
+                            kind { __typename }
+                            gasInput { gasBudget gasPrice }
+                        }
+                        contents { type { repr } }
+                    }
+                }
+            }"#,
+            Some(json!({ "pkg": package_id.to_string() })),
+        )
+        .await;
+
+    let _digest = emit_event_harness::emit(&mut cluster.validator, package_id).await;
+    let item = stream.next().await.expect("Stream ended");
+
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!("event_subscription_transaction_fields", item);
+    });
+}
+
+/// Verifies the `IAddressable.asTransactionObject` resolver in streaming mode for the
+/// `ObjectChange` variant.
+#[tokio::test]
+async fn test_event_subscription_as_transaction_object_change() {
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let package_id = emit_event_harness::publish(&mut cluster.validator).await;
+
+    // Pre-create the object in a separate tx, before subscribing, so the subscription
+    // only sees the mutation tx's event.
+    let (_, object_ref) =
+        emit_event_harness::create_object(&mut cluster.validator, package_id, /* value = */ 7)
+            .await;
+
+    let mut stream = cluster
+        .subscribe_with_variables(
+            r#"subscription($pkg: SuiAddress!) {
+                events(filter: { type: $pkg }) {
+                    node {
+                        contents {
+                            extract(path: "address_event_id") {
+                                asAddress {
+                                    asTransactionObject {
+                                        __typename
+                                        ... on ObjectChange {
+                                            inputState {
+                                                asMoveObject { contents { json } }
+                                            }
+                                            outputState {
+                                                asMoveObject { contents { json } }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }"#,
+            Some(json!({ "pkg": package_id.to_string() })),
+        )
+        .await;
+
+    let _digest = emit_event_harness::mutate_and_emit(
+        &mut cluster.validator,
+        package_id,
+        object_ref,
+        /* new_value = */ 99,
+    )
+    .await;
+    let item = stream.next().await.expect("Stream ended");
+
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!("event_subscription_as_transaction_object_change", item);
+    });
+}
+
+/// Verifies the `IAddressable.asTransactionObject` resolver in streaming mode for the
+/// `ConsensusObjectRead` variant. The test tx takes the (read-only) shared clock as a
+/// consensus input and emits a `TestAddressEvent` whose payload is the clock's address.
+#[tokio::test]
+async fn test_event_subscription_as_transaction_object_consensus_read() {
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let package_id = emit_event_harness::publish(&mut cluster.validator).await;
+
+    let mut stream = cluster
+        .subscribe_with_variables(
+            r#"subscription($pkg: SuiAddress!) {
+                events(filter: { type: $pkg }) {
+                    node {
+                        contents {
+                            extract(path: "address_event_id") {
+                                asAddress {
+                                    asTransactionObject {
+                                        __typename
+                                        ... on ConsensusObjectRead {
+                                            object {
+                                                asMoveObject { contents { type { repr } } }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }"#,
+            Some(json!({ "pkg": package_id.to_string() })),
+        )
+        .await;
+
+    let _digest = emit_event_harness::emit_with_clock(&mut cluster.validator, package_id).await;
+    let item = stream.next().await.expect("Stream ended");
+
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!(
+            "event_subscription_as_transaction_object_consensus_read",
+            item
+        );
+    });
+}
+
+/// Verifies that `event.transaction.effects.objectChanges` resolves with non-empty
+/// object data in streaming mode. Exercises `EffectsContents::fetch`'s streaming fast
+/// path plus the per-tx execution-objects anchor that `Scope::with_tx_sequence_number_viewed_at`
+/// sets up.
+#[tokio::test]
+async fn test_event_subscription_object_changes() {
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let package_id = emit_event_harness::publish(&mut cluster.validator).await;
+
+    let mut stream = cluster
+        .subscribe_with_variables(
+            r#"subscription($pkg: SuiAddress!) {
+                events(filter: { type: $pkg }) {
+                    node {
+                        transaction {
+                            effects {
+                                status
+                                objectChanges {
+                                    nodes {
+                                        outputState {
+                                            address
+                                            version
+                                            digest
+                                            asMoveObject {
+                                                contents { type { repr } }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }"#,
+            Some(json!({ "pkg": package_id.to_string() })),
+        )
+        .await;
+
+    let _digest = emit_event_harness::emit_and_create(&mut cluster.validator, package_id, 7).await;
+    let item = stream.next().await.expect("Stream ended");
+
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!("event_subscription_object_changes", item);
+    });
+}
+
 #[tokio::test]
 async fn test_event_subscription_module_filter() {
     let mut cluster = SubscriptionTestCluster::new().await;
@@ -91,7 +277,9 @@ async fn test_event_subscription_module_filter() {
         .subscribe_with_variables(
             r#"subscription($mod: String!) {
                 events(filter: { module: $mod }) {
-                    contents { type { repr } }
+                    node {
+                        contents { type { repr } }
+                    }
                 }
             }"#,
             Some(json!({ "mod": format!("{}::emit_test_event", package_id) })),
@@ -122,8 +310,10 @@ async fn test_event_subscription_recovers_from_upstream_disconnect() {
         .subscribe_with_variables(
             r#"subscription($pkg: SuiAddress!) {
                 events(filter: { type: $pkg }) {
-                    eventBcs
-                    contents { json }
+                    node {
+                        eventBcs
+                        contents { json }
+                    }
                 }
             }"#,
             Some(json!({ "pkg": package_id.to_string() })),

@@ -1,0 +1,15 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 1, lines 12-22:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5099600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 24:
+//# run test::bulletproofs::verify
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::rangeproofs::verify_bulletproofs_ristretto255 (function index 1) at offset 1, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("rangeproofs") }, function: 1, instruction: 1, function_name: Some("verify_bulletproofs_ristretto255") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("sui::rangeproofs::verify_bulletproofs_ristretto255 at offset 1"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("rangeproofs") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 1)] }), command: Some(0) } }

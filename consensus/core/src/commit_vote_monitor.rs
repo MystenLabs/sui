@@ -13,6 +13,21 @@ use crate::{
     context::Context,
 };
 
+// Is used to calculate the threshold for blocking blocks or triggering sync
+// when the local commit index is lagging too far from the quorum commit index.
+pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
+
+/// When a node is lagging behind peers in commits, we expect commit sync to be
+/// triggered to catch up.
+pub(crate) fn is_commit_lagging(
+    context: &Context,
+    local_commit_index: CommitIndex,
+    quorum_commit_index: CommitIndex,
+) -> bool {
+    local_commit_index + context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER
+        < quorum_commit_index
+}
+
 /// Monitors the progress of consensus commits across the network.
 pub(crate) struct CommitVoteMonitor {
     context: Arc<Context>,

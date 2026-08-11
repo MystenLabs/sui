@@ -4,6 +4,7 @@
 //! Configuration types for the analytics indexer.
 
 use std::collections::HashMap;
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 
 use serde::Deserialize;
@@ -128,10 +129,11 @@ pub struct PipelineIngestionLayer {
 pub struct IngestionLayer {
     pub ingest_concurrency: Option<IngestConcurrencyConfig>,
     pub retry_interval_ms: Option<u64>,
-    pub streaming_backoff_initial_batch_size: Option<usize>,
+    pub streaming_backoff_initial_batch_size: Option<NonZeroUsize>,
     pub streaming_backoff_max_batch_size: Option<usize>,
     pub streaming_connection_timeout_ms: Option<u64>,
     pub streaming_statement_timeout_ms: Option<u64>,
+    pub min_cohort_boundary: Option<u64>,
 
     /// Deprecated: accepted (and ignored) so old configs don't fail to parse. Replaced by
     /// per-pipeline `ingestion.subscriber_channel_size`.
@@ -164,6 +166,7 @@ impl IngestionLayer {
             streaming_statement_timeout_ms: self
                 .streaming_statement_timeout_ms
                 .unwrap_or(base.streaming_statement_timeout_ms),
+            min_cohort_boundary: self.min_cohort_boundary.unwrap_or(base.min_cohort_boundary),
         }
     }
 }

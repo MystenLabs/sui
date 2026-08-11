@@ -66,15 +66,30 @@ impl std::fmt::Debug for BalanceChange {
     }
 }
 
-fn coins(objects: &[Object]) -> impl Iterator<Item = (&SuiAddress, TypeTag, u64)> + '_ {
-    objects.iter().filter_map(|object| {
+fn coins<'a, I>(objects: I) -> impl Iterator<Item = (&'a SuiAddress, TypeTag, u64)> + 'a
+where
+    I: IntoIterator<Item = &'a Object> + 'a,
+{
+    objects.into_iter().filter_map(|object| {
+        // Balance changes are an address-level view: only coins held
+        // directly by an address count, with `ConsensusAddressOwner`
+        // (the consensus-sequenced form of address ownership) combined
+        // into the same address. Coins held by objects (e.g. in dynamic
+        // fields) are deliberately excluded -- the parent object's id
+        // reinterpreted as an address is not a meaningful balance
+        // owner, and the balance indexes
+        // (`sui-indexer-alt-consistent-store`, `sui-rpc-store`) track
+        // only address-held coins, so including them here would let a
+        // transaction's reported changes disagree with the balances
+        // they change.
         let address = match object.owner() {
             Owner::AddressOwner(sui_address)
-            | Owner::ObjectOwner(sui_address)
             | Owner::ConsensusAddressOwner {
                 owner: sui_address, ..
             } => sui_address,
-            Owner::Shared { .. } | Owner::Immutable => return None,
+            // TODO(Party WIP)
+            Owner::Party { .. } => todo!("Party WIP"),
+            Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => return None,
         };
         let (coin_type, balance) = Coin::extract_balance_if_coin(object).ok().flatten()?;
         Some((address, coin_type, balance))
@@ -148,6 +163,42 @@ pub fn derive_detailed_balance_changes(
     input_objects: &[Object],
     output_objects: &[Object],
 ) -> Vec<DetailedBalanceChange> {
+    derive_detailed_balance_changes_inner(effects, input_objects, output_objects)
+}
+
+/// `ObjectSet`-keyed sibling of [`derive_detailed_balance_changes`]: looks
+/// up input and output objects in `objects` rather than taking pre-collected
+/// `&[Object]` slices, so callers that already hold an `ObjectSet` don't
+/// have to materialize separate `Vec<Object>`s.
+pub fn derive_detailed_balance_changes_2(
+    effects: &TransactionEffects,
+    objects: &ObjectSet,
+) -> Vec<DetailedBalanceChange> {
+    let input_objects = effects
+        .modified_at_versions()
+        .into_iter()
+        .filter_map(|(object_id, version)| objects.get(&ObjectKey(object_id, version)));
+    let output_objects = effects
+        .all_changed_objects()
+        .into_iter()
+        .filter_map(|(object_ref, _owner, _kind)| objects.get(&object_ref.into()));
+
+    derive_detailed_balance_changes_inner(effects, input_objects, output_objects)
+}
+
+/// Shared implementation behind [`derive_detailed_balance_changes`] and
+/// [`derive_detailed_balance_changes_2`]. Generic over the input/output
+/// object iterators so callers can stream `&Object` references straight from
+/// an [`ObjectSet`] without cloning into intermediate `Vec<Object>`s.
+fn derive_detailed_balance_changes_inner<'a, I, O>(
+    effects: &TransactionEffects,
+    input_objects: I,
+    output_objects: O,
+) -> Vec<DetailedBalanceChange>
+where
+    I: IntoIterator<Item = &'a Object> + 'a,
+    O: IntoIterator<Item = &'a Object> + 'a,
+{
     // 1. subtract all input coins
     let balances = coins(input_objects).fold(
         std::collections::BTreeMap::<_, (i128, i128)>::new(),
@@ -194,54 +245,16 @@ pub fn derive_balance_changes_2(
     effects: &TransactionEffects,
     objects: &ObjectSet,
 ) -> Vec<BalanceChange> {
-    let input_objects = effects
-        .modified_at_versions()
+    derive_detailed_balance_changes_2(effects, objects)
         .into_iter()
-        .filter_map(|(object_id, version)| objects.get(&ObjectKey(object_id, version)).cloned())
-        .collect::<Vec<_>>();
-    let output_objects = effects
-        .all_changed_objects()
-        .into_iter()
-        .filter_map(|(object_ref, _owner, _kind)| objects.get(&object_ref.into()).cloned())
-        .collect::<Vec<_>>();
-
-    // 1. subtract all input coins
-    let balances = coins(&input_objects).fold(
-        std::collections::BTreeMap::<_, i128>::new(),
-        |mut acc, (address, coin_type, balance)| {
-            *acc.entry((*address, coin_type)).or_default() -= balance as i128;
-            acc
-        },
-    );
-
-    // 2. add all mutated/output coins
-    let balances =
-        coins(&output_objects).fold(balances, |mut acc, (address, coin_type, balance)| {
-            *acc.entry((*address, coin_type)).or_default() += balance as i128;
-            acc
-        });
-
-    // 3. add address balance changes from accumulator events
-    let balances = address_balance_changes_from_accumulator_events(effects).fold(
-        balances,
-        |mut acc, (address, coin_type, signed_amount)| {
-            *acc.entry((address, coin_type)).or_default() += signed_amount;
-            acc
-        },
-    );
-
-    balances
-        .into_iter()
-        .filter_map(|((address, coin_type), amount)| {
-            if amount == 0 {
-                return None;
+        // Filter out when coin and address changes net to 0
+        .filter_map(|detailed_change| {
+            let change = BalanceChange::from(detailed_change);
+            if change.amount == 0 {
+                None
+            } else {
+                Some(change)
             }
-
-            Some(BalanceChange {
-                address,
-                coin_type,
-                amount,
-            })
         })
         .collect()
 }
@@ -283,7 +296,6 @@ mod tests {
             0,
             GasCostSummary::default(),
             vec![],
-            std::collections::BTreeSet::new(),
             TransactionDigest::random(),
             crate::base_types::SequenceNumber::new(),
             changed_objects,
@@ -498,16 +510,16 @@ mod tests {
     // Tests combining coin objects with accumulator events
 
     fn create_gas_coin_object(owner: SuiAddress, value: u64) -> Object {
+        create_gas_coin_object_with_owner(Owner::AddressOwner(owner), value)
+    }
+
+    fn create_gas_coin_object_with_owner(owner: Owner, value: u64) -> Object {
         use crate::base_types::SequenceNumber;
         use crate::object::MoveObject;
 
         let obj_id = ObjectID::random();
         let move_obj = MoveObject::new_gas_coin(SequenceNumber::new(), obj_id, value);
-        Object::new_move(
-            move_obj,
-            Owner::AddressOwner(owner),
-            TransactionDigest::random(),
-        )
+        Object::new_move(move_obj, owner, TransactionDigest::random())
     }
 
     fn create_custom_coin_object(owner: SuiAddress, coin_type: TypeTag, value: u64) -> Object {
@@ -539,6 +551,58 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].address, address);
         assert_eq!(result[0].amount, -2000); // 3000 - 5000 = -2000
+    }
+
+    /// Coins held by objects (dynamic fields, transfer-to-object) are
+    /// excluded from balance changes: moving a coin from an address
+    /// into an object's custody reports only the address's spend, and
+    /// nothing is ever attributed to the parent object's id
+    /// reinterpreted as an address. This pins the address-level
+    /// contract the balance indexes share.
+    #[test]
+    fn test_derive_balance_changes_excludes_object_owned_coins() {
+        let sender = SuiAddress::random_for_testing_only();
+        let parent = ObjectID::random();
+
+        // The sender's coin moves into a dynamic field of `parent`.
+        let input_coin = create_gas_coin_object(sender, 3000);
+        let output_coin =
+            create_gas_coin_object_with_owner(Owner::ObjectOwner(parent.into()), 3000);
+
+        let effects = create_effects_with_accumulator_writes(vec![]);
+        let result = derive_balance_changes(&effects, &[input_coin], &[output_coin]);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].address, sender);
+        assert_eq!(result[0].amount, -3000);
+    }
+
+    /// Consensus-address-owned coins are combined with address-owned
+    /// coins for the same address: converting between the two forms of
+    /// address custody is not a balance change.
+    #[test]
+    fn test_derive_balance_changes_combines_consensus_address_owner() {
+        use crate::base_types::SequenceNumber;
+
+        let address = SuiAddress::random_for_testing_only();
+
+        let input_coin = create_gas_coin_object(address, 4000);
+        let output_coin = create_gas_coin_object_with_owner(
+            Owner::ConsensusAddressOwner {
+                start_version: SequenceNumber::new(),
+                owner: address,
+            },
+            4000,
+        );
+
+        let effects = create_effects_with_accumulator_writes(vec![]);
+        let result = derive_balance_changes(&effects, &[input_coin], &[output_coin]);
+
+        assert!(
+            result.is_empty(),
+            "moving a coin between fastpath and consensus address custody \
+             is not a balance change"
+        );
     }
 
     #[test]

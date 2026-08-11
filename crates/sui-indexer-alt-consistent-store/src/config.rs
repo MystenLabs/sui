@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_default_config::DefaultConfig;
+use std::num::NonZeroUsize;
+
+use serde::Deserialize;
+use serde::Serialize;
 use sui_indexer_alt_framework as framework;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use tracing::warn;
@@ -9,9 +12,8 @@ use tracing::warn;
 use crate::DbConfig;
 use crate::rpc::pagination::PaginationConfig;
 
-#[DefaultConfig]
-#[derive(Default)]
-#[serde(deny_unknown_fields)]
+#[derive(Default, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ServiceConfig {
     /// How checkpoints are read by the indexer.
     pub ingestion: IngestionConfig,
@@ -35,24 +37,24 @@ pub struct ServiceConfig {
 
 /// This type is identical to [`framework::ingestion::IngestionConfig`], but is set-up to be
 /// serialized and deserialized by `serde`.
-#[DefaultConfig]
-#[serde(deny_unknown_fields)]
+#[derive(Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct IngestionConfig {
     pub ingest_concurrency: framework::config::ConcurrencyConfig,
     pub retry_interval_ms: u64,
-    pub streaming_backoff_initial_batch_size: usize,
+    pub streaming_backoff_initial_batch_size: NonZeroUsize,
     pub streaming_backoff_max_batch_size: usize,
     pub streaming_connection_timeout_ms: u64,
     pub streaming_statement_timeout_ms: u64,
+    pub min_cohort_boundary: u64,
 
     /// Deprecated: accepted (and ignored) so old configs don't fail to parse. Replaced by
     /// per-pipeline `ingestion.subscriber-channel-size`.
     pub checkpoint_buffer_size: Option<usize>,
 }
 
-#[DefaultConfig]
-#[derive(Clone)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ConsistencyConfig {
     /// The number of snapshots to keep in the buffer.
     pub snapshots: u64,
@@ -64,8 +66,8 @@ pub struct ConsistencyConfig {
     pub buffer_size: usize,
 }
 
-#[DefaultConfig]
-#[derive(Default)]
+#[derive(Default, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct PipelineLayer {
     pub balances: Option<CommitterLayer>,
     pub object_by_owner: Option<CommitterLayer>,
@@ -73,18 +75,16 @@ pub struct PipelineLayer {
     pub address_balances: Option<CommitterLayer>,
 }
 
-#[DefaultConfig]
-#[derive(Default)]
-#[serde(deny_unknown_fields)]
+#[derive(Default, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
 }
 
-#[DefaultConfig]
-#[derive(Default)]
-#[serde(deny_unknown_fields)]
+#[derive(Default, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct RpcConfig {
     /// Configuration for paginated endpoints in the RPC service.
     pub pagination: PaginationConfig,
@@ -155,6 +155,7 @@ impl From<framework::ingestion::IngestionConfig> for IngestionConfig {
             streaming_backoff_max_batch_size: config.streaming_backoff_max_batch_size,
             streaming_connection_timeout_ms: config.streaming_connection_timeout_ms,
             streaming_statement_timeout_ms: config.streaming_statement_timeout_ms,
+            min_cohort_boundary: config.min_cohort_boundary,
             checkpoint_buffer_size: None,
         }
     }
@@ -177,6 +178,7 @@ impl From<IngestionConfig> for framework::ingestion::IngestionConfig {
             streaming_backoff_max_batch_size: config.streaming_backoff_max_batch_size,
             streaming_connection_timeout_ms: config.streaming_connection_timeout_ms,
             streaming_statement_timeout_ms: config.streaming_statement_timeout_ms,
+            min_cohort_boundary: config.min_cohort_boundary,
         }
     }
 }

@@ -11,7 +11,9 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::{sync::mpsc, time::Instant};
-use tracing::{error, info, warn};
+#[cfg(not(tidehunter))]
+use tracing::warn;
+use tracing::{error, info};
 use typed_store::rocks::safe_drop_db;
 
 struct Metrics {

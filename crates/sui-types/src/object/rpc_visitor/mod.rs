@@ -1,16 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod format;
-pub mod json;
-mod meter;
 pub mod proto;
 
-pub use format::Format;
-pub use meter::LocalMeter;
-pub use meter::Meter;
-pub use meter::MeterError;
-pub use meter::Unmetered;
+pub use mysten_common::rpc_format::Format;
+pub use mysten_common::rpc_format::LocalMeter;
+pub use mysten_common::rpc_format::Meter;
+pub use mysten_common::rpc_format::MeterError;
+pub use mysten_common::rpc_format::Unmetered;
 
 use std::marker::PhantomData;
 

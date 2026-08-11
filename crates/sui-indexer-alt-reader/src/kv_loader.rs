@@ -15,6 +15,7 @@ use sui_rpc::proto::sui::rpc::v2 as grpc;
 use sui_types::balance_change::BalanceChange as NativeBalanceChange;
 use sui_types::base_types::ObjectID;
 use sui_types::crypto::AuthorityQuorumSignInfo;
+use sui_types::digests::CheckpointDigest;
 use sui_types::digests::TransactionDigest;
 use sui_types::digests::TransactionEffectsDigest;
 use sui_types::effects::TransactionEffects;
@@ -29,8 +30,10 @@ use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 use tonic::transport::Uri;
 
+use crate::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use crate::bigtable_reader::BigtableArgs;
 use crate::bigtable_reader::BigtableReader;
+use crate::checkpoints::CheckpointDigestKey;
 use crate::checkpoints::CheckpointKey;
 use crate::error::Error;
 use crate::events::StoredTransactionEvents;
@@ -38,9 +41,13 @@ use crate::events::TransactionEventsKey;
 use crate::ledger_grpc_reader::CheckpointedTransaction;
 use crate::ledger_grpc_reader::LedgerGrpcArgs;
 use crate::ledger_grpc_reader::LedgerGrpcReader;
+use crate::ledger_grpc_reader::MAX_BATCH_GET_OBJECTS;
+use crate::ledger_grpc_reader::MAX_BATCH_GET_TRANSACTIONS;
 use crate::objects::VersionedObjectKey;
 use crate::pg_reader::PgReader;
+use crate::transactions::ProtoEffectsKey;
 use crate::transactions::TransactionKey;
+use crate::transactions::TransactionTimestampKey;
 
 /// Arguments for configuring KV store access (either Bigtable or Ledger gRPC).
 ///
@@ -79,6 +86,11 @@ pub struct KvArgs {
     /// gRPC endpoint URL for the ledger service (e.g., archive.mainnet.sui.io)
     #[arg(long, group = "kv_source")]
     pub ledger_grpc_url: Option<Uri>,
+
+    /// Whether the configured ledger gRPC service serves the List APIs (e.g. bitmap-backed
+    /// transaction pagination). When unset, treated as `false`.
+    #[arg(long, alias = "experimental-query-apis")]
+    pub enable_list_apis: Option<bool>,
 
     /// Time spent waiting for a request to the kv store to complete, in milliseconds.
     #[arg(long, alias = "bigtable-statement-timeout-ms")]
@@ -161,10 +173,17 @@ impl KvArgs {
         ))
     }
 
+    /// `max_batch_get_transactions`/`max_batch_get_objects` may lower
+    /// `LedgerGrpcReader`'s batch-chunking size below `MAX_BATCH_GET_TRANSACTIONS`/
+    /// `MAX_BATCH_GET_OBJECTS`, never raise it above — a larger value would just be
+    /// rejected by the ledger gRPC/KV-RPC service, so it's clamped rather
+    /// than passed through.
     pub async fn ledger_grpc_reader(
         &self,
         prefix: Option<&str>,
         registry: &Registry,
+        max_batch_get_transactions: Option<usize>,
+        max_batch_get_objects: Option<usize>,
     ) -> anyhow::Result<Option<LedgerGrpcReader>> {
         let Some(ledger_grpc_url) = self.ledger_grpc_url.as_ref() else {
             return Ok(None);
@@ -172,6 +191,38 @@ impl KvArgs {
 
         Ok(Some(
             LedgerGrpcReader::new(
+                ledger_grpc_url.clone(),
+                self.ledger_grpc_args(),
+                prefix,
+                registry,
+                max_batch_get_transactions
+                    .unwrap_or(MAX_BATCH_GET_TRANSACTIONS)
+                    .min(MAX_BATCH_GET_TRANSACTIONS),
+                max_batch_get_objects
+                    .unwrap_or(MAX_BATCH_GET_OBJECTS)
+                    .min(MAX_BATCH_GET_OBJECTS),
+            )
+            .await?,
+        ))
+    }
+
+    /// Construct a streaming list reader when the operator has opted in via
+    /// `enable_list_apis` AND a ledger gRPC URL is configured. Returns `None`
+    /// otherwise. Reuses the same channel settings as the v2 `ledger_grpc_reader`.
+    pub async fn alpha_ledger_grpc_reader(
+        &self,
+        prefix: Option<&str>,
+        registry: &Registry,
+    ) -> anyhow::Result<Option<AlphaLedgerGrpcReader>> {
+        if !self.enable_list_apis.unwrap_or(false) {
+            return Ok(None);
+        }
+        let Some(ledger_grpc_url) = self.ledger_grpc_url.as_ref() else {
+            return Ok(None);
+        };
+
+        Ok(Some(
+            AlphaLedgerGrpcReader::new(
                 ledger_grpc_url.clone(),
                 self.ledger_grpc_args(),
                 prefix,
@@ -192,10 +243,10 @@ impl KvArgs {
     }
 
     fn ledger_grpc_args(&self) -> LedgerGrpcArgs {
-        LedgerGrpcArgs {
-            ledger_grpc_statement_timeout_ms: self.kv_statement_timeout_ms,
-            ledger_grpc_max_decoding_message_size: self.kv_max_decoding_message_size,
-        }
+        LedgerGrpcArgs::new(
+            self.kv_statement_timeout_ms,
+            self.kv_max_decoding_message_size,
+        )
     }
 }
 
@@ -299,6 +350,38 @@ impl KvLoader {
         }
     }
 
+    /// Resolve a checkpoint digest to its sequence number. Returns `None` if the digest is not
+    /// found in the configured reader. Used by `Query.checkpoint(digest:)` to translate a
+    /// caller-supplied digest into the sequence number that downstream resolvers consume.
+    ///
+    /// Only the PG path goes through the DataLoader (its `Loader<CheckpointDigestKey>` impl can
+    /// batch via `eq_any`). The BigTable and LedgerGrpc paths call the reader directly because
+    /// their backends only support single-digest lookup, so DataLoader can't add real batching;
+    /// it would only fan keys out into N parallel backend requests.
+    pub async fn load_one_checkpoint_seq_by_digest(
+        &self,
+        digest: CheckpointDigest,
+    ) -> Result<Option<u64>, Error> {
+        match self {
+            Self::Pg(loader) => loader.load_one(CheckpointDigestKey(digest)).await,
+            Self::Bigtable(loader) => {
+                let checkpoint = loader
+                    .loader()
+                    .checkpoint_by_digest(digest)
+                    .await
+                    .map_err(Error::from)?;
+                Ok(checkpoint
+                    .and_then(|c| c.summary)
+                    .map(|s| s.sequence_number))
+            }
+            Self::LedgerGrpc(loader) => loader
+                .loader()
+                .checkpoint_seq_by_digest(digest)
+                .await
+                .map_err(Error::from),
+        }
+    }
+
     pub async fn load_one_transaction(
         &self,
         digest: TransactionDigest,
@@ -314,6 +397,30 @@ impl KvLoader {
                 .load_one(key)
                 .await?
                 .map(TransactionContents::LedgerGrpc)),
+        }
+    }
+
+    pub async fn load_one_transaction_timestamp(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<Option<u64>, Error> {
+        let key = TransactionTimestampKey(digest);
+        match self {
+            Self::Bigtable(loader) => loader.load_one(key).await,
+            Self::Pg(loader) => loader.load_one(key).await,
+            Self::LedgerGrpc(loader) => loader.load_one(key).await,
+        }
+    }
+
+    /// Load a transaction's effects as rendered by the ledger service, otherwise `None`, as these
+    /// backends do not render additional data.
+    pub async fn load_one_rendered_effects(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<Option<grpc::TransactionEffects>, Error> {
+        match self {
+            Self::LedgerGrpc(loader) => loader.load_one(ProtoEffectsKey(digest)).await,
+            Self::Bigtable(_) | Self::Pg(_) => Ok(None),
         }
     }
 
@@ -533,21 +640,41 @@ impl TransactionContents {
         }
     }
 
+    /// The proto TransactionEffects cached from a gRPC execution or streaming response, if any.
+    pub fn cached_proto_effects(&self) -> Option<&grpc::TransactionEffects> {
+        match self {
+            Self::ExecutedTransaction(tx) => tx.proto_effects.as_ref(),
+            _ => None,
+        }
+    }
+
     /// Returns the proto TransactionEffects.
     ///
-    /// For ExecutedTransaction, returns the cached proto from gRPC (with object types, clever errors).
-    /// For other sources, converts native effects to proto.
-    pub fn proto_effects(&self) -> anyhow::Result<grpc::TransactionEffects> {
-        match self {
-            Self::ExecutedTransaction(tx) => {
-                // Use cached proto if available, otherwise convert from native
-                if let Some(proto) = &tx.proto_effects {
-                    Ok(proto.clone())
-                } else {
-                    Ok(self.effects()?.into())
-                }
-            }
-            _ => Ok(self.effects()?.into()),
+    /// Prefers the proto cached from an execution or streaming response (rendered by the fullnode).
+    /// Otherwise retrieve the rendered effects from kv.
+    pub async fn proto_effects(
+        &self,
+        kv_loader: &KvLoader,
+    ) -> anyhow::Result<grpc::TransactionEffects> {
+        if let Some(proto) = self.cached_proto_effects() {
+            return Ok(proto.clone());
+        }
+
+        // TODO: fullnode-rendered protos also include clever error rendering, which sui-kv-rpc does
+        // not implement (though it has the package resolver required).
+        //
+        // TODO: The local BCS conversion is a transitional fallback, reachable only on the pg /
+        // direct-bigtable `KvLoader` variants (no ledger service to ask). It lacks object type
+        // annotations and runtime-loaded objects, which are not derivable from the effects BCS.
+        // These paths will be unreachable once the variants are deprecated.
+
+        match kv_loader
+            .load_one_rendered_effects(self.digest()?)
+            .await
+            .context("Failed to fetch rendered effects")?
+        {
+            Some(proto) => Ok(proto),
+            None => Ok(self.effects()?.into()),
         }
     }
 

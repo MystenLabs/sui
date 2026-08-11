@@ -25,7 +25,12 @@ pub struct ConsensusProtocolConfig {
     transaction_voting_enabled: bool,
     num_leaders_per_round: Option<usize>,
     bad_nodes_stake_threshold: u64,
+    /// Whether to enable V3 logic.
     enable_v3: bool,
+    /// Number of recent commits retained for leader schedule sliding-window scoring.
+    leader_schedule_window_size: u32,
+    /// Number of commit indices that use the same Mysticeti v3 leader schedule.
+    leader_schedule_update_interval: u32,
 }
 
 impl Default for ConsensusProtocolConfig {
@@ -41,6 +46,8 @@ impl Default for ConsensusProtocolConfig {
             num_leaders_per_round: None,
             bad_nodes_stake_threshold: 0,
             enable_v3: false,
+            leader_schedule_window_size: 600,
+            leader_schedule_update_interval: 60,
         }
     }
 }
@@ -57,6 +64,8 @@ impl ConsensusProtocolConfig {
         num_leaders_per_round: Option<usize>,
         bad_nodes_stake_threshold: u64,
         enable_v3: bool,
+        leader_schedule_window_size: u32,
+        leader_schedule_update_interval: u32,
     ) -> Self {
         Self {
             protocol_version,
@@ -69,6 +78,8 @@ impl ConsensusProtocolConfig {
             num_leaders_per_round,
             bad_nodes_stake_threshold,
             enable_v3,
+            leader_schedule_window_size,
+            leader_schedule_update_interval,
         }
     }
 
@@ -86,6 +97,8 @@ impl ConsensusProtocolConfig {
             num_leaders_per_round: Some(1),
             bad_nodes_stake_threshold: 30,
             enable_v3: false,
+            leader_schedule_window_size: 600,
+            leader_schedule_update_interval: 60,
         }
     }
 
@@ -131,6 +144,17 @@ impl ConsensusProtocolConfig {
         self.enable_v3
     }
 
+    // Clamped to ≥ 1: downstream code (LeaderScheduleV3) uses these as window
+    // sizes and modulus operands, so a 0 config would divide by zero or be
+    // an empty window. Treat 0 as "effectively 1" instead of panicking.
+    pub fn leader_schedule_window_size(&self) -> u32 {
+        self.leader_schedule_window_size.max(1)
+    }
+
+    pub fn leader_schedule_update_interval(&self) -> u32 {
+        self.leader_schedule_update_interval.max(1)
+    }
+
     // Test setter methods
 
     pub fn set_gc_depth_for_testing(&mut self, val: u32) {
@@ -163,5 +187,13 @@ impl ConsensusProtocolConfig {
 
     pub fn set_enable_v3_for_testing(&mut self, val: bool) {
         self.enable_v3 = val;
+    }
+
+    pub fn set_leader_schedule_window_size_for_testing(&mut self, val: u32) {
+        self.leader_schedule_window_size = val;
+    }
+
+    pub fn set_leader_schedule_update_interval_for_testing(&mut self, val: u32) {
+        self.leader_schedule_update_interval = val;
     }
 }

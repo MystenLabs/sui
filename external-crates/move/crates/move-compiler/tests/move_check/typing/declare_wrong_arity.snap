@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04005]: expected a single type
+error[EC04005]: expected a single type
   ┌─ tests/move_check/typing/declare_wrong_arity.move:5:13
   │
 5 │         let _x: ();
@@ -13,7 +13,7 @@ error[E04005]: expected a single type
   │             │    
   │             Invalid type for local
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/declare_wrong_arity.move:6:13
   │
 6 │         let (): u64;
@@ -22,7 +22,7 @@ error[E04007]: incompatible types
   │             Invalid value for binding
   │             Expected: '()'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/declare_wrong_arity.move:7:13
   │
 7 │         let (x, b, R{f}): (u64, bool, R, R); x; b; f;
@@ -31,7 +31,7 @@ error[E04007]: incompatible types
   │             Invalid value for binding
   │             Expected expression list of length 3: '(_, _, _)'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/declare_wrong_arity.move:8:13
   │
 8 │         let (x, b, R{f}): (u64, bool); x; b; f;

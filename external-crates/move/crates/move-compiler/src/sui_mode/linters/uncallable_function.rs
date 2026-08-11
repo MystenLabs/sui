@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode};
+use super::SuiLintCode;
 use crate::{
     diag,
-    diagnostics::codes::{DiagnosticInfo, Severity, custom},
     expansion::ast::ModuleIdent,
     parser::ast::FunctionName,
     sui_mode::{
@@ -15,14 +14,6 @@ use crate::{
     typing::{ast as T, visitor::simple_visitor},
 };
 use move_ir_types::location::Loc;
-
-const UNCALLABLE_FUNCTION_SIGNATURE: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Sui as u8,
-    LinterDiagnosticCode::UncallableFunction as u8,
-    "it will not be possible to call this function",
-);
 
 simple_visitor!(
     UncallableFunction,
@@ -61,7 +52,7 @@ simple_visitor!(
                     let mut_msg =
                         "Duplicate 'TxContext' usage. '&mut TxContext' usage must be unique";
                     let mut diag = diag!(
-                        UNCALLABLE_FUNCTION_SIGNATURE,
+                        SuiLintCode::UncallableFunction.diag_info(),
                         (param_ty.loc, mut_msg),
                         (*prev_loc, "Previous 'TxContext' usage here")
                     );
@@ -73,7 +64,7 @@ simple_visitor!(
                     let mut_msg =
                         "Previous 'TxContext' usage here. '&mut TxContext' usage must be unique";
                     let mut diag = diag!(
-                        UNCALLABLE_FUNCTION_SIGNATURE,
+                        SuiLintCode::UncallableFunction.diag_info(),
                         (param_ty.loc, "Duplicate TxContext usage"),
                         (*prev_loc, mut_msg)
                     );
@@ -84,7 +75,10 @@ simple_visitor!(
                 (TxContextKind::Owned, _) => {
                     let msg = "Invalid TxContext usage. 'TxContext' must be taken by reference, \
                     e.g. '&TxContext' or '&mut TxContext'";
-                    let diag = diag!(UNCALLABLE_FUNCTION_SIGNATURE, (param_ty.loc, msg));
+                    let diag = diag!(
+                        SuiLintCode::UncallableFunction.diag_info(),
+                        (param_ty.loc, msg)
+                    );
                     self.add_diag(diag);
                     break;
                 }
@@ -100,7 +94,10 @@ simple_visitor!(
                     "Invalid parameter type. '{2}' must be taken immutably, e.g. '&{}::{}::{2}'",
                     SUI_ADDR_NAME, CLOCK_MODULE_NAME, CLOCK_TYPE_NAME
                 );
-                let mut diag = diag!(UNCALLABLE_FUNCTION_SIGNATURE, (param_ty.loc, msg),);
+                let mut diag = diag!(
+                    SuiLintCode::UncallableFunction.diag_info(),
+                    (param_ty.loc, msg),
+                );
                 diag.add_note(OBJECT_NOTE);
                 self.add_diag(diag);
             }
@@ -109,7 +106,10 @@ simple_visitor!(
                     "Invalid parameter type. '{2}' must be taken immutably, e.g. '&{}::{}::{2}'",
                     SUI_ADDR_NAME, RANDOMNESS_MODULE_NAME, RANDOMNESS_STATE_TYPE_NAME
                 );
-                let mut diag = diag!(UNCALLABLE_FUNCTION_SIGNATURE, (param_ty.loc, msg));
+                let mut diag = diag!(
+                    SuiLintCode::UncallableFunction.diag_info(),
+                    (param_ty.loc, msg)
+                );
                 diag.add_note(OBJECT_NOTE);
                 self.add_diag(diag);
             }

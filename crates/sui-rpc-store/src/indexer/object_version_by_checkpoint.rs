@@ -1,0 +1,756 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//! Sequential pipeline that populates the
+//! [`schema::object_version_by_checkpoint`](crate::schema::object_version_by_checkpoint)
+//! CF, which resolves an object's version as of a checkpoint.
+//!
+//! It writes three kinds of rows:
+//!
+//! - **Change rows** `(id, c) -> final version` -- one per object that
+//!   changed in checkpoint `c`, carrying its final version at the end
+//!   of `c` (a live version, or the tombstone version for an object
+//!   deleted or wrapped and not re-created). Only the final version is
+//!   recorded; intra-checkpoint intermediate versions stay addressable
+//!   through the version-keyed [`objects`](crate::schema::objects) CF.
+//! - **Restore floor rows** `(id, T) -> version`, marked `from_restore`
+//!   -- one per live object at the restore anchor `T`, bulk-loaded by
+//!   the restore impl. A read below `T` for an object that never
+//!   changed in the available window falls back to these.
+//! - **Synthetic floor rows** `(id, 0) -> window-entry version` -- for
+//!   an object that existed before the available window `[L, T]` and
+//!   first changes within it, this records the version it entered the
+//!   window with, so a read in `[L, first-change)` resolves to that
+//!   instead of the newer restore floor. Written during the embedded
+//!   backfill only: past `T` the restore floor already covers
+//!   pre-window objects, so the dedup read is skipped. The row is keyed
+//!   at checkpoint 0 (below the window, where `L > 0`) so the floor
+//!   scan finds it, and the effects-driven pruner retracts it once the
+//!   object's first in-window change ages out.
+
+use std::collections::BTreeMap;
+use std::num::NonZeroUsize;
+use std::ops::Bound;
+use std::sync::Arc;
+use std::sync::Mutex;
+
+use anyhow::Context as _;
+use async_trait::async_trait;
+use lru::LruCache;
+use sui_consistent_store::Batch;
+use sui_consistent_store::Db;
+use sui_consistent_store::DbMap;
+use sui_consistent_store::PipelineTaskKey;
+use sui_consistent_store::Restore;
+use sui_consistent_store::error::Error;
+use sui_consistent_store::reader::Reader;
+use sui_consistent_store::restore_state;
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::pipeline::sequential;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::full_checkpoint_content::Checkpoint;
+use sui_types::object::Object;
+
+use crate::RpcStoreSchema;
+use crate::indexer::Schema;
+use crate::indexer::Store;
+use crate::indexer::checkpoint_input_objects;
+use crate::indexer::checkpoint_output_objects;
+use crate::schema::object_version_by_checkpoint;
+
+/// Upper bound on the number of object ids the [floor cache] holds.
+///
+/// The cache only needs to keep the objects that recur as input floor
+/// candidates -- the hot set (`0x5`, `0x6`, popular shared objects and
+/// packages) that would otherwise pay a redundant `iter_rev` scan on
+/// every checkpoint they appear in. An LRU keeps exactly that hot set
+/// resident and evicts one-off objects, so this bounds the cache to
+/// order-of-a-hundred-MB regardless of how wide the backfill window
+/// `(L, T]` is (an unbounded set over a large window could reach several
+/// GB). A miss (including every miss after an eviction or a restart)
+/// simply falls back to the durable scan, so the capacity is a pure
+/// performance knob with no bearing on correctness.
+///
+/// [floor cache]: ObjectVersionByCheckpoint::floored
+const FLOOR_CACHE_CAPACITY: usize = 1_000_000;
+
+/// Pipeline marker for `object_version_by_checkpoint`.
+///
+/// `anchor` is the restore anchor `T`, used two ways: the restore impl
+/// writes its `from_restore` floor rows at `T`, and the processor only
+/// produces floor candidates within the backfill window `[L, T]`
+/// (checkpoints at or below `T`). It is `None` for a from-genesis build
+/// (no restore), which has no window and needs no floor rows.
+pub struct ObjectVersionByCheckpoint {
+    anchor: Option<u64>,
+
+    /// Objects already resolved as input floor candidates during this
+    /// run: each necessarily has a row at a checkpoint strictly below
+    /// any checkpoint still to be committed (either the synthetic floor
+    /// this pipeline wrote at `(id, 0)`, or the prior in-window row the
+    /// fallback scan found). Consulted in [`commit`](Self::commit) to
+    /// skip the `iter_rev` first-appearance scan for objects that
+    /// recur as inputs -- overwhelmingly the frequently-touched objects
+    /// (`0x5`, `0x6`, ...). Bounded by an LRU (see
+    /// [`FLOOR_CACHE_CAPACITY`]). The [`Mutex`] only guards interior
+    /// mutation behind `&self`; commits are sequential and `process`
+    /// never touches the cache, so it is locked once per batch and never
+    /// contended.
+    floored: Mutex<LruCache<ObjectID, ()>>,
+}
+
+impl Default for ObjectVersionByCheckpoint {
+    fn default() -> Self {
+        Self::with_anchor(None)
+    }
+}
+
+/// One staged write produced by [`process`](ObjectVersionByCheckpoint::process).
+pub enum Row {
+    /// Object `id`'s final version at the end of `checkpoint` -- a live
+    /// version, or a tombstone version for a removal.
+    Change {
+        id: ObjectID,
+        checkpoint: u64,
+        version: SequenceNumber,
+    },
+    /// Object `id` existed before `checkpoint` and was an input to it,
+    /// entering with `version`. A synthetic floor row is written at
+    /// `(id, 0)` iff this is the object's first appearance in the
+    /// backfill window (so it predates the window).
+    Floor {
+        id: ObjectID,
+        checkpoint: u64,
+        version: SequenceNumber,
+    },
+}
+
+impl ObjectVersionByCheckpoint {
+    /// Marker for the restore-driver registration: writes `from_restore`
+    /// floor rows at the anchor `checkpoint`.
+    pub fn for_restore(checkpoint: u64) -> Self {
+        Self::with_anchor(Some(checkpoint))
+    }
+
+    /// Marker for the tip/backfill registration, carrying the restore
+    /// anchor `T` (or `None` for a from-genesis build) so the processor
+    /// scopes floor candidates to the backfill window `[L, T]`.
+    pub fn with_anchor(anchor: Option<u64>) -> Self {
+        Self {
+            anchor,
+            floored: Mutex::new(LruCache::new(
+                NonZeroUsize::new(FLOOR_CACHE_CAPACITY).expect("FLOOR_CACHE_CAPACITY is non-zero"),
+            )),
+        }
+    }
+}
+
+#[async_trait]
+impl Processor for ObjectVersionByCheckpoint {
+    const NAME: &'static str = "object_version_by_checkpoint";
+    type Value = Row;
+
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Row>> {
+        let cp = checkpoint.summary.data().sequence_number;
+
+        // Change rows: objects live at the end of the checkpoint, each
+        // with its final version.
+        let outputs = checkpoint_output_objects(checkpoint)?;
+        let mut rows: Vec<Row> = outputs
+            .iter()
+            .map(|(id, (object, _))| Row::Change {
+                id: *id,
+                checkpoint: cp,
+                version: object.version(),
+            })
+            .collect();
+
+        // Objects removed (deleted or wrapped) during the checkpoint:
+        // record the tombstone version -- the removing transaction's
+        // lamport version, where the `objects` pipeline writes the
+        // tombstone row -- keeping the highest such version if an id is
+        // touched more than once. A read pinned at `cp` then resolves
+        // to the tombstone (and thus "no live object") instead of the
+        // stale prior version.
+        let mut removed: BTreeMap<ObjectID, SequenceNumber> = BTreeMap::new();
+        for tx in &checkpoint.transactions {
+            let lamport = tx.effects.lamport_version();
+            for oref in tx
+                .effects
+                .deleted()
+                .into_iter()
+                .chain(tx.effects.unwrapped_then_deleted())
+                .chain(tx.effects.wrapped())
+            {
+                removed
+                    .entry(oref.0)
+                    .and_modify(|v| *v = (*v).max(lamport))
+                    .or_insert(lamport);
+            }
+        }
+
+        for (id, version) in removed {
+            // Removed then re-created within the same checkpoint (e.g.
+            // wrapped then unwrapped) -- it is live at the end and
+            // already covered by its output row above.
+            if outputs.contains_key(&id) {
+                continue;
+            }
+            rows.push(Row::Change {
+                id,
+                checkpoint: cp,
+                version,
+            });
+        }
+
+        // Floor candidates, only within the backfill window `[L, T]`:
+        // objects that existed *before* this checkpoint and were inputs
+        // to it (so they predate any creation this checkpoint), each
+        // carrying its incoming version. `commit` turns the first such
+        // appearance per object into a synthetic floor row. Past `T` the
+        // restore floor already covers pre-window objects, so producing
+        // these (in the worker pool) would be wasted work.
+        if self.anchor.is_some_and(|t| cp <= t) {
+            for (id, (input, _)) in checkpoint_input_objects(checkpoint)? {
+                rows.push(Row::Floor {
+                    id,
+                    checkpoint: cp,
+                    version: input.version(),
+                });
+            }
+        }
+
+        Ok(rows)
+    }
+}
+
+impl Restore for ObjectVersionByCheckpoint {
+    type Schema = RpcStoreSchema;
+
+    fn restore(
+        &self,
+        schema: &Self::Schema,
+        object: &Object,
+        batch: &mut Batch,
+    ) -> anyhow::Result<()> {
+        // Restoration runs against a live-object snapshot with no
+        // per-checkpoint history, so every live object contributes one
+        // row at the restore anchor. The anchor is supplied at
+        // registration (`for_restore`); a tip-mode marker would never
+        // be registered with the restore driver, so its absence is a
+        // programmer error.
+        let checkpoint = self
+            .anchor
+            .context("object_version_by_checkpoint restored without a restore anchor checkpoint")?;
+        // Mark these as restore-floor rows so a checkpoint-pinned read
+        // below the anchor can tell a pre-window object (live) apart
+        // from one created in the anchor checkpoint.
+        let (key, value) =
+            object_version_by_checkpoint::store_restored(object.id(), checkpoint, object.version());
+        batch.put(&schema.object_version_by_checkpoint, &key, &value)?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl sequential::Handler for ObjectVersionByCheckpoint {
+    type Store = Store;
+    type Batch = Vec<Row>;
+
+    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Row>) {
+        batch.extend(values);
+    }
+
+    async fn commit<'a>(
+        &self,
+        batch: &Self::Batch,
+        conn: &mut sui_consistent_store::Connection<'a, Schema>,
+    ) -> anyhow::Result<usize> {
+        let cf = &conn.store.schema().object_version_by_checkpoint;
+
+        // Lock the floor cache once for the whole batch rather than per
+        // floor row. Commits are sequential and `process` never touches
+        // the cache, so the guard is uncontended; `commit` has no
+        // `.await`, so it never crosses a suspend point.
+        let mut floored = self.floored.lock().expect("floor cache mutex poisoned");
+
+        let mut count = 0;
+        for row in batch {
+            match row {
+                Row::Change {
+                    id,
+                    checkpoint,
+                    version,
+                } => {
+                    let (k, v) = object_version_by_checkpoint::store(*id, *checkpoint, *version);
+                    conn.batch.put(cf, &k, &v)?;
+                    count += 1;
+                }
+                Row::Floor {
+                    id,
+                    checkpoint,
+                    version,
+                } => {
+                    // The processor only emits floor candidates within
+                    // the backfill window, so all that is left is to
+                    // dedup repeated and re-indexed appearances: only the
+                    // object's first appearance writes the floor row. The
+                    // cache short-circuits the scan for objects that have
+                    // already appeared this run.
+                    if needs_floor(&mut floored, cf, *id, *checkpoint)? {
+                        let (k, v) = object_version_by_checkpoint::store(*id, 0, *version);
+                        conn.batch.put(cf, &k, &v)?;
+                        count += 1;
+                    }
+                }
+            }
+        }
+        Ok(count)
+    }
+}
+
+/// The restore anchor `T` (`__restore.restored_at`) for this pipeline,
+/// or `None` if it was never restored. Read once at registration so the
+/// processor can scope floor candidates to the backfill window `[L, T]`.
+pub(crate) fn restored_anchor(db: &Db) -> anyhow::Result<Option<u64>> {
+    let key = PipelineTaskKey::new(ObjectVersionByCheckpoint::NAME);
+    Ok(db
+        .framework()
+        .restore
+        .get(&key)?
+        .and_then(|s| match s.state {
+            Some(restore_state::State::Complete(c)) => Some(c.restored_at),
+            _ => None,
+        }))
+}
+
+/// Whether object `id`'s synthetic floor row should be written at
+/// `checkpoint`, consulting `cache` before the durable
+/// [`is_first_appearance`] scan.
+///
+/// A cache hit means the object has already been resolved as an input
+/// floor candidate earlier this run, so it necessarily has a row below
+/// `checkpoint` (commits advance monotonically) and is not a first
+/// appearance -- return `false` without touching RocksDB. A miss falls
+/// back to the scan; the object is recorded either way so its next
+/// input appearance hits.
+///
+/// The fallback keeps the result correct when the cache cannot answer:
+/// after a restart (empty cache) or an LRU eviction, the scan finds the
+/// floor row a prior run persisted at `(id, 0)` and returns `false`, so
+/// the row is never rewritten with a newer -- and wrong -- version.
+///
+/// The caller holds the cache lock for the batch, so this takes a plain
+/// `&mut` and stays oblivious to the locking.
+fn needs_floor<R: Reader>(
+    cache: &mut LruCache<ObjectID, ()>,
+    cf: &DbMap<object_version_by_checkpoint::Key, object_version_by_checkpoint::Value, R>,
+    id: ObjectID,
+    checkpoint: u64,
+) -> Result<bool, Error> {
+    // `get` rather than `contains` so a hit promotes the entry to
+    // most-recently-used, keeping the hot set (`0x5`, `0x6`, ...)
+    // resident instead of aging out under churn from one-off objects.
+    if cache.get(&id).is_some() {
+        return Ok(false);
+    }
+    let first = is_first_appearance(cf, id, checkpoint)?;
+    cache.put(id, ());
+    Ok(first)
+}
+
+/// Whether `checkpoint` is the object's first appearance in the index:
+/// it has no row strictly below `checkpoint`. The restore floor sits at
+/// `T >= checkpoint`, so it is excluded, as is the change row written
+/// for this same checkpoint. Dedups repeated and re-indexed appearances
+/// so only the first writes the synthetic floor row.
+fn is_first_appearance<R: Reader>(
+    cf: &DbMap<object_version_by_checkpoint::Key, object_version_by_checkpoint::Value, R>,
+    id: ObjectID,
+    checkpoint: u64,
+) -> Result<bool, Error> {
+    let lo = object_version_by_checkpoint::Key { id, checkpoint: 0 };
+    let hi = object_version_by_checkpoint::Key { id, checkpoint };
+    let seen = cf
+        .iter_rev((Bound::Included(lo), Bound::Excluded(hi)))?
+        .next()
+        .is_some();
+    Ok(!seen)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use sui_consistent_store::Db;
+    use sui_consistent_store::DbOptions;
+    use sui_consistent_store::FrameworkSchema;
+    use sui_consistent_store::RestoreState;
+    use sui_types::base_types::SuiAddress;
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+
+    use super::*;
+
+    fn fresh_db() -> (tempfile::TempDir, Db, RpcStoreSchema) {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        (dir, db, schema)
+    }
+
+    /// Seed this pipeline's `__restore` row as `Complete { restored_at }`.
+    fn seed_restored_at(db: &Db, restored_at: u64) {
+        let framework = FrameworkSchema::new(db.clone());
+        let mut batch = db.batch();
+        batch
+            .put(
+                &framework.restore,
+                &PipelineTaskKey::new(ObjectVersionByCheckpoint::NAME),
+                &RestoreState {
+                    state: Some(restore_state::State::Complete(restore_state::Complete {
+                        restored_at,
+                    })),
+                },
+            )
+            .unwrap();
+        batch.commit().unwrap();
+    }
+
+    fn put(schema: &RpcStoreSchema, db: &Db, id: ObjectID, checkpoint: u64, version: u64) {
+        let (k, v) =
+            object_version_by_checkpoint::store(id, checkpoint, SequenceNumber::from_u64(version));
+        let mut batch = db.batch();
+        batch
+            .put(&schema.object_version_by_checkpoint, &k, &v)
+            .unwrap();
+        batch.commit().unwrap();
+    }
+
+    #[tokio::test]
+    async fn process_runs_against_synthetic_checkpoint() {
+        let checkpoint = Arc::new(TestCheckpointBuilder::new(1).build_checkpoint());
+        let _rows = ObjectVersionByCheckpoint::default()
+            .process(&checkpoint)
+            .await
+            .unwrap();
+    }
+
+    /// A live object created in the checkpoint gets a change row at the
+    /// checkpoint's sequence number, carrying its current version.
+    #[tokio::test]
+    async fn process_records_final_live_version() {
+        let checkpoint = Arc::new(
+            TestCheckpointBuilder::new(7)
+                .start_transaction(0)
+                .create_owned_object(0)
+                .finish_transaction()
+                .build_checkpoint(),
+        );
+        let created_id = TestCheckpointBuilder::derive_object_id(0);
+        let version = checkpoint.transactions[0].effects.lamport_version();
+
+        // Within the backfill window (anchor above this checkpoint), so
+        // the floor candidates are produced.
+        let rows = ObjectVersionByCheckpoint::with_anchor(Some(100))
+            .process(&checkpoint)
+            .await
+            .unwrap();
+        let found = rows.iter().find_map(|r| match r {
+            Row::Change {
+                id,
+                checkpoint,
+                version,
+            } if *id == created_id => Some((*checkpoint, *version)),
+            _ => None,
+        });
+        assert_eq!(found, Some((7, version)));
+        // A freshly created object is not an input to its own checkpoint,
+        // so it produces no floor candidate.
+        assert!(
+            !rows
+                .iter()
+                .any(|r| matches!(r, Row::Floor { id, .. } if *id == created_id))
+        );
+    }
+
+    /// An object deleted in the checkpoint is recorded at the tombstone
+    /// (lamport) version, not its prior live version.
+    #[tokio::test]
+    async fn process_records_tombstone_for_deleted_object() {
+        let mut builder = TestCheckpointBuilder::new(0)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        let _cp0 = builder.build_checkpoint();
+        builder = builder
+            .start_transaction(0)
+            .delete_object(0)
+            .finish_transaction();
+        let cp1 = Arc::new(builder.build_checkpoint());
+
+        let deleted_id = TestCheckpointBuilder::derive_object_id(0);
+        let tombstone_version = cp1.transactions[0].effects.lamport_version();
+
+        let rows = ObjectVersionByCheckpoint::default()
+            .process(&cp1)
+            .await
+            .unwrap();
+        let found = rows.iter().find_map(|r| match r {
+            Row::Change {
+                id,
+                checkpoint,
+                version,
+            } if *id == deleted_id => Some((*checkpoint, *version)),
+            _ => None,
+        });
+        assert_eq!(found, Some((1, tombstone_version)));
+    }
+
+    /// An object that existed before the checkpoint and is consumed by
+    /// it produces a floor candidate carrying its incoming version.
+    #[tokio::test]
+    async fn process_emits_floor_candidate_for_input_object() {
+        let mut builder = TestCheckpointBuilder::new(0)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        let cp0 = builder.build_checkpoint();
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .finish_transaction();
+        let cp1 = Arc::new(builder.build_checkpoint());
+
+        let obj = TestCheckpointBuilder::derive_object_id(0);
+        let incoming = cp0.transactions[0].effects.lamport_version();
+
+        // Within the backfill window: the input object is floored.
+        let rows = ObjectVersionByCheckpoint::with_anchor(Some(100))
+            .process(&cp1)
+            .await
+            .unwrap();
+        let floor = rows.iter().find_map(|r| match r {
+            Row::Floor {
+                id,
+                checkpoint,
+                version,
+            } if *id == obj => Some((*checkpoint, *version)),
+            _ => None,
+        });
+        assert_eq!(floor, Some((1, incoming)), "input object floor candidate");
+    }
+
+    /// Past the restore anchor (tip indexing), the processor produces no
+    /// floor candidates at all, even for input objects.
+    #[tokio::test]
+    async fn process_skips_floor_candidates_past_the_anchor() {
+        let mut builder = TestCheckpointBuilder::new(0)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        let _cp0 = builder.build_checkpoint();
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .finish_transaction();
+        let cp1 = Arc::new(builder.build_checkpoint());
+
+        // Anchor below this checkpoint (cp 1 > T 0): tip indexing, so no
+        // floor candidates are produced.
+        let rows = ObjectVersionByCheckpoint::with_anchor(Some(0))
+            .process(&cp1)
+            .await
+            .unwrap();
+        assert!(!rows.iter().any(|r| matches!(r, Row::Floor { .. })));
+        // And likewise for a from-genesis build (no anchor).
+        let rows = ObjectVersionByCheckpoint::default()
+            .process(&cp1)
+            .await
+            .unwrap();
+        assert!(!rows.iter().any(|r| matches!(r, Row::Floor { .. })));
+    }
+
+    /// Restore writes a `from_restore` floor row at the anchor, which
+    /// resolves at, above, and (via the fallback) below the anchor.
+    #[test]
+    fn restore_writes_one_row_at_the_anchor() {
+        let (_dir, db, schema) = fresh_db();
+
+        let object =
+            Object::with_id_owner_for_testing(ObjectID::from_single_byte(1), SuiAddress::ZERO);
+
+        let mut batch = db.batch();
+        ObjectVersionByCheckpoint::for_restore(123)
+            .restore(&schema, &object, &mut batch)
+            .unwrap();
+        batch.commit().unwrap();
+
+        for cp in [122, 123, 200] {
+            assert_eq!(
+                schema
+                    .get_object_version_at_checkpoint(object.id(), cp)
+                    .unwrap(),
+                Some(object.version()),
+            );
+        }
+    }
+
+    #[test]
+    fn restored_anchor_reads_restore_state() {
+        let (_dir, db, _schema) = fresh_db();
+        // No restore row yet.
+        assert_eq!(restored_anchor(&db).unwrap(), None);
+        // A completed restore exposes its anchor.
+        seed_restored_at(&db, 42);
+        assert_eq!(restored_anchor(&db).unwrap(), Some(42));
+    }
+
+    #[test]
+    fn is_first_appearance_true_with_no_prior_row() {
+        let (_dir, _db, schema) = fresh_db();
+        let id = ObjectID::random();
+        assert!(is_first_appearance(&schema.object_version_by_checkpoint, id, 50).unwrap());
+    }
+
+    #[test]
+    fn is_first_appearance_false_when_already_seen() {
+        let (_dir, db, schema) = fresh_db();
+        let id = ObjectID::random();
+        // A prior row exists below the checkpoint.
+        put(&schema, &db, id, 30, 5);
+        assert!(!is_first_appearance(&schema.object_version_by_checkpoint, id, 50).unwrap());
+    }
+
+    #[test]
+    fn is_first_appearance_ignores_rows_at_or_above_the_checkpoint() {
+        let (_dir, db, schema) = fresh_db();
+        let id = ObjectID::random();
+        // The restore floor row sits at the anchor (100), at or above the
+        // queried checkpoint, so it must not count as a prior row.
+        put(&schema, &db, id, 100, 9);
+        assert!(is_first_appearance(&schema.object_version_by_checkpoint, id, 50).unwrap());
+    }
+
+    fn cache(capacity: usize) -> LruCache<ObjectID, ()> {
+        LruCache::new(NonZeroUsize::new(capacity).unwrap())
+    }
+
+    /// Once an object has been resolved as a floor candidate, the next
+    /// resolution short-circuits on the cache: `needs_floor` returns
+    /// `false` without a scan, even though the durable state (no prior
+    /// row) would otherwise report a first appearance.
+    #[test]
+    fn needs_floor_short_circuits_after_first_resolution() {
+        let (_dir, _db, schema) = fresh_db();
+        let cf = &schema.object_version_by_checkpoint;
+        let mut cache = cache(FLOOR_CACHE_CAPACITY);
+        let id = ObjectID::random();
+
+        // First appearance: no prior row, so the floor is needed and the
+        // object is recorded.
+        assert!(needs_floor(&mut cache, cf, id, 50).unwrap());
+        // A later appearance hits the cache and skips the (still empty)
+        // scan, which on its own would report another first appearance.
+        assert!(is_first_appearance(cf, id, 60).unwrap());
+        assert!(!needs_floor(&mut cache, cf, id, 60).unwrap());
+    }
+
+    /// A cold cache (a fresh run) falls back to the durable scan: an
+    /// object whose floor row a prior run persisted is not re-floored.
+    #[test]
+    fn needs_floor_falls_back_to_scan_on_cold_cache() {
+        let (_dir, db, schema) = fresh_db();
+        let cf = &schema.object_version_by_checkpoint;
+        let mut cache = cache(FLOOR_CACHE_CAPACITY);
+        let id = ObjectID::random();
+
+        // A prior run already recorded a row below the checkpoint.
+        put(&schema, &db, id, 30, 5);
+        assert!(!needs_floor(&mut cache, cf, id, 50).unwrap());
+    }
+
+    /// LRU eviction never causes a duplicate floor write: an evicted
+    /// object that reappears falls back to the scan, which finds the
+    /// floor its earlier resolution persisted and reports "not first".
+    #[test]
+    fn needs_floor_survives_eviction() {
+        let (_dir, db, schema) = fresh_db();
+        let cf = &schema.object_version_by_checkpoint;
+        // Capacity one: a second object evicts the first.
+        let mut cache = cache(1);
+        let a = ObjectID::random();
+        let b = ObjectID::random();
+
+        // `a` is a first appearance; mirror the caller by persisting its
+        // synthetic floor at `(a, 0)`.
+        assert!(needs_floor(&mut cache, cf, a, 10).unwrap());
+        put(&schema, &db, a, 0, 5);
+
+        // `b` is a first appearance too, evicting `a` from the cache.
+        assert!(needs_floor(&mut cache, cf, b, 11).unwrap());
+        put(&schema, &db, b, 0, 7);
+
+        // `a` reappears: the cache no longer holds it, so the scan runs
+        // and finds the persisted `(a, 0)` floor -- not a first
+        // appearance, so no rewrite.
+        assert!(!needs_floor(&mut cache, cf, a, 12).unwrap());
+    }
+
+    /// End-to-end shape for a pre-window object that first changes
+    /// inside the window: the rows the restore and backfill would write,
+    /// then the reads they enable. Below the first change, the synthetic
+    /// floor at `(id, 0)` answers with the pre-window version rather than
+    /// the newer restore floor.
+    #[test]
+    fn synthetic_floor_serves_reads_below_first_change() {
+        let (_dir, db, schema) = fresh_db();
+        let id = ObjectID::random();
+        let anchor = 100; // restore tip T
+        let window_entry = SequenceNumber::from_u64(5); // version entering the window
+        let v1 = SequenceNumber::from_u64(6); // after the first in-window change (cp 50)
+
+        // The restore floor at T, and the backfilled change row at the
+        // object's first in-window change (cp 50).
+        let mut batch = db.batch();
+        let (rk, rv) = object_version_by_checkpoint::store_restored(id, anchor, v1);
+        batch
+            .put(&schema.object_version_by_checkpoint, &rk, &rv)
+            .unwrap();
+        let (ck, cv) = object_version_by_checkpoint::store(id, 50, v1);
+        batch
+            .put(&schema.object_version_by_checkpoint, &ck, &cv)
+            .unwrap();
+        batch.commit().unwrap();
+
+        // That change is the object's first appearance in the window, so
+        // the backfill writes a synthetic floor at `(id, 0)`.
+        assert!(is_first_appearance(&schema.object_version_by_checkpoint, id, 50).unwrap());
+        let mut batch = db.batch();
+        let (fk, fv) = object_version_by_checkpoint::store(id, 0, window_entry);
+        batch
+            .put(&schema.object_version_by_checkpoint, &fk, &fv)
+            .unwrap();
+        batch.commit().unwrap();
+
+        // Below the first change, the synthetic floor answers with the
+        // pre-window version (not the restore floor's newer version).
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(id, 30).unwrap(),
+            Some(window_entry),
+        );
+        // At and after the first change, the change row answers.
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(id, 50).unwrap(),
+            Some(v1),
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(id, 75).unwrap(),
+            Some(v1),
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(id, 100).unwrap(),
+            Some(v1),
+        );
+    }
+}

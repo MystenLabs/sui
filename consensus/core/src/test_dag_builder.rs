@@ -428,7 +428,6 @@ pub struct LayerBuilder<'a> {
     blocks: Vec<VerifiedBlock>,
 }
 
-#[allow(unused)]
 impl<'a> LayerBuilder<'a> {
     fn new(dag_builder: &'a mut DagBuilder, start_round: Round) -> Self {
         assert!(start_round > 0, "genesis round is created by default");
@@ -642,7 +641,7 @@ impl<'a> LayerBuilder<'a> {
         round: Round,
     ) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
         let quorum_threshold = self.dag_builder.context.committee.quorum_threshold() as usize;
-        let mut authorities: Vec<AuthorityIndex> = self
+        let authorities: Vec<AuthorityIndex> = self
             .dag_builder
             .context
             .committee
@@ -707,7 +706,7 @@ impl<'a> LayerBuilder<'a> {
     fn configure_no_leader_links(
         &mut self,
         authorities: Vec<AuthorityIndex>,
-        round: Round,
+        _round: Round,
     ) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
         let mut missing_leaders = Vec::new();
         let mut specified_leader_offsets = self
@@ -853,12 +852,11 @@ impl<'a> LayerBuilder<'a> {
         round: Round,
         num_block: u32,
     ) -> BlockTimestampMs {
-        if self.specified_authorities.is_some() && !self.timestamps.is_empty() {
-            let specified_authorities = self.specified_authorities.as_ref().unwrap();
-
-            if let Some(position) = specified_authorities.iter().position(|&x| x == authority) {
-                return self.timestamps[position] + (round + num_block) as u64;
-            }
+        if let Some(specified_authorities) = self.specified_authorities.as_ref()
+            && !self.timestamps.is_empty()
+            && let Some(position) = specified_authorities.iter().position(|&x| x == authority)
+        {
+            return self.timestamps[position] + (round + num_block) as u64;
         }
         let author = authority.value() as u32;
         let base_ts = round as BlockTimestampMs * 1000;

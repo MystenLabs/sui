@@ -116,22 +116,8 @@ impl SingleValidator {
         let effects = self
             .get_validator()
             .try_execute_immediately(&executable, ExecutionEnv::new(), &self.epoch_store)
-            .await
             .unwrap()
             .0;
-        assert!(effects.status().is_ok());
-        effects
-    }
-
-    pub async fn execute_dry_run(&self, transaction: Transaction) -> TransactionEffects {
-        let effects = self
-            .get_validator()
-            .dry_exec_transaction_for_benchmark(
-                transaction.data().intent_message().value.clone(),
-                *transaction.digest(),
-            )
-            .unwrap()
-            .2;
         assert!(effects.status().is_ok());
         effects
     }
@@ -160,7 +146,6 @@ impl SingleValidator {
                         ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
                         &self.epoch_store,
                     )
-                    .await
                     .unwrap()
                     .0
             }
@@ -228,10 +213,11 @@ impl SingleValidator {
                 self.epoch_store.protocol_config(),
                 self.get_validator().metrics.execution_metrics.clone(),
                 false,
-                ExecutionOrEarlyError::Ok(()),
+                ExecutionOrEarlyError::ok(None),
                 &self.epoch_store.epoch(),
                 0,
                 input_objects,
+                std::collections::BTreeMap::new(),
                 gas_data,
                 gas_status,
                 kind,

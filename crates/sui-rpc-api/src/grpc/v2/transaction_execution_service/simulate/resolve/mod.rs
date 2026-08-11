@@ -402,17 +402,21 @@ fn resolve_object_reference_with_object(
         ));
     }
 
-    if version.is_some_and(|version| version != v.value()) {
+    if let Some(version) = version.filter(|version| *version != v.value()) {
         return Err(RpcError::new(
             tonic::Code::InvalidArgument,
-            format!("provided version doesn't match, provided: {version:?} actual: {v}"),
+            format!(
+                "provided version doesn't match for object {id}, provided: {version} actual: {v}"
+            ),
         ));
     }
 
-    if digest.is_some_and(|digest| digest.inner() != d.inner()) {
+    if let Some(digest) = digest.filter(|digest| digest.inner() != d.inner()) {
         return Err(RpcError::new(
             tonic::Code::InvalidArgument,
-            format!("provided digest doesn't match, provided: {digest:?} actual: {d}"),
+            format!(
+                "provided digest doesn't match for object {id}, provided: {digest} actual: {d}"
+            ),
         ));
     }
 
@@ -660,7 +664,8 @@ fn resolve_object(
             .pipe(Ok)
         }
         sui_types::object::Owner::Shared { .. }
-        | sui_types::object::Owner::ConsensusAddressOwner { .. } => {
+        | sui_types::object::Owner::ConsensusAddressOwner { .. }
+        | sui_types::object::Owner::Party { .. } => {
             resolve_shared_input_with_object(called_packages, arg_uses, arg_idx, object)
         }
         sui_types::object::Owner::ObjectOwner(_) => Err(RpcError::new(
@@ -1013,5 +1018,56 @@ impl<'a> UnresolvedInput<'a> {
                 .transpose()?,
             mutable: input.mutable,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sui_types::base_types::ObjectID;
+    use sui_types::object::Object;
+
+    #[test]
+    fn version_mismatch_error_includes_object_id() {
+        let id = ObjectID::random();
+        let object = Object::immutable_with_id_for_testing(id);
+
+        // Request a version that doesn't match the object's actual version.
+        let unresolved = UnresolvedObjectReference {
+            object_id: sui_sdk_types::Address::new(id.into_bytes()),
+            version: Some(object.version().value() + 1),
+            digest: None,
+        };
+
+        let message = resolve_object_reference_with_object(&object, unresolved)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            message.contains(&id.to_string()),
+            "version mismatch error should include the object id, got: {message}"
+        );
+    }
+
+    #[test]
+    fn digest_mismatch_error_includes_object_id() {
+        let id = ObjectID::random();
+        let object = Object::immutable_with_id_for_testing(id);
+
+        // Request a digest that doesn't match the object's actual digest.
+        let unresolved = UnresolvedObjectReference {
+            object_id: sui_sdk_types::Address::new(id.into_bytes()),
+            version: None,
+            digest: Some(sui_sdk_types::Digest::new(
+                [0u8; sui_sdk_types::Digest::LENGTH],
+            )),
+        };
+
+        let message = resolve_object_reference_with_object(&object, unresolved)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            message.contains(&id.to_string()),
+            "digest mismatch error should include the object id, got: {message}"
+        );
     }
 }

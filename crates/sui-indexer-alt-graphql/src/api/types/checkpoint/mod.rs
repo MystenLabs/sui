@@ -8,7 +8,11 @@ use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::connection::Connection;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_rpc_cursor::CursorKind;
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::Position;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
+use sui_types::digests::CheckpointDigest;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::CheckpointCommitment;
 use sui_types::messages_checkpoint::CheckpointContents as NativeCheckpointContents;
@@ -16,7 +20,10 @@ use sui_types::messages_checkpoint::CheckpointSummary;
 
 use crate::api::query::Query;
 use crate::api::scalars::base64::Base64;
+use crate::api::scalars::cursor::ByteCursor;
 use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::cursor::MultiCursor;
+use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::date_time::DateTime;
 use crate::api::scalars::id::Id;
 use crate::api::scalars::uint53::UInt53;
@@ -29,10 +36,12 @@ use crate::api::types::epoch::Epoch;
 use crate::api::types::gas::GasCostSummary;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::validator_aggregated_signature::ValidatorAggregatedSignature;
 use crate::error::RpcError;
+use crate::error::upcast;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
 use crate::scope::Scope;
@@ -40,6 +49,12 @@ use crate::task::streaming::ProcessedCheckpoint;
 use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
+
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum Error {
+    #[error("Cannot specify both `sequenceNumber` and `digest` on `Query.checkpoint`")]
+    BothBoundsSet,
+}
 
 pub(crate) struct Checkpoint {
     pub(crate) sequence_number: u64,
@@ -61,7 +76,17 @@ struct CheckpointContents {
     streamed_data: Option<Arc<ProcessedCheckpoint>>,
 }
 
-pub(crate) type CCheckpoint = JsonCursor<u64>;
+/// Validated checkpoint cursor coordinates.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CheckpointToken {
+    /// Tracks the originating `CursorToken`'s kind, so it can be reproduced on re-encode.
+    kind: CursorKind,
+    checkpoint: u64,
+}
+
+/// Compatibility dispatch over the on-wire cursor formats: `CursorToken` (primary) or the
+/// legacy JSON cursor (secondary).
+pub type CCheckpoint = MultiCursor<OpaqueCursor<CheckpointToken>, JsonCursor<u64>>;
 
 /// Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 #[Object]
@@ -214,7 +239,7 @@ impl CheckpointContents {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+    ) -> Option<Result<TransactionConnection, RpcError>> {
         async {
             let Some((summary, _, _)) = &self.contents else {
                 return Ok(None);
@@ -228,12 +253,13 @@ impl CheckpointContents {
                 at_checkpoint: Some(UInt53::from(summary.sequence_number)),
                 ..Default::default()
             }) else {
-                return Ok(Some(Connection::new(false, false)));
+                return Ok(Some(Connection::new(false, false).into()));
             };
 
             if let Some(streamed) = &self.streamed_data {
                 return Ok(Some(Transaction::paginate_preloaded_transactions(
                     self.scope.clone(),
+                    summary.sequence_number,
                     &streamed.transactions,
                     &page,
                     filter,
@@ -241,7 +267,9 @@ impl CheckpointContents {
             }
 
             Ok(Some(
-                Transaction::paginate(ctx, self.scope.clone(), page, filter).await?,
+                Transaction::paginate(ctx, self.scope.clone(), page, filter)
+                    .await
+                    .map_err(upcast)?,
             ))
         }
         .await
@@ -265,6 +293,26 @@ impl Checkpoint {
             sequence_number,
             streamed_data: None,
         })
+    }
+
+    /// Resolve a checkpoint by its digest. Translates the digest to a sequence number via the
+    /// configured KV reader, then delegates to `with_sequence_number` so all downstream resolvers
+    /// behave the same as the sequence-number path.
+    pub(crate) async fn by_digest(
+        ctx: &Context<'_>,
+        scope: Scope,
+        digest: CheckpointDigest,
+    ) -> Result<Option<Self>, RpcError> {
+        let kv_loader: &KvLoader = ctx.data()?;
+        let Some(sequence_number) = kv_loader
+            .load_one_checkpoint_seq_by_digest(digest)
+            .await
+            .context("Failed to look up checkpoint by digest")?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Self::with_sequence_number(scope, Some(sequence_number)))
     }
 
     /// Paginate through checkpoints with filters applied.
@@ -307,7 +355,7 @@ impl Checkpoint {
 
         page.paginate_results(
             results,
-            |c| JsonCursor::new(*c),
+            |c| CheckpointToken::cursor(*c),
             |c| Ok(Self::with_sequence_number(scope.clone(), Some(c)).unwrap()),
         )
     }
@@ -349,5 +397,108 @@ impl CheckpointContents {
             )),
             streamed_data: Some(Arc::clone(processed)),
         })
+    }
+}
+
+impl CheckpointToken {
+    /// Mint the edge cursor for the checkpoint at the given sequence number.
+    pub fn cursor(checkpoint: u64) -> CCheckpoint {
+        CCheckpoint::new(OpaqueCursor::new(Self {
+            kind: CursorKind::Item,
+            checkpoint,
+        }))
+    }
+}
+
+impl CCheckpoint {
+    pub(crate) fn sequence_number(&self) -> u64 {
+        match self {
+            CCheckpoint::Primary(c) => c.checkpoint,
+            CCheckpoint::Secondary(c) => **c,
+        }
+    }
+}
+
+impl ByteCursor for CheckpointToken {
+    fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
+        CursorToken::decode(bytes)?.try_into()
+    }
+
+    fn encode_cursor(&self) -> bytes::Bytes {
+        CursorToken::from(self).encode()
+    }
+}
+
+impl From<&CheckpointToken> for CursorToken {
+    fn from(token: &CheckpointToken) -> Self {
+        CursorToken {
+            kind: token.kind,
+            position: Position::Checkpoints {
+                checkpoint: token.checkpoint,
+            },
+        }
+    }
+}
+
+impl TryFrom<CursorToken> for CheckpointToken {
+    type Error = anyhow::Error;
+
+    fn try_from(token: CursorToken) -> anyhow::Result<Self> {
+        let Position::Checkpoints { checkpoint } = token.position else {
+            anyhow::bail!("invalid cursor");
+        };
+        Ok(Self {
+            kind: token.kind,
+            checkpoint,
+        })
+    }
+}
+
+impl Eq for CCheckpoint {}
+
+/// Cursors minted by different paths can disagree on the kind, so pagination only compares the
+/// checkpoint coordinate.
+impl PartialEq for CCheckpoint {
+    fn eq(&self, other: &Self) -> bool {
+        self.sequence_number() == other.sequence_number()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_graphql::connection::CursorType;
+    use fastcrypto::encoding::Base64 as B64;
+    use fastcrypto::encoding::Encoding;
+
+    /// Legacy pg-style cursor: a bare JSON-encoded checkpoint sequence number.
+    fn legacy_cursor(checkpoint: u64) -> CCheckpoint {
+        CCheckpoint::Secondary(JsonCursor::new(checkpoint))
+    }
+
+    #[test]
+    fn primary_cursor_roundtrips() {
+        let cursor = CheckpointToken::cursor(42);
+        let decoded = CCheckpoint::decode_cursor(&cursor.encode_cursor()).expect("valid cursor");
+        assert_eq!(decoded.sequence_number(), 42);
+        assert_eq!(decoded, cursor);
+    }
+
+    /// A legacy cursor paginates the same as a grpc cursor at the same sequence number.
+    #[test]
+    fn legacy_cursor_matches_primary() {
+        assert_eq!(legacy_cursor(42).sequence_number(), 42);
+        assert_eq!(legacy_cursor(42), CheckpointToken::cursor(42));
+    }
+
+    /// A token scoped to another endpoint must not decode as a checkpoint cursor.
+    #[test]
+    fn rejects_wrong_variant_cursor() {
+        let token = CursorToken::item(Position::Transactions {
+            checkpoint: 1,
+            tx_seq: 2,
+        });
+        let encoded = B64::encode(token.encode());
+        assert!(CCheckpoint::decode_cursor(&encoded).is_err());
     }
 }

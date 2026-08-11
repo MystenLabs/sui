@@ -1,0 +1,23 @@
+---
+source: crates/sui/tests/shell_tests.rs
+assertion_line: 112
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Happy path: stub `prettier-move` exits 0. Asserts the user's args are
+# forwarded verbatim.
+
+chmod +x stubs/prettier-move
+export PATH="$PWD/stubs:$(dirname "$(command -v sui)")"
+
+sui move --client.config $CONFIG format -c example
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+prettier-move called with: -c example
+
+----- stderr -----

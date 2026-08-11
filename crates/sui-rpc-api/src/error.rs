@@ -50,6 +50,17 @@ impl RpcError {
     }
 }
 
+impl std::fmt::Display for RpcError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.message {
+            Some(m) => write!(f, "{}: {}", self.code, m),
+            None => write!(f, "{}", self.code),
+        }
+    }
+}
+
+impl std::error::Error for RpcError {}
+
 impl From<RpcError> for tonic::Status {
     fn from(value: RpcError) -> Self {
         use prost::Message;
@@ -399,6 +410,31 @@ impl std::error::Error for CheckpointNotFoundError {}
 
 impl From<CheckpointNotFoundError> for crate::RpcError {
     fn from(value: CheckpointNotFoundError) -> Self {
+        Self::new(tonic::Code::NotFound, value.to_string())
+    }
+}
+
+#[derive(Debug)]
+pub struct EpochNotFoundError {
+    epoch: sui_sdk_types::EpochId,
+}
+
+impl EpochNotFoundError {
+    pub fn new(epoch: sui_sdk_types::EpochId) -> Self {
+        Self { epoch }
+    }
+}
+
+impl std::fmt::Display for EpochNotFoundError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Epoch {} not found", self.epoch)
+    }
+}
+
+impl std::error::Error for EpochNotFoundError {}
+
+impl From<EpochNotFoundError> for crate::RpcError {
+    fn from(value: EpochNotFoundError) -> Self {
         Self::new(tonic::Code::NotFound, value.to_string())
     }
 }

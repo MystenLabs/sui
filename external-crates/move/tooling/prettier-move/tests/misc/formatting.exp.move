@@ -14,11 +14,13 @@ module tests::formatting {
 
     public fun list() {
         let a = vector[
+            // leading
             /* block */ 100, // hahaha
+            // lead
             /* block */ 200, // hihihi
         ];
 
-        let b = vector[100, /* hahaha */  200 /* hihihi */];
+        let b = vector[100 /* hahaha */, 200 /* hihihi */];
 
         let c /* comment in between */ : vector<u64> = vector[
             100, // hahaha

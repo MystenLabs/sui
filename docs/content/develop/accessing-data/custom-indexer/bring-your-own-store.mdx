@@ -1,7 +1,39 @@
 ---
 title: Bring Your Own Store (BYOS)
 description: Implement a custom storage backend for the customer indexer framework.
-keywords: [indexer, custom store, BYOS, bring your own store, event deserialization, BCS, Move events, ClickHouse]
+keywords:
+  - indexer
+  - custom store
+  - BYOS
+  - bring your own store
+  - event deserialization
+  - BCS
+  - Move events
+  - ClickHouse
+goal:
+  description: >-
+    Reader can implement a custom storage backend for the customer indexer
+    framework
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Bring Your Own Store (BYOS) in Sui?
+  - How does bring your own store (byos) work on Sui?
+  - Why should I use bring your own store (byos)?
+answer: Implement a custom storage backend for the customer indexer framework.
 ---
 
 The `IndexerCluster` provides a convenient way to get started with PostgreSQL, but you might want to use a different database or storage system. This requires using the manual `Indexer` class and implementing custom `Store` and `Connection` traits from `sui-indexer-alt-framework-store-traits`.
@@ -105,6 +137,7 @@ use sui_indexer_alt_framework::{Indexer, IndexerArgs};
 use sui_indexer_alt_framework::ingestion::{
     ClientArgs, IngestionConfig,
     ingestion_client::IngestionClientArgs,
+    streaming_client::StreamingClientArgs,
 };
 
 async fn main() -> anyhow::Result<()> {
@@ -117,11 +150,23 @@ async fn main() -> anyhow::Result<()> {
         IndexerArgs::default(),
         ClientArgs {
             ingestion: IngestionClientArgs {
-                // Use full node gRPC as the primary steady-state source and the
-                // remote checkpoint store as a fallback.
-                rpc_api_url: Some("https://fullnode.testnet.sui.io:443".parse()?),
+                // Use the full-retention Testnet GCS bucket for checkpoint
+                // catch-up and streaming fallback. The public Testnet HTTPS
+                // checkpoint endpoint has 30-day retention only.
+                remote_store_gcs: Some("mysten-testnet-checkpoints-use4".to_string()),
+                // This is the programmatic equivalent of passing
+                // --remote-store-header="x-goog-user-project:my-project"
+                // to the indexer framework CLI.
+                remote_store_headers: vec![(
+                    "x-goog-user-project".parse()?,
+                    "my-project".parse()?,
+                )],
+                ..Default::default()
+            },
+            streaming: StreamingClientArgs {
+                // Public-good Testnet endpoint for testing only. Production
+                // indexers must use a fullnode endpoint from an RPC provider.
                 streaming_url: Some("https://fullnode.testnet.sui.io:443".parse()?),
-                remote_store_url: Some("https://checkpoints.testnet.sui.io".to_string()),
                 ..Default::default()
             },
             ..Default::default()
@@ -142,6 +187,8 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 ```
+
+The public-good fullnode URL in this example is for testing only. For production, replace it with a production-grade fullnode gRPC endpoint from an [RPC provider](/develop/accessing-data/rpc-providers).
 
 ### Example: ClickHouse implementation
 

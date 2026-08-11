@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_check/typing/unused_local.move:5:13
   │
 5 │         let x: u64;
@@ -13,7 +13,7 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_check/typing/unused_local.move:9:14
   │
 9 │         let (x, y): (u64, u64);
@@ -21,7 +21,7 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_check/typing/unused_local.move:9:17
   │
 9 │         let (x, y): (u64, u64);
@@ -29,7 +29,7 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_check/typing/unused_local.move:13:16
    │
 13 │         let S{ f, g }: S;
@@ -37,7 +37,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_check/typing/unused_local.move:13:19
    │
 13 │         let S{ f, g }: S;
@@ -45,7 +45,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_check/typing/unused_local.move:25:22
    │
 25 │     fun unused_param(x: u64) {
@@ -53,7 +53,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_check/typing/unused_local.move:28:20
    │
 28 │     fun two_unused(x: u64, y: bool) {
@@ -61,7 +61,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_check/typing/unused_local.move:28:28
    │
 28 │     fun two_unused(x: u64, y: bool) {
@@ -69,7 +69,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_check/typing/unused_local.move:31:35
    │
 31 │     fun unused_param1_used_param2(x: u64, y: bool): bool {
@@ -77,7 +77,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_check/typing/unused_local.move:35:43
    │
 35 │     fun unused_param2_used_param1(x: u64, y: bool): u64 {
