@@ -46,6 +46,8 @@ pub struct VerifierConfig {
     pub disallow_jump_orphans: bool,
     pub max_generic_instantiation_type_nodes_per_function: Option<usize>,
     pub max_generic_instantiation_type_nodes_per_module: Option<usize>,
+    /// Count function signatures as part of of the generic instantiation type-node budgets.
+    pub include_function_signatures_in_instantiation_limits: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -102,6 +104,7 @@ impl Default for VerifierConfig {
             disallow_jump_orphans: true,
             max_generic_instantiation_type_nodes_per_function: Some(10_000),
             max_generic_instantiation_type_nodes_per_module: Some(500_000),
+            include_function_signatures_in_instantiation_limits: true,
         }
     }
 }

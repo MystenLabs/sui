@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{SUI_BRIDGE_OBJECT_ID, base_types::*, error::*};
-use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue};
+use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue, check_accumulator_type_bounds};
 use crate::authenticator_state::ActiveJwk;
 use crate::balance::{
     BALANCE_MODULE_NAME, BALANCE_REDEEM_FUNDS_FUNCTION_NAME, BALANCE_SEND_FUNDS_FUNCTION_NAME,
@@ -873,7 +873,15 @@ impl CallArg {
                     }
                 }
             },
-            CallArg::FundsWithdrawal(_) => {}
+            CallArg::FundsWithdrawal(w) => {
+                fp_ensure!(
+                    check_accumulator_type_bounds(config, &w.type_arg.to_type_tag()),
+                    UserInputError::SizeLimitExceeded {
+                        limit: "maximum type nodes in a funds accumulator type".to_string(),
+                        value: config.max_accumulator_type_nodes().to_string()
+                    }
+                );
+            }
         }
         Ok(())
     }

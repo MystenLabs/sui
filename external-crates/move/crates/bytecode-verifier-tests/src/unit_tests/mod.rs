@@ -64,6 +64,7 @@ pub(crate) fn production_config() -> (VerifierConfig, MeterConfig) {
             disallow_jump_orphans: true,
             max_generic_instantiation_type_nodes_per_function: Some(10_000),
             max_generic_instantiation_type_nodes_per_module: Some(500_000),
+            include_function_signatures_in_instantiation_limits: true,
         },
         MeterConfig::old_default(),
     )
