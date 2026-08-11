@@ -89,9 +89,6 @@ pub struct TransactionToken {
 /// Compatibility dispatch over the on-wire cursor format.
 pub type CTransaction = OpaqueCursor<TransactionToken>;
 
-/// Custom `Connection` for transactions to support partially-filled pages.
-pub(crate) type TransactionConnection = StreamConnection<Transaction>;
-
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
 impl Transaction {
@@ -282,7 +279,7 @@ impl Transaction {
         transactions: &[ProcessedTransaction],
         page: &Page<CTransaction>,
         filter: TransactionFilter,
-    ) -> Result<TransactionConnection, RpcError> {
+    ) -> Result<StreamConnection<Transaction>, RpcError> {
         let after = page.after().map(|c| c.tx_sequence_number());
         let before = page.before().map(|c| c.tx_sequence_number());
 
@@ -337,7 +334,7 @@ impl Transaction {
         scope: Scope,
         page: Page<CTransaction>,
         filter: TransactionFilter,
-    ) -> Result<TransactionConnection, RpcError> {
+    ) -> Result<StreamConnection<Transaction>, RpcError> {
         if let Some(reader) = ctx.data_opt::<AlphaLedgerGrpcReader>() {
             query_limits::rich::debit(ctx)?;
             return Self::paginate_grpc(reader, scope, page, filter).await;
@@ -352,7 +349,7 @@ impl Transaction {
         let reader_lo = available_range_key.reader_lo(watermarks)?;
 
         let Some(query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
-            return Ok(TransactionConnection::empty());
+            return Ok(StreamConnection::empty());
         };
 
         let TransactionFilter {
@@ -399,7 +396,7 @@ impl Transaction {
         scope: Scope,
         page: Page<CTransaction>,
         filter: TransactionFilter,
-    ) -> Result<TransactionConnection, RpcError> {
+    ) -> Result<StreamConnection<Transaction>, RpcError> {
         if page.limit() == 0 {
             return Ok(Connection::new(false, false).into());
         }
@@ -636,14 +633,14 @@ fn transaction_from_stream_item(
     )
 }
 
-/// Build a `TransactionConnection` from draining a bitmap-scan page.
+/// Build a `StreamConnection<Transaction>` from draining a bitmap-scan page.
 ///
 /// Edges are returned in ascending order.
 pub(crate) fn build_grpc_connection(
     scope: Scope,
     page: &Page<CTransaction>,
     result: StreamPage<v2::ExecutedTransaction>,
-) -> Result<TransactionConnection, RpcError> {
+) -> Result<StreamConnection<Transaction>, RpcError> {
     page.paginate_stream_results(result, |payload| {
         transaction_from_stream_item(scope.clone(), payload)
     })
@@ -1041,7 +1038,7 @@ mod tests {
         CursorToken::from(&*decoded)
     }
 
-    fn edge_positions(conn: &TransactionConnection) -> Vec<u64> {
+    fn edge_positions(conn: &StreamConnection<Transaction>) -> Vec<u64> {
         conn.edges
             .iter()
             .map(|e| match edge_token(&e.cursor).position {

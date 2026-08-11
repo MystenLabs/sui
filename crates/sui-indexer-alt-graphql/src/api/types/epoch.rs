@@ -47,7 +47,6 @@ use crate::api::types::object::Object;
 use crate::api::types::protocol_configs::ProtocolConfigs;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
-use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::validator_set::ValidatorSet;
@@ -55,6 +54,7 @@ use crate::error::RpcError;
 use crate::error::upcast;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
+use crate::pagination::StreamConnection;
 use crate::scope::Scope;
 use crate::task::watermark::Watermarks;
 
@@ -426,7 +426,7 @@ impl Epoch {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Option<Result<TransactionConnection, RpcError>> {
+    ) -> Option<Result<StreamConnection<Transaction>, RpcError>> {
         async {
             let (Some(start), end) = try_join!(self.start(ctx), self.end(ctx))? else {
                 return Ok(None);

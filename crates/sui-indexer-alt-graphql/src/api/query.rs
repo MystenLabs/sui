@@ -39,7 +39,6 @@ use crate::api::types::epoch::CEpoch;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::event::CEvent;
 use crate::api::types::event::Event;
-use crate::api::types::event::EventConnection;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::move_object::MoveObject;
 use crate::api::types::move_package;
@@ -64,7 +63,6 @@ use crate::api::types::signature_verify::SignatureVerifyResult;
 use crate::api::types::simulation_result::SimulationResult;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
-use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::transaction_effects::TransactionEffects;
@@ -77,6 +75,7 @@ use crate::error::feature_unavailable;
 use crate::error::upcast;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
+use crate::pagination::StreamConnection;
 use crate::scope::Scope;
 use crate::task::chain_identifier::ChainIdentifier;
 
@@ -312,7 +311,7 @@ impl Query {
         last: Option<u64>,
         before: Option<CEvent>,
         filter: Option<EventFilter>,
-    ) -> Option<Result<EventConnection, RpcError>> {
+    ) -> Option<Result<StreamConnection<Event>, RpcError>> {
         Some(
             async {
                 let scope = self.scope(ctx)?;
@@ -720,7 +719,7 @@ impl Query {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Option<Result<TransactionConnection, RpcError>> {
+    ) -> Option<Result<StreamConnection<Transaction>, RpcError>> {
         Some(
             async {
                 let scope = self.scope(ctx)?;
