@@ -34,8 +34,30 @@ answer: >-
   Sui repository.
 ---
 
-The Legacy Rust SDK crate is in the [`crates/sui-sdk` directory](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk) of the Sui repository.
+The Sui Rust SDK provides Rust wrappers for interacting with Sui networks. Two Rust SDK crates are available:
 
-This SDK is forward and backwards compatible with the [`sui-rust-sdk`](https://github.com/MystenLabs/sui-rust-sdk) and supports JSON RPC. If you do not need JSON RPC, use the [`sui-rust-sdk`](https://github.com/MystenLabs/sui-rust-sdk) instead.
+| **Crate** | **Repository** | **Status** | **Use when** |
+|---|---|---|---|
+| [`sui-rust-sdk`](https://github.com/MystenLabs/sui-rust-sdk) | [MystenLabs/sui-rust-sdk](https://github.com/MystenLabs/sui-rust-sdk) | **Current** | Building new Rust integrations. Uses [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) and [gRPC](/develop/accessing-data/grpc). |
+| [`sui-sdk`](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk) | [MystenLabs/sui](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk) | **Legacy** | Maintaining existing integrations that depend on this crate. |
+
+For new projects, use [`sui-rust-sdk`](https://github.com/MystenLabs/sui-rust-sdk). It is the actively maintained Rust SDK with support for the current Sui API surface.
+
+## Legacy `sui-sdk` crate
+
+The legacy SDK crate lives in the [`crates/sui-sdk` directory](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk) of the main Sui repository. It is forward and backwards compatible with `sui-rust-sdk`.
+
+### Installation
+
+Add the crate to your `Cargo.toml`:
+
+```toml
+[dependencies]
+sui-sdk = { git = "https://github.com/MystenLabs/sui.git", package = "sui-sdk" }
+```
+
+### SDK reference
+
+The legacy SDK README contains usage examples for connecting to a network, querying objects, and submitting transactions:
 
 <ImportContent source="crates/sui-sdk/README.md" mode="code" style="md" />

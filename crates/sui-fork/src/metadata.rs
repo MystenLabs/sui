@@ -3,8 +3,8 @@
 
 //! Fork-local metadata sidecar.
 //!
-//! Raw chain data lives in `sui-rpc-store`. This module only owns data-dir
-//! layout and the immutable seed manifest.
+//! Raw chain data lives in the local DB. This module only owns data-dir layout and the immutable
+//! seed manifest.
 
 use std::env;
 use std::ffi::OsString;
@@ -36,8 +36,8 @@ pub(crate) struct MetadataStore {
 }
 
 impl MetadataStore {
-    /// Create a new fork metadata store. Explicit data directories are used as the exact
-    /// root; otherwise the root is `{base_path}/{network_name}/forked_at_{checkpoint}`.
+    /// Create a new fork metadata store. An explicit data directory is used as the exact root, and
+    /// without one the root is `{base_path}/{network_name}/forked_at_{checkpoint}`.
     pub(crate) fn new(
         node: &Node,
         forked_at_checkpoint: CheckpointSequenceNumber,
@@ -65,8 +65,8 @@ impl MetadataStore {
         Self::base_path_from_env(|key| env::var_os(key))
     }
 
-    /// Resolve the default base path for on-disk metadata, using the provided `get_env` function
-    /// to access environment variables.
+    /// Resolve the default base path for on-disk metadata, using the provided `get_env` function to
+    /// access environment variables.
     fn base_path_from_env(
         mut get_env: impl FnMut(&str) -> Option<OsString>,
     ) -> Result<PathBuf, Error> {

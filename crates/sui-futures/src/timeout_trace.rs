@@ -9,10 +9,7 @@
 //! Any `Future::poll` that returns [`Poll::Pending`] is required, by the `Waker` contract, to
 //! arrange for its task to be polled again later -- almost always by cloning the `Waker` it was
 //! given and stashing the clone somewhere (a timer wheel, an I/O reactor's readiness slot, a
-//! channel's waiter list, ...) so it can be woken once whatever it's waiting on is ready. In
-//! other words: *cloning the waker is what a future does to say "I'm going to sleep and someone
-//! needs to wake me up later"* -- it's the general-purpose signal for "this is a genuine await
-//! point".
+//! channel's waiter list, ...) so it can be woken once whatever it's waiting on is ready.
 //!
 //! [`timeout`] exploits this. Once its deadline elapses, it polls the wrapped future exactly one
 //! more time using a custom [`Waker`] (backed by a hand-rolled [`RawWakerVTable`], see
@@ -45,19 +42,6 @@ use pin_project::pin_project;
 use tokio::sync::mpsc;
 use tokio::time::Sleep;
 use tracing_error::SpanTrace;
-
-/// Capacity of the channel `TracingWaker` clones send captured traces down. Bounded rather than
-/// unbounded (the repo disallows `mpsc::unbounded_channel`); sends only ever happen synchronously
-/// during the one poll call a `TracingWaker` is used for, so this is really a cap on how many
-/// distinct branches can be captured as still-pending in that one poll.
-///
-/// Not derived from any config value: callers like `sui-indexer-alt-graphql` can allow queries
-/// wide enough to exceed this in principle (e.g. its `max_query_nodes` defaults to 300). If a
-/// query has more than 64 sibling fields still concurrently unresolved at the exact moment its
-/// timeout fires, only the first 64 (in whatever order the poll visits them) get reported --
-/// `clone_capturing_trace`'s `try_send` silently drops the rest, so the timeout response still
-/// goes out fine, just with an incomplete trace list.
-const TRACE_CHANNEL_CAPACITY: usize = 64;
 
 /// Wraps a future with a timeout that also captures [`SpanTrace`]s of whatever was still pending
 /// when it fired -- see [`timeout`].
@@ -95,12 +79,12 @@ struct TracedAwaitPoint {
 /// never a task left for a later wake-up to usefully reach.
 struct TracingWaker {
     /// Traces are sent, one per clone, down this channel; `TracedTimeout::poll` drains it after
-    /// the final poll returns. Bounded (see [`TRACE_CHANNEL_CAPACITY`]) rather than unbounded --
-    /// nothing ever calls `recv().await` on the receiving end, only `try_recv` in a loop, so the
-    /// bound is really just a cap on distinct branches captured per poll rather than a real
-    /// backpressure mechanism (sends only ever happen synchronously during the one poll call this
-    /// waker is used for).
-    sender: mpsc::Sender<TracedAwaitPoint>,
+    /// the final poll returns. Unbounded: sends only ever happen synchronously during the one
+    /// poll call a `TracingWaker` is used for, and are always fully drained immediately
+    /// afterward, so there's no producer that could outpace a slow consumer -- the usual reason
+    /// the repo disallows `mpsc::unbounded_channel` (see the `#[allow]` where this is
+    /// constructed).
+    sender: mpsc::UnboundedSender<TracedAwaitPoint>,
     /// Kept alive for as long as this clone is -- e.g. by whatever external structure (a timer,
     /// a connection pool's waiter list, ...) retained the `Waker` clone wrapping it (never read
     /// directly -- `TracedAwaitPoint::alive` observes it through the paired `Weak` handle).
@@ -121,7 +105,7 @@ impl TracingWaker {
         Self::raw_drop,
     );
 
-    fn new_std_waker(sender: mpsc::Sender<TracedAwaitPoint>) -> Waker {
+    fn new_std_waker(sender: mpsc::UnboundedSender<TracedAwaitPoint>) -> Waker {
         let data = Box::into_raw(Box::new(Self {
             sender,
             _alive: None,
@@ -133,13 +117,12 @@ impl TracingWaker {
 
     fn clone_capturing_trace(&self) -> Box<Self> {
         let alive = Arc::new(());
-        // Non-blocking: this runs synchronously inside `Waker::clone`, which can't `.await`.
-        // Ignore errors: a full channel (see `TRACE_CHANNEL_CAPACITY`'s docs -- reachable, not
-        // just theoretical) or a closed one (`TracedTimeout::poll` has already drained and
-        // returned) both just mean there's nowhere useful to put this trace. Dropping it here is
-        // never unsafe, only lossy: the timeout still resolves and its response still goes out
-        // fine either way, just possibly missing this one entry from the trace list.
-        let _ = self.sender.try_send(TracedAwaitPoint {
+        // Ignore errors: the only way `send` fails here is a closed receiver, meaning
+        // `TracedTimeout::poll` has already drained and returned -- there's nowhere useful to put
+        // this trace. Dropping it here is never unsafe, only lossy: the timeout still resolves
+        // and its response still goes out fine either way, just possibly missing this one entry
+        // from the trace list.
+        let _ = self.sender.send(TracedAwaitPoint {
             trace: SpanTrace::capture(),
             alive: Arc::downgrade(&alive),
         });
@@ -185,7 +168,10 @@ impl<Fut: Future> Future for TracedTimeout<Fut> {
         // We hit the timeout. Do one final poll of `inner`, capturing a trace every time it
         // clones its waker. This call resolves this whole `poll` one way or another -- see
         // `TracingWaker`'s docs for why that means it never needs to forward wake-ups.
-        let (sender, mut receiver) = mpsc::channel(TRACE_CHANNEL_CAPACITY);
+        // Unbounded: see `TracingWaker::sender`'s docs for why that's safe here despite the
+        // repo's default of disallowing `mpsc::unbounded_channel`.
+        #[allow(clippy::disallowed_methods)]
+        let (sender, mut receiver) = mpsc::unbounded_channel();
         let waker = TracingWaker::new_std_waker(sender);
         let mut traced_cx = Context::from_waker(&waker);
         match this.inner.poll(&mut traced_cx) {
@@ -243,7 +229,6 @@ mod tests {
     use tracing_error::ErrorLayer;
     use tracing_subscriber::layer::SubscriberExt;
 
-    use super::TRACE_CHANNEL_CAPACITY;
     use super::TracingWaker;
     use super::timeout;
 
@@ -396,7 +381,8 @@ mod tests {
     /// borrowed the box, leaking it forever.
     #[test]
     fn wake_drops_the_waker_like_drop_does() {
-        let (sender, receiver) = mpsc::channel(TRACE_CHANNEL_CAPACITY);
+        #[allow(clippy::disallowed_methods)]
+        let (sender, receiver) = mpsc::unbounded_channel();
         let waker = TracingWaker::new_std_waker(sender);
         assert_eq!(receiver.sender_strong_count(), 1, "waker's own box");
 
@@ -421,7 +407,8 @@ mod tests {
     /// `drop` still must.
     #[test]
     fn wake_by_ref_then_drop_frees_the_box() {
-        let (sender, receiver) = mpsc::channel(TRACE_CHANNEL_CAPACITY);
+        #[allow(clippy::disallowed_methods)]
+        let (sender, receiver) = mpsc::unbounded_channel();
         let waker = TracingWaker::new_std_waker(sender);
         let cloned = waker.clone();
         assert_eq!(receiver.sender_strong_count(), 2);
@@ -444,7 +431,8 @@ mod tests {
     /// best-effort.
     #[test]
     fn clone_after_receiver_dropped_does_not_panic() {
-        let (sender, receiver) = mpsc::channel(TRACE_CHANNEL_CAPACITY);
+        #[allow(clippy::disallowed_methods)]
+        let (sender, receiver) = mpsc::unbounded_channel();
         drop(receiver);
 
         let waker = TracingWaker::new_std_waker(sender);

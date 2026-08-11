@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! End-to-end tests for the checkpoint subscription gRPC. Spins up the full
-//! tonic stack (forking admin RPCs + the canonical sui-rpc-api streaming
-//! RPC), drives checkpoint-producing admin calls, and asserts subscribers
-//! see each checkpoint on the stream.
+//! End-to-end tests for the checkpoint subscription gRPC. They spin up the full tonic stack
+//! (forking admin RPCs plus the canonical sui-rpc-api streaming RPC), drive checkpoint-producing
+//! admin calls, and assert subscribers see each checkpoint on the stream.
 
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
@@ -39,10 +38,9 @@ use crate::rpc::forking_service::ForkingServiceImpl;
 use crate::services::ServiceManager;
 use crate::store::ForkStore;
 
-/// In-process gRPC harness: builds a fresh Simulacrum from a genesis
-/// `NetworkConfig`, wires up the subscription broker, and starts a tonic
-/// server on an ephemeral port. The server task is aborted when the
-/// harness is dropped.
+/// In-process gRPC harness. It builds a fresh Simulacrum from a genesis `NetworkConfig`, wires up
+/// the subscription broker, and starts a tonic server on an ephemeral port. The server task is
+/// aborted when the harness is dropped.
 struct ServerHarness {
     server_task: tokio::task::JoinHandle<()>,
     grpc_endpoint: String,

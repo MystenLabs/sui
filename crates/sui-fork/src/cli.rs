@@ -52,19 +52,23 @@ enum Command {
         checkpoint: Option<u64>,
 
         /// Optional directory where to store the fork data. If none is provided, a default
-        /// directory is used based on `XDG_DATA_HOME` or `HOME` env variables (APPData on Windows).
+        /// directory is used based on `XDG_DATA_HOME` or `HOME` env variables (APPData on Windows)
         #[arg(long)]
         data_dir: Option<PathBuf>,
 
         /// Address whose owned objects should be recorded in the seed manifest
+        ///
+        /// This can be specified multiple times to seed multiple addresses
         #[arg(long = "address")]
         addresses: Vec<SuiAddress>,
 
         /// Object ID to fetch and seed if it is owned by an address
+        ///
+        /// This can be specified multiple times to seed multiple objects
         #[arg(long = "object")]
         object_ids: Vec<ObjectID>,
 
-        /// Address to bind the RPC server to
+        /// Address to bind the RPC server to.
         #[arg(long, default_value = DEFAULT_RPC_ADDR)]
         rpc_addr: SocketAddr,
     },
@@ -80,7 +84,7 @@ enum Command {
         duration_ms: Option<u64>,
     },
 
-    /// Seal pending transactions into a new checkpoint
+    /// Advance to a new checkpoint
     AdvanceCheckpoint {
         /// RPC server address to connect to
         #[arg(long, default_value = DEFAULT_RPC_ADDR, value_parser = parse_rpc_addr)]
