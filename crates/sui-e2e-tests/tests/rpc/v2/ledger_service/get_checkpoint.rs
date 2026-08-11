@@ -7,7 +7,10 @@ use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2::{Checkpoint, ExecutedTransaction, GetCheckpointRequest, Object};
+use sui_rpc::proto::sui::rpc::v2::{
+    BatchGetCheckpointsRequest, BatchGetCheckpointsResponse, Checkpoint, ExecutedTransaction,
+    GetCheckpointRequest, Object,
+};
 use test_cluster::TestClusterBuilder;
 
 use crate::{stake_with_validator, transfer_coin};
@@ -356,6 +359,195 @@ async fn get_checkpoint() {
     assert!(
         found_transaction_with_events,
         "should have found transaction with events"
+    );
+
+    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+}
+
+#[sim_test]
+async fn batch_get_checkpoints() {
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .disable_fullnode_pruning()
+        .build()
+        .await;
+
+    let _transaction_digest = transfer_coin(&test_cluster.wallet).await;
+    let transaction_digest = stake_with_validator(&test_cluster).await;
+
+    let mut client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    // Batch request by sequence number with no provided read_mask
+    let BatchGetCheckpointsResponse { checkpoints, .. } = client
+        .batch_get_checkpoints({
+            let mut message = BatchGetCheckpointsRequest::default();
+            message.requests = vec![
+                GetCheckpointRequest::by_sequence_number(0),
+                GetCheckpointRequest::by_sequence_number(1),
+                GetCheckpointRequest::by_sequence_number(2),
+            ];
+            message
+        })
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert_eq!(checkpoints.len(), 3);
+    for (expected_sequence_number, result) in checkpoints.iter().enumerate() {
+        let Checkpoint {
+            sequence_number,
+            digest,
+            summary,
+            signature,
+            contents,
+            transactions,
+            objects,
+            ..
+        } = result.checkpoint();
+        assert_eq!(*sequence_number, Some(expected_sequence_number as u64));
+        assert!(digest.is_some());
+        assert!(summary.is_none());
+        assert!(signature.is_none());
+        assert!(contents.is_none());
+        assert!(transactions.is_empty());
+        assert!(objects.is_none());
+    }
+
+    let genesis_digest = checkpoints[0].checkpoint().digest.clone().unwrap();
+
+    // Mixed lookups: by digest, by sequence number, and latest
+    let BatchGetCheckpointsResponse { checkpoints, .. } = client
+        .batch_get_checkpoints({
+            let mut message = BatchGetCheckpointsRequest::default();
+            message.requests = vec![
+                {
+                    let mut request = GetCheckpointRequest::default();
+                    request.checkpoint_id = Some(CheckpointId::Digest(genesis_digest.clone()));
+                    request
+                },
+                GetCheckpointRequest::by_sequence_number(1),
+                GetCheckpointRequest::latest(),
+            ];
+            message
+        })
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert_eq!(checkpoints.len(), 3);
+    assert_eq!(checkpoints[0].checkpoint().sequence_number, Some(0));
+    assert_eq!(
+        checkpoints[0].checkpoint().digest,
+        Some(genesis_digest.clone())
+    );
+    assert_eq!(checkpoints[1].checkpoint().sequence_number, Some(1));
+    assert!(checkpoints[2].checkpoint().sequence_number.unwrap() >= 1);
+
+    // A missing checkpoint yields a per-entry error without failing the batch
+    let BatchGetCheckpointsResponse { checkpoints, .. } = client
+        .batch_get_checkpoints({
+            let mut message = BatchGetCheckpointsRequest::default();
+            message.requests = vec![
+                GetCheckpointRequest::by_sequence_number(0),
+                GetCheckpointRequest::by_sequence_number(999_999_999),
+            ];
+            message
+        })
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert_eq!(checkpoints.len(), 2);
+    assert_eq!(checkpoints[0].checkpoint().sequence_number, Some(0));
+    assert!(checkpoints[1].checkpoint_opt().is_none());
+    assert_eq!(checkpoints[1].error().code, tonic::Code::NotFound as i32);
+
+    // A malformed digest fails the whole batch
+    let error = client
+        .batch_get_checkpoints({
+            let mut message = BatchGetCheckpointsRequest::default();
+            message.requests = vec![GetCheckpointRequest::by_sequence_number(0), {
+                let mut request = GetCheckpointRequest::default();
+                request.checkpoint_id = Some(CheckpointId::Digest("not-a-digest".to_owned()));
+                request
+            }];
+            message
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+
+    // Exceeding the batch size limit fails the whole batch
+    let error = client
+        .batch_get_checkpoints({
+            let mut message = BatchGetCheckpointsRequest::default();
+            message.requests = vec![GetCheckpointRequest::default(); 101];
+            message
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+
+    // The top-level read_mask applies to every entry
+    let checkpoint = client
+        .get_transaction(
+            GetTransactionRequest::new(&transaction_digest)
+                .with_read_mask(FieldMask::from_paths(["checkpoint"])),
+        )
+        .await
+        .unwrap()
+        .into_inner()
+        .transaction
+        .unwrap()
+        .checkpoint
+        .unwrap();
+
+    let BatchGetCheckpointsResponse { checkpoints, .. } = client
+        .batch_get_checkpoints({
+            let mut message = BatchGetCheckpointsRequest::default();
+            message.requests = vec![
+                GetCheckpointRequest::by_sequence_number(0),
+                GetCheckpointRequest::by_sequence_number(checkpoint),
+            ];
+            message.read_mask = Some(FieldMask::from_paths([
+                "sequence_number",
+                "digest",
+                "summary",
+                "contents",
+                "transactions.digest",
+            ]));
+            message
+        })
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert_eq!(checkpoints.len(), 2);
+    for result in &checkpoints {
+        let Checkpoint {
+            sequence_number,
+            digest,
+            summary,
+            signature,
+            contents,
+            objects,
+            ..
+        } = result.checkpoint();
+        assert!(sequence_number.is_some());
+        assert!(digest.is_some());
+        assert!(summary.is_some());
+        assert!(signature.is_none());
+        assert!(contents.is_some());
+        assert!(objects.is_none());
+    }
+    assert!(
+        checkpoints[1]
+            .checkpoint()
+            .transactions
+            .iter()
+            .any(|t| t.digest == Some(transaction_digest.to_string()))
     );
 
     tokio::time::sleep(std::time::Duration::from_secs(15)).await;

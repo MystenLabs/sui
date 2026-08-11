@@ -1,10 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use sui_kvstore::{BigTableClient, CHECKPOINTS_PIPELINE, CheckpointData, KeyValueStoreReader};
 use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
-use sui_rpc::proto::sui::rpc::v2::{Checkpoint, GetCheckpointRequest, GetCheckpointResponse};
+use sui_rpc::proto::sui::rpc::v2::{
+    BatchGetCheckpointsRequest, BatchGetCheckpointsResponse, Checkpoint, GetCheckpointRequest,
+    GetCheckpointResponse, GetCheckpointResult,
+};
 use sui_rpc_api::{
     CheckpointNotFoundError, ErrorReason, RpcError, proto::google::rpc::bad_request::FieldViolation,
 };
@@ -15,7 +19,18 @@ use crate::config::{PipelineStage, ResolvedStageConfig, StagesConfig};
 use crate::render;
 use crate::resolve;
 
+pub const MAX_BATCH_REQUESTS: usize = 100;
 pub const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::CHECKPOINT;
+
+fn validate_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTree, RpcError> {
+    let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
+    read_mask.validate::<Checkpoint>().map_err(|path| {
+        FieldViolation::new("read_mask")
+            .with_description(format!("invalid read_mask path: {path}"))
+            .with_reason(ErrorReason::FieldInvalid)
+    })?;
+    Ok(FieldMaskTree::from(read_mask))
+}
 
 pub async fn get_checkpoint(
     mut client: BigTableClient,
@@ -23,17 +38,7 @@ pub async fn get_checkpoint(
     stages: &StagesConfig,
     request: GetCheckpointRequest,
 ) -> Result<GetCheckpointResponse, RpcError> {
-    let read_mask = {
-        let read_mask = request
-            .read_mask
-            .unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
-        read_mask.validate::<Checkpoint>().map_err(|path| {
-            FieldViolation::new("read_mask")
-                .with_description(format!("invalid read_mask path: {path}"))
-                .with_reason(ErrorReason::FieldInvalid)
-        })?;
-        FieldMaskTree::from(read_mask)
-    };
+    let read_mask = validate_read_mask(request.read_mask)?;
     let needs_full = resolve::needs_transactions_or_objects(&read_mask);
     let columns = resolve::list_checkpoint_columns(&read_mask, needs_full);
     let checkpoint = match request.checkpoint_id {
@@ -82,6 +87,170 @@ pub async fn get_checkpoint(
         render::checkpoint_to_response(checkpoint, &read_mask)?
     };
     Ok(GetCheckpointResponse::new(message))
+}
+
+enum ResolvedCheckpointId {
+    Latest,
+    SequenceNumber(u64),
+    Digest(CheckpointDigest),
+}
+
+pub async fn batch_get_checkpoints(
+    mut client: BigTableClient,
+    limited_client: LimitedBigTableClient,
+    stages: &StagesConfig,
+    BatchGetCheckpointsRequest {
+        requests,
+        read_mask,
+        ..
+    }: BatchGetCheckpointsRequest,
+) -> Result<BatchGetCheckpointsResponse, RpcError> {
+    if requests.len() > MAX_BATCH_REQUESTS {
+        return Err(RpcError::new(
+            tonic::Code::InvalidArgument,
+            format!("number of batch requests exceed limit of {MAX_BATCH_REQUESTS}"),
+        ));
+    }
+
+    let read_mask = validate_read_mask(read_mask)?;
+    let needs_full = resolve::needs_transactions_or_objects(&read_mask);
+    let columns = resolve::list_checkpoint_columns(&read_mask, needs_full);
+
+    let checkpoint_ids = requests
+        .into_iter()
+        .enumerate()
+        .map(|(idx, request)| match request.checkpoint_id {
+            Some(CheckpointId::SequenceNumber(s)) => Ok(ResolvedCheckpointId::SequenceNumber(s)),
+            Some(CheckpointId::Digest(digest)) => digest
+                .parse::<CheckpointDigest>()
+                .map(ResolvedCheckpointId::Digest)
+                .map_err(|e| {
+                    FieldViolation::new("digest")
+                        .with_description(format!("invalid digest: {e}"))
+                        .with_reason(ErrorReason::FieldInvalid)
+                        .nested_at("requests", idx)
+                        .into()
+                }),
+            None => Ok(ResolvedCheckpointId::Latest),
+            _ => Ok(ResolvedCheckpointId::Latest),
+        })
+        .collect::<Result<Vec<_>, RpcError>>()?;
+
+    let latest = if checkpoint_ids
+        .iter()
+        .any(|id| matches!(id, ResolvedCheckpointId::Latest))
+    {
+        Some(
+            client
+                .get_watermark_for_pipelines(&[CHECKPOINTS_PIPELINE])
+                .await?
+                .and_then(|wm| wm.checkpoint_hi_inclusive)
+                .ok_or(CheckpointNotFoundError::sequence_number(0))?,
+        )
+    } else {
+        None
+    };
+
+    let mut sequence_numbers = checkpoint_ids
+        .iter()
+        .filter_map(|id| match id {
+            ResolvedCheckpointId::SequenceNumber(s) => Some(*s),
+            ResolvedCheckpointId::Latest => latest,
+            ResolvedCheckpointId::Digest(_) => None,
+        })
+        .collect::<Vec<_>>();
+    sequence_numbers.sort_unstable();
+    sequence_numbers.dedup();
+
+    let mut by_sequence = HashMap::new();
+    if !sequence_numbers.is_empty() {
+        for checkpoint in client
+            .get_checkpoints_filtered(&sequence_numbers, Some(&columns))
+            .await?
+        {
+            let sequence_number = checkpoint
+                .summary
+                .as_ref()
+                .map(|s| s.sequence_number)
+                .ok_or_else(|| {
+                    RpcError::new(tonic::Code::Internal, "checkpoint summary column missing")
+                })?;
+            by_sequence.insert(sequence_number, checkpoint);
+        }
+    }
+
+    let mut by_digest = HashMap::new();
+    for id in &checkpoint_ids {
+        if let ResolvedCheckpointId::Digest(digest) = id
+            && !by_digest.contains_key(digest)
+            && let Some(checkpoint) = client
+                .get_checkpoint_by_digest_filtered(*digest, Some(&columns))
+                .await?
+        {
+            by_digest.insert(*digest, checkpoint);
+        }
+    }
+
+    let mut checkpoints = Vec::with_capacity(checkpoint_ids.len());
+    for id in checkpoint_ids {
+        let found: Result<CheckpointData, RpcError> = match id {
+            ResolvedCheckpointId::Latest => {
+                let sequence_number = latest.unwrap();
+                by_sequence
+                    .get(&sequence_number)
+                    .cloned()
+                    .ok_or_else(|| CheckpointNotFoundError::sequence_number(sequence_number).into())
+            }
+            ResolvedCheckpointId::SequenceNumber(sequence_number) => by_sequence
+                .get(&sequence_number)
+                .cloned()
+                .ok_or_else(|| CheckpointNotFoundError::sequence_number(sequence_number).into()),
+            ResolvedCheckpointId::Digest(digest) => by_digest
+                .get(&digest)
+                .cloned()
+                .ok_or_else(|| CheckpointNotFoundError::digest(digest.into()).into()),
+        };
+
+        // A shared storage failure aborts the whole call (`?`); only per-entry
+        // not-found and render failures are embedded in the entry's result,
+        // matching `batch_get_transactions`.
+        let rendered = match found {
+            Ok(checkpoint) => {
+                if needs_full {
+                    let cp_seq = checkpoint
+                        .summary
+                        .as_ref()
+                        .map(|s| s.sequence_number)
+                        .ok_or_else(|| {
+                            RpcError::new(
+                                tonic::Code::Internal,
+                                "checkpoint summary column missing",
+                            )
+                        })?;
+                    let (_, cp_data, txs, objects) = resolve::resolve_checkpoint(
+                        limited_client.clone(),
+                        &read_mask,
+                        stages.stage(PipelineStage::Transactions),
+                        stages.stage(PipelineStage::Objects),
+                        cp_seq,
+                        checkpoint,
+                    )
+                    .await?;
+                    render::render_full_checkpoint(cp_data, txs, objects, &read_mask)
+                } else {
+                    render::checkpoint_to_response(checkpoint, &read_mask)
+                }
+            }
+            Err(error) => Err(error),
+        };
+
+        checkpoints.push(match rendered {
+            Ok(checkpoint) => GetCheckpointResult::new_checkpoint(checkpoint),
+            Err(error) => GetCheckpointResult::new_error(error.into_status_proto()),
+        });
+    }
+
+    Ok(BatchGetCheckpointsResponse::new(checkpoints))
 }
 
 /// Heavy path: resolve the checkpoint's transactions and (when requested)
