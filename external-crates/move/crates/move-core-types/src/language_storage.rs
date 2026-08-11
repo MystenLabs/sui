@@ -132,6 +132,29 @@ impl TypeTag {
             }
     }
 
+    /// The number of nodes in the type.
+    pub fn node_count(&self) -> u64 {
+        let mut count = 0u64;
+        let mut frontier = vec![self];
+        while let Some(tag) = frontier.pop() {
+            count = count.saturating_add(1);
+            match tag {
+                TypeTag::Vector(inner) => frontier.push(inner),
+                TypeTag::Struct(tag) => frontier.extend(tag.type_params.iter()),
+                TypeTag::Bool
+                | TypeTag::U8
+                | TypeTag::U16
+                | TypeTag::U32
+                | TypeTag::U64
+                | TypeTag::U128
+                | TypeTag::U256
+                | TypeTag::Address
+                | TypeTag::Signer => (),
+            }
+        }
+        count
+    }
+
     /// Return all of the addresses used inside of the type.
     pub fn all_addresses(&self) -> IndexSet<AccountAddress> {
         let mut account_addresses = IndexSet::new();

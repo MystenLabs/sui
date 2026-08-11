@@ -29,7 +29,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 132;
+const MAX_PROTOCOL_VERSION: u64 = 133;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -373,6 +373,8 @@ const MAINNET_USDB: &str =
 //              root version of hash-derived UIDs (`new_uid_from_hash`).
 //              Create the ForwardingAddressRegistry system object on devnet.
 //              Make upgrade-init linkage checks independent of PTB command order.
+// Version 133: Include function signatures in type-node limits.
+//              Bound type nodes in accumulators.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1038,6 +1040,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     framework_tx_context_mut_restrictions: bool,
 
+    // Count function and local signatures towards type-node budgets.
+    #[serde(skip_serializing_if = "is_false")]
+    include_function_signatures_in_instantiation_limits: bool,
+
     // Enable display registry protocol
     #[serde(skip_serializing_if = "is_false")]
     enable_display_registry: bool,
@@ -1484,6 +1490,9 @@ pub struct ProtocolConfig {
 
     /// Maximum number of "type nodes" that can be instantiated in a module.
     max_generic_instantiation_type_nodes_per_module: Option<u64>,
+
+    /// Maximum number of "type nodes" allowed in an accumulator.
+    max_accumulator_type_nodes: Option<u64>,
 
     /// Maximum number of push instructions in one function. Enforced by the Move bytecode verifier.
     max_push_size: Option<u64>,
@@ -2524,6 +2533,7 @@ impl ProtocolConfig {
             max_type_nodes: Some(256),
             max_generic_instantiation_type_nodes_per_function: None,
             max_generic_instantiation_type_nodes_per_module: None,
+            max_accumulator_type_nodes: None,
             max_push_size: Some(10000),
             max_struct_definitions: Some(200),
             max_function_definitions: Some(1000),
@@ -4556,6 +4566,11 @@ impl ProtocolConfig {
                     cfg.feature_flags
                         .enable_order_independent_upgrade_init_linkage = true;
                 }
+                133 => {
+                    cfg.feature_flags
+                        .include_function_signatures_in_instantiation_limits = true;
+                    cfg.max_accumulator_type_nodes = Some(16);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4642,6 +4657,8 @@ impl ProtocolConfig {
             max_generic_instantiation_type_nodes_per_module: self
                 .max_generic_instantiation_type_nodes_per_module_as_option()
                 .map(|v| v as usize),
+            include_function_signatures_in_instantiation_limits: self
+                .include_function_signatures_in_instantiation_limits(),
             max_push_size: Some(self.max_push_size() as usize),
             max_dependency_depth: Some(self.max_dependency_depth() as usize),
             max_fields_in_struct: Some(self.max_fields_in_struct() as usize),
