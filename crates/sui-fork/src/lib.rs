@@ -1,25 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! A fork node: a local Sui network that starts from the state of a live
-//! network at a chosen checkpoint and executes transactions locally from
-//! there.
+//! A fork node: a local Sui network that starts from the state of a live network at a chosen
+//! checkpoint and executes transactions locally from there.
 //!
-//! State the fork has written itself lives in a stock `sui-rpc-store` RocksDB
-//! kept current by an embedded indexer; state inherited from the forked-from
-//! chain is fetched lazily over GraphQL pinned at the fork checkpoint and
-//! cached into the same database. Execution runs through `simulacrum` in
-//! lock-step: nothing advances until a transaction is executed or an admin
-//! operation advances the clock or seals a checkpoint. The fork serves the
-//! standard `sui-rpc-api` gRPC surface plus a forking admin service
-//! (advance-clock, advance-checkpoint, status). The design is argued in this
-//! crate's `design/` directory.
+//! State the fork writes itself lives in a stock `sui-rpc-store` RocksDB database, kept current by
+//! an embedded indexer. State inherited from the live network is fetched lazily over GraphQL,
+//! pinned at the fork checkpoint, and cached into the same database. Execution runs through
+//! `simulacrum` in lock-step, so nothing advances until a transaction is executed or an admin
+//! operation advances the clock or seals a checkpoint. The fork serves the standard `sui-rpc-api`
+//! gRPC surface plus a forking admin service (advance-clock, advance-checkpoint, status). The
+//! design is argued in this crate's `design/` directory.
 //!
-//! There are two ways in. Programs embed a fork through [`ForkNode::start`],
-//! which takes [`StartArgs`], a version string, and a metrics registry, and
-//! returns a running [`ForkNode`]. The `sui-fork` binary wraps the same entry
-//! point behind [`cli::Cli`], whose client subcommands drive a running fork
-//! over the forking service ([`ForkingServiceClient`]).
+//! There are two ways in. Programs embed a fork through [`ForkNode::start`], which takes
+//! [`StartArgs`], a version string, and a metrics registry, and returns a running [`ForkNode`].
+//! The `sui-fork` binary wraps the same entry point behind [`cli::Cli`], whose client subcommands
+//! drive a running fork over the forking service ([`ForkingServiceClient`]).
 
 pub mod cli;
 pub(crate) mod context;

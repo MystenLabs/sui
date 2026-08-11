@@ -39,6 +39,7 @@ use crate::CheckpointRead;
 use crate::GraphQLClient;
 use crate::Node;
 use crate::context::Context;
+use crate::fork::ForkAdmin;
 use crate::metadata::MetadataStore;
 use crate::proto::forking::forking_service_server::ForkingServiceServer;
 use crate::rpc::executor::ForkedTransactionExecutor;
@@ -66,6 +67,8 @@ pub(crate) struct ForkParts {
     /// The fork's local checkpoint tip at initialization: the fork point on a
     /// fresh fork, higher on a resumed one.
     pub(crate) starting_checkpoint: CheckpointSequenceNumber,
+    /// Whether the fork resumed state persisted by an earlier run.
+    pub(crate) resumed: bool,
 }
 
 /// Checkpoint selected for startup, plus whether existing local fork state was found.
@@ -73,36 +76,6 @@ pub(crate) struct ForkParts {
 pub(crate) struct ResolvedStartCheckpoint {
     pub(crate) checkpoint: Option<CheckpointSequenceNumber>,
     pub(crate) resuming: bool,
-}
-
-/// Resolve the checkpoint the fork starts from and whether it resumes existing
-/// local state.
-///
-/// Local knowledge wins: a fork already present in an inspectable data
-/// directory is resumed at its recorded checkpoint (a requested checkpoint or
-/// network that disagrees with it is an error). Otherwise the requested
-/// checkpoint is used, and with no request either, the network's latest
-/// checkpoint is fetched from the remote.
-pub(crate) async fn resolve_fork_point(
-    node: &Node,
-    requested_checkpoint: Option<CheckpointSequenceNumber>,
-    data_dir: Option<&Path>,
-    version: &str,
-) -> Result<(CheckpointSequenceNumber, bool)> {
-    let resolved = resolve_start_checkpoint_from_local(node, requested_checkpoint, data_dir)?;
-    let checkpoint = match resolved.checkpoint {
-        Some(checkpoint) => checkpoint,
-        None => GraphQLClient::new(node.clone(), version)?
-            .get_latest_checkpoint_sequence_number()
-            .await?
-            .with_context(|| {
-                format!(
-                    "failed to get latest checkpoint for {}",
-                    node.network_name()
-                )
-            })?,
-    };
-    Ok((checkpoint, resolved.resuming))
 }
 
 /// Resolve the fork checkpoint from local state when possible.
@@ -154,24 +127,45 @@ pub(crate) fn resolve_start_checkpoint_from_local(
     })
 }
 
-/// Initialize a forked network at `forked_at_checkpoint`: open or create the data directory, apply
-/// seed metadata, start a local Simulacrum instance from the highest checkpoint already persisted
-/// locally, and start the embedded indexer. Also builds the checkpoint subscription broker, whose
-/// handle is carried in the returned parts so [`serve`] can expose the streaming RPC.
+/// Initialize a forked network: resolve the fork checkpoint, open or create the data directory,
+/// apply seed metadata, start a local Simulacrum instance from the highest checkpoint already
+/// persisted locally, and start the embedded indexer. Also builds the checkpoint subscription
+/// broker, whose handle is carried in the returned parts so [`serve`] can expose the streaming
+/// RPC.
+///
+/// A fork already present in an inspectable data directory is resumed at its recorded checkpoint,
+/// and a requested checkpoint or network that disagrees with it is an error. Otherwise the
+/// requested checkpoint is used, and with no request either, the network's latest checkpoint is
+/// fetched from the remote.
 ///
 /// Metrics for the subscription broker and the embedded indexer are registered into `registry`.
 /// `data_dir` is the root folder where the fork state is persisted. If `None`, a default path is
 /// used. See the [`MetadataStore`] docs for details.
 pub(crate) async fn initialize(
     node: Node,
-    forked_at_checkpoint: CheckpointSequenceNumber,
+    requested_checkpoint: Option<CheckpointSequenceNumber>,
     version: &str,
     data_dir: Option<PathBuf>,
     seed_input: SeedInput,
     registry: &Registry,
 ) -> Result<ForkParts> {
-    // 1. Prepare metadata and GraphQL, then open the RPC store before constructing ForkStore.
+    // 1. Resolve the fork point, prepare metadata and GraphQL, then open the RPC store before
+    //    constructing ForkStore.
     let gql = GraphQLClient::new(node.clone(), version)?;
+    let resolved =
+        resolve_start_checkpoint_from_local(&node, requested_checkpoint, data_dir.as_deref())?;
+    let forked_at_checkpoint = match resolved.checkpoint {
+        Some(checkpoint) => checkpoint,
+        None => gql
+            .get_latest_checkpoint_sequence_number()
+            .await?
+            .with_context(|| {
+                format!(
+                    "failed to get latest checkpoint for {}",
+                    node.network_name()
+                )
+            })?,
+    };
     let chain_identifier = gql.chain();
     let local = MetadataStore::new(&node, forked_at_checkpoint, data_dir)?;
     let data_dir = local.root().to_path_buf();
@@ -266,6 +260,7 @@ pub(crate) async fn initialize(
         network_name,
         forked_at_checkpoint,
         starting_checkpoint,
+        resumed: resolved.resuming,
     })
 }
 
@@ -327,7 +322,9 @@ pub(crate) async fn serve(
     service.with_metrics(registry);
     service.with_subscription_service(subscription_handle);
     service.with_executor(Arc::new(ForkedTransactionExecutor::new(context.clone())));
-    service.with_custom_service(ForkingServiceServer::new(ForkingServiceImpl::new(context)));
+    service.with_custom_service(ForkingServiceServer::new(ForkingServiceImpl::new(
+        ForkAdmin::new(context),
+    )));
     service.with_file_descriptor_set(crate::proto::FILE_DESCRIPTOR_SET);
 
     let rpc_address = listener

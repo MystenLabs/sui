@@ -142,8 +142,8 @@ pub async fn create_checkpoint(&self) -> Result<CreatedCheckpoint>;
 pub async fn status(&self) -> Result<ForkStatus>;
 ```
 
-These share one implementation with the forking gRPC service — both delegate to the same
-methods on the fork's shared context — so the in-process and remote surfaces cannot drift
+These share one implementation with the forking gRPC service — the service holds the same
+`ForkAdmin` handle the node hands out — so the in-process and remote surfaces cannot drift
 apart, and a host that just started a fork can advance its clock without dialing the socket
 it opened.
 
@@ -156,9 +156,11 @@ reads lag raw reads and subscribers are not notified until the indexer catches u
 background watchdog polices this. The fork is a command-driven sequential node — one user
 transaction, then its checkpoint — so every indexing cycle that matters is already observed
 by the call that produced it, and a watchdog would only add false positives on an idle fork.
-The checkpoint-producing closure itself runs on a blocking thread, because it executes the
-Move VM and can make synchronous remote reads, either of which would otherwise park a
-runtime worker for as long as the simulacrum write lock is held.
+The checkpoint-producing closure runs inline on the calling task, blocking it for the
+duration of Move execution and any synchronous live-network reads. That stall is accepted
+for the same sequential-node reason, and because the RPC read paths make the same
+synchronous remote reads on their own tasks — dispatching only the executor to a blocking
+thread would not remove the class.
 
 `ForkNode::admin` returns a cheap cloneable handle carrying the same three methods. It
 exists because the two ways a host holds a running fork both make the methods on the node
@@ -194,11 +196,10 @@ guarantees.
 
 The executor handle is the largest omission. Exposing the simulacrum would put `ForkStore`
 and the executor's locking discipline into the public surface, and its simulation path
-blocks the calling thread with Move execution and synchronous remote reads, which is why
-the checkpoint-producing path dispatches it on a blocking thread. An embedder holding the
-raw lock inherits that trap along with every internal type it can reach. In-process execution and simulation
-are left out for the same reason: the gRPC execution path already exists, carries the
-sender-impersonation rules, and owns the blocking dispatch.
+blocks the calling thread with Move execution and synchronous remote reads. An embedder
+holding the raw lock inherits that trap along with every internal type it can reach.
+In-process execution and simulation are left out for the same reason: the gRPC execution
+path already exists and carries the sender-impersonation rules.
 
 The rest of the crate narrows to match. The GraphQL client, the startup internals, the seed
 input, and the store become crate-private; the public surface is `StartArgs`, `ForkNode` and

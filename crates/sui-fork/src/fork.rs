@@ -3,14 +3,12 @@
 
 //! Programmatic entry point for running a fork node inside another program.
 //!
-//! [`StartArgs`] describes what to fork and where to serve it; it derives
-//! `clap::Args` so a binary can flatten it into its own command line, and
-//! `Default` so a library caller can construct it directly — clap reads its
-//! defaults from the `Default` impl, so the two cannot drift.
-//! [`ForkNode::start`] performs the whole startup sequence and returns a
-//! [`ForkNode`]: a running fork whose accessors report what was started, whose
-//! admin methods drive the fork's clock and checkpoints in-process, and whose
-//! lifecycle methods decide when it stops.
+//! [`StartArgs`] describes what to fork and where to serve it. It derives `clap::Args` so a binary
+//! can flatten it into its own command line, and `Default` so a library caller can construct it
+//! directly; clap reads its defaults from the `Default` impl, so the two cannot drift.
+//! [`ForkNode::start`] performs the whole startup sequence and returns a [`ForkNode`]: a running
+//! fork whose accessors report what was started, whose admin methods drive the fork's clock and
+//! checkpoints in-process, and whose lifecycle methods decide when it stops.
 
 use std::net::SocketAddr;
 use std::path::Path;
@@ -21,12 +19,16 @@ use std::time::Duration;
 use anyhow::Result;
 use prometheus::Registry;
 
+use simulacrum::SimulatorStore as _;
 use sui_futures::service::Service;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffectsAPI as _;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait as _;
 use tokio::net::TcpListener;
+use tracing::info;
 
 use crate::Node;
 use crate::context::Context;
@@ -81,21 +83,6 @@ pub struct StartArgs {
     pub rpc_listen_address: SocketAddr,
 }
 
-impl Default for StartArgs {
-    fn default() -> Self {
-        Self {
-            network: Node::Mainnet,
-            checkpoint: None,
-            data_dir: None,
-            addresses: Vec::new(),
-            object_ids: Vec::new(),
-            rpc_listen_address: DEFAULT_RPC_ADDR
-                .parse()
-                .expect("default RPC address is valid"),
-        }
-    }
-}
-
 /// A running fork node: gRPC server bound and serving, embedded indexer
 /// running.
 ///
@@ -104,7 +91,7 @@ impl Default for StartArgs {
 /// [`Self::into_service`] for callers that compose the fork with other
 /// services and own their own signal handling.
 pub struct ForkNode {
-    context: Arc<Context>,
+    admin: ForkAdmin,
     service: Service,
     rpc_address: SocketAddr,
     network_name: String,
@@ -112,6 +99,58 @@ pub struct ForkNode {
     forked_at_checkpoint: CheckpointSequenceNumber,
     starting_checkpoint: CheckpointSequenceNumber,
     resumed: bool,
+}
+
+/// Cloneable handle for driving a running fork in-process, detached from the
+/// fork's lifetime management.
+///
+/// Obtained from [`ForkNode::admin`]. The methods are the same as
+/// [`ForkNode`]'s and share its contracts; this handle exists so they survive
+/// [`ForkNode::into_service`] and can run concurrently with
+/// [`ForkNode::join`]. It does not keep the fork's tasks alive, but it does
+/// keep the state store alive: after the fork stops, checkpoint-producing
+/// calls still execute against the store and seal durable checkpoints (after
+/// a 30-second indexing wait), and [`Self::status`] keeps answering. Do not
+/// drive a fork after shutting it down.
+#[derive(Clone)]
+pub struct ForkAdmin {
+    context: Arc<Context>,
+}
+
+/// Result of advancing the fork's clock.
+#[derive(Clone, Copy, Debug)]
+pub struct ClockAdvanced {
+    /// Digest of the transaction that moved the on-chain clock.
+    pub tx_digest: TransactionDigest,
+    /// The clock's timestamp after the advance, in milliseconds.
+    pub timestamp_ms: u64,
+    /// The checkpoint the clock transaction was sealed into.
+    pub checkpoint: CreatedCheckpoint,
+}
+
+/// A checkpoint created by the fork.
+///
+/// Callers only need these fields for responses and finality metadata; the
+/// checkpoint itself is re-read from the store by the indexer.
+#[derive(Clone, Copy, Debug)]
+pub struct CreatedCheckpoint {
+    /// The checkpoint's sequence number.
+    pub sequence_number: CheckpointSequenceNumber,
+    /// The checkpoint's timestamp, in milliseconds.
+    pub timestamp_ms: u64,
+}
+
+/// Snapshot of a running fork's progress.
+#[derive(Clone, Copy, Debug)]
+pub struct ForkStatus {
+    /// The fork's current epoch.
+    pub epoch: u64,
+    /// The fork's local checkpoint tip.
+    pub checkpoint_sequence_number: CheckpointSequenceNumber,
+    /// The fork's clock, in milliseconds.
+    pub timestamp_ms: u64,
+    /// The checkpoint the fork was created from.
+    pub forked_at_checkpoint: CheckpointSequenceNumber,
 }
 
 impl ForkNode {
@@ -163,18 +202,10 @@ impl ForkNode {
         };
 
         let listener = startup::bind(rpc_listen_address).await?;
-        let (forked_at_checkpoint, resumed) =
-            startup::resolve_fork_point(&network, checkpoint, data_dir.as_deref(), version).await?;
-        let parts = startup::initialize(
-            network,
-            forked_at_checkpoint,
-            version,
-            data_dir,
-            seed_input,
-            registry,
-        )
-        .await?;
-        Self::from_parts(parts, resumed, listener, version, registry).await
+        let parts =
+            startup::initialize(network, checkpoint, version, data_dir, seed_input, registry)
+                .await?;
+        Self::from_parts(parts, listener, version, registry).await
     }
 
     /// Serve an already-initialized fork. The seam between building fork state
@@ -182,7 +213,6 @@ impl ForkNode {
     /// hand-built [`ForkParts`] over synthetic genesis state.
     pub(crate) async fn from_parts(
         parts: ForkParts,
-        resumed: bool,
         listener: TcpListener,
         version: &'static str,
         registry: &Registry,
@@ -195,6 +225,7 @@ impl ForkNode {
             network_name,
             forked_at_checkpoint,
             starting_checkpoint,
+            resumed,
         } = parts;
 
         let context = Arc::new(context);
@@ -208,7 +239,7 @@ impl ForkNode {
         .await?;
 
         Ok(ForkNode {
-            context,
+            admin: ForkAdmin::new(context),
             service: server.merge(indexer_service),
             rpc_address,
             network_name,
@@ -258,9 +289,7 @@ impl ForkNode {
     /// surrendering its tasks, or to drive it concurrently with
     /// [`Self::join`], which holds `&mut self`.
     pub fn admin(&self) -> ForkAdmin {
-        ForkAdmin {
-            context: Arc::clone(&self.context),
-        }
+        self.admin.clone()
     }
 
     /// Advance the fork's clock by `duration` and seal the resulting clock
@@ -272,20 +301,20 @@ impl ForkNode {
     /// logging an error; until the indexer catches up, derived reads (owned
     /// objects, balances) lag raw reads and subscribers are not notified.
     pub async fn advance_clock(&self, duration: Duration) -> ClockAdvanced {
-        self.context.advance_clock(duration).await
+        self.admin.advance_clock(duration).await
     }
 
     /// Seal all pending transactions into a new checkpoint. Same contract as
     /// the forking gRPC service's `AdvanceCheckpoint`; the indexing caveat on
     /// [`Self::advance_clock`] applies here too.
     pub async fn create_checkpoint(&self) -> CreatedCheckpoint {
-        self.context.create_checkpoint().await
+        self.admin.create_checkpoint().await
     }
 
     /// The fork's current epoch, checkpoint tip, clock, and fork point. Same
     /// contract as the forking gRPC service's `GetStatus`.
     pub async fn status(&self) -> ForkStatus {
-        self.context.status().await
+        self.admin.status().await
     }
 
     /// Resolves with the error when one of the fork's tasks — the server or
@@ -317,71 +346,81 @@ impl ForkNode {
     }
 }
 
-/// Cloneable handle for driving a running fork in-process, detached from the
-/// fork's lifetime management.
-///
-/// Obtained from [`ForkNode::admin`]. The methods are the same as
-/// [`ForkNode`]'s and share its contracts; this handle exists so they survive
-/// [`ForkNode::into_service`] and can run concurrently with
-/// [`ForkNode::join`]. It does not keep the fork's tasks alive, but it does
-/// keep the state store alive: after the fork stops, checkpoint-producing
-/// calls still execute against the store and seal durable checkpoints (after
-/// a 30-second indexing wait), and [`Self::status`] keeps answering. Do not
-/// drive a fork after shutting it down.
-#[derive(Clone)]
-pub struct ForkAdmin {
-    context: Arc<Context>,
-}
-
 impl ForkAdmin {
+    /// The one implementation of the fork's admin operations: the forking
+    /// gRPC service holds a `ForkAdmin` too, so the in-process and remote
+    /// surfaces cannot drift apart.
+    pub(crate) fn new(context: Arc<Context>) -> Self {
+        Self { context }
+    }
+
     /// See [`ForkNode::advance_clock`].
     pub async fn advance_clock(&self, duration: Duration) -> ClockAdvanced {
-        self.context.advance_clock(duration).await
+        let ((tx_digest, timestamp_ms), checkpoint) = self
+            .context
+            .run_with_new_checkpoint(|sim| {
+                let effects = sim.advance_clock(duration);
+                let tx_digest = *effects.transaction_digest();
+                let timestamp_ms = sim.store().get_clock().timestamp_ms;
+                (tx_digest, timestamp_ms)
+            })
+            .await;
+
+        info!(
+            %tx_digest,
+            duration_ms = duration.as_millis() as u64,
+            timestamp_ms,
+            checkpoint_sequence_number = checkpoint.sequence_number,
+            "clock advanced"
+        );
+
+        ClockAdvanced {
+            tx_digest,
+            timestamp_ms,
+            checkpoint,
+        }
     }
 
     /// See [`ForkNode::create_checkpoint`].
     pub async fn create_checkpoint(&self) -> CreatedCheckpoint {
-        self.context.create_checkpoint().await
+        let ((), checkpoint) = self.context.run_with_new_checkpoint(|_| ()).await;
+
+        info!(
+            checkpoint_sequence_number = checkpoint.sequence_number,
+            timestamp_ms = checkpoint.timestamp_ms,
+            "checkpoint created"
+        );
+
+        checkpoint
     }
 
     /// See [`ForkNode::status`].
     pub async fn status(&self) -> ForkStatus {
-        self.context.status().await
+        let sim = self.context.simulacrum().read().await;
+        ForkStatus {
+            epoch: sim.epoch_start_state().epoch(),
+            checkpoint_sequence_number: sim
+                .store()
+                .get_highest_checkpint()
+                .map(|checkpoint| checkpoint.data().sequence_number)
+                .unwrap_or(0),
+            timestamp_ms: sim.store().get_clock().timestamp_ms,
+            forked_at_checkpoint: sim.store().forked_at_checkpoint(),
+        }
     }
 }
 
-/// Result of advancing the fork's clock.
-#[derive(Clone, Copy, Debug)]
-pub struct ClockAdvanced {
-    /// Digest of the transaction that moved the on-chain clock.
-    pub tx_digest: TransactionDigest,
-    /// The clock's timestamp after the advance, in milliseconds.
-    pub timestamp_ms: u64,
-    /// The checkpoint the clock transaction was sealed into.
-    pub checkpoint: CreatedCheckpoint,
-}
-
-/// A checkpoint created by the fork.
-///
-/// Callers only need these fields for responses and finality metadata; the
-/// checkpoint itself is re-read from the store by the indexer.
-#[derive(Clone, Copy, Debug)]
-pub struct CreatedCheckpoint {
-    /// The checkpoint's sequence number.
-    pub sequence_number: CheckpointSequenceNumber,
-    /// The checkpoint's timestamp, in milliseconds.
-    pub timestamp_ms: u64,
-}
-
-/// Snapshot of a running fork's progress.
-#[derive(Clone, Copy, Debug)]
-pub struct ForkStatus {
-    /// The fork's current epoch.
-    pub epoch: u64,
-    /// The fork's local checkpoint tip.
-    pub checkpoint_sequence_number: CheckpointSequenceNumber,
-    /// The fork's clock, in milliseconds.
-    pub timestamp_ms: u64,
-    /// The checkpoint the fork was created from.
-    pub forked_at_checkpoint: CheckpointSequenceNumber,
+impl Default for StartArgs {
+    fn default() -> Self {
+        Self {
+            network: Node::Mainnet,
+            checkpoint: None,
+            data_dir: None,
+            addresses: Vec::new(),
+            object_ids: Vec::new(),
+            rpc_listen_address: DEFAULT_RPC_ADDR
+                .parse()
+                .expect("default RPC address is valid"),
+        }
+    }
 }
