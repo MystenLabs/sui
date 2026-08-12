@@ -175,14 +175,14 @@ Open a **new terminal window** after installing. If the issue persists, verify t
 $ command -v sui
 ```
 
-If no path is printed, the install directory is not in your `PATH`. Add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile (`~/.bashrc`, `~/.zshrc`, or `~/.bash_profile`), then restart your terminal.
+If no path is printed, the install directory is not in your `PATH`. The default `suiup` install location is `~/.local/bin` (see [`suiup` README](https://github.com/MystenLabs/suiup?tab=readme-ov-file#paths-used-by-the-suiup-tool)). Add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile (`~/.bashrc`, `~/.zshrc`, or `~/.bash_profile`), then restart your terminal.
 
 </details>
 
 <details>
 <summary>Client/server API version mismatch</summary>
 
-Your local Sui CLI version does not match the network you are targeting. Switch to the correct version with `suiup`:
+Your local Sui CLI version does not match the network you are targeting. Switch to the correct version with [`suiup`](https://github.com/MystenLabs/suiup):
 
 ```sh
 $ suiup install sui@testnet
@@ -227,7 +227,7 @@ $ which sui
 $ sui --version
 ```
 
-Remove the older installation method and use `suiup` exclusively to manage versions. Run `suiup install sui@<network>` to switch between network-compatible versions.
+Remove the older installation method and use [`suiup`](https://github.com/MystenLabs/suiup) exclusively to manage versions. Run `suiup install sui@<network>` to switch between network-compatible versions.
 
 </details>
 

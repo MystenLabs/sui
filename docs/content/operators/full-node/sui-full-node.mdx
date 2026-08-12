@@ -631,7 +631,7 @@ Use this section as a quick reference for the most common full node operations. 
 If your node's database is corrupted, if you are starting a new node, or if you need to recover from a failed upgrade, restore from a snapshot rather than syncing from genesis:
 
 1. Stop the node.
-2. Download and restore the latest snapshot. See [Sui Snapshots](/operators/snapshots) for the complete command, which requires `--genesis`, `--path`, and network flags in addition to `--latest`.
+2. Download and restore the latest snapshot. The [`sui-tool download-formal-snapshot` command](/operators/snapshots#formal-snapshots) requires `--genesis`, `--path`, and `--network` flags in addition to `--latest`.
 3. Verify the snapshot is placed at the correct `db_path` (see your `fullnode.yaml` configuration).
 4. Restart the node.
 

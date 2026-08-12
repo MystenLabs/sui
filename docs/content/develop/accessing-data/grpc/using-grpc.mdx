@@ -79,7 +79,7 @@ In the Sui gRPC API, `FieldMask`s are used in requests like `GetTransaction`, `G
 
 Field masks are defined using `google.protobuf.FieldMask` and typically appear in the request message as `read_mask`. You can pass an explicit value of `*` to request all fields.
 
-If you omit `read_mask`, it defaults to `*` (all fields), unless documented otherwise.
+If you omit `read_mask`, the server applies a method-specific default that returns a minimal subset of fields (for example, `object_id,version,digest` for `GetObject`). Pass `*` explicitly to request all fields. See [`read_mask_defaults.rs`](https://github.com/MystenLabs/sui/blob/main/crates/sui-rpc-api/src/read_mask_defaults.rs) for the full list of defaults.
 
 - Each field path in the mask must match the field structure of the response proto message. Nested fields are supported using dot notation.
 
@@ -89,7 +89,7 @@ If you omit `read_mask`, it defaults to `*` (all fields), unless documented othe
 
 ### Field path reference {#field-path-reference}
 
-The following tables list commonly used `read_mask` field paths for each service method. Field paths follow the proto message structure and support dot notation for nested fields. Pass `*` to request all fields. When `read_mask` is omitted, the default varies by method (for example, `GetObject` defaults to `object_id,version,digest`). Check the [proto source](https://github.com/MystenLabs/sui-apis/tree/main/proto) for method-specific defaults.
+The following tables list commonly used `read_mask` field paths for each service method. Field paths follow the proto message structure defined in the [`sui-apis` proto source](https://github.com/MystenLabs/sui-apis/tree/main/proto) and support dot notation for nested fields. Pass `*` to request all fields. When `read_mask` is omitted, the server applies method-specific defaults defined in [`read_mask_defaults.rs`](https://github.com/MystenLabs/sui/blob/main/crates/sui-rpc-api/src/read_mask_defaults.rs).
 
 #### `LedgerService.GetObject` / `BatchGetObjects`
 
@@ -142,20 +142,18 @@ The following tables list commonly used `read_mask` field paths for each service
 
 `SubscribeCheckpoints`, `SubscribeTransactions`, and `SubscribeEvents` accept a `read_mask` that applies to the checkpoint, transaction, or event payload in each response frame. Use the same field paths as the corresponding `Get*` or `List*` methods.
 
-### Rate limits {#rate-limits}
+### Connection and buffer limits {#connection-limits}
 
-Rate limits depend on the endpoint operator. The public Sui Foundation endpoints at `fullnode.<network>.sui.io` enforce the following default limits:
+The following limits are configured in the Sui full node source code and apply to all gRPC endpoints unless the operator overrides them:
 
-| Limit type | Default value |
-| --- | --- |
-| Requests per second (unary) | 100 RPS per IP |
-| Concurrent streams | 10 per IP |
-| Max message size (request) | 4 MB |
-| Max message size (response) | 50 MB |
-| Connection max age | 4 hours (server sends GOAWAY) |
-| Subscription buffer | 256 items per subscriber |
+| Limit type | Default value | Source |
+| --- | --- | --- |
+| Connection max age | 4 hours (server sends GOAWAY) | [`DEFAULT_MAX_CONNECTION_AGE`](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/src/rpc_config.rs) |
+| gRPC timeout (unary) | 60 seconds | [`DEFAULT_GRPC_TIMEOUT`](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/src/rpc_config.rs) |
+| Subscription buffer | 1,024 items per subscriber | [`CHECKPOINT_MAILBOX_SIZE`](https://github.com/MystenLabs/sui/blob/main/crates/sui-rpc-api/src/subscription/mod.rs) |
+| Max subscribers | 1,024 | [`DEFAULT_MAX_SUBSCRIBERS`](https://github.com/MystenLabs/sui/blob/main/crates/sui-rpc-api/src/subscription/mod.rs) |
 
-Private providers and self-hosted full nodes can configure different limits. Contact your provider for their specific rate limits, or check the full node's `grpc` configuration section if you operate your own node.
+The public Sui Foundation endpoints at `fullnode.<network>.sui.io` are behind load balancers that impose additional rate limits (requests per second, concurrent streams, and message size caps) beyond what the node itself configures. Contact your provider for their specific limits, or check the full node's `grpc` configuration section if you operate your own node.
 
 ## Field presence
 
