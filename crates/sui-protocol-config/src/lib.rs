@@ -29,7 +29,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 133;
+const MAX_PROTOCOL_VERSION: u64 = 134;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -374,6 +374,7 @@ const MAINNET_USDB: &str =
 //              Create the ForwardingAddressRegistry system object on devnet.
 //              Make upgrade-init linkage checks independent of PTB command order.
 // Version 133: Add `package::original_package_id` and its native costs.
+// Version 134: Enable allowances (demo, not to be landed)
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1205,6 +1206,12 @@ struct FeatureFlags {
     // If true enable unified linkage
     #[serde(skip_serializing_if = "is_false")]
     enable_unified_linkage: bool,
+
+    // Enable allowance-sourced funds withdrawals (`WithdrawFrom::Allowance`).
+    // Requires `enable_accumulators`.
+    #[serde(skip_serializing_if = "is_false")]
+    #[skip_protocol_config_accessor]
+    enable_allowances: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2245,6 +2252,10 @@ impl ProtocolConfig {
 
     pub fn zklogin_max_epoch_upper_bound_delta(&self) -> Option<u64> {
         self.feature_flags.zklogin_max_epoch_upper_bound_delta
+    }
+
+    pub fn enable_allowances(&self) -> bool {
+        self.feature_flags.enable_allowances && self.enable_accumulators()
     }
 
     pub fn enable_coin_reservation_obj_refs(&self) -> bool {
@@ -4568,6 +4579,12 @@ impl ProtocolConfig {
                     let package_read_cost_per_byte = cfg.obj_access_cost_read_per_byte();
                     cfg.package_original_package_id_impl_cost_per_byte =
                         Some(package_read_cost_per_byte);
+                }
+                134 => {
+                    // Allowance withdrawals, devnet-first per the usual rollout.
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_allowances = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
