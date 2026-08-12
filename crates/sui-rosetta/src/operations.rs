@@ -89,10 +89,10 @@ struct TxCurrencies {
 ///   fall through to generic_op rather than guess)
 ///
 /// For a non-SUI coin we degrade to `Unresolvable` only when it genuinely has no
-/// usable metadata (empty symbol / NotFound / missing); every other (transient)
-/// failure returns a retriable error so `/block` stalls and retries rather than
-/// baking a generic_op into a block that should have been PayCoin (by-hash
-/// idempotency).
+/// usable metadata (empty symbol / NotFound / missing, or a coin type that is not
+/// a struct and so cannot have metadata at all); every other (transient) failure
+/// returns a retriable error so `/block` stalls and retries rather than baking a
+/// generic_op into a block that should have been PayCoin (by-hash idempotency).
 async fn resolve_tx_currencies(
     balance_changes: &[BalanceChange],
     cache: &CoinMetadataCache,
@@ -109,8 +109,18 @@ async fn resolve_tx_currencies(
             currencies.insert(coin_type.to_string(), SUI.clone());
             continue;
         }
-        let type_tag = sui_types::TypeTag::from_str(coin_type)
-            .map_err(|e| anyhow!("Invalid coin type: {}", e))?;
+        // `Coin<T>` and `Balance<T>` take an unconstrained phantom `T`, so a
+        // balance change can name a type that is not a struct at all — mainnet
+        // carries `Balance<u64>` accumulator writes. Coin metadata is keyed by
+        // `StructTag`, so such a type can never have metadata and the node
+        // rejects the lookup outright; treat it as unresolvable rather than
+        // spending a round trip on a request that is guaranteed to fail.
+        let Ok(struct_tag) = StructTag::from_str(coin_type) else {
+            tracing::debug!(coin_type, "coin type is not a struct type; generic_op");
+            any_unresolvable = true;
+            continue;
+        };
+        let type_tag = sui_types::TypeTag::Struct(Box::new(struct_tag));
         // `get_currency` surfaces "this coin has no usable metadata" in three
         // different shapes, depending on what the upstream node returned and
         // where it short-circuited: an `Ok` whose symbol is empty (metadata
@@ -2629,6 +2639,29 @@ mod tests {
         assert_eq!(
             resolved.by_coin_type.get(&SUI.metadata.coin_type),
             Some(&*SUI)
+        );
+    }
+
+    /// `Balance<T>`/`Coin<T>` accept a non-struct `T`, so a balance change can
+    /// name `u64`. Coin metadata is keyed by `StructTag`, so no lookup may be
+    /// issued for such a type: `unreachable_cache` turns any attempt into a
+    /// retriable error, so `Ok` here proves the request was never sent. Mainnet
+    /// checkpoint 309686199 stalled `/block` on exactly this shape.
+    #[tokio::test]
+    async fn test_resolve_non_struct_coin_type_degrades() {
+        let cache = unreachable_cache();
+        let resolved = resolve_tx_currencies(&[balance_change("u64")], &cache)
+            .await
+            .expect("a non-struct coin type must not fail the block");
+        assert!(
+            matches!(resolved.payment, PaymentCurrency::Unresolvable),
+            "a non-struct coin type must fall through to generic_op: {:?}",
+            resolved.payment
+        );
+        assert!(
+            resolved.by_coin_type.is_empty(),
+            "a non-struct coin type must not be reported as a currency: {:?}",
+            resolved.by_coin_type
         );
     }
 
