@@ -88,12 +88,11 @@ async fn transfer_self(
         .expect("gas mutated")
 }
 
-/// Demonstrates a bug: `LedgerGrpcReader::checkpoint_watermark()` currently resolves the
-/// checkpoint via an unqualified "latest" `GetCheckpoint`, which is only bounded by the base
-/// `checkpoints` pipeline — not `GetServiceInfo`'s `checkpoint_height`, which is bounded by the
-/// list-index pipelines too. With the list-index pipelines throttled well behind, the two
-/// diverge, and `checkpoint_watermark()` incorrectly reports the base pipeline's (too far ahead)
-/// checkpoint.
+/// `LedgerGrpcReader::checkpoint_watermark()` must resolve the checkpoint via `GetServiceInfo`'s
+/// `checkpoint_height`, which is bounded by the list-index pipelines, not an unqualified "latest"
+/// `GetCheckpoint`, which is only bounded by the base `checkpoints` pipeline. With the list-index
+/// pipelines throttled well behind, the two diverge — reproducing the race a caller reading the
+/// unqualified "latest" would hit against a real, indexing-in-progress deployment.
 #[tokio::test]
 async fn checkpoint_watermark_tracks_list_api_lag() {
     let mut cluster = cluster_with_lagging_list_index_pipelines().await;
@@ -149,7 +148,9 @@ async fn checkpoint_watermark_tracks_list_api_lag() {
         .await
         .expect("checkpoint_watermark should succeed");
 
-    // Bug: checkpoint_watermark() reports the base pipeline's checkpoint, ignoring that the
-    // list-index pipelines (which the List APIs actually depend on) haven't caught up to it.
-    assert_eq!(watermark.sequence_number, latest_base_checkpoint);
+    assert_eq!(
+        watermark.sequence_number, list_api_checkpoint_height,
+        "checkpoint_watermark() must track GetServiceInfo's List-API-aware checkpoint_height, \
+         not the base checkpoint pipeline's (unbounded by list-index lag) latest checkpoint",
+    );
 }

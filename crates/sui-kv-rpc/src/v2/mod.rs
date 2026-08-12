@@ -117,6 +117,7 @@ impl LedgerService for KvRpcServer {
             self.client.clone(),
             self.limited_client("GetCheckpoint"),
             &self.stages,
+            &self.service_info_watermark_pipelines,
             request.into_inner(),
         )
         .await
