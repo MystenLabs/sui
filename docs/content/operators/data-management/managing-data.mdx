@@ -97,7 +97,7 @@ A full node that starts from scratch can replay (and thus re-verify) transaction
 
 A Sui full node that fails to retrieve checkpoints from its peers through the state sync protocol falls back to downloading the missing checkpoints from its pre-configured archive. This fallback enables a full node to catch up with the rest of the system regardless of the pruning policies of its peers.
 
-## Pruning quickstart
+## Pruning 
 
 If your node's disk usage is growing beyond your capacity (commonly 7TB or more without pruning), copy one of the following configurations into your `fullnode.yaml` and restart the node. Pruning runs in the background and reclaims space over multiple days as RocksDB compaction completes.
 

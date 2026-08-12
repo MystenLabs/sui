@@ -89,7 +89,7 @@ If you omit `read_mask`, the server applies a method-specific default that retur
 
 ### Field path reference {#field-path-reference}
 
-The following tables list commonly used `read_mask` field paths for each service method. Field paths follow the proto message structure defined in the [`sui-apis` proto source](https://github.com/MystenLabs/sui-apis/tree/main/proto) and support dot notation for nested fields. Pass `*` to request all fields. When `read_mask` is omitted, the server applies method-specific defaults defined in [`read_mask_defaults.rs`](https://github.com/MystenLabs/sui/blob/main/crates/sui-rpc-api/src/read_mask_defaults.rs).
+The following tables list commonly used `read_mask` field paths for each service method. Field paths follow the proto message structure defined in the [`sui-apis` proto source](https://github.com/MystenLabs/sui-apis/tree/main/proto) and support dot notation for nested fields.
 
 #### `LedgerService.GetObject` / `BatchGetObjects`
 
