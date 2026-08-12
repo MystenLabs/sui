@@ -83,13 +83,16 @@ pub mod checked {
             }
         }
 
-        pub fn new_unmetered(tx_digest: TransactionDigest) -> Self {
+        pub fn new_unmetered(
+            tx_digest: TransactionDigest,
+            protocol_config: &ProtocolConfig,
+        ) -> Self {
             Self {
                 tx_digest,
                 gas_model_version: 6, // pick any of the latest, it should not matter
                 payment_method: PaymentMethod::Unmetered,
                 smashed_gas_coin: None,
-                gas_status: SuiGasStatus::new_unmetered(),
+                gas_status: SuiGasStatus::new_unmetered(protocol_config),
             }
         }
 
@@ -237,6 +240,7 @@ pub mod checked {
         ) -> u64 {
             self.gas_status
                 .track_storage_mutation(object_id, new_size, storage_rebate)
+                .expect("storage gas overflow")
         }
 
         pub fn reset_storage_cost_and_rebate(&mut self) {

@@ -53,6 +53,12 @@ struct InvariantInputs {
     /// address balance, and gas-data coin-reservation digests. Consumed by
     /// `check_address_balance_changes` and `check_ownership_invariants`.
     input_reservations: BTreeMap<(SuiAddress, TypeTag), u64>,
+    /// For gasless transactions only (`Some` even when empty): the per-`(owner, coin type)`
+    /// withdrawal reservations declared by the PTB's `FundsWithdrawal` inputs. Unlike
+    /// `input_reservations` this is keyed by the coin type `T` (not `Balance<T>`) and carries no
+    /// gas sources. Consumed by the reservation-dust rule of
+    /// `TemporaryStore::check_gasless_execution_requirements`.
+    gasless_reservations: Option<BTreeMap<(SuiAddress, TypeTag), u64>>,
     /// For the advance-epoch transaction, `(epoch_fees minted, epoch_rebates burned)`; `None`
     /// for every other transaction. Needed by `check_sui_conserved_expensive`, which must account
     /// for the SUI the epoch change mints and burns.
@@ -101,6 +107,7 @@ impl InvariantChecker {
         transaction_kind: &TransactionKind,
         gas_data: &GasData,
         transaction_signer: SuiAddress,
+        is_gasless: bool,
     ) {
         self.inputs = InvariantInputs {
             input_reservations: compute_input_reservations(
@@ -108,6 +115,11 @@ impl InvariantChecker {
                 gas_data,
                 transaction_signer,
             ),
+            gasless_reservations: is_gasless.then(|| {
+                let sponsor = (gas_data.owner != transaction_signer).then_some(gas_data.owner);
+                compute_gasless_reservations(transaction_kind, transaction_signer, sponsor)
+                    .unwrap_or_default()
+            }),
             advance_epoch_gas_summary: transaction_kind.get_advance_epoch_tx_gas_summary(),
             is_genesis: matches!(transaction_kind, TransactionKind::Genesis(_)),
             declared_packages: declared_packages(transaction_kind),
@@ -118,6 +130,11 @@ impl InvariantChecker {
     /// `TemporaryStore::check_ownership_invariants`, which shares the same authorization model.
     pub(crate) fn input_reservations(&self) -> &BTreeMap<(SuiAddress, TypeTag), u64> {
         &self.inputs.input_reservations
+    }
+
+    /// The gasless withdrawal reservations; `Some` iff the transaction is gasless.
+    pub(crate) fn gasless_reservations(&self) -> Option<&BTreeMap<(SuiAddress, TypeTag), u64>> {
+        self.inputs.gasless_reservations.as_ref()
     }
 
     /// Drop the PTB-emitted ranges. Called from `TemporaryStore::drop_writes` since the
@@ -543,6 +560,43 @@ fn compute_input_reservations(
     reservations
 }
 
+/// Compute the per-`(owner, coin type)` withdrawal reservations of a gasless transaction from its
+/// PTB `FundsWithdrawal` inputs. Keyed by the coin type `T` to match the gasless allowed-token
+/// table, unlike `compute_input_reservations` above (keyed `Balance<T>`).
+fn compute_gasless_reservations(
+    transaction_kind: &TransactionKind,
+    sender: SuiAddress,
+    sponsor: Option<SuiAddress>,
+) -> Option<BTreeMap<(SuiAddress, TypeTag), u64>> {
+    use sui_types::transaction::{CallArg, Reservation, WithdrawFrom};
+
+    let TransactionKind::ProgrammableTransaction(pt) = transaction_kind else {
+        debug_fatal!("Gasless transaction must be a ProgrammableTransaction");
+        return None;
+    };
+    let mut reservations = BTreeMap::<(SuiAddress, TypeTag), u64>::new();
+    for input in &pt.inputs {
+        let CallArg::FundsWithdrawal(fw) = input else {
+            continue;
+        };
+        let Some(coin_type) = fw.type_arg.get_balance_type_param() else {
+            debug_fatal!("expected Balance type for withdrawal");
+            continue;
+        };
+        let owner = match fw.withdraw_from {
+            WithdrawFrom::Sender => sender,
+            WithdrawFrom::Sponsor => {
+                debug_fatal!("WithdrawFrom::Sponsor is not expected in gasless transactions");
+                sponsor.unwrap_or(sender)
+            }
+        };
+        let Reservation::MaxAmountU64(amount) = fw.reservation;
+        let entry = reservations.entry((owner, coin_type)).or_insert(0);
+        *entry = entry.saturating_add(amount);
+    }
+    Some(reservations)
+}
+
 impl InvariantChecker {
     /// Run the SUI-conservation and balance-accumulator invariant checks against the
     /// (already-finalized, gas-charged) `store`. Read-only: the caller (the execution engine's
@@ -631,7 +685,6 @@ impl InvariantChecker {
         sender: &SuiAddress,
         sponsor: &Option<SuiAddress>,
         gas_charger: &GasCharger,
-        mutable_inputs: &HashSet<ObjectID>,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
         // The funds-accumulator reservation budget is shared with the conservation checks; see
@@ -691,8 +744,15 @@ impl InvariantChecker {
             })
             .filter(|id| {
                 // remove any non-mutable inputs. This will remove deleted or readonly shared
-                // objects
-                mutable_inputs.contains(id)
+                // objects.
+                // REVIEW AND DELETE COMMENT AFTER: before we took a caller-passed `mutable_inputs`
+                // (= `input_objects.all_mutable_inputs()`); now we derive the identical set from the
+                // store. Verified exactly equivalent:
+                // all_mutable_inputs() ==
+                //      exclusive_mutable_inputs() (mutable_input_refs) ∪
+                //      non_exclusive_input_objects() (non_exclusive_input_original_versions).
+                store.mutable_input_refs.contains_key(id)
+                    || store.non_exclusive_input_original_versions.contains_key(id)
             })
             .copied()
             // Add any object IDs generated in the object runtime during execution to the
