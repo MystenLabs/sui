@@ -22,21 +22,22 @@
 //!          Subscriptions unblock; start receiving from current tip (C+N)
 //! ```
 //!
-//! # 2. Eviction: draining the store as kv_packages catches up
+//! # 2. Eviction: draining the store as the ledger gRPC service catches up
 //!
-//! After startup, the stream keeps advancing while kv_packages indexes in the
-//! background. Packages in the store at checkpoints ≤ kv_packages_hi are safely
-//! in the DB and can be removed. Periodic eviction keeps the store bounded.
+//! After startup, the stream keeps advancing while the ledger gRPC service
+//! (which serves package resolution) indexes in the background. Packages in the
+//! store at checkpoints ≤ ledger_grpc_hi are resolvable from it and can be
+//! removed. Periodic eviction keeps the store bounded.
 //!
 //! ```text
 //!   gRPC stream:       ..., C+10, C+11, C+12, C+13, C+14, ...
-//!   kv_packages_hi:    .........  C+11 ............
+//!   ledger_grpc_hi:    .........  C+11 ............
 //!
 //!                               │
 //!                               ▼
 //!   StreamingPkgStore keeps packages at cp > C+11 (C+12, C+13, C+14, ...)
 //!   Packages at cp ≤ C+11 are evicted and served by:
-//!     PackageCache (shared, LRU + system-package invalidation) → DB
+//!     PackageCache (shared, LRU + system-package invalidation) → ledger gRPC
 //! ```
 
 // Only the (staging-gated) subscription resolvers backfill via `scan_checkpoints`; `test` keeps the

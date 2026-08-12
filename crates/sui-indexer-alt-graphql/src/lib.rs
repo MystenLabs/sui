@@ -402,9 +402,10 @@ pub async fn start_rpc(
             let streaming_packages = Arc::new(task::streaming::StreamingPackageStore::new(
                 package_store.clone(),
             ));
-            // Unbounded is intentional: if `kv_packages` lags long enough for this queue to
-            // grow without bound, the indexer infrastructure itself has a bigger problem and
-            // OOM on this service is one failure mode among many. Monitor via metrics.
+            // Unbounded is intentional: if the ledger gRPC service lags long enough for this
+            // queue to grow without bound, the indexer infrastructure itself has a bigger
+            // problem and OOM on this service is one failure mode among many. Monitor via
+            // metrics.
             #[allow(clippy::disallowed_methods)]
             let (package_eviction_tx, package_eviction_rx) = tokio::sync::mpsc::unbounded_channel();
             let readiness =
