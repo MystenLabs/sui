@@ -80,6 +80,7 @@ pub const DYNAMIC_COIN_CREATION_FUNCTION_NAME: Symbol = symbol!("new_currency");
 pub const REGISTRY_CREATE_FUNCTION_NAME: Symbol = symbol!("create");
 
 pub const DISPLAY_REGISTRY_MODULE_NAME: Symbol = symbol!("display_registry");
+pub const PACKAGE_CONFIG_MODULE_NAME: Symbol = symbol!("package_config");
 
 pub const ADDRESS_ALIAS_MODULE_NAME: Symbol = symbol!("address_alias");
 pub const ADDRESS_ALIAS_CREATE: Symbol = symbol!("create");

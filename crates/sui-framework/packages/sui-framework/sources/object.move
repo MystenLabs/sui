@@ -40,6 +40,9 @@ const SUI_RANDOM_ID: address = @0x8;
 /// The hardcoded ID for the singleton DenyList.
 const SUI_DENY_LIST_OBJECT_ID: address = @0x403;
 
+/// The hardcoded ID for the singleton PackageConfig.
+const SUI_PACKAGE_CONFIG_OBJECT_ID: address = @0x426;
+
 /// The hardcoded ID for the singleton AccumulatorRoot Object.
 const SUI_ACCUMULATOR_ROOT_OBJECT_ID: address = @0xacc;
 
@@ -148,6 +151,14 @@ public(package) fun randomness_state(): UID {
 public(package) fun sui_deny_list_object_id(): UID {
     UID {
         id: ID { bytes: SUI_DENY_LIST_OBJECT_ID },
+    }
+}
+
+/// Create the `UID` for the singleton `PackageConfig` object.
+/// This should only be called once from `package_config`.
+public(package) fun sui_package_config_object_id(): UID {
+    UID {
+        id: ID { bytes: SUI_PACKAGE_CONFIG_OBJECT_ID },
     }
 }
 
