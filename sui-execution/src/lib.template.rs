@@ -4,9 +4,13 @@
 // $GENERATED_MESSAGE
 
 use std::sync::Arc;
-
 use sui_protocol_config::ProtocolConfig;
-use sui_types::{error::SuiResult, metrics::BytecodeVerifierMetrics};
+use sui_types::{
+    error::SuiResult,
+    metrics::BytecodeVerifierMetrics,
+    storage::BackingPackageStore,
+    transaction::{ProgrammableTransaction, UnifiedLinkageInformation},
+};
 
 pub use executor::Executor;
 pub use verifier::Verifier;
@@ -40,6 +44,22 @@ pub fn verifier<'m>(
     let config = protocol_config.verifier_config(signing_limits);
     match version {
         // $VERIFIER_CUTS
+        v => panic!("Unsupported execution version {v}"),
+    }
+}
+
+pub fn collect_unification_information_for_signing(
+    protocol_config: &ProtocolConfig,
+    pt: &ProgrammableTransaction,
+    package_store: &dyn BackingPackageStore,
+) -> SuiResult<UnifiedLinkageInformation> {
+    if !protocol_config.enable_unified_linkage() {
+        return Ok(UnifiedLinkageInformation::default());
+    }
+
+    let version = protocol_config.execution_version_as_option().unwrap_or(0);
+    match version {
+        // $COLLECT_UNIFICATION_INFORMATION_FOR_SIGNING_CUTS
         v => panic!("Unsupported execution version {v}"),
     }
 }

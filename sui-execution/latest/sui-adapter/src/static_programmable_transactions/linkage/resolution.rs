@@ -77,6 +77,14 @@ impl VersionConstraint {
         }
     }
 
+    pub(crate) fn version(&self) -> u64 {
+        match self {
+            VersionConstraint::Exact(version, _) | VersionConstraint::AtLeast(version, _) => {
+                *version
+            }
+        }
+    }
+
     pub(crate) fn exact<P: PackageMetadata>(pkg: &P) -> Option<VersionConstraint> {
         Some(VersionConstraint::Exact(pkg.version(), pkg.version_id()))
     }
