@@ -416,7 +416,7 @@ Production hardening checklist:
 - **Least-privilege service accounts.** `roles/bigtable.user` for the indexer, `roles/bigtable.reader` for the service. Do not share one account.
 - **Credentials in a secret manager.** Prefer [Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) on GKE over key files.
 - **Test backup and restore.** Configure [Bigtable backups](#backup-policy) and verify you can restore, not just that backups exist.
-- **TLS.** Set `tls-cert` and `tls-key`, and restrict the gRPC and health endpoints to trusted networks. If `plaintext-address` is also set for internal callers, it has no TLS or authentication of its own — bind it to a private network interface, exactly as if it were the health endpoint.
+- **TLS.** Set `tls-cert` and `tls-key`, and restrict the gRPC and health endpoints to trusted networks. If `plaintext-address` is also set for internal callers, it has no TLS or authentication of its own, so bind it to a private network interface, exactly as if it were the health endpoint.
 - **Single-cluster-routing app profile for the indexer.** Nothing validates this at runtime.
 
 See [Security Best Practices](/develop/security/best-practices).
