@@ -29,6 +29,7 @@ use crate::{
     typing::ast as T,
 };
 
+use move_core_types::runtime_value::MoveValue;
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
@@ -527,6 +528,7 @@ fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H:
         index,
         attributes,
         loc,
+        visibility: _,
         signature: tsignature,
         value: tvalue,
     } = cdef;
@@ -1468,7 +1470,7 @@ fn value(
             make_exp(new_unit)
         }
         E::Value(ev) => make_exp(HE::Value(process_value(context, ev))),
-        E::Constant(_m, c) => make_exp(HE::Constant(c)), // only private constants (for now)
+        E::Constant(m, c) => make_exp(HE::Constant(m, c)),
         E::ErrorConstant {
             line_number_loc,
             error_constant,
@@ -3059,4 +3061,92 @@ fn gen_unused_warnings(
 
         context.pop_warning_filter_scope();
     }
+}
+
+//**************************************************************************************************
+// Pre-compiled constants
+//**************************************************************************************************
+
+/// Constants from precompiled modules, etc., were already pre-folded but remain defined as part
+/// of the typing AST. This allows us to grab their definitions to see the initial constant
+/// definition list when processing modules in the CFGIR pass. Constants are only visible within
+/// their package, so only precompiled modules from `packages` (the packages under compilation)
+/// that are not themselves in the compilation (`compiled`) contribute. A `None` value marks a
+/// constant that failed its own compilation (already reported there) or whose value disagrees
+/// with its signature (an ICE, reported here).
+pub(crate) fn precompiled_constants(
+    reporter: &DiagnosticReporter,
+    info: &TypingProgramInfo,
+    compiled: &BTreeSet<ModuleIdent>,
+    packages: &BTreeSet<Option<Symbol>>,
+) -> BTreeMap<(ModuleIdent, ConstantName), (Loc, H::BaseType, Option<H::Value>)> {
+    // Precompiled constants arrive as MoveValues, but we need them as H::Value to include them.
+    // This should only matter for partial compilation, such as for the IDE.
+    #[growing_stack]
+    fn value_from_move_value(mv: &MoveValue, ty: &H::BaseType) -> Option<H::Value> {
+        use H::TypeName_ as TN;
+        use H::Value_ as V;
+        use MoveValue as MV;
+        let loc = ty.loc;
+        let v_ = match mv {
+            MV::U8(u) => V::U8(*u),
+            MV::U16(u) => V::U16(*u),
+            MV::U32(u) => V::U32(*u),
+            MV::U64(u) => V::U64(*u),
+            MV::U128(u) => V::U128(*u),
+            MV::U256(u) => V::U256(*u),
+            MV::Bool(b) => V::Bool(*b),
+            MV::Address(a) => V::Address(NumericalAddress::new(a.into_bytes(), NumberFormat::Hex)),
+            MV::Vector(vs) => {
+                let H::BaseType_::Apply(
+                    _,
+                    sp!(_, TN::Builtin(sp!(_, N::BuiltinTypeName_::Vector))),
+                    args,
+                ) = &ty.value
+                else {
+                    return None;
+                };
+                let [elem_ty] = args.as_slice() else {
+                    return None;
+                };
+                let elems = vs
+                    .iter()
+                    .map(|v| value_from_move_value(v, elem_ty))
+                    .collect::<Option<Vec<_>>>()?;
+                V::Vector(Box::new(elem_ty.clone()), elems)
+            }
+            MV::Struct(_) | MV::Signer(_) | MV::Variant(_) => return None,
+        };
+        Some(sp(loc, v_))
+    }
+
+    let mut constants = BTreeMap::new();
+    for (mident, minfo) in info.modules.key_cloned_iter() {
+        if compiled.contains(&mident) || !packages.contains(&minfo.package) {
+            continue;
+        }
+        for (cname, cinfo) in minfo.constants.key_cloned_iter() {
+            let signature = base_type(reporter, &cinfo.signature);
+            let value = match cinfo.value.get() {
+                // the constant's own compilation reported an error for it
+                None => None,
+                Some(mv) => {
+                    let value = value_from_move_value(mv, &signature);
+                    if value.is_none() {
+                        reporter.add_diag(ice!((
+                            cinfo.defined_loc,
+                            format!(
+                                "pre-compiled constant '{}::{}' value disagrees with its \
+                                 signature",
+                                mident, cname
+                            )
+                        )));
+                    }
+                    value
+                }
+            };
+            constants.insert((mident, cname), (cinfo.defined_loc, signature, value));
+        }
+    }
+    constants
 }

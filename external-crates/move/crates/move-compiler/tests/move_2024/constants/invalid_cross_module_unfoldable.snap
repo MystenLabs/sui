@@ -1,0 +1,44 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[EC08001]: cannot compute constant value
+  ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable.move:9:34
+  │
+9 │ public(package) const BAD: u64 = 1 / 0;
+  │                                  ^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable.move:15:23
+   │
+15 │ public(package) const X: u64 = Y + 1;
+   │                       ^ Constant definitions form a circular dependency: 0x42::c::X, 0x42::c::Y
+16 │ const Y: u64 = X + 1;
+   │       - Cyclic constant defined here
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable.move:25:7
+   │
+25 │ const D: u64 = a::BAD + c::X;
+   │       ^ Constant uses constant 0x42::c::X, which has a circular dependency
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable.move:27:25
+   │
+ 9 │ public(package) const BAD: u64 = 1 / 0;
+   │                       --- 'BAD' is defined here
+   ·
+27 │ public fun bad(): u64 { a::BAD }
+   │                         ^^^^^^ Invalid use of constant '0x42::a::BAD'. Its value could not be computed
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable.move:29:23
+   │
+15 │ public(package) const X: u64 = Y + 1;
+   │                       - 'X' is defined here
+   ·
+29 │ public fun x(): u64 { c::X }
+   │                       ^^^^ Invalid use of constant '0x42::c::X'. Its value could not be computed

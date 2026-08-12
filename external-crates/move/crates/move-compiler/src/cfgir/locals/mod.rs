@@ -370,7 +370,7 @@ fn exp(context: &mut Context, parent_e: &Exp) {
     match &parent_e.exp.value {
         E::Unit { .. }
         | E::Value(_)
-        | E::Constant(_)
+        | E::Constant(_, _)
         | E::UnresolvedError
         | E::ErrorConstant { .. } => (),
 

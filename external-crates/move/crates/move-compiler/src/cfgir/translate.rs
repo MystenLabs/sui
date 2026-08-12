@@ -8,12 +8,16 @@ use crate::{
         self,
         ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
         cfg::{ImmForwardCFG, MutForwardCFG},
+        constants::{ConstantEntry, folded_constants, generate_cross_module_constants},
         visitor::{CFGIRVisitor, CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
     diag,
     diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
     expansion::ast::{Attributes, ModuleIdent, Mutability},
-    hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
+    hlir::{
+        ast::{self as H, BlockLabel, Label, Value, Value_, Var},
+        translate::precompiled_constants,
+    },
     ice_assert,
     parser::ast::{ConstantName, FunctionName},
     shared::{AstDebug, CompilationEnv, program_info::TypingProgramInfo, unique_map::UniqueMap},
@@ -23,10 +27,6 @@ use move_core_types::{account_address::AccountAddress as MoveAddress, runtime_va
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
-use petgraph::{
-    algo::{kosaraju_scc as petgraph_scc, toposort as petgraph_toposort},
-    graphmap::DiGraphMap,
-};
 use rayon::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -50,11 +50,16 @@ pub(super) struct CFGIRDebugFlags {
     pub(super) print_optimized_blocks: bool,
 }
 
-struct Context<'env> {
-    env: &'env CompilationEnv,
-    info: &'env TypingProgramInfo,
+pub(super) struct Context<'env> {
+    pub(super) env: &'env CompilationEnv,
+    pub(super) info: &'env TypingProgramInfo,
     reporter: DiagnosticReporter<'env>,
-    current_package: Option<Symbol>,
+    pub(super) current_package: Option<Symbol>,
+    /// the fold state of every constant in the program, populated by the global constant pass
+    pub(super) constant_defs: BTreeMap<(ModuleIdent, ConstantName), ConstantEntry>,
+    /// stable per-compilation module ids used in constant copy names
+    pub(super) module_ids: BTreeMap<ModuleIdent, usize>,
+    pub(super) precompiled_module_ids: BTreeMap<ModuleIdent, usize>,
     label_count: usize,
     named_blocks: UniqueMap<BlockLabel, (Label, Label)>,
     // Used for populating block_info
@@ -70,6 +75,9 @@ impl<'env> Context<'env> {
             reporter,
             info,
             current_package: None,
+            constant_defs: BTreeMap::new(),
+            module_ids: BTreeMap::new(),
+            precompiled_module_ids: BTreeMap::new(),
             label_count: 0,
             named_blocks: UniqueMap::new(),
             loop_bounds: BTreeMap::new(),
@@ -78,6 +86,10 @@ impl<'env> Context<'env> {
                 print_optimized_blocks: false,
             },
         }
+    }
+
+    pub(super) fn reporter(&self) -> &DiagnosticReporter<'env> {
+        &self.reporter
     }
 
     pub fn add_diag(&self, diag: Diagnostic) {
@@ -164,7 +176,6 @@ pub fn program(
     } = prog;
 
     let mut context = Context::new(compilation_env, &info);
-
     let modules = modules(&mut context, hmodules);
     set_constant_value_types(&info, &modules);
 
@@ -182,14 +193,12 @@ fn set_constant_value_types(
 ) {
     for (mname, mdef) in modules.key_cloned_iter() {
         for (cname, cdef) in mdef.constants.key_cloned_iter() {
+            // synthesized copies of cross-module constants have no typing-info counterpart
+            let Some(info_cdef) = info.module(&mname).constants.get(&cname) else {
+                continue;
+            };
             if let Some(value) = &cdef.value {
-                info.module(&mname)
-                    .constants
-                    .get(&cname)
-                    .unwrap()
-                    .value
-                    .set(value.clone())
-                    .unwrap();
+                info_cdef.value.set(value.clone()).unwrap();
             }
         }
     }
@@ -199,14 +208,29 @@ fn modules(
     context: &mut Context,
     hmodules: UniqueMap<ModuleIdent, H::ModuleDefinition>,
 ) -> UniqueMap<ModuleIdent, G::ModuleDefinition> {
-    let modules = hmodules
-        .into_iter()
-        .map(|(mname, m)| module(context, mname, m));
+    let mut hmodules = hmodules.into_iter().collect::<Vec<_>>();
+    // module ids used in constant copy names; the position in the (sorted) module list is stable
+    // and unique, unlike dependency order, which is only assigned to modules with dependencies
+    for (id, (mname, _)) in hmodules.iter().enumerate() {
+        context.module_ids.insert(*mname, id);
+    }
+    let mut constant_values: BTreeMap<(ModuleIdent, ConstantName), Value> = BTreeMap::new();
+    seed_precompiled_constants(context, &hmodules, &mut constant_values);
+    // All constants are folded up front, in the order of their own dependency graph; module
+    // order is irrelevant
+    let mut folded_constants = folded_constants(context, &mut hmodules, &mut constant_values);
+    let constant_values = &constant_values;
+    let modules = hmodules.into_iter().map(|(mname, m)| {
+        let constants = folded_constants.remove(&mname).unwrap_or_default();
+        module(context, constant_values, constants, mname, m)
+    });
     UniqueMap::maybe_from_iter(modules).unwrap()
 }
 
 fn module(
     context: &mut Context,
+    constant_values: &BTreeMap<(ModuleIdent, ConstantName), Value>,
+    mut constants: UniqueMap<ConstantName, G::Constant>,
     module_ident: ModuleIdent,
     mdef: H::ModuleDefinition,
 ) -> (ModuleIdent, G::ModuleDefinition) {
@@ -222,10 +246,20 @@ fn module(
         functions: hfunctions,
         constants: hconstants,
     } = mdef;
+    assert!(
+        hconstants.is_empty(),
+        "ICE constants should have been taken by the global constant pass"
+    );
     context.current_package = package_name;
     context.push_warning_filter_scope(warning_filter.clone());
-    let constants = constants(context, module_ident, hconstants);
-    let functions = hfunctions.map(|name, f| function(context, module_ident, name, f));
+    let mut functions = hfunctions.map(|name, f| function(context, module_ident, name, f));
+    generate_cross_module_constants(
+        context,
+        constant_values,
+        module_ident,
+        &mut constants,
+        &mut functions,
+    );
     context.pop_warning_filter_scope();
     context.current_package = None;
     (
@@ -246,214 +280,48 @@ fn module(
 }
 
 //**************************************************************************************************
-// Functions
+// Constants
 //**************************************************************************************************
 
-fn constants(
+/// Constants of modules outside this compilation (e.g. the analyzer's pre-compiled dependencies)
+/// were folded when they were compiled; seed their values so they can be folded into constant
+/// definitions and copied into function bodies like any other constant. The conversion into HLIR
+/// form lives with the rest of type lowering in `hlir::translate`; the map is transient to this
+/// pass.
+fn seed_precompiled_constants(
     context: &mut Context,
-    module: ModuleIdent,
-    mut consts: UniqueMap<ConstantName, H::Constant>,
-) -> UniqueMap<ConstantName, G::Constant> {
-    // Traverse the constants and compute the dependency graph between constants: if one mentions
-    // another, an edge is added between them.
-    let mut graph = DiGraphMap::<ConstantName, ()>::new();
-    for (name, constant) in consts.key_cloned_iter() {
-        let deps = dependent_constants(constant);
-        graph.add_node(name);
-        for dep in deps {
-            // Only add edges for constants defined in this module; cross-module constants
-            // are already resolved and don't need dependency tracking here.
-            if consts.contains_key(&dep) {
-                graph.add_edge(dep, name, ());
-            }
-        }
-    }
-
-    // report any cycles we find
-    let sccs = petgraph_scc(&graph);
-    let mut cycle_nodes = BTreeSet::new();
-    for scc in sccs {
-        // An SCC of size 1 is only a cycle if the node has a self-edge.
-        if scc.len() == 1 && graph.contains_edge(scc[0], scc[0]) {
-            let name = scc[0];
-            context.add_diag(diag!(
-                CodeGeneration::UnfoldableConstant,
-                (
-                    *consts.get_loc(&name).unwrap(),
-                    format!("Constant '{}' references itself", name),
-                )
-            ));
-            cycle_nodes.insert(name);
-        } else if scc.len() > 1 {
-            let names = scc
-                .iter()
-                .map(|name| name.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            let mut diag = diag!(
-                CodeGeneration::UnfoldableConstant,
-                (
-                    *consts.get_loc(&scc[0]).unwrap(),
-                    format!("Constant definitions form a circular dependency: {}", names),
-                )
-            );
-            for name in scc.iter().skip(1) {
-                diag.add_secondary_label((
-                    *consts.get_loc(name).unwrap(),
-                    "Cyclic constant defined here",
-                ));
-            }
-            context.add_diag(diag);
-            cycle_nodes.append(&mut scc.into_iter().collect());
-        }
-    }
-    // report any node that relies on a node in a cycle but is not iself part of that cycle
-    for cycle_node in cycle_nodes.iter() {
-        // petgraph retains edges for nodes that have been deleted, so we ensure the node is not
-        // part of a cyclle _and_ it's still in the graph
-        let neighbors: Vec<_> = graph
-            .neighbors(*cycle_node)
-            .filter(|node| !cycle_nodes.contains(node) && graph.contains_node(*node))
-            .collect();
-        for node in neighbors {
-            context.add_diag(diag!(
-                CodeGeneration::UnfoldableConstant,
-                (
-                    *consts.get_loc(&node).unwrap(),
-                    format!(
-                        "Constant uses constant {}, which has a circular dependency",
-                        cycle_node
-                    )
-                )
-            ));
-            graph.remove_node(node);
-        }
-        graph.remove_node(*cycle_node);
-    }
-
-    // Finally, iterate the remaining constants in dependency order, inlining them into each other
-    // via the constant folding optimizer as we process them.
-
-    // petgraph will include nodes in the toposort that only appear in an edge, even if that node
-    // has been removed from the graph, so we filter down to only the remaining nodes
-    let remaining_nodes: BTreeSet<_> = graph.nodes().collect();
-    let sorted: Vec<_> = petgraph_toposort(&graph, None)
-        .expect("ICE concstant cycles not removed")
-        .into_iter()
-        .filter(|node| remaining_nodes.contains(node))
-        .collect();
-
-    let mut out_map = UniqueMap::new();
-    let mut constant_values = UniqueMap::new();
-    for constant_name in sorted.into_iter() {
-        let cdef = consts.remove(&constant_name).unwrap();
-        let new_cdef = constant(context, &mut constant_values, module, constant_name, cdef);
-        out_map
-            .add(constant_name, new_cdef)
-            .expect("ICE constant name collision");
-    }
-
-    out_map
-}
-
-fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
-    fn dep_exp(set: &mut BTreeSet<ConstantName>, exp: &H::Exp) {
-        use H::UnannotatedExp_ as E;
-        match &exp.exp.value {
-            E::UnresolvedError
-            | E::Unreachable
-            | E::Unit { .. }
-            | E::Value(_)
-            | E::Move { .. }
-            | E::Copy { .. } => (),
-            E::UnaryExp(_, rhs) => dep_exp(set, rhs),
-            E::BinopExp(lhs, _, rhs) => {
-                dep_exp(set, lhs);
-                dep_exp(set, rhs)
-            }
-            E::Cast(base, _) => dep_exp(set, base),
-            E::Vector(_, _, _, args) | E::Multiple(args) => {
-                for arg in args {
-                    dep_exp(set, arg);
+    hmodules: &[(ModuleIdent, H::ModuleDefinition)],
+    constant_values: &mut BTreeMap<(ModuleIdent, ConstantName), Value>,
+) {
+    let compiled: BTreeSet<ModuleIdent> = hmodules.iter().map(|(mname, _)| *mname).collect();
+    // constants are only visible within their package, so only modules from the packages being
+    // compiled can contribute
+    let packages: BTreeSet<Option<Symbol>> =
+        hmodules.iter().map(|(_, mdef)| mdef.package_name).collect();
+    let precompiled = precompiled_constants(&context.reporter, context.info, &compiled, &packages);
+    for ((mident, cname), (defined_loc, signature, value)) in precompiled {
+        let next_id = context.precompiled_module_ids.len();
+        context
+            .precompiled_module_ids
+            .entry(mident)
+            .or_insert(next_id);
+        let entry = match value {
+            Some(value) => {
+                constant_values.insert((mident, cname), value);
+                ConstantEntry::Defined {
+                    loc: defined_loc,
+                    signature: Box::new(signature),
                 }
             }
-            E::Constant(c) => {
-                set.insert(*c);
-            }
-            _ => panic!("ICE typing should have rejected exp in const"),
-        }
+            None => ConstantEntry::Failed,
+        };
+        context.constant_defs.insert((mident, cname), entry);
     }
-
-    fn dep_cmd(set: &mut BTreeSet<ConstantName>, command: &H::Command_) {
-        use H::Command_ as C;
-        match command {
-            C::IgnoreAndPop { exp, .. } => dep_exp(set, exp),
-            C::Return { exp, .. } => dep_exp(set, exp),
-            C::Abort(_, exp) | C::Assign(_, _, exp) => dep_exp(set, exp),
-            C::Mutate(lhs, rhs) => {
-                dep_exp(set, lhs);
-                dep_exp(set, rhs)
-            }
-            C::Break(_)
-            | C::Continue(_)
-            | C::Jump { .. }
-            | C::JumpIf { .. }
-            | C::VariantSwitch { .. } => (),
-        }
-    }
-
-    fn dep_stmt(set: &mut BTreeSet<ConstantName>, stmt: &H::Statement_) {
-        use H::Statement_ as S;
-        match stmt {
-            S::Command(cmd) => dep_cmd(set, &cmd.value),
-            S::IfElse {
-                cond,
-                if_block,
-                else_block,
-            } => {
-                dep_exp(set, cond);
-                dep_block(set, if_block);
-                dep_block(set, else_block)
-            }
-            S::VariantMatch {
-                subject,
-                enum_name: _,
-                arms,
-            } => {
-                dep_exp(set, subject);
-                for (_, arm) in arms {
-                    dep_block(set, arm);
-                }
-            }
-            S::While {
-                cond: (cond_block, cond_exp),
-                block,
-                ..
-            } => {
-                dep_block(set, cond_block);
-                dep_exp(set, cond_exp);
-                dep_block(set, block)
-            }
-            S::Loop { block, .. } => dep_block(set, block),
-            S::NamedBlock { block, .. } => dep_block(set, block),
-        }
-    }
-
-    fn dep_block(set: &mut BTreeSet<ConstantName>, block: &H::Block) {
-        for entry in block {
-            dep_stmt(set, &entry.value);
-        }
-    }
-
-    let mut output = BTreeSet::new();
-    let (_, block) = &constant.value;
-    dep_block(&mut output, block);
-    output
 }
 
-fn constant(
+pub(super) fn constant(
     context: &mut Context,
-    constant_values: &mut UniqueMap<ConstantName, Value>,
+    constant_values: &mut BTreeMap<(ModuleIdent, ConstantName), Value>,
     module: ModuleIdent,
     name: ConstantName,
     c: H::Constant,
@@ -479,18 +347,32 @@ fn constant(
         locals,
         block,
     );
-    let value = match final_value {
+    let entry = match final_value {
         Some(H::Exp {
             exp: sp!(_, H::UnannotatedExp_::Value(value)),
             ..
         }) => {
-            constant_values
-                .add(name, value.clone())
-                .expect("ICE constant name collision");
-            Some(move_value_from_value(value))
+            let prev = constant_values.insert((module, name), value.clone());
+            ice_assert!(
+                context.reporter,
+                prev.is_none(),
+                loc,
+                "constant name collision"
+            );
+            (
+                ConstantEntry::Defined {
+                    loc,
+                    signature: Box::new(signature.clone()),
+                },
+                Some(move_value_from_value(value)),
+            )
         }
-        _ => None,
+        // an error was reported during folding
+        _ => (ConstantEntry::Failed, None),
     };
+    let (entry, value) = entry;
+    let prev_entry = context.constant_defs.insert((module, name), entry);
+    debug_assert!(prev_entry.is_none());
 
     context.pop_warning_filter_scope();
     G::Constant {
@@ -508,7 +390,7 @@ const CANNOT_FOLD: &str =
 
 fn constant_(
     context: &mut Context,
-    constant_values: &UniqueMap<ConstantName, Value>,
+    constant_values: &BTreeMap<(ModuleIdent, ConstantName), Value>,
     module: ModuleIdent,
     name: ConstantName,
     full_loc: Loc,
@@ -569,10 +451,11 @@ fn constant_(
     );
 
     if blocks.len() != 1 {
-        context.add_diag(diag!(
-            CodeGeneration::UnfoldableConstant,
-            (full_loc, CANNOT_FOLD)
-        ));
+        let exps = blocks
+            .values()
+            .flat_map(|block| block.iter())
+            .flat_map(|cmd| command_exps(&cmd.value));
+        report_cannot_fold(context, module, full_loc, exps);
         return None;
     }
     let mut optimized_block = blocks.remove(&start).unwrap();
@@ -581,32 +464,139 @@ fn constant_(
         let e = match cmd_ {
             C::IgnoreAndPop { exp, .. } => exp,
             _ => {
-                context.add_diag(diag!(
-                    CodeGeneration::UnfoldableConstant,
-                    (*cloc, CANNOT_FOLD)
-                ));
+                report_cannot_fold(context, module, *cloc, command_exps(cmd_));
                 continue;
             }
         };
-        check_constant_value(context, e)
+        check_constant_value(context, module, e)
     }
 
     let result = match return_cmd.value {
         C::Return { exp: e, .. } => e,
         _ => unreachable!(),
     };
-    check_constant_value(context, &result);
+    check_constant_value(context, module, &result);
     Some(result)
 }
 
-fn check_constant_value(context: &mut Context, e: &H::Exp) {
+fn check_constant_value(context: &mut Context, module: ModuleIdent, e: &H::Exp) {
     use H::UnannotatedExp_ as E;
     match &e.exp.value {
         E::Value(_) => (),
-        _ => context.add_diag(diag!(
+        _ => report_cannot_fold(context, module, e.exp.loc, std::iter::once(e)),
+    }
+}
+
+fn command_exps(cmd_: &H::Command_) -> impl Iterator<Item = &H::Exp> {
+    use H::Command_ as C;
+    let exps: Vec<&H::Exp> = match cmd_ {
+        C::IgnoreAndPop { exp, .. }
+        | C::Return { exp, .. }
+        | C::Abort(_, exp)
+        | C::Assign(_, _, exp)
+        | C::JumpIf { cond: exp, .. }
+        | C::VariantSwitch { subject: exp, .. } => vec![exp],
+        C::Mutate(lhs, rhs) => vec![lhs, rhs],
+        C::Break(_) | C::Continue(_) | C::Jump { .. } => vec![],
+    };
+    exps.into_iter()
+}
+
+/// Reports a constant definition that could not be folded to a value: cross-module references to
+/// constants that themselves failed to fold (or are outside the current compilation) are reported
+/// as the root cause, otherwise the generic unfoldable-constant error is reported at `loc`.
+fn report_cannot_fold<'a>(
+    context: &mut Context,
+    module: ModuleIdent,
+    loc: Loc,
+    exps: impl Iterator<Item = &'a H::Exp>,
+) {
+    let mut unresolved = vec![];
+    for e in exps {
+        unresolved_cross_module_constants(context, module, e, &mut unresolved);
+    }
+    if unresolved.is_empty() {
+        context.add_diag(diag!(
             CodeGeneration::UnfoldableConstant,
-            (e.exp.loc, CANNOT_FOLD)
-        )),
+            (loc, CANNOT_FOLD)
+        ));
+        return;
+    }
+    for (m, c, use_loc) in unresolved {
+        let diag = match context.constant_defs.get_key_value(&(m, c)) {
+            Some(((_, defined), _)) => {
+                unfoldable_constant_use_error(&m, &c, use_loc, defined.0.loc)
+            }
+            None => outside_compilation_use(&m, &c, use_loc),
+        };
+        context.add_diag(diag);
+    }
+}
+
+/// The error reported at each use of a constant whose definition could not be evaluated to a value
+pub(super) fn unfoldable_constant_use_error(
+    m: &ModuleIdent,
+    c: &ConstantName,
+    use_loc: Loc,
+    defined_loc: Loc,
+) -> Diagnostic {
+    let msg = format!(
+        "Invalid use of constant '{}::{}'. Its value could not be computed",
+        m, c
+    );
+    let mut diag = diag!(CodeGeneration::UnfoldableConstant, (use_loc, msg));
+    diag.add_secondary_label((defined_loc, format!("'{}' is defined here", c)));
+    diag
+}
+
+/// The error reported at each use of a constant defined outside the current compilation
+pub(super) fn outside_compilation_use(
+    m: &ModuleIdent,
+    c: &ConstantName,
+    use_loc: Loc,
+) -> Diagnostic {
+    let msg = format!(
+        "Invalid access of '{}::{}'. Constants defined in modules outside of the current \
+         compilation cannot be accessed from other modules",
+        m, c
+    );
+    diag!(TypeSafety::Visibility, (use_loc, msg))
+}
+
+/// Collects cross-module constant references that failed to fold or are outside the current
+/// compilation
+#[growing_stack]
+fn unresolved_cross_module_constants(
+    context: &Context,
+    module: ModuleIdent,
+    e: &H::Exp,
+    unresolved: &mut Vec<(ModuleIdent, ConstantName, Loc)>,
+) {
+    use H::UnannotatedExp_ as E;
+    match &e.exp.value {
+        E::Constant(m, c) => {
+            if *m != module
+                && matches!(
+                    context.constant_defs.get(&(*m, *c)),
+                    Some(ConstantEntry::Failed) | None
+                )
+            {
+                unresolved.push((*m, *c, e.exp.loc));
+            }
+        }
+        E::UnaryExp(_, rhs) => unresolved_cross_module_constants(context, module, rhs, unresolved),
+        E::BinopExp(lhs, _, rhs) => {
+            unresolved_cross_module_constants(context, module, lhs, unresolved);
+            unresolved_cross_module_constants(context, module, rhs, unresolved)
+        }
+        E::Cast(base, _) => unresolved_cross_module_constants(context, module, base, unresolved),
+        E::Vector(_, _, _, args) | E::Multiple(args) => {
+            for arg in args {
+                unresolved_cross_module_constants(context, module, arg, unresolved);
+            }
+        }
+        // other forms cannot appear in constant bodies
+        _ => (),
     }
 }
 
@@ -693,6 +683,8 @@ fn function_body(
     let b_ = match tb_ {
         HB::Native => GB::Native,
         HB::Defined { locals, body } => {
+            // cross-module constant uses are rewritten to module-local copies after translation,
+            // by the constant selection pass (see `cfgir::constants`)
             let blocks = block(context, body);
             let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
             context.clear_block_state();
@@ -734,7 +726,7 @@ fn function_body(
                     context.current_package,
                     signature,
                     &locals,
-                    &UniqueMap::new(),
+                    &BTreeMap::new(),
                     &mut cfg,
                 );
                 if context.debug.print_optimized_blocks {
