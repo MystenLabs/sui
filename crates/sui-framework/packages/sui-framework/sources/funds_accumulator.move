@@ -32,6 +32,10 @@ const EOwnerMismatch: vector<u8> = b"Withdrawal owners do not match";
 #[error(code = 3)]
 const EObjectFundsWithdrawNotEnabled: vector<u8> = b"Object funds withdraw is not enabled";
 
+/// The accumulator type is too large to be used with the funds accumulator.
+#[allow(unused_const)]
+const EAccumulatorTypeTooLarge: u64 = 4;
+
 /// Allows for withdrawing funds from a given address. The `Withdrawal` can be created in PTBs for
 /// the transaction sender, or dynamically from an object via `withdraw_from_object`.
 /// The redemption of the funds must be initiated from the module that defines `T`.
