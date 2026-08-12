@@ -122,7 +122,7 @@ const references = [
 			'references/sdk-comparison',
 			{
 				type: 'link',
-				label: 'TypeScript SDK Migration Guide',
+				label: 'TypeScript SDK v1 -> v2 Migration Guide',
 				href: 'https://sdk.mystenlabs.com/sui/migrations/sui-2.0',
 			},
 			{
