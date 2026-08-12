@@ -5,11 +5,14 @@ use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
 use serde::Deserialize;
 use serde_json::json;
+use simulacrum::Simulacrum;
 
 use sui_indexer_alt_e2e_tests::FullCluster;
+use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
 use sui_indexer_alt_e2e_tests::graphql;
 use sui_indexer_alt_e2e_tests::transaction::DEFAULT_GAS_BUDGET;
 use sui_indexer_alt_e2e_tests::transaction::send_sui;
+use sui_kv_rpc::KvRpcConfig;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 
@@ -75,7 +78,19 @@ fn window(edges: &[graphql::Edge<TxNode>]) -> Vec<(String, Option<u64>)> {
 
 #[tokio::test]
 async fn test_transactions_query_cursor_pagination() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = FullCluster::new_with_configs(
+        Simulacrum::new(),
+        OffchainClusterConfig {
+            kv_rpc_config: KvRpcConfig {
+                enable_list_apis: Some(true),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        &prometheus::Registry::new(),
+    )
+    .await
+    .unwrap();
 
     let (a, kp, mut gas) = cluster
         .funded_account(DEFAULT_GAS_BUDGET * 40)
@@ -174,5 +189,9 @@ async fn test_transactions_query_cursor_pagination() {
         .await
         .unwrap();
     assert!(page.edges.is_empty());
-    assert!(!page.page_info.has_next_page);
+    // `hasNextPage` is conservatively `true` here: the streaming ledger gRPC scan can't prove a
+    // cursor-bound range is analytically empty the way a Postgres LIMIT+1 query could, so
+    // `CursorBound` scan termini always report "maybe more" (a known limitation in sui-rpc-api's
+    // ledger_history code, not specific to this resolver).
+    assert!(page.page_info.has_next_page);
 }

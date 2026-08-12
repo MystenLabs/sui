@@ -45,6 +45,10 @@ pub(crate) struct TypeFilterError;
 
 impl TypeFilter {
     /// Returns the package address if this filter contains one
+    ///
+    /// Only called from `EventFilter::matches`, which serves the `staging`-gated subscription
+    /// backfill — unused (and so `#[allow(dead_code)]`'d) otherwise.
+    #[cfg_attr(not(feature = "staging"), allow(dead_code))]
     pub(crate) fn package(&self) -> SuiAddress {
         match self {
             TypeFilter::Package(p) => *p,
@@ -54,6 +58,7 @@ impl TypeFilter {
     }
 
     /// Returns the module name if this filter contains one
+    #[cfg_attr(not(feature = "staging"), allow(dead_code))]
     pub(crate) fn module(&self) -> Option<&str> {
         match self {
             TypeFilter::Package(_) => None,
@@ -63,6 +68,7 @@ impl TypeFilter {
     }
 
     /// Returns the type name if this filter contains one
+    #[cfg_attr(not(feature = "staging"), allow(dead_code))]
     pub(crate) fn type_name(&self) -> Option<&str> {
         match self {
             TypeFilter::Package(_) | TypeFilter::Module(_, _) => None,
@@ -71,6 +77,7 @@ impl TypeFilter {
     }
 
     /// Returns the type's type parameters if this filter has any
+    #[cfg_attr(not(feature = "staging"), allow(dead_code))]
     pub(crate) fn type_params(&self) -> Option<&[TypeTag]> {
         match self {
             TypeFilter::Type(t) if !t.type_params.is_empty() => Some(&t.type_params),
