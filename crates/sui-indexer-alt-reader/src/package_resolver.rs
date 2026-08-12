@@ -165,10 +165,33 @@ impl ChunkedLoader<PackageKey> for LedgerGrpcReader {
             .map_err(|e| store_err(GRPC_STORE, e))?;
 
         for obj_result in batch_response.objects {
-            let Some(proto::get_object_result::Result::Object(object)) = obj_result.result else {
-                // Misses come back as per-object errors; leave the key unmapped so the store
-                // reports `PackageNotFound`.
-                continue;
+            let object = match obj_result.result {
+                Some(proto::get_object_result::Result::Object(object)) => object,
+
+                // A per-object NOT_FOUND is a genuine miss: leave the key unmapped so the
+                // store reports `PackageNotFound`.
+                Some(proto::get_object_result::Result::Error(status))
+                    if status.code == tonic::Code::NotFound as i32 =>
+                {
+                    continue;
+                }
+
+                // Any other per-object status (INTERNAL, UNAVAILABLE, ...) is a backend
+                // problem, not a miss — fail the chunk so it surfaces as a store error
+                // rather than a phantom `PackageNotFound`.
+                Some(proto::get_object_result::Result::Error(status)) => {
+                    return Err(store_err(
+                        GRPC_STORE,
+                        format!("{:?}: {}", tonic::Code::from(status.code), status.message),
+                    ));
+                }
+
+                _ => {
+                    return Err(store_err(
+                        GRPC_STORE,
+                        "Empty or unrecognized result in batch response",
+                    ));
+                }
             };
 
             let object: Object = object
@@ -193,5 +216,62 @@ fn store_err(store: &'static str, e: impl ToString) -> Error {
     Error::Store {
         store,
         error: e.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_rpc::proto::google::rpc::Status as StatusProto;
+    use sui_rpc::proto::sui::rpc::v2::GetObjectResult;
+
+    use super::*;
+    use crate::ledger_grpc_reader::test_support::mock_reader;
+
+    fn error_result(code: tonic::Code, message: &str) -> GetObjectResult {
+        GetObjectResult::new_error(StatusProto {
+            code: code as i32,
+            message: message.to_owned(),
+            ..Default::default()
+        })
+    }
+
+    #[tokio::test]
+    async fn per_object_not_found_is_package_not_found() {
+        let (reader, mock, _server) = mock_reader().await;
+        mock.set_object_results(vec![error_result(
+            tonic::Code::NotFound,
+            "object not found",
+        )]);
+
+        let store = GrpcPackageStore::new(&reader);
+        let err = store.fetch(AccountAddress::TWO).await.unwrap_err();
+        assert!(matches!(err, Error::PackageNotFound(_)), "{err:?}");
+    }
+
+    #[tokio::test]
+    async fn per_object_backend_error_is_store_error() {
+        let (reader, mock, _server) = mock_reader().await;
+        mock.set_object_results(vec![error_result(tonic::Code::Internal, "boom")]);
+
+        let store = GrpcPackageStore::new(&reader);
+        let err = store.fetch(AccountAddress::TWO).await.unwrap_err();
+        assert!(
+            matches!(
+                &err,
+                Error::Store { store, error }
+                    if *store == GRPC_STORE && error.contains("Internal") && error.contains("boom")
+            ),
+            "{err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn per_object_empty_result_is_store_error() {
+        let (reader, mock, _server) = mock_reader().await;
+        mock.set_object_results(vec![GetObjectResult::default()]);
+
+        let store = GrpcPackageStore::new(&reader);
+        let err = store.fetch(AccountAddress::TWO).await.unwrap_err();
+        assert!(matches!(&err, Error::Store { .. }), "{err:?}");
     }
 }
