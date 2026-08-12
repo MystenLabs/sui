@@ -75,7 +75,7 @@ answer: Install the Sui framework and its required prerequisites on your system.
   prompt="Set up this machine for Sui development: Install the Sui CLI with curl -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh, then run suiup install sui@testnet to get the Testnet-compatible toolchain. Run sui client to generate your keys and config, then prompt me to visit faucet.sui.io, enter the generated address, and fund it with test tokens."
 />
 
-This page walks you through installing the [Sui CLI](/references/cli) and verifying it works. The CLI creates and manages address balances, builds and publishes smart contracts, and queries information from the network.
+Install the [Sui CLI](/references/cli) and verify it works. The CLI creates and manages address balances, builds and publishes smart contracts, and queries information from the network.
 
 :::tip Looking for something else?
 
@@ -195,7 +195,7 @@ Replace `testnet` with `mainnet` or `devnet` as needed.
 <details>
 <summary>Homebrew or Chocolatey installation is slow</summary>
 
-Homebrew and Chocolatey might compile dependencies from source if prebuilt binaries are not cached. This can take several minutes. For a faster installation, use `suiup` instead:
+Homebrew and Chocolatey might compile dependencies from source if the package manager has not cached prebuilt binaries. This can take several minutes. For a faster installation, use `suiup` instead:
 
 ```sh
 $ curl -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh

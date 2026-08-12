@@ -632,7 +632,7 @@ If your node's database is corrupted, if you are starting a new node, or if you 
 
 1. Stop the node.
 2. Download and restore the latest snapshot. The [`sui-tool download-formal-snapshot` command](/operators/snapshots#formal-snapshots) requires `--genesis`, `--path`, and `--network` flags in addition to `--latest`.
-3. Verify the snapshot is placed at the correct `db_path` (see your `fullnode.yaml` configuration).
+3. Verify you placed the snapshot at the correct `db_path` (see your `fullnode.yaml` configuration).
 4. Restart the node.
 
 For the complete procedure, see [Sui Snapshots](/operators/snapshots).

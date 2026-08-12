@@ -107,7 +107,7 @@ If your node's disk usage is growing beyond your capacity (commonly 7TB or more 
 | Full node serving RPC queries | [Indexing config](#full-node-with-indexing-but-limited-object-history) | Moderate (5 epochs of object history, 2 epochs of transactions) |
 | Full node with complete object history | [Full history config](#full-node-with-full-object-history-but-pruned-transaction-history) | Highest (all object versions retained, transactions pruned) |
 
-{/* TODO: Citation needed — verify current approximate disk sizes for each pruning scenario on Mainnet */}
+{/* TODO: Citation needed. Verify current approximate disk sizes for each pruning scenario on Mainnet. */}
 
 After applying a pruning configuration, monitor disk usage over the following days. Pruning deletes data logically first; RocksDB reclaims the physical space during background compaction. If disk usage does not decrease after 3 to 5 days, verify your configuration and check that `periodic-compaction-threshold-days` is set to `1`.
 
