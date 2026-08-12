@@ -332,11 +332,50 @@ Replace `suix_queryTransactionBlocks` with `LedgerService.ListTransactions` for 
 
 :::info
 
-The `@mysten/sui` TypeScript SDK (v2.23.1+) exposes `client.listTransactions()` as a high-level wrapper. You can also use the proto client directly through `client.ledgerService.listTransactions()`. The `grpcurl` example below shows the raw protobuf JSON request shape.
+The `@mysten/sui` TypeScript SDK (v2.23.1+) exposes `client.listTransactions()` as a high-level wrapper. You can also use the proto client directly through `client.ledgerService.listTransactions()`. The examples below show the TypeScript proto client and raw protobuf JSON request shapes.
 
 :::
 
 <Tabs groupId="transport">
+<TabItem value="grpc-proto" label="gRPC (proto client)">
+
+```ts
+// Use the proto client for full control over the streaming response
+const stream = client.ledgerService.listTransactions({
+  startCheckpoint: BigInt(1000000),
+  filter: {
+    terms: [{
+      literals: [{
+        negated: false,
+        predicate: {
+          oneofKind: 'sender',
+          sender: { address: '<ADDRESS>' },
+        },
+      }],
+    }],
+  },
+  options: { limit: 50 },
+  readMask: { paths: ['digest', 'effects'] },
+});
+
+for await (const response of stream.responses) {
+  if (response.transaction) {
+    console.log('Digest:', response.transaction.digest);
+    console.log('Effects:', response.transaction.effects);
+  }
+  // Track the watermark for resume
+  if (response.watermark) {
+    console.log('Scanned to checkpoint:', response.watermark.checkpoint);
+  }
+  // Check why the stream ended
+  if (response.queryEnd) {
+    console.log('Ended:', response.queryEnd.reason);
+    // Save response.watermark.cursor to resume from this point
+  }
+}
+```
+
+</TabItem>
 <TabItem value="grpcurl" label="gRPC (grpcurl)">
 
 ```sh
@@ -621,11 +660,38 @@ Use `SubscriptionService.SubscribeTransactions` for a real-time, filtered stream
 
 :::info
 
-The `@mysten/sui` TypeScript SDK (v2.23.1+) exposes `SubscribeTransactions` through the proto client at `client.subscriptionService.subscribeTransactions()`. The Buf CLI example below shows the raw protobuf JSON request shape.
+The `@mysten/sui` TypeScript SDK (v2.23.1+) exposes `SubscribeTransactions` through the proto client at `client.subscriptionService.subscribeTransactions()`. The examples below show the TypeScript proto client and raw protobuf JSON request shapes.
 
 :::
 
 <Tabs groupId="transport">
+<TabItem value="grpc-proto" label="gRPC (proto client)">
+
+```ts
+const stream = client.subscriptionService.subscribeTransactions({
+  filter: {
+    terms: [{
+      literals: [{
+        negated: false,
+        predicate: {
+          oneofKind: 'sender',
+          sender: { address: '<ADDRESS>' },
+        },
+      }],
+    }],
+  },
+  readMask: { paths: ['digest', 'effects'] },
+});
+
+for await (const response of stream.responses) {
+  if (response.transaction) {
+    console.log('Transaction:', response.transaction.digest);
+    console.log('Status:', response.transaction.effects?.status);
+  }
+}
+```
+
+</TabItem>
 <TabItem value="buf-cli" label="gRPC (Buf CLI)">
 
 ```sh

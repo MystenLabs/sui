@@ -76,6 +76,35 @@ JSON-RPC is deprecated and is being decommissioned on the following timeline:
 
 The 2 replacements are [gRPC](/develop/accessing-data/grpc) for real-time full node access, archival service access and transaction execution, and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) for rich, structured queries over live and historical blockchain data.
 
+## Migration roadmap
+
+Follow these steps to migrate from JSON-RPC to gRPC and/or GraphQL:
+
+1. **Audit your JSON-RPC usage.** List every JSON-RPC method your application calls. Use the [method mapping](#method-mapping) table to identify the gRPC or GraphQL replacement for each call.
+
+2. **Choose your replacement API.** Use the [decision criteria](#choose-your-replacement) to decide whether each call migrates to gRPC, GraphQL, or both. Most applications use gRPC for the live data path and transaction submission, and GraphQL for ad hoc queries and joined reads.
+
+3. **Set up a gRPC client.** Install the `@mysten/sui` TypeScript SDK or generate a client from the [proto definitions](https://github.com/MystenLabs/sui-apis/tree/main/proto). See [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc) for setup instructions in TypeScript, Go, and Python.
+
+4. **Migrate call by call.** Use the [gRPC Migration Cookbook](/develop/accessing-data/grpc/grpc-migration-cookbook) for side-by-side code samples. Start with read-only calls (object lookups, balance queries) before migrating transaction execution.
+
+5. **Replace WebSocket subscriptions.** Migrate any `sui_subscribeEvent` or `sui_subscribeTransaction` WebSocket usage to `SubscriptionService` gRPC streaming. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
+
+6. **Test against Testnet.** Verify each migrated call against a Testnet gRPC endpoint before switching production traffic.
+
+7. **Update your production endpoint.** Point your application at a production gRPC endpoint. Do not use the public `fullnode.*.sui.io` URLs for production workloads.
+
+### Related pages
+
+| Page | Purpose |
+| --- | --- |
+| [What is gRPC?](/develop/accessing-data/grpc/what-is-grpc) | gRPC concepts, service table, and streaming patterns |
+| [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc) | Client setup, field masks, pagination, and language-specific examples |
+| [gRPC Migration Cookbook](/develop/accessing-data/grpc/grpc-migration-cookbook) | Side-by-side JSON-RPC to gRPC code samples for every common call |
+| [gRPC Method Reference](/references/fullnode-protocol) | Auto-generated reference for all gRPC methods |
+| [gRPC Message Definitions](/references/fullnode-protocol-messages) | Proto message field definitions |
+| [gRPC Enum and Scalar Types](/references/fullnode-protocol-types) | Enum values and scalar type mappings |
+
 ## Choose your replacement
 
 You can use one API or both. Most exchanges and indexers end up using both: gRPC for the live data path and transaction submission, GraphQL for ad hoc queries, support tools, and joined reads.

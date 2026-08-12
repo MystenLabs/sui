@@ -87,6 +87,75 @@ If you omit `read_mask`, it defaults to `*` (all fields), unless documented othe
 
 - In some cases, non-terminal repeated fields might be supported in the mask, even if this is atypical per standard `FieldMask` behavior.
 
+### Field path reference {#field-path-reference}
+
+The following tables list commonly used `read_mask` field paths for each service method. Field paths follow the proto message structure and support dot notation for nested fields. Pass `*` to request all fields, or omit `read_mask` entirely (defaults to `*`). For the complete field definitions, see the [proto source](https://github.com/MystenLabs/sui-apis/tree/main/proto).
+
+#### `LedgerService.GetObject` / `BatchGetObjects`
+
+| Field path | Description |
+| --- | --- |
+| `object_id` | The object's unique ID |
+| `version` | The object's version (sequence number) |
+| `digest` | The object's content digest |
+| `type` | The Move type of the object |
+| `owner` | Ownership information (address-owned, shared, immutable, or wrapped) |
+| `content` | The object's BCS-encoded or JSON content |
+| `previous_transaction` | Digest of the transaction that last modified this object |
+| `storage_rebate` | Storage rebate in MIST if the object is deleted |
+
+#### `LedgerService.GetTransaction` / `BatchGetTransactions`
+
+| Field path | Description |
+| --- | --- |
+| `digest` | The transaction digest |
+| `effects` | Execution effects (status, gas used, created/mutated/deleted objects) |
+| `events` | Events emitted during execution |
+| `signatures` | Transaction signatures |
+| `transaction` | The transaction data (sender, commands, gas info) |
+| `balance_changes` | Balance changes caused by the transaction |
+| `object_changes` | Object mutations (created, mutated, deleted, wrapped, unwrapped) |
+
+#### `LedgerService.GetCheckpoint`
+
+| Field path | Description |
+| --- | --- |
+| `sequence_number` | The checkpoint sequence number |
+| `digest` | The checkpoint digest |
+| `summary` | Checkpoint summary (timestamp, gas costs, transaction count) |
+| `summary.timestamp` | Finalization timestamp |
+| `summary.total_network_transactions` | Cumulative transaction count up to this checkpoint |
+| `transactions` | Transaction digests included in this checkpoint |
+
+#### `LedgerService.GetEpoch`
+
+| Field path | Description |
+| --- | --- |
+| `epoch` | The epoch number |
+| `reference_gas_price` | Reference gas price for this epoch in MIST |
+| `start_timestamp` | Epoch start timestamp |
+| `end_timestamp` | Epoch end timestamp (set after epoch ends) |
+| `protocol_config` | Protocol configuration parameters |
+
+#### `SubscriptionService` streams
+
+`SubscribeCheckpoints`, `SubscribeTransactions`, and `SubscribeEvents` accept a `read_mask` that applies to the checkpoint, transaction, or event payload in each response frame. Use the same field paths as the corresponding `Get*` or `List*` methods.
+
+### Rate limits {#rate-limits}
+
+Rate limits depend on the endpoint operator. The public Sui Foundation endpoints at `fullnode.<network>.sui.io` enforce the following default limits:
+
+| Limit type | Default value |
+| --- | --- |
+| Requests per second (unary) | 100 RPS per IP |
+| Concurrent streams | 10 per IP |
+| Max message size (request) | 4 MB |
+| Max message size (response) | 50 MB |
+| Connection max age | 4 hours (server sends GOAWAY) |
+| Subscription buffer | 256 items per subscriber |
+
+Private providers and self-hosted full nodes can configure different limits. Contact your provider for their specific rate limits, or check the full node's `grpc` configuration section if you operate your own node.
+
 ## Field presence
 
 When using gRPC with Sui, it's important to understand how [field presence](https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md) works, especially when dealing with `proto3` syntax. In `proto3`, primitive fields like numbers, booleans, and strings are always initialized to a default value if not present in the message. This means you cannot tell whether a value is explicitly set or just left out. To give you that distinction, Sui marks all fields as `optional`, even if they are required by the API.
