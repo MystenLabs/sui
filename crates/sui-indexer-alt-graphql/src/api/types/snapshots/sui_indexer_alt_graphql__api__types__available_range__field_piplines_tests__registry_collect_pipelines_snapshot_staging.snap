@@ -1484,6 +1484,9 @@ Query.multiGetCheckpoints
 Query.multiGetEpochs
   => {}
 
+Query.multiGetDynamicFields
+  => {"obj_versions"}
+
 Query.multiGetObjects
   => {}
 

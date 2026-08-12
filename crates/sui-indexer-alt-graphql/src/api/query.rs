@@ -15,6 +15,7 @@ use sui_indexer_alt_reader::fullnode_client::Error::GrpcExecutionError;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
+use sui_types::dynamic_field::DynamicFieldType;
 use tonic::Code;
 
 use crate::api::mutation::TransactionInputError;
@@ -37,7 +38,9 @@ use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
 use crate::api::types::checkpoint::filter::CheckpointFilter;
 use crate::api::types::coin_metadata::CoinMetadata;
+use crate::api::types::dynamic_field;
 use crate::api::types::dynamic_field::DynamicField;
+use crate::api::types::dynamic_field::NameKey;
 use crate::api::types::epoch::CEpoch;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::event::CEvent;
@@ -394,6 +397,22 @@ impl Query {
             .map(|k| Epoch::fetch(ctx, scope.clone(), Some(k)));
 
         try_join_all(epochs).await
+    }
+
+    /// Access dynamic fields on parent objects using their names and optional version bounds.
+    ///
+    /// Each key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a dynamic field could not be found, its corresponding entry in the result is `null`.
+    async fn multi_get_dynamic_fields(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<NameKey>,
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
+        let scope = self.scope(ctx)?;
+        let fields = keys.into_iter().map(|key| {
+            DynamicField::by_key(ctx, scope.clone(), DynamicFieldType::DynamicField, key)
+        });
+
+        try_join_all(fields).await
     }
 
     /// Fetch objects by their keys.

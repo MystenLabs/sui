@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 23 tasks
+processed 26 tasks
 
 init:
 A: object(0,0)
@@ -862,5 +862,86 @@ Response: {
         }
       }
     }
+  }
+}
+
+task 23, lines 262-264:
+//# programmable --sender A --inputs object(1,0) 42u64 1000u64
+//> 0: sui::bag::remove<u64, u64>(Input(0), Input(1));
+//> 1: sui::bag::add<u64, u64>(Input(0), Input(1), Input(2));
+mutated: object(0,0), object(1,0), object(6,0)
+gas summary: computation_cost: 1000000, storage_cost: 3754400,  storage_rebate: 3716856, non_refundable_storage_fee: 37544
+
+task 24, line 266:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 25, lines 268-286:
+//# run-graphql --cursors bcs(42u64)
+Response: {
+  "data": {
+    "multiGetDynamicFields": [
+      {
+        "name": {
+          "json": "43"
+        },
+        "value": {
+          "json": {
+            "id": "0xc46b6eceeac93b04321eccf1e4528f96b02cf116ee2cdb594a1f9564334b09a7",
+            "balance": "100"
+          }
+        }
+      },
+      {
+        "name": {
+          "json": "42"
+        },
+        "value": {
+          "json": "1000"
+        }
+      },
+      null,
+      null,
+      {
+        "name": {
+          "json": "42"
+        },
+        "value": {
+          "json": "1000"
+        }
+      },
+      {
+        "name": {
+          "json": "42"
+        },
+        "value": {
+          "json": "1000"
+        }
+      },
+      {
+        "name": {
+          "json": "42"
+        },
+        "value": {
+          "json": "999"
+        }
+      },
+      {
+        "name": {
+          "json": "42"
+        },
+        "value": {
+          "json": "999"
+        }
+      },
+      {
+        "name": {
+          "json": "42"
+        },
+        "value": {
+          "json": "999"
+        }
+      }
+    ]
   }
 }
