@@ -15,6 +15,11 @@ use prometheus::register_int_counter_with_registry;
 use prometheus::register_int_gauge_vec_with_registry;
 use prometheus::register_int_gauge_with_registry;
 
+mod subscription;
+
+pub use subscription::ProcessedCheckpointMetricReporter;
+pub use subscription::SubscriptionMetrics;
+
 /// Histogram buckets for the distribution of latency (time between receiving a request and sending
 /// a response).
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -70,6 +75,8 @@ pub struct RpcMetrics {
     pub fields_received: IntCounterVec,
     pub fields_succeeded: IntCounterVec,
     pub fields_failed: IntCounterVec,
+
+    pub subscription: Arc<SubscriptionMetrics>,
 }
 
 impl RpcMetrics {
@@ -268,6 +275,8 @@ impl RpcMetrics {
                 registry,
             )
             .unwrap(),
+
+            subscription: Arc::new(SubscriptionMetrics::new(registry)),
         })
     }
 }
