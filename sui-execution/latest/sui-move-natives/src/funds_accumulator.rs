@@ -5,7 +5,9 @@ use std::collections::VecDeque;
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_binary_format::safe_unwrap;
-use move_core_types::{account_address::AccountAddress, u256::U256, vm_status::StatusCode};
+use move_core_types::{
+    account_address::AccountAddress, gas_algebra::InternalGas, u256::U256, vm_status::StatusCode,
+};
 use move_vm_runtime::{
     execution::{
         Type,
@@ -30,6 +32,11 @@ use crate::{
 const E_OVERFLOW: u64 = 0;
 const E_ADDRESS_BALANCE_NOT_ENABLED: u64 = 1;
 const E_ACCUMULATOR_TYPE_TOO_LARGE: u64 = 4;
+
+#[derive(Clone)]
+pub struct ReserveObjectFundsForWithdrawalCostParams {
+    pub cold_read_cost: Option<InternalGas>,
+}
 
 pub fn add_to_accumulator_address(
     context: &mut NativeContext,
@@ -166,17 +173,34 @@ pub fn reserve_object_funds_for_withdrawal(
     let owner: SuiAddress =
         safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>()).into();
 
-    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
-
     // Before check_object_funds_withdraw_in_execution is enabled, object funds withdrawals are not
     // checked in execution. They are checked post-execution, and potentially retried if insufficient.
-    if !obj_runtime
-        .protocol_config
-        .check_object_funds_withdraw_in_execution()
-    {
-        return Ok(NativeResult::ok(context.gas_used(), smallvec![]));
+    let needs_cold_read = {
+        let obj_runtime: &ObjectRuntime = context.extensions().get()?;
+        if !obj_runtime
+            .protocol_config
+            .check_object_funds_withdraw_in_execution()
+        {
+            return Ok(NativeResult::ok(context.gas_used(), smallvec![]));
+        }
+        obj_runtime.object_funds_sufficiency_needs_store_read(owner, &ty_tag, limit)
+    };
+
+    if needs_cold_read {
+        let cold_read_cost = context
+            .extensions()
+            .get::<NativesCostTable>()?
+            .reserve_object_funds_for_withdrawal_cost_params
+            .cold_read_cost
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    "reserve_object_funds_for_withdrawal cold read gas cost is not set".to_string(),
+                )
+            })?;
+        native_charge_gas_early_exit!(context, cold_read_cost);
     }
 
+    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
     match obj_runtime.check_object_funds_sufficiency(owner, &ty_tag, limit) {
         ObjectFundsSufficiency::Sufficient => Ok(NativeResult::ok(context.gas_used(), smallvec![])),
         ObjectFundsSufficiency::Insufficient => Ok(NativeResult::err(

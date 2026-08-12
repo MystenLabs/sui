@@ -135,6 +135,38 @@ struct ObjectFundsAvailable {
     queried: bool,
 }
 
+impl ObjectFundsAvailable {
+    fn needs_store_read(&self, amount: U256) -> bool {
+        self.available < amount && !self.queried
+    }
+}
+
+#[cfg(test)]
+mod object_funds_available_tests {
+    use super::ObjectFundsAvailable;
+    use move_core_types::u256::U256;
+
+    #[test]
+    fn store_read_is_needed_only_when_uncached_balance_is_insufficient() {
+        let empty = ObjectFundsAvailable::default();
+        assert!(!empty.needs_store_read(U256::from(0u64)));
+        assert!(empty.needs_store_read(U256::from(1u64)));
+
+        let deposited = ObjectFundsAvailable {
+            available: U256::from(500u64),
+            queried: false,
+        };
+        assert!(!deposited.needs_store_read(U256::from(500u64)));
+        assert!(deposited.needs_store_read(U256::from(501u64)));
+
+        let queried = ObjectFundsAvailable {
+            available: U256::from(0u64),
+            queried: true,
+        };
+        assert!(!queried.needs_store_read(U256::from(1u64)));
+    }
+}
+
 #[derive(Tid)]
 pub struct ObjectRuntime<'a> {
     child_object_store: ChildObjectStore<'a>,
@@ -244,7 +276,7 @@ impl<'a> ObjectRuntime<'a> {
             .get(&key)
             .copied()
             .unwrap_or_default();
-        if entry.available < amount && !entry.queried {
+        if entry.needs_store_read(amount) {
             let settled_available = match self
                 .child_object_store
                 .object_available_balance(owner, type_)
@@ -270,6 +302,20 @@ impl<'a> ObjectRuntime<'a> {
         };
         self.state.object_funds_available.insert(key, entry);
         sufficiency
+    }
+
+    pub(crate) fn object_funds_sufficiency_needs_store_read(
+        &self,
+        owner: SuiAddress,
+        type_: &TypeTag,
+        amount: U256,
+    ) -> bool {
+        self.state
+            .object_funds_available
+            .get(&(owner.into(), type_.clone()))
+            .copied()
+            .unwrap_or_default()
+            .needs_store_read(amount)
     }
 
     pub fn new_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
