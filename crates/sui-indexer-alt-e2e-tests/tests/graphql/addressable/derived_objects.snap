@@ -1,0 +1,271 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-35:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 37-39:
+//# programmable --sender A --inputs @A
+//> 0: test::derived::new();
+//> 1: TransferObjects([Result(0)], Input(0));
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 41-45:
+//# programmable --sender A --inputs object(2,0) 7u64 8u64 9u64 @A
+//> 0: test::derived::claim(Input(0), Input(1));
+//> 1: test::derived::claim(Input(0), Input(2));
+//> 2: test::derived::claim(Input(0), Input(3));
+//> 3: TransferObjects([Result(0), Result(1), Result(2)], Input(4));
+created: object(3,0), object(3,1), object(3,2), object(3,3), object(3,4), object(3,5)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 13976400,  storage_rebate: 2257200, non_refundable_storage_fee: 22800
+
+task 4, line 47:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 49-52:
+//# programmable --sender A --inputs object(3,3) object(3,4) object(3,5) 70u64
+//> 0: test::derived::set_value(Input(0), Input(3));
+//> 1: test::derived::set_value(Input(1), Input(3));
+//> 2: test::derived::set_value(Input(2), Input(3));
+mutated: object(0,0), object(3,3), object(3,4), object(3,5)
+gas summary: computation_cost: 1000000, storage_cost: 5206000,  storage_rebate: 5153940, non_refundable_storage_fee: 52060
+
+task 6, line 54:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, lines 56-85:
+//# run-graphql
+Response: {
+  "data": {
+    "address": {
+      "seven": {
+        "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+        "contents": {
+          "json": {
+            "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+            "key": "7",
+            "value": "70"
+          }
+        }
+      },
+      "eight": {
+        "address": "0xcb5ef49d6e3de9b6baa6b8dd88b116024106cc26e6ceb6a9771ce4ec026c0557",
+        "contents": {
+          "json": {
+            "id": "0xcb5ef49d6e3de9b6baa6b8dd88b116024106cc26e6ceb6a9771ce4ec026c0557",
+            "key": "8",
+            "value": "70"
+          }
+        }
+      },
+      "nine": {
+        "address": "0x21d444cbd778121f8940c73e0bca4c9167c99a06379fdc19381bd4481eb6871e",
+        "contents": {
+          "json": {
+            "id": "0x21d444cbd778121f8940c73e0bca4c9167c99a06379fdc19381bd4481eb6871e",
+            "key": "9",
+            "value": "70"
+          }
+        }
+      },
+      "missing": null,
+      "multiGetDerivedObjects": [
+        {
+          "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+          "contents": {
+            "json": {
+              "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+              "key": "7",
+              "value": "70"
+            }
+          }
+        },
+        {
+          "address": "0xcb5ef49d6e3de9b6baa6b8dd88b116024106cc26e6ceb6a9771ce4ec026c0557",
+          "contents": {
+            "json": {
+              "id": "0xcb5ef49d6e3de9b6baa6b8dd88b116024106cc26e6ceb6a9771ce4ec026c0557",
+              "key": "8",
+              "value": "70"
+            }
+          }
+        },
+        {
+          "address": "0x21d444cbd778121f8940c73e0bca4c9167c99a06379fdc19381bd4481eb6871e",
+          "contents": {
+            "json": {
+              "id": "0x21d444cbd778121f8940c73e0bca4c9167c99a06379fdc19381bd4481eb6871e",
+              "key": "9",
+              "value": "70"
+            }
+          }
+        },
+        null,
+        {
+          "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+          "contents": {
+            "json": {
+              "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+              "key": "7",
+              "value": "7"
+            }
+          }
+        },
+        {
+          "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+          "contents": {
+            "json": {
+              "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+              "key": "7",
+              "value": "7"
+            }
+          }
+        },
+        {
+          "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+          "contents": {
+            "json": {
+              "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+              "key": "7",
+              "value": "7"
+            }
+          }
+        }
+      ],
+      "sevenAtCheckpoint": {
+        "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+        "contents": {
+          "json": {
+            "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+            "key": "7",
+            "value": "7"
+          }
+        }
+      },
+      "sevenAtVersion": {
+        "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+        "contents": {
+          "json": {
+            "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+            "key": "7",
+            "value": "7"
+          }
+        }
+      },
+      "sevenAtRootVersion": {
+        "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+        "contents": {
+          "json": {
+            "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+            "key": "7",
+            "value": "7"
+          }
+        }
+      }
+    }
+  }
+}
+
+task 8, lines 87-106:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "latest": {
+        "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+        "contents": {
+          "json": {
+            "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+            "key": "7",
+            "value": "70"
+          }
+        }
+      },
+      "atCheckpoint": {
+        "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+        "contents": {
+          "json": {
+            "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+            "key": "7",
+            "value": "7"
+          }
+        }
+      },
+      "atVersion": {
+        "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+        "contents": {
+          "json": {
+            "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+            "key": "7",
+            "value": "7"
+          }
+        }
+      },
+      "atRootVersion": {
+        "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+        "contents": {
+          "json": {
+            "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+            "key": "7",
+            "value": "7"
+          }
+        }
+      },
+      "multiGetDerivedObjects": [
+        {
+          "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+          "contents": {
+            "json": {
+              "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+              "key": "7",
+              "value": "70"
+            }
+          }
+        },
+        {
+          "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+          "contents": {
+            "json": {
+              "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+              "key": "7",
+              "value": "7"
+            }
+          }
+        },
+        {
+          "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+          "contents": {
+            "json": {
+              "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+              "key": "7",
+              "value": "7"
+            }
+          }
+        },
+        {
+          "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+          "contents": {
+            "json": {
+              "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+              "key": "7",
+              "value": "7"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

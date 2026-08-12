@@ -44,6 +44,9 @@ use crate::api::types::address;
 use crate::api::types::address::Address;
 use crate::api::types::balance;
 use crate::api::types::balance::Balance;
+use crate::api::types::dynamic_field;
+use crate::api::types::dynamic_field::DerivedObjectKey;
+use crate::api::types::dynamic_field::DynamicFieldName;
 use crate::api::types::linkage::Linkage;
 use crate::api::types::move_module::MoveModule;
 use crate::api::types::move_object::MoveObject;
@@ -312,6 +315,25 @@ impl MovePackage {
         .transpose()
     }
 
+    /// Access a derived object using its key.
+    ///
+    /// The object can be bounded by at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`.
+    ///
+    /// Returns `null` if the derived object has not been claimed, has been deleted, or is not available in the store.
+    pub(crate) async fn derived_object(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+        version: Option<UInt53>,
+        root_version: Option<UInt53>,
+        at_checkpoint: Option<UInt53>,
+    ) -> Option<Result<MoveObject, RpcError<dynamic_field::Error>>> {
+        self.super_
+            .derived_object(ctx, name, version, root_version, at_checkpoint)
+            .await
+            .ok()?
+    }
+
     /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module name, followed by module bytes), in alphabetic order by module name.
     async fn module_bcs(&self, ctx: &Context<'_>) -> Option<Result<Base64, RpcError>> {
         async {
@@ -336,6 +358,17 @@ impl MovePackage {
         keys: Vec<TypeInput>,
     ) -> Option<Result<Vec<Balance>, RpcError<balance::Error>>> {
         self.super_.multi_get_balances(ctx, keys).await.ok()?
+    }
+
+    /// Access derived objects using their keys and optional version bounds.
+    ///
+    /// Each key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a derived object has not been claimed, has been deleted, or is not available in the store, its corresponding entry is `null`.
+    pub(crate) async fn multi_get_derived_objects(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<DerivedObjectKey>,
+    ) -> Result<Vec<Option<MoveObject>>, RpcError<dynamic_field::Error>> {
+        self.super_.multi_get_derived_objects(ctx, keys).await
     }
 
     /// Objects owned by this package, optionally filtered by type.

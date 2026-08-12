@@ -51,6 +51,9 @@ Address.balances
 Address.defaultNameRecord
   => {"obj_versions"}
 
+Address.derivedObject
+  => {"obj_versions"}
+
 Address.dynamicField
   => {"obj_versions"}
 
@@ -58,6 +61,9 @@ Address.dynamicFields
   => {"consistent"}
 
 Address.dynamicObjectField
+  => {"obj_versions"}
+
+Address.multiGetDerivedObjects
   => {"obj_versions"}
 
 Address.multiGetDynamicFields
@@ -297,6 +303,9 @@ CoinMetadata.defaultNameRecord
 CoinMetadata.description
   => {}
 
+CoinMetadata.derivedObject
+  => {"obj_versions"}
+
 CoinMetadata.dynamicField
   => {"obj_versions"}
 
@@ -311,6 +320,9 @@ CoinMetadata.hasPublicTransfer
 
 CoinMetadata.iconUrl
   => {}
+
+CoinMetadata.multiGetDerivedObjects
+  => {"obj_versions"}
 
 CoinMetadata.multiGetDynamicFields
   => {"obj_versions"}
@@ -459,6 +471,9 @@ DynamicField.contents
 DynamicField.defaultNameRecord
   => {"obj_versions"}
 
+DynamicField.derivedObject
+  => {"obj_versions"}
+
 DynamicField.dynamicField
   => {"obj_versions"}
 
@@ -470,6 +485,9 @@ DynamicField.dynamicObjectField
 
 DynamicField.hasPublicTransfer
   => {}
+
+DynamicField.multiGetDerivedObjects
+  => {"obj_versions"}
 
 DynamicField.multiGetDynamicFields
   => {"obj_versions"}
@@ -720,8 +738,14 @@ IAddressable.balances
 IAddressable.defaultNameRecord
   => {"obj_versions"}
 
+IAddressable.derivedObject
+  => {"obj_versions"}
+
 IAddressable.multiGetBalances
   => {"consistent"}
+
+IAddressable.multiGetDerivedObjects
+  => {"obj_versions"}
 
 IAddressable.objects
   => {"consistent"}
@@ -993,6 +1017,9 @@ MoveObject.contents
 MoveObject.defaultNameRecord
   => {"obj_versions"}
 
+MoveObject.derivedObject
+  => {"obj_versions"}
+
 MoveObject.dynamicField
   => {"obj_versions"}
 
@@ -1004,6 +1031,9 @@ MoveObject.dynamicObjectField
 
 MoveObject.hasPublicTransfer
   => {}
+
+MoveObject.multiGetDerivedObjects
+  => {"obj_versions"}
 
 MoveObject.multiGetDynamicFields
   => {"obj_versions"}
@@ -1077,11 +1107,17 @@ MovePackage.module
 MovePackage.modules
   => {}
 
+MovePackage.derivedObject
+  => {"obj_versions"}
+
 MovePackage.moduleBcs
   => {}
 
 MovePackage.multiGetBalances
   => {"consistent"}
+
+MovePackage.multiGetDerivedObjects
+  => {"obj_versions"}
 
 MovePackage.objects
   => {"consistent"}
@@ -1260,6 +1296,9 @@ Object.balances
 Object.defaultNameRecord
   => {"obj_versions"}
 
+Object.derivedObject
+  => {"obj_versions"}
+
 Object.dynamicField
   => {"obj_versions"}
 
@@ -1267,6 +1306,9 @@ Object.dynamicFields
   => {"consistent"}
 
 Object.dynamicObjectField
+  => {"obj_versions"}
+
+Object.multiGetDerivedObjects
   => {"obj_versions"}
 
 Object.multiGetDynamicFields

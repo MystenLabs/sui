@@ -26,7 +26,9 @@ use crate::api::scalars::uint53::UInt53;
 use crate::api::types::balance;
 use crate::api::types::balance::Balance;
 use crate::api::types::coin_metadata::CoinMetadata;
+use crate::api::types::derived_object;
 use crate::api::types::dynamic_field;
+use crate::api::types::dynamic_field::DerivedObjectKey;
 use crate::api::types::dynamic_field::DynamicField;
 use crate::api::types::dynamic_field::DynamicFieldName;
 use crate::api::types::move_object::MoveObject;
@@ -105,10 +107,25 @@ pub(crate) enum AddressTransactionRelationship {
         desc = "The domain explicitly configured as the default Name Service name for this address."
     ),
     field(
+        name = "derived_object",
+        arg(name = "name", ty = "DynamicFieldName"),
+        arg(name = "version", ty = "Option<UInt53>"),
+        arg(name = "root_version", ty = "Option<UInt53>"),
+        arg(name = "at_checkpoint", ty = "Option<UInt53>"),
+        ty = "Option<Result<MoveObject, RpcError<dynamic_field::Error>>>",
+        desc = "Access a derived object using its key.\n\nThe object can be bounded by at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`.\n\nReturns `null` if the derived object has not been claimed, has been deleted, or is not available in the store.",
+    ),
+    field(
         name = "multi_get_balances",
         arg(name = "keys", ty = "Vec<TypeInput>"),
         ty = "Option<Result<Vec<Balance>, RpcError<balance::Error>>>",
         desc = "Fetch balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.\n\nEach result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.",
+    ),
+    field(
+        name = "multi_get_derived_objects",
+        arg(name = "keys", ty = "Vec<DerivedObjectKey>"),
+        ty = "Result<Vec<Option<MoveObject>>, RpcError<dynamic_field::Error>>",
+        desc = "Access derived objects using their keys and optional version bounds.\n\nEach key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a derived object has not been claimed, has been deleted, or is not available in the store, its corresponding entry is `null`.",
     ),
     field(
         name = "objects",
@@ -331,6 +348,34 @@ impl Address {
             .transpose()
     }
 
+    /// Access a derived object using its key.
+    ///
+    /// The object can be bounded by at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`.
+    ///
+    /// Returns `null` if the derived object has not been claimed, has been deleted, or is not available in the store.
+    pub(crate) async fn derived_object(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+        version: Option<UInt53>,
+        root_version: Option<UInt53>,
+        at_checkpoint: Option<UInt53>,
+    ) -> Option<Result<MoveObject, RpcError<dynamic_field::Error>>> {
+        derived_object::by_key(
+            ctx,
+            self.scope.clone(),
+            dynamic_field::NameKey {
+                parent: self.address.into(),
+                name,
+                version,
+                root_version,
+                at_checkpoint,
+            },
+        )
+        .await
+        .transpose()
+    }
+
     /// Access a dynamic field on an object using its type and BCS-encoded name.
     ///
     /// Returns `null` if a dynamic field with that name could not be found attached to the object with this address.
@@ -392,6 +437,31 @@ impl Address {
         .transpose()
     }
 
+    /// Access derived objects using their keys and optional version bounds.
+    ///
+    /// Each key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a derived object has not been claimed, has been deleted, or is not available in the store, its corresponding entry is `null`.
+    pub(crate) async fn multi_get_derived_objects(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<DerivedObjectKey>,
+    ) -> Result<Vec<Option<MoveObject>>, RpcError<dynamic_field::Error>> {
+        let objects = keys.into_iter().map(|key| {
+            derived_object::by_key(
+                ctx,
+                self.scope.clone(),
+                dynamic_field::NameKey {
+                    parent: self.address.into(),
+                    name: key.name,
+                    version: key.version,
+                    root_version: key.root_version,
+                    at_checkpoint: key.at_checkpoint,
+                },
+            )
+        });
+
+        try_join_all(objects).await
+    }
+
     /// Access dynamic fields on an object using their types and BCS-encoded names.
     ///
     /// Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
@@ -400,7 +470,7 @@ impl Address {
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
     ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
-        try_join_all(keys.into_iter().map(|key| {
+        let fields = keys.into_iter().map(|key| {
             DynamicField::by_name(
                 ctx,
                 self.scope.clone(),
@@ -408,8 +478,9 @@ impl Address {
                 DynamicFieldType::DynamicField,
                 key,
             )
-        }))
-        .await
+        });
+
+        try_join_all(fields).await
     }
 
     /// Access dynamic object fields on an object using their types and BCS-encoded names.
