@@ -258,3 +258,29 @@ fragment DF on DynamicField {
   name { json }
   value { ... on MoveValue { json } }
 }
+
+//# programmable --sender A --inputs object(1,0) 42u64 1000u64
+//> 0: sui::bag::remove<u64, u64>(Input(0), Input(1));
+//> 1: sui::bag::add<u64, u64>(Input(0), Input(1), Input(2));
+
+//# create-checkpoint
+
+//# run-graphql --cursors bcs(42u64)
+{ # Fetch dynamic fields directly from their parent/name keys
+  multiGetDynamicFields(keys: [
+    { parent: "@{obj_1_0}", name: { literal: "43u64" } },
+    { parent: "@{obj_1_0}", name: { type: "u64", bcs: "@{cursor_0}" } },
+    { parent: "@{obj_2_0}", name: { literal: "43u64" } },
+    { parent: "@{obj_1_0}", name: { literal: "46u64" } },
+    { parent: "@{obj_1_0}", name: { literal: "42u64" } },
+    { parent: "@{obj_1_0}", name: { literal: "42u64" } },
+    { parent: "@{obj_1_0}", name: { literal: "42u64" }, atCheckpoint: 1 },
+    { parent: "@{obj_1_0}", name: { literal: "42u64" }, version: 7 },
+    { parent: "@{obj_1_0}", name: { literal: "42u64" }, rootVersion: 7 },
+  ]) { ...RootField }
+}
+
+fragment RootField on DynamicField {
+  name { json }
+  value { ... on MoveValue { json } }
+}
