@@ -2038,6 +2038,7 @@
                 "random_beacon_min_round_interval_ms": null,
                 "random_beacon_reduction_allowed_delta": null,
                 "random_beacon_reduction_lower_bound": null,
+                "reserve_object_funds_for_withdrawal_cold_read_cost": null,
                 "reward_slashing_rate": {
                   "u64": "10000"
                 },

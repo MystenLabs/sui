@@ -138,6 +138,10 @@ pub struct NativesCostTable {
     // Event natives
     pub event_emit_cost_params: EventEmitCostParams,
 
+    // Funds accumulator natives
+    pub reserve_object_funds_for_withdrawal_cost_params:
+        funds_accumulator::ReserveObjectFundsForWithdrawalCostParams,
+
     // Object
     pub borrow_uid_cost_params: BorrowUidCostParams,
     pub delete_impl_cost_params: DeleteImplCostParams,
@@ -375,6 +379,13 @@ impl NativesCostTable {
                     .event_emit_auth_stream_cost_as_option()
                     .map(Into::into),
             },
+
+            reserve_object_funds_for_withdrawal_cost_params:
+                funds_accumulator::ReserveObjectFundsForWithdrawalCostParams {
+                    cold_read_cost: protocol_config
+                        .reserve_object_funds_for_withdrawal_cold_read_cost_as_option()
+                        .map(Into::into),
+                },
 
             borrow_uid_cost_params: BorrowUidCostParams {
                 object_borrow_uid_cost_base: protocol_config.object_borrow_uid_cost_base().into(),
