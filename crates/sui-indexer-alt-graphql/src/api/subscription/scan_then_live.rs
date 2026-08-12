@@ -35,6 +35,7 @@ use tracing::warn;
 
 use crate::config::SubscriptionConfig;
 use crate::error::RpcError;
+use crate::metrics::SubscriptionMetrics;
 use crate::pagination::Page;
 use crate::pagination::PageLimits;
 use crate::scope::Scope;
@@ -42,6 +43,9 @@ use crate::task::streaming::CheckpointBroadcaster;
 use crate::task::streaming::ProcessedCheckpoint;
 use crate::task::streaming::StreamedCaches;
 use crate::task::streaming::SubscriptionBroadcast;
+use crate::task::streaming::SubscriptionLifecycleGuard;
+use crate::task::streaming::SubscriptionTerminationReason;
+use crate::task::streaming::SubscriptionType;
 use crate::task::streaming::broadcast_error;
 use crate::task::streaming::reconnect_error;
 use crate::task::streaming::wait_for_pipelines_catching_up_at;
@@ -55,6 +59,9 @@ const BACKFILL_POLL_INTERVAL: Duration = Duration::from_millis(100);
 /// GraphQL type (transactions, events) supplies its cursor, filter, and matching, and the free
 /// functions here drive the shared machinery over it.
 pub(super) trait Subscribable {
+    /// The subscription kind, used to label this feed's aggregate subscriber metrics.
+    const SUBSCRIPTION_TYPE: SubscriptionType;
+
     /// The GraphQL node delivered in each edge.
     type Item: OutputType + Send + 'static;
     /// The opaque cursor minted for resumption.
@@ -125,6 +132,7 @@ pub(super) fn subscribe<S: Subscribable>(
     after: Option<S::Cursor>,
     after_checkpoint: Option<u64>,
     config: SubscriptionConfig,
+    metrics: Arc<SubscriptionMetrics>,
 ) -> impl Stream<Item = Result<Edge<String, S::Item, EmptyFields>, RpcError>> {
     // Size the backfill scan page to the resolve concurrency. Scans are sequential (each needs the
     // previous page's cursor), so feeding one window of `n` concurrent resolutions takes ceil(n /
@@ -137,6 +145,7 @@ pub(super) fn subscribe<S: Subscribable>(
     let handoff_threshold = config.broadcast_buffer as u64 / 2;
 
     stream! {
+        let mut guard = SubscriptionLifecycleGuard::new(S::SUBSCRIPTION_TYPE, &metrics);
         let mut pending_receiver = None;
         let mut handoff: Option<u64> = None;
         let mut last_checkpoint: Option<u64> = None;
@@ -159,6 +168,7 @@ pub(super) fn subscribe<S: Subscribable>(
                 let scanned = match scanned {
                     Ok(scanned) => scanned,
                     Err(e) => {
+                        guard.set_termination_reason(SubscriptionTerminationReason::BackfillError);
                         yield Err(e);
                         return;
                     }
@@ -179,6 +189,7 @@ pub(super) fn subscribe<S: Subscribable>(
                             break;
                         }
                         yield Ok(edge);
+                        guard.record_backfill_delivered();
                     }
                     // A coverage marker (its `checkpoint` is the fully-scanned frontier): stop once
                     // it has covered the handoff.
@@ -194,7 +205,9 @@ pub(super) fn subscribe<S: Subscribable>(
 
         // Phase 2: follow live from `handoff + 1` (a fresh receiver if there was no backfill).
         let receiver = pending_receiver.unwrap_or_else(|| broadcast.broadcaster().resubscribe());
-        for await edge in live::<S>(receiver, last_checkpoint, caches, resolver_limits, filter) {
+        for await edge in
+            live::<S>(receiver, last_checkpoint, caches, resolver_limits, filter, guard)
+        {
             yield edge;
         }
     }
@@ -271,6 +284,7 @@ fn live<S: Subscribable>(
     caches: Arc<StreamedCaches>,
     resolver_limits: sui_package_resolver::Limits,
     filter: S::Filter,
+    mut guard: SubscriptionLifecycleGuard,
 ) -> impl Stream<Item = Result<Edge<String, S::Item, EmptyFields>, RpcError>> {
     stream! {
         let mut delivered_live = false;
@@ -289,15 +303,21 @@ fn live<S: Subscribable>(
                                 received = seq,
                                 "Unexpected gap between scan and live; disconnecting"
                             );
+                            guard
+                                .set_termination_reason(SubscriptionTerminationReason::UnexpectedGap);
                             yield Err(reconnect_error());
                             return;
                         }
                     }
                     // Deliver each matching item as its own payload, ordered within the checkpoint.
                     // Empty checkpoints yield nothing.
-                    let edges = S::matching_edges(&checkpoint, &caches, &resolver_limits, &filter)?;
+                    let edges = S::matching_edges(&checkpoint, &caches, &resolver_limits, &filter)
+                        .inspect_err(|_| {
+                            guard.set_termination_reason(SubscriptionTerminationReason::Error);
+                        })?;
                     for edge in edges {
                         yield Ok(edge);
+                        guard.record_delivered(checkpoint.summary.timestamp_ms);
                     }
                     last_checkpoint = Some(seq);
                     delivered_live = true;
@@ -305,10 +325,12 @@ fn live<S: Subscribable>(
                 // A lag before the first live checkpoint is catch-up overflow (likely kv-rpc lag).
                 Err(broadcast::error::RecvError::Lagged(missed)) if !delivered_live => {
                     warn!(missed, "Subscriber fell behind during catch-up; disconnecting");
+                    guard.set_termination_reason(SubscriptionTerminationReason::Lagged);
                     yield Err(reconnect_error());
                     return;
                 }
                 Err(e) => {
+                    guard.set_termination_reason(SubscriptionTerminationReason::from_recv_error(&e));
                     yield Err(broadcast_error(e));
                     return;
                 }
