@@ -284,3 +284,35 @@ fragment RootField on DynamicField {
   name { json }
   value { ... on MoveValue { json } }
 }
+
+//# programmable --sender A --inputs object(2,0) 44u64 50u64
+//> 0: sui::object_bag::remove<u64, sui::coin::Coin<sui::sui::SUI>>(Input(0), Input(1));
+//> 1: SplitCoins(Gas, [Input(2)]);
+//> 2: sui::coin::join<sui::sui::SUI>(Result(0), Result(1));
+//> 3: sui::object_bag::add<u64, sui::coin::Coin<sui::sui::SUI>>(Input(0), Input(1), Result(0));
+
+//# create-checkpoint
+
+//# run-graphql --cursors bcs(44u64)
+{ # Fetch dynamic object fields directly from their parent/name keys
+  multiGetDynamicObjectFields(keys: [
+    { parent: "@{obj_2_0}", name: { literal: "44u64" } },
+    { parent: "@{obj_2_0}", name: { type: "u64", bcs: "@{cursor_0}" } },
+    { parent: "@{obj_1_0}", name: { literal: "44u64" } },
+    { parent: "@{obj_2_0}", name: { literal: "46u64" } },
+    { parent: "@{obj_2_0}", name: { literal: "44u64" } },
+    { parent: "@{obj_2_0}", name: { literal: "44u64" }, atCheckpoint: 2 },
+    { parent: "@{obj_2_0}", name: { literal: "44u64" }, version: 9 },
+    { parent: "@{obj_2_0}", name: { literal: "44u64" }, rootVersion: 9 },
+  ]) { ...RootObjectField }
+}
+
+fragment RootObjectField on DynamicField {
+  name { json }
+  value {
+    ... on MoveObject {
+      address
+      contents { json }
+    }
+  }
+}

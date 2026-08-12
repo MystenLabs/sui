@@ -1493,6 +1493,9 @@ Query.multiGetEpochs
 Query.multiGetDynamicFields
   => {"obj_versions"}
 
+Query.multiGetDynamicObjectFields
+  => {"obj_versions"}
+
 Query.multiGetObjects
   => {}
 

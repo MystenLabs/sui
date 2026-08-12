@@ -415,6 +415,22 @@ impl Query {
         try_join_all(fields).await
     }
 
+    /// Access dynamic object fields on parent objects using their names and optional version bounds.
+    ///
+    /// Each key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a dynamic object field could not be found, its corresponding entry in the result is `null`.
+    async fn multi_get_dynamic_object_fields(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<NameKey>,
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
+        let scope = self.scope(ctx)?;
+        let fields = keys.into_iter().map(|key| {
+            DynamicField::by_key(ctx, scope.clone(), DynamicFieldType::DynamicObject, key)
+        });
+
+        try_join_all(fields).await
+    }
+
     /// Fetch objects by their keys.
     ///
     /// Returns a list of objects that is guaranteed to be the same length as `keys`. If an object in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the object never existed, or because it was pruned.
