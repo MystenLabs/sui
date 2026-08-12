@@ -31,32 +31,6 @@ pub struct EventPosition {
     pub event_index: u32,
 }
 
-impl EventPosition {
-    /// Fencepost at the first event slot of `tx_seq`; valid as a boundary even
-    /// if the transaction has no events.
-    pub fn start_of_tx(tx_seq: u64) -> Self {
-        Self {
-            tx_seq,
-            event_index: 0,
-        }
-    }
-}
-
-impl From<EventPosition> for (u64, u32) {
-    fn from(position: EventPosition) -> Self {
-        (position.tx_seq, position.event_index)
-    }
-}
-
-impl From<(u64, u32)> for EventPosition {
-    fn from((tx_seq, event_index): (u64, u32)) -> Self {
-        Self {
-            tx_seq,
-            event_index,
-        }
-    }
-}
-
 /// Why a resolved scan interval is exhausted. Fixed at range-resolution time,
 /// carried through scan state, and rendered by [`ScanTerminal`].
 ///
@@ -72,16 +46,6 @@ pub enum RangeExhaustion {
     /// skips an item (Item is preserved only for an ascending event interval
     /// made empty by an `after` Item cursor; every other site uses Boundary).
     CursorBound { kind: sui_rpc_cursor::CursorKind },
-}
-
-impl RangeExhaustion {
-    pub fn reason(self) -> QueryEndReason {
-        match self {
-            Self::LedgerTip => QueryEndReason::LedgerTip,
-            Self::CheckpointBound => QueryEndReason::CheckpointBound,
-            Self::CursorBound { .. } => QueryEndReason::CursorBound,
-        }
-    }
 }
 
 /// Validated, normalized form of `QueryOptions` (the proto wire type).
@@ -185,6 +149,27 @@ pub struct CheckpointRange {
     end: u64,
     high_exhaustion: RangeExhaustion,
     indexed_tip: u64,
+}
+
+impl EventPosition {
+    /// Fencepost at the first event slot of `tx_seq`; valid as a boundary even
+    /// if the transaction has no events.
+    pub fn start_of_tx(tx_seq: u64) -> Self {
+        Self {
+            tx_seq,
+            event_index: 0,
+        }
+    }
+}
+
+impl RangeExhaustion {
+    pub fn reason(self) -> QueryEndReason {
+        match self {
+            Self::LedgerTip => QueryEndReason::LedgerTip,
+            Self::CheckpointBound => QueryEndReason::CheckpointBound,
+            Self::CursorBound { .. } => QueryEndReason::CursorBound,
+        }
+    }
 }
 
 impl QueryOptions {
@@ -503,28 +488,6 @@ impl QueryOptions {
     }
 }
 
-fn u64_cursor_position(cursor: &CursorToken) -> u64 {
-    match cursor.position {
-        Position::Checkpoints { checkpoint } => checkpoint,
-        Position::Transactions { tx_seq, .. } => tx_seq,
-        Position::Events { .. } => panic!("event queries must use apply_event_cursor_bounds"),
-    }
-}
-
-fn event_cursor_position(cursor: &CursorToken) -> EventPosition {
-    match cursor.position {
-        Position::Events {
-            tx_seq,
-            event_index,
-            ..
-        } => EventPosition {
-            tx_seq,
-            event_index,
-        },
-        _ => unreachable!("validated at decode"),
-    }
-}
-
 impl ResolvedCheckpointRange {
     pub fn empty_at(checkpoint: u64, exhaustion: RangeExhaustion) -> Self {
         Self {
@@ -724,31 +687,6 @@ impl ResolvedEventRange {
     }
 }
 
-fn lower_bound_gte(candidate: Bound<EventPosition>, current: Bound<EventPosition>) -> bool {
-    let Some(candidate) = lower_bound_key(candidate) else {
-        return false;
-    };
-    match lower_bound_key(current) {
-        Some(current) => candidate >= current,
-        None => true,
-    }
-}
-
-fn lower_bound_key(bound: Bound<EventPosition>) -> Option<(EventPosition, u8)> {
-    match bound {
-        Bound::Included(position) => Some((position, 0)),
-        Bound::Excluded(position) => Some((position, 1)),
-        Bound::Unbounded => None,
-    }
-}
-
-fn hi_admits_upper_bound(current: Bound<EventPosition>, candidate: EventPosition) -> bool {
-    match current {
-        Bound::Included(position) | Bound::Excluded(position) => candidate <= position,
-        Bound::Unbounded => true,
-    }
-}
-
 impl CheckpointRange {
     pub fn from_request(
         start_checkpoint: Option<u64>,
@@ -849,6 +787,68 @@ impl CheckpointRange {
             range: start..end,
             exhaustion,
         }
+    }
+}
+
+impl From<EventPosition> for (u64, u32) {
+    fn from(position: EventPosition) -> Self {
+        (position.tx_seq, position.event_index)
+    }
+}
+
+impl From<(u64, u32)> for EventPosition {
+    fn from((tx_seq, event_index): (u64, u32)) -> Self {
+        Self {
+            tx_seq,
+            event_index,
+        }
+    }
+}
+
+fn u64_cursor_position(cursor: &CursorToken) -> u64 {
+    match cursor.position {
+        Position::Checkpoints { checkpoint } => checkpoint,
+        Position::Transactions { tx_seq, .. } => tx_seq,
+        Position::Events { .. } => panic!("event queries must use apply_event_cursor_bounds"),
+    }
+}
+
+fn event_cursor_position(cursor: &CursorToken) -> EventPosition {
+    match cursor.position {
+        Position::Events {
+            tx_seq,
+            event_index,
+            ..
+        } => EventPosition {
+            tx_seq,
+            event_index,
+        },
+        _ => unreachable!("validated at decode"),
+    }
+}
+
+fn lower_bound_gte(candidate: Bound<EventPosition>, current: Bound<EventPosition>) -> bool {
+    let Some(candidate) = lower_bound_key(candidate) else {
+        return false;
+    };
+    match lower_bound_key(current) {
+        Some(current) => candidate >= current,
+        None => true,
+    }
+}
+
+fn lower_bound_key(bound: Bound<EventPosition>) -> Option<(EventPosition, u8)> {
+    match bound {
+        Bound::Included(position) => Some((position, 0)),
+        Bound::Excluded(position) => Some((position, 1)),
+        Bound::Unbounded => None,
+    }
+}
+
+fn hi_admits_upper_bound(current: Bound<EventPosition>, candidate: EventPosition) -> bool {
+    match current {
+        Bound::Included(position) | Bound::Excluded(position) => candidate <= position,
+        Bound::Unbounded => true,
     }
 }
 
