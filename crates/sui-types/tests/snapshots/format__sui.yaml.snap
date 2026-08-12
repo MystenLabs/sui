@@ -1454,6 +1454,13 @@ WithdrawFrom:
       Sender: UNIT
     1:
       Sponsor: UNIT
+    2:
+      Allowance:
+        STRUCT:
+          - funder:
+              TYPENAME: SuiAddress
+          - allowance:
+              TYPENAME: ObjectID
 WithdrawalTypeArg:
   ENUM:
     0:

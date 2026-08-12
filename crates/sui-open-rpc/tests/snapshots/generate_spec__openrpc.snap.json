@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "133",
+              "maxSupportedProtocolVersion": "134",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1357,6 +1357,7 @@
                 "early_return_receive_object_mismatched_type": false,
                 "enable_accumulators": false,
                 "enable_address_balance_gas_payments": false,
+                "enable_allowances": false,
                 "enable_authenticated_event_streams": false,
                 "enable_coin_deny_list": false,
                 "enable_coin_deny_list_v2": false,
@@ -2250,6 +2251,7 @@
                 "ed25519_ed25519_verify_msg_cost_per_byte": "2",
                 "enable_accumulators": false,
                 "enable_address_balance_gas_payments": false,
+                "enable_allowances": false,
                 "enable_authenticated_event_streams": false,
                 "enable_coin_deny_list": false,
                 "enable_coin_deny_list_v2": false,
@@ -11070,10 +11072,38 @@
         }
       },
       "SuiWithdrawFrom": {
-        "type": "string",
-        "enum": [
-          "sender",
-          "sponsor"
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "sender",
+              "sponsor"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "allowance"
+            ],
+            "properties": {
+              "allowance": {
+                "type": "object",
+                "required": [
+                  "allowance",
+                  "funder"
+                ],
+                "properties": {
+                  "allowance": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "funder": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          }
         ]
       },
       "SuiWithdrawalTypeArg": {
