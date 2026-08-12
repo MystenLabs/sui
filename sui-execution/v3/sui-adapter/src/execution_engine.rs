@@ -253,7 +253,8 @@ mod checked {
             protocol_config,
             0,
         );
-        let mut gas_charger = GasCharger::new_unmetered(tx_context.borrow().digest());
+        let mut gas_charger =
+            GasCharger::new_unmetered(tx_context.borrow().digest(), protocol_config);
         programmable_transactions::execution::execute::<execution_mode::Genesis>(
             protocol_config,
             metrics,
