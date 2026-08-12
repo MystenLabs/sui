@@ -500,12 +500,24 @@ mod tests {
 
     struct ObserverSubscriberTestClient {
         stream_blocks_calls: std::sync::atomic::AtomicU32,
+        // `None` streams blocks forever, so a subscription can only end through the
+        // subscriber's own logic (e.g. the in-stream commit lag check), never because
+        // the fake stream hung up on its own.
+        stream_limit: Option<usize>,
     }
 
     impl ObserverSubscriberTestClient {
         fn new() -> Self {
             Self {
                 stream_blocks_calls: std::sync::atomic::AtomicU32::new(0),
+                stream_limit: Some(10),
+            }
+        }
+
+        fn new_never_ending() -> Self {
+            Self {
+                stream_blocks_calls: std::sync::atomic::AtomicU32::new(0),
+                stream_limit: None,
             }
         }
 
@@ -540,9 +552,11 @@ mod tests {
                     },
                     val,
                 ))
+            });
+            Ok(match self.stream_limit {
+                Some(limit) => Box::pin(block_stream.take(limit)),
+                None => Box::pin(block_stream),
             })
-            .take(10);
-            Ok(Box::pin(block_stream))
         }
 
         async fn fetch_blocks(
@@ -939,6 +953,123 @@ mod tests {
         assert!(
             network_client.stream_blocks_calls() > calls_while_regated,
             "Subscription should resume again after catching up"
+        );
+        assert_eq!(gated_metric.get(), 0);
+
+        subscriber.stop().await;
+    }
+
+    // Unlike the other gate tests, whose fake streams end on their own after 10 items
+    // (letting the gate engage between reconnection attempts), this stream never ends:
+    // the gate can only engage through the in-stream lag check dropping the stream.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_in_stream_lag_check_drops_never_ending_stream() {
+        use consensus_config::Parameters;
+        use consensus_types::block::BlockDigest;
+
+        use crate::{
+            block::TestBlock,
+            commit::{CommitDigest, CommitRef},
+        };
+
+        telemetry_subscribers::init_for_testing();
+        let (mut context, _keys) = Context::new_for_test(4);
+        // Gate threshold is batch_size * 5 = 25 commits of lag, resume at <= 5.
+        context.parameters = Parameters {
+            commit_sync_batch_size: 5,
+            ..context.parameters
+        };
+        let context = Arc::new(context);
+        let observer_service = Arc::new(ObserverSubscriberTestService::new());
+        let network_client = Arc::new(ObserverSubscriberTestClient::new_never_ending());
+        let store = Arc::new(MemStore::new());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+
+        let subscriber = ObserverSubscriber::new(
+            context.clone(),
+            network_client.clone(),
+            observer_service.clone(),
+            commit_vote_monitor.clone(),
+            dag_state.clone(),
+            None,
+        );
+        let peer = PeerId::Validator(context.committee.to_authority_index(0).unwrap());
+        subscriber.subscribe(peer.clone());
+
+        // Blocks flow while not lagging.
+        for _ in 0..100 {
+            sleep(Duration::from_millis(100)).await;
+            if !observer_service.handle_block_calls.lock().is_empty() {
+                break;
+            }
+        }
+        assert!(!observer_service.handle_block_calls.lock().is_empty());
+        assert_eq!(network_client.stream_blocks_calls(), 1);
+
+        // A quorum votes for commit 100 while the local commit index is 0: lag exceeds
+        // the gate threshold.
+        for author in 0..3 {
+            let block = VerifiedBlock::new_for_test(
+                TestBlock::new(10, author)
+                    .set_commit_votes(vec![CommitRef::new(100, CommitDigest::MIN)])
+                    .build(),
+            );
+            commit_vote_monitor.observe_block(&block);
+        }
+        let gated_metric = &context.metrics.node_metrics.observer_subscription_gated;
+        for _ in 0..100 {
+            sleep(Duration::from_secs(1)).await;
+            if gated_metric.get() == 1 {
+                break;
+            }
+        }
+        assert_eq!(
+            gated_metric.get(),
+            1,
+            "The in-stream lag check should drop the never-ending stream and engage the gate"
+        );
+
+        // The stream was dropped: no blocks arrive and no reconnections happen while gated.
+        let calls_while_gated = observer_service.handle_block_calls.lock().len();
+        let stream_calls_while_gated = network_client.stream_blocks_calls();
+        sleep(Duration::from_secs(30)).await;
+        assert_eq!(
+            observer_service.handle_block_calls.lock().len(),
+            calls_while_gated,
+            "No blocks should be handled while gated"
+        );
+        assert_eq!(
+            network_client.stream_blocks_calls(),
+            stream_calls_while_gated,
+            "No subscription attempts should happen while gated"
+        );
+
+        // Commit sync catches up to within the resume threshold: lag 100 - 96 = 4 <= 5,
+        // so the subscription resumes.
+        let leader_ref = BlockRef::new(
+            96,
+            context.committee.to_authority_index(0).unwrap(),
+            BlockDigest::MIN,
+        );
+        dag_state
+            .write()
+            .set_last_commit(TrustedCommit::new_for_test(
+                96,
+                CommitDigest::MIN,
+                0,
+                leader_ref,
+                vec![],
+            ));
+        for _ in 0..100 {
+            sleep(Duration::from_secs(1)).await;
+            if network_client.stream_blocks_calls() > stream_calls_while_gated {
+                break;
+            }
+        }
+        assert!(
+            network_client.stream_blocks_calls() > stream_calls_while_gated,
+            "Subscription should resume after catching up"
         );
         assert_eq!(gated_metric.get(), 0);
 
