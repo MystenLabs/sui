@@ -6,98 +6,98 @@ processed 23 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 6-97:
+task 1, lines 6-98:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 11248000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 99:
+task 2, line 100:
 //# run test::execution_error_tests::success_function --sender A --args 123
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, line 101:
+task 3, line 102:
 //# run test::execution_error_tests::abort_with_42 --sender A
 Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::abort_with_42 (function index 1) at offset 1, Abort Code: 42
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 1, instruction: 1, function_name: Some("abort_with_42") }, 42), source: Some(VMError { major_status: ABORTED, sub_status: Some(42), message: Some("test::execution_error_tests::abort_with_42 at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 1)] }), command: Some(0) } }
 
-task 4, line 103:
+task 4, line 104:
 //# run test::execution_error_tests::abort_with_255 --sender B
 Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::abort_with_255 (function index 2) at offset 1, Abort Code: 255
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 2, instruction: 1, function_name: Some("abort_with_255") }, 255), source: Some(VMError { major_status: ABORTED, sub_status: Some(255), message: Some("test::execution_error_tests::abort_with_255 at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(2), 1)] }), command: Some(0) } }
 
-task 5, line 105:
+task 5, line 106:
 //# run test::execution_error_tests::abort_with_clever_u8 --sender B
-Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_u8 (function index 3) at offset 1 at line 36
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 3, instruction: 1, function_name: Some("abort_with_clever_u8") }, 13906834328962203649), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834328962203649), message: Some("test::execution_error_tests::abort_with_clever_u8 at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 1)] }), command: Some(0) } }
+Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_u8 (function index 3) at offset 1 at line 37
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 3, instruction: 1, function_name: Some("abort_with_clever_u8") }, 13906834333257170945), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834333257170945), message: Some("test::execution_error_tests::abort_with_clever_u8 at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 1)] }), command: Some(0) } }
 
-task 6, line 107:
+task 6, line 108:
 //# run test::execution_error_tests::abort_with_clever_u16 --sender A
-Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_u16 (function index 4) at offset 1 at line 39
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 4, instruction: 1, function_name: Some("abort_with_clever_u16") }, 13906834341847236611), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834341847236611), message: Some("test::execution_error_tests::abort_with_clever_u16 at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(4), 1)] }), command: Some(0) } }
+Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_u16 (function index 4) at offset 1 at line 40
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 4, instruction: 1, function_name: Some("abort_with_clever_u16") }, 13906834346142203907), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834346142203907), message: Some("test::execution_error_tests::abort_with_clever_u16 at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(4), 1)] }), command: Some(0) } }
 
-task 7, line 109:
+task 7, line 110:
 //# run test::execution_error_tests::abort_with_clever_u64 --sender B
-Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_u64 (function index 5) at offset 1 at line 42
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 5, instruction: 1, function_name: Some("abort_with_clever_u64") }, 13906834354732269573), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834354732269573), message: Some("test::execution_error_tests::abort_with_clever_u64 at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(5), 1)] }), command: Some(0) } }
+Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_u64 (function index 5) at offset 1 at line 43
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 5, instruction: 1, function_name: Some("abort_with_clever_u64") }, 13906834359027236869), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834359027236869), message: Some("test::execution_error_tests::abort_with_clever_u64 at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(5), 1)] }), command: Some(0) } }
 
-task 8, line 111:
+task 8, line 112:
 //# run test::execution_error_tests::abort_with_clever_address --sender A
-Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_address (function index 6) at offset 1 at line 45
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 6, instruction: 1, function_name: Some("abort_with_clever_address") }, 13906834367617302535), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834367617302535), message: Some("test::execution_error_tests::abort_with_clever_address at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(6), 1)] }), command: Some(0) } }
+Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_address (function index 6) at offset 1 at line 46
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 6, instruction: 1, function_name: Some("abort_with_clever_address") }, 13906834371912269831), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834371912269831), message: Some("test::execution_error_tests::abort_with_clever_address at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(6), 1)] }), command: Some(0) } }
 
-task 9, line 113:
+task 9, line 114:
 //# run test::execution_error_tests::abort_with_clever_string --sender B
-Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_string (function index 7) at offset 1 at line 48
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 7, instruction: 1, function_name: Some("abort_with_clever_string") }, 13906834380502335497), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834380502335497), message: Some("test::execution_error_tests::abort_with_clever_string at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(7), 1)] }), command: Some(0) } }
+Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_string (function index 7) at offset 1 at line 49
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 7, instruction: 1, function_name: Some("abort_with_clever_string") }, 13906834384797302793), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834384797302793), message: Some("test::execution_error_tests::abort_with_clever_string at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(7), 1)] }), command: Some(0) } }
 
-task 10, line 115:
+task 10, line 116:
 //# run test::execution_error_tests::abort_with_clever_code --sender A
-Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_code (function index 8) at offset 1 at line 51 with clever code 15
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 8, instruction: 1, function_name: Some("abort_with_clever_code") }, 13839280398976811019), source: Some(VMError { major_status: ABORTED, sub_status: Some(13839280398976811019), message: Some("test::execution_error_tests::abort_with_clever_code at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(8), 1)] }), command: Some(0) } }
+Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_code (function index 8) at offset 1 at line 52 with clever code 15
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 8, instruction: 1, function_name: Some("abort_with_clever_code") }, 13839280403271778315), source: Some(VMError { major_status: ABORTED, sub_status: Some(13839280403271778315), message: Some("test::execution_error_tests::abort_with_clever_code at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(8), 1)] }), command: Some(0) } }
 
-task 11, line 117:
+task 11, line 118:
 //# run test::execution_error_tests::abort_with_clever_raw --sender B
-Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_raw (function index 9) at offset 1 at line 54
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 9, instruction: 1, function_name: Some("abort_with_clever_raw") }, 13906834406272401421), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834406272401421), message: Some("test::execution_error_tests::abort_with_clever_raw at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(9), 1)] }), command: Some(0) } }
+Error: Transaction Effects Status: Move Abort in test::execution_error_tests::abort_with_clever_raw (function index 9) at offset 1 at line 55
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 9, instruction: 1, function_name: Some("abort_with_clever_raw") }, 13906834410567368717), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834410567368717), message: Some("test::execution_error_tests::abort_with_clever_raw at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(9), 1)] }), command: Some(0) } }
 
-task 12, line 119:
+task 12, line 120:
 //# run test::execution_error_tests::assert_failure --sender B
-Error: Transaction Effects Status: Move Abort in test::execution_error_tests::assert_failure (function index 10) at offset 1 at line 57
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 10, instruction: 1, function_name: Some("assert_failure") }, 13906834423451484159), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834423451484159), message: Some("test::execution_error_tests::assert_failure at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(10), 1)] }), command: Some(0) } }
+Error: Transaction Effects Status: Move Abort in test::execution_error_tests::assert_failure (function index 10) at offset 1 at line 58
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 10, instruction: 1, function_name: Some("assert_failure") }, 13906834427746451455), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834427746451455), message: Some("test::execution_error_tests::assert_failure at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(10), 1)] }), command: Some(0) } }
 
-task 13, lines 121-122:
+task 13, lines 122-123:
 //# programmable --sender A --inputs @test
 //> test::execution_error_tests::nonexistent_function()
 Error: Transaction Effects Status: Function Not Found.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FunctionNotFound, source: Some("Could not resolve function 'nonexistent_function' in module test::execution_error_tests"), command: Some(0) } }
 
-task 14, line 124:
+task 14, line 125:
 //# run test::execution_error_tests::arithmetic_underflow --sender A
 Error: Transaction Effects Status: Move Primitive Runtime Error. Location: test::execution_error_tests::arithmetic_underflow (function index 11) at offset 2. Arithmetic error, stack overflow, max value depth, etc.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 11, instruction: 2, function_name: Some("arithmetic_underflow") }))), source: Some(VMError { major_status: ARITHMETIC_ERROR, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(11), 2)] }), command: Some(0) } }
 
-task 15, line 126:
+task 15, line 127:
 //# run test::execution_error_tests::arithmetic_overflow --sender B
 Error: Transaction Effects Status: Move Primitive Runtime Error. Location: test::execution_error_tests::arithmetic_overflow (function index 12) at offset 2. Arithmetic error, stack overflow, max value depth, etc.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 12, instruction: 2, function_name: Some("arithmetic_overflow") }))), source: Some(VMError { major_status: ARITHMETIC_ERROR, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(12), 2)] }), command: Some(0) } }
 
-task 16, line 128:
+task 16, line 129:
 //# run test::execution_error_tests::division_by_zero --sender A
 Error: Transaction Effects Status: Move Primitive Runtime Error. Location: test::execution_error_tests::division_by_zero (function index 13) at offset 2. Arithmetic error, stack overflow, max value depth, etc.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 13, instruction: 2, function_name: Some("division_by_zero") }))), source: Some(VMError { major_status: ARITHMETIC_ERROR, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(13), 2)] }), command: Some(0) } }
 
-task 17, line 130:
+task 17, line 131:
 //# run test::execution_error_tests::vector_out_of_bounds --sender B
 Error: Transaction Effects Status: Move Primitive Runtime Error. Location: test::execution_error_tests::vector_out_of_bounds (function index 14) at offset 4. Arithmetic error, stack overflow, max value depth, etc.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 14, instruction: 4, function_name: Some("vector_out_of_bounds") }))), source: Some(VMError { major_status: VECTOR_OPERATION_ERROR, sub_status: Some(1), message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(14), 4)] }), command: Some(0) } }
 
-task 18, line 132:
+task 18, line 133:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 19, lines 134-155:
+task 19, lines 135-156:
 //# run-graphql
 Response: {
   "data": {
@@ -107,7 +107,7 @@ Response: {
   }
 }
 
-task 20, lines 157-197:
+task 20, lines 158-198:
 //# run-graphql
 Response: {
   "data": {
@@ -118,11 +118,11 @@ Response: {
         "instructionOffset": 1,
         "identifier": null,
         "constant": null,
-        "message": "Error in 1st command, from '0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef::execution_error_tests::abort_with_42' (instruction 1), abort code: 42",
+        "message": "Error in 1st command, from '0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb::execution_error_tests::abort_with_42' (instruction 1), abort code: 42",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef"
+            "address": "0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb"
           }
         },
         "function": {
@@ -140,11 +140,11 @@ Response: {
         "instructionOffset": 1,
         "identifier": null,
         "constant": null,
-        "message": "Error in 1st command, from '0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef::execution_error_tests::abort_with_255' (instruction 1), abort code: 255",
+        "message": "Error in 1st command, from '0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb::execution_error_tests::abort_with_255' (instruction 1), abort code: 255",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef"
+            "address": "0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb"
           }
         },
         "function": {
@@ -158,22 +158,22 @@ Response: {
   }
 }
 
-task 21, lines 199-372:
+task 21, lines 200-373:
 //# run-graphql
 Response: {
   "data": {
     "cleverU8": {
       "executionError": {
-        "abortCode": "13906834328962203649",
-        "sourceLineNumber": 36,
+        "abortCode": "13906834333257170945",
+        "sourceLineNumber": 37,
         "instructionOffset": 1,
         "identifier": "ECleverU8",
         "constant": "10",
-        "message": "Error in 1st command, from '0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef::execution_error_tests::abort_with_clever_u8' (line 36), abort 'ECleverU8': 10",
+        "message": "Error in 1st command, from '0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb::execution_error_tests::abort_with_clever_u8' (line 37), abort 'ECleverU8': 10",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef"
+            "address": "0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb"
           }
         },
         "function": {
@@ -186,16 +186,16 @@ Response: {
     },
     "cleverU16": {
       "executionError": {
-        "abortCode": "13906834341847236611",
-        "sourceLineNumber": 39,
+        "abortCode": "13906834346142203907",
+        "sourceLineNumber": 40,
         "instructionOffset": 1,
         "identifier": "ECleverU16",
         "constant": "20",
-        "message": "Error in 1st command, from '0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef::execution_error_tests::abort_with_clever_u16' (line 39), abort 'ECleverU16': 20",
+        "message": "Error in 1st command, from '0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb::execution_error_tests::abort_with_clever_u16' (line 40), abort 'ECleverU16': 20",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef"
+            "address": "0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb"
           }
         },
         "function": {
@@ -208,16 +208,16 @@ Response: {
     },
     "cleverU64": {
       "executionError": {
-        "abortCode": "13906834354732269573",
-        "sourceLineNumber": 42,
+        "abortCode": "13906834359027236869",
+        "sourceLineNumber": 43,
         "instructionOffset": 1,
         "identifier": "ECleverU64",
         "constant": "100",
-        "message": "Error in 1st command, from '0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef::execution_error_tests::abort_with_clever_u64' (line 42), abort 'ECleverU64': 100",
+        "message": "Error in 1st command, from '0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb::execution_error_tests::abort_with_clever_u64' (line 43), abort 'ECleverU64': 100",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef"
+            "address": "0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb"
           }
         },
         "function": {
@@ -230,16 +230,16 @@ Response: {
     },
     "cleverAddress": {
       "executionError": {
-        "abortCode": "13906834367617302535",
-        "sourceLineNumber": 45,
+        "abortCode": "13906834371912269831",
+        "sourceLineNumber": 46,
         "instructionOffset": 1,
         "identifier": "ECleverAddress",
         "constant": "0x0000000000000000000000000000000000000000000000000000000000000042",
-        "message": "Error in 1st command, from '0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef::execution_error_tests::abort_with_clever_address' (line 45), abort 'ECleverAddress': 0x0000000000000000000000000000000000000000000000000000000000000042",
+        "message": "Error in 1st command, from '0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb::execution_error_tests::abort_with_clever_address' (line 46), abort 'ECleverAddress': 0x0000000000000000000000000000000000000000000000000000000000000042",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef"
+            "address": "0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb"
           }
         },
         "function": {
@@ -252,16 +252,16 @@ Response: {
     },
     "cleverString": {
       "executionError": {
-        "abortCode": "13906834380502335497",
-        "sourceLineNumber": 48,
+        "abortCode": "13906834384797302793",
+        "sourceLineNumber": 49,
         "instructionOffset": 1,
         "identifier": "ECleverString",
         "constant": "This is a clever error message",
-        "message": "Error in 1st command, from '0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef::execution_error_tests::abort_with_clever_string' (line 48), abort 'ECleverString': This is a clever error message",
+        "message": "Error in 1st command, from '0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb::execution_error_tests::abort_with_clever_string' (line 49), abort 'ECleverString': This is a clever error message",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef"
+            "address": "0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb"
           }
         },
         "function": {
@@ -275,15 +275,15 @@ Response: {
     "cleverWithCode": {
       "executionError": {
         "abortCode": "15",
-        "sourceLineNumber": 51,
+        "sourceLineNumber": 52,
         "instructionOffset": 1,
         "identifier": "ECleverWithCode",
         "constant": "Error with explicit code",
-        "message": "Error in 1st command, from '0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef::execution_error_tests::abort_with_clever_code' (line 51), abort(code = 15) 'ECleverWithCode': Error with explicit code",
+        "message": "Error in 1st command, from '0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb::execution_error_tests::abort_with_clever_code' (line 52), abort(code = 15) 'ECleverWithCode': Error with explicit code",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef"
+            "address": "0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb"
           }
         },
         "function": {
@@ -296,16 +296,16 @@ Response: {
     },
     "cleverRaw": {
       "executionError": {
-        "abortCode": "13906834406272401421",
-        "sourceLineNumber": 54,
+        "abortCode": "13906834410567368717",
+        "sourceLineNumber": 55,
         "instructionOffset": 1,
         "identifier": "ECleverRaw",
         "constant": "AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAw==",
-        "message": "Error in 1st command, from '0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef::execution_error_tests::abort_with_clever_raw' (line 54), abort 'ECleverRaw': AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAw==",
+        "message": "Error in 1st command, from '0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb::execution_error_tests::abort_with_clever_raw' (line 55), abort 'ECleverRaw': AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAw==",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef"
+            "address": "0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb"
           }
         },
         "function": {
@@ -318,16 +318,16 @@ Response: {
     },
     "assertFailure": {
       "executionError": {
-        "abortCode": "13906834423451484159",
-        "sourceLineNumber": 57,
+        "abortCode": "13906834427746451455",
+        "sourceLineNumber": 58,
         "instructionOffset": 1,
         "identifier": null,
         "constant": null,
-        "message": "Error in 1st command, from '0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef::execution_error_tests::assert_failure' (line 57)",
+        "message": "Error in 1st command, from '0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb::execution_error_tests::assert_failure' (line 58)",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef"
+            "address": "0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb"
           }
         },
         "function": {
@@ -353,7 +353,7 @@ Response: {
   }
 }
 
-task 22, lines 374-452:
+task 22, lines 375-453:
 //# run-graphql
 Response: {
   "data": {
@@ -364,11 +364,11 @@ Response: {
         "instructionOffset": 2,
         "identifier": null,
         "constant": null,
-        "message": "Error in 1st command, Move Primitive Runtime Error. Location: b1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef::execution_error_tests::arithmetic_underflow (function index 11) at offset 2. Arithmetic error, stack overflow, max value depth, etc.",
+        "message": "Error in 1st command, Move Primitive Runtime Error. Location: 761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb::execution_error_tests::arithmetic_underflow (function index 11) at offset 2. Arithmetic error, stack overflow, max value depth, etc.",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef"
+            "address": "0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb"
           }
         },
         "function": {
@@ -386,11 +386,11 @@ Response: {
         "instructionOffset": 2,
         "identifier": null,
         "constant": null,
-        "message": "Error in 1st command, Move Primitive Runtime Error. Location: b1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef::execution_error_tests::arithmetic_overflow (function index 12) at offset 2. Arithmetic error, stack overflow, max value depth, etc.",
+        "message": "Error in 1st command, Move Primitive Runtime Error. Location: 761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb::execution_error_tests::arithmetic_overflow (function index 12) at offset 2. Arithmetic error, stack overflow, max value depth, etc.",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef"
+            "address": "0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb"
           }
         },
         "function": {
@@ -408,11 +408,11 @@ Response: {
         "instructionOffset": 2,
         "identifier": null,
         "constant": null,
-        "message": "Error in 1st command, Move Primitive Runtime Error. Location: b1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef::execution_error_tests::division_by_zero (function index 13) at offset 2. Arithmetic error, stack overflow, max value depth, etc.",
+        "message": "Error in 1st command, Move Primitive Runtime Error. Location: 761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb::execution_error_tests::division_by_zero (function index 13) at offset 2. Arithmetic error, stack overflow, max value depth, etc.",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef"
+            "address": "0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb"
           }
         },
         "function": {
@@ -430,11 +430,11 @@ Response: {
         "instructionOffset": 4,
         "identifier": null,
         "constant": null,
-        "message": "Error in 1st command, Move Primitive Runtime Error. Location: b1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef::execution_error_tests::vector_out_of_bounds (function index 14) at offset 4. Arithmetic error, stack overflow, max value depth, etc.",
+        "message": "Error in 1st command, Move Primitive Runtime Error. Location: 761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb::execution_error_tests::vector_out_of_bounds (function index 14) at offset 4. Arithmetic error, stack overflow, max value depth, etc.",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xb1bf539e0f434599f64947b72fec7995c8fff1a4f3dc2b4533d46ec7a7023aef"
+            "address": "0x761dcb0d1d2318a0f91f08ed482619099ac5621fae80a1693f4db31f633fa9fb"
           }
         },
         "function": {

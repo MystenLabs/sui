@@ -1,3 +1,19 @@
 Command `sandbox publish`:
+warning[WC08002]: operation always errors
+  ┌─ ./sources/script.move:3:9
+  │
+3 │         1u64 - 2; // will cause integer underflow
+  │         ^^^^^^^^ Subtracting '2' from '1' is less than zero. This operation always errors at runtime
+  │
+  = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 Command `sandbox run storage/0x0000000000000000000000000000000000000000000000000000000000000042/package/m.mv main`:
 Execution failed because of an arithmetic error (i.e., integer overflow/underflow, div/mod by zero, or invalid shift) in 0000000000000000000000000000000000000000000000000000000000000042::m::main at code offset 2
+warning[WC08002]: operation always errors
+  ┌─ ./sources/script.move:3:9
+  │
+3 │         1u64 - 2; // will cause integer underflow
+  │         ^^^^^^^^ Subtracting '2' from '1' is less than zero. This operation always errors at runtime
+  │
+  = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

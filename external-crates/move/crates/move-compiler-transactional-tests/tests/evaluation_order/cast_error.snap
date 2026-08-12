@@ -3,7 +3,7 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 3 tasks
 
-task 2, line 14:
+task 2, line 15:
 //# run 0x42::m::t --args false
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,

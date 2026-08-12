@@ -1,6 +1,7 @@
 //# init --edition 2024.alpha
 
 //# publish
+#[allow(always_errors)]
 module 0x42::m {
     const LARGE: u16 = 0xFFFF;
 
