@@ -3807,6 +3807,12 @@ type Query {
 	"""
 	multiGetCheckpoints(keys: [UInt53!]!): [Checkpoint]!
 	"""
+	Access derived objects under parent objects using their names and optional version bounds.
+	
+	Each key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a derived object has not been claimed, has been deleted, or is not available in the store, its corresponding entry is `null`.
+	"""
+	multiGetDerivedObjects(keys: [NameKey!]!): [MoveObject]!
+	"""
 	Access dynamic fields on parent objects using their names and optional version bounds.
 	
 	Each key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a dynamic field could not be found, its corresponding entry in the result is `null`.
