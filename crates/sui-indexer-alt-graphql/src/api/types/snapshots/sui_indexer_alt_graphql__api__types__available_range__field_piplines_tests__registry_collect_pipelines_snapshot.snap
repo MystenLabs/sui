@@ -1433,6 +1433,9 @@ Query.events (filter: module)
 Query.multiGetAddresses
   => {}
 
+Query.multiGetBalances
+  => {"consistent"}
+
 Query.multiGetCheckpoints
   => {}
 

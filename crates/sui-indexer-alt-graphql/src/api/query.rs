@@ -29,6 +29,9 @@ use crate::api::scalars::uint53::UInt53;
 use crate::api::types::address;
 use crate::api::types::address::Address;
 use crate::api::types::address::AddressKey;
+use crate::api::types::balance;
+use crate::api::types::balance::Balance;
+use crate::api::types::balance::BalanceKey;
 use crate::api::types::checkpoint;
 use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
@@ -334,11 +337,32 @@ impl Query {
         keys: Vec<AddressKey>,
     ) -> Result<Vec<Option<Address>>, RpcError<address::Error>> {
         let scope = self.scope(ctx)?;
-        try_join_all(
-            keys.into_iter()
-                .map(|k| Address::by_key(ctx, scope.clone(), k)),
-        )
-        .await
+        let addresses = keys
+            .into_iter()
+            .map(|k| Address::by_key(ctx, scope.clone(), k));
+
+        try_join_all(addresses).await
+    }
+
+    /// Fetch balances by their addresses and coin types.
+    ///
+    /// Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns a list that is guaranteed to be the same length as `keys`. If an address has no balance of a given type, all three values are zero for that key.
+    async fn multi_get_balances(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<BalanceKey>,
+    ) -> Result<Vec<Balance>, RpcError<balance::Error>> {
+        let scope = self.scope(ctx)?;
+        let keys = keys
+            .into_iter()
+            .map(|key| (key.address.into(), key.coin_type.into()))
+            .collect();
+
+        // Query is only exposed at the request root or through Checkpoint.query, both of which
+        // set a checkpoint bound.
+        Ok(Balance::fetch_many(ctx, &scope, keys)
+            .await?
+            .context("Query scope is missing a checkpoint bound")?)
     }
 
     /// Fetch checkpoints by their sequence numbers.
