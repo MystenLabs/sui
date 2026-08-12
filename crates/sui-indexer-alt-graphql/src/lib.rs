@@ -303,10 +303,14 @@ struct IdeEnabled(bool);
 #[derive(Clone, Copy)]
 struct SubscriptionsEnabled(bool);
 
-/// Per-subscriber delivery rate in output nodes per second, surfaced to the subscription handler so
-/// it can pace each payload by its cost. `0` disables pacing.
-#[derive(Clone, Copy)]
-struct SubscriptionThrottleRate(u32);
+/// Per-subscriber delivery throttle settings surfaced to the subscription handler: the rate in
+/// output nodes per second (`0` disables pacing) and the metric each payload's pacing delay is
+/// observed into.
+#[derive(Clone)]
+struct SubscriptionThrottle {
+    nodes_per_second: u32,
+    delay_metric: prometheus::Histogram,
+}
 
 /// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
 /// command-line).
@@ -394,6 +398,8 @@ pub async fn start_rpc(
         metrics.clone(),
     );
 
+    let subscription_metrics = Arc::new(SubscriptionMetrics::new(registry));
+
     let streaming_setup = match subscription_args.checkpoint_stream_url {
         Some(uri) => {
             let ledger_grpc = ledger_grpc_reader
@@ -417,7 +423,7 @@ pub async fn start_rpc(
                 readiness.clone(),
                 ledger_grpc.clone(),
                 watermark_task.watermarks_rx(),
-                Arc::new(SubscriptionMetrics::new(registry)),
+                subscription_metrics.clone(),
             );
             let caches = Arc::new(StreamedCaches::new(
                 streaming_packages,
@@ -435,6 +441,7 @@ pub async fn start_rpc(
         None => None,
     };
 
+    let throttle_delay_metric = subscription_metrics.subscriber_throttle_delay.clone();
     let mut rpc = rpc
         .route(GRAPHQL_PATH, post(graphql).get(graphiql))
         .route(GRAPHQL_SUBSCRIPTIONS_PATH, post(graphql_subscriptions))
@@ -473,11 +480,12 @@ pub async fn start_rpc(
 
     let subscriptions_enabled = streaming_setup.is_some();
     rpc = rpc.layer(SubscriptionsEnabled(subscriptions_enabled));
-    rpc = rpc.layer(SubscriptionThrottleRate(
-        config
+    rpc = rpc.layer(SubscriptionThrottle {
+        nodes_per_second: config
             .subscription
             .per_subscriber_max_output_nodes_per_second,
-    ));
+        delay_metric: throttle_delay_metric,
+    });
 
     // The transaction subscription backfill waits on pipeline watermarks to gate delivery, so it
     // needs a live view of them. Captured before the watermark task is consumed by `run()`.
@@ -513,6 +521,7 @@ pub async fn start_rpc(
             let subscription_broadcast = Arc::new(SubscriptionBroadcast::new(
                 _broadcaster,
                 first_live_checkpoint,
+                subscription_metrics.clone(),
             ));
             rpc = rpc
                 .data(subscription_broadcast)
@@ -584,7 +593,7 @@ async fn graphql_subscriptions(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Extension(schema): Extension<Schema<Query, Mutation, Subscription>>,
     Extension(SubscriptionsEnabled(subscriptions_enabled)): Extension<SubscriptionsEnabled>,
-    Extension(SubscriptionThrottleRate(nodes_per_second)): Extension<SubscriptionThrottleRate>,
+    Extension(throttle_cfg): Extension<SubscriptionThrottle>,
     Extension(watermark): Extension<WatermarksLock>,
     request: GraphQLRequest,
 ) -> axum::response::Response {
@@ -600,7 +609,7 @@ async fn graphql_subscriptions(
     // Query depth is computed once by the query-limits extension during validation and stashed here,
     // so the throttle can add its depth surcharge to each payload's cost.
     let query_depth = QueryDepth::default();
-    let throttle = Throttle::new(nodes_per_second);
+    let throttle = Throttle::new(throttle_cfg.nodes_per_second, throttle_cfg.delay_metric);
     let req = request
         .into_inner()
         .data(Session::new(addr))
