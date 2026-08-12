@@ -38,6 +38,7 @@ use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
 use crate::api::types::checkpoint::filter::CheckpointFilter;
 use crate::api::types::coin_metadata::CoinMetadata;
+use crate::api::types::derived_object;
 use crate::api::types::dynamic_field;
 use crate::api::types::dynamic_field::DynamicField;
 use crate::api::types::dynamic_field::NameKey;
@@ -397,6 +398,22 @@ impl Query {
             .map(|k| Epoch::fetch(ctx, scope.clone(), Some(k)));
 
         try_join_all(epochs).await
+    }
+
+    /// Access derived objects under parent objects using their names and optional version bounds.
+    ///
+    /// Each key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a derived object has not been claimed, has been deleted, or is not available in the store, its corresponding entry is `null`.
+    async fn multi_get_derived_objects(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<NameKey>,
+    ) -> Result<Vec<Option<MoveObject>>, RpcError<dynamic_field::Error>> {
+        let scope = self.scope(ctx)?;
+        let objects = keys
+            .into_iter()
+            .map(|key| derived_object::by_key(ctx, scope.clone(), key));
+
+        try_join_all(objects).await
     }
 
     /// Access dynamic fields on parent objects using their names and optional version bounds.
