@@ -2691,6 +2691,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
                 .with_kind(Kind::AuthenticatorStateExpire),
             K::RandomnessStateCreate => message.with_kind(Kind::RandomnessStateCreate),
             K::DenyListStateCreate => message.with_kind(Kind::DenyListStateCreate),
+            K::PackageConfigCreate => {
+                todo!("PackageConfigCreate is not yet represented in the RPC API")
+            }
             K::BridgeStateCreate(chain_id) => message
                 .with_bridge_chain_id(chain_id.to_string())
                 .with_kind(Kind::BridgeStateCreate),

@@ -3,11 +3,11 @@
 
 use crate::base_types::{EpochId, SuiAddress};
 use crate::coin::COIN_MODULE_NAME;
-use crate::config::{Config, Setting};
+use crate::config::{Config, get_config_from_store, read_config_setting};
 use crate::deny_list_v1::{
     DENY_LIST_COIN_TYPE_INDEX, DENY_LIST_MODULE, input_object_coin_types_for_denylist_check,
 };
-use crate::dynamic_field::{DOFWrapper, get_dynamic_field_from_store};
+use crate::dynamic_field::DOFWrapper;
 use crate::error::{ExecutionError, UserInputError, UserInputResult};
 use crate::execution_status::ExecutionErrorKind;
 use crate::gas_coin::GAS;
@@ -20,10 +20,8 @@ use crate::{
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
-use std::fmt;
 
 pub const CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS: usize = 1000;
 pub const DENY_CAP_V2_STRUCT_NAME: &IdentStr = ident_str!("DenyCapV2");
@@ -216,9 +214,7 @@ pub fn get_per_type_coin_deny_list_v2(
         },
     };
     // TODO: Consider caching the config object UID to avoid repeat deserialization.
-    let config: Config =
-        get_dynamic_field_from_store(object_store, SUI_DENY_LIST_OBJECT_ID, &config_key).ok()?;
-    Some(config)
+    get_config_from_store(object_store, SUI_DENY_LIST_OBJECT_ID, &config_key)
 }
 
 pub fn check_address_denied_by_config(
@@ -238,27 +234,4 @@ pub fn check_global_pause(
 ) -> bool {
     let global_pause_key = GlobalPauseKey::new();
     read_config_setting(object_store, deny_config, global_pause_key, cur_epoch).unwrap_or(false)
-}
-
-/// Fetches the setting from a particular config.
-/// Reads the value of the setting, giving `newer_value` if the current epoch is greater than
-/// `newer_value_epoch`, and `older_value_opt` otherwise.
-/// If `cur_epoch` is `None`, the `newer_value` is always returned.
-fn read_config_setting<K, V>(
-    object_store: &dyn ObjectStore,
-    config: &Config,
-    setting_name: K,
-    cur_epoch: Option<EpochId>,
-) -> Option<V>
-where
-    K: Clone + MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
-    V: Clone + Serialize + DeserializeOwned + fmt::Debug,
-{
-    let setting: Setting<V> = {
-        match get_dynamic_field_from_store(object_store, *config.id.object_id(), &setting_name) {
-            Ok(setting) => setting,
-            Err(_) => return None,
-        }
-    };
-    setting.read_value(cur_epoch).cloned()
 }
