@@ -54,6 +54,7 @@ use sui_kvstore::ALL_PIPELINE_NAMES;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
+use sui_kvstore::CHECKPOINTS_PIPELINE;
 use sui_kvstore::IndexerConfig as BtIndexerConfig;
 use sui_kvstore::IngestionConfig as BtIngestionConfig;
 use sui_kvstore::KeyValueStoreReader;
@@ -164,6 +165,8 @@ pub struct OffchainClusterConfig {
     pub graphql_config: GraphQlConfig,
     pub bootstrap_genesis: Option<BootstrapGenesis>,
     pub kv_rpc_config: KvRpcConfig,
+    /// Per-pipeline overrides (e.g. rate limits) for the BigTable archival indexer.
+    pub bt_pipeline_layer: PipelineLayer,
 }
 
 impl FullCluster {
@@ -259,14 +262,47 @@ impl FullCluster {
         let graphql = self
             .offchain
             .wait_for_graphql(checkpoint.sequence_number, timeout);
-        let bigtable = self
-            .offchain
-            .wait_for_bigtable(checkpoint.sequence_number, timeout);
+        let bigtable = self.offchain.wait_for_bigtable(
+            &ALL_PIPELINE_NAMES,
+            checkpoint.sequence_number,
+            timeout,
+        );
 
         try_join!(indexer, consistent_store, graphql, bigtable)
             .expect("Timed out waiting for off-chain services");
 
         checkpoint
+    }
+
+    /// Unlike [`create_checkpoint`](Self::create_checkpoint), only waits for the base
+    /// `checkpoints` BigTable pipeline to catch up — not the indexer, consistent store, GraphQL,
+    /// or the list-index BigTable pipelines (`tx_seq_digest`, `transaction_bitmap_index`,
+    /// `event_bitmap_index`). Used by tests that need to observe a checkpoint the base pipeline
+    /// has indexed before the (typically throttled, via `bt_pipeline_layer`) list-index
+    /// pipelines have processed it, without unrelated services' sync time giving the throttled
+    /// pipelines room to catch up anyway.
+    pub async fn create_checkpoint_before_list_apis_sync(&mut self) -> VerifiedCheckpoint {
+        let checkpoint = self.executor.create_checkpoint();
+        let timeout = Duration::from_secs(100);
+        self.offchain
+            .wait_for_bigtable(&[CHECKPOINTS_PIPELINE], checkpoint.sequence_number, timeout)
+            .await
+            .expect("Timed out waiting for the base checkpoints pipeline");
+
+        checkpoint
+    }
+
+    /// Waits until every pipeline in `pipelines` has caught up to the given `checkpoint`, or the
+    /// `timeout` is reached (an error).
+    pub async fn wait_for_bigtable(
+        &self,
+        pipelines: &[&str],
+        checkpoint: u64,
+        timeout: Duration,
+    ) -> Result<(), Elapsed> {
+        self.offchain
+            .wait_for_bigtable(pipelines, checkpoint, timeout)
+            .await
     }
 
     /// The URL to talk to the database on.
@@ -355,6 +391,7 @@ impl OffchainCluster {
             graphql_config,
             bootstrap_genesis,
             kv_rpc_config,
+            bt_pipeline_layer,
         }: OffchainClusterConfig,
         registry: &prometheus::Registry,
     ) -> anyhow::Result<Self> {
@@ -435,8 +472,14 @@ impl OffchainCluster {
         // consume them when they are. Off by default, matching production.
         let enable_list_apis = kv_rpc_config.enable_list_apis();
 
-        let (bigtable_client, bigtable_emulator, archival_service) =
-            start_archival(client_args.clone(), kv_rpc_address, kv_rpc_config, registry).await?;
+        let (bigtable_client, bigtable_emulator, archival_service) = start_archival(
+            client_args.clone(),
+            kv_rpc_address,
+            kv_rpc_config,
+            bt_pipeline_layer,
+            registry,
+        )
+        .await?;
 
         let kv_args = KvArgs {
             ledger_grpc_url: Some(
@@ -726,10 +769,11 @@ impl OffchainCluster {
         .await
     }
 
-    /// Waits until the BigTable indexer has caught up to the given `checkpoint`, or the `timeout`
-    /// is reached (an error).
+    /// Waits until every pipeline in `pipelines` has caught up to the given `checkpoint`, or the
+    /// `timeout` is reached (an error).
     pub async fn wait_for_bigtable(
         &self,
+        pipelines: &[&str],
         checkpoint: u64,
         timeout: Duration,
     ) -> Result<(), Elapsed> {
@@ -739,7 +783,7 @@ impl OffchainCluster {
             loop {
                 interval.tick().await;
                 if client
-                    .get_watermark_for_pipelines(&ALL_PIPELINE_NAMES)
+                    .get_watermark_for_pipelines(pipelines)
                     .await
                     .is_ok_and(|wm| {
                         wm.is_some_and(|wm| {
@@ -769,6 +813,7 @@ impl Default for OffchainClusterConfig {
             graphql_config: Default::default(),
             bootstrap_genesis: None,
             kv_rpc_config: KvRpcConfig::default(),
+            bt_pipeline_layer: PipelineLayer::default(),
         }
     }
 }
@@ -839,6 +884,7 @@ async fn start_archival(
     client_args: ClientArgs,
     kv_rpc_address: SocketAddr,
     kv_rpc_config: KvRpcConfig,
+    bt_pipeline_layer: PipelineLayer,
     registry: &prometheus::Registry,
 ) -> anyhow::Result<(BigTableClient, BigTableEmulator, Service)> {
     let emulator = tokio::task::spawn_blocking(BigTableEmulator::start)
@@ -867,7 +913,7 @@ async fn start_archival(
         BtIngestionConfig::default(),
         CommitterConfig::default(),
         BtIndexerConfig::default(),
-        PipelineLayer::default(),
+        bt_pipeline_layer,
         Chain::Unknown,
         registry,
     )
