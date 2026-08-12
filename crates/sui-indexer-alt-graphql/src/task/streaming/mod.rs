@@ -5,9 +5,9 @@
 //!
 //! # 1. Initialization: filling the store while waiting for readiness
 //!
-//! gRPC starts streaming at checkpoint C. Packages from checkpoints < C live
-//! only in the DB, so subscriptions must wait until kv_packages has indexed
-//! them before being served.
+//! gRPC starts streaming at checkpoint C. Packages from checkpoints < C are
+//! only resolvable through the ledger gRPC service, so subscriptions must wait
+//! until it has indexed them before being served.
 //!
 //! Meanwhile, checkpoints C, C+1, C+2, ... populate the store:
 //!
@@ -16,7 +16,7 @@
 //!                  ↓     ↓      ↓
 //!   StreamingPkgStore  stores packages from each streamed checkpoint
 //!
-//!   kv_packages_hi:  [.......... must reach ≥ C-1 ..........]
+//!   ledger_grpc_hi:  [.......... must reach ≥ C-1 ..........]
 //!                                      │
 //!                                      ▼
 //!          Subscriptions unblock; start receiving from current tip (C+N)
@@ -67,7 +67,7 @@ pub(crate) use checkpoint_stream_task::broadcast_error;
 #[cfg(feature = "staging")]
 pub(crate) use checkpoint_stream_task::reconnect_error;
 #[cfg(feature = "staging")]
-pub(crate) use gap_recovery::wait_for_pipelines_catching_up_at;
+pub(crate) use gap_recovery::wait_for_ledger_grpc_catching_up_at;
 pub(crate) use package_eviction_task::PackageEvictionTask;
 pub(crate) use processed_checkpoint::ProcessedCheckpoint;
 pub(crate) use processed_checkpoint::ProcessedTransaction;

@@ -7,15 +7,16 @@ use std::sync::OnceLock;
 use anyhow::Context;
 use tokio::sync::watch;
 
-use crate::task::watermark::KV_PACKAGES_PIPELINE;
+use crate::task::watermark::LEDGER_GRPC_PIPELINE;
 use crate::task::watermark::Watermarks;
 
 /// Coordinates readiness of streaming subscriptions at service startup.
 ///
 /// When the service begins streaming at checkpoint C, any package published at
-/// checkpoints before C lives only in the database. A subscriber reading from the
-/// streaming tip needs those earlier packages resolvable, so subscriptions must wait
-/// until `kv_packages` has caught up to at least C - 1 before starting.
+/// checkpoints before C is only resolvable through the ledger gRPC service. A
+/// subscriber reading from the streaming tip needs those earlier packages resolvable,
+/// so subscriptions must wait until `ledger_grpc` has caught up to at least C - 1
+/// before starting.
 pub(crate) struct SubscriptionReadiness {
     /// Sequence number of the first checkpoint received from the live upstream gRPC stream
     /// (the broadcast tip at startup). Not from the kv-rpc resume fallback.
@@ -45,7 +46,7 @@ impl SubscriptionReadiness {
     }
 
     /// Wait until the service is ready to serve subscriptions: the first live checkpoint has
-    /// been streamed AND `kv_packages` has indexed everything before it.
+    /// been streamed AND `ledger_grpc` has indexed everything before it.
     pub(crate) async fn wait_for_ready(&self) -> anyhow::Result<()> {
         let mut watermarks_rx = self.watermarks_rx.clone();
         watermarks_rx
@@ -55,7 +56,7 @@ impl SubscriptionReadiness {
                 };
                 let target = first_cp.saturating_sub(1);
                 w.per_pipeline()
-                    .get(KV_PACKAGES_PIPELINE)
+                    .get(LEDGER_GRPC_PIPELINE)
                     .is_some_and(|p| p.hi().checkpoint() >= target)
             })
             .await

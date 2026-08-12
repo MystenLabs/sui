@@ -489,7 +489,7 @@ pub async fn start_rpc(
     let s_watermark = watermark_task.run();
 
     // Spawn the streaming tasks and wait for subscriptions to be ready before
-    // binding the listener, so the schema is only advertised once `kv_packages`
+    // binding the listener, so the schema is only advertised once `ledger_grpc`
     // has caught up to the first streamed checkpoint.
     let streaming_handles =
         if let Some((stream_task, _broadcaster, eviction_task, streaming_packages, readiness)) =
