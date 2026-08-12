@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
+  "engines": {
+    "node": ">=22"
+  },
   "main": "./out/adapter.js",
   "types": "./out/adapter.d.ts",
   "files": [
@@ -27,7 +30,7 @@
   },
   "devDependencies": {
     "@types/lodash.snakecase": "^4.1.9",
-    "@types/node": "20.x",
+    "@types/node": "22.x",
     "@typescript-eslint/eslint-plugin": "^7.14.1",
     "@typescript-eslint/parser": "^7.11.0",
     "@vscode/debugadapter-testsupport": "^1.56.0",

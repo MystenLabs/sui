@@ -1,0 +1,27 @@
+---
+compiled_package_info:
+  package_name: u128_values
+  build_flags:
+    test_mode: true
+    generate_docs: false
+    save_disassembly: true
+    install_dir: ~
+    force_recompilation: false
+    allow_dirty: false
+    default_flavor: sui
+    default_edition: ~
+    silence_warnings: false
+    warnings_are_errors: false
+    json_errors: false
+    additional_named_addresses: {}
+    lint_flag:
+      no_lint: false
+      lint: false
+    modes: []
+    force_lock_file: false
+    root_as_zero: false
+    environment: testnet
+    set_unpublished_deps_to_zero: false
+    pubfile_path: ~
+dependencies:
+  - MoveStdlib

@@ -38,9 +38,9 @@ pub struct Writer<'a>(pub(crate) &'a mut MoveTrace);
 impl Writer<'_> {
     /// Emit an external event into the trace.
     pub fn push<T: Serialize>(&mut self, e: T) {
-        self.0.push_event(TraceEvent::External(Box::new(
-            serde_json::to_value(e).unwrap(),
-        )));
+        self.0.push_event(TraceEvent::External(
+            serde_json::value::to_raw_value(&e).unwrap(),
+        ));
     }
 
     /// Get the current version of the trace.

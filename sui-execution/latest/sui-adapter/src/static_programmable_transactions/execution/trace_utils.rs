@@ -29,13 +29,17 @@ use sui_types::{
 };
 use sui_verifier::INIT_FN_NAME;
 
+// External trace events are serialized with `serde_json::value::to_raw_value` (the streaming
+// serializer) rather than `serde_json::json!`/`to_value`, so that integer values outside
+// `serde_json::Number`'s range (e.g. `u128`, `u256`) are preserved exactly instead of panicking.
+
 /// Inserts Move call start event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
 pub fn trace_move_call_start(trace_builder_opt: &mut Option<MoveTraceBuilder>) {
     if let Some(trace_builder) = trace_builder_opt {
-        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-            PTBEvent::MoveCallStart
-        ))));
+        trace_builder.push_event(TraceEvent::External(
+            serde_json::value::to_raw_value(&PTBEvent::MoveCallStart).unwrap(),
+        ));
     }
 }
 
@@ -43,9 +47,9 @@ pub fn trace_move_call_start(trace_builder_opt: &mut Option<MoveTraceBuilder>) {
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
 pub fn trace_move_call_end(trace_builder_opt: &mut Option<MoveTraceBuilder>) {
     if let Some(trace_builder) = trace_builder_opt {
-        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-            PTBEvent::MoveCallEnd
-        ))));
+        trace_builder.push_event(TraceEvent::External(
+            serde_json::value::to_raw_value(&PTBEvent::MoveCallEnd).unwrap(),
+        ));
     }
 }
 
@@ -68,13 +72,14 @@ pub fn trace_transfer<Mode: ExecutionMode>(
                 info: ExtMoveValueInfo { type_: tag, value },
             });
         }
-        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-            PTBEvent::ExternalEvent(ExternalEvent {
+        trace_builder.push_event(TraceEvent::External(
+            serde_json::value::to_raw_value(&PTBEvent::ExternalEvent(ExternalEvent {
                 description: "TransferObjects: obj0...objN => ()".to_string(),
                 name: "Transfer".to_string(),
                 values: to_transfer,
-            })
-        ))));
+            }))
+            .map_err(|e| make_invariant_violation!("Failed to serialize PTB trace event: {}", e))?,
+        ));
     }
     Ok(())
 }
@@ -149,12 +154,13 @@ pub fn trace_ptb_summary<Mode: ExecutionMode>(
             .into_iter()
             .flatten()
             .collect();
-        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-            PTBEvent::Summary(SummaryEvent {
+        trace_builder.push_event(TraceEvent::External(
+            serde_json::value::to_raw_value(&PTBEvent::Summary(SummaryEvent {
                 name: "PTBSummary".to_string(),
                 events,
-            })
-        ))));
+            }))
+            .map_err(|e| make_invariant_violation!("Failed to serialize PTB trace event: {}", e))?,
+        ));
     }
 
     Ok(())
@@ -187,23 +193,24 @@ pub fn trace_split_coins<Mode: ExecutionMode>(
             current_balance.saturating_sub(total_split_value)
         })?;
 
-        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-            PTBEvent::ExternalEvent(ExternalEvent {
+        trace_builder.push_event(TraceEvent::External(
+            serde_json::value::to_raw_value(&PTBEvent::ExternalEvent(ExternalEvent {
                 description: "SplitCoins: input => result".to_string(),
                 name: "SplitCoins".to_string(),
                 values: vec![
                     ExtMoveValue::Single {
                         name: "input".to_string(),
-                        info: input
+                        info: input,
                     },
                     ExtMoveValue::Vector {
                         name: "result".to_string(),
                         type_: type_tag_with_refs.clone(),
-                        value: split_coin_move_values
+                        value: split_coin_move_values,
                     },
                 ],
-            })
-        ))));
+            }))
+            .map_err(|e| make_invariant_violation!("Failed to serialize PTB trace event: {}", e))?,
+        ));
     }
     Ok(())
 }
@@ -242,13 +249,14 @@ pub fn trace_merge_coins<Mode: ExecutionMode>(
             name: "merge_result".to_string(),
             info: target_coin_resulting_state,
         });
-        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-            PTBEvent::ExternalEvent(ExternalEvent {
+        trace_builder.push_event(TraceEvent::External(
+            serde_json::value::to_raw_value(&PTBEvent::ExternalEvent(ExternalEvent {
                 description: "MergeCoins: merge_target, coin0...coinN => mergeresult".to_string(),
                 name: "MergeCoins".to_string(),
                 values,
-            })
-        ))));
+            }))
+            .map_err(|e| make_invariant_violation!("Failed to serialize PTB trace event: {}", e))?,
+        ));
     }
     Ok(())
 }
@@ -268,8 +276,8 @@ pub fn trace_make_move_vec<Mode: ExecutionMode>(
             .iter()
             .map(|ctx_value| serializable_move_value_from_ctx_value(ctx_value, &layout))
             .collect::<Result<_, _>>()?;
-        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-            PTBEvent::ExternalEvent(ExternalEvent {
+        trace_builder.push_event(TraceEvent::External(
+            serde_json::value::to_raw_value(&PTBEvent::ExternalEvent(ExternalEvent {
                 description: "MakeMoveVec: vector".to_string(),
                 name: "MakeMoveVec".to_string(),
                 values: vec![ExtMoveValue::Vector {
@@ -277,8 +285,9 @@ pub fn trace_make_move_vec<Mode: ExecutionMode>(
                     type_: type_tag_with_refs,
                     value: values,
                 }],
-            })
-        ))));
+            }))
+            .map_err(|e| make_invariant_violation!("Failed to serialize PTB trace event: {}", e))?,
+        ));
     }
     Ok(())
 }
@@ -289,13 +298,14 @@ pub fn trace_publish_event(
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> Result<(), ExecutionError> {
     if let Some(trace_builder) = trace_builder_opt {
-        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-            PTBEvent::ExternalEvent(ExternalEvent {
+        trace_builder.push_event(TraceEvent::External(
+            serde_json::value::to_raw_value(&PTBEvent::ExternalEvent(ExternalEvent {
                 description: "Publish: ()".to_string(),
                 name: "Publish".to_string(),
                 values: vec![],
-            })
-        ))));
+            }))
+            .map_err(|e| make_invariant_violation!("Failed to serialize PTB trace event: {}", e))?,
+        ));
     }
     Ok(())
 }
@@ -306,13 +316,14 @@ pub fn trace_upgrade_event(
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> Result<(), ExecutionError> {
     if let Some(trace_builder) = trace_builder_opt {
-        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-            PTBEvent::ExternalEvent(ExternalEvent {
+        trace_builder.push_event(TraceEvent::External(
+            serde_json::value::to_raw_value(&PTBEvent::ExternalEvent(ExternalEvent {
                 description: "Upgrade: ()".to_string(),
                 name: "Upgrade".to_string(),
                 values: vec![],
-            })
-        ))));
+            }))
+            .map_err(|e| make_invariant_violation!("Failed to serialize PTB trace event: {}", e))?,
+        ));
     }
     Ok(())
 }

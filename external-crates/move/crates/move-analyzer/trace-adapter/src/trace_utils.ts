@@ -606,7 +606,17 @@ export async function readTrace(
     const frameInfoStack: ITraceGenFrameInfo[] = [];
     for (const line of lineIterator) {
         eventCount++;
-        const event = JSON.parse(line) as JSONTraceEvent;
+        // Parse with a source-text reviver so that integer values outside JS's safe range
+        // (e.g. `u64`/`u128` Move values) are preserved exactly as their decimal string
+        // instead of being silently rounded to a double by a "regular"`JSON.parse`.
+        const event = JSON.parse(line, (_key: string, value: any, context?: { source?: string }) =>
+            typeof value === 'number'
+                && !Number.isSafeInteger(value) // isn't integer in safe rage
+                && typeof context?.source === 'string' // context exists and contains a string
+                && /^-?\d+$/.test(context.source) // represents an integer (and, say, not a float)
+                ? context.source
+                : value,
+        ) as JSONTraceEvent;
         const now = Date.now();
         if (now - lastProgressTime >= 5000) {
             logger.log(`Processing trace: ${eventCount} events parsed so far...`);
@@ -1692,9 +1702,11 @@ function traceRuntimeValueFromJSON(moveValue: JSONTraceMoveValue): RuntimeValueT
     } else if (moveValue.type === 'U256' && Array.isArray(moveValue.value)) {
         let result = 0n;
         const arr: string[] = moveValue.value as unknown as string[];
+        // A u256 is serialized as its 32 little-endian bytes, so element `i` contributes 8 bits
+        // and must be shifted left by `8 * i`.
         for (let i = 0; i < arr.length; i++) {
-            const word = BigInt(arr[i]);
-            result += word << BigInt(64 * i);
+            const byte = BigInt(arr[i]);
+            result += byte << BigInt(8 * i);
         }
         return String(result);
     } else if (moveValue.type === 'Vector' && Array.isArray(moveValue.value)) {
