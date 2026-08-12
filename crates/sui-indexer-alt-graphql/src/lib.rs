@@ -413,6 +413,7 @@ pub async fn start_rpc(
                 readiness.clone(),
                 ledger_grpc.clone(),
                 watermark_task.watermarks_rx(),
+                metrics.subscription.clone(),
             );
             let caches = Arc::new(StreamedCaches::new(
                 streaming_packages,
