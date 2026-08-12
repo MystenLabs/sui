@@ -169,13 +169,13 @@ Regardless of whether you used `suiup`, Homebrew, or Chocolately, Sui stores a p
 <details>
 <summary><code>sui: command not found</code> after installation</summary>
 
-Open a **new terminal window** after installing. If the issue persists, verify that `~/.local/bin` (Linux/macOS) or the suiup install directory is in your `PATH`:
+Open a **new terminal window** after installing. If the issue persists, verify that the shell can find the `sui` binary:
 
 ```sh
-$ echo $PATH | tr ':' '\n' | grep -i sui
+$ command -v sui
 ```
 
-If no path appears, add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile (`~/.bashrc`, `~/.zshrc`, or `~/.bash_profile`), then restart your terminal.
+If no path is printed, the install directory is not in your `PATH`. Add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile (`~/.bashrc`, `~/.zshrc`, or `~/.bash_profile`), then restart your terminal.
 
 </details>
 

@@ -89,7 +89,7 @@ If you omit `read_mask`, it defaults to `*` (all fields), unless documented othe
 
 ### Field path reference {#field-path-reference}
 
-The following tables list commonly used `read_mask` field paths for each service method. Field paths follow the proto message structure and support dot notation for nested fields. Pass `*` to request all fields, or omit `read_mask` entirely (defaults to `*`). For the complete field definitions, see the [proto source](https://github.com/MystenLabs/sui-apis/tree/main/proto).
+The following tables list commonly used `read_mask` field paths for each service method. Field paths follow the proto message structure and support dot notation for nested fields. Pass `*` to request all fields. When `read_mask` is omitted, the default varies by method (for example, `GetObject` defaults to `object_id,version,digest`). Check the [proto source](https://github.com/MystenLabs/sui-apis/tree/main/proto) for method-specific defaults.
 
 #### `LedgerService.GetObject` / `BatchGetObjects`
 
@@ -98,9 +98,10 @@ The following tables list commonly used `read_mask` field paths for each service
 | `object_id` | The object's unique ID |
 | `version` | The object's version (sequence number) |
 | `digest` | The object's content digest |
-| `type` | The Move type of the object |
+| `object_type` | The Move type of the object |
 | `owner` | Ownership information (address-owned, shared, immutable, or wrapped) |
-| `content` | The object's BCS-encoded or JSON content |
+| `contents` | The object's BCS-encoded content |
+| `contents.json` | The object's content as JSON |
 | `previous_transaction` | Digest of the transaction that last modified this object |
 | `storage_rebate` | Storage rebate in MIST if the object is deleted |
 
@@ -114,7 +115,7 @@ The following tables list commonly used `read_mask` field paths for each service
 | `signatures` | Transaction signatures |
 | `transaction` | The transaction data (sender, commands, gas info) |
 | `balance_changes` | Balance changes caused by the transaction |
-| `object_changes` | Object mutations (created, mutated, deleted, wrapped, unwrapped) |
+| `objects` | Object mutations (created, mutated, deleted, wrapped, unwrapped) |
 
 #### `LedgerService.GetCheckpoint`
 
@@ -133,8 +134,8 @@ The following tables list commonly used `read_mask` field paths for each service
 | --- | --- |
 | `epoch` | The epoch number |
 | `reference_gas_price` | Reference gas price for this epoch in MIST |
-| `start_timestamp` | Epoch start timestamp |
-| `end_timestamp` | Epoch end timestamp (set after epoch ends) |
+| `start` | Epoch start timestamp |
+| `end` | Epoch end timestamp (set after epoch ends) |
 | `protocol_config` | Protocol configuration parameters |
 
 #### `SubscriptionService` streams

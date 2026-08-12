@@ -613,7 +613,7 @@ FROM watermarks
 ORDER BY pipeline;
 ```
 
-If a pipeline's `checkpoint_hi_inclusive` is significantly behind the network tip, that pipeline is lagging. Compare against the current network checkpoint (visible on [SuiVision](https://suivision.xyz/) or through `curl -s http://localhost:9184/metrics | grep highest_synced_checkpoint`).
+If a pipeline's `checkpoint_hi_inclusive` is significantly behind the network tip, that pipeline is lagging. Compare against the current network checkpoint (visible on [SuiVision](https://suivision.xyz/) or through `curl -s http://localhost:9184/metrics | grep watermark_checkpoint`).
 
 ### Diagnose a stalled pipeline
 
