@@ -1,6 +1,5 @@
 ---
 source: consensus/config/tests/parameters_test.rs
-assertion_line: 8
 expression: parameters
 ---
 leader_timeout:
@@ -40,6 +39,7 @@ tonic:
 observer:
   server_port: ~
   allowlist: []
+  quorum_gated_block_release: true
   peers: []
 internal:
   skip_equivocation_validation: false
