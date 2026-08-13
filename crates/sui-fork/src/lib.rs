@@ -98,19 +98,10 @@ pub struct ForkNode {
     resumed: bool,
 }
 
-/// Cloneable handle for driving a running fork in-process, detached from the
-/// fork's lifetime management.
-///
-/// Obtained from [`ForkNode::admin`]. The methods are the same as
-/// [`ForkNode`]'s and share its contracts; this handle exists so they survive
-/// [`ForkNode::into_service`] and can run concurrently with
-/// [`ForkNode::join`]. It does not keep the fork's tasks alive, but it does
-/// keep the state store alive: after the fork stops, checkpoint-producing
-/// calls still execute against the store and seal durable checkpoints (after
-/// a 30-second indexing wait), and [`Self::status`] keeps answering. Do not
-/// drive a fork after shutting it down.
-#[derive(Clone)]
-pub struct ForkAdmin {
+/// The one implementation of the fork's admin operations: [`ForkNode`]'s
+/// in-process methods and the forking gRPC service both delegate here, so the
+/// two surfaces cannot drift apart.
+pub(crate) struct ForkAdmin {
     context: Arc<Context>,
 }
 
@@ -280,15 +271,6 @@ impl ForkNode {
         self.resumed
     }
 
-    /// A cheap, cloneable handle carrying the in-process admin methods.
-    ///
-    /// Take one before [`Self::into_service`] to keep driving the fork after
-    /// surrendering its tasks, or to drive it concurrently with
-    /// [`Self::join`], which holds `&mut self`.
-    pub fn admin(&self) -> ForkAdmin {
-        self.admin.clone()
-    }
-
     /// Advance the fork's clock by `duration` and seal the resulting clock
     /// transaction into a checkpoint. Same contract as the forking gRPC
     /// service's `AdvanceClock`; both delegate to one implementation.
@@ -336,23 +318,20 @@ impl ForkNode {
 
     /// Surrender the fork's tasks as a [`Service`] for composition with other
     /// services (`host_service.merge(fork.into_service())`). The gRPC surface
-    /// at [`Self::rpc_address`] remains; take [`Self::admin`] first to keep
-    /// the in-process admin methods as well.
+    /// at [`Self::rpc_address`] remains, including the forking admin service;
+    /// the in-process admin methods do not survive the conversion.
     pub fn into_service(self) -> Service {
         self.service
     }
 }
 
 impl ForkAdmin {
-    /// The one implementation of the fork's admin operations: the forking
-    /// gRPC service holds a `ForkAdmin` too, so the in-process and remote
-    /// surfaces cannot drift apart.
     pub(crate) fn new(context: Arc<Context>) -> Self {
         Self { context }
     }
 
     /// See [`ForkNode::advance_clock`].
-    pub async fn advance_clock(&self, duration: Duration) -> ClockAdvanced {
+    pub(crate) async fn advance_clock(&self, duration: Duration) -> ClockAdvanced {
         let ((tx_digest, timestamp_ms), checkpoint) = self
             .context
             .run_with_new_checkpoint(|sim| {
@@ -379,7 +358,7 @@ impl ForkAdmin {
     }
 
     /// See [`ForkNode::create_checkpoint`].
-    pub async fn create_checkpoint(&self) -> CreatedCheckpoint {
+    pub(crate) async fn create_checkpoint(&self) -> CreatedCheckpoint {
         let ((), checkpoint) = self.context.run_with_new_checkpoint(|_| ()).await;
 
         info!(
@@ -392,7 +371,7 @@ impl ForkAdmin {
     }
 
     /// See [`ForkNode::status`].
-    pub async fn status(&self) -> ForkStatus {
+    pub(crate) async fn status(&self) -> ForkStatus {
         let sim = self.context.simulacrum().read().await;
         ForkStatus {
             epoch: sim.epoch_start_state().epoch(),
