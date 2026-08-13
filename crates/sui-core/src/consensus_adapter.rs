@@ -36,7 +36,6 @@ use sui_types::fp_ensure;
 use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_consensus::ConsensusTransactionKind;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKey};
-use sui_types::transaction::TransactionDataAPI;
 use tokio::sync::{Notify, Semaphore, SemaphorePermit, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
@@ -471,18 +470,7 @@ impl ConsensusAdapter {
         }
 
         // Record submitted transactions early for DoS protection
-        for transaction in &transactions {
-            if let Some(tx) = transaction.kind.as_user_transaction() {
-                let amplification_factor = (tx.data().transaction_data().gas_price()
-                    / epoch_store.reference_gas_price().max(1))
-                .max(1);
-                epoch_store.submitted_transaction_cache.record_submitted_tx(
-                    tx.digest(),
-                    amplification_factor as u32,
-                    submitter_client_addr,
-                );
-            }
-        }
+        epoch_store.record_submitted_user_transactions(&transactions, submitter_client_addr);
 
         // Current code path ensures:
         // - If transactions.len() > 1, it is a soft bundle. System transactions should have been submitted individually.

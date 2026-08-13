@@ -4,6 +4,7 @@
 use dashmap::DashMap;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::future::Future;
+use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -1424,6 +1425,31 @@ impl AuthorityPerEpochStore {
 
     pub fn reference_gas_price(&self) -> u64 {
         self.epoch_start_state().reference_gas_price()
+    }
+
+    /// Records user transactions in the submitted-transaction cache for gas-price-based
+    /// DoS accounting, shared by the push (`ConsensusAdapter`) and pull (consensus
+    /// transaction pool) submission paths. Paying k * RGP allows a transaction to appear
+    /// up to k times in consensus output; beyond that, the consensus handler's
+    /// `increment_submission_count` charges spam weight against the client addresses
+    /// recorded here.
+    pub(crate) fn record_submitted_user_transactions(
+        &self,
+        transactions: &[ConsensusTransaction],
+        submitter_client_addr: Option<IpAddr>,
+    ) {
+        for transaction in transactions {
+            if let Some(tx) = transaction.kind.as_user_transaction() {
+                let amplification_factor = (tx.data().transaction_data().gas_price()
+                    / self.reference_gas_price().max(1))
+                .max(1);
+                self.submitted_transaction_cache.record_submitted_tx(
+                    tx.digest(),
+                    amplification_factor as u32,
+                    submitter_client_addr,
+                );
+            }
+        }
     }
 
     pub fn protocol_version(&self) -> ProtocolVersion {

@@ -403,7 +403,8 @@ impl ValidatorServiceMetrics {
     }
 }
 
-/// Where `handle_submit_transaction` routes a request.
+/// Per-request routing decision: records where `handle_submit_transaction` sends one
+/// particular request.
 #[derive(Clone, Copy)]
 enum UserSubmissionMode {
     /// Admit via the gas-price priority queue.
@@ -417,6 +418,9 @@ enum UserSubmissionMode {
     Direct,
 }
 
+/// The user-transaction submission infrastructure this validator runs, fixed at
+/// startup from `NodeConfig`. Contrast with [`UserSubmissionMode`], the
+/// per-request routing decision derived from this configuration.
 #[derive(Clone)]
 pub enum UserSubmissionPath {
     Direct,
@@ -874,7 +878,9 @@ impl ValidatorService {
             }
 
             // Use the pre-queue per-tx consensus overload reject on the direct
-            // submission path (queue off, failover, or ping).
+            // submission path (queue off, failover, or ping). Skipped in pool
+            // mode: the check reads the ConsensusAdapter's inflight-submission buffers,
+            // which are not relevant when block contents are pulled by consensus.
             if matches!(submit_mode, UserSubmissionMode::Direct)
                 && !matches!(&self.user_submission_path, UserSubmissionPath::Pool(_))
                 && let Err(error) = self.consensus_adapter.check_consensus_overload()
@@ -1406,25 +1412,10 @@ impl ValidatorService {
 
                 let mut receivers = Vec::with_capacity(tx_groups.len());
                 for txns in tx_groups {
-                    // Gas-price-based DoS accounting, mirroring the recording in
-                    // ConsensusAdapter::submit_and_wait_inner, which pull-mode user
-                    // transactions bypass. Paying k * RGP allows a transaction to appear
-                    // up to k times in consensus output; beyond that, the consensus
-                    // handler's increment_submission_count charges spam weight against
-                    // the client addresses recorded here.
-                    for transaction in &txns {
-                        if let Some(transaction) = transaction.kind.as_user_transaction() {
-                            let amplification_factor =
-                                (transaction.data().transaction_data().gas_price()
-                                    / epoch_store.reference_gas_price().max(1))
-                                .max(1);
-                            epoch_store.submitted_transaction_cache.record_submitted_tx(
-                                transaction.digest(),
-                                amplification_factor as u32,
-                                submitter_client_addr,
-                            );
-                        }
-                    }
+                    // Gas-price-based DoS accounting; pull-mode user transactions bypass
+                    // the recording in ConsensusAdapter::submit_and_wait_inner, so record
+                    // here instead.
+                    epoch_store.record_submitted_user_transactions(&txns, submitter_client_addr);
                     let gas_price = Self::extract_gas_price(&txns);
                     let result = context
                         .try_insert(epoch_store.epoch(), gas_price, txns)

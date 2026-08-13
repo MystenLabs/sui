@@ -552,6 +552,9 @@ impl ConsensusTransactionPool {
     /// Enforces per-transaction and per-block size limits at insert time, which
     /// guarantees every admitted entry fits an empty proposal — `take()` can
     /// therefore never stall on an unfittable head-of-queue entry.
+    ///
+    /// Mirrors the checks in `consensus_core::TransactionClient::submit`, which
+    /// pool submissions bypass (the proposer drains the pool directly).
     fn serialize_and_validate(
         &self,
         transactions: &[ConsensusTransaction],
