@@ -1535,6 +1535,80 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
+    async fn severe_latency_with_positive_server_feedback_recovers_at_min_qps_within_deadline() {
+        const LEARNED_BASELINE: Duration = Duration::from_millis(200);
+        const STABLE_RPC_LATENCY: Duration = Duration::from_millis(1_200);
+        const MAX_COMPLETED_RPCS: u64 = 120;
+        const RECOVERY_DEADLINE: Duration = Duration::from_secs(20 * 60);
+
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        controller
+            .state
+            .lock()
+            .expect("flow-control state mutex poisoned")
+            .baseline_write_latency_micros = Some(LEARNED_BASELINE.as_micros() as f64);
+        set_effective_qps_fixture(&controller, MIN_QPS);
+
+        let affirmative_feedback = rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD);
+        let deadline = Instant::now() + RECOVERY_DEADLINE;
+        let mut completed_rpcs = 0;
+        let mut positive_server_feedbacks = 0;
+        let mut saw_recorded_latency_sample = false;
+        let mut saw_severe_feedback = false;
+
+        while controller.effective_qps() <= MIN_QPS
+            && completed_rpcs < MAX_COMPLETED_RPCS
+            && Instant::now() < deadline
+        {
+            let completed_rpc = tokio::time::timeout_at(deadline, async {
+                let admission = controller.admit_rpc().await;
+                tokio::time::advance(STABLE_RPC_LATENCY).await;
+                admission.on_server_feedback(Some(&affirmative_feedback));
+                admission.complete();
+                (
+                    latency_samples(&controller),
+                    pending_latency_feedback(&controller),
+                )
+            })
+            .await;
+            let Ok((recorded_samples, latency_feedback)) = completed_rpc else {
+                break;
+            };
+
+            completed_rpcs += 1;
+            positive_server_feedbacks += 1;
+            saw_recorded_latency_sample |= recorded_samples > 0;
+            saw_severe_feedback |= latency_feedback == Some(LatencyFeedback::Decrease);
+        }
+
+        let effective_qps = controller.effective_qps();
+        let final_baseline_micros = baseline_micros(&controller);
+        if effective_qps <= MIN_QPS {
+            assert!(
+                completed_rpcs >= MIN_WINDOW_SAMPLES && saw_recorded_latency_sample,
+                "missing completed latency samples under sustained demand; completed_rpcs={completed_rpcs}, saw_recorded_latency_sample={saw_recorded_latency_sample}"
+            );
+            assert!(
+                positive_server_feedbacks >= MIN_WINDOW_SAMPLES,
+                "missing repeated positive server feedback; positive_server_feedbacks={positive_server_feedbacks}, completed_rpcs={completed_rpcs}"
+            );
+            assert!(
+                saw_severe_feedback,
+                "expected stable 1.2 second RPC latency to exercise Severe recovery from a 200 ms baseline"
+            );
+            assert_ne!(
+                final_baseline_micros,
+                Some(LEARNED_BASELINE.as_micros() as f64),
+                "latency baseline remained unchanged despite completed Severe samples and repeated positive server feedback; completed_rpcs={completed_rpcs}, positive_server_feedbacks={positive_server_feedbacks}"
+            );
+        }
+        assert!(
+            effective_qps > MIN_QPS,
+            "no growth above {MIN_QPS} QPS within 20 virtual minutes; completed_rpcs={completed_rpcs}, positive_server_feedbacks={positive_server_feedbacks}, saw_recorded_latency_sample={saw_recorded_latency_sample}, saw_severe_feedback={saw_severe_feedback}, baseline_micros={final_baseline_micros:?}, effective_qps={effective_qps}"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn late_feedback_starts_a_new_observation_after_server_period() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
         let period = Duration::from_secs(1);
