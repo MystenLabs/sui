@@ -838,6 +838,17 @@ mod tests {
         }
     }
 
+    async fn complete_rpc_with_latency(
+        controller: &Arc<BatchWriteFlowController>,
+        rpc_latency: Duration,
+    ) -> (Instant, ControllerSnapshot) {
+        let admission = controller.admit_rpc().await;
+        let admission_snapshot = (Instant::now(), observation_snapshot(controller));
+        tokio::time::advance(rpc_latency).await;
+        admission.complete();
+        admission_snapshot
+    }
+
     fn learn_healthy_baseline(controller: &BatchWriteFlowController) {
         make_latency_evaluation_ready(controller);
         record_latency_samples(controller, MIN_WINDOW_SAMPLES, Duration::from_millis(20));
@@ -1193,6 +1204,89 @@ mod tests {
                 .expect("flow-control state mutex poisoned")
                 .observation
                 .is_none()
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn min_qps_recovers_under_sustained_healthy_load() {
+        const STABLE_RPC_LATENCY: Duration = Duration::from_millis(200);
+        const MAX_COMPLETED_RPCS: u64 = 30;
+        const MAX_RECOVERY_TIME: Duration = Duration::from_secs(5 * 60);
+
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        // Matching the safe baseline isolates feedback liveness from stale-baseline adaptation.
+        controller
+            .state
+            .lock()
+            .expect("flow-control state mutex poisoned")
+            .baseline_write_latency_micros = Some(200_000.0);
+        set_effective_qps_fixture(&controller, MIN_QPS);
+
+        let simulation_started_at = Instant::now();
+        let deadline = simulation_started_at + MAX_RECOVERY_TIME;
+        let mut completed_rpcs = 0;
+        let mut saw_growth_feedback = false;
+        let mut saw_growth_discarded = false;
+
+        while controller.effective_qps() <= MIN_QPS
+            && completed_rpcs < MAX_COMPLETED_RPCS
+            && Instant::now() < deadline
+        {
+            let pre_rpc_snapshot = observation_snapshot(&controller);
+            let zero_start_growth_observation_started_at = if pre_rpc_snapshot.latency_feedback
+                == Some(LatencyFeedback::Increase)
+            {
+                saw_growth_feedback = true;
+                pre_rpc_snapshot
+                    .observation
+                    .and_then(|(started_at, rpc_starts)| (rpc_starts == 0).then_some(started_at))
+            } else {
+                None
+            };
+
+            let completed_rpc = tokio::time::timeout_at(
+                deadline,
+                complete_rpc_with_latency(&controller, STABLE_RPC_LATENCY),
+            )
+            .await;
+            let Ok((admitted_at, admission_snapshot)) = completed_rpc else {
+                break;
+            };
+            completed_rpcs += 1;
+
+            if zero_start_growth_observation_started_at.is_some_and(|observation_started_at| {
+                admitted_at.saturating_duration_since(observation_started_at) >= OBSERVATION_WINDOW
+                    && admission_snapshot.effective_qps <= MIN_QPS
+                    && admission_snapshot.latency_feedback != Some(LatencyFeedback::Increase)
+                    && admission_snapshot.observation.is_none()
+            }) {
+                saw_growth_discarded = true;
+            }
+
+            let post_completion_snapshot = observation_snapshot(&controller);
+            if post_completion_snapshot.latency_feedback == Some(LatencyFeedback::Increase) {
+                saw_growth_feedback = true;
+            }
+        }
+
+        let effective_qps = controller.effective_qps();
+        if effective_qps <= MIN_QPS {
+            assert!(
+                completed_rpcs >= MIN_WINDOW_SAMPLES,
+                "expected at least {MIN_WINDOW_SAMPLES} completed RPCs, got {completed_rpcs}"
+            );
+            assert!(
+                saw_growth_feedback,
+                "expected healthy latency to authorize growth"
+            );
+            assert!(
+                saw_growth_discarded,
+                "expected sparse admission to discard authorized growth"
+            );
+        }
+        assert!(
+            effective_qps > MIN_QPS,
+            "expected recovery above {MIN_QPS} QPS after sustained healthy demand; completed_rpcs={completed_rpcs}, saw_growth_feedback={saw_growth_feedback}, saw_growth_discarded={saw_growth_discarded}, effective_qps={effective_qps}"
         );
     }
 
