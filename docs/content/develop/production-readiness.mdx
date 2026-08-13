@@ -51,7 +51,6 @@ answer: >-
 
 Production readiness is the process of verifying that a Sui application is secure, correctly configured, and operationally prepared before deploying to [Mainnet](/develop/sui-architecture/networks). Moving from Testnet to Mainnet introduces real financial risk, so each area below requires deliberate verification rather than assumption.
 
-This page consolidates the production-relevant guidance from across the Sui documentation into a single checklist. Each item links to the detailed documentation for that topic.
 
 ## Smart contract security
 
@@ -79,7 +78,7 @@ Decide and configure your upgrade strategy before publishing. This decision is d
 
 - [ ] **Choose an upgrade policy.** Decide between keeping the package upgradeable (with a governed `UpgradeCap`) or making it [immutable](/develop/publish-upgrade-packages/upgrade) (calling `make_immutable`). Immutability provides the strongest guarantee to users but prevents all future changes.
 - [ ] **Custom upgrade policy.** If keeping the package upgradeable, consider a [custom upgrade policy](/develop/publish-upgrade-packages/custom-policies) that enforces constraints such as time delays between authorization and execution. This provides a review window for stakeholders.
-- [ ] **UpgradeCap governance.** Store the `UpgradeCap` in a multisig address with a higher threshold than operational capabilities. A package upgrade affects all users, so it warrants the highest approval bar.
+- [ ] **`UpgradeCap` governance.** Store the `UpgradeCap` in a multisig address with a higher threshold than operational capabilities. A package upgrade affects all users, so it warrants the highest approval bar.
 - [ ] **Test the upgrade path.** Publish your package to Testnet, create representative state (objects, balances, configurations), publish an upgrade, and verify that existing state works correctly with the new code. Learn more about [upgrading packages](/develop/publish-upgrade-packages/upgrade).
 - [ ] **Versioning strategy.** If your package uses [versioning](/develop/publish-upgrade-packages/versioning), verify that version checks work correctly and that the upgrade procedure increments the version as expected.
 
@@ -87,7 +86,6 @@ Decide and configure your upgrade strategy before publishing. This decision is d
 
 - [ ] **Gas budget estimation.** Run critical transaction paths with dry run to measure actual gas costs. Set gas budgets with sufficient margin for variable costs (shared object contention, dynamic field depth). Learn more about [gas in Sui](/develop/transaction-payment/gas-in-sui).
 - [ ] **Sponsored transactions.** If using [gas sponsorship](/develop/transaction-payment/sponsor-txn), verify that the gas station has sufficient SUI balance and rate limiting appropriate for your expected transaction volume.
-- [ ] **Coin management.** If your application holds SUI for gas, supply multiple SUI coins as gas payment to trigger automatic [gas smashing](/develop/transaction-payment/gas-smashing), which consolidates them into a single coin and avoids transaction failures from fragmented balances.
 
 ## Infrastructure
 
