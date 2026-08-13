@@ -30,7 +30,7 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use tokio::net::TcpListener;
 use tracing::info;
 
-use crate::Node;
+use crate::Network;
 use crate::context::Context;
 use crate::seed::SeedInput;
 use crate::startup;
@@ -51,7 +51,7 @@ pub const DEFAULT_RPC_ADDR: &str = "127.0.0.1:9000";
 pub struct StartArgs {
     /// Network to fork from: mainnet, testnet, devnet, or a custom GraphQL URL.
     #[arg(long, default_value_t = Self::default().network)]
-    pub network: Node,
+    pub network: Network,
 
     /// Checkpoint sequence number to fork at. When omitted, the fork found in the data directory
     /// is resumed if there is one to inspect; otherwise the network's latest checkpoint is used.
@@ -413,7 +413,7 @@ impl ForkAdmin {
 impl Default for StartArgs {
     fn default() -> Self {
         Self {
-            network: Node::Mainnet,
+            network: Network::Mainnet,
             checkpoint: None,
             data_dir: None,
             addresses: Vec::new(),

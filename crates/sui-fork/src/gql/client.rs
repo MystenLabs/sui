@@ -19,7 +19,7 @@ use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 
 use crate::CheckpointRead;
-use crate::Node;
+use crate::Network;
 use crate::ObjectKey;
 use crate::ObjectRead;
 use crate::TransactionInfo;
@@ -98,19 +98,19 @@ macro_rules! block_on {
 #[derive(Debug, Clone)]
 pub struct GraphQLClient {
     client: reqwest::Client,
-    node: Node,
+    network: Network,
     rpc: reqwest::Url,
     version: String,
 }
 
 impl GraphQLClient {
     /// Create a new GraphQL client
-    pub fn new(node: Node, version: &str) -> Result<Self, Error> {
-        let rpc = reqwest::Url::parse(node.gql_url())
-            .with_context(|| format!("invalid GraphQL URL '{}'", node.gql_url()))?;
+    pub fn new(network: Network, version: &str) -> Result<Self, Error> {
+        let rpc = reqwest::Url::parse(network.gql_url())
+            .with_context(|| format!("invalid GraphQL URL '{}'", network.gql_url()))?;
         Ok(Self {
             client: reqwest::Client::new(),
-            node,
+            network,
             rpc,
             version: version.to_string(),
         })
@@ -150,11 +150,11 @@ impl GraphQLClient {
     }
 
     pub(crate) fn chain(&self) -> Chain {
-        match self.node {
-            Node::Mainnet => Chain::Mainnet,
-            Node::Testnet => Chain::Testnet,
-            Node::Devnet => Chain::Unknown,
-            Node::Custom(_) => Chain::Unknown,
+        match self.network {
+            Network::Mainnet => Chain::Mainnet,
+            Network::Testnet => Chain::Testnet,
+            Network::Devnet => Chain::Unknown,
+            Network::Custom(_) => Chain::Unknown,
         }
     }
 }
@@ -282,7 +282,7 @@ mod tests {
     use crate::VersionQuery;
 
     fn mock_store(server: &MockServer) -> GraphQLClient {
-        GraphQLClient::new(Node::Custom(server.uri()), "test-version").expect("store should build")
+        GraphQLClient::new(Network::Custom(server.uri()), "test-version").expect("store should build")
     }
 
     fn checkpoint_response_body(

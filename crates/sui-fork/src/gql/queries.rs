@@ -411,7 +411,7 @@ pub(crate) mod address_owned_objects_query {
         use wiremock::matchers::path;
 
         use super::*;
-        use crate::Node;
+        use crate::Network;
 
         fn address_objects_response(
             nodes: Vec<serde_json::Value>,
@@ -517,7 +517,7 @@ pub(crate) mod address_owned_objects_query {
                 .mount(&server)
                 .await;
 
-            let gql = GraphQLClient::new(Node::Custom(server.uri()), "test")
+            let gql = GraphQLClient::new(Network::Custom(server.uri()), "test")
                 .expect("graphql client should build");
             let entries = query(owner, 10, &gql)
                 .await
@@ -556,7 +556,7 @@ pub(crate) mod address_owned_objects_query {
                 .respond_with(ResponseTemplate::new(200).set_body_json(missing_address_response()))
                 .mount(&server)
                 .await;
-            let gql = GraphQLClient::new(Node::Custom(server.uri()), "test")
+            let gql = GraphQLClient::new(Network::Custom(server.uri()), "test")
                 .expect("graphql client should build");
 
             assert!(
@@ -572,7 +572,7 @@ pub(crate) mod address_owned_objects_query {
                 .respond_with(ResponseTemplate::new(200).set_body_json(missing_objects_response()))
                 .mount(&server)
                 .await;
-            let gql = GraphQLClient::new(Node::Custom(server.uri()), "test")
+            let gql = GraphQLClient::new(Network::Custom(server.uri()), "test")
                 .expect("graphql client should build");
 
             assert!(
@@ -1019,7 +1019,7 @@ pub(crate) mod object_seed_query {
         use wiremock::matchers::path;
 
         use super::*;
-        use crate::Node;
+        use crate::Network;
 
         fn object_seed_response(nodes: Vec<serde_json::Value>) -> serde_json::Value {
             serde_json::json!({
@@ -1126,7 +1126,7 @@ pub(crate) mod object_seed_query {
                 .mount(&server)
                 .await;
 
-            let gql = GraphQLClient::new(Node::Custom(server.uri()), "test")
+            let gql = GraphQLClient::new(Network::Custom(server.uri()), "test")
                 .expect("graphql client should build");
             let entries = query(&[first.id(), missing, second.id()], 10, &gql)
                 .await
@@ -1214,7 +1214,7 @@ pub(crate) mod object_seed_query {
                     .mount(&server)
                     .await;
 
-                let gql = GraphQLClient::new(Node::Custom(server.uri()), "test")
+                let gql = GraphQLClient::new(Network::Custom(server.uri()), "test")
                     .expect("graphql client should build");
                 let err = query(&[object.id()], 10, &gql)
                     .await

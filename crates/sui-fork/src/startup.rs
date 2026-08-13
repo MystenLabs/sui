@@ -37,7 +37,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 
 use crate::CheckpointRead;
 use crate::GraphQLClient;
-use crate::Node;
+use crate::Network;
 use crate::context::Context;
 use crate::fork::ForkAdmin;
 use crate::metadata::MetadataStore;
@@ -84,13 +84,13 @@ pub(crate) struct ResolvedStartCheckpoint {
 /// latest. Default roots cannot be inspected without a checkpoint because their path contains the
 /// checkpoint.
 pub(crate) fn resolve_start_checkpoint_from_local(
-    node: &Node,
+    network: &Network,
     requested_checkpoint: Option<CheckpointSequenceNumber>,
     data_dir: Option<&Path>,
 ) -> Result<ResolvedStartCheckpoint> {
     let local = match (data_dir, requested_checkpoint) {
         (Some(data_dir), _) => Some(MetadataStore::new_with_root(data_dir.to_path_buf())),
-        (None, Some(checkpoint)) => Some(MetadataStore::new(node, checkpoint, None)?),
+        (None, Some(checkpoint)) => Some(MetadataStore::new(network, checkpoint, None)?),
         (None, None) => None,
     };
 
@@ -103,7 +103,7 @@ pub(crate) fn resolve_start_checkpoint_from_local(
 
     if local.seed_manifest_exists() {
         let manifest = local.read_seed_manifest()?;
-        ensure_seed_manifest_matches(&manifest, &node.network_name(), requested_checkpoint)?;
+        ensure_seed_manifest_matches(&manifest, &network.network_name(), requested_checkpoint)?;
         return Ok(ResolvedStartCheckpoint {
             checkpoint: Some(manifest.checkpoint),
             resuming: true,
@@ -112,7 +112,7 @@ pub(crate) fn resolve_start_checkpoint_from_local(
 
     if let Some(checkpoint) = ServiceManager::existing_forked_checkpoint(
         local.root(),
-        &node.network_name(),
+        &network.network_name(),
         requested_checkpoint,
     )? {
         return Ok(ResolvedStartCheckpoint {
@@ -142,7 +142,7 @@ pub(crate) fn resolve_start_checkpoint_from_local(
 /// `data_dir` is the root folder where the fork state is persisted. If `None`, a default path is
 /// used. See the [`MetadataStore`] docs for details.
 pub(crate) async fn initialize(
-    node: Node,
+    network: Network,
     requested_checkpoint: Option<CheckpointSequenceNumber>,
     version: &str,
     data_dir: Option<PathBuf>,
@@ -151,9 +151,9 @@ pub(crate) async fn initialize(
 ) -> Result<ForkParts> {
     // 1. Resolve the fork point, prepare metadata and GraphQL, then open the RPC store before
     //    constructing ForkStore.
-    let gql = GraphQLClient::new(node.clone(), version)?;
+    let gql = GraphQLClient::new(network.clone(), version)?;
     let resolved =
-        resolve_start_checkpoint_from_local(&node, requested_checkpoint, data_dir.as_deref())?;
+        resolve_start_checkpoint_from_local(&network, requested_checkpoint, data_dir.as_deref())?;
     let forked_at_checkpoint = match resolved.checkpoint {
         Some(checkpoint) => checkpoint,
         None => gql
@@ -162,14 +162,14 @@ pub(crate) async fn initialize(
             .with_context(|| {
                 format!(
                     "failed to get latest checkpoint for {}",
-                    node.network_name()
+                    network.network_name()
                 )
             })?,
     };
     let chain_identifier = gql.chain();
-    let local = MetadataStore::new(&node, forked_at_checkpoint, data_dir)?;
+    let local = MetadataStore::new(&network, forked_at_checkpoint, data_dir)?;
     let data_dir = local.root().to_path_buf();
-    let network_name = node.network_name();
+    let network_name = network.network_name();
     crate::seed::ensure_seed_policy(&local, &seed_input)?;
 
     // 2. Fetch the startup checkpoint, open the RPC store using its chain identity,
@@ -223,7 +223,7 @@ pub(crate) async fn initialize(
         .with_chain_start_timestamp_ms(base_checkpoint.timestamp_ms)
         .deterministic_committee_size(NonZeroUsize::MIN)
         .with_protocol_version(ProtocolVersion::new(protocol_version))
-        .with_chain_override(node.chain())
+        .with_chain_override(network.chain())
         .build();
 
     // 5. Override validators in system state with local keys from config.
@@ -402,7 +402,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         write_manifest(temp.path(), "mainnet", 42);
 
-        let resolved = resolve_start_checkpoint_from_local(&Node::Mainnet, None, Some(temp.path()))
+        let resolved = resolve_start_checkpoint_from_local(&Network::Mainnet, None, Some(temp.path()))
             .expect("checkpoint resolution should not fail");
 
         assert_eq!(
@@ -419,7 +419,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         write_manifest(temp.path(), "mainnet", 42);
 
-        let err = resolve_start_checkpoint_from_local(&Node::Mainnet, Some(43), Some(temp.path()))
+        let err = resolve_start_checkpoint_from_local(&Network::Mainnet, Some(43), Some(temp.path()))
             .expect_err("checkpoint mismatch should fail");
 
         assert!(
@@ -433,7 +433,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         write_manifest(temp.path(), "testnet", 42);
 
-        let err = resolve_start_checkpoint_from_local(&Node::Mainnet, None, Some(temp.path()))
+        let err = resolve_start_checkpoint_from_local(&Network::Mainnet, None, Some(temp.path()))
             .expect_err("network mismatch should fail");
 
         assert!(err.to_string().contains("does not match requested network"));
@@ -450,7 +450,7 @@ mod tests {
         )
         .expect("fork metadata should write");
 
-        let resolved = resolve_start_checkpoint_from_local(&Node::Mainnet, None, Some(temp.path()))
+        let resolved = resolve_start_checkpoint_from_local(&Network::Mainnet, None, Some(temp.path()))
             .expect("checkpoint resolution should not fail");
 
         assert_eq!(
@@ -466,7 +466,7 @@ mod tests {
     fn resolve_start_checkpoint_returns_none_for_fresh_start() {
         let temp = tempfile::tempdir().expect("tempdir");
 
-        let resolved = resolve_start_checkpoint_from_local(&Node::Mainnet, None, Some(temp.path()))
+        let resolved = resolve_start_checkpoint_from_local(&Network::Mainnet, None, Some(temp.path()))
             .expect("checkpoint resolution should not fail");
 
         assert_eq!(

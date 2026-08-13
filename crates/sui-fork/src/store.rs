@@ -525,7 +525,7 @@ impl ForkStore {
     #[cfg(test)]
     pub(crate) fn new_for_testing(root: std::path::PathBuf, local_store: LocalStore) -> Self {
         let gql = GraphQLClient::new(
-            crate::Node::Custom("http://localhost:1".to_string()),
+            crate::Network::Custom("http://localhost:1".to_string()),
             "test",
         )
         .expect("graphql store with localhost url should construct");
@@ -542,7 +542,7 @@ impl ForkStore {
         forked_at_checkpoint: CheckpointSequenceNumber,
         local_store: LocalStore,
     ) -> Self {
-        let gql = GraphQLClient::new(crate::Node::Custom(gql_url), "test")
+        let gql = GraphQLClient::new(crate::Network::Custom(gql_url), "test")
             .expect("graphql store with custom url should construct");
         let metadata = MetadataStore::new_with_root(root);
         Self::from_parts(forked_at_checkpoint, gql, metadata, local_store)
