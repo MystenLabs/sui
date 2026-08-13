@@ -16,8 +16,12 @@ fn env_value(vars: &BTreeMap<&'static str, &'static str>, key: &str) -> Option<O
 #[test]
 fn explicit_data_dir_is_used_as_store_root() {
     let root = tempfile::tempdir().expect("tempdir");
-    let store = MetadataStore::new(&crate::Network::Mainnet, 42, Some(root.path().to_path_buf()))
-        .expect("store should construct");
+    let store = MetadataStore::new(
+        &crate::Network::Mainnet,
+        42,
+        Some(root.path().to_path_buf()),
+    )
+    .expect("store should construct");
 
     assert_eq!(store.root(), root.path());
     assert_eq!(

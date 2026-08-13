@@ -14,7 +14,7 @@ use tonic::Request;
 use tonic::Response;
 use tonic::Status;
 
-use crate::fork::ForkAdmin;
+use crate::ForkAdmin;
 use crate::proto::forking::AdvanceCheckpointRequest;
 use crate::proto::forking::AdvanceCheckpointResponse;
 use crate::proto::forking::AdvanceClockRequest;

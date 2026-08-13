@@ -36,10 +36,10 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 
 use crate::CheckpointRead;
+use crate::ForkAdmin;
 use crate::GraphQLClient;
 use crate::Network;
 use crate::context::Context;
-use crate::fork::ForkAdmin;
 use crate::metadata::MetadataStore;
 use crate::proto::forking::forking_service_server::ForkingServiceServer;
 use crate::rpc::executor::ForkedTransactionExecutor;
@@ -402,8 +402,9 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         write_manifest(temp.path(), "mainnet", 42);
 
-        let resolved = resolve_start_checkpoint_from_local(&Network::Mainnet, None, Some(temp.path()))
-            .expect("checkpoint resolution should not fail");
+        let resolved =
+            resolve_start_checkpoint_from_local(&Network::Mainnet, None, Some(temp.path()))
+                .expect("checkpoint resolution should not fail");
 
         assert_eq!(
             resolved,
@@ -419,8 +420,9 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         write_manifest(temp.path(), "mainnet", 42);
 
-        let err = resolve_start_checkpoint_from_local(&Network::Mainnet, Some(43), Some(temp.path()))
-            .expect_err("checkpoint mismatch should fail");
+        let err =
+            resolve_start_checkpoint_from_local(&Network::Mainnet, Some(43), Some(temp.path()))
+                .expect_err("checkpoint mismatch should fail");
 
         assert!(
             err.to_string()
@@ -450,8 +452,9 @@ mod tests {
         )
         .expect("fork metadata should write");
 
-        let resolved = resolve_start_checkpoint_from_local(&Network::Mainnet, None, Some(temp.path()))
-            .expect("checkpoint resolution should not fail");
+        let resolved =
+            resolve_start_checkpoint_from_local(&Network::Mainnet, None, Some(temp.path()))
+                .expect("checkpoint resolution should not fail");
 
         assert_eq!(
             resolved,
@@ -466,8 +469,9 @@ mod tests {
     fn resolve_start_checkpoint_returns_none_for_fresh_start() {
         let temp = tempfile::tempdir().expect("tempdir");
 
-        let resolved = resolve_start_checkpoint_from_local(&Network::Mainnet, None, Some(temp.path()))
-            .expect("checkpoint resolution should not fail");
+        let resolved =
+            resolve_start_checkpoint_from_local(&Network::Mainnet, None, Some(temp.path()))
+                .expect("checkpoint resolution should not fail");
 
         assert_eq!(
             resolved,

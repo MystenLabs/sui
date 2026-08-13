@@ -282,7 +282,8 @@ mod tests {
     use crate::VersionQuery;
 
     fn mock_store(server: &MockServer) -> GraphQLClient {
-        GraphQLClient::new(Network::Custom(server.uri()), "test-version").expect("store should build")
+        GraphQLClient::new(Network::Custom(server.uri()), "test-version")
+            .expect("store should build")
     }
 
     fn checkpoint_response_body(

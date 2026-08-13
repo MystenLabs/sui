@@ -15,7 +15,7 @@ use simulacrum::Simulacrum;
 use sui_futures::service::Service;
 use sui_types::full_checkpoint_content::Checkpoint;
 
-use crate::fork::CreatedCheckpoint;
+use crate::CreatedCheckpoint;
 use crate::services::ServiceManager;
 use crate::store::ForkStore;
 
