@@ -114,9 +114,7 @@ pub(crate) async fn list_transactions(
     let tx_range = resolve_tx_range(&client, cp_range, &options)
         .instrument(debug_span!("resolve_tx_range"))
         .await?;
-    let exhaustion = tx_range.edges.terminal.exhaustion;
-    let range_end_checkpoint = tx_range.edges.terminal.end_checkpoint;
-    let range_end_position = tx_range.edges.terminal.end_coordinate;
+    let terminal = tx_range.edges.terminal;
     let entry_checkpoint = tx_range.edges.entry_checkpoint;
     let tx_range = tx_range.bounds.to_range();
 
@@ -132,10 +130,10 @@ pub(crate) async fn list_transactions(
         // no checkpoint coverage.
         let response = range_end_response(
             &options,
-            exhaustion,
+            terminal.exhaustion,
             Position::Transactions {
-                checkpoint: range_end_checkpoint,
-                tx_seq: range_end_position,
+                checkpoint: terminal.end_checkpoint,
+                tx_seq: terminal.end_coordinate,
             },
             None,
             true,
@@ -282,10 +280,10 @@ pub(crate) async fn list_transactions(
             else {
                 let (response, reason) = range_end_response(
                     &options,
-                    exhaustion,
+                    terminal.exhaustion,
                     Position::Transactions {
-                        checkpoint: range_end_checkpoint,
-                        tx_seq: range_end_position,
+                        checkpoint: terminal.end_checkpoint,
+                        tx_seq: terminal.end_coordinate,
                     },
                     covered_checkpoint_bound,
                     false,

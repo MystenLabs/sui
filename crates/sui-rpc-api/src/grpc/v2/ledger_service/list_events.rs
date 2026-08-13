@@ -7,7 +7,6 @@ use std::ops::Bound;
 use std::time::Instant;
 
 use crate::ledger_history::query_options::IntraTxCoordinate;
-use crate::ledger_history::query_options::RangeExhaustion;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 use mysten_common::ZipDebugEqIteratorExt;
@@ -32,6 +31,7 @@ use crate::ledger_history::query_options::IntraTxScanBounds;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::ResolvedCheckpointRange;
 use crate::ledger_history::query_options::ResolvedScan;
+use crate::ledger_history::query_options::TerminalRecord;
 use crate::metrics::ListRequestMetrics;
 use crate::metrics::ListStreamMetrics;
 use crate::read_mask_defaults;
@@ -245,9 +245,7 @@ enum EventScanState {
         // tx may carry zero events) to the endpoint's configured `max_limit_items`
         // rows per request.
         row_scan_budget: usize,
-        exhaustion: RangeExhaustion,
-        end_checkpoint: u64,
-        end_position: IntraTxCoordinate,
+        terminal: TerminalRecord<IntraTxCoordinate>,
     },
     Filtered {
         query: BitmapQuery,
@@ -255,9 +253,7 @@ enum EventScanState {
         /// Checkpoint containing the effective interval's first event.
         entry_checkpoint: u64,
         pending_bucket: Option<PendingBitmapBucket>,
-        exhaustion: RangeExhaustion,
-        end_checkpoint: u64,
-        end_position: IntraTxCoordinate,
+        terminal: TerminalRecord<IntraTxCoordinate>,
     },
 }
 
@@ -320,17 +316,13 @@ fn next_event_chunk(
                     bounds: Some(bounds),
                     entry_checkpoint: event_range.edges.entry_checkpoint,
                     pending_bucket: None,
-                    exhaustion: event_range.edges.terminal.exhaustion,
-                    end_checkpoint: event_range.edges.terminal.end_checkpoint,
-                    end_position: event_range.edges.terminal.end_coordinate,
+                    terminal: event_range.edges.terminal,
                 },
                 None => EventScanState::Unfiltered {
                     bounds,
                     entry_checkpoint: event_range.edges.entry_checkpoint,
                     row_scan_budget: unfiltered_row_scan_budget,
-                    exhaustion: event_range.edges.terminal.exhaustion,
-                    end_checkpoint: event_range.edges.terminal.end_checkpoint,
-                    end_position: event_range.edges.terminal.end_coordinate,
+                    terminal: event_range.edges.terminal,
                 },
             };
             return next_event_chunk(
@@ -351,9 +343,7 @@ fn next_event_chunk(
             bounds,
             entry_checkpoint,
             row_scan_budget,
-            exhaustion,
-            end_checkpoint,
-            end_position,
+            terminal,
         } => {
             if cancel.is_cancelled() {
                 return Err(cancelled());
@@ -380,9 +370,7 @@ fn next_event_chunk(
                     bounds,
                     entry_checkpoint,
                     row_scan_budget: remaining_row_scan_budget,
-                    exhaustion,
-                    end_checkpoint,
-                    end_position,
+                    terminal,
                 })
             };
             let frontier = if scan.row_limit_reached {
@@ -413,13 +401,13 @@ fn next_event_chunk(
                 None
             };
             let terminal_position = Position::Events {
-                checkpoint: end_checkpoint,
-                tx_seq: end_position.tx_seq,
-                event_index: end_position.event_index,
+                checkpoint: terminal.end_checkpoint,
+                tx_seq: terminal.end_coordinate.tx_seq,
+                event_index: terminal.end_coordinate.event_index,
             };
             let terminal = scan_limit_or_range(
                 request_scan_limit_reached,
-                exhaustion,
+                terminal.exhaustion,
                 terminal_position,
                 || {
                     frontier_watermark.ok_or_else(|| {
@@ -443,9 +431,7 @@ fn next_event_chunk(
             bounds,
             entry_checkpoint,
             pending_bucket,
-            exhaustion,
-            end_checkpoint,
-            end_position,
+            terminal,
         } => {
             let hit_limit = chunk_item_limit.min(remaining_request_item_limit);
             let chunk_scan_budget = remaining_scan_budget.min(chunk_scan_budget);
@@ -484,9 +470,7 @@ fn next_event_chunk(
                         entry_checkpoint,
                         bounds: hits.next_bounds,
                         pending_bucket: hits.pending_bucket,
-                        exhaustion,
-                        end_checkpoint,
-                        end_position,
+                        terminal,
                     },
                 )
             };
@@ -518,13 +502,13 @@ fn next_event_chunk(
                 None
             };
             let terminal_position = Position::Events {
-                checkpoint: end_checkpoint,
-                tx_seq: end_position.tx_seq,
-                event_index: end_position.event_index,
+                checkpoint: terminal.end_checkpoint,
+                tx_seq: terminal.end_coordinate.tx_seq,
+                event_index: terminal.end_coordinate.event_index,
             };
             let terminal = scan_limit_or_range(
                 request_scan_limit_reached,
-                exhaustion,
+                terminal.exhaustion,
                 terminal_position,
                 || {
                     frontier_watermark.ok_or_else(|| {

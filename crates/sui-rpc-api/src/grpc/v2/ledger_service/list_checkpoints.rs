@@ -27,10 +27,10 @@ use crate::RpcService;
 use crate::grpc::v2::ledger_service::get_checkpoint::get_checkpoint;
 use crate::ledger_history::filter::transaction_filter_to_query;
 use crate::ledger_history::query_options::QueryOptions;
-use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::query_options::ResolvedCheckpointRange;
 use crate::ledger_history::query_options::ResolvedScan;
 use crate::ledger_history::query_options::ScanBounds;
+use crate::ledger_history::query_options::TerminalRecord;
 use crate::ledger_history::query_options::WatermarkEdges;
 use crate::metrics::ListRequestMetrics;
 use crate::metrics::ListStreamMetrics;
@@ -243,9 +243,7 @@ enum CheckpointScanState {
     },
     Unfiltered {
         range: Range<u64>,
-        exhaustion: RangeExhaustion,
-        end_checkpoint: u64,
-        end_position: u64,
+        terminal: TerminalRecord<u64>,
     },
     Filtered {
         query: BitmapQuery,
@@ -256,9 +254,7 @@ enum CheckpointScanState {
         covered_checkpoint_bound: Option<u64>,
         /// Checkpoint containing the cursor-trimmed interval's first scan position.
         entry_checkpoint: u64,
-        exhaustion: RangeExhaustion,
-        end_checkpoint: u64,
-        end_position: u64,
+        terminal: TerminalRecord<u64>,
     },
 }
 
@@ -389,16 +385,12 @@ fn next_checkpoint_chunk(
                     last_cp_seq: None,
                     covered_checkpoint_bound: None,
                     entry_checkpoint: edges.entry_checkpoint,
-                    exhaustion: edges.terminal.exhaustion,
-                    end_checkpoint: edges.terminal.end_checkpoint,
-                    end_position: edges.terminal.end_coordinate,
+                    terminal: edges.terminal,
                 }
             } else {
                 CheckpointScanState::Unfiltered {
                     range,
-                    exhaustion: edges.terminal.exhaustion,
-                    end_checkpoint: edges.terminal.end_checkpoint,
-                    end_position: edges.terminal.end_coordinate,
+                    terminal: edges.terminal,
                 }
             };
             next_checkpoint_chunk(
@@ -414,17 +406,10 @@ fn next_checkpoint_chunk(
                 metrics,
             )
         }
-        CheckpointScanState::Unfiltered {
-            range,
-            exhaustion,
-            end_checkpoint,
-            end_position,
-        } => next_unfiltered_checkpoint_chunk(
+        CheckpointScanState::Unfiltered { range, terminal } => next_unfiltered_checkpoint_chunk(
             service,
             range,
-            exhaustion,
-            end_checkpoint,
-            end_position,
+            terminal,
             read_mask,
             options,
             scan_budget,
@@ -440,9 +425,7 @@ fn next_checkpoint_chunk(
             last_cp_seq,
             covered_checkpoint_bound,
             entry_checkpoint,
-            exhaustion,
-            end_checkpoint,
-            end_position,
+            terminal,
         } => next_filtered_checkpoint_chunk(
             service,
             query,
@@ -452,9 +435,7 @@ fn next_checkpoint_chunk(
             last_cp_seq,
             covered_checkpoint_bound,
             entry_checkpoint,
-            exhaustion,
-            end_checkpoint,
-            end_position,
+            terminal,
             read_mask,
             options,
             scan_budget,
@@ -470,9 +451,7 @@ fn next_checkpoint_chunk(
 fn next_unfiltered_checkpoint_chunk(
     service: RpcService,
     range: Range<u64>,
-    exhaustion: RangeExhaustion,
-    end_checkpoint: u64,
-    end_position: u64,
+    terminal: TerminalRecord<u64>,
     read_mask: FieldMaskTree,
     options: QueryOptions,
     scan_budget: usize,
@@ -485,12 +464,7 @@ fn next_unfiltered_checkpoint_chunk(
     let next_state = seqs
         .last()
         .and_then(|cp_seq| remaining_range_after(range, *cp_seq, ascending))
-        .map(|range| CheckpointScanState::Unfiltered {
-            range,
-            exhaustion,
-            end_checkpoint,
-            end_position,
-        });
+        .map(|range| CheckpointScanState::Unfiltered { range, terminal });
     if cancel.is_cancelled() {
         return Err(cancelled());
     }
@@ -501,9 +475,9 @@ fn next_unfiltered_checkpoint_chunk(
         produced,
         next_state,
         terminal: ScanTerminal::from_range_exhaustion(
-            exhaustion,
+            terminal.exhaustion,
             Position::Checkpoints {
-                checkpoint: end_position,
+                checkpoint: terminal.end_coordinate,
             },
             false,
         ),
@@ -520,9 +494,7 @@ fn next_filtered_checkpoint_chunk(
     mut last_cp_seq: Option<u64>,
     mut covered_checkpoint_bound: Option<u64>,
     entry_checkpoint: u64,
-    exhaustion: RangeExhaustion,
-    end_checkpoint: u64,
-    end_position: u64,
+    terminal: TerminalRecord<u64>,
     read_mask: FieldMaskTree,
     options: QueryOptions,
     scan_budget: usize,
@@ -659,9 +631,7 @@ fn next_filtered_checkpoint_chunk(
                 last_cp_seq,
                 covered_checkpoint_bound,
                 entry_checkpoint,
-                exhaustion,
-                end_checkpoint,
-                end_position,
+                terminal,
             },
         )
     };
@@ -681,11 +651,11 @@ fn next_filtered_checkpoint_chunk(
         items.push(watermark);
     }
     let terminal_position = Position::Checkpoints {
-        checkpoint: end_position,
+        checkpoint: terminal.end_coordinate,
     };
     let terminal = scan_limit_or_range(
         request_scan_limit_reached,
-        exhaustion,
+        terminal.exhaustion,
         terminal_position,
         || {
             frontier_watermark.ok_or_else(|| {
@@ -936,7 +906,7 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListCheckpoints
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ledger_history::query_options::TerminalRecord;
+    use crate::ledger_history::query_options::RangeExhaustion;
     use sui_rpc::proto::sui::rpc::v2::Ordering;
     use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
     use sui_rpc_cursor::CursorToken;

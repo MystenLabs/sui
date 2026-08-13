@@ -27,9 +27,9 @@ use crate::RpcService;
 use crate::grpc::v2::ledger_service::get_transaction::render_executed_transaction;
 use crate::ledger_history::filter::transaction_filter_to_query;
 use crate::ledger_history::query_options::QueryOptions;
-use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::query_options::ResolvedCheckpointRange;
 use crate::ledger_history::query_options::ResolvedScan;
+use crate::ledger_history::query_options::TerminalRecord;
 use crate::ledger_history::watermark::ScanTerminal;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
@@ -244,18 +244,14 @@ enum TransactionScanState {
     Unfiltered {
         range: Range<u64>,
         entry_checkpoint: u64,
-        exhaustion: RangeExhaustion,
-        end_checkpoint: u64,
-        end_position: u64,
+        terminal: TerminalRecord<u64>,
     },
     Filtered {
         query: BitmapQuery,
         range: Option<Range<u64>>,
         pending_bucket: Option<PendingBitmapBucket>,
         entry_checkpoint: u64,
-        exhaustion: RangeExhaustion,
-        end_checkpoint: u64,
-        end_position: u64,
+        terminal: TerminalRecord<u64>,
     },
 }
 
@@ -321,16 +317,12 @@ fn next_transaction_chunk(
                         range: Some(range),
                         entry_checkpoint,
                         pending_bucket: None,
-                        exhaustion: tx_range.edges.terminal.exhaustion,
-                        end_checkpoint: tx_range.edges.terminal.end_checkpoint,
-                        end_position: tx_range.edges.terminal.end_coordinate,
+                        terminal: tx_range.edges.terminal,
                     },
                     None => TransactionScanState::Unfiltered {
                         range,
                         entry_checkpoint,
-                        exhaustion: tx_range.edges.terminal.exhaustion,
-                        end_checkpoint: tx_range.edges.terminal.end_checkpoint,
-                        end_position: tx_range.edges.terminal.end_coordinate,
+                        terminal: tx_range.edges.terminal,
                     },
                 };
                 continue;
@@ -338,9 +330,7 @@ fn next_transaction_chunk(
             TransactionScanState::Unfiltered {
                 range,
                 entry_checkpoint,
-                exhaustion,
-                end_checkpoint,
-                end_position,
+                terminal,
             } => {
                 let rows =
                     get_tx_seq_digest_rows(&service, range.clone(), !ascending, chunk_item_limit)?;
@@ -350,15 +340,13 @@ fn next_transaction_chunk(
                     .map(|range| TransactionScanState::Unfiltered {
                         range,
                         entry_checkpoint,
-                        exhaustion,
-                        end_checkpoint,
-                        end_position,
+                        terminal,
                     });
                 let terminal = ScanTerminal::from_range_exhaustion(
-                    exhaustion,
+                    terminal.exhaustion,
                     Position::Transactions {
-                        checkpoint: end_checkpoint,
-                        tx_seq: end_position,
+                        checkpoint: terminal.end_checkpoint,
+                        tx_seq: terminal.end_coordinate,
                     },
                     false,
                 );
@@ -369,9 +357,7 @@ fn next_transaction_chunk(
                 range,
                 entry_checkpoint,
                 pending_bucket,
-                exhaustion,
-                end_checkpoint,
-                end_position,
+                terminal,
             } => {
                 let hit_limit = chunk_item_limit.min(remaining_request_item_limit);
                 let chunk_scan_budget = remaining_scan_budget.min(chunk_scan_budget);
@@ -408,9 +394,7 @@ fn next_transaction_chunk(
                             entry_checkpoint,
                             range: hits.next_range,
                             pending_bucket: hits.pending_bucket,
-                            exhaustion,
-                            end_checkpoint,
-                            end_position,
+                            terminal,
                         },
                     )
                 };
@@ -443,12 +427,12 @@ fn next_transaction_chunk(
                     None
                 };
                 let terminal_position = Position::Transactions {
-                    checkpoint: end_checkpoint,
-                    tx_seq: end_position,
+                    checkpoint: terminal.end_checkpoint,
+                    tx_seq: terminal.end_coordinate,
                 };
                 let terminal = scan_limit_or_range(
                     request_scan_limit_reached,
-                    exhaustion,
+                    terminal.exhaustion,
                     terminal_position,
                     || {
                         frontier_watermark.ok_or_else(|| {
@@ -685,6 +669,7 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListTransaction
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ledger_history::query_options::RangeExhaustion;
     use sui_rpc::proto::sui::rpc::v2::Ordering;
     use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
     use sui_rpc_cursor::CursorToken;

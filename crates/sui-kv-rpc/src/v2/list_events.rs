@@ -104,10 +104,8 @@ pub(crate) async fn list_events(
     let event_range = resolve_event_range(&client, cp_range, &options)
         .instrument(debug_span!("resolve_event_range"))
         .await?;
-    let exhaustion = event_range.edges.terminal.exhaustion;
+    let terminal = event_range.edges.terminal;
     let entry_checkpoint = event_range.edges.entry_checkpoint;
-    let range_end_checkpoint = event_range.edges.terminal.end_checkpoint;
-    let range_end_position = event_range.edges.terminal.end_coordinate;
     let event_bounds = event_range.bounds;
 
     if event_range.is_empty() {
@@ -123,11 +121,12 @@ pub(crate) async fn list_events(
         // Empty resolved ranges still surface their terminal cursor, but
         // natural completion claims no checkpoint.
         let terminal_position = Position::Events {
-            checkpoint: range_end_checkpoint,
-            tx_seq: range_end_position.tx_seq,
-            event_index: range_end_position.event_index,
+            checkpoint: terminal.end_checkpoint,
+            tx_seq: terminal.end_coordinate.tx_seq,
+            event_index: terminal.end_coordinate.event_index,
         };
-        let response = range_end_response(&options, exhaustion, terminal_position, None, true).0;
+        let response =
+            range_end_response(&options, terminal.exhaustion, terminal_position, None, true).0;
         return Ok(async_stream::try_stream! {
             ctx.inc_stream_watermark_frames();
             ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
@@ -274,13 +273,13 @@ pub(crate) async fn list_events(
         let terminal_reason = loop {
             let Some(item) = ctx.next_response_item(resolution, &mut rendered_stream).await else {
                 let terminal_position = Position::Events {
-                    checkpoint: range_end_checkpoint,
-                    tx_seq: range_end_position.tx_seq,
-                    event_index: range_end_position.event_index,
+                    checkpoint: terminal.end_checkpoint,
+                    tx_seq: terminal.end_coordinate.tx_seq,
+                    event_index: terminal.end_coordinate.event_index,
                 };
                 let (response, reason) = range_end_response(
                     &options,
-                    exhaustion,
+                    terminal.exhaustion,
                     terminal_position,
                     covered_checkpoint_bound,
                     false,
