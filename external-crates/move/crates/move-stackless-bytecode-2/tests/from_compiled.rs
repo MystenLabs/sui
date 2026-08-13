@@ -74,7 +74,7 @@ fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
         &bytecode,
         &root_modules,
         &test_module_names,
-        "bytecode.opt.sbir",
+        "compiled.opt.sbir",
     )?;
 
     let (_mdl, bytecode) = from_compiled_modules(modules, /* optimize */ false)?;
@@ -83,13 +83,13 @@ fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
         &bytecode,
         &root_modules,
         &test_module_names,
-        "bytecode.no_opt.sbir",
+        "compiled.no_opt.sbir",
     )?;
 
     Ok(())
 }
 
-/// For each module name listed in `from_bytecode.txt`, finds the corresponding translated root
+/// For each module name listed in `from_compiled.txt`, finds the corresponding translated root
 /// module and compares its formatted output with the module's snapshot file. Fails if any listed
 /// name does not correspond to a translated root module.
 fn assert_modules(
@@ -134,4 +134,4 @@ fn assert_modules(
     Ok(())
 }
 
-datatest_stable::harness!(lib_test, "tests/move", r"from_bytecode.txt$");
+datatest_stable::harness!(lib_test, "tests/move", r"from_compiled.txt$");

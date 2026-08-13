@@ -1,20 +1,28 @@
 ---
-source: crates/move-stackless-bytecode-2/tests/from_bytecode.rs
+source: crates/move-stackless-bytecode-2/tests/from_compiled.rs
 ---
   Module: action
     Function: test (entry: LBL_0)
       Label LBL_0:
-        reg_2 : 0x0::action::Action = PackVariant<MoveTo>(Immediate(10u64), Immediate(20u64))
-        reg_4 : 0x0::action::Action = PackVariant<ChangeSpeed>(Immediate(40u64))
-        reg_7 : 0x0::action::Action = PackVariant<MoveTo>(Immediate(10u64), Immediate(20u64))
+        reg_0 : u64 = Immediate(10u64)
+        reg_1 : u64 = Immediate(20u64)
+        reg_2 : 0x0::action::Action = PackVariant<MoveTo>(reg_0 : u64, reg_1 : u64)
+        reg_3 : u64 = Immediate(40u64)
+        reg_4 : 0x0::action::Action = PackVariant<ChangeSpeed>(reg_3 : u64)
+        reg_5 : u64 = Immediate(10u64)
+        reg_6 : u64 = Immediate(20u64)
+        reg_7 : 0x0::action::Action = PackVariant<MoveTo>(reg_5 : u64, reg_6 : u64)
         reg_8 : 0x0::action::Action = PackVariant<Stop>()
-        reg_10 : 0x0::action::Action = PackVariant<ChangeSpeed>(Immediate(40u64))
+        reg_9 : u64 = Immediate(40u64)
+        reg_10 : 0x0::action::Action = PackVariant<ChangeSpeed>(reg_9 : u64)
         reg_11 : vector<0x0::action::Action> = VecPack<0x0::action::Action>(reg_2 : 0x0::action::Action, reg_4 : 0x0::action::Action, reg_7 : 0x0::action::Action, reg_8 : 0x0::action::Action, reg_10 : 0x0::action::Action)
         lcl_4 = reg_11 : vector<0x0::action::Action>
-        lcl_9 = Immediate(0u64)
+        reg_12 : u64 = Immediate(0u64)
+        lcl_9 = reg_12 : u64
 
       Label LBL_15:
-        lcl_5 = Immediate(0u64)
+        reg_13 : u64 = Immediate(0u64)
+        lcl_5 = reg_13 : u64
         Jump(LBL_18)
 
       Label LBL_18:
@@ -73,7 +81,8 @@ source: crates/move-stackless-bytecode-2/tests/from_bytecode.rs
 
       Label LBL_62:
         reg_45 : u64 = Move(lcl_5)
-        reg_47 : u64 = Add(reg_45 : u64, Immediate(1u64))
+        reg_46 : u64 = Immediate(1u64)
+        reg_47 : u64 = Add(reg_45 : u64, reg_46 : u64)
         lcl_5 = reg_47 : u64
         Jump(LBL_18)
 
@@ -87,7 +96,8 @@ source: crates/move-stackless-bytecode-2/tests/from_bytecode.rs
         reg_51 : &vector<0x0::action::Action> = ImmBorrow(lcl_10)
         reg_52 : u64 = VecLen<0x0::action::Action>(reg_51 : &vector<0x0::action::Action>)
         lcl_0 = reg_52 : u64
-        lcl_6 = Immediate(0u64)
+        reg_53 : u64 = Immediate(0u64)
+        lcl_6 = reg_53 : u64
         reg_54 : u64 = Move(lcl_0)
         lcl_8 = reg_54 : u64
 
@@ -104,7 +114,8 @@ source: crates/move-stackless-bytecode-2/tests/from_bytecode.rs
         reg_60 : 0x0::action::Action = VecPopBack<0x0::action::Action>(reg_59 : &mut vector<0x0::action::Action>)
         Drop(reg_60 : 0x0::action::Action)
         reg_61 : u64 = Move(lcl_6)
-        reg_63 : u64 = Add(reg_61 : u64, Immediate(1u64))
+        reg_62 : u64 = Immediate(1u64)
+        reg_63 : u64 = Add(reg_61 : u64, reg_62 : u64)
         lcl_6 = reg_63 : u64
         Jump(LBL_80)
 
@@ -112,14 +123,16 @@ source: crates/move-stackless-bytecode-2/tests/from_bytecode.rs
         reg_64 : vector<0x0::action::Action> = Move(lcl_10)
         VecUnpack<0x0::action::Action>(reg_64 : vector<0x0::action::Action>)
         reg_65 : u64 = Move(lcl_9)
-        reg_67 : bool = Equal(reg_65 : u64, Immediate(100u64))
+        reg_66 : u64 = Immediate(100u64)
+        reg_67 : bool = Equal(reg_65 : u64, reg_66 : u64)
         JumpIf(reg_67 : bool, LBL_100, LBL_101)
 
       Label LBL_100:
         Jump(LBL_103)
 
       Label LBL_101:
-        Abort(Immediate(13906834401976647679u64))
+        reg_68 : u64 = Immediate(13906834401976647679u64)
+        Abort(reg_68 : u64)
 
       Label LBL_103:
         Return()

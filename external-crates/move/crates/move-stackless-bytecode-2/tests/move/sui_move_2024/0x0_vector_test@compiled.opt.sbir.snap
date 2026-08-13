@@ -1,5 +1,5 @@
 ---
-source: crates/move-stackless-bytecode-2/tests/from_bytecode.rs
+source: crates/move-stackless-bytecode-2/tests/from_compiled.rs
 ---
   Module: vector_test
     Function: create_and_destroy_vector (entry: LBL_0)
