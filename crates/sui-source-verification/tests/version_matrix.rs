@@ -147,9 +147,7 @@ async fn run_matrix(versions: &[String]) -> Vec<Outcome> {
     let current_sui = get_cargo_bin("sui");
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
-    let Some(chain_id) = chain_identifier(&current_sui, &config) else {
-        panic!("could not read the localnet chain identifier");
-    };
+    let chain_id = chain_identifier(&current_sui, &config);
 
     let mut outcomes = Vec::new();
     for version in versions {
@@ -158,17 +156,31 @@ async fn run_matrix(versions: &[String]) -> Vec<Outcome> {
     outcomes
 }
 
-/// The chain identifier of the network `config` points at.
-fn chain_identifier(sui: &Path, config: &Path) -> Option<String> {
+/// The chain identifier of the network `config` points at, as the eight-digit hex short form that
+/// `[environments]` entries are written in. Panics unless the CLI prints exactly that: the value is
+/// interpolated into a manifest, and a manifest that fails to parse is dropped silently rather than
+/// reported, so an unexpected shape here surfaces much later as a missing environment.
+fn chain_identifier(sui: &Path, config: &Path) -> String {
     let out = Command::new(sui)
         .args(["client", "--client.config"])
         .arg(config)
-        .arg("chain-identifier")
+        .args(["chain-identifier", "--format", "hex"])
         .output()
-        .ok()?;
-    out.status
-        .success()
-        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .expect("could not run `sui client chain-identifier`");
+
+    assert!(
+        out.status.success(),
+        "`sui client chain-identifier` failed: {}",
+        diagnostics(&out)
+    );
+
+    let chain_id = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    assert!(
+        chain_id.len() == 8 && chain_id.chars().all(|c| c.is_ascii_hexdigit()),
+        "expected an eight-digit hex chain identifier, got {chain_id:?}"
+    );
+
+    chain_id
 }
 
 /// Declare `localnet` in the fixture's manifest so it can be published to for real.
