@@ -7,20 +7,13 @@ use move_stackless_bytecode_2::from_model;
 
 use move_command_line_common::insta_assert;
 use move_package_alt_compilation::model_builder;
-use move_symbol_pool::Symbol;
 
-use std::{collections::BTreeSet, io::BufRead, path::Path};
+use std::path::Path;
 
 fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
     let pkg_dir = file_path.parent().unwrap();
 
-    let test_module_names = std::io::BufReader::new(std::fs::File::open(file_path)?)
-        .lines()
-        .collect::<Result<Vec<_>, _>>()?;
-    let test_module_names = test_module_names
-        .into_iter()
-        .map(|name| name.into())
-        .collect::<BTreeSet<Symbol>>();
+    let test_module_names = common::read_test_module_names(file_path)?;
 
     let model = common::run_test_package_build(pkg_dir, model_builder::build)?;
     let bytecode = from_model(&model, /* optimize */ true)?;

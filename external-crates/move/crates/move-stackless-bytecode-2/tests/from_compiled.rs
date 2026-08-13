@@ -10,23 +10,14 @@ use move_command_line_common::insta_assert;
 use move_core_types::account_address::AccountAddress;
 use move_package_alt_compilation::build_plan::BuildPlan;
 use move_symbol_pool::Symbol;
-use std::{collections::BTreeSet, io::BufRead, path::Path};
+use std::{collections::BTreeSet, path::Path};
 
 type ModuleKey = (AccountAddress, Symbol);
 
 fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
     let pkg_dir = file_path.parent().unwrap();
 
-    let test_module_names = std::io::BufReader::new(std::fs::File::open(file_path)?)
-        .lines()
-        .collect::<Result<Vec<_>, _>>()?;
-    let test_module_names = test_module_names
-        .into_iter()
-        .map(|name| name.into())
-        .collect::<BTreeSet<Symbol>>();
-    if test_module_names.is_empty() {
-        return Err(anyhow::anyhow!("no modules requested by {}", file_path.display()).into());
-    }
+    let test_module_names = common::read_test_module_names(file_path)?;
 
     let compiled_package = common::run_test_package_build(pkg_dir, |writer, root_pkg, config| {
         BuildPlan::create(root_pkg, config)?.compile_no_exit(writer, |compiler| compiler)
