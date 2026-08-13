@@ -27,23 +27,23 @@ use crate::{
     task::{join_and_propagate_panic, reap_finished_task, shutdown_join_set},
 };
 
-/// Number of commit-sync batches of lag below which a gated subscription is resumed.
-/// The subscription is gated at `COMMIT_LAG_MULTIPLIER` (5) batches of lag, where the
+/// Number of commit-sync batches of lag below which a suspended subscription is resumed.
+/// The subscription is suspended at `COMMIT_LAG_MULTIPLIER` (5) batches of lag, where the
 /// observer service starts rejecting streamed blocks anyway; the band between the two
-/// thresholds is hysteresis preventing rapid gate flapping.
+/// thresholds is hysteresis preventing rapid suspend/resume flapping.
 ///
 /// The value must stay within `1..=COMMIT_LAG_MULTIPLIER`:
 /// - `>= 1` is load-bearing for liveness: commit sync never fetches partial batches, so
 ///   it can leave up to `commit_sync_batch_size - 1` commits of residual lag that only
 ///   streamed blocks can close. With `0`, the resume condition (zero lag) would be
-///   unreachable and the subscription would stay gated forever.
+///   unreachable and the subscription would stay suspended forever.
 /// - `<= COMMIT_LAG_MULTIPLIER`, or the subscription resumes while still commit-lagging
 ///   and the in-stream lag check immediately drops it again, churning reconnects until
-///   commit sync shrinks the lag below the gate threshold.
+///   commit sync shrinks the lag below the suspension threshold.
 const RESUBSCRIBE_LAG_BATCHES: u32 = 1;
 
-/// How often a gated subscription re-evaluates commit lag.
-const GATE_CHECK_INTERVAL: Duration = Duration::from_secs(1);
+/// How often a suspended subscription re-evaluates commit lag.
+const SUSPENSION_CHECK_INTERVAL: Duration = Duration::from_secs(1);
 
 /// ObserverSubscriber manages block stream subscriptions to peers (validators or other observers),
 /// taking care of retrying when subscription streams break. Blocks returned from peers are sent
@@ -52,12 +52,12 @@ const GATE_CHECK_INTERVAL: Duration = Duration::from_secs(1);
 /// While the local commit index lags the quorum commit index too much, streamed blocks
 /// would be rejected by the observer service and re-fetched later via commit sync, so the
 /// subscription drops its stream and holds off reconnecting until commit sync has nearly
-/// caught up, saving the bandwidth and verification on both ends. While gated, the quorum
+/// caught up, saving the bandwidth and verification on both ends. While suspended, the quorum
 /// commit index stays effectively frozen: commit sync only fetches up to the already-known
 /// quorum commit index, so its observed commit votes cannot push it further. Instead, each
 /// resubscription refreshes the quorum commit index from the freshly streamed blocks, and
-/// if the node is still too far behind, the gate re-engages — so a deep catch-up proceeds
-/// as a bounded cycle of gate, catch up, briefly resubscribe, re-gate.
+/// if the node is still too far behind, the subscription is suspended again — so a deep
+/// catch-up proceeds as a bounded cycle of suspend, catch up, briefly resubscribe, re-suspend.
 pub(crate) struct ObserverSubscriber<C: ObserverNetworkClient, S: ObserverNetworkService> {
     context: Arc<Context>,
     network_client: Arc<C>,
@@ -217,13 +217,13 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
 
         shutdown_join_set(&mut tasks).await;
 
-        // The task may have been torn down mid-gate (peer switch or stop), leaving the
-        // gauge at 1 with no task left to clear it. Reset it here; if a replacement task
-        // is genuinely gated, it re-asserts 1 within GATE_CHECK_INTERVAL.
+        // The task may have been torn down mid-suspension (peer switch or stop), leaving
+        // the gauge at 1 with no task left to clear it. Reset it here; if a replacement
+        // task is genuinely suspended, it re-asserts 1 within SUSPENSION_CHECK_INTERVAL.
         context
             .metrics
             .node_metrics
-            .observer_subscription_gated
+            .observer_subscription_suspended
             .set(0);
     }
 
@@ -404,18 +404,21 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
 
     // While the local commit index lags the quorum commit index too much, waits for
     // commit sync to bring it within `RESUBSCRIBE_LAG_BATCHES` batches before returning;
-    // the band between the gate and resume thresholds is hysteresis preventing rapid
-    // flapping. While waiting, the quorum commit index stays effectively frozen — commit
-    // sync only fetches up to it, so its observed votes cannot push it further. It is
-    // refreshed from streamed blocks after the subscription resumes; if that reveals the
-    // node is still too far behind, the stream is dropped and the gate re-engages.
+    // the band between the suspension and resume thresholds is hysteresis preventing
+    // rapid flapping. While waiting, the quorum commit index stays effectively frozen:
+    // with the stream suspended no new blocks — and hence no new commit votes — arrive
+    // from the peer, and the blocks fetched by commit sync only carry votes for commits
+    // at or below the already-known quorum commit index, so they cannot advance it.
+    // Only once the subscription resumes do the freshly streamed higher-round blocks
+    // carry votes that push the quorum commit index forward; if that reveals the node
+    // is still too far behind, the stream is dropped and suspended again.
     // Returns false when the node is shutting down.
     async fn wait_while_commit_lagging(
         context: &Context,
         commit_vote_monitor: &CommitVoteMonitor,
         dag_state: &Weak<parking_lot::RwLock<DagState>>,
     ) -> bool {
-        let mut gated = false;
+        let mut suspended = false;
         loop {
             let Some(dag_state) = dag_state.upgrade() else {
                 return false;
@@ -424,18 +427,19 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             drop(dag_state);
             let quorum_commit_index = commit_vote_monitor.quorum_commit_index();
 
-            let caught_up = if gated {
+            let caught_up = if suspended {
                 quorum_commit_index.saturating_sub(local_commit_index)
                     <= context.parameters.commit_sync_batch_size * RESUBSCRIBE_LAG_BATCHES
             } else {
                 !is_commit_lagging(context, local_commit_index, quorum_commit_index)
             };
             // The gauge writes are level-triggered (re-asserted every iteration) rather
-            // than transition-triggered: a task torn down mid-gate (peer switch or stop)
-            // never performs the closing transition, so a stale value must be overwritten
-            // by whichever task evaluates the gate next. Logs stay on transitions.
+            // than transition-triggered: a task torn down mid-suspension (peer switch or
+            // stop) never performs the closing transition, so a stale value must be
+            // overwritten by whichever task evaluates the suspension next. Logs stay on
+            // transitions.
             if caught_up {
-                if gated {
+                if suspended {
                     info!(
                         "Resuming block stream subscription: local commit index {} caught up with quorum commit index {}",
                         local_commit_index, quorum_commit_index,
@@ -444,23 +448,23 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                 context
                     .metrics
                     .node_metrics
-                    .observer_subscription_gated
+                    .observer_subscription_suspended
                     .set(0);
                 return true;
             }
-            if !gated {
-                gated = true;
+            if !suspended {
+                suspended = true;
                 info!(
-                    "Gating block stream subscription: local commit index {} lags quorum commit index {}, blocks will arrive via commit sync",
+                    "Suspending block stream subscription: local commit index {} lags quorum commit index {}, blocks will arrive via commit sync",
                     local_commit_index, quorum_commit_index,
                 );
             }
             context
                 .metrics
                 .node_metrics
-                .observer_subscription_gated
+                .observer_subscription_suspended
                 .set(1);
-            sleep(GATE_CHECK_INTERVAL).await;
+            sleep(SUSPENSION_CHECK_INTERVAL).await;
         }
     }
 
@@ -796,7 +800,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn test_gate_subscription_on_commit_lag_and_resume() {
+    async fn test_suspend_subscription_on_commit_lag_and_resume() {
         use consensus_config::Parameters;
         use consensus_types::block::BlockDigest;
 
@@ -807,7 +811,7 @@ mod tests {
 
         telemetry_subscribers::init_for_testing();
         let (mut context, _keys) = Context::new_for_test(4);
-        // Gate threshold is batch_size * 5 = 25 commits of lag, resume at <= 5.
+        // Suspension threshold is batch_size * 5 = 25 commits of lag, resume at <= 5.
         context.parameters = Parameters {
             commit_sync_batch_size: 5,
             ..context.parameters
@@ -842,7 +846,7 @@ mod tests {
         assert!(network_client.stream_blocks_calls() > 0);
 
         // A quorum votes for commit 100 while the local commit index is 0: lag exceeds
-        // the gate threshold, so the subscription is torn down.
+        // the suspension threshold, so the subscription is torn down.
         for author in 0..3 {
             let block = VerifiedBlock::new_for_test(
                 TestBlock::new(10, author)
@@ -851,22 +855,22 @@ mod tests {
             );
             commit_vote_monitor.observe_block(&block);
         }
-        // Wait for the gate to engage, then verify no new subscription attempts happen.
-        let gated_metric = &context.metrics.node_metrics.observer_subscription_gated;
+        // Wait for the suspension to engage, then verify no new subscription attempts happen.
+        let suspended_metric = &context.metrics.node_metrics.observer_subscription_suspended;
         for _ in 0..100 {
             sleep(Duration::from_secs(1)).await;
-            if gated_metric.get() == 1 {
+            if suspended_metric.get() == 1 {
                 break;
             }
         }
-        assert_eq!(gated_metric.get(), 1);
+        assert_eq!(suspended_metric.get(), 1);
         sleep(Duration::from_secs(2)).await;
-        let calls_while_gated = network_client.stream_blocks_calls();
+        let calls_while_suspended = network_client.stream_blocks_calls();
         sleep(Duration::from_secs(30)).await;
         assert_eq!(
             network_client.stream_blocks_calls(),
-            calls_while_gated,
-            "No subscription attempts should happen while gated"
+            calls_while_suspended,
+            "No subscription attempts should happen while suspended"
         );
 
         // Commit sync catches up to within the resume threshold: lag 100 - 96 = 4 <= 5,
@@ -887,20 +891,20 @@ mod tests {
             ));
         for _ in 0..100 {
             sleep(Duration::from_secs(1)).await;
-            if network_client.stream_blocks_calls() > calls_while_gated {
+            if network_client.stream_blocks_calls() > calls_while_suspended {
                 break;
             }
         }
         assert!(
-            network_client.stream_blocks_calls() > calls_while_gated,
+            network_client.stream_blocks_calls() > calls_while_suspended,
             "Subscription should resume after catching up"
         );
-        assert_eq!(gated_metric.get(), 0);
+        assert_eq!(suspended_metric.get(), 0);
 
-        // In production the quorum commit index stays effectively frozen while gated
+        // In production the quorum commit index stays effectively frozen while suspended
         // (commit sync only fetches up to it) and is refreshed by the streamed blocks
         // once the subscription resumes. Simulate that refresh: a quorum now votes for
-        // commit 200 while the local commit index is 96, so the gate must re-engage.
+        // commit 200 while the local commit index is 96, so the subscription must be suspended again.
         for author in 0..3 {
             let block = VerifiedBlock::new_for_test(
                 TestBlock::new(20, author)
@@ -911,21 +915,21 @@ mod tests {
         }
         for _ in 0..100 {
             sleep(Duration::from_secs(1)).await;
-            if gated_metric.get() == 1 {
+            if suspended_metric.get() == 1 {
                 break;
             }
         }
         assert_eq!(
-            gated_metric.get(),
+            suspended_metric.get(),
             1,
-            "Gate should re-engage when the refreshed quorum commit index reveals more lag"
+            "Subscription should be suspended again when the refreshed quorum commit index reveals more lag"
         );
-        let calls_while_regated = network_client.stream_blocks_calls();
+        let calls_while_resuspended = network_client.stream_blocks_calls();
         sleep(Duration::from_secs(30)).await;
         assert_eq!(
             network_client.stream_blocks_calls(),
-            calls_while_regated,
-            "No subscription attempts should happen while re-gated"
+            calls_while_resuspended,
+            "No subscription attempts should happen while re-suspended"
         );
 
         // Commit sync catches up again: lag 200 - 196 = 4 <= 5, so the subscription
@@ -946,22 +950,23 @@ mod tests {
             ));
         for _ in 0..100 {
             sleep(Duration::from_secs(1)).await;
-            if network_client.stream_blocks_calls() > calls_while_regated {
+            if network_client.stream_blocks_calls() > calls_while_resuspended {
                 break;
             }
         }
         assert!(
-            network_client.stream_blocks_calls() > calls_while_regated,
+            network_client.stream_blocks_calls() > calls_while_resuspended,
             "Subscription should resume again after catching up"
         );
-        assert_eq!(gated_metric.get(), 0);
+        assert_eq!(suspended_metric.get(), 0);
 
         subscriber.stop().await;
     }
 
-    // Unlike the other gate tests, whose fake streams end on their own after 10 items
-    // (letting the gate engage between reconnection attempts), this stream never ends:
-    // the gate can only engage through the in-stream lag check dropping the stream.
+    // Unlike the other suspension tests, whose fake streams end on their own after 10
+    // items (letting the suspension engage between reconnection attempts), this stream
+    // never ends: the subscription can only be suspended through the in-stream lag check
+    // dropping the stream.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_in_stream_lag_check_drops_never_ending_stream() {
         use consensus_config::Parameters;
@@ -974,7 +979,7 @@ mod tests {
 
         telemetry_subscribers::init_for_testing();
         let (mut context, _keys) = Context::new_for_test(4);
-        // Gate threshold is batch_size * 5 = 25 commits of lag, resume at <= 5.
+        // Suspension threshold is batch_size * 5 = 25 commits of lag, resume at <= 5.
         context.parameters = Parameters {
             commit_sync_batch_size: 5,
             ..context.parameters
@@ -1008,7 +1013,7 @@ mod tests {
         assert_eq!(network_client.stream_blocks_calls(), 1);
 
         // A quorum votes for commit 100 while the local commit index is 0: lag exceeds
-        // the gate threshold.
+        // the suspension threshold.
         for author in 0..3 {
             let block = VerifiedBlock::new_for_test(
                 TestBlock::new(10, author)
@@ -1017,32 +1022,32 @@ mod tests {
             );
             commit_vote_monitor.observe_block(&block);
         }
-        let gated_metric = &context.metrics.node_metrics.observer_subscription_gated;
+        let suspended_metric = &context.metrics.node_metrics.observer_subscription_suspended;
         for _ in 0..100 {
             sleep(Duration::from_secs(1)).await;
-            if gated_metric.get() == 1 {
+            if suspended_metric.get() == 1 {
                 break;
             }
         }
         assert_eq!(
-            gated_metric.get(),
+            suspended_metric.get(),
             1,
-            "The in-stream lag check should drop the never-ending stream and engage the gate"
+            "The in-stream lag check should drop the never-ending stream and suspend the subscription"
         );
 
-        // The stream was dropped: no blocks arrive and no reconnections happen while gated.
-        let calls_while_gated = observer_service.handle_block_calls.lock().len();
-        let stream_calls_while_gated = network_client.stream_blocks_calls();
+        // The stream was dropped: no blocks arrive and no reconnections happen while suspended.
+        let calls_while_suspended = observer_service.handle_block_calls.lock().len();
+        let stream_calls_while_suspended = network_client.stream_blocks_calls();
         sleep(Duration::from_secs(30)).await;
         assert_eq!(
             observer_service.handle_block_calls.lock().len(),
-            calls_while_gated,
-            "No blocks should be handled while gated"
+            calls_while_suspended,
+            "No blocks should be handled while suspended"
         );
         assert_eq!(
             network_client.stream_blocks_calls(),
-            stream_calls_while_gated,
-            "No subscription attempts should happen while gated"
+            stream_calls_while_suspended,
+            "No subscription attempts should happen while suspended"
         );
 
         // Commit sync catches up to within the resume threshold: lag 100 - 96 = 4 <= 5,
@@ -1063,21 +1068,21 @@ mod tests {
             ));
         for _ in 0..100 {
             sleep(Duration::from_secs(1)).await;
-            if network_client.stream_blocks_calls() > stream_calls_while_gated {
+            if network_client.stream_blocks_calls() > stream_calls_while_suspended {
                 break;
             }
         }
         assert!(
-            network_client.stream_blocks_calls() > stream_calls_while_gated,
+            network_client.stream_blocks_calls() > stream_calls_while_suspended,
             "Subscription should resume after catching up"
         );
-        assert_eq!(gated_metric.get(), 0);
+        assert_eq!(suspended_metric.get(), 0);
 
         subscriber.stop().await;
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn test_gate_metric_reset_on_resubscription_and_stop() {
+    async fn test_suspended_metric_reset_on_resubscription_and_stop() {
         use consensus_config::Parameters;
         use consensus_types::block::BlockDigest;
 
@@ -1088,7 +1093,7 @@ mod tests {
 
         telemetry_subscribers::init_for_testing();
         let (mut context, _keys) = Context::new_for_test(4);
-        // Gate threshold is batch_size * 5 = 25 commits of lag, resume at <= 5.
+        // Suspension threshold is batch_size * 5 = 25 commits of lag, resume at <= 5.
         context.parameters = Parameters {
             commit_sync_batch_size: 5,
             ..context.parameters
@@ -1119,7 +1124,7 @@ mod tests {
         }
         assert!(network_client.stream_blocks_calls() > 0);
 
-        // A quorum votes for commit 100 while the local commit index is 0: the gate
+        // A quorum votes for commit 100 while the local commit index is 0: the subscription
         // engages.
         for author in 0..3 {
             let block = VerifiedBlock::new_for_test(
@@ -1129,18 +1134,18 @@ mod tests {
             );
             commit_vote_monitor.observe_block(&block);
         }
-        let gated_metric = &context.metrics.node_metrics.observer_subscription_gated;
+        let suspended_metric = &context.metrics.node_metrics.observer_subscription_suspended;
         for _ in 0..100 {
             sleep(Duration::from_secs(1)).await;
-            if gated_metric.get() == 1 {
+            if suspended_metric.get() == 1 {
                 break;
             }
         }
-        assert_eq!(gated_metric.get(), 1);
+        assert_eq!(suspended_metric.get(), 1);
 
-        // Replace the gated subscription with another peer, and catch up before the
+        // Replace the suspended subscription with another peer, and catch up before the
         // replacement task runs its first lag check. The torn-down task never performs
-        // the gated -> resumed transition, so the gauge must be cleared by the
+        // the suspended -> resumed transition, so the gauge must be cleared by the
         // replacement task's level-triggered write (and the exit reset), not stay
         // stuck at 1 on a healthy streaming node.
         let calls_before_switch = network_client.stream_blocks_calls();
@@ -1157,7 +1162,8 @@ mod tests {
             ));
         for _ in 0..100 {
             sleep(Duration::from_secs(1)).await;
-            if network_client.stream_blocks_calls() > calls_before_switch && gated_metric.get() == 0
+            if network_client.stream_blocks_calls() > calls_before_switch
+                && suspended_metric.get() == 0
             {
                 break;
             }
@@ -1167,12 +1173,12 @@ mod tests {
             "Replacement subscription should stream while caught up"
         );
         assert_eq!(
-            gated_metric.get(),
+            suspended_metric.get(),
             0,
-            "Gauge must not report gated after the gated task was replaced and the node caught up"
+            "Gauge must not report suspended after the suspended task was replaced and the node caught up"
         );
 
-        // Gate again, then stop the subscriber: the exiting task must reset the gauge.
+        // Suspend again, then stop the subscriber: the exiting task must reset the gauge.
         for author in 0..3 {
             let block = VerifiedBlock::new_for_test(
                 TestBlock::new(20, author)
@@ -1183,16 +1189,16 @@ mod tests {
         }
         for _ in 0..100 {
             sleep(Duration::from_secs(1)).await;
-            if gated_metric.get() == 1 {
+            if suspended_metric.get() == 1 {
                 break;
             }
         }
-        assert_eq!(gated_metric.get(), 1);
+        assert_eq!(suspended_metric.get(), 1);
         subscriber.stop().await;
         assert_eq!(
-            gated_metric.get(),
+            suspended_metric.get(),
             0,
-            "Gauge must be reset when the subscription stops while gated"
+            "Gauge must be reset when the subscription stops while suspended"
         );
     }
 }

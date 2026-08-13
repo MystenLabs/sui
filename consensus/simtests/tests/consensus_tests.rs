@@ -729,10 +729,10 @@ mod consensus_tests {
     }
 
     /// An observer starting mid-run must catch up while its block stream subscription is
-    /// gated on commit lag, and resume the live stream once caught up: commits arrive via
+    /// suspended on commit lag, and resume the live stream once caught up: commits arrive via
     /// commit sync during catch-up, and via the block stream afterwards.
     #[sim_test(config = "test_config()")]
-    async fn test_observer_catchup_with_gated_block_stream() {
+    async fn test_observer_catchup_with_suspended_block_stream() {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(RegistryService::new(db_registry));
@@ -742,11 +742,11 @@ mod consensus_tests {
         // Give commit sync production-like throughput: the msim defaults (batch size 3,
         // 10 blocks per fetch) trigger the intra-fetch chunk pacing on every range and
         // cap pull sync below the commit production rate, so a late observer could never
-        // converge, with or without subscription gating.
+        // converge, with or without subscription suspension.
         const COMMIT_SYNC_BATCH_SIZE: u32 = 10;
         const MAX_BLOCKS_PER_FETCH: usize = 1000;
         // Validators must be at least this far ahead before the observer starts, so it
-        // begins commit-lagging (gate threshold is COMMIT_SYNC_BATCH_SIZE * 5).
+        // begins commit-lagging (suspension threshold is COMMIT_SYNC_BATCH_SIZE * 5).
         const CATCHUP_START_COMMITS: u32 = 60;
 
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
@@ -852,7 +852,7 @@ mod consensus_tests {
         observer.spawn_committed_subdag_consumer().unwrap();
         let observer_monitor = observer.commit_consumer_monitor();
 
-        // The observer must catch up to the target even with its block stream gated
+        // The observer must catch up to the target even with its block stream suspended
         // during commit sync.
         timeout(Duration::from_secs(180), async {
             while observer_monitor.highest_handled_commit() < catchup_target {
