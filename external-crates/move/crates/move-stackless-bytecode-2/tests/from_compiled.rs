@@ -3,10 +3,8 @@
 
 mod common;
 
-use move_stackless_bytecode_2::{ast::StacklessBytecode, from_compiled_modules};
+use move_stackless_bytecode_2::from_compiled_modules;
 
-use anyhow::ensure;
-use move_command_line_common::insta_assert;
 use move_core_types::account_address::AccountAddress;
 use move_package_alt_compilation::build_plan::BuildPlan;
 use move_symbol_pool::Symbol;
@@ -64,49 +62,25 @@ fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
     Ok(())
 }
 
-/// For each module name listed in `from_compiled.txt`, finds the corresponding translated root
-/// module and compares its formatted output with the module's snapshot file. Fails if any listed
-/// name does not correspond to a translated root module.
+/// Validates test output for input root modules, excluding translated dependencies.
 fn assert_modules(
     file_path: &Path,
-    bytecode: &StacklessBytecode,
+    bytecode: &move_stackless_bytecode_2::ast::StacklessBytecode,
     root_modules: &BTreeSet<ModuleKey>,
     test_module_names: &BTreeSet<Symbol>,
     suffix: &str,
 ) -> anyhow::Result<()> {
-    let mut observed_modules = BTreeSet::new();
-
-    for pkg in &bytecode.packages {
-        let pkg_name = pkg
+    let modules = bytecode.packages.iter().flat_map(|pkg| {
+        let package_name = pkg
             .name
             .unwrap_or(Symbol::from(pkg.address.to_hex_literal()));
-        for (module_name, module) in &pkg.modules {
-            let module_key = (pkg.address, *module_name);
-            if root_modules.contains(&module_key) && test_module_names.contains(module_name) {
-                observed_modules.insert(*module_name);
-                let name = format!("{}_{}", pkg_name, module_name);
-                let stackless_bytecode = format!("{}", module);
-                insta_assert! {
-                    input_path: file_path,
-                    contents: stackless_bytecode,
-                    name: name,
-                    suffix: suffix,
-                };
-            }
-        }
-    }
-
-    ensure!(
-        &observed_modules == test_module_names,
-        "requested modules were not translated for {suffix}: {}",
-        test_module_names
-            .difference(&observed_modules)
-            .map(Symbol::as_str)
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
-
-    Ok(())
+        pkg.modules.values().filter_map(move |module| {
+            root_modules
+                .contains(&(pkg.address, module.name))
+                .then_some((package_name, module))
+        })
+    });
+    common::assert_modules(file_path, modules, test_module_names, suffix)
 }
 
 datatest_stable::harness!(lib_test, "tests/move", r"from_compiled.txt$");

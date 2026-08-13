@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context;
+use move_command_line_common::insta_assert;
 use move_package_alt::{RootPackage, Vanilla};
 use move_package_alt_compilation::build_config::BuildConfig;
+use move_stackless_bytecode_2::ast::Module;
 use move_symbol_pool::Symbol;
 use std::{
     collections::BTreeSet,
@@ -31,6 +33,44 @@ pub fn read_test_module_names(file_path: &Path) -> anyhow::Result<BTreeSet<Symbo
     );
 
     Ok(module_names)
+}
+
+/// Checks that every module named in `selected_module_names` is present in `modules` and that its
+/// formatted output matches the existing snapshot selected by `file_path`, its package and module
+/// names, and `suffix`.
+pub fn assert_modules<'a>(
+    file_path: &Path,
+    modules: impl IntoIterator<Item = (Symbol, &'a Module)>,
+    selected_module_names: &BTreeSet<Symbol>,
+    suffix: &str,
+) -> anyhow::Result<()> {
+    let mut observed_modules = BTreeSet::new();
+
+    for (package_name, module) in modules {
+        if selected_module_names.contains(&module.name) {
+            observed_modules.insert(module.name);
+            let name = format!("{}_{}", package_name, module.name);
+            let stackless_bytecode = format!("{}", module);
+            insta_assert! {
+                input_path: file_path,
+                contents: stackless_bytecode,
+                name: name,
+                suffix: suffix,
+            };
+        }
+    }
+
+    anyhow::ensure!(
+        &observed_modules == selected_module_names,
+        "requested modules were not translated for {suffix}: {}",
+        selected_module_names
+            .difference(&observed_modules)
+            .map(Symbol::as_str)
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
+    Ok(())
 }
 
 /// Loads `package_dir` with an isolated temporary output directory and runs `build`, attaching

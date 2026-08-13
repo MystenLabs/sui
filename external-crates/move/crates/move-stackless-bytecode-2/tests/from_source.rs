@@ -5,7 +5,6 @@ mod common;
 
 use move_stackless_bytecode_2::from_model;
 
-use move_command_line_common::insta_assert;
 use move_package_alt_compilation::model_builder;
 
 use std::path::Path;
@@ -17,42 +16,28 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
 
     let model = common::run_test_package_build(pkg_dir, model_builder::build)?;
     let bytecode = from_model(&model, /* optimize */ true)?;
-
-    for pkg in &bytecode.packages {
-        let pkg_name = pkg.name;
-        for (module_name, module) in &pkg.modules {
-            if test_module_names.contains(module_name) {
-                let name = format!("{}_{}", pkg_name.expect("NO PACKAGE NAME"), module_name);
-                let stackless_bytecode = format!("{}", module);
-                insta_assert! {
-                    input_path: file_path,
-                    contents: stackless_bytecode,
-                    name: name,
-                    suffix: "opt.sbir",
-                };
-            }
-        }
-    }
+    assert_modules(file_path, &bytecode, &test_module_names, "opt.sbir")?;
 
     let bytecode = from_model(&model, /* optimize */ false)?;
-
-    for pkg in &bytecode.packages {
-        let pkg_name = pkg.name;
-        for (module_name, module) in &pkg.modules {
-            if test_module_names.contains(module_name) {
-                let name = format!("{}_{}", pkg_name.expect("NO PACKAGE NAME"), module_name);
-                let stackless_bytecode = format!("{}", module);
-                insta_assert! {
-                    input_path: file_path,
-                    contents: stackless_bytecode,
-                    name: name,
-                    suffix: "no_opt.sbir",
-                };
-            }
-        }
-    }
+    assert_modules(file_path, &bytecode, &test_module_names, "no_opt.sbir")?;
 
     Ok(())
+}
+
+/// Validates test output for input modules from all translated packages.
+fn assert_modules(
+    file_path: &Path,
+    bytecode: &move_stackless_bytecode_2::ast::StacklessBytecode,
+    test_module_names: &std::collections::BTreeSet<move_symbol_pool::Symbol>,
+    suffix: &str,
+) -> anyhow::Result<()> {
+    let modules = bytecode.packages.iter().flat_map(|pkg| {
+        let package_name = pkg.name.expect("NO PACKAGE NAME");
+        pkg.modules
+            .values()
+            .map(move |module| (package_name, module))
+    });
+    common::assert_modules(file_path, modules, test_module_names, suffix)
 }
 
 // Hand in each Move.toml path
