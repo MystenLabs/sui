@@ -4,7 +4,7 @@
 //! Bigtable batch-write flow control starts configured clients at a conservative `MutateRows`
 //! admission rate, then derives later limits from observed RPC starts. Server decreases,
 //! qualifying RPC errors, and write latency contribute feedback to complete observation windows.
-//! Rate increases require both an absolute-safe latency and a healthy relative baseline.
+//! Rate increases require healthy latency relative to the learned baseline and sufficient demand.
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -28,14 +28,11 @@ const MAX_FACTOR: f64 = 1.3;
 const HEALTHY_RECOVERY_FACTOR: f64 = 1.05;
 const UPWARD_UTILIZATION_THRESHOLD: f64 = 0.8;
 const ELEVATED_LATENCY_RATIO: f64 = 1.5;
-// Never learn a multi-second startup as healthy. One second is the maximum completion time this
-// controller treats as safe while probing upward.
-const MAX_HEALTHY_WRITE_LATENCY_MICROS: f64 = 1_000_000.0;
 const SEVERE_LATENCY_RATIO: f64 = 3.0;
 const BASELINE_EWMA_ALPHA: f64 = 0.2;
-// Sustained elevated latency moves the baseline halfway toward the observed latency every ten
+// Sustained non-healthy latency moves the baseline halfway toward the observed latency every ten
 // minutes of bounded sample evidence.
-const ELEVATED_BASELINE_HALF_LIFE: Duration = Duration::from_secs(10 * 60);
+const NON_HEALTHY_BASELINE_HALF_LIFE: Duration = Duration::from_secs(10 * 60);
 const MIN_WINDOW_SAMPLES: u64 = 5;
 
 pub(super) fn is_overload_error(code: Code) -> bool {
@@ -97,10 +94,7 @@ fn classify_write_latency(
     window_avg_micros: f64,
     baseline_micros: Option<f64>,
 ) -> WriteLatencyCondition {
-    if window_avg_micros > MAX_HEALTHY_WRITE_LATENCY_MICROS
-        || baseline_micros
-            .is_some_and(|baseline| window_avg_micros > SEVERE_LATENCY_RATIO * baseline)
-    {
+    if baseline_micros.is_some_and(|baseline| window_avg_micros > SEVERE_LATENCY_RATIO * baseline) {
         WriteLatencyCondition::Severe
     } else if baseline_micros
         .is_some_and(|baseline| window_avg_micros > ELEVATED_LATENCY_RATIO * baseline)
@@ -111,8 +105,9 @@ fn classify_write_latency(
     }
 }
 
-fn elevated_baseline_alpha(evidence_duration: Duration) -> f64 {
-    1.0 - 2.0_f64.powf(-evidence_duration.as_secs_f64() / ELEVATED_BASELINE_HALF_LIFE.as_secs_f64())
+fn non_healthy_baseline_alpha(evidence_duration: Duration) -> f64 {
+    1.0 - 2.0_f64
+        .powf(-evidence_duration.as_secs_f64() / NON_HEALTHY_BASELINE_HALF_LIFE.as_secs_f64())
 }
 
 struct ServerFeedback {
@@ -678,15 +673,17 @@ impl BatchWriteFlowController {
 
         let condition =
             classify_write_latency(window_avg_micros, state.baseline_write_latency_micros);
+        if matches!(
+            condition,
+            WriteLatencyCondition::Elevated | WriteLatencyCondition::Severe
+        ) && let Some(baseline) = state.baseline_write_latency_micros.as_mut()
+        {
+            let alpha = non_healthy_baseline_alpha(evidence_duration);
+            *baseline += alpha * (window_avg_micros - *baseline);
+        }
         let latency_feedback = match condition {
             WriteLatencyCondition::Severe => Some(LatencyFeedback::Decrease),
-            WriteLatencyCondition::Elevated => {
-                if let Some(baseline) = state.baseline_write_latency_micros.as_mut() {
-                    let alpha = elevated_baseline_alpha(evidence_duration);
-                    *baseline += alpha * (window_avg_micros - *baseline);
-                }
-                Some(LatencyFeedback::Reanchor)
-            }
+            WriteLatencyCondition::Elevated => Some(LatencyFeedback::Reanchor),
             WriteLatencyCondition::Healthy => {
                 let had_baseline = state.baseline_write_latency_micros.is_some();
                 let baseline = state
@@ -1552,7 +1549,7 @@ mod tests {
         let affirmative_feedback = rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD);
         let deadline = Instant::now() + RECOVERY_DEADLINE;
         let mut completed_rpcs = 0;
-        let mut positive_server_feedbacks = 0;
+        let mut positive_server_feedback_attempts = 0;
         let mut saw_recorded_latency_sample = false;
         let mut saw_severe_feedback = false;
 
@@ -1576,7 +1573,7 @@ mod tests {
             };
 
             completed_rpcs += 1;
-            positive_server_feedbacks += 1;
+            positive_server_feedback_attempts += 1;
             saw_recorded_latency_sample |= recorded_samples > 0;
             saw_severe_feedback |= latency_feedback == Some(LatencyFeedback::Decrease);
         }
@@ -1589,8 +1586,8 @@ mod tests {
                 "missing completed latency samples under sustained demand; completed_rpcs={completed_rpcs}, saw_recorded_latency_sample={saw_recorded_latency_sample}"
             );
             assert!(
-                positive_server_feedbacks >= MIN_WINDOW_SAMPLES,
-                "missing repeated positive server feedback; positive_server_feedbacks={positive_server_feedbacks}, completed_rpcs={completed_rpcs}"
+                positive_server_feedback_attempts >= MIN_WINDOW_SAMPLES,
+                "missing repeated positive server feedback attempts; positive_server_feedback_attempts={positive_server_feedback_attempts}, completed_rpcs={completed_rpcs}"
             );
             assert!(
                 saw_severe_feedback,
@@ -1599,12 +1596,12 @@ mod tests {
             assert_ne!(
                 final_baseline_micros,
                 Some(LEARNED_BASELINE.as_micros() as f64),
-                "latency baseline remained unchanged despite completed Severe samples and repeated positive server feedback; completed_rpcs={completed_rpcs}, positive_server_feedbacks={positive_server_feedbacks}"
+                "latency baseline remained unchanged despite completed Severe samples and repeated positive server feedback attempts; completed_rpcs={completed_rpcs}, positive_server_feedback_attempts={positive_server_feedback_attempts}"
             );
         }
         assert!(
             effective_qps > MIN_QPS,
-            "no growth above {MIN_QPS} QPS within 20 virtual minutes; completed_rpcs={completed_rpcs}, positive_server_feedbacks={positive_server_feedbacks}, saw_recorded_latency_sample={saw_recorded_latency_sample}, saw_severe_feedback={saw_severe_feedback}, baseline_micros={final_baseline_micros:?}, effective_qps={effective_qps}"
+            "no growth above {MIN_QPS} QPS within 20 virtual minutes; completed_rpcs={completed_rpcs}, positive_server_feedback_attempts={positive_server_feedback_attempts}, saw_recorded_latency_sample={saw_recorded_latency_sample}, saw_severe_feedback={saw_severe_feedback}, baseline_micros={final_baseline_micros:?}, effective_qps={effective_qps}"
         );
     }
 
@@ -1920,7 +1917,14 @@ mod tests {
         learn_healthy_baseline(&controller);
         tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
         record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(200));
-        assert_eq!(baseline_micros(&controller), Some(20_000.0));
+        let expected_alpha = non_healthy_baseline_alpha(LATENCY_EVALUATION_PERIOD);
+        let expected_baseline = 20_000.0 + expected_alpha * (200_000.0 - 20_000.0);
+        let actual_baseline =
+            baseline_micros(&controller).expect("baseline should remain available");
+        assert!(
+            (actual_baseline - expected_baseline).abs() < 1e-9,
+            "expected slowly adapted baseline {expected_baseline}, got {actual_baseline}"
+        );
         assert_eq!(
             pending_latency_feedback(&controller),
             Some(LatencyFeedback::Decrease)
@@ -1933,21 +1937,14 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn unsafe_absolute_latency_never_becomes_baseline_or_authorizes_growth() {
+    async fn first_latency_window_establishes_baseline_without_authorizing_growth() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
         make_latency_evaluation_ready(&controller);
         record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_secs(5));
 
-        assert_eq!(baseline_micros(&controller), None);
-        assert_eq!(
-            pending_latency_feedback(&controller),
-            Some(LatencyFeedback::Decrease)
-        );
+        assert_eq!(baseline_micros(&controller), Some(5_000_000.0));
+        assert_eq!(pending_latency_feedback(&controller), None);
         assert_effective_qps(&controller, INITIAL_QPS);
-
-        admit_rpcs(&controller, 10).await;
-        finish_observation(&controller).await;
-        assert_effective_qps(&controller, 7.0);
     }
 
     #[tokio::test(start_paused = true)]
@@ -2042,7 +2039,7 @@ mod tests {
         make_latency_evaluation_ready(&controller);
         record_latency_samples(&controller, MIN_WINDOW_SAMPLES, ELEVATED_LATENCY);
 
-        let expected_alpha = elevated_baseline_alpha(LATENCY_EVALUATION_PERIOD);
+        let expected_alpha = non_healthy_baseline_alpha(LATENCY_EVALUATION_PERIOD);
         let expected_baseline = 20_000.0 + expected_alpha * (40_000.0 - 20_000.0);
         let actual_baseline =
             baseline_micros(&controller).expect("baseline should remain available");
@@ -2112,7 +2109,7 @@ mod tests {
         tokio::time::advance(IDLE_GAP).await;
         record_latency_samples(&controller, MIN_WINDOW_SAMPLES, ELEVATED_LATENCY);
 
-        let expected_alpha = elevated_baseline_alpha(LATENCY_EVALUATION_PERIOD);
+        let expected_alpha = non_healthy_baseline_alpha(LATENCY_EVALUATION_PERIOD);
         let expected_baseline = 20_000.0 + expected_alpha * (40_000.0 - 20_000.0);
         let actual_baseline =
             baseline_micros(&controller).expect("baseline should remain available");
