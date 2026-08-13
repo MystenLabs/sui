@@ -125,6 +125,10 @@ pub struct OffchainCluster {
     /// The address the kv-rpc (LedgerService) server is listening on.
     kv_rpc_listen_address: SocketAddr,
 
+    /// The address kv-rpc's second, unencrypted listener is listening on, when
+    /// `OffchainClusterConfig::kv_rpc_plaintext_listener` is set.
+    kv_rpc_plaintext_listen_address: Option<SocketAddr>,
+
     /// Read access to BigTable.
     bigtable_client: BigTableClient,
 
@@ -164,6 +168,10 @@ pub struct OffchainClusterConfig {
     pub graphql_config: GraphQlConfig,
     pub bootstrap_genesis: Option<BootstrapGenesis>,
     pub kv_rpc_config: KvRpcConfig,
+    /// When set, kv-rpc also binds a second, unencrypted listener
+    /// (`sui_kv_rpc::ServerConfig::plaintext_address`), reachable via
+    /// `kv_rpc_plaintext_url`, for tests that exercise it directly.
+    pub kv_rpc_plaintext_listener: bool,
 }
 
 impl FullCluster {
@@ -294,6 +302,12 @@ impl FullCluster {
         self.offchain.kv_rpc_url()
     }
 
+    /// The URL to send requests to kv-rpc's second, unencrypted listener, when
+    /// `OffchainClusterConfig::kv_rpc_plaintext_listener` was set.
+    pub fn kv_rpc_plaintext_url(&self) -> Option<Url> {
+        self.offchain.kv_rpc_plaintext_url()
+    }
+
     /// Returns the latest checkpoint that we have all data for in the database, according to the
     /// watermarks table. Returns `None` if any of the expected pipelines are missing data.
     pub async fn latest_checkpoint(&self) -> anyhow::Result<Option<u64>> {
@@ -355,6 +369,7 @@ impl OffchainCluster {
             graphql_config,
             bootstrap_genesis,
             kv_rpc_config,
+            kv_rpc_plaintext_listener,
         }: OffchainClusterConfig,
         registry: &prometheus::Registry,
     ) -> anyhow::Result<Self> {
@@ -370,6 +385,11 @@ impl OffchainCluster {
 
         let kv_rpc_port = get_available_port();
         let kv_rpc_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), kv_rpc_port);
+
+        let kv_rpc_plaintext_address = kv_rpc_plaintext_listener.then(|| {
+            let port = get_available_port();
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port)
+        });
 
         let database = TempDb::new().context("Failed to create database")?;
         let database_url = database.database().url();
@@ -435,8 +455,14 @@ impl OffchainCluster {
         // consume them when they are. Off by default, matching production.
         let enable_list_apis = kv_rpc_config.enable_list_apis();
 
-        let (bigtable_client, bigtable_emulator, archival_service) =
-            start_archival(client_args.clone(), kv_rpc_address, kv_rpc_config, registry).await?;
+        let (bigtable_client, bigtable_emulator, archival_service) = start_archival(
+            client_args.clone(),
+            kv_rpc_address,
+            kv_rpc_plaintext_address,
+            kv_rpc_config,
+            registry,
+        )
+        .await?;
 
         let kv_args = KvArgs {
             ledger_grpc_url: Some(
@@ -490,6 +516,7 @@ impl OffchainCluster {
             jsonrpc_listen_address,
             graphql_listen_address,
             kv_rpc_listen_address: kv_rpc_address,
+            kv_rpc_plaintext_listen_address: kv_rpc_plaintext_address,
             bigtable_client,
             db,
             pipelines,
@@ -527,6 +554,13 @@ impl OffchainCluster {
     pub fn kv_rpc_url(&self) -> Url {
         Url::parse(&format!("http://{}/", self.kv_rpc_listen_address))
             .expect("Failed to parse RPC URL")
+    }
+
+    /// The URL to send requests to kv-rpc's second, unencrypted listener, when
+    /// `OffchainClusterConfig::kv_rpc_plaintext_listener` was set.
+    pub fn kv_rpc_plaintext_url(&self) -> Option<Url> {
+        let address = self.kv_rpc_plaintext_listen_address?;
+        Some(Url::parse(&format!("http://{address}/")).expect("Failed to parse RPC URL"))
     }
 
     /// Returns the latest checkpoint that we have all data for in the database, according to the
@@ -769,6 +803,7 @@ impl Default for OffchainClusterConfig {
             graphql_config: Default::default(),
             bootstrap_genesis: None,
             kv_rpc_config: KvRpcConfig::default(),
+            kv_rpc_plaintext_listener: false,
         }
     }
 }
@@ -838,6 +873,7 @@ pub async fn write_checkpoint(path: &Path, checkpoint: Checkpoint) -> anyhow::Re
 async fn start_archival(
     client_args: ClientArgs,
     kv_rpc_address: SocketAddr,
+    kv_rpc_plaintext_address: Option<SocketAddr>,
     kv_rpc_config: KvRpcConfig,
     registry: &prometheus::Registry,
 ) -> anyhow::Result<(BigTableClient, BigTableEmulator, Service)> {
@@ -893,7 +929,13 @@ async fn start_archival(
     .await
     .context("Failed to create KvRpcServer")?;
     let kv_rpc_service = kv_rpc_server
-        .start_service(kv_rpc_address, sui_kv_rpc::ServerConfig::default())
+        .start_service(
+            kv_rpc_address,
+            sui_kv_rpc::ServerConfig {
+                plaintext_address: kv_rpc_plaintext_address,
+                ..Default::default()
+            },
+        )
         .await
         .context("Failed to start kv-rpc server")?;
 
