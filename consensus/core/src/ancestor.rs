@@ -86,8 +86,7 @@ impl AncestorStateManager {
 
         // Note: this value cannot be greater than the threshold used in leader
         // schedule to identify bad nodes.
-        let excluded_nodes_stake_threshold_percentage =
-            2 * context.protocol_config.bad_nodes_stake_threshold() / 3;
+        let excluded_nodes_stake_threshold_percentage = 20;
 
         let excluded_nodes_stake_threshold = (excluded_nodes_stake_threshold_percentage
             * context.committee.total_stake())

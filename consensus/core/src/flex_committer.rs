@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// FlexCommitter will be wired into Core in a follow-up PR.
-#![allow(dead_code)]
-
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -230,6 +227,23 @@ impl FlexCommitter {
             // This round is fully decided but has no committed leader, so it is skipped.
         }
         None
+    }
+
+    /// Highest leader round in the contiguous-decided prefix of
+    /// `pending_commit_state.rounds`, used as a high-water mark for the
+    /// `last_decided_leader_round` gauge. Walks from the front, stops at the
+    /// first round with non-empty `undecided_slots`, and returns the round of
+    /// the last fully-decided entry seen so far. Returns `None` if no round
+    /// is fully decided yet.
+    pub(crate) fn highest_decided_leader_round(&self) -> Option<Round> {
+        let mut highest = None;
+        for round_state in &self.pending_commit_state.rounds {
+            if !round_state.undecided_slots.is_empty() {
+                break;
+            }
+            highest = Some(round_state.round);
+        }
+        highest
     }
 
     /// Builds a single commit with leaders from `commit_leader_round`.
