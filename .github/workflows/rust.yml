@@ -355,7 +355,7 @@ jobs:
     needs: [diff, rustfmt, clippy, snapshot-check]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
-    runs-on: [ windows-ghcloud-128 ]
+    runs-on: [ windows-ghcloud ]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -379,7 +379,7 @@ jobs:
     needs: [diff]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
-    runs-on: [ windows-ghcloud-128 ]
+    runs-on: [ windows-ghcloud ]
     env:
       # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
       # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
