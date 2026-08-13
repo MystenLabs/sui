@@ -87,7 +87,7 @@ Decide and configure your upgrade strategy before publishing. This decision is d
 
 - [ ] **Gas budget estimation.** Run critical transaction paths with dry run to measure actual gas costs. Set gas budgets with sufficient margin for variable costs (shared object contention, dynamic field depth). Learn more about [gas in Sui](/develop/transaction-payment/gas-in-sui).
 - [ ] **Sponsored transactions.** If using [gas sponsorship](/develop/transaction-payment/sponsor-txn), verify that the gas station has sufficient SUI balance and rate limiting appropriate for your expected transaction volume.
-- [ ] **Coin management.** If your application holds SUI for gas, implement [gas smashing](/develop/transaction-payment/gas-smashing) to consolidate coin objects and avoid transaction failures from too many small coins.
+- [ ] **Coin management.** If your application holds SUI for gas, supply multiple SUI coins as gas payment to trigger automatic [gas smashing](/develop/transaction-payment/gas-smashing), which consolidates them into a single coin and avoids transaction failures from fragmented balances.
 
 ## Infrastructure
 

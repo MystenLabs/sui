@@ -45,7 +45,7 @@ Cryptographic agility is core to Sui. The system supports multiple cryptography 
 
 Sui provides the following cryptographic capabilities for smart contracts and applications:
 
-- **[Signing](/develop/cryptography/signing):** Sui supports Ed25519, ECDSA (secp256k1 and secp256r1), and BLS12-381 signature schemes. Transactions can use any supported scheme, and [multisig](/develop/transactions/transaction-auth/multisig) addresses can combine different schemes in a single address.
+- **[Signing](/develop/cryptography/signing):** Sui supports multiple signature schemes. User transactions authenticate with Ed25519, ECDSA (secp256k1 and secp256r1), or [passkeys](/develop/cryptography/passkeys), and [multisig](/develop/transactions/transaction-auth/multisig) addresses can combine different schemes in a single address. BLS12-381 signatures are available for validator operations and onchain verification in Move but are not used for user transaction authentication.
 - **[Hashing](/develop/cryptography/hashing):** Move modules can compute SHA2-256, SHA3-256, Keccak-256, and Blake2b-256 hashes onchain for data integrity verification, commitment schemes, and cross-chain interoperability.
 - **[Groth16 verification](/develop/cryptography/groth16):** Verify zero-knowledge proofs onchain using the Groth16 proof system over BN254 and BLS12-381 curves. This enables privacy-preserving applications that verify computations without revealing inputs.
 - **[ECVRF](/develop/cryptography/ecvrf):** Verify Elliptic Curve Verifiable Random Function outputs onchain for applications that need provably fair randomness from an external source.
