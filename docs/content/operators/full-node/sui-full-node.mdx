@@ -621,3 +621,42 @@ If `journalctl` or your log file shows no output, check the following:
 - If you expect file logging, confirm the process environment includes `RUST_LOG_FILE`. Run `systemctl show <unit> --property=Environment` to see the effective environment.
 
 - Confirm the log directory exists and the node user can write to it. A missing or unwritable directory prevents file logging.
+
+## Operator runbook
+
+Use this section as a quick reference for the most common full node operations. Each entry links to the detailed guide for that procedure.
+
+### Snapshot restore
+
+If your node's database is corrupted, if you are starting a new node, or if you need to recover from a failed upgrade, restore from a snapshot rather than syncing from genesis:
+
+1. Stop the node.
+2. Download and restore the latest snapshot. The [`sui-tool download-formal-snapshot` command](/operators/snapshots#formal-snapshots) requires `--genesis`, `--path`, and `--network` flags in addition to `--latest`.
+3. Verify you placed the snapshot at the correct `db_path` (see your `fullnode.yaml` configuration).
+4. Restart the node.
+
+For the complete procedure, see [Sui Snapshots](/operators/snapshots).
+
+### Version upgrades
+
+Sui releases new versions regularly. To upgrade your node:
+
+1. Check the target version in the [release notes](https://github.com/MystenLabs/sui/releases) and verify compatibility with your network.
+2. Stop the node.
+3. Replace the `sui-node` binary with the new version. If you installed with `suiup`, run `suiup update`.
+4. Review the release notes for any configuration changes required in `fullnode.yaml`.
+5. Restart the node and monitor logs for errors.
+
+For network-specific upgrade instructions, see [Node Updates](/operators/full-node/updates).
+
+### Common operations troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Node cannot start after upgrade | Configuration format changed between versions | Check release notes for `fullnode.yaml` changes. Compare your config with the [template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml). |
+| Node falls behind after restart | Node is syncing from last checkpoint, not from tip | Restore from a recent [snapshot](/operators/snapshots) instead of waiting for catch-up. |
+| `Address already in use` on port 9184 | Another process is using the metrics port | Change `metrics-address` in `fullnode.yaml` to a different port (for example, `0.0.0.0:9180`). |
+| Disk full (7TB+) | Pruning not configured or not active | Apply a [pruning configuration](/operators/data-management/managing-data#pruning-quickstart) and wait 3 to 5 days for compaction. |
+| `genesis.blob` chain mismatch | Wrong genesis file for target network | Download the correct `genesis.blob` from [sui-genesis](https://github.com/MystenLabs/sui-genesis). See [Genesis](/operators/genesis#network-identity). |
+| Peer connections rejected | Firewall blocking P2P ports | Open ports 8080 (P2P) and 8084 (discovery) in your firewall. See [Node Updates](/operators/full-node/updates) for port requirements. |
+| gRPC queries return `NOT_FOUND` for old data | Data pruned beyond retention window | Query the [Archival Service](/develop/accessing-data/archival-store) for historical data, or increase `num-epochs-to-retain` in your pruning config. |

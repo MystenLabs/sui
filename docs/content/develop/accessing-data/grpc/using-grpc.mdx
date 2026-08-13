@@ -79,13 +79,81 @@ In the Sui gRPC API, `FieldMask`s are used in requests like `GetTransaction`, `G
 
 Field masks are defined using `google.protobuf.FieldMask` and typically appear in the request message as `read_mask`. You can pass an explicit value of `*` to request all fields.
 
-If you omit `read_mask`, it defaults to `*` (all fields), unless documented otherwise.
+If you omit `read_mask`, the server applies a method-specific default that returns a minimal subset of fields (for example, `object_id,version,digest` for `GetObject`). Pass `*` explicitly to request all fields. See [`read_mask_defaults.rs`](https://github.com/MystenLabs/sui/blob/main/crates/sui-rpc-api/src/read_mask_defaults.rs) for the full list of defaults.
 
 - Each field path in the mask must match the field structure of the response proto message. Nested fields are supported using dot notation.
 
 - In batch APIs, only the top-level `read_mask` is respected. The API ignores any masks inside sub-requests.
 
 - In some cases, non-terminal repeated fields might be supported in the mask, even if this is atypical per standard `FieldMask` behavior.
+
+### Field path reference {#field-path-reference}
+
+The following tables list commonly used `read_mask` field paths for each service method. Field paths follow the proto message structure defined in the [`sui-apis` proto source](https://github.com/MystenLabs/sui-apis/tree/main/proto) and support dot notation for nested fields.
+
+#### `LedgerService.GetObject` / `BatchGetObjects`
+
+| Field path | Description |
+| --- | --- |
+| `object_id` | The object's unique ID |
+| `version` | The object's version (sequence number) |
+| `digest` | The object's content digest |
+| `object_type` | The Move type of the object |
+| `owner` | Ownership information (address-owned, shared, immutable, or wrapped) |
+| `contents` | The object's BCS-encoded content |
+| `contents.json` | The object's content as JSON |
+| `previous_transaction` | Digest of the transaction that last modified this object |
+| `storage_rebate` | Storage rebate in MIST if the object is deleted |
+
+#### `LedgerService.GetTransaction` / `BatchGetTransactions`
+
+| Field path | Description |
+| --- | --- |
+| `digest` | The transaction digest |
+| `effects` | Execution effects (status, gas used, created/mutated/deleted objects) |
+| `events` | Events emitted during execution |
+| `signatures` | Transaction signatures |
+| `transaction` | The transaction data (sender, commands, gas info) |
+| `balance_changes` | Balance changes caused by the transaction |
+| `objects` | Object mutations (created, mutated, deleted, wrapped, unwrapped) |
+
+#### `LedgerService.GetCheckpoint`
+
+| Field path | Description |
+| --- | --- |
+| `sequence_number` | The checkpoint sequence number |
+| `digest` | The checkpoint digest |
+| `summary` | Checkpoint summary (timestamp, gas costs, transaction count) |
+| `summary.timestamp` | Finalization timestamp |
+| `summary.total_network_transactions` | Cumulative transaction count up to this checkpoint |
+| `transactions` | Transaction digests included in this checkpoint |
+
+#### `LedgerService.GetEpoch`
+
+| Field path | Description |
+| --- | --- |
+| `epoch` | The epoch number |
+| `reference_gas_price` | Reference gas price for this epoch in MIST |
+| `start` | Epoch start timestamp |
+| `end` | Epoch end timestamp (set after epoch ends) |
+| `protocol_config` | Protocol configuration parameters |
+
+#### `SubscriptionService` streams
+
+`SubscribeCheckpoints`, `SubscribeTransactions`, and `SubscribeEvents` accept a `read_mask` that applies to the checkpoint, transaction, or event payload in each response frame. Use the same field paths as the corresponding `Get*` or `List*` methods.
+
+### Connection and buffer limits {#connection-limits}
+
+The following limits are configured in the Sui full node source code and apply to all gRPC endpoints unless the operator overrides them:
+
+| Limit type | Default value | Source |
+| --- | --- | --- |
+| Connection max age | 4 hours (server sends GOAWAY) | [`DEFAULT_MAX_CONNECTION_AGE`](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/src/rpc_config.rs) |
+| gRPC timeout (unary) | 60 seconds | [`DEFAULT_GRPC_TIMEOUT`](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/src/rpc_config.rs) |
+| Subscription buffer | 1,024 items per subscriber | [`CHECKPOINT_MAILBOX_SIZE`](https://github.com/MystenLabs/sui/blob/main/crates/sui-rpc-api/src/subscription/mod.rs) |
+| Max subscribers | 1,024 | [`DEFAULT_MAX_SUBSCRIBERS`](https://github.com/MystenLabs/sui/blob/main/crates/sui-rpc-api/src/subscription/mod.rs) |
+
+The public Sui Foundation endpoints at `fullnode.<network>.sui.io` are behind load balancers that impose additional rate limits (requests per second, concurrent streams, and message size caps) beyond what the node itself configures. Contact your provider for their specific limits, or check the full node's `grpc` configuration section if you operate your own node.
 
 ## Field presence
 
