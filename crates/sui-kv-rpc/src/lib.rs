@@ -273,12 +273,17 @@ pub struct KvRpcServer {
     list_apis_enabled: bool,
 }
 
-/// Optional configuration for the gRPC server (TLS, metrics, reflection).
+/// Optional configuration for the gRPC server (TLS, metrics, reflection, and
+/// an optional second plaintext listener).
 #[derive(Default)]
 pub struct ServerConfig {
     pub tls_identity: Option<Identity>,
     pub metrics_registry: Option<Registry>,
     pub enable_reflection: bool,
+    /// Address a second, unencrypted gRPC listener binds to, serving the
+    /// same `LedgerService` as the primary listener without TLS. See
+    /// [`KvRpcConfig::plaintext_address`] for the rationale.
+    pub plaintext_address: Option<SocketAddr>,
 }
 
 fn ledger_service_with_response_compression<T>(service: T) -> LedgerServiceServer<T>
@@ -286,6 +291,65 @@ where
     T: LedgerService,
 {
     LedgerServiceServer::new(service).send_compressed(tonic::codec::CompressionEncoding::Zstd)
+}
+
+/// Build and start one gRPC listener serving `ledger`'s `LedgerService`, wired with the given
+/// (shared, already-constructed) metrics/logging layers and optional reflection. `builder` carries
+/// whatever TLS config the caller wants for this listener (or none, for a plaintext listener).
+///
+/// Used once per listener -- the primary listener, and the optional second plaintext one -- so
+/// that expensive shared pieces (metrics, allowlist, request-log layer) are constructed once by
+/// the caller and passed in here, rather than rebuilt (and, for `RpcMetrics`, re-registered against
+/// the same `Registry`, which panics) per listener.
+fn spawn_listener(
+    listen_address: SocketAddr,
+    builder: Server,
+    ledger: KvRpcServer,
+    rpc_metrics: Arc<sui_rpc_api::RpcMetrics>,
+    grpc_method_allowlist: sui_rpc_api::GrpcMethodAllowlist,
+    request_log_layer: mysten_network::request_log::GrpcRequestLogLayer,
+    enable_reflection: bool,
+    file_descriptor_sets: &[&'static [u8]],
+) -> anyhow::Result<sui_futures::service::Service> {
+    use sui_http::middleware::callback::CallbackLayer;
+    use sui_rpc_api::RpcMetricsMakeCallbackHandler;
+
+    let mut router = builder
+        .layer(CallbackLayer::new(
+            RpcMetricsMakeCallbackHandler::with_grpc_method_allowlist(
+                rpc_metrics,
+                grpc_method_allowlist,
+            ),
+        ))
+        .layer(request_log_layer)
+        .add_service(ledger_service_with_response_compression(ledger));
+
+    if enable_reflection {
+        let mut reflection_v1_builder = tonic_reflection::server::Builder::configure();
+        let mut reflection_v1alpha_builder = tonic_reflection::server::Builder::configure();
+        for &fds in file_descriptor_sets {
+            reflection_v1_builder = reflection_v1_builder.register_encoded_file_descriptor_set(fds);
+            reflection_v1alpha_builder =
+                reflection_v1alpha_builder.register_encoded_file_descriptor_set(fds);
+        }
+        router = router
+            .add_service(reflection_v1_builder.build_v1()?)
+            .add_service(reflection_v1alpha_builder.build_v1alpha()?);
+    }
+
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+    let server_future = router.serve_with_shutdown(listen_address, async {
+        let _ = rx.await;
+    });
+
+    Ok(sui_futures::service::Service::new()
+        .spawn(async move {
+            server_future.await?;
+            Ok(())
+        })
+        .with_shutdown_signal(async move {
+            let _ = tx.send(());
+        }))
 }
 
 impl KvRpcServer {
@@ -459,21 +523,13 @@ impl KvRpcServer {
         listen_address: SocketAddr,
         config: ServerConfig,
     ) -> anyhow::Result<sui_futures::service::Service> {
-        use sui_http::middleware::callback::CallbackLayer;
-        use sui_rpc_api::{
-            RpcMetrics, RpcMetricsMakeCallbackHandler, grpc_method_paths_from_file_descriptor_sets,
-        };
-
-        let mut builder = Server::builder();
-
-        if let Some(identity) = config.tls_identity {
-            builder = builder.tls_config(ServerTlsConfig::new().identity(identity))?;
-        }
+        use sui_rpc_api::{RpcMetrics, grpc_method_paths_from_file_descriptor_sets};
 
         // Single source of truth for every encoded FileDescriptorSet that
         // backs a gRPC service mounted below. Consumed by both the
         // reflection services and the metrics allowlist so they cannot drift
-        // out of sync.
+        // out of sync, and shared by the optional second (plaintext)
+        // listener below.
         let file_descriptor_sets: Vec<&'static [u8]> = vec![
             sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
             sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET,
@@ -484,47 +540,54 @@ impl KvRpcServer {
         let grpc_method_allowlist = Arc::new(grpc_method_paths_from_file_descriptor_sets(
             &file_descriptor_sets,
         )?);
-        let mut router = builder
-            .layer(CallbackLayer::new(
-                RpcMetricsMakeCallbackHandler::with_grpc_method_allowlist(
-                    Arc::new(RpcMetrics::new(&registry)),
-                    grpc_method_allowlist,
-                ),
-            ))
-            .layer(
-                mysten_network::request_log::GrpcRequestLogLayer::from_encoded_file_descriptor_sets(
-                    file_descriptor_sets.iter().copied(),
-                )?,
-            )
-            .add_service(ledger_service_with_response_compression(self));
+        // Constructed once and shared (via `Arc`/`Clone`) across both
+        // listeners below: `RpcMetrics::new` registers Prometheus collectors
+        // against `registry`, and doing that twice would panic on duplicate
+        // registration.
+        let rpc_metrics = Arc::new(RpcMetrics::new(&registry));
+        let request_log_layer =
+            mysten_network::request_log::GrpcRequestLogLayer::from_encoded_file_descriptor_sets(
+                file_descriptor_sets.iter().copied(),
+            )?;
 
-        if config.enable_reflection {
-            let mut reflection_v1_builder = tonic_reflection::server::Builder::configure();
-            let mut reflection_v1alpha_builder = tonic_reflection::server::Builder::configure();
-            for &fds in &file_descriptor_sets {
-                reflection_v1_builder =
-                    reflection_v1_builder.register_encoded_file_descriptor_set(fds);
-                reflection_v1alpha_builder =
-                    reflection_v1alpha_builder.register_encoded_file_descriptor_set(fds);
-            }
-            router = router
-                .add_service(reflection_v1_builder.build_v1()?)
-                .add_service(reflection_v1alpha_builder.build_v1alpha()?);
+        let mut builder = Server::builder();
+        if let Some(identity) = config.tls_identity {
+            builder = builder.tls_config(ServerTlsConfig::new().identity(identity))?;
         }
 
-        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-        let server_future = router.serve_with_shutdown(listen_address, async {
-            let _ = rx.await;
-        });
+        // Cloned up-front (before `self` is consumed below) only when the
+        // second listener is actually being started.
+        let ledger_for_plaintext = config.plaintext_address.is_some().then(|| self.clone());
 
-        let service = sui_futures::service::Service::new()
-            .spawn(async move {
-                server_future.await?;
-                Ok(())
-            })
-            .with_shutdown_signal(async move {
-                let _ = tx.send(());
-            });
+        let mut service = spawn_listener(
+            listen_address,
+            builder,
+            self,
+            rpc_metrics.clone(),
+            grpc_method_allowlist.clone(),
+            request_log_layer.clone(),
+            config.enable_reflection,
+            &file_descriptor_sets,
+        )?;
+
+        // Second, unencrypted listener for trusted internal callers (e.g.
+        // other in-cluster services) that should not need to negotiate TLS
+        // to reach this server. Serves the same `LedgerService`.
+        if let Some(plaintext_address) = config.plaintext_address {
+            let ledger =
+                ledger_for_plaintext.expect("cloned above whenever plaintext_address is set");
+            let plaintext_service = spawn_listener(
+                plaintext_address,
+                Server::builder(),
+                ledger,
+                rpc_metrics,
+                grpc_method_allowlist,
+                request_log_layer,
+                config.enable_reflection,
+                &file_descriptor_sets,
+            )?;
+            service = service.merge(plaintext_service);
+        }
 
         Ok(service)
     }
