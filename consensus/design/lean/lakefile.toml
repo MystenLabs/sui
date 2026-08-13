@@ -1,0 +1,7 @@
+name = "mysticeti"
+version = "0.1.0"
+defaultTargets = ["Mysticeti"]
+
+[[lean_lib]]
+name = "Mysticeti"
+srcDir = "."
