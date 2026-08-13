@@ -234,6 +234,7 @@ export default {
         'develop/security/best-practices',
       ],
     },
+    'develop/production-readiness',
   ],
 
   gettingStartedSidebar: [
