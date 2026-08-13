@@ -33,8 +33,9 @@ const ELEVATED_LATENCY_RATIO: f64 = 1.5;
 const MAX_HEALTHY_WRITE_LATENCY_MICROS: f64 = 1_000_000.0;
 const SEVERE_LATENCY_RATIO: f64 = 3.0;
 const BASELINE_EWMA_ALPHA: f64 = 0.2;
-const BASELINE_STALE_EVALS: u32 = 90;
-const BASELINE_STALE_ALPHA: f64 = 0.05;
+// Sustained elevated latency moves the baseline halfway toward the observed latency every ten
+// minutes of bounded sample evidence.
+const ELEVATED_BASELINE_HALF_LIFE: Duration = Duration::from_secs(10 * 60);
 const MIN_WINDOW_SAMPLES: u64 = 5;
 
 pub(super) fn is_overload_error(code: Code) -> bool {
@@ -100,6 +101,10 @@ fn classify_write_latency(
     } else {
         WriteLatencyCondition::Healthy
     }
+}
+
+fn elevated_baseline_alpha(evidence_duration: Duration) -> f64 {
+    1.0 - 2.0_f64.powf(-evidence_duration.as_secs_f64() / ELEVATED_BASELINE_HALF_LIFE.as_secs_f64())
 }
 
 struct ServerFeedback {
@@ -180,8 +185,8 @@ struct ControllerState {
     next_latency_evaluation_at: Instant,
     latency_total_micros: u64,
     latency_samples: u64,
+    latency_sampling_started_at: Option<Instant>,
     baseline_write_latency_micros: Option<f64>,
-    non_healthy_evals: u32,
 }
 
 impl ControllerState {
@@ -191,6 +196,14 @@ impl ControllerState {
 
     fn growth_observation_timeout(&self) -> Duration {
         self.permit_interval().saturating_add(OBSERVATION_WINDOW)
+    }
+
+    // Limit adaptation credit to the expected sampling cadence so idle time cannot redefine the
+    // baseline.
+    fn baseline_evidence_cap(&self) -> Duration {
+        let minimum_sample_duration =
+            Duration::from_secs_f64(MIN_WINDOW_SAMPLES as f64 / self.effective_qps);
+        LATENCY_EVALUATION_PERIOD.max(minimum_sample_duration)
     }
 
     fn restart_or_close_empty_observation(&mut self, now: Instant) {
@@ -271,8 +284,8 @@ impl BatchWriteFlowController {
                 next_latency_evaluation_at: now + LATENCY_EVALUATION_PERIOD,
                 latency_total_micros: 0,
                 latency_samples: 0,
+                latency_sampling_started_at: None,
                 baseline_write_latency_micros: None,
-                non_healthy_evals: 0,
             }),
             client_name,
             metrics,
@@ -392,6 +405,7 @@ impl BatchWriteFlowController {
             state.rate_generation = state.rate_generation.saturating_add(1);
             state.latency_total_micros = 0;
             state.latency_samples = 0;
+            state.latency_sampling_started_at = None;
             state.next_latency_evaluation_at = now + LATENCY_EVALUATION_PERIOD;
             state.next_permit_at = now;
         }
@@ -602,6 +616,14 @@ impl BatchWriteFlowController {
         }
 
         let window_avg_micros = state.latency_total_micros as f64 / state.latency_samples as f64;
+        let evidence_duration = now
+            .saturating_duration_since(
+                state
+                    .latency_sampling_started_at
+                    .take()
+                    .expect("latency samples missing sampling start"),
+            )
+            .clamp(LATENCY_EVALUATION_PERIOD, state.baseline_evidence_cap());
         state.latency_total_micros = 0;
         state.latency_samples = 0;
         state.next_latency_evaluation_at = now + LATENCY_EVALUATION_PERIOD;
@@ -609,21 +631,15 @@ impl BatchWriteFlowController {
         let condition =
             classify_write_latency(window_avg_micros, state.baseline_write_latency_micros);
         let latency_feedback = match condition {
-            WriteLatencyCondition::Severe => {
-                state.non_healthy_evals = state.non_healthy_evals.saturating_add(1);
-                Some(LatencyFeedback::Decrease)
-            }
+            WriteLatencyCondition::Severe => Some(LatencyFeedback::Decrease),
             WriteLatencyCondition::Elevated => {
-                state.non_healthy_evals = state.non_healthy_evals.saturating_add(1);
-                if state.non_healthy_evals >= BASELINE_STALE_EVALS
-                    && let Some(baseline) = state.baseline_write_latency_micros.as_mut()
-                {
-                    *baseline += BASELINE_STALE_ALPHA * (window_avg_micros - *baseline);
+                if let Some(baseline) = state.baseline_write_latency_micros.as_mut() {
+                    let alpha = elevated_baseline_alpha(evidence_duration);
+                    *baseline += alpha * (window_avg_micros - *baseline);
                 }
                 Some(LatencyFeedback::Reanchor)
             }
             WriteLatencyCondition::Healthy => {
-                state.non_healthy_evals = 0;
                 let had_baseline = state.baseline_write_latency_micros.is_some();
                 let baseline = state
                     .baseline_write_latency_micros
@@ -655,6 +671,9 @@ impl BatchWriteFlowController {
                 None
             } else {
                 let elapsed_micros = elapsed.as_micros().min(u64::MAX as u128) as u64;
+                if state.latency_samples == 0 {
+                    state.latency_sampling_started_at = Some(now);
+                }
                 state.latency_total_micros =
                     state.latency_total_micros.saturating_add(elapsed_micros);
                 state.latency_samples = state.latency_samples.saturating_add(1);
@@ -851,6 +870,16 @@ mod tests {
         for _ in 0..samples {
             admission_with_elapsed(controller, latency).complete();
         }
+    }
+
+    async fn record_latency_window_over(
+        controller: &BatchWriteFlowController,
+        latency: Duration,
+        evidence_duration: Duration,
+    ) {
+        record_latency_samples(controller, 1, latency);
+        tokio::time::advance(evidence_duration).await;
+        record_latency_samples(controller, MIN_WINDOW_SAMPLES - 1, latency);
     }
 
     async fn complete_rpc_with_latency(
@@ -1391,8 +1420,6 @@ mod tests {
         let deadline = Instant::now() + RECOVERY_DEADLINE;
         let mut completed_rpcs = 0;
         let mut saw_recorded_latency_sample = false;
-        let mut max_non_healthy_evals = 0;
-        let mut baseline_stayed_stale = true;
         let mut saw_growth_feedback = false;
 
         while controller.effective_qps() <= MIN_QPS
@@ -1414,15 +1441,6 @@ mod tests {
             saw_growth_feedback |=
                 admission_snapshot.latency_feedback == Some(LatencyFeedback::Increase);
             saw_recorded_latency_sample |= latency_samples(&controller) > 0;
-            max_non_healthy_evals = max_non_healthy_evals.max(
-                controller
-                    .state
-                    .lock()
-                    .expect("flow-control state mutex poisoned")
-                    .non_healthy_evals,
-            );
-            baseline_stayed_stale &=
-                baseline_micros(&controller) == Some(LEARNED_BASELINE.as_micros() as f64);
             saw_growth_feedback |=
                 pending_latency_feedback(&controller) == Some(LatencyFeedback::Increase);
         }
@@ -1437,23 +1455,10 @@ mod tests {
                 saw_recorded_latency_sample,
                 "expected completed RPC latency to enter the evaluation window"
             );
-            assert!(
-                max_non_healthy_evals > 0,
-                "expected a completed latency window to be classified non-healthy"
-            );
-            assert!(
-                baseline_stayed_stale,
-                "expected the 200 ms baseline to remain stale before recovery; baseline_micros={:?}",
-                baseline_micros(&controller)
-            );
-            assert!(
-                !saw_growth_feedback,
-                "expected stale-baseline classification not to authorize healthy Increase feedback"
-            );
         }
         assert!(
             effective_qps > MIN_QPS,
-            "expected recovery above {MIN_QPS} QPS within 15 virtual minutes after stable latency changed from 200 ms to 400 ms; completed_rpcs={completed_rpcs}, baseline_micros={:?}, saw_recorded_latency_sample={saw_recorded_latency_sample}, max_non_healthy_evals={max_non_healthy_evals}, saw_growth_feedback={saw_growth_feedback}, effective_qps={effective_qps}",
+            "expected recovery above {MIN_QPS} QPS within 15 virtual minutes after stable latency changed from 200 ms to 400 ms; completed_rpcs={completed_rpcs}, baseline_micros={:?}, saw_recorded_latency_sample={saw_recorded_latency_sample}, saw_growth_feedback={saw_growth_feedback}, effective_qps={effective_qps}",
             baseline_micros(&controller)
         );
     }
@@ -1714,6 +1719,7 @@ mod tests {
         learn_healthy_baseline(&controller);
         tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
         record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(200));
+        assert_eq!(baseline_micros(&controller), Some(20_000.0));
         assert_eq!(
             pending_latency_feedback(&controller),
             Some(LatencyFeedback::Decrease)
@@ -1754,7 +1760,7 @@ mod tests {
             pending_latency_feedback(&controller),
             Some(LatencyFeedback::Reanchor)
         );
-        assert_eq!(baseline_micros(&controller), Some(20_000.0));
+        assert!(baseline_micros(&controller).is_some_and(|baseline| baseline > 20_000.0));
         admit_rpcs(&controller, 20).await;
         finish_observation(&controller).await;
         assert_effective_qps(&controller, 20.0);
@@ -1768,7 +1774,7 @@ mod tests {
         admit_rpcs(&with_server, 20).await;
         finish_observation(&with_server).await;
         assert_effective_qps(&with_server, 14.0);
-        assert_eq!(baseline_micros(&with_server), Some(20_000.0));
+        assert!(baseline_micros(&with_server).is_some_and(|baseline| baseline > 20_000.0));
     }
 
     #[tokio::test(start_paused = true)]
@@ -1827,52 +1833,95 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn stale_elevated_baseline_drifts_until_healthy() {
+    async fn ready_elevated_window_receives_minimum_evidence_credit() {
+        const ELEVATED_LATENCY: Duration = Duration::from_millis(40);
+
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
         learn_healthy_baseline(&controller);
+        make_latency_evaluation_ready(&controller);
+        record_latency_samples(&controller, MIN_WINDOW_SAMPLES, ELEVATED_LATENCY);
 
-        for evaluation in 1..BASELINE_STALE_EVALS {
-            tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
-            record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(40));
-            let state = controller
-                .state
-                .lock()
-                .expect("flow-control state mutex poisoned");
-            assert_eq!(state.non_healthy_evals, evaluation);
-            assert_eq!(state.baseline_write_latency_micros, Some(20_000.0));
-        }
-
-        tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
-        record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(40));
-        {
-            let state = controller
-                .state
-                .lock()
-                .expect("flow-control state mutex poisoned");
-            assert_eq!(state.non_healthy_evals, BASELINE_STALE_EVALS);
-            assert_eq!(state.baseline_write_latency_micros, Some(21_000.0));
-        }
-
-        let mut reached_healthy = false;
-        for _ in 0..BASELINE_STALE_EVALS {
-            tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
-            record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(40));
-            if controller
-                .state
-                .lock()
-                .expect("flow-control state mutex poisoned")
-                .non_healthy_evals
-                == 0
-            {
-                reached_healthy = true;
-                break;
-            }
-        }
-
+        let expected_alpha = elevated_baseline_alpha(LATENCY_EVALUATION_PERIOD);
+        let expected_baseline = 20_000.0 + expected_alpha * (40_000.0 - 20_000.0);
+        let actual_baseline =
+            baseline_micros(&controller).expect("baseline should remain available");
         assert!(
-            reached_healthy,
-            "stale elevated baseline never reached healthy"
+            (actual_baseline - expected_baseline).abs() < 1e-9,
+            "expected minimum evidence credit baseline {expected_baseline}, got {actual_baseline}"
         );
-        assert!(baseline_micros(&controller).is_some_and(|baseline| baseline > 21_000.0));
+        assert_eq!(
+            pending_latency_feedback(&controller),
+            Some(LatencyFeedback::Reanchor)
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn one_elevated_window_does_not_authorize_growth() {
+        const ELEVATED_LATENCY: Duration = Duration::from_millis(40);
+
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        learn_healthy_baseline(&controller);
+        record_latency_window_over(&controller, ELEVATED_LATENCY, LATENCY_EVALUATION_PERIOD).await;
+
+        assert!(baseline_micros(&controller).is_some_and(|baseline| {
+            baseline > 20_000.0
+                && baseline < ELEVATED_LATENCY.as_micros() as f64 / ELEVATED_LATENCY_RATIO
+        }));
+        assert_eq!(
+            pending_latency_feedback(&controller),
+            Some(LatencyFeedback::Reanchor)
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn elevated_baseline_adaptation_is_cadence_independent() {
+        const ELEVATED_LATENCY: Duration = Duration::from_millis(40);
+        const EVIDENCE_DURATION: Duration = Duration::from_secs(50);
+
+        let frequent = BatchWriteFlowController::new("frequent".to_owned(), None);
+        learn_healthy_baseline(&frequent);
+        for _ in 0..5 {
+            record_latency_window_over(&frequent, ELEVATED_LATENCY, LATENCY_EVALUATION_PERIOD)
+                .await;
+        }
+
+        let sparse = BatchWriteFlowController::new("sparse".to_owned(), None);
+        learn_healthy_baseline(&sparse);
+        set_effective_qps_fixture(&sparse, MIN_QPS);
+        record_latency_window_over(&sparse, ELEVATED_LATENCY, EVIDENCE_DURATION).await;
+
+        let frequent_baseline =
+            baseline_micros(&frequent).expect("frequent baseline should remain available");
+        let sparse_baseline =
+            baseline_micros(&sparse).expect("sparse baseline should remain available");
+        assert!(
+            (frequent_baseline - sparse_baseline).abs() < 1e-9,
+            "expected cadence-independent baselines, got frequent={frequent_baseline} sparse={sparse_baseline}"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn idle_gap_cannot_accelerate_elevated_baseline() {
+        const ELEVATED_LATENCY: Duration = Duration::from_millis(40);
+        const IDLE_GAP: Duration = Duration::from_secs(24 * 60 * 60);
+
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        learn_healthy_baseline(&controller);
+        set_effective_qps_fixture(&controller, MIN_QPS);
+        tokio::time::advance(IDLE_GAP).await;
+        record_latency_samples(&controller, MIN_WINDOW_SAMPLES, ELEVATED_LATENCY);
+
+        let expected_alpha = elevated_baseline_alpha(LATENCY_EVALUATION_PERIOD);
+        let expected_baseline = 20_000.0 + expected_alpha * (40_000.0 - 20_000.0);
+        let actual_baseline =
+            baseline_micros(&controller).expect("baseline should remain available");
+        assert!(
+            (actual_baseline - expected_baseline).abs() < 1e-9,
+            "expected evidence-capped baseline {expected_baseline}, got {actual_baseline}"
+        );
+        assert_eq!(
+            pending_latency_feedback(&controller),
+            Some(LatencyFeedback::Reanchor)
+        );
     }
 }
