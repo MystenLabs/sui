@@ -155,12 +155,12 @@ fn thdb_config(metric_conf: &MetricConf) -> Config {
         .then_some(BatchCodec::Lz4);
     let mut config = Config {
         frag_size,
-        // run snapshot every 64 Gb written to wal
+        // run snapshot every 8 Gb written to wal
         snapshot_written_bytes: parse_env_usize("TH_SNAPSHOT_WRITTEN_BYTES", 1)
-            .unwrap_or(64 * 1024 * 1024 * 1024) as u64,
-        // force unloading dirty index entries if behind 60 Gb of wal
+            .unwrap_or(8 * 1024 * 1024 * 1024) as u64,
+        // force unloading dirty index entries if behind 7.5 Gb of wal
         snapshot_unload_threshold: parse_env_usize("TH_SNAPSHOT_UNLOAD_THRESHOLD", 1)
-            .unwrap_or(60 * 1024 * 1024 * 1024) as u64,
+            .unwrap_or(15 * 1024 * 1024 * 1024 / 2) as u64,
         unload_jitter_pct: 30,
         max_dirty_keys: default_max_dirty_keys(),
         max_maps,
