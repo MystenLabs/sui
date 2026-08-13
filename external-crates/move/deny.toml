@@ -62,6 +62,11 @@ ignore = [
     # `proc-macro-error2` is unmaintained, no safe upgrade — transitive via
     # aquamarine (doc diagrams), dev-dependency of move-package-alt
     "RUSTSEC-2026-0173",
+    # `bitmaps` is unmaintained (all versions). It is a transitive dependency of
+    # `imbl`, which is the RUSTSEC-recommended replacement for the unmaintained
+    # `im` crate. Unmaintained-only advisory, no unsoundness. Revisit if imbl
+    # drops its bitmaps dependency.
+    "RUSTSEC-2026-0247",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories

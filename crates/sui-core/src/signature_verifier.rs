@@ -4,7 +4,7 @@
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::{JWK, OIDCProvider};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
-use im::hashmap::HashMap as ImHashMap;
+use imbl::hashmap::HashMap as ImHashMap;
 use itertools::Itertools as _;
 use mysten_common::debug_fatal;
 use nonempty::NonEmpty;
@@ -131,10 +131,10 @@ impl SignatureVerifier {
     pub(crate) fn insert_jwk(&self, jwk_id: &JwkId, jwk: &JWK) {
         let mut jwks = self.jwks.write();
         match jwks.entry(jwk_id.clone()) {
-            im::hashmap::Entry::Occupied(_) => {
+            imbl::hashmap::Entry::Occupied(_) => {
                 debug!("JWK with kid {:?} already exists", jwk_id);
             }
-            im::hashmap::Entry::Vacant(entry) => {
+            imbl::hashmap::Entry::Vacant(entry) => {
                 debug!("inserting JWK with kid: {:?}", jwk_id);
                 entry.insert(jwk.clone());
             }
