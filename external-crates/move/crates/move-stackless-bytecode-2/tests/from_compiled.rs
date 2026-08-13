@@ -1,16 +1,16 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+mod common;
+
 use move_stackless_bytecode_2::{ast::StacklessBytecode, from_compiled_modules};
 
-use anyhow::{Context, ensure};
+use anyhow::ensure;
 use move_command_line_common::insta_assert;
 use move_core_types::account_address::AccountAddress;
-use move_package_alt::{RootPackage, Vanilla};
-use move_package_alt_compilation::{build_config::BuildConfig, build_plan::BuildPlan};
+use move_package_alt_compilation::build_plan::BuildPlan;
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeSet, io::BufRead, path::Path};
-use tempfile::TempDir;
 
 type ModuleKey = (AccountAddress, Symbol);
 
@@ -28,25 +28,9 @@ fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
         return Err(anyhow::anyhow!("no modules requested by {}", file_path.display()).into());
     }
 
-    let output_dir = TempDir::new()?;
-    let config = BuildConfig {
-        install_dir: Some(output_dir.path().to_path_buf()),
-        ..Default::default()
-    };
-    let env = Vanilla::default_environment();
-    let root_pkg: RootPackage<Vanilla> = config
-        .package_loader(pkg_dir, &env, Vanilla::new())
-        .load_sync()?;
-    let mut writer = Vec::new();
-    let compiled_package = BuildPlan::create(&root_pkg, &config)?
-        .compile_no_exit(&mut writer, |compiler| compiler)
-        .with_context(|| {
-            format!(
-                "failed to compile {}:\n{}",
-                pkg_dir.display(),
-                String::from_utf8_lossy(&writer)
-            )
-        })?;
+    let compiled_package = common::run_test_package_build(pkg_dir, |writer, root_pkg, config| {
+        BuildPlan::create(root_pkg, config)?.compile_no_exit(writer, |compiler| compiler)
+    })?;
 
     let root_modules = compiled_package
         .root_modules()
