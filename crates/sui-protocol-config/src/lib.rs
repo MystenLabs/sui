@@ -376,6 +376,7 @@ const MAINNET_USDB: &str =
 // Version 133: Include function signatures in type-node limits.
 //              Bound type nodes in accumulators.
 // Version 134: Add `package::original_package_id` and its native costs.
+//              Reduce the consensus block transaction count and payload limits.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4583,6 +4584,9 @@ impl ProtocolConfig {
                     let package_read_cost_per_byte = cfg.obj_access_cost_read_per_byte();
                     cfg.package_original_package_id_impl_cost_per_byte =
                         Some(package_read_cost_per_byte);
+
+                    cfg.consensus_max_transactions_in_block_bytes = Some(288 * 1024);
+                    cfg.consensus_max_num_transactions_in_block = Some(128);
                 }
                 // Use this template when making changes:
                 //
