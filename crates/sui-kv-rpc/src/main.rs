@@ -229,6 +229,7 @@ async fn main() -> Result<()> {
         tls_identity: config.tls_identity()?,
         metrics_registry: Some(registry),
         enable_reflection: true,
+        plaintext_address: config.plaintext_address().map(str::parse).transpose()?,
     };
 
     tokio::spawn(async {
