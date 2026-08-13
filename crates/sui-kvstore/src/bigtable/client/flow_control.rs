@@ -68,6 +68,14 @@ impl LatencyFeedback {
         }
     }
 
+    fn direction_label(self) -> &'static str {
+        match self {
+            Self::Decrease => "decrease",
+            Self::Reanchor => "reanchor",
+            Self::Increase => "increase",
+        }
+    }
+
     fn reanchors_to_observed(self) -> bool {
         matches!(self, Self::Decrease | Self::Reanchor)
     }
@@ -110,6 +118,18 @@ fn elevated_baseline_alpha(evidence_duration: Duration) -> f64 {
 struct ServerFeedback {
     factor: f64,
     period: Duration,
+}
+
+impl ServerFeedback {
+    fn direction_label(&self) -> &'static str {
+        if self.factor < 1.0 {
+            "decrease"
+        } else if self.factor > 1.0 {
+            "increase"
+        } else {
+            "neutral"
+        }
+    }
 }
 
 struct ObservationWindow {
@@ -261,6 +281,7 @@ struct LatencyEvaluation {
     window_avg_micros: f64,
     baseline_micros: Option<f64>,
     condition: WriteLatencyCondition,
+    feedback: Option<LatencyFeedback>,
     started_observation: bool,
 }
 
@@ -445,6 +466,7 @@ impl BatchWriteFlowController {
         let Some(feedback) = Self::validated_server_feedback(info) else {
             return;
         };
+        let feedback_direction = feedback.direction_label();
         let (completed_observation, started_observation, server_feedback_rejected) = {
             let mut state = self
                 .state
@@ -475,6 +497,14 @@ impl BatchWriteFlowController {
         if started_observation {
             self.emit_observation_started_telemetry();
         }
+        self.increment_server_feedback(
+            feedback_direction,
+            if server_feedback_rejected {
+                "rejected"
+            } else {
+                "queued"
+            },
+        );
         if server_feedback_rejected {
             self.emit_server_feedback_rejected_telemetry();
         }
@@ -594,6 +624,24 @@ impl BatchWriteFlowController {
         info!("Batch write flow control: feedback observation started");
     }
 
+    fn increment_server_feedback(&self, direction: &str, outcome: &str) {
+        if let Some(metrics) = &self.metrics {
+            metrics
+                .kv_bt_flow_control_server_feedback_total
+                .with_label_values(&[self.client_name.as_str(), direction, outcome])
+                .inc();
+        }
+    }
+
+    fn increment_latency_feedback(&self, feedback: LatencyFeedback) {
+        if let Some(metrics) = &self.metrics {
+            metrics
+                .kv_bt_flow_control_latency_feedback_total
+                .with_label_values(&[self.client_name.as_str(), feedback.direction_label()])
+                .inc();
+        }
+    }
+
     fn emit_server_feedback_rejected_telemetry(&self) {
         self.increment_flow_control_event("feedback_rejected");
     }
@@ -655,6 +703,7 @@ impl BatchWriteFlowController {
             window_avg_micros,
             baseline_micros: state.baseline_write_latency_micros,
             condition,
+            feedback: latency_feedback,
             started_observation,
         })
     }
@@ -703,6 +752,9 @@ impl BatchWriteFlowController {
                         .with_label_values(&[&self.client_name])
                         .set(baseline_micros / 1_000.0);
                 }
+            }
+            if let Some(feedback) = latency_evaluation.feedback {
+                self.increment_latency_feedback(feedback);
             }
             if latency_evaluation.condition == WriteLatencyCondition::Severe {
                 info!(
@@ -981,6 +1033,25 @@ mod tests {
         metrics
             .kv_bt_flow_control_events_total
             .with_label_values(&[client, event])
+            .get()
+    }
+
+    fn server_feedback_count(
+        metrics: &KvMetrics,
+        client: &str,
+        direction: &str,
+        outcome: &str,
+    ) -> u64 {
+        metrics
+            .kv_bt_flow_control_server_feedback_total
+            .with_label_values(&[client, direction, outcome])
+            .get()
+    }
+
+    fn latency_feedback_count(metrics: &KvMetrics, client: &str, direction: &str) -> u64 {
+        metrics
+            .kv_bt_flow_control_latency_feedback_total
+            .with_label_values(&[client, direction])
             .get()
     }
 
@@ -1499,7 +1570,9 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn missing_and_invalid_hints_are_no_ops() {
-        let controller = BatchWriteFlowController::new("invalid".to_owned(), None);
+        let registry = Registry::new();
+        let metrics = KvMetrics::new(&registry);
+        let controller = BatchWriteFlowController::new("invalid".to_owned(), Some(metrics.clone()));
         set_effective_qps_fixture(&controller, 42.0);
         controller.on_server_feedback(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
         let expected = observation_snapshot(&controller);
@@ -1522,6 +1595,22 @@ mod tests {
             controller.on_server_feedback(invalid_hint.as_ref());
             assert_eq!(observation_snapshot(&controller), expected);
         }
+        assert_eq!(
+            server_feedback_count(&metrics, "invalid", "neutral", "queued"),
+            1
+        );
+        for direction in ["decrease", "increase"] {
+            for outcome in ["queued", "rejected"] {
+                assert_eq!(
+                    server_feedback_count(&metrics, "invalid", direction, outcome),
+                    0
+                );
+            }
+        }
+        assert_eq!(
+            server_feedback_count(&metrics, "invalid", "neutral", "rejected"),
+            0
+        );
 
         let nanos_only = BatchWriteFlowController::new("nanos".to_owned(), None);
         set_effective_qps_fixture(&nanos_only, 42.0);
@@ -1558,6 +1647,10 @@ mod tests {
         let period = Duration::from_secs(2);
         controller.on_server_feedback(Some(&rate_limit_info(1.0, period)));
         assert_eq!(
+            server_feedback_count(&metrics, "period", "neutral", "queued"),
+            1
+        );
+        assert_eq!(
             flow_control_event_count(&metrics, "period", "observation_started"),
             1
         );
@@ -1575,6 +1668,14 @@ mod tests {
         assert_eq!(
             flow_control_event_count(&metrics, "period", "feedback_rejected"),
             2
+        );
+        assert_eq!(
+            server_feedback_count(&metrics, "period", "decrease", "rejected"),
+            1
+        );
+        assert_eq!(
+            server_feedback_count(&metrics, "period", "decrease", "queued"),
+            0
         );
         assert!(
             controller
@@ -1599,6 +1700,32 @@ mod tests {
             flow_control_event_count(&metrics, "period", "observation_completed"),
             2
         );
+        assert_eq!(
+            server_feedback_count(&metrics, "period", "decrease", "queued"),
+            1
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn latency_feedback_metrics_record_generated_directions() {
+        let registry = Registry::new();
+        let metrics = KvMetrics::new(&registry);
+        let controller = BatchWriteFlowController::new("latency".to_owned(), Some(metrics.clone()));
+
+        learn_healthy_baseline(&controller);
+        assert_eq!(latency_feedback_count(&metrics, "latency", "increase"), 0);
+
+        make_latency_evaluation_ready(&controller);
+        record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(20));
+        assert_eq!(latency_feedback_count(&metrics, "latency", "increase"), 1);
+
+        make_latency_evaluation_ready(&controller);
+        record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(40));
+        assert_eq!(latency_feedback_count(&metrics, "latency", "reanchor"), 1);
+
+        make_latency_evaluation_ready(&controller);
+        record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(100));
+        assert_eq!(latency_feedback_count(&metrics, "latency", "decrease"), 1);
     }
 
     #[tokio::test(start_paused = true)]
