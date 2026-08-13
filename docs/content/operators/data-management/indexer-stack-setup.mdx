@@ -615,14 +615,17 @@ ORDER BY pipeline;
 
 If a pipeline's `checkpoint_hi_inclusive` is significantly behind the network tip, that pipeline is lagging. Compare against the current network checkpoint (visible on [SuiVision](https://suivision.xyz/) or through `curl -s http://localhost:9184/metrics | grep watermark_checkpoint`). The [`watermark_checkpoint` metric](https://github.com/MystenLabs/sui/blob/main/crates/sui-indexer-alt-framework/src/metrics.rs) tracks each pipeline's current position; `watermark_checkpoint_in_db` shows the last position persisted to the database.
 
+If you also run the GraphQL RPC server, its health endpoint (for example, `http://localhost:7000/health`) reports lag broken down by data source and pipeline.
+
 ### Diagnose a stalled pipeline
 
-If a pipeline's checkpoint stops advancing:
+A stalled watermark is the starting point for most indexer investigations. Narrow the cause to one of three categories before taking action:
 
-1. Check the indexer logs for errors related to that pipeline. Filter by pipeline name: `grep "PIPELINE_NAME" indexer.log`.
-2. Verify the Postgres connection is healthy. A connection timeout or lock contention can stall all pipelines.
-3. Check for autovacuum contention. Long-running autovacuum on a pipeline's table can block writes. Query `pg_stat_activity` for vacuum processes.
-4. Restart the indexer. It resumes from the last recorded watermark automatically.
+**Checkpoints not being downloaded (upstream):** The ingestion layer cannot fetch new checkpoints from the data source. Check network connectivity to your gRPC endpoint or GCS bucket. Verify the fullnode or checkpoint store is healthy and serving the expected checkpoint range. The `ingested_checkpoint_timestamp_lag` Prometheus metric shows how far behind the ingestion layer is.
+
+**Pipeline processing error:** The pipeline fetched checkpoints but fails to transform or process them. Check the indexer logs filtered by the pipeline name for error messages. Common causes include schema mismatches after a protocol upgrade or unexpected data in a specific checkpoint.
+
+**Commits not going through (downstream):** The pipeline processed checkpoints but cannot write results to the database. Check Postgres connectivity, disk space, and lock contention. Long-running autovacuum on the pipeline's target table can block writes. Query `pg_stat_activity` for active vacuum processes on that table.
 
 ### The `cp_sequence_numbers` pipeline
 
@@ -635,12 +638,14 @@ To fix, ensure `cp_sequence_numbers` is included in your indexer's pipeline list
 
 ### Indexer troubleshooting
 
-| Symptom | Cause | Fix |
+The following table lists common starting points for investigation. Most symptoms can result from multiple confounding factors, so treat these as initial hypotheses rather than definitive diagnoses.
+
+| Symptom | Common cause | Suggested mitigation |
 |---|---|---|
 | All pipelines stalled at the same checkpoint | Postgres connection lost or disk full | Check Postgres connectivity and disk space. Restart the indexer after fixing. |
 | One pipeline lagging, others current | Pipeline-specific error (schema mismatch, data issue) | Check indexer logs for that pipeline. If corrupted, [re-index from a checkpoint](#re-indexing-from-a-different-checkpoint). |
 | GraphQL returns empty results for valid queries | `cp_sequence_numbers` pipeline missing or lagging | Add the pipeline or wait for it to catch up. |
-| Watermark not advancing after restart | `--first-checkpoint` flag ignored because watermark exists | Delete the watermark record for that pipeline (see [re-indexing](#re-indexing-from-a-different-checkpoint)). |
+| Watermark not advancing after restart | Pipeline resuming from its last committed watermark, which is expected behavior | Investigate using the three categories above (upstream, processing, downstream). Only delete the watermark record as a last resort (see [re-indexing](#re-indexing-from-a-different-checkpoint)). |
 | Postgres table bloat after enabling pruning | Dead rows accumulating faster than autovacuum | Apply the [autovacuum tuning settings](#reducing-indexer-pipeline-table-and-index-bloat). |
 
 ## Adding a new pipeline
