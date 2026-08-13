@@ -179,6 +179,7 @@ impl ValidatorConfigBuilder {
                         .server_port
                         .or_else(|| Some(local_ip_utils::get_available_port(&localhost))),
                     allowlist: observer_config.allowlist,
+                    quorum_release: observer_config.quorum_release,
                     peers: observer_config.peers,
                 },
                 ..Default::default()
@@ -538,6 +539,7 @@ impl FullnodeConfigBuilder {
                         .server_port
                         .or_else(|| Some(local_ip_utils::get_available_port(&ip))),
                     allowlist: observer_config.allowlist,
+                    quorum_release: observer_config.quorum_release,
                     peers: observer_config.peers,
                 },
                 ..Default::default()
