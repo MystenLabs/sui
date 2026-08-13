@@ -20,6 +20,7 @@ fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
     let compiled_package = common::run_test_package_build(pkg_dir, |writer, root_pkg, config| {
         BuildPlan::create(root_pkg, config)?.compile_no_exit(writer, |compiler| compiler)
     })?;
+    let root_package_name = compiled_package.compiled_package_info.package_name;
 
     let root_modules = compiled_package
         .root_modules()
@@ -45,6 +46,7 @@ fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
     assert_modules(
         file_path,
         &bytecode,
+        root_package_name,
         &root_modules,
         &test_module_names,
         "compiled.opt.sbir",
@@ -54,6 +56,7 @@ fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
     assert_modules(
         file_path,
         &bytecode,
+        root_package_name,
         &root_modules,
         &test_module_names,
         "compiled.no_opt.sbir",
@@ -66,18 +69,16 @@ fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
 fn assert_modules(
     file_path: &Path,
     bytecode: &move_stackless_bytecode_2::ast::StacklessBytecode,
+    root_package_name: Symbol,
     root_modules: &BTreeSet<ModuleKey>,
     test_module_names: &BTreeSet<Symbol>,
     suffix: &str,
 ) -> anyhow::Result<()> {
     let modules = bytecode.packages.iter().flat_map(|pkg| {
-        let package_name = pkg
-            .name
-            .unwrap_or(Symbol::from(pkg.address.to_hex_literal()));
         pkg.modules.values().filter_map(move |module| {
             root_modules
                 .contains(&(pkg.address, module.name))
-                .then_some((package_name, module))
+                .then_some((root_package_name, module))
         })
     });
     common::assert_modules(file_path, modules, test_module_names, suffix)
