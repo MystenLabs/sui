@@ -1,0 +1,148 @@
+---
+title: Freeze and Revoke Patterns
+description: >-
+  Implement freeze and revoke patterns for regulated assets on Sui, including
+  single-account freeze, bulk freeze, time-locked freeze, multisig AdminCap
+  governance, and unfreeze flows with audit events.
+keywords:
+  - freeze
+  - revoke
+  - AdminCap
+  - DenyCapV2
+  - multisig
+  - time-locked freeze
+  - bulk freeze
+  - unfreeze
+  - audit events
+  - regulated assets
+goal:
+  description: >-
+    Reader understands the freeze and revoke patterns available for regulated
+    assets on Sui and can choose the right pattern for their compliance
+    requirements
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I freeze an address on Sui for a regulated currency?
+  - What is the difference between single-account freeze and bulk freeze?
+  - How do I implement a time-locked freeze on Sui?
+  - How should I govern the AdminCap or DenyCapV2 for freeze operations?
+  - How do I unfreeze an address and emit audit events?
+answer: >-
+  Freezing an address for a regulated currency on Sui involves adding it to the
+  DenyList using a DenyCapV2 capability. Patterns range from single-account
+  freeze to bulk freeze through PTBs. Time-locked freeze can be implemented
+  using Sui's Clock object to schedule automatic expiration. The DenyCapV2
+  should be governed through a multisig address with separation of duties.
+  Every freeze and unfreeze action should emit events for audit trail purposes.
+---
+
+Freeze and revoke operations restrict an address's ability to transact with a specific [regulated currency](/onchain-finance/fungible-tokens/regulated-tokens) on Sui. These operations use the [`DenyList` system object](/onchain-finance/fungible-tokens/regulated-tokens#denylist) and the `DenyCapV2` capability. This page covers the operational patterns for freeze and revoke beyond basic deny list add and remove.
+
+For foundational deny list management, see [Deny List Operations](/onchain-finance/compliance/deny-list-operations). For the broader compliance context, see [Compliance for Regulated Assets](/onchain-finance/compliance).
+
+## Single-account freeze
+
+A single-account freeze adds one address to the deny list for a specific currency type. This is the most common freeze operation for responding to a specific compliance event such as a sanctions match or fraud detection.
+
+The operation calls `deny_list_v2_add` on the `coin` module, passing the `DenyList` object (`0x403`), the `DenyCapV2`, and the target address. The frozen address cannot send the currency immediately. It can still receive until the current [epoch](/develop/sui-architecture/epochs) ends.
+
+{/* TODO: Import code from MystenLabs/sui — deny_list_v2_add single address example */}
+{/* Description: TypeScript example showing a single-address freeze operation with DenyCapV2 */}
+
+Every freeze action should emit a custom event from your module so that downstream systems can track the action. The framework's deny list operations do not emit application-level events automatically. Your wrapper module should emit an event containing the frozen address, the operator address, the timestamp, and a reason code.
+
+## Bulk freeze
+
+Bulk freeze adds multiple addresses to the deny list in a single atomic transaction using a [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks). Each address requires a separate `deny_list_v2_add` command within the PTB, but they all execute atomically.
+
+Use bulk freeze when:
+
+- A sanctions list update adds multiple addresses simultaneously.
+- A fraud investigation identifies a cluster of related addresses.
+- A regulatory order requires freezing all addresses associated with a specific entity.
+
+Gas cost scales linearly with the number of addresses. Learn more about [gas and throughput implications](/onchain-finance/compliance/performance-cost).
+
+{/* TODO: Import code from MystenLabs/sui — PTB bulk freeze example */}
+{/* Description: TypeScript example showing a PTB that freezes multiple addresses in a single transaction */}
+
+## Time-locked freeze
+
+A time-locked freeze is a freeze that automatically expires after a specified duration. Sui does not provide built-in time-locked deny list entries, but you can implement this pattern using the [`sui::clock`](/develop/write-move/sui-move-concepts) module and a custom wrapper.
+
+The pattern works as follows:
+
+1. A custom Move module stores freeze records as [dynamic fields](/develop/objects/dynamic-fields) on a shared registry object. Each record contains the frozen address, the freeze timestamp (read from `Clock`), and the expiration timestamp.
+2. When freezing an address, the module adds the address to the `DenyList` and creates a freeze record with the expiration time.
+3. A separate `unfreeze_expired` function checks the current `Clock` time against the freeze record. If the freeze has expired, it removes the address from the `DenyList` and deletes the freeze record.
+4. An offchain service or cron job calls `unfreeze_expired` periodically to process expired freezes.
+
+{/* TODO: Import code from MystenLabs/sui — time-locked freeze Move module example */}
+{/* Description: Move module showing freeze record struct, freeze_with_expiry function, and unfreeze_expired function using Clock */}
+
+:::info
+
+The `unfreeze_expired` function must be called explicitly. There is no automatic expiration on Sui. Build a reliable offchain process to call this function, and include monitoring to detect if the process fails.
+
+:::
+
+## Multisig governance for freeze capabilities
+
+The `DenyCapV2` controls freeze and unfreeze operations for a regulated currency. In production, this capability should be governed through a [multisig address](/develop/transactions/transaction-auth/multisig) to prevent unilateral freeze actions and provide an approval workflow.
+
+Recommended governance patterns:
+
+- **Two-of-three multisig:** Requires two out of three designated signers to approve a freeze operation. Balances operational speed with oversight.
+- **Role-based multisig:** Different threshold requirements for different operations. For example, emergency freeze might require one-of-two while unfreeze requires two-of-three.
+- **Governance module:** A custom Move module that wraps `DenyCapV2` and enforces additional constraints such as time delays, maximum freeze counts per epoch, or mandatory reason codes before executing a freeze.
+
+:::caution
+
+Store multisig key shares on separate hardware devices managed by different team members. A compromised multisig defeats the purpose of distributed governance. For key management best practices, see [Security Best Practices](/develop/security/best-practices).
+
+:::
+
+## Unfreeze flow with audit events
+
+Unfreezing an address removes it from the deny list. The address can receive the currency immediately but must wait until the next [epoch](/develop/sui-architecture/epochs) before it can send. Design your unfreeze workflow to include these steps:
+
+1. **Compliance review:** Confirm that the reason for the original freeze no longer applies. This is an offchain process involving your compliance team or provider.
+2. **Approval:** Submit the unfreeze transaction for multisig approval.
+3. **Execution:** Call `deny_list_v2_remove` with the `DenyList` object, `DenyCapV2`, and the target address.
+4. **Event emission:** Emit a custom event from your wrapper module containing the unfrozen address, the operator, the timestamp, a reference to the original freeze event, and the resolution reason.
+5. **Notification:** Notify downstream systems (indexers, compliance dashboards, the affected user) that the address is unfrozen.
+
+The event emitted on unfreeze should reference the original freeze event so that compliance auditors can trace the full lifecycle of a restriction. Learn more about designing compliance events in [Compliance Events](/onchain-finance/compliance/compliance-events).
+
+## Global pause
+
+The [Currency Standard](/onchain-finance/fungible-tokens/currency) supports a global pause that halts all transfers of a regulated currency, not just specific addresses. Use global pause only for emergency situations such as:
+
+- A critical vulnerability discovered in the token contract.
+- A regulatory order requiring immediate cessation of all transfers.
+- A key compromise where the scope of unauthorized transfers is unknown.
+
+Global pause is a blunt instrument. It affects all holders, not just targeted addresses. Resume transfers only after the situation is resolved and audited. Emit events for both pause and unpause actions.
+
+## Choosing a freeze pattern
+
+| Pattern | Use case | Latency | Governance overhead |
+| --- | --- | --- | --- |
+| Single-account freeze | Individual sanctions match or fraud case | Immediate (outbound) | Per-incident multisig approval |
+| Bulk freeze | Sanctions list update or entity cluster | Immediate (outbound) | Single multisig approval for batch |
+| Time-locked freeze | Temporary holds pending investigation | Immediate with scheduled expiry | Requires offchain expiry service |
+| Global pause | Emergency halt of all transfers | Immediate for all holders | Highest threshold multisig |

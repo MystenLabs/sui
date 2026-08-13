@@ -1,0 +1,193 @@
+---
+title: Testing Compliance Logic
+description: >-
+  Test regulated asset compliance logic on Sui, including unit test patterns
+  for policy rules in Move, PTB simulation of freeze and deny scenarios, and
+  a Testnet validation checklist.
+keywords:
+  - testing compliance
+  - unit tests
+  - Move testing
+  - PTB simulation
+  - testnet checklist
+  - policy rule testing
+  - deny list testing
+  - freeze testing
+  - compliance validation
+  - regulated assets
+goal:
+  description: >-
+    Reader can test compliance logic for regulated assets using Move unit tests,
+    PTB simulation, and a structured Testnet validation process
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I test compliance logic for regulated assets on Sui?
+  - How do I unit test custom policy rules in Move?
+  - How do I simulate freeze and deny list scenarios?
+  - What should I test on Testnet before deploying compliance modules?
+  - How do I test token policy rule enforcement?
+answer: >-
+  Testing compliance logic involves three layers: Move unit tests for
+  individual policy rule functions, PTB simulation using dry run for
+  multi-step compliance scenarios, and end-to-end Testnet validation of the
+  full regulated payment flow. Each layer covers different failure modes and
+  provides increasing confidence before Mainnet deployment.
+---
+
+Testing compliance logic for regulated assets requires verifying that restrictions are enforced correctly, failure modes are handled properly, and events are emitted accurately. This page covers three testing layers: Move unit tests for individual policy rules, programmable transaction block (PTB) simulation for multi-step scenarios, and end-to-end Testnet validation.
+
+For general Move testing documentation, see [Testing](/develop/testing-debugging/testing).
+
+## Move unit tests for policy rules
+
+Move unit tests verify the logic of individual policy rule `verify` functions in isolation. These tests run locally without a network connection and provide fast feedback on rule logic.
+
+### What to test
+
+For each custom [policy rule](/onchain-finance/closed-loop-token/rules), test the following scenarios:
+
+**Positive cases (rule approves):**
+- Valid attestation object exists and is not expired.
+- Transfer amount is within configured limits.
+- Sender and recipient both meet the rule's requirements.
+
+**Negative cases (rule rejects):**
+- No attestation object exists for the sender.
+- Attestation object is expired (issuance timestamp plus validity period is before the current clock time).
+- Attestation object is revoked.
+- Transfer amount exceeds the configured limit.
+- Attestation was issued by an untrusted issuer.
+
+**Edge cases:**
+- Attestation expires exactly at the current timestamp (boundary condition).
+- Transfer amount equals exactly the configured limit.
+- Sender has multiple attestation objects (if your model allows this).
+- Rule configuration is missing or has default values.
+
+### Test structure
+
+Move unit tests for compliance rules follow the standard [Move testing](/develop/testing-debugging/testing) pattern using `#[test]` attributes and the `test_scenario` module.
+
+{/* TODO: Import code from MystenLabs/sui — Move unit test example for a custom attestation check rule */}
+{/* Description: Move test module showing test functions for attestation rule verify — valid attestation, expired attestation, missing attestation, and revoked attestation cases */}
+
+### Testing time-dependent logic
+
+Rules that check attestation expiration or time-locked freeze durations depend on the `sui::clock::Clock` object. In unit tests, use a test `Clock` object with a controlled timestamp.
+
+{/* TODO: Import code from MystenLabs/sui — Move test example showing Clock manipulation for time-dependent compliance tests */}
+{/* Description: Move test showing how to create a test Clock, set its timestamp, and verify that an attestation expiration check behaves correctly at different times */}
+
+## PTB simulation with dry run
+
+Programmable transaction block simulation using [dry run](/develop/transactions/ptbs/prog-txn-blocks) executes a transaction against the current network state without committing it. This is useful for testing multi-step compliance flows that involve multiple objects and shared state.
+
+### What to simulate
+
+Use dry run to verify:
+
+- **Deny list enforcement:** Construct a transfer PTB for a denied address and confirm that dry run returns an error indicating the deny list restriction.
+- **Policy rule chain:** Construct a transfer PTB that triggers multiple policy rules and confirm that all rules evaluate correctly and the transfer succeeds (or fails) as expected.
+- **Batch operations:** Construct a PTB with multiple deny list add or remove commands and confirm that all operations execute correctly.
+- **Sponsored transactions:** Construct a [sponsored transaction](/develop/transaction-payment/sponsor-txn) for a compliance operation and confirm that gas sponsorship works correctly with the compliance checks.
+
+### Running dry run
+
+Use the TypeScript SDK or Rust SDK to construct the PTB and submit it for dry run:
+
+{/* TODO: Import code from MystenLabs/sui-typescript — dry run example for a compliance transfer PTB */}
+{/* Description: TypeScript example showing how to construct a regulated currency transfer PTB and execute it with dryRunTransactionBlock to verify compliance rule evaluation */}
+
+Dry run returns the transaction effects including:
+
+- Whether the transaction would succeed or fail.
+- The events that would be emitted (verify compliance events are correct).
+- The gas cost (use this for [cost planning](/onchain-finance/compliance/performance-cost)).
+- The object changes (verify the correct objects are modified).
+
+:::info
+
+Dry run executes against the current network state. If the deny list, attestation registry, or policy configuration has changed since you constructed the transaction, the dry run result might not match the result of actual execution. For time-sensitive tests, run dry run immediately before submitting the real transaction.
+
+:::
+
+## Testnet validation checklist
+
+Before deploying compliance modules to Mainnet, complete the following validation on [Testnet](/develop/sui-architecture/networks). Each item should be tested and the result documented.
+
+### Package deployment
+
+- [ ] Publish the compliance package to Testnet.
+- [ ] Verify that `DenyCapV2`, `TreasuryCap`, `MetadataCap`, and `UpgradeCap` are created and transferred to the expected addresses.
+- [ ] Transfer capabilities to their governance addresses (multisig or governance module).
+
+### Deny list operations
+
+- [ ] Add an address to the deny list. Verify that the address cannot send the regulated currency immediately.
+- [ ] Verify that the denied address can still receive the currency until the epoch boundary.
+- [ ] Wait for the next epoch. Verify that the denied address can no longer receive the currency.
+- [ ] Remove the address from the deny list. Verify that the address can receive the currency immediately.
+- [ ] Wait for the next epoch. Verify that the removed address can send the currency again.
+- [ ] Batch add multiple addresses in a single PTB. Verify that all addresses are denied.
+- [ ] Batch remove multiple addresses in a single PTB. Verify that all addresses are restored.
+
+### Freeze and revoke
+
+- [ ] Freeze a single address. Verify the freeze event is emitted with correct data.
+- [ ] Unfreeze the address. Verify the unfreeze event references the original freeze.
+- [ ] If using time-locked freeze: freeze an address with an expiration. Call the unfreeze function after the expiration. Verify automatic removal works correctly.
+- [ ] Test global pause. Verify that all transfers fail while paused and resume when unpaused.
+
+### Identity gating
+
+- [ ] Issue an attestation for a test address. Verify the attestation event is emitted.
+- [ ] Attempt a transfer with the attested address. Verify the policy rule approves.
+- [ ] Attempt a transfer with an unattested address. Verify the policy rule rejects.
+- [ ] Revoke the attestation. Verify that subsequent transfers are rejected.
+- [ ] Test attestation expiration. Create an attestation, wait for it to expire, and verify rejection.
+
+### Policy rule enforcement
+
+- [ ] Add a rule to the TokenPolicy. Verify it is enforced on the next transfer.
+- [ ] Remove a rule from the TokenPolicy. Verify it is no longer enforced.
+- [ ] Test multiple rules in combination. Verify that all rules must approve for the transfer to succeed.
+- [ ] Test a rule denial. Verify that the PolicyDenyEvent is emitted with the correct reason.
+
+### Package upgrades
+
+- [ ] Publish an upgrade to the compliance package on Testnet.
+- [ ] Verify that existing tokens, attestations, and deny list entries continue to function.
+- [ ] Verify that new compliance logic takes effect after the upgrade.
+- [ ] Test backward compatibility with attestation objects created before the upgrade.
+
+### Event and indexer validation
+
+- [ ] Verify that all compliance event types are emitted correctly (transfer, freeze, unfreeze, deny, attestation, pause).
+- [ ] Query events through [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) and verify the schema matches expectations.
+- [ ] If using a custom indexer, verify that events are ingested, enriched, and queryable.
+
+### End-to-end regulated payment
+
+- [ ] Execute the full [regulated payment flow](/onchain-finance/compliance/regulated-payment-flow) on Testnet.
+- [ ] Verify each stage: identity verification, deny list screening, transaction construction, policy enforcement, transfer execution, event emission, and indexer confirmation.
+- [ ] Test each failure mode from the [failure modes table](/onchain-finance/compliance/regulated-payment-flow#failure-modes) and verify correct error handling.
+
+:::caution
+
+Testnet epoch durations are shorter than Mainnet. Account for this difference when testing epoch-boundary behavior such as deny list latency. The deny list behavior is the same, but the wall-clock time before epoch boundary effects take hold differs.
+
+:::

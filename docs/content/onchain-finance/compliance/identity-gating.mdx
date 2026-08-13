@@ -1,0 +1,158 @@
+---
+title: Identity Gating with zkLogin
+description: >-
+  Gate regulated token actions using zkLogin identity verification, onchain
+  attestation objects, and custom token policy rules on Sui.
+keywords:
+  - zkLogin
+  - identity gating
+  - KYC attestation
+  - token policy rule
+  - PolicyRule
+  - identity verification
+  - onchain attestation
+  - regulated tokens
+  - compliance
+goal:
+  description: >-
+    Reader understands how to use zkLogin identity data to gate regulated token
+    actions through onchain attestation objects and custom policy rules
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I gate token transfers with zkLogin identity on Sui?
+  - What is an onchain attestation object for KYC compliance?
+  - How do I create a custom PolicyRule that checks identity attestation?
+  - How does zkLogin integrate with token policies for regulated assets?
+answer: >-
+  Identity gating on Sui uses zkLogin to verify a user's identity through an
+  OAuth provider, then stores the verification result as an onchain attestation
+  object. A custom token policy rule checks for a valid attestation before
+  approving token actions such as transfers. This pattern separates the
+  identity verification process (offchain, handled by providers) from the
+  onchain enforcement (attestation check in the policy rule).
+---
+
+Identity gating is a compliance pattern that restricts regulated token actions to addresses with verified identities. On Sui, this pattern combines [zkLogin](/sui-stack/zklogin-integration) for identity verification with [token policy rules](/onchain-finance/closed-loop-token/rules) for onchain enforcement. The identity verification itself happens offchain through OAuth providers. The verification result is stored onchain as an attestation object that policy rules can check.
+
+## How the pattern works
+
+Identity gating separates three concerns:
+
+1. **Identity verification (offchain):** A user authenticates through a [zkLogin](/sui-stack/zklogin-integration) flow, proving ownership of an identity from an OAuth provider (Google, Facebook, Apple, and others). An offchain KYC provider verifies additional identity documents if required.
+2. **Attestation issuance (onchain):** After verification, an authorized issuer creates an onchain attestation object linked to the user's address. This object records that the address has passed identity verification without storing personal data onchain.
+3. **Policy enforcement (onchain):** A custom [token policy rule](/onchain-finance/closed-loop-token/rules) checks for a valid attestation object before approving token actions such as transfers or conversions.
+
+This separation means personal identity data never appears onchain. The attestation object is a boolean signal: this address has been verified, or it has not.
+
+## Attestation objects
+
+An attestation object is a Sui [object](/develop/objects) that records the result of an identity verification. It is owned by the verified address and referenced by policy rules during token action requests.
+
+A well-designed attestation object includes:
+
+- **Issuer identity:** The address or capability that issued the attestation, so policy rules can verify the attestation comes from a trusted source.
+- **Subject address:** The address that passed verification.
+- **Issuer name (from zkLogin):** The OAuth provider identifier (for example, `https://accounts.google.com`) extracted from the zkLogin proof. This identifies which provider verified the identity without revealing the user's account.
+- **Issuance timestamp:** When the attestation was created, enabling expiration checks.
+- **Attestation type:** The level or type of verification completed (for example, basic email verification versus full KYC with document check).
+
+{/* TODO: Import code from MystenLabs/sui — attestation object struct definition in Move */}
+{/* Description: Move struct showing an Attestation object with issuer, subject, provider, timestamp, and verification level fields */}
+
+:::caution
+
+Do not store personal identity information (names, document numbers, dates of birth) in attestation objects. Onchain data is public and permanent. Store only the minimum signal needed for policy enforcement: that verification occurred, when, by whom, and at what level.
+
+:::
+
+### Issuing attestations
+
+Only authorized issuers should create attestation objects. The issuer is typically a backend service that:
+
+1. Receives confirmation from the KYC provider that a user passed verification.
+2. Verifies the user's Sui address (for example, through a signed challenge).
+3. Constructs a transaction that creates an `Attestation` object and transfers it to the verified address.
+
+The issuer's authority is controlled by a capability object (for example, an `IssuerCap`). This capability determines which addresses can create valid attestations. Govern the `IssuerCap` through a [multisig address](/develop/transactions/transaction-auth/multisig) and emit [events](/develop/accessing-data/using-events) on every issuance. For capability governance patterns, see [Security Best Practices](/develop/security/best-practices).
+
+{/* TODO: Import code from MystenLabs/sui — attestation issuance function in Move */}
+{/* Description: Move function showing how an authorized issuer creates and transfers an Attestation object */}
+
+### Revoking attestations
+
+Attestations might need to be revoked if:
+
+- A user's KYC status expires or is invalidated.
+- An identity provider notifies you of a compromised account.
+- A regulatory order requires revoking a specific user's access.
+
+Revocation can follow two patterns:
+
+- **Deletion:** The issuer calls a function that deletes the attestation object. This requires the issuer to have a mechanism to access or reclaim the object, such as storing it as a [dynamic field](/develop/objects/dynamic-fields) on a shared registry rather than transferring it directly to the user.
+- **Status flag:** The attestation object includes a `revoked` field that the issuer can set to `true`. The policy rule checks this field and rejects actions when the attestation is revoked.
+
+The registry pattern (storing attestations as dynamic fields on a shared object keyed by address) is generally preferred because it gives the issuer control over the attestation lifecycle while still allowing policy rules to look up attestations by address.
+
+## Custom policy rule for identity checks
+
+A custom [token policy rule](/onchain-finance/closed-loop-token/rules) enforces the attestation requirement at the point of token action. The rule module defines a witness type and a `verify` function that the token policy calls during action request processing.
+
+The rule checks:
+
+1. An attestation exists for the sender's address in the attestation registry.
+2. The attestation was issued by a trusted issuer.
+3. The attestation has not expired (current time minus issuance timestamp is within the allowed window).
+4. The attestation has not been revoked (if using the status flag pattern).
+
+If any check fails, the rule does not add its receipt to the [action request](/onchain-finance/closed-loop-token/action-request), and the token action is denied.
+
+{/* TODO: Import code from MystenLabs/sui — custom PolicyRule verify function for attestation check */}
+{/* Description: Move module showing a rule witness, verify function that looks up an attestation and checks validity */}
+
+### Connecting zkLogin identity to attestations
+
+The [zkLogin](/sui-stack/zklogin-integration) integration provides a way to verify that a Sui address is controlled by a specific OAuth identity (identified by issuer and subject). The zkLogin proof is verified during transaction execution, but the issuer and subject information is available in the [transaction context](/develop/transactions/txn-overview).
+
+To connect zkLogin identity to attestations:
+
+1. During the KYC flow, the user authenticates with zkLogin, proving they control a specific OAuth identity.
+2. The KYC provider verifies the user's identity documents against the OAuth identity.
+3. The backend service extracts the zkLogin issuer (for example, `https://accounts.google.com`) and records it in the attestation object.
+4. Policy rules can then verify not just that an attestation exists, but that it was issued for an address authenticated through a specific OAuth provider.
+
+This creates a chain of trust: OAuth provider verifies identity, KYC provider verifies documents against that identity, attestation records the result onchain, and the policy rule enforces the requirement at transaction time.
+
+Learn more about zkLogin integration in the [zkLogin guide](/sui-stack/zklogin-integration/integration-guide).
+
+## Attestation expiration and renewal
+
+Attestations should have a defined validity period to ensure identity verification remains current. The validity period depends on regulatory requirements and risk tolerance.
+
+Implement expiration by:
+
+1. Recording the issuance timestamp in the attestation object.
+2. Defining a validity duration in the policy rule's configuration (stored as a [rule config](/onchain-finance/closed-loop-token/rules) on the `TokenPolicy`).
+3. Comparing the current time (from `sui::clock::Clock`) against the issuance timestamp plus the validity duration during rule verification.
+
+When an attestation expires, the user must re-verify through the KYC flow to receive a new attestation. The renewal process follows the same issuance flow.
+
+## Design considerations
+
+- **Privacy:** Attestation objects should contain the minimum data needed for policy enforcement. No personal data onchain.
+- **Scalability:** If every token action requires a shared object lookup (the attestation registry), this creates a sequencing point. Consider whether the attestation can be an [address-owned object](/develop/objects/object-ownership/address-owned) that the sender provides as an input, which avoids shared object contention.
+- **Provider independence:** Design attestation objects and policy rules to be provider-agnostic. If you switch KYC providers, you should be able to issue new attestations without changing the policy rule logic.
+- **Testing:** Test the full flow on [Testnet](/develop/sui-architecture/networks) including attestation issuance, policy rule enforcement, expiration, and revocation before deploying to Mainnet. Learn more about [testing compliance logic](/onchain-finance/compliance/testing-compliance).

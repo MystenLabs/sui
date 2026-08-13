@@ -1,0 +1,185 @@
+---
+title: Regulated Payment Flow
+description: >-
+  Build an end-to-end regulated payment flow on Sui that integrates identity
+  gating, deny list checks, compliance event emission, and audit trail
+  indexing.
+keywords:
+  - regulated payment
+  - compliance flow
+  - end-to-end
+  - payment flow
+  - KYC gate
+  - deny list check
+  - compliance logging
+  - audit trail
+  - stablecoin payment
+goal:
+  description: >-
+    Reader understands the end-to-end regulated payment flow on Sui and can
+    integrate compliance checks at each stage of a payment transaction
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I build a regulated payment flow on Sui?
+  - What compliance checks are needed for a stablecoin payment?
+  - How do I integrate KYC gating with payment transactions?
+  - How do I log compliance events during a payment flow?
+  - What is the end-to-end lifecycle of a regulated payment?
+answer: >-
+  A regulated payment flow on Sui integrates compliance checks at each stage
+  of a transaction: identity verification before account creation, deny list
+  screening before transfer execution, token policy rule enforcement during
+  transfer, compliance event emission during execution, and audit trail
+  indexing after confirmation. The flow combines offchain provider processes
+  with onchain Sui primitives into a single verifiable lifecycle.
+---
+
+A regulated payment flow combines the compliance primitives described in this section into a single end-to-end lifecycle. Each stage of the payment integrates a specific compliance check, creating a verifiable trail from identity verification through settlement and reporting.
+
+This page walks through the full lifecycle of a regulated payment, identifying where each compliance primitive applies. For details on each primitive, see the linked pages throughout this guide.
+
+## Flow overview
+
+A regulated payment on Sui follows these stages:
+
+1. **Identity verification** (offchain)
+2. **Deny list screening** (onchain check)
+3. **Transaction construction** (client-side)
+4. **Policy rule enforcement** (onchain execution)
+5. **Transfer execution** (onchain execution)
+6. **Event emission** (onchain execution)
+7. **Confirmation and indexing** (offchain)
+
+The first stage happens once per user (or periodically for renewal). Stages 2 through 6 happen within a single [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks) for each payment. Stage 7 happens asynchronously after transaction confirmation.
+
+## Stage 1: Identity verification
+
+Before a user can transact with a regulated currency, they complete an identity verification flow. This is an offchain process managed by a KYC provider.
+
+1. The user authenticates through [zkLogin](/sui-stack/zklogin-integration), proving ownership of an OAuth identity.
+2. The KYC provider verifies the user's identity documents.
+3. After verification, an authorized issuer creates an onchain [attestation object](/onchain-finance/compliance/identity-gating) for the user's address.
+
+This stage happens once per user, or when attestation renewal is required. The attestation object persists onchain and is referenced during later payment transactions.
+
+## Stage 2: Deny list screening
+
+Before constructing the payment transaction, the application checks whether either party (sender and recipient) is on the [deny list](/onchain-finance/compliance/deny-list-operations).
+
+This check can happen:
+
+- **Client-side (precheck):** Query the `DenyList` object through [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) before constructing the transaction. This provides a fast user experience by catching denials before transaction submission.
+- **Onchain (enforcement):** The deny list is enforced at the protocol level during transaction execution. Even if the client-side check is skipped, a denied address cannot transact with the regulated currency.
+
+The client-side precheck is recommended to provide meaningful error messages to the user rather than a generic transaction failure.
+
+{/* TODO: Import GraphQL query example for checking deny list status of an address */}
+{/* Description: GraphQL RPC query showing how to check if a specific address is on the deny list for a regulated currency */}
+
+## Stage 3: Transaction construction
+
+The payment transaction is a [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks) that combines multiple commands into a single atomic operation. For a regulated payment, the PTB typically includes:
+
+1. A command to initiate the transfer through the regulated currency's transfer function (which triggers policy rule evaluation).
+2. Any additional commands required by the payment model, such as creating a [payment receipt](/onchain-finance/payment-kit) or recording the payment in a [payment registry](/onchain-finance/payment-kit).
+
+The transaction can be constructed by the sender's client application or by a backend service. For gasless payments, a [sponsor](/develop/transaction-payment/sponsor-txn) can pay the gas fees so that the sender does not need to hold SUI.
+
+Learn more about structuring payment transactions in [Payment Intents](/onchain-finance/payment-intents) and [Payment Kit](/onchain-finance/payment-kit).
+
+## Stage 4: Policy rule enforcement
+
+When the transaction executes, the regulated currency's [token policy](/onchain-finance/closed-loop-token/token-policy) evaluates its rules against the action request. Each rule module's `verify` function runs in sequence.
+
+For a compliance-gated transfer, the policy might enforce:
+
+- **Identity attestation rule:** Checks that the sender has a valid, unexpired [attestation object](/onchain-finance/compliance/identity-gating). If the attestation is missing, expired, or revoked, the rule rejects the action.
+- **Transfer limit rule:** Checks that the transfer amount does not exceed a configured per-transaction or per-epoch limit.
+- **Recipient verification rule:** Checks that the recipient also has a valid attestation (if required by the compliance model).
+
+If any rule rejects the action, the entire transaction fails atomically. No funds move, and a `PolicyDenyEvent` is emitted (if the module emits on denial).
+
+## Stage 5: Transfer execution
+
+After all policy rules approve the action, the regulated currency transfer executes. The tokens move from the sender's balance to the recipient's balance.
+
+For currencies using the [Currency Standard](/onchain-finance/fungible-tokens/currency), this operates through the standard coin transfer mechanism with deny list enforcement at the protocol level. For currencies using the [Closed-Loop Token](/onchain-finance/closed-loop-token) standard, the transfer completes through the `TokenPolicy` action confirmation.
+
+## Stage 6: Event emission
+
+During execution, the regulated currency's module emits [compliance events](/onchain-finance/compliance/compliance-events) for each action that occurred:
+
+- A `TransferEvent` recording the sender, recipient, amount, and timestamp.
+- If a policy rule denied the action (and the transaction therefore failed), a `PolicyDenyEvent` recording the denied action and the reason.
+- If additional compliance actions are part of the same PTB (for example, a freeze triggered by a suspicious transfer), the corresponding events are emitted as well.
+
+These events are part of the transaction's effects and are permanently recorded onchain.
+
+## Stage 7: Confirmation and indexing
+
+After the transaction is confirmed, offchain systems process the results:
+
+1. **Compliance indexer:** A [custom indexing pipeline](/develop/accessing-data/custom-indexer/custom-indexers) or [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) query picks up the emitted events and stores them in the compliance database.
+2. **Identity enrichment:** The compliance system joins the onchain event data (addresses, amounts, timestamps) with offchain identity data (names, KYC status, risk scores) from the KYC provider.
+3. **Alerting:** The compliance system evaluates the transaction against alert rules (for example, transfers above a threshold, transfers to newly verified addresses, transfers near epoch boundaries).
+4. **Reporting:** Periodic compliance reports aggregate indexed events for regulatory submission.
+
+Learn more about indexing and reporting in [Compliance Events and Audit Trails](/onchain-finance/compliance/compliance-events).
+
+## Architecture diagram
+
+The following diagram shows how offchain provider processes and onchain Sui primitives interact during a regulated payment:
+
+```
+User                    Application              Onchain (Sui)
+ |                          |                         |
+ |-- 1. KYC verify ------->|                         |
+ |                          |-- Issue attestation --->|
+ |                          |                         |
+ |-- 2. Initiate payment ->|                         |
+ |                          |-- Query deny list ----->|
+ |                          |<-- Not denied ----------|
+ |                          |                         |
+ |                          |-- 3. Build PTB -------->|
+ |                          |                         |
+ |                          |   4. Policy rules run   |
+ |                          |      - Attestation check|
+ |                          |      - Transfer limits  |
+ |                          |                         |
+ |                          |   5. Transfer executes  |
+ |                          |   6. Events emitted     |
+ |                          |                         |
+ |                          |<-- Tx confirmed --------|
+ |<-- Payment confirmed ----|                         |
+ |                          |                         |
+ |                   7. Index events, enrich, alert   |
+```
+
+## Failure modes
+
+Each stage has specific failure modes that the application should handle:
+
+| Stage | Failure | User-facing behavior |
+| --- | --- | --- |
+| Identity verification | KYC provider rejects identity | User cannot create an attestation; inform them of the requirement |
+| Deny list screening | Sender or recipient is on the deny list | Transaction is not submitted; display a clear denial message |
+| Policy rule enforcement | Attestation expired or missing | Transaction fails; prompt user to renew KYC verification |
+| Policy rule enforcement | Transfer limit exceeded | Transaction fails; display the limit and current usage |
+| Transfer execution | Insufficient balance | Transaction fails; display balance information |
+| Event indexing | Indexer lag or failure | Payment succeeds onchain, but compliance dashboard is delayed; build monitoring for indexer health |
+
+For a broader discussion of error handling across payment flows, see [Compliance for Regulated Assets](/onchain-finance/compliance).

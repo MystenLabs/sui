@@ -1,0 +1,156 @@
+---
+title: Policy Upgrades and Migration
+description: >-
+  Upgrade deployed token policies and compliance logic on Sui without revoking
+  user tokens, including package upgrade patterns, attestation versioning, and
+  testnet validation.
+keywords:
+  - policy upgrade
+  - package upgrade
+  - UpgradeCap
+  - migration
+  - token policy
+  - compliance logic
+  - versioning
+  - AdminCap
+  - regulated assets
+goal:
+  description: >-
+    Reader can upgrade a deployed token policy package on Sui, migrate policy
+    rules without disrupting token holders, and test upgrade paths on Testnet
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I upgrade a token policy on Sui?
+  - How do I migrate policy rules without revoking tokens?
+  - How do I version attestation objects for compliance?
+  - How do I test token policy upgrades on Testnet?
+  - What is the upgrade authority model for compliance packages?
+answer: >-
+  Token policy upgrades on Sui use the package upgrade system. The UpgradeCap
+  controls upgrade authority and should be governed through a multisig address
+  or custom upgrade policy. Policy rule modules can be upgraded to add new
+  checks or modify existing logic without revoking user tokens. Attestation
+  objects can be versioned to support schema changes across upgrades. All
+  upgrade paths should be validated on Testnet before deploying to Mainnet.
+---
+
+Policy upgrades allow you to update compliance logic in a deployed regulated asset package without revoking existing tokens or disrupting token holders. Sui's [package upgrade system](/develop/publish-upgrade-packages/upgrade) enables this by allowing new versions of a package to be published while preserving the original package's type definitions and object state.
+
+This page covers upgrade patterns specific to compliance modules, including policy rule migration, attestation versioning, and governance for upgrade authority. For general package upgrade documentation, see [Upgrading Packages](/develop/publish-upgrade-packages/upgrade).
+
+## Upgrade authority model
+
+The `UpgradeCap` capability controls who can publish new versions of a package. For compliance packages, this capability requires strict governance because an upgrade to compliance logic affects how restrictions are enforced for all token holders.
+
+:::danger
+
+A compromised `UpgradeCap` allows an attacker to modify compliance logic, potentially bypassing deny list checks, identity gating, or freeze enforcement. Govern the `UpgradeCap` with at least the same rigor as `DenyCapV2` and `TreasuryCap`.
+
+:::
+
+Recommended governance patterns for compliance package upgrades:
+
+- **Multisig with high threshold:** Store the `UpgradeCap` in a [multisig address](/develop/transactions/transaction-auth/multisig) with a higher threshold than operational capabilities. For example, if `DenyCapV2` operations require two-of-three, package upgrades might require three-of-five.
+- **Custom upgrade policy:** Use a [custom upgrade policy](/develop/publish-upgrade-packages/custom-policies) that enforces additional constraints such as time delays between upgrade authorization and execution. This provides a window for stakeholders to review the upgrade before it takes effect.
+- **Immutability for stable modules:** If a specific compliance module is considered stable and complete, call `make_immutable` on its `UpgradeCap` to permanently prevent future upgrades. This provides the strongest guarantee to token holders but is irreversible. For more on upgrade policy options, see [Security Best Practices](/develop/security/best-practices).
+
+### Upgrade compatibility
+
+Sui enforces [compatibility rules](/develop/publish-upgrade-packages/upgrade) during package upgrades. These rules affect compliance module design:
+
+- **Struct layouts cannot change.** Existing struct definitions (including event structs and attestation objects) cannot have fields added, removed, or reordered. Plan for future fields by including reserved fields or using [dynamic fields](/develop/objects/dynamic-fields) for extensible data.
+- **Public function signatures cannot change.** Existing public functions must maintain their parameter and return types. New functions can be added.
+- **New modules can be added.** You can add entirely new rule modules in an upgrade without affecting existing ones.
+
+## Upgrading policy rules
+
+Policy rule modules define the compliance checks that gate token actions. Upgrading a rule module allows you to modify the verification logic while preserving the rule's identity.
+
+### Adding new checks to an existing rule
+
+If you need to add a check to an existing rule (for example, adding an expiration check to an attestation rule that previously did not check expiration):
+
+1. Upgrade the package with the modified `verify` function that includes the new check.
+2. The new logic takes effect immediately for all token actions after the upgrade.
+3. Existing attestation objects that lack expiration data might fail the new check. Plan for a migration period or add a fallback that handles attestation objects created before the upgrade.
+
+### Adding a new rule module
+
+If you need a compliance check that does not fit within an existing rule:
+
+1. Create a new rule module in the package upgrade with its own witness type and `verify` function.
+2. After the upgrade is published, add the new rule to the [TokenPolicy](/onchain-finance/closed-loop-token/token-policy) using the `TokenPolicyCap`.
+3. From this point forward, token actions require approval from both existing rules and the new rule.
+
+### Removing a rule
+
+To remove a compliance check that is no longer required:
+
+1. Remove the rule from the `TokenPolicy` using the `TokenPolicyCap`. This is a runtime configuration change that does not require a package upgrade.
+2. Optionally, publish a package upgrade that removes the rule module. This is not required because the rule is already deactivated, but removing unused code reduces confusion.
+
+:::info
+
+Removing a rule from a `TokenPolicy` is an operational action, not a package upgrade. It uses the `TokenPolicyCap`, which should be governed with the same rigor as other administrative capabilities.
+
+:::
+
+## Versioning attestation objects
+
+Attestation objects store identity verification results onchain. As compliance requirements evolve, the attestation schema might need to change. Because Sui's upgrade compatibility rules prevent modifying struct layouts, use one of these versioning patterns:
+
+### Dynamic fields for extensibility
+
+Store extensible data as [dynamic fields](/develop/objects/dynamic-fields) on the attestation object rather than as fixed struct fields. This allows adding new data to existing attestation objects without changing the struct definition.
+
+For example, an attestation might initially track only the verification level and issuance timestamp as struct fields, with additional metadata (such as jurisdiction, provider ID, or verification method) stored as dynamic fields. New fields can be added to future attestations without upgrading the struct definition.
+
+### Versioned attestation wrapper
+
+Create a wrapper module that contains a version field and dispatches to the correct attestation handler based on the version. When the schema changes:
+
+1. Increment the version constant in the upgraded package.
+2. New attestations are created with the new version.
+3. The policy rule's `verify` function checks the version and applies the appropriate validation logic for each version.
+4. Existing attestation objects continue to work with the original validation logic.
+
+This pattern adds complexity but provides clean separation between schema versions.
+
+## Testing upgrade paths
+
+Test every compliance module upgrade on [Testnet](/develop/sui-architecture/networks) before deploying to Mainnet. The testing workflow:
+
+1. **Deploy the original package** to Testnet with the current compliance logic.
+2. **Create test state:** Mint tokens, create attestation objects, add addresses to the deny list, and execute token actions to populate the event history.
+3. **Publish the upgrade** to Testnet using the `UpgradeCap`.
+4. **Verify backward compatibility:** Confirm that existing tokens, attestation objects, and deny list entries continue to function correctly under the new logic.
+5. **Verify new functionality:** Test the new compliance checks, rule additions, or attestation schema changes.
+6. **Verify event continuity:** Confirm that events emitted after the upgrade are consistent with pre-upgrade events in schema and content, so compliance indexers do not break.
+7. **Simulate failure cases:** Test what happens if an attestation object created before the upgrade encounters the new logic. Verify that error handling is correct and informative.
+
+Learn more about testing compliance logic in [Testing Compliance](/onchain-finance/compliance/testing-compliance).
+
+## Migration checklist
+
+Before upgrading a compliance package on Mainnet:
+
+- Review the upgrade diff with your security and compliance teams.
+- Verify that the `UpgradeCap` governance process (multisig approvals, time delays) is followed.
+- Complete the full testing workflow on Testnet, including backward compatibility and failure cases.
+- Notify integrators (exchanges, wallets, compliance dashboards) of the upcoming change and any impact on their event processing.
+- Prepare a rollback plan in case the upgrade introduces unexpected behavior (though Sui package upgrades cannot be rolled back, a subsequent corrective upgrade can be published).
+- Emit a custom event when the upgrade is executed so compliance indexers can mark the boundary in their event stream.

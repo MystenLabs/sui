@@ -1,0 +1,96 @@
+---
+title: Compliance for Regulated Assets
+description: >-
+  Understand the boundary between Sui onchain compliance primitives and
+  offchain provider responsibilities when building regulated asset applications.
+keywords:
+  - compliance
+  - regulated assets
+  - deny list
+  - freeze
+  - token policy
+  - KYC
+  - AML
+  - stablecoin compliance
+  - provider responsibility
+  - Sui primitives
+goal:
+  description: >-
+    Reader understands which compliance capabilities Sui provides onchain and
+    which responsibilities belong to external providers or legal counsel
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What compliance tools does Sui provide for regulated assets?
+  - What is the difference between Sui compliance primitives and provider responsibilities?
+  - How do I build a compliant token application on Sui?
+  - What does Sui handle versus what my compliance provider handles?
+answer: >-
+  Sui provides onchain primitives for regulated asset compliance including deny
+  lists for address-level restrictions, freeze and revoke capabilities, token
+  policies with programmable rules, and event emission for audit trails.
+  External providers are responsible for offchain obligations such as KYC/AML
+  verification, sanctions list sourcing, legal interpretation, fiat settlement,
+  and regulatory reporting. Building a compliant application requires
+  integrating both layers.
+---
+
+Compliance for regulated assets on Sui involves two distinct layers: **onchain primitives** that enforce transfer restrictions, access controls, and audit trails, and **offchain processes** owned by providers and legal teams that handle identity verification, sanctions screening, and regulatory reporting.
+
+This section covers the operational guidance for using Sui's compliance primitives in production. For the foundational API for creating regulated currencies with deny list capabilities, see [Regulated Currencies](/onchain-finance/fungible-tokens/regulated-tokens). For programmable token restrictions using the closed-loop model, see [Closed-Loop Token](/onchain-finance/closed-loop-token). For the Permissioned Asset Standard, see [PAS Architecture](/onchain-finance/pas/pas-architecture).
+
+## Sui onchain primitives
+
+Sui provides the following onchain mechanisms for compliance enforcement:
+
+- **Deny list (`DenyList`):** A [shared system object](/onchain-finance/fungible-tokens/regulated-tokens#denylist) at address `0x403` that restricts specified addresses from sending or receiving a regulated currency. Addresses with `DenyCapV2` can add or remove entries.
+- **Global pause:** The [Currency Standard](/onchain-finance/fungible-tokens/currency) supports pausing all transfers of a regulated currency for emergency situations.
+- **Token policies:** [TokenPolicy](/onchain-finance/closed-loop-token/token-policy) objects define programmable rules that gate token actions such as transfers, conversions, and spending.
+- **Permissioned accounts:** The [Permissioned Asset Standard](/onchain-finance/pas/pas-architecture) provides account-level access control with policy-gated operations and clawback capabilities.
+- **Freeze and revoke:** Admin capabilities allow freezing individual addresses or revoking access. Learn more about [freeze and revoke patterns](/onchain-finance/compliance/freeze-revoke).
+- **Event emission:** Move modules emit [events](/develop/accessing-data/using-events) for every privileged action, providing an onchain audit trail that indexers can consume.
+- **Package upgrades:** Sui's [upgrade system](/develop/publish-upgrade-packages/upgrade) allows updating compliance logic in deployed packages while preserving existing token holders.
+
+These primitives are deterministic, transparent, and enforceable at the protocol level. They define **what** restrictions exist and **how** they execute onchain.
+
+## Provider and legal responsibilities
+
+The following responsibilities fall outside Sui's onchain primitives. They belong to external compliance providers, legal counsel, or the application operator:
+
+- **KYC and AML verification:** Identity verification, document collection, and risk scoring are offchain processes handled by providers such as identity verification services or banking partners. Sui does not store or process personal identity documents onchain.
+- **Sanctions list sourcing:** Determining which addresses to add to a deny list requires consulting external sources such as OFAC's Specially Designated Nationals (SDN) list. The deny list primitive enforces restrictions, but sourcing and interpreting the list is a provider responsibility. Learn more about [deny list operations](/onchain-finance/compliance/deny-list-operations).
+- **Legal interpretation:** Determining which regulations apply to a specific token, jurisdiction, or user segment requires legal counsel. Sui primitives are jurisdiction-agnostic enforcement tools.
+- **Fiat settlement:** Converting between onchain assets and fiat currencies requires integration with licensed payment providers. Learn more about [fiat on-ramps](/onchain-finance/asset-custody/fiat-on-ramps) and [fiat off-ramps](/onchain-finance/asset-custody/fiat-off-ramps).
+- **Regulatory reporting:** Generating compliance reports for regulators requires aggregating onchain events with offchain identity data. Sui provides the event stream. Providers assemble the reports. Learn more about [compliance events](/onchain-finance/compliance/compliance-events).
+- **Dispute resolution:** Handling user disputes, chargebacks, or legal challenges to freeze actions involves offchain processes and legal frameworks.
+
+## How the layers interact
+
+A compliant regulated asset application combines both layers. The onchain layer enforces restrictions deterministically. The offchain layer feeds decisions into the onchain layer and interprets onchain events for regulatory purposes.
+
+For example, a stablecoin issuer might:
+
+1. Use an offchain KYC provider to verify user identity before allowing wallet creation.
+2. Feed OFAC sanctions data into the onchain [deny list](/onchain-finance/compliance/deny-list-operations) through an authorized oracle or admin process.
+3. Gate token transfers with a [token policy rule](/onchain-finance/closed-loop-token/rules) that checks an onchain attestation object issued after KYC verification.
+4. Emit [compliance events](/onchain-finance/compliance/compliance-events) for every transfer, freeze, and policy-deny action.
+5. Index those events offchain to generate regulatory reports and trigger alerts.
+
+Each step in this section covers one of these operational concerns in detail.
+
+## Topics in this section
+
+<DocCardList />

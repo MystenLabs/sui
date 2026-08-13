@@ -1,0 +1,156 @@
+---
+title: Deny List Operations
+description: >-
+  Manage deny lists for regulated currencies in production, including batching
+  updates, epoch-boundary latency, authority models, and sanctions oracle
+  patterns.
+keywords:
+  - deny list
+  - DenyList
+  - DenyCapV2
+  - OFAC
+  - sanctions screening
+  - deny list updates
+  - batching
+  - epoch latency
+  - regulated currency
+  - access control
+goal:
+  description: >-
+    Reader can manage deny list operations for regulated currencies including
+    batching updates, understanding epoch latency, and designing an oracle
+    feed pattern
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I keep a deny list current with OFAC sanctions data?
+  - What is the latency when adding or removing addresses from a deny list?
+  - How do I batch deny list updates on Sui?
+  - Who has authority to update a deny list?
+  - How does the DenyCapV2 authority model work?
+answer: >-
+  Deny list operations involve adding and removing addresses from the shared
+  DenyList object using a DenyCapV2 capability. Updates take effect for
+  outbound transfers immediately but inbound restrictions and removals have
+  epoch-boundary latency. Batch updates are possible through programmable
+  transaction blocks. Sanctions data can be fed onchain through an authorized
+  admin process or oracle pattern that maps external lists to deny list entries.
+---
+
+Deny list operations are the runtime management tasks for maintaining address-level restrictions on [regulated currencies](/onchain-finance/fungible-tokens/regulated-tokens). The `DenyList` is a shared system object at address `0x403` that tracks which addresses cannot send or receive a specific regulated currency. An address holding the `DenyCapV2` for a given currency type can add or remove entries from the list.
+
+This page covers the operational concerns of managing deny lists in production. For creating a regulated currency with deny list capabilities, see [Regulated Currencies](/onchain-finance/fungible-tokens/regulated-tokens).
+
+## Authority model
+
+The `DenyCapV2` capability object controls who can modify the deny list for a specific currency type. This capability is created during [currency initialization](/onchain-finance/fungible-tokens/create-a-fungible-token) and transferred to the publishing address.
+
+In production, the `DenyCapV2` should not remain in a single hot wallet. Store it behind a [multisig address](/develop/transactions/transaction-auth/multisig) or a custom governance module that requires multiple approvals before executing deny list changes. Emit [events](/develop/accessing-data/using-events) on every deny list modification so holders and integrators can audit changes. For more on capability security, see [Security Best Practices](/develop/security/best-practices).
+
+:::caution
+
+The `DenyCapV2` grants the ability to prevent any address from transacting with your currency. Govern it with the same rigor as `TreasuryCap`. A compromised `DenyCapV2` can block legitimate users or fail to block sanctioned ones.
+
+:::
+
+### Separation of duties
+
+For regulated assets with multiple administrative roles, consider separating capabilities:
+
+- **Deny list operator:** Holds `DenyCapV2` and executes address restrictions based on compliance decisions.
+- **Treasury operator:** Holds `TreasuryCap` and manages minting and burning.
+- **Metadata operator:** Holds `MetadataCap` and manages token metadata updates.
+
+Each role can be assigned to a different multisig address with its own approval threshold. This prevents a single compromised key from affecting all administrative functions.
+
+## Epoch-boundary latency
+
+Deny list changes do not take full effect instantly. The enforcement follows these timing rules:
+
+- **Adding an address (outbound):** The address cannot send the regulated currency as soon as the transaction that adds it is executed.
+- **Adding an address (inbound):** The address can still receive the currency until the current [epoch](/develop/sui-architecture/epochs) ends. Starting in the next epoch, the address can no longer receive it.
+- **Removing an address (inbound):** The address can receive the currency immediately after removal.
+- **Removing an address (outbound):** The address must wait until the next epoch before it can include the currency as a transaction input.
+
+This asymmetry exists because Sui's deny list enforcement hooks into transaction validation at different points for inputs and outputs. Plan compliance workflows around this latency. For time-sensitive sanctions enforcement, adding an address blocks outbound transfers immediately, which prevents the sanctioned address from moving funds. The epoch delay only affects whether others can send funds to the sanctioned address.
+
+:::info
+
+Epochs on Sui Mainnet are approximately 24 hours. On Testnet, epochs are shorter. Factor epoch duration into your compliance SLAs when planning deny list update cadences.
+
+:::
+
+## Batching deny list updates
+
+You can add or remove multiple addresses in a single transaction using a [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks). Each add or remove call is a separate command within the PTB, but they execute atomically in one transaction.
+
+Batching is useful when:
+
+- Processing a bulk sanctions list update with many addresses.
+- Performing periodic reconciliation between an offchain sanctions database and the onchain deny list.
+- Removing multiple addresses simultaneously after a compliance review.
+
+Each `deny_list_v2_add` or `deny_list_v2_remove` call within the PTB costs gas independently, so the total gas cost scales linearly with the number of addresses. Learn more about [gas costs for compliance operations](/onchain-finance/compliance/performance-cost).
+
+{/* TODO: Import code from MystenLabs/sui — example PTB batching multiple deny_list_v2_add calls */}
+{/* Description: TypeScript example showing a PTB that adds 3 addresses to a deny list in a single transaction */}
+
+## Sanctions oracle pattern
+
+Keeping a deny list synchronized with external sanctions databases (such as OFAC's SDN list) requires a bridge between offchain data and onchain state. Sui does not provide a built-in sanctions oracle. You design this integration based on your compliance requirements.
+
+### Direct admin update
+
+The most straightforward approach is a manual or semi-automated process:
+
+1. A compliance team monitors the external sanctions source for updates.
+2. When changes occur, the compliance team constructs a PTB with the necessary `deny_list_v2_add` or `deny_list_v2_remove` calls.
+3. The multisig holders for the `DenyCapV2` approve and execute the transaction.
+
+This approach works for low-frequency updates and provides the highest level of human oversight.
+
+### Automated oracle feed
+
+For higher-frequency updates or larger lists, an automated pipeline can reduce latency between a sanctions list change and onchain enforcement:
+
+1. An offchain service polls the sanctions data source on a defined interval.
+2. The service compares the current sanctions list against the onchain deny list state (queried through [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc)).
+3. For any differences, the service constructs a PTB with the necessary add or remove operations.
+4. The transaction is signed by an authorized key pair (or submitted for multisig approval) and executed.
+
+:::caution
+
+Automating deny list updates introduces operational risk. Ensure the oracle service has monitoring, alerting, and a kill switch. A bug in the automation could block legitimate users or fail to block sanctioned ones. Test the pipeline thoroughly on [Testnet](/develop/sui-architecture/networks) before deploying to Mainnet.
+
+:::
+
+### Querying deny list state
+
+To audit which addresses are currently on the deny list for a specific currency type, query the `DenyList` object through [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc). The deny list state is part of the shared object's dynamic fields.
+
+{/* TODO: Import GraphQL query example for reading deny list state */}
+{/* Description: GraphQL query showing how to read the current deny list entries for a regulated currency type */}
+
+## Operational checklist
+
+Before deploying deny list management to Mainnet:
+
+- Store `DenyCapV2` behind a multisig address with an appropriate approval threshold.
+- Define a runbook for adding and removing addresses, including who approves and the expected latency.
+- Establish a reconciliation cadence between your offchain sanctions source and onchain deny list state.
+- Set up event monitoring for deny list changes using an [event indexer](/develop/accessing-data/using-events) or [custom indexing pipeline](/develop/accessing-data/custom-indexer/custom-indexers).
+- Test the full add, remove, and batch workflow on Testnet, including epoch-boundary behavior.
+- Document the rollback procedure for incorrectly denied addresses.

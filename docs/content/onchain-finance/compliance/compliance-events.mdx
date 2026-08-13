@@ -1,0 +1,156 @@
+---
+title: Compliance Events and Audit Trails
+description: >-
+  Design compliance event schemas, build audit trail indexing pipelines, and
+  query compliance data for regulated assets on Sui.
+keywords:
+  - compliance events
+  - audit trail
+  - event schema
+  - indexing
+  - compliance reporting
+  - GraphQL RPC
+  - event indexer
+  - regulated assets
+  - freeze event
+  - transfer event
+goal:
+  description: >-
+    Reader can design compliance event schemas, build indexing pipelines for
+    compliance data, and query onchain events for regulatory reporting
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I design compliance event schemas for regulated assets on Sui?
+  - How do I index compliance events for audit trails?
+  - How do I query compliance events with GraphQL RPC?
+  - What events should a regulated token emit for compliance?
+  - How do I build a compliance reporting pipeline on Sui?
+answer: >-
+  Compliance events are custom Move events emitted by regulated asset modules
+  on every privileged action. A well-designed compliance event schema includes
+  event types for transfers, freezes, unfreezes, deny list changes, policy
+  denials, and attestation actions. These events are indexed through custom
+  indexing pipelines or queried through GraphQL RPC to generate audit trails
+  and compliance reports.
+---
+
+Compliance events are custom [Move events](/develop/accessing-data/using-events) emitted by regulated asset modules during privileged actions such as transfers, freezes, deny list changes, and policy denials. These events form the onchain audit trail that compliance teams, regulators, and integrators use to verify that restrictions are enforced correctly.
+
+Sui's event system emits structured data that indexers can consume in real time. This page covers how to design event schemas for compliance, build indexing pipelines, and query events for regulatory reporting.
+
+## Event schema design
+
+Each compliance-relevant action should emit a dedicated event type. Using separate event types (rather than a single generic event with a type field) makes indexing and filtering more efficient and provides stronger type safety.
+
+### Recommended event types
+
+The following event types cover the core compliance actions for a regulated currency:
+
+- **`TransferEvent`:** Emitted on every transfer of the regulated currency. Records the sender, recipient, amount, and transaction digest.
+- **`FreezeEvent`:** Emitted when an address is added to the deny list. Records the frozen address, the operator who executed the freeze, the timestamp, and a reason code.
+- **`UnfreezeEvent`:** Emitted when an address is removed from the deny list. Records the unfrozen address, the operator, the timestamp, the original freeze reference, and a resolution reason.
+- **`PolicyDenyEvent`:** Emitted when a token policy rule rejects an action request. Records the denied address, the action type, the rule that rejected it, and the reason.
+- **`AttestationIssuedEvent`:** Emitted when a new identity attestation is created. Records the subject address, the issuer, the verification level, and the issuance timestamp.
+- **`AttestationRevokedEvent`:** Emitted when an attestation is revoked. Records the subject address, the issuer, and the revocation reason.
+- **`PauseEvent` and `UnpauseEvent`:** Emitted when global pause is activated or deactivated. Records the operator and timestamp.
+
+{/* TODO: Import code from MystenLabs/sui — compliance event struct definitions in Move */}
+{/* Description: Move module showing event struct definitions for TransferEvent, FreezeEvent, UnfreezeEvent, PolicyDenyEvent, AttestationIssuedEvent */}
+
+### Schema design principles
+
+When designing compliance event schemas:
+
+- **Include the operator.** Every privileged action should record which address (or capability) authorized it. This enables attribution in audit reports.
+- **Include timestamps.** Use the `sui::clock::Clock` object to record the time of the action, not just the epoch. Clock timestamps provide higher resolution for compliance timelines.
+- **Use typed reason codes.** Define reason codes as constants in your module rather than free-form strings. This makes filtering and aggregation consistent across events.
+- **Reference related events.** When an unfreeze event corresponds to a prior freeze, include a reference (such as the freeze transaction digest or a freeze ID) to enable lifecycle tracking.
+- **Avoid personal data.** Events are public and permanent. Record addresses and action metadata, not identity information. Link events to identity data in your offchain compliance system.
+
+## Indexing compliance events
+
+Onchain events must be indexed to an offchain data store for querying, alerting, and reporting. Sui provides two approaches for event indexing.
+
+### GraphQL RPC event queries
+
+For lower-volume compliance monitoring, you can query events directly through [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc). This approach does not require running your own indexer, but it has limitations on query depth and historical range.
+
+Use GraphQL RPC event queries for:
+
+- Ad-hoc compliance investigations.
+- Low-frequency audit checks.
+- Verifying specific transactions or address histories.
+
+{/* TODO: Import GraphQL query example for filtering compliance events by type and address */}
+{/* Description: GraphQL RPC query showing how to filter events by module, event type, and sender address for compliance reporting */}
+
+### Custom indexing pipeline
+
+For production compliance monitoring with high-volume event streams, build a [custom indexing pipeline](/develop/accessing-data/custom-indexer/custom-indexers) that processes events in real time and stores them in a database optimized for compliance queries.
+
+A compliance indexer typically:
+
+1. Subscribes to new checkpoints through the [indexer framework](/develop/accessing-data/custom-indexer/pipeline-architecture).
+2. Filters events by your regulated currency's package ID and event types.
+3. Enriches events with offchain identity data (mapping addresses to verified identities from your KYC system).
+4. Stores enriched events in a compliance database with appropriate indexing for address lookups, time ranges, and event type filtering.
+5. Triggers alerts for specific event patterns (for example, a policy denial or a freeze of a high-value address).
+
+:::info
+
+The compliance indexer must process events in order and handle reorgs if your data store does not tolerate duplicate events. The [indexer framework's pipeline architecture](/develop/accessing-data/custom-indexer/pipeline-architecture) provides built-in checkpoint sequencing to help with this.
+
+:::
+
+### Retention considerations
+
+Compliance event data is subject to regulatory retention requirements. These requirements vary by jurisdiction and regulation:
+
+- Define a retention policy that meets the strictest applicable requirement.
+- Store raw event data (as emitted onchain) separately from enriched data (with identity mappings) to handle different retention and access control requirements.
+- Consider immutable storage for raw event data to demonstrate to auditors that records have not been tampered with.
+- Onchain events are permanent by default, but indexer databases might have TTLs or compaction policies. Ensure your offchain storage retention matches regulatory requirements.
+
+## Querying for compliance reports
+
+Compliance reports typically answer questions like:
+
+- What transfers occurred for a specific address in a given time range?
+- When was an address frozen, and when was it unfrozen?
+- How many policy denials occurred in the last 30 days, and for what reasons?
+- Which addresses have active attestations, and when do they expire?
+
+Structure your compliance database schema to support these query patterns efficiently. Common approaches:
+
+- **Address-centric views:** Index events by address as the primary key, with time as a secondary index. This supports per-user compliance reports.
+- **Time-series views:** Index events by timestamp as the primary key, with event type as a filter. This supports periodic compliance summaries.
+- **Lifecycle views:** Group related events (freeze, unfreeze, policy-deny for the same address) into a single timeline to show the full restriction history.
+
+{/* TODO: Import GraphQL query example for a compliance report — all freeze/unfreeze events for an address in a time range */}
+{/* Description: GraphQL RPC query showing how to retrieve all FreezeEvent and UnfreezeEvent for a specific address within a time range */}
+
+## Connecting events to offchain compliance systems
+
+The onchain audit trail is one input to a broader compliance system. To generate regulatory reports, you typically join onchain event data with offchain data:
+
+- **Identity mapping:** Link addresses to verified identities from your KYC provider database.
+- **Sanctions list state:** Cross-reference deny list events with the sanctions list state at the time of the event to verify that enforcement was timely.
+- **Transaction context:** Enrich transfer events with business context (payment type, merchant, purpose) from your application's offchain records.
+
+This joining happens in your compliance database or reporting system, not onchain. The onchain events provide the verifiable foundation. The offchain systems provide the context.
+
+Learn more about the broader compliance architecture in [Compliance for Regulated Assets](/onchain-finance/compliance).

@@ -427,6 +427,21 @@ export default {
         ],
       },
       {
+        type: 'category',
+        label: 'Compliance',
+        link: { type: 'doc', id: 'onchain-finance/compliance/index' },
+        items: [
+          'onchain-finance/compliance/deny-list-operations',
+          'onchain-finance/compliance/freeze-revoke',
+          'onchain-finance/compliance/identity-gating',
+          'onchain-finance/compliance/compliance-events',
+          'onchain-finance/compliance/policy-upgrades',
+          'onchain-finance/compliance/regulated-payment-flow',
+          'onchain-finance/compliance/performance-cost',
+          'onchain-finance/compliance/testing-compliance',
+        ],
+      },
+      {
       type: 'category',
       label: 'DeepBook',
       link: { type: 'doc', id: 'onchain-finance/deepbook/index' },
