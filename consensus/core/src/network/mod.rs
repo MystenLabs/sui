@@ -371,15 +371,53 @@ pub(crate) use clients::{CommitSyncerClient, SynchronizerClient};
 /// Serialized block with extended information from the proposing authority.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub(crate) struct ExtendedSerializedBlock {
-    pub(crate) block: Bytes,
+    pub(crate) block: SerializedBlockForm,
     // Serialized BlockRefs that are excluded from the blocks ancestors.
     pub(crate) excluded_ancestors: Vec<Vec<u8>>,
+}
+
+/// The wire framing for one block on live subscription streams, shared so the observer
+/// batch stream can adopt the same framing later (its `blocks` field is `repeated`, and
+/// protobuf has no repeated oneof, so the envelope must ride inside the bytes). Only
+/// live subscription streams use this: fetch, commit sync, latest-block, and the
+/// test-only unicast stay raw full `SignedBlock` bytes -- they are the recovery paths
+/// slim reconstruction falls back to.
+#[derive(Clone, PartialEq, prost::Message)]
+pub(crate) struct SerializedBlockEnvelope {
+    #[prost(oneof = "SerializedBlockForm", tags = "1, 2")]
+    pub(crate) block: Option<SerializedBlockForm>,
+}
+
+/// Which representation of a block a payload holds.
+#[derive(Clone, PartialEq, Eq, prost::Oneof)]
+pub(crate) enum SerializedBlockForm {
+    /// The block exactly as serialized and signed by its author.
+    #[prost(bytes = "bytes", tag = "1")]
+    Full(Bytes),
+    /// The same block with its ancestor digests stripped, to be rebuilt by the
+    /// receiver. Nothing emits this form yet; the encoder lands with the codec.
+    #[prost(bytes = "bytes", tag = "2")]
+    Slim(Bytes),
+}
+
+impl SerializedBlockEnvelope {
+    pub(crate) fn encode_form(form: SerializedBlockForm) -> Bytes {
+        use prost::Message as _;
+        Self { block: Some(form) }.encode_to_vec().into()
+    }
+
+    pub(crate) fn decode_form(bytes: &[u8]) -> Result<SerializedBlockForm, prost::DecodeError> {
+        use prost::Message as _;
+        Self::decode(bytes)?
+            .block
+            .ok_or_else(|| prost::DecodeError::new("empty block envelope"))
+    }
 }
 
 impl From<ExtendedBlock> for ExtendedSerializedBlock {
     fn from(extended_block: ExtendedBlock) -> Self {
         Self {
-            block: extended_block.block.serialized().clone(),
+            block: SerializedBlockForm::Full(extended_block.block.serialized().clone()),
             excluded_ancestors: extended_block
                 .excluded_ancestors
                 .iter()

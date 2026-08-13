@@ -22,7 +22,7 @@ use crate::{
     context::Context,
     dag_state::DagState,
     error::ConsensusError,
-    network::{ValidatorNetworkClient, ValidatorNetworkService},
+    network::{SerializedBlockForm, ValidatorNetworkClient, ValidatorNetworkService},
     task::{join_and_propagate_panic, reap_finished_task},
 };
 
@@ -256,6 +256,21 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                         let Some(authority_service) = authority_service.upgrade() else {
                             return;
                         };
+                        // Nothing emits the slim form yet; the decoder that turns it
+                        // back into a full block lands with the codec. Until then a
+                        // slim payload can only come from a misbehaving peer: drop it
+                        // here rather than hand downstream a form it cannot parse.
+                        if matches!(block.block, SerializedBlockForm::Slim(_)) {
+                            context
+                                .metrics
+                                .node_metrics
+                                .subscribe_stream_form_failures
+                                .with_label_values(&[peer_hostname, "unexpected_slim"])
+                                .inc();
+                            retries = 0;
+                            backoff.reset();
+                            continue 'stream;
+                        }
                         let result = authority_service.handle_send_block(peer, block).await;
                         if let Err(e) = result {
                             match e {
@@ -325,6 +340,7 @@ mod test {
         block_interval: Option<Duration>,
         // When true, subscribe_blocks() itself never returns.
         hang_on_subscribe: bool,
+        emit_slim: bool,
     }
 
     impl SubscriberTestClient {
@@ -337,6 +353,7 @@ mod test {
                 subscribe_calls: Mutex::new(Vec::new()),
                 block_interval: None,
                 hang_on_subscribe: false,
+                emit_slim: false,
             }
         }
 
@@ -345,6 +362,7 @@ mod test {
                 subscribe_calls: Mutex::new(Vec::new()),
                 block_interval: Some(interval),
                 hang_on_subscribe: false,
+                emit_slim: false,
             }
         }
 
@@ -353,6 +371,7 @@ mod test {
                 subscribe_calls: Mutex::new(Vec::new()),
                 block_interval: None,
                 hang_on_subscribe: true,
+                emit_slim: false,
             }
         }
 
@@ -385,13 +404,23 @@ mod test {
             let Some(interval) = self.block_interval else {
                 return Ok(Box::pin(stream::pending()));
             };
-            let block_stream = stream::unfold((), move |_| async move {
+            let emit_slim = self.emit_slim;
+            let block_stream = stream::unfold(0u8, move |i| async move {
                 sleep(interval).await;
-                let block = ExtendedSerializedBlock {
-                    block: Bytes::from(vec![1u8; 8]),
-                    excluded_ancestors: vec![],
+                // With emit_slim set, every other payload is the slim form, which the
+                // subscriber must drop without delivering.
+                let block = if emit_slim && i % 2 == 0 {
+                    ExtendedSerializedBlock {
+                        block: SerializedBlockForm::Slim(Bytes::from(vec![2u8; 8])),
+                        excluded_ancestors: vec![],
+                    }
+                } else {
+                    ExtendedSerializedBlock {
+                        block: SerializedBlockForm::Full(Bytes::from(vec![1u8; 8])),
+                        excluded_ancestors: vec![],
+                    }
                 };
-                Some((block, ()))
+                Some((block, i.wrapping_add(1)))
             })
             .take(10);
             Ok(Box::pin(block_stream))
@@ -471,11 +500,67 @@ mod test {
             assert_eq!(
                 *block,
                 ExtendedSerializedBlock {
-                    block: Bytes::from(vec![1u8; 8]),
-                    excluded_ancestors: vec![]
+                    block: SerializedBlockForm::Full(Bytes::from(vec![1u8; 8])),
+                    excluded_ancestors: vec![],
                 }
             );
         }
+    }
+
+    /// Slim payloads are dropped at the subscriber: nothing can decode them until the
+    /// codec lands, so they must never reach the authority service, while full payloads
+    /// on the same stream keep flowing.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn subscriber_drops_slim_payloads_without_delivering() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let network_client = Arc::new(SubscriberTestClient {
+            subscribe_calls: Mutex::new(Vec::new()),
+            block_interval: Some(Duration::from_millis(1)),
+            hang_on_subscribe: false,
+            emit_slim: true,
+        });
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client,
+            authority_service.clone(),
+            dag_state,
+        );
+
+        let peer = context.committee.to_authority_index(2).unwrap();
+        subscriber.subscribe(peer);
+
+        for _ in 0..10 {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            if authority_service.lock().handle_send_block.len() >= 20 {
+                break;
+            }
+        }
+
+        let service = authority_service.lock();
+        assert!(!service.handle_send_block.is_empty());
+        for (_, block) in service.handle_send_block.iter() {
+            assert!(
+                matches!(block.block, SerializedBlockForm::Full(_)),
+                "a slim payload must never be delivered"
+            );
+        }
+        assert!(
+            context
+                .metrics
+                .node_metrics
+                .subscribe_stream_form_failures
+                .with_label_values(&[
+                    context.committee.authority(peer).hostname.as_str(),
+                    "unexpected_slim",
+                ])
+                .get()
+                > 0,
+            "dropped slim payloads must be counted"
+        );
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]

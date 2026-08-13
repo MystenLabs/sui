@@ -128,6 +128,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) protocol_version: IntGauge,
     pub(crate) block_commit_latency: Histogram,
     pub(crate) proposed_blocks: IntCounterVec,
+    pub(crate) subscribe_blocks_response_bytes: IntCounterVec,
+    pub(crate) subscribe_stream_form_failures: IntCounterVec,
     pub(crate) proposed_block_commit_latency: Histogram,
     pub(crate) proposed_block_finalization_latency: Histogram,
     pub(crate) proposed_block_size: Histogram,
@@ -275,6 +277,18 @@ impl NodeMetrics {
                 "block_commit_latency",
                 "The time taken between block creation and block commit.",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            subscribe_blocks_response_bytes: register_int_counter_vec_with_registry!(
+                "subscribe_blocks_response_bytes",
+                "Encoded protobuf length of subscription responses, by subscriber and block form. Measured at message construction -- upstream of the stream throttle, the gRPC length prefix and framing, and zstd -- so it tracks payload form, not bytes on the socket. Includes the block envelope framing only while slim propagation is enabled",
+                &["authority", "form"],
+                registry,
+            ).unwrap(),
+            subscribe_stream_form_failures: register_int_counter_vec_with_registry!(
+                "subscribe_stream_form_failures",
+                "Subscription payloads whose wire form was unusable, per peer and reason",
+                &["authority", "reason"],
                 registry,
             ).unwrap(),
             proposed_blocks: register_int_counter_vec_with_registry!(
