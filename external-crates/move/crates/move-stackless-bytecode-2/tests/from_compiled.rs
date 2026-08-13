@@ -65,7 +65,7 @@ fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
     Ok(())
 }
 
-/// Validates test output for input root modules, excluding translated dependencies.
+/// Validates test output for input root modules.
 fn assert_modules(
     file_path: &Path,
     bytecode: &move_stackless_bytecode_2::ast::StacklessBytecode,
@@ -74,6 +74,7 @@ fn assert_modules(
     test_module_names: &BTreeSet<Symbol>,
     suffix: &str,
 ) -> anyhow::Result<()> {
+    // Dependencies are needed for translation but excluded from snapshot output.
     let modules = bytecode.packages.iter().flat_map(|pkg| {
         pkg.modules.values().filter_map(move |module| {
             root_modules
