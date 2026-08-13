@@ -185,6 +185,14 @@ struct ControllerState {
 }
 
 impl ControllerState {
+    fn permit_interval(&self) -> Duration {
+        Duration::from_secs_f64(1.0 / self.effective_qps)
+    }
+
+    fn growth_observation_timeout(&self) -> Duration {
+        self.permit_interval().saturating_add(OBSERVATION_WINDOW)
+    }
+
     fn restart_or_close_empty_observation(&mut self, now: Instant) {
         self.pending.discard_growth_feedback();
         if self.pending.is_empty() {
@@ -198,7 +206,7 @@ impl ControllerState {
     }
 
     fn reserve_permit(&mut self, now: Instant) -> PermitReservation {
-        let permit_interval = Duration::from_secs_f64(1.0 / self.effective_qps);
+        let permit_interval = self.permit_interval();
         let permit_at = self.next_permit_at.max(now);
         self.next_permit_at = permit_at + permit_interval;
         PermitReservation {
@@ -347,7 +355,14 @@ impl BatchWriteFlowController {
             return None;
         }
         if observation.rpc_starts == 0 {
-            state.restart_or_close_empty_observation(now);
+            // A low paced rate can make the fixed window empty even under sustained demand.
+            // Growth-only feedback remains valid through the next permit interval and one
+            // observation boundary. Conservative feedback restarts without including idle time.
+            if state.pending.growth_factor().is_none()
+                || elapsed >= state.growth_observation_timeout()
+            {
+                state.restart_or_close_empty_observation(now);
+            }
             return None;
         }
 
@@ -1176,14 +1191,36 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn healthy_growth_feedback_expires_after_empty_window() {
+    async fn healthy_growth_feedback_expires_after_rate_aware_empty_window() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
         learn_healthy_baseline(&controller);
         tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
         record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(20));
         controller.on_server_feedback(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
 
+        let growth_observation_timeout = controller
+            .state
+            .lock()
+            .expect("flow-control state mutex poisoned")
+            .growth_observation_timeout();
+        assert!(growth_observation_timeout > OBSERVATION_WINDOW);
+
         tokio::time::advance(OBSERVATION_WINDOW).await;
+        finish_ready_observation(&controller);
+        {
+            let state = controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned");
+            assert!(state.observation.is_some());
+            assert_eq!(
+                state.pending.latency_feedback,
+                Some(LatencyFeedback::Increase)
+            );
+            assert_eq!(state.pending.server_factor, Some(MAX_FACTOR));
+        }
+
+        tokio::time::advance(growth_observation_timeout - OBSERVATION_WINDOW).await;
         finish_ready_observation(&controller);
         {
             let state = controller
@@ -1205,6 +1242,51 @@ mod tests {
                 .observation
                 .is_none()
         );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn conservative_server_feedback_restarts_empty_growth_observation() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        learn_healthy_baseline(&controller);
+        tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
+        record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(20));
+        controller.on_server_feedback(Some(&rate_limit_info(MIN_FACTOR, DEFAULT_PERIOD)));
+
+        {
+            let state = controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned");
+            assert_eq!(
+                state.pending.latency_feedback,
+                Some(LatencyFeedback::Increase)
+            );
+            assert_eq!(state.pending.server_factor, Some(MIN_FACTOR));
+            assert!(state.pending.growth_factor().is_none());
+        }
+
+        tokio::time::advance(OBSERVATION_WINDOW).await;
+        finish_ready_observation(&controller);
+        {
+            let state = controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned");
+            assert!(state.pending.latency_feedback.is_none());
+            assert_eq!(state.pending.server_factor, Some(MIN_FACTOR));
+            assert_eq!(
+                state
+                    .observation
+                    .as_ref()
+                    .expect("conservative feedback should restart its observation")
+                    .rpc_starts,
+                0
+            );
+        }
+
+        admit_rpcs(&controller, 10).await;
+        finish_observation(&controller).await;
+        assert_effective_qps(&controller, INITIAL_QPS * MIN_FACTOR);
     }
 
     #[tokio::test(start_paused = true)]
