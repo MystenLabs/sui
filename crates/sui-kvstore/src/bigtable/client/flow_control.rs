@@ -1373,6 +1373,92 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
+    async fn stale_latency_baseline_recovers_at_min_qps_within_deadline() {
+        const LEARNED_BASELINE: Duration = Duration::from_millis(200);
+        const STABLE_RPC_LATENCY: Duration = Duration::from_millis(400);
+        const MAX_COMPLETED_RPCS: u64 = 100;
+        const RECOVERY_DEADLINE: Duration = Duration::from_secs(15 * 60);
+
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        // Direct state setup isolates recovery after a historical safe latency has changed.
+        controller
+            .state
+            .lock()
+            .expect("flow-control state mutex poisoned")
+            .baseline_write_latency_micros = Some(LEARNED_BASELINE.as_micros() as f64);
+        set_effective_qps_fixture(&controller, MIN_QPS);
+
+        let deadline = Instant::now() + RECOVERY_DEADLINE;
+        let mut completed_rpcs = 0;
+        let mut saw_recorded_latency_sample = false;
+        let mut max_non_healthy_evals = 0;
+        let mut baseline_stayed_stale = true;
+        let mut saw_growth_feedback = false;
+
+        while controller.effective_qps() <= MIN_QPS
+            && completed_rpcs < MAX_COMPLETED_RPCS
+            && Instant::now() < deadline
+        {
+            saw_growth_feedback |=
+                pending_latency_feedback(&controller) == Some(LatencyFeedback::Increase);
+            let completed_rpc = tokio::time::timeout_at(
+                deadline,
+                complete_rpc_with_latency(&controller, STABLE_RPC_LATENCY),
+            )
+            .await;
+            let Ok((_, admission_snapshot)) = completed_rpc else {
+                break;
+            };
+            completed_rpcs += 1;
+
+            saw_growth_feedback |=
+                admission_snapshot.latency_feedback == Some(LatencyFeedback::Increase);
+            saw_recorded_latency_sample |= latency_samples(&controller) > 0;
+            max_non_healthy_evals = max_non_healthy_evals.max(
+                controller
+                    .state
+                    .lock()
+                    .expect("flow-control state mutex poisoned")
+                    .non_healthy_evals,
+            );
+            baseline_stayed_stale &=
+                baseline_micros(&controller) == Some(LEARNED_BASELINE.as_micros() as f64);
+            saw_growth_feedback |=
+                pending_latency_feedback(&controller) == Some(LatencyFeedback::Increase);
+        }
+
+        let effective_qps = controller.effective_qps();
+        if effective_qps <= MIN_QPS {
+            assert!(
+                completed_rpcs >= MIN_WINDOW_SAMPLES,
+                "expected completed latency samples under sustained demand; completed_rpcs={completed_rpcs}"
+            );
+            assert!(
+                saw_recorded_latency_sample,
+                "expected completed RPC latency to enter the evaluation window"
+            );
+            assert!(
+                max_non_healthy_evals > 0,
+                "expected a completed latency window to be classified non-healthy"
+            );
+            assert!(
+                baseline_stayed_stale,
+                "expected the 200 ms baseline to remain stale before recovery; baseline_micros={:?}",
+                baseline_micros(&controller)
+            );
+            assert!(
+                !saw_growth_feedback,
+                "expected stale-baseline classification not to authorize healthy Increase feedback"
+            );
+        }
+        assert!(
+            effective_qps > MIN_QPS,
+            "expected recovery above {MIN_QPS} QPS within 15 virtual minutes after stable latency changed from 200 ms to 400 ms; completed_rpcs={completed_rpcs}, baseline_micros={:?}, saw_recorded_latency_sample={saw_recorded_latency_sample}, max_non_healthy_evals={max_non_healthy_evals}, saw_growth_feedback={saw_growth_feedback}, effective_qps={effective_qps}",
+            baseline_micros(&controller)
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn late_feedback_starts_a_new_observation_after_server_period() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
         let period = Duration::from_secs(1);
