@@ -28,7 +28,7 @@ use move_compiler::{
 use move_ir_types::location::{Loc, sp};
 use move_symbol_pool::Symbol;
 
-use im::OrdMap;
+use imbl::OrdMap;
 use lsp_types::Position;
 use std::{
     cmp,

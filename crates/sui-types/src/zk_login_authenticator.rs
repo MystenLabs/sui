@@ -248,7 +248,7 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
 
 fn verify_zklogin_inputs_wrapper(
     params: ZkLoginCachingParams,
-    all_jwk: &im::HashMap<JwkId, JWK>,
+    all_jwk: &imbl::HashMap<JwkId, JWK>,
     env: &ZkLoginEnv,
 ) -> SuiResult<()> {
     verify_zk_login(
