@@ -39,7 +39,7 @@ tonic:
 observer:
   server_port: ~
   allowlist: []
-  quorum_gated_block_release: true
+  quorum_release: true
   peers: []
 internal:
   skip_equivocation_validation: false

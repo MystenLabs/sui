@@ -279,7 +279,7 @@ impl ObserverNetworkService for ObserverService {
         );
         // When quorum-gated release is disabled, serve blocks straight off the broadcast as
         // soon as they are accepted, without the buffering task in between.
-        let live_block_stream = if self.context.parameters.observer.quorum_gated_block_release {
+        let live_block_stream = if self.context.parameters.observer.quorum_release {
             Either::Left(quorum_gated_accepted_block_stream(
                 self.context.clone(),
                 broadcast_stream,
@@ -960,7 +960,7 @@ mod tests {
         // With gating disabled, a single sub-quorum block must be served well before this
         // release timeout could ever fire.
         context.parameters.leader_timeout = Duration::from_secs(300);
-        context.parameters.observer.quorum_gated_block_release = false;
+        context.parameters.observer.quorum_release = false;
         let context = Arc::new(context);
 
         let store = Arc::new(MemStore::new());

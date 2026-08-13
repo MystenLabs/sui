@@ -366,8 +366,8 @@ pub struct ObserverParameters {
     /// expires). When disabled, blocks are served to observers as soon as they are accepted.
     ///
     /// If unspecified, this will default to `true`.
-    #[serde(default = "ObserverParameters::default_quorum_gated_block_release")]
-    pub quorum_gated_block_release: bool,
+    #[serde(default = "ObserverParameters::default_quorum_release")]
+    pub quorum_release: bool,
 
     /// List of observer peers to connect to when acting as an observer client.
     /// Each record contains the network public key and multi-address of a peer observer server.
@@ -390,7 +390,7 @@ impl ObserverParameters {
         Vec::new()
     }
 
-    fn default_quorum_gated_block_release() -> bool {
+    fn default_quorum_release() -> bool {
         true
     }
 
@@ -404,7 +404,7 @@ impl Default for ObserverParameters {
         Self {
             server_port: ObserverParameters::default_server_port(),
             allowlist: ObserverParameters::default_allowlist(),
-            quorum_gated_block_release: ObserverParameters::default_quorum_gated_block_release(),
+            quorum_release: ObserverParameters::default_quorum_release(),
             peers: ObserverParameters::default_peers(),
         }
     }
