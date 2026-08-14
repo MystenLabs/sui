@@ -29,7 +29,8 @@ use crate::ledger_history::filter::transaction_filter_to_query;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::query_options::ResolvedCheckpointRange;
-use crate::ledger_history::query_options::ResolvedRange;
+use crate::ledger_history::query_options::ResolvedScan;
+use crate::ledger_history::query_options::ScanBounds;
 use crate::metrics::ListRequestMetrics;
 use crate::metrics::ListStreamMetrics;
 use crate::read_mask_defaults;
@@ -304,29 +305,31 @@ fn next_checkpoint_chunk(
             if !cp_range.is_empty()
                 && let Some(floor) = probe_checkpoint_serving_floor(
                     &service,
-                    cp_range.range.start,
+                    cp_range.bounds.to_range().start,
                     start_checkpoint,
                     &options,
                 )?
             {
                 cp_range.apply_serving_floor(floor, floor, &options);
             }
-            let interval_empty = cp_range.is_empty();
-            let mut end_checkpoint = cp_range.end_checkpoint;
-            let mut end_position = cp_range.end_position;
+            // Emptiness is a store-edge fact under symbolic resume: a dense
+            // window cursors collapsed only becomes empty in to_range, and
+            // an empty scan must not claim coverage.
+            let range = cp_range.bounds.to_range();
+            let interval_empty = range.is_empty();
+            let mut terminal_record = cp_range.terminal;
             let mut terminal = ScanTerminal::from_range_exhaustion(
-                cp_range.exhaustion,
+                terminal_record.exhaustion,
                 Position::Checkpoints {
-                    checkpoint: end_position,
+                    checkpoint: terminal_record.end_coordinate,
                 },
                 interval_empty,
             );
             let mut entry_checkpoint = if options.is_ascending() {
-                cp_range.range.start
+                range.start
             } else {
-                cp_range.range.end.saturating_sub(1)
+                range.end.saturating_sub(1)
             };
-            let range = cp_range.range;
             if range.is_empty() {
                 return Ok(CheckpointChunkDone {
                     items: Vec::new(),
@@ -342,19 +345,27 @@ fn next_checkpoint_chunk(
                     && let Some(floor) =
                         probe_serving_floor(&service, tx_range.start, start_checkpoint, &options)?
                 {
-                    let consumed = apply_serving_floor_to_filtered_window(
-                        &mut tx_range,
-                        &mut entry_checkpoint,
-                        &mut end_checkpoint,
-                        &mut end_position,
-                        floor.tx_seq,
-                        floor.checkpoint,
-                        options.is_ascending(),
-                    );
+                    // The scan window is transaction-space while the
+                    // watermark metadata stays checkpoint-space, so the
+                    // floor's halves route separately: tx fencepost to the
+                    // bounds, checkpoint to the terminal record.
+                    let mut bounds = ScanBounds::from_range(tx_range.clone());
+                    let consumed = bounds.clamp_to_available_lo(floor.tx_seq);
+                    if consumed {
+                        tx_range = tx_range.end..tx_range.end;
+                    } else {
+                        terminal_record.reconcile_floor(
+                            &mut entry_checkpoint,
+                            floor.checkpoint,
+                            floor.checkpoint,
+                            options.is_ascending(),
+                        );
+                        tx_range = bounds.to_range();
+                    }
                     terminal = ScanTerminal::from_range_exhaustion(
-                        cp_range.exhaustion,
+                        terminal_record.exhaustion,
                         Position::Checkpoints {
-                            checkpoint: end_position,
+                            checkpoint: terminal_record.end_coordinate,
                         },
                         consumed,
                     );
@@ -376,16 +387,16 @@ fn next_checkpoint_chunk(
                     last_cp_seq: None,
                     covered_checkpoint_bound: None,
                     entry_checkpoint,
-                    exhaustion: cp_range.exhaustion,
-                    end_checkpoint,
-                    end_position,
+                    exhaustion: terminal_record.exhaustion,
+                    end_checkpoint: terminal_record.end_checkpoint,
+                    end_position: terminal_record.end_coordinate,
                 }
             } else {
                 CheckpointScanState::Unfiltered {
                     range,
-                    exhaustion: cp_range.exhaustion,
-                    end_checkpoint,
-                    end_position,
+                    exhaustion: terminal_record.exhaustion,
+                    end_checkpoint: terminal_record.end_checkpoint,
+                    end_position: terminal_record.end_coordinate,
                 }
             };
             next_checkpoint_chunk(
@@ -889,37 +900,10 @@ fn render_checkpoint_seq(
     Ok(response_for(watermark, checkpoint))
 }
 
-/// [`ResolvedRange::apply_serving_floor`]'s analogue for the filtered
-/// checkpoint scan, whose watermark metadata lives in checkpoint space
-/// beside a transaction-space scan window. A floor inside the window starts
-/// the scan there (ascending entry rises to the floor checkpoint, a
-/// descending terminal is pinned to it). Returns `true` when the floor
-/// consumed the whole window: nothing is scannable, the window
-/// canonicalizes to empty, and the terminal metadata stays at the requested
-/// boundary so it cannot move outside the requested interval.
-fn apply_serving_floor_to_filtered_window(
-    tx_range: &mut std::ops::Range<u64>,
-    entry_checkpoint: &mut u64,
-    end_checkpoint: &mut u64,
-    end_position: &mut u64,
-    floor_tx: u64,
-    floor_checkpoint: u64,
-    ascending: bool,
-) -> bool {
-    if floor_tx >= tx_range.end {
-        *tx_range = tx_range.end..tx_range.end;
-        return true;
-    }
-    tx_range.start = floor_tx;
-    if ascending {
-        *entry_checkpoint = (*entry_checkpoint).max(floor_checkpoint);
-    } else {
-        *end_checkpoint = floor_checkpoint;
-        *end_position = floor_checkpoint;
-    }
-    false
-}
-fn resolve_cp_range(cp_range: ResolvedCheckpointRange, options: &QueryOptions) -> ResolvedRange {
+fn resolve_cp_range(
+    cp_range: ResolvedCheckpointRange,
+    options: &QueryOptions,
+) -> ResolvedScan<u64> {
     let range = cp_range.range.clone();
     options.resolve_scan(cp_range, range)
 }
@@ -950,6 +934,7 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListCheckpoints
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ledger_history::query_options::TerminalRecord;
     use sui_rpc::proto::sui::rpc::v2::Ordering;
     use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
     use sui_rpc_cursor::CursorToken;
@@ -984,12 +969,14 @@ mod tests {
         }
     }
 
-    /// The filtered checkpoint scan's serving-floor reconciliation mirrors
-    /// [`ResolvedRange::apply_serving_floor`]: floor inside the window moves
-    /// the scan start plus the direction-relevant checkpoint metadata; a
-    /// floor at/past the window's end consumes it — the window canonicalizes
-    /// to empty and no metadata (in particular the descending terminal)
-    /// moves outside the requested interval.
+    /// The filtered checkpoint scan's serving-floor reconciliation composes
+    /// the shared pieces across two coordinate spaces — `clamp_to_available_lo` on
+    /// the transaction-space window, `reconcile_floor` on the
+    /// checkpoint-space terminal record. Floor inside the window moves the
+    /// scan start plus the direction-relevant checkpoint metadata; a floor
+    /// at/past the window's end consumes it — the window canonicalizes to
+    /// empty and no metadata (in particular the descending terminal) moves
+    /// outside the requested interval.
     #[test]
     fn filtered_window_serving_floor_matrix() {
         // (ascending, floor_tx, floor_cp, expected: consumed, tx_range, entry, end_cp, end_pos)
@@ -1011,20 +998,38 @@ mod tests {
             (false, 50, 10, true, 40..40, 8, 0, 0),
         ] {
             let mut tx_range = 0..40u64;
-            let (mut entry_checkpoint, mut end_checkpoint, mut end_position) = if ascending {
-                (0u64, 8u64, 40u64)
+            let (mut entry_checkpoint, mut terminal_record) = if ascending {
+                (
+                    0u64,
+                    TerminalRecord {
+                        end_checkpoint: 8,
+                        end_coordinate: 40u64,
+                        exhaustion: RangeExhaustion::CheckpointBound,
+                    },
+                )
             } else {
-                (8u64, 0u64, 0u64)
+                (
+                    8u64,
+                    TerminalRecord {
+                        end_checkpoint: 0,
+                        end_coordinate: 0u64,
+                        exhaustion: RangeExhaustion::CheckpointBound,
+                    },
+                )
             };
-            let got_consumed = apply_serving_floor_to_filtered_window(
-                &mut tx_range,
-                &mut entry_checkpoint,
-                &mut end_checkpoint,
-                &mut end_position,
-                floor_tx,
-                floor_cp,
-                ascending,
-            );
+            let mut bounds = ScanBounds::from_range(tx_range.clone());
+            let got_consumed = bounds.clamp_to_available_lo(floor_tx);
+            if got_consumed {
+                tx_range = tx_range.end..tx_range.end;
+            } else {
+                terminal_record.reconcile_floor(
+                    &mut entry_checkpoint,
+                    floor_cp,
+                    floor_cp,
+                    ascending,
+                );
+                tx_range = bounds.to_range();
+            }
             assert_eq!(
                 got_consumed, consumed,
                 "floor_tx {floor_tx} asc {ascending}"
@@ -1038,10 +1043,13 @@ mod tests {
                 "floor_tx {floor_tx} asc {ascending}"
             );
             assert_eq!(
-                end_checkpoint, end_cp,
+                terminal_record.end_checkpoint, end_cp,
                 "floor_tx {floor_tx} asc {ascending}"
             );
-            assert_eq!(end_position, end_pos, "floor_tx {floor_tx} asc {ascending}");
+            assert_eq!(
+                terminal_record.end_coordinate, end_pos,
+                "floor_tx {floor_tx} asc {ascending}"
+            );
         }
     }
 

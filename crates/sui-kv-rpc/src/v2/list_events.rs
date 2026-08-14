@@ -33,7 +33,7 @@ use sui_rpc_api::ledger_history::query_options::IntraTxScanBounds;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
-use sui_rpc_api::ledger_history::query_options::ResolvedIntraTxRange;
+use sui_rpc_api::ledger_history::query_options::ResolvedScan;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
@@ -104,10 +104,10 @@ pub(crate) async fn list_events(
     let event_range = resolve_event_range(&client, checkpoint_range, &options)
         .instrument(debug_span!("resolve_event_range"))
         .await?;
-    let exhaustion = event_range.exhaustion;
+    let exhaustion = event_range.terminal.exhaustion;
     let entry_checkpoint = event_range.entry_checkpoint;
-    let range_end_checkpoint = event_range.end_checkpoint;
-    let range_end_position = event_range.end_position;
+    let range_end_checkpoint = event_range.terminal.end_checkpoint;
+    let range_end_position = event_range.terminal.end_coordinate;
     let event_bounds = event_range.bounds;
 
     if event_range.is_empty() {
@@ -812,11 +812,11 @@ async fn resolve_event_range(
     client: &BigTableClient,
     cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedIntraTxRange, RpcError> {
+) -> Result<ResolvedScan<IntraTxCoordinate>, RpcError> {
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
-    Ok(options.resolve_intra_tx_scan(cp_range, tx_range))
+    Ok(options.resolve_scan(cp_range, tx_range))
 }
 
 #[cfg(test)]

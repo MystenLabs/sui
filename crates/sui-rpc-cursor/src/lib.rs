@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::Bound;
+
 use anyhow::Context as _;
 use bytes::Bytes;
 use prost::Message as _;
@@ -149,6 +151,22 @@ impl CursorToken {
 }
 
 impl CursorKind {
+    /// Lower (resume) bound a cursor imposes on a scan: an `Item` was
+    /// delivered, so the scan resumes strictly after it; a `Boundary` is a
+    /// frontier, so the scan resumes at it.
+    pub fn resume_bound<P>(self, position: P) -> Bound<P> {
+        match self {
+            CursorKind::Item => Bound::Excluded(position),
+            CursorKind::Boundary => Bound::Included(position),
+        }
+    }
+
+    /// Upper bound a `before` cursor imposes on a scan: exclusive at the
+    /// coordinate for both kinds.
+    pub fn limit_bound<P>(self, position: P) -> Bound<P> {
+        Bound::Excluded(position)
+    }
+
     fn to_proto(self) -> grpc::CursorKind {
         match self {
             CursorKind::Item => grpc::CursorKind::Item,
