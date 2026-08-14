@@ -153,11 +153,13 @@ The proof needs these implementation facts:
 
 1. A correct accept voter cannot commit before its target block.
 2. A depth-two leader has a verified immediate-parent quorum.
-3. The linearizer includes each committed accept voter before the trigger.
+3. Local `FlexCommitter::build_commit` and certified
+   `FlexCommitter::handle_certified_commit` include each required accept voter
+   before the trigger.
 4. Garbage collection does not remove the evidence first.
 
 The constructor checks `gc_depth > 2`. The block verifier checks immediate-parent
-quorum stake. Add an integration invariant that covers the linearizer order,
+quorum stake. Add an integration invariant that covers both v3 sub-DAG paths,
 commit-sync recovery, and the exact GC boundary. This item is a proof-closure gap.
 
 ## P2: close the natural-number to Rust-integer refinement

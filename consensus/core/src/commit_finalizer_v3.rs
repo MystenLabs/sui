@@ -50,8 +50,10 @@ impl CommitFinalizerV3 {
             context.protocol_config.gc_depth() > INDIRECT_COMMIT_DEPTH,
             "Mysticeti v3 GC depth must be greater than {INDIRECT_COMMIT_DEPTH}"
         );
-        // The indirect proof also depends on Linearizer::linearize_sub_dag reading the
-        // previous commit's GC round before DagState records the current commit.
+        // The indirect proof depends on FlexCommitter::build_commit reading the GC
+        // round of the previous commit before Core::post_commit records the new
+        // commit. FlexCommitter::handle_certified_commit must preserve the same
+        // committed sub-DAG evidence for synchronized commits.
         let committee = &context.committee;
         let total_stake = u128::from(committee.total_stake());
         let quorum_threshold = u128::from(committee.quorum_threshold());
