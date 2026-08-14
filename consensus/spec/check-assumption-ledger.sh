@@ -4,8 +4,8 @@
 
 set -euo pipefail
 
-design_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-ledger="$design_dir/docs/ASSUMPTIONS.md"
+spec_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ledger="$spec_dir/docs/ASSUMPTIONS.md"
 defined_ids_file="$(mktemp)"
 referenced_ids_file="$(mktemp)"
 
@@ -82,10 +82,11 @@ if [ "$status_total" -ne "$defined_count" ]; then
 fi
 
 rg --no-filename --only-matching 'ASM-[A-Z0-9-]+' \
-    "$design_dir/README.md" \
-    "$design_dir/docs/PROOF_SCOPE.md" \
-    "$design_dir/docs/IMPLEMENTATION_GAPS.md" \
-    "$design_dir/lean/Mysticeti" |
+    "$spec_dir/README.md" \
+    "$spec_dir/design" \
+    "$spec_dir/docs/PROOF_SCOPE.md" \
+    "$spec_dir/docs/IMPLEMENTATION_GAPS.md" \
+    "$spec_dir/lean/Mysticeti" |
     sort -u >"$referenced_ids_file"
 
 unknown_ids="$(

@@ -3,15 +3,16 @@ Copyright (c) Mysten Labs, Inc.
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Mysticeti v3 formal design
+# Mysticeti v3 formal specification
 
 This directory contains a Lean 4 proof model for Mysticeti v3.
 
-The model has two parts:
+The specification has three parts:
 
 - `lean/` contains the machine-checked definitions and theorems.
 - `docs/` contains the assumption ledger, proof scope, and implementation gap
   report.
+- `design/` contains designs for changes that close open proof obligations.
 
 The safety proof includes the Core garbage-collection boundary, the v3 sub-DAG
 retention window, and the signed transaction vote cutoff. The transaction cutoff is
@@ -36,7 +37,7 @@ lake --version
 ```
 
 If all three commands succeed, you do not need to install Lean again. Run the
-commands from `consensus/design/lean` to make Elan select the pinned Lean version.
+commands from `consensus/spec/lean` to make Elan select the pinned Lean version.
 
 ### macOS and Linux
 
@@ -76,7 +77,7 @@ The first `lake build` command reads `lean-toolchain`. Elan then installs
 the repository root:
 
 ```sh
-cd consensus/design/lean
+cd consensus/spec/lean
 lean --version
 lake --version
 ```
@@ -88,7 +89,7 @@ The `lean --version` output must report version 4.33.0.
 Run these commands from the repository root:
 
 ```sh
-cd consensus/design/lean
+cd consensus/spec/lean
 lake build
 ```
 
@@ -104,7 +105,7 @@ An empty result is correct.
 Check that each assumption identifier is defined and referenced:
 
 ```sh
-bash consensus/design/check-assumption-ledger.sh
+bash consensus/spec/check-assumption-ledger.sh
 ```
 
 Run this command from the repository root. A successful result reports the number
@@ -130,3 +131,5 @@ changes, when you check the proof-to-Rust mapping.
 Read [the assumption ledger](docs/ASSUMPTIONS.md) and
 [the proof scope](docs/PROOF_SCOPE.md) before you use a theorem as a protocol claim.
 Read [the implementation gaps](docs/IMPLEMENTATION_GAPS.md) before v3 activation.
+Read [the round-jump recovery design](design/ROUND_JUMP_RECOVERY.md) before you
+change threshold-clock advancement or recovery block production.

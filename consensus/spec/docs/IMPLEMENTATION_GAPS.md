@@ -18,6 +18,9 @@ environmental assumption is explicitly accepted.
 Related assumptions: `ASM-LIVE-ROUND-CATCHUP` and
 `ASM-LIVE-COMMIT-RECOVERY`.
 
+See the [round-jump recovery design](../design/ROUND_JUMP_RECOVERY.md) for the
+proposed Rust behavior, proof obligations, and test plan.
+
 This is a confirmed proof gap and an activation blocker. The current Lean theorem
 uses a strong catch-up condition for old leader opportunities. The required Rust
 property is narrower: after a commit stall, the commit index must increase.

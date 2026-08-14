@@ -3,12 +3,12 @@ name: Consensus design verification
 on:
   pull_request:
     paths:
-      - "consensus/design/**"
+      - "consensus/spec/**"
   push:
     branches:
       - main
     paths:
-      - "consensus/design/**"
+      - "consensus/spec/**"
 
 permissions:
   contents: read
@@ -23,12 +23,12 @@ jobs:
 
       - name: Check proof assumption ledger
         shell: bash
-        run: bash consensus/design/check-assumption-ledger.sh
+        run: bash consensus/spec/check-assumption-ledger.sh
 
       - name: Build Lean proofs
         uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # pin@v1
         with:
-          lake-package-directory: consensus/design/lean
+          lake-package-directory: consensus/spec/lean
           auto-config: false
           build: true
           build-args: "--wfail"
@@ -37,7 +37,7 @@ jobs:
           use-mathlib-cache: false
 
       - name: Reject unchecked proof declarations
-        working-directory: consensus/design/lean
+        working-directory: consensus/spec/lean
         shell: bash
         run: |
           set -euo pipefail
