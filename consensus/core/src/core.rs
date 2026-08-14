@@ -1371,7 +1371,11 @@ impl CoreTestFixture {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::BTreeSet, iter, time::Duration};
+    use std::{
+        collections::{BTreeMap, BTreeSet},
+        iter,
+        time::Duration,
+    };
 
     use consensus_config::{AuthorityIndex, Parameters};
     use consensus_types::block::BlockTimestampMs;
@@ -3243,6 +3247,215 @@ mod test {
                 .with_label_values(&["skipped"])
                 .get(),
             5
+        );
+    }
+
+    #[tokio::test]
+    async fn add_multi_leader_certified_commits_v3() {
+        const PREFIX_LAST_ROUND: Round = 5;
+        const INITIAL_DAG_LAST_ROUND: Round = PREFIX_LAST_ROUND + 1;
+        const CONTINUATION_DAG_LAST_ROUND: Round = INITIAL_DAG_LAST_ROUND + 2;
+
+        telemetry_subscribers::init_for_testing();
+
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        let context = context.with_parameters(Parameters {
+            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
+            ..Default::default()
+        });
+        let authority_index = AuthorityIndex::new_for_test(0);
+
+        // Use the real v3 commit path as the producer. The legacy DagBuilder certified-commit
+        // helper creates single-leader commits and cannot exercise this commit shape.
+        let source_fixture =
+            CoreTestFixture::new(context.clone(), vec![1, 1, 1, 1], authority_index, true).await;
+        let source_store = source_fixture.store.clone();
+        let mut source = source_fixture.core;
+
+        let receiver_fixture =
+            CoreTestFixture::new(context, vec![1, 1, 1, 1], authority_index, true).await;
+        let receiver_store = receiver_fixture.store.clone();
+        let mut receiver = receiver_fixture.core;
+
+        let next_commit_leaders = source
+            .leader_schedule_v3
+            .as_ref()
+            .expect("LeaderScheduleV3 must be initialized")
+            .next_commit_leader_schedule();
+        assert!(next_commit_leaders.num_leaders() > 1);
+        assert!(
+            source
+                .context
+                .protocol_config
+                .leader_schedule_update_interval()
+                > PREFIX_LAST_ROUND
+        );
+        let scheduled_leaders = next_commit_leaders
+            .allowed_leaders
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>();
+
+        let mut dag_builder = DagBuilder::new(source.context.clone());
+        dag_builder.layers(1..=INITIAL_DAG_LAST_ROUND).build();
+        source
+            .dag_state
+            .write()
+            .accept_blocks(dag_builder.blocks(1..=INITIAL_DAG_LAST_ROUND));
+
+        let source_subdags = source.try_commit_v3().unwrap();
+        // Round 6 supplies direct votes for leader rounds through round 5.
+        assert_eq!(source_subdags.len(), PREFIX_LAST_ROUND as usize);
+        source.dag_state.write().flush();
+        let source_commits = source_store
+            .scan_commits((1..=PREFIX_LAST_ROUND).into())
+            .unwrap();
+        assert_eq!(source_commits.len(), source_subdags.len());
+
+        let source_scores_at_prefix = source.current_reputation_scores();
+        assert_ne!(source_scores_at_prefix, ReputationScores::default());
+
+        let certified_leader_counts = |core: &Core| {
+            core.context
+                .committee
+                .authorities()
+                .map(|(authority_index, authority)| {
+                    (
+                        authority_index,
+                        core.context
+                            .metrics
+                            .node_metrics
+                            .committed_leaders_total
+                            .with_label_values(&[&authority.hostname, "certified-commit"])
+                            .get(),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>()
+        };
+        // The fixtures share a metrics registry. No source commit below uses the
+        // `certified-commit` label, and the baseline is taken before receiver processing.
+        let certified_leaders_before = certified_leader_counts(&receiver);
+
+        let mut source_subdags_by_commit = source_subdags
+            .into_iter()
+            .map(|subdag| (subdag.commit_ref, subdag))
+            .collect::<BTreeMap<_, _>>();
+        let mut expected_certified_leaders = BTreeMap::<AuthorityIndex, u64>::new();
+        let mut expected_receiver_subdags = Vec::new();
+        let mut has_multi_leader_commit = false;
+        let certified_commits = source_commits
+            .iter()
+            .map(|commit| {
+                let subdag = source_subdags_by_commit
+                    .remove(&commit.reference())
+                    .expect("Every source commit must have a matching subdag");
+                let block_refs = subdag
+                    .blocks
+                    .iter()
+                    .map(|block| block.reference())
+                    .collect::<Vec<_>>();
+                assert_eq!(block_refs, commit.blocks());
+
+                // V3 treats each scheduled block in the named leader round as a leader.
+                let leader_blocks = subdag
+                    .blocks
+                    .iter()
+                    .filter(|block| block.round() == commit.leader().round)
+                    .map(|block| block.reference())
+                    .collect::<Vec<_>>();
+                assert!(leader_blocks.contains(&commit.leader()));
+                assert!(
+                    leader_blocks
+                        .iter()
+                        .all(|block| scheduled_leaders.contains(&block.author))
+                );
+                has_multi_leader_commit |= leader_blocks.len() > 1;
+                for block in leader_blocks {
+                    *expected_certified_leaders.entry(block.author).or_default() += 1;
+                }
+
+                let mut expected_receiver_subdag = subdag.clone();
+                expected_receiver_subdag.decided_with_local_blocks = false;
+                expected_receiver_subdags.push(expected_receiver_subdag);
+
+                // Certification is tested in CommitSyncer. This test starts after verification
+                // and checks multi-leader reconstruction and continued local commits.
+                CertifiedCommit::new_certified(commit.clone(), subdag.blocks)
+            })
+            .collect::<Vec<_>>();
+        assert!(source_subdags_by_commit.is_empty());
+        assert!(has_multi_leader_commit);
+        assert!(expected_certified_leaders.values().sum::<u64>() > source_commits.len() as u64);
+
+        let receiver_subdags = receiver
+            .process_certified_commits(certified_commits)
+            .expect("Certified commits should be accepted");
+        assert_eq!(receiver_subdags, expected_receiver_subdags);
+        assert!(receiver.try_commit_v3().unwrap().is_empty());
+        assert_eq!(
+            receiver.dag_state.read().last_commit_index(),
+            PREFIX_LAST_ROUND
+        );
+        assert_eq!(
+            receiver.current_reputation_scores(),
+            source_scores_at_prefix
+        );
+
+        receiver.dag_state.write().flush();
+        let receiver_commits = receiver_store
+            .scan_commits((1..=PREFIX_LAST_ROUND).into())
+            .unwrap();
+        assert_eq!(receiver_commits, source_commits);
+        let certified_leaders_after = certified_leader_counts(&receiver);
+        for (authority_index, expected) in expected_certified_leaders {
+            assert_eq!(
+                certified_leaders_after[&authority_index]
+                    - certified_leaders_before[&authority_index],
+                expected
+            );
+        }
+
+        // Give both nodes the same remaining DAG. The receiver must produce the same next
+        // commits as the source after the certified prefix.
+        dag_builder
+            .layers(INITIAL_DAG_LAST_ROUND + 1..=CONTINUATION_DAG_LAST_ROUND)
+            .build();
+        source.dag_state.write().accept_blocks(
+            dag_builder.blocks(INITIAL_DAG_LAST_ROUND + 1..=CONTINUATION_DAG_LAST_ROUND),
+        );
+        // Re-accepting the prefix simulates normal block dissemination after commit sync.
+        // DagState ignores blocks that the certified commits already marked committed.
+        receiver
+            .dag_state
+            .write()
+            .accept_blocks(dag_builder.blocks(1..=CONTINUATION_DAG_LAST_ROUND));
+
+        let source_continuation = source.try_commit_v3().unwrap();
+        let receiver_continuation = receiver.try_commit_v3().unwrap();
+        assert_eq!(
+            source_continuation
+                .iter()
+                .map(|subdag| subdag.leader.round)
+                .collect::<Vec<_>>(),
+            vec![PREFIX_LAST_ROUND + 1, PREFIX_LAST_ROUND + 2]
+        );
+        assert_eq!(receiver_continuation, source_continuation);
+
+        source.dag_state.write().flush();
+        receiver.dag_state.write().flush();
+        let first_continuation_index = PREFIX_LAST_ROUND + 1;
+        let last_continuation_index = source_continuation.last().unwrap().commit_ref.index;
+        let source_continuation_commits = source_store
+            .scan_commits((first_continuation_index..=last_continuation_index).into())
+            .unwrap();
+        let receiver_continuation_commits = receiver_store
+            .scan_commits((first_continuation_index..=last_continuation_index).into())
+            .unwrap();
+        assert_eq!(receiver_continuation_commits, source_continuation_commits);
+        assert_eq!(
+            receiver_continuation_commits[0].previous_digest(),
+            source_commits.last().unwrap().digest()
         );
     }
 

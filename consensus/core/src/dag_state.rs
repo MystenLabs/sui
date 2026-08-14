@@ -80,7 +80,7 @@ pub struct DagState {
     // Last wall time when commit round advanced. Does not persist across restarts.
     last_commit_round_advancement_time: Option<std::time::Instant>,
 
-    // Last committed rounds per authority.
+    // Highest committed block round currently known for each authority.
     last_committed_rounds: Vec<Round>,
 
     /// The committed subdags that have been scored but scores have not been used
@@ -1204,7 +1204,12 @@ impl DagState {
         }
     }
 
-    /// Last committed round per authority.
+    /// Returns the highest committed block round known for each authority.
+    ///
+    /// On the v3 path with GC enabled, restart recovery scans only commits whose leader
+    /// round is above `gc_round`. Each entry is therefore a lower bound on the full commit
+    /// history. It is exact if the authority has a committed block above `gc_round`.
+    /// Otherwise, it can omit committed blocks at or below `gc_round`.
     pub(crate) fn last_committed_rounds(&self) -> Vec<Round> {
         self.last_committed_rounds.clone()
     }
