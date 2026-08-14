@@ -19,16 +19,19 @@ use crate::workloads::workload::{
 };
 use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
-use sui_core::test_utils::make_transfer_object_transaction;
 use sui_types::{
-    base_types::{ObjectRef, SuiAddress},
+    base_types::{FullObjectRef, ObjectRef, SuiAddress},
     crypto::{AccountKeyPair, get_key_pair},
-    transaction::Transaction,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
+    transaction::{TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData},
 };
 
 /// TODO: This should be the amount that is being transferred instead of MAX_GAS.
 /// Number of mist sent to each address on each batch transfer
 const _TRANSFER_AMOUNT: u64 = 1;
+
+// Add a pure input so the serialized programmable transaction is roughly 2 KiB.
+const PTB_PADDING_BYTES: usize = 2 * 1024;
 
 #[derive(Debug)]
 pub struct TransferObjectTestPayload {
@@ -70,17 +73,27 @@ impl Payload for TransferObjectTestPayload {
     }
     fn make_transaction(&mut self) -> Transaction {
         let (gas_obj, _, keypair) = self.gas.iter().find(|x| x.1 == self.transfer_from).unwrap();
-        make_transfer_object_transaction(
-            self.transfer_object,
-            *gas_obj,
+        let gas_price = self
+            .system_state_observer
+            .state
+            .borrow()
+            .reference_gas_price;
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let _ = builder.pure_bytes(vec![0; PTB_PADDING_BYTES], false);
+        builder
+            .transfer_object(
+                self.transfer_to,
+                FullObjectRef::from_fastpath_ref(self.transfer_object),
+            )
+            .unwrap();
+        let data = TransactionData::new_programmable(
             self.transfer_from,
-            keypair,
-            self.transfer_to,
-            self.system_state_observer
-                .state
-                .borrow()
-                .reference_gas_price,
-        )
+            vec![*gas_obj],
+            builder.finish(),
+            gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
+            gas_price,
+        );
+        Transaction::from_data_and_signer(data, vec![&**keypair])
     }
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {
         None
