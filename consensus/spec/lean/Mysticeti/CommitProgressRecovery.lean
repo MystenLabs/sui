@@ -3,16 +3,18 @@ Copyright (c) Mysten Labs, Inc.
 SPDX-License-Identifier: Apache-2.0
 -/
 
-import Mysticeti.Leader
+import Mysticeti.FlexCommitter
 import Mysticeti.Liveness
 
 namespace Mysticeti
 
 /-! Commit-progress recovery definitions and stage composition for Mysticeti v3.
 
-The final theorem composes four derived recovery stages. It does not yet derive the
-stages from simple process and network assumptions. It does not prove liveness for
-old leader blocks or transaction inclusion. See
+The local FlexCommitter scan is executable and proved. The final theorem composes
+three distributed recovery stages with one local task-fairness and Rust-refinement
+boundary. It does not yet derive the distributed stages from simple process and
+network assumptions. It does not prove liveness for old leader blocks or
+transaction inclusion. See
 `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`, `ASM-LIVE-LEADER`,
 `ASM-LIVE-FIRST-SLOT-SAMPLING`, and `ASM-LIVE-LOCAL-RESPONSE`.
 -/
@@ -290,73 +292,6 @@ theorem threshold_safety_is_independent_of_leader_selection
   exact ⟨thresholds.quorum_certificate_intersection,
     thresholds.quorum_preserves_certificate⟩
 
-/-- The state of one selected leader slot in the order used by the committer. -/
-inductive SelectedLeaderSlotStatus where
-  | undecided
-  | commit
-  | skip
-  deriving DecidableEq, Repr
-
-/-- One selected leader slot and its status at its position in the Rust scan. -/
-structure SelectedLeaderSlotView where
-  validator : Nat
-  status : SelectedLeaderSlotStatus
-  deriving DecidableEq, Repr
-
-/-- Every selected leader slot in the round has a final commit-or-skip result. -/
-def AllSelectedLeaderSlotsFinal
-    (statuses : List SelectedLeaderSlotStatus) : Prop :=
-  ∀ status, status ∈ statuses → status ≠ .undecided
-
-/-- At least one selected leader slot in the round has a commit result. -/
-def HasCommitResultInSelectedLeaderSlot
-    (statuses : List SelectedLeaderSlotStatus) : Prop :=
-  .commit ∈ statuses
-
-/-- One round's ordered scan fragment finds a commit before an undecided slot.
-
-Rust concatenates this scan fragment with the selected leader slot orders for later
-pending rounds. A skip lets the scan continue. A commit supplies an anchor. An
-undecided slot stops the scan. -/
-def UsableAnchorOrder : List SelectedLeaderSlotStatus → Prop
-  | [] => False
-  | .commit :: _ => True
-  | .undecided :: _ => False
-  | .skip :: tail => UsableAnchorOrder tail
-
-/-- Full finality plus one selected leader slot with a commit result is a simple,
-order-independent sufficient condition for a usable anchor. -/
-theorem all_selected_leader_slots_final_with_commit_is_usable
-    {statuses : List SelectedLeaderSlotStatus}
-    (allFinal : AllSelectedLeaderSlotsFinal statuses)
-    (hasCommit : HasCommitResultInSelectedLeaderSlot statuses) :
-    UsableAnchorOrder statuses := by
-  induction statuses with
-  | nil => simp [HasCommitResultInSelectedLeaderSlot] at hasCommit
-  | cons head tail ih =>
-      cases head with
-      | undecided =>
-          have finalHead := allFinal .undecided (by simp)
-          exact False.elim (finalHead rfl)
-      | commit => simp [UsableAnchorOrder]
-      | skip =>
-          simp only [UsableAnchorOrder]
-          apply ih
-          · intro status member
-            exact allFinal status (by simp [member])
-          · simpa [HasCommitResultInSelectedLeaderSlot] using hasCommit
-
-/-- A usable scan fragment can still contain an undecided slot after its first
-commit. Thus, usable anchors for older rounds do not by themselves make the anchor
-round eligible for commit construction. -/
-theorem usable_anchor_order_need_not_be_fully_final :
-    UsableAnchorOrder [.commit, .undecided] ∧
-      ¬AllSelectedLeaderSlotsFinal [.commit, .undecided] := by
-  constructor
-  · simp [UsableAnchorOrder]
-  · intro allFinal
-    exact allFinal .undecided (by simp) rfl
-
 /-! ### Per-round shuffle does not give adjacent correct first slots
 
 The next definitions give a small counterexample. Each round uses a permutation of
@@ -452,6 +387,12 @@ structure CommitProgressRecoveryView (State : Type) where
   stake : Nat → Nat
   commitIndex : State → Nat
   committedPrefixId : State → CommitPrefixId
+  /-- The protocol round at index zero of Rust's pending-round array. -/
+  firstPendingLeaderRound : State → Nat
+  /-- The number of entries in Rust's pending-round array. -/
+  pendingRoundCount : State → Nat
+  /-- The greatest pending-round index visited by the indirect decision scan. -/
+  highestIndirectDecisionIndex : State → Nat
   stallExpired : State → Prop
   correctRecoveryAuthorities : State → VoterSet
   highestKnownOwnProposalRound : Nat → State → Nat
@@ -511,6 +452,22 @@ def selectedLeaderSlotStatuses {State : Type}
     (view : CommitProgressRecoveryView State) (round : Nat) (state : State) :
     List SelectedLeaderSlotStatus :=
   (view.selectedLeaderSlots round state).map SelectedLeaderSlotView.status
+
+/-- Ordered selected leader slot statuses at one index in Rust's pending-round
+array. -/
+def pendingSelectedLeaderSlotStatuses {State : Type}
+    (view : CommitProgressRecoveryView State) (index : Nat) (state : State) :
+    List SelectedLeaderSlotStatus :=
+  view.selectedLeaderSlotStatuses
+    (view.firstPendingLeaderRound state + index) state
+
+/-- The status-level FlexCommitter state derived from the recovery view. -/
+def flexCommitState {State : Type}
+    (view : CommitProgressRecoveryView State) (state : State) : FlexCommitState :=
+  flexCommitStateFromSlotStatuses
+    (view.commitIndex state)
+    (view.pendingRoundCount state)
+    (fun index => view.pendingSelectedLeaderSlotStatuses index state)
 
 end CommitProgressRecoveryView
 
@@ -609,6 +566,63 @@ def HasUsableAnchorWindowAt {State : Type}
   fun state => AtCommitIndex view baseline state ∧
     HasUsableAnchorWindow view count state
 
+/-- The indirect scan contains one usable anchor window. The base is an index in
+Rust's pending-round array. -/
+def HasCoveredUsableAnchorWindowAt {State : Type}
+    (view : CommitProgressRecoveryView State)
+    (baseline depth count : Nat) : State → Prop :=
+  fun state =>
+    AtCommitIndex view baseline state ∧
+      ∃ baseIndex,
+        baseIndex ≤ view.highestIndirectDecisionIndex state ∧
+          baseIndex + depth < view.pendingRoundCount state ∧
+          ∀ offset, offset < count →
+            UsableAnchorRound view
+              (view.firstPendingLeaderRound state + baseIndex + offset) state
+
+/-- The local FlexCommitter transition is enabled for every valid indirect result.
+The remaining liveness step is to schedule Core and apply the Rust refinement. -/
+def FlexCommitterStepEnabledAt {State : Type}
+    (view : CommitProgressRecoveryView State)
+    (baseline depth : Nat) : State → Prop :=
+  fun state =>
+    AtCommitIndex view baseline state ∧
+      ∀ outcome : Nat → IndirectRoundOutcome,
+        let model := view.flexCommitState state
+        let result := runFlexIndirectDescending depth outcome
+          (view.highestIndirectDecisionIndex state)
+          (view.highestIndirectDecisionIndex state + 1) model
+        (flexCommitStep result).commitIndex = baseline + 1
+
+/-- A covered usable anchor window enables the executable FlexCommitter commit
+step. This is the deterministic fourth recovery stage. -/
+theorem covered_usable_anchor_window_enables_flex_committer
+    {State : Type} (view : CommitProgressRecoveryView State)
+    {state : State} {baseline depth : Nat}
+    (depthPositive : 0 < depth)
+    (window : HasCoveredUsableAnchorWindowAt view baseline depth
+      (depth + 1) state) :
+    FlexCommitterStepEnabledAt view baseline depth state := by
+  rcases window with
+    ⟨atBaseline, baseIndex, baseLeHighest, windowInRange, anchors⟩
+  constructor
+  · exact atBaseline
+  · intro outcome
+    let model := view.flexCommitState state
+    have modelAnchors : FlexAnchorWindow model baseIndex (depth + 1) := by
+      apply usable_orders_give_flex_anchor_window
+      intro offset beforeEnd
+      have usable := anchors offset beforeEnd
+      simpa [model, CommitProgressRecoveryView.flexCommitState,
+        CommitProgressRecoveryView.pendingSelectedLeaderSlotStatuses,
+        UsableAnchorRound, Nat.add_assoc] using usable
+    have advances := full_flex_anchor_window_advances_commit_index
+      (outcome := outcome) depthPositive baseLeHighest modelAnchors windowInRange
+    have modelIndex : model.commitIndex = baseline := by
+      simpa [model, CommitProgressRecoveryView.flexCommitState,
+        flexCommitStateFromSlotStatuses, AtCommitIndex] using atBaseline
+    simpa [modelIndex] using advances
+
 /-- Consecutive quorum block layers give the required adjacent anchor window when
 the multi-leader recovery conditions give one usable anchor per candidate round. -/
 theorem quorum_block_layer_window_yields_anchor_window
@@ -668,13 +682,15 @@ theorem next_round_proposal_target_is_not_old
   rw [nextRoundTargets authority authorityInRange authorityInRecovery]
   omega
 
-/-- Derived stages for commit progress recovery.
+/-- Distributed stages and the local execution boundary for commit progress
+recovery.
 
-These fields are theorem goals. They are not basic process or network assumptions.
-A complete proof must derive them from partial synchrony, bounded post-GST local
-processing, weak task fairness, recovery persistence, the next-round proposal
-policy, parent availability, pacing, and executable models of the Rust decision
-rules. -/
+The first three fields are theorem goals. The last field is the weak task-fairness
+and Rust-transition refinement boundary for an already proved enabled local step.
+A complete implementation proof must derive the first three fields from partial
+synchrony, bounded post-GST local processing, recovery persistence, the next-round
+proposal policy, parent availability, pacing, and the executable direct decision
+rule. -/
 structure CommitProgressRecoveryStages
     {State : Type} {protocolPacket : Packet → Prop}
     (trace : Trace State)
@@ -706,9 +722,10 @@ structure CommitProgressRecoveryStages
               (requiredRecoveryLayerCount
                 (requiredRecoveryAnchorCount indirectCommitDepth)) state)
   /-- Repeated recovery layers either advance the commit or contain the required
-  usable adjacent anchors. Derive this stage from propagation delay, first-slot
-  sampling, the direct decision rule, and recovery persistence. One arbitrary
-  quorum-layer pair does not imply a usable anchor. -/
+  usable adjacent anchors inside the pending FlexCommitter scan. Derive this stage
+  from propagation delay, first-slot sampling, the direct decision rule, recovery
+  persistence, and retained pending-round state. One arbitrary quorum-layer pair
+  does not imply a usable anchor. -/
   recoveryLayersToUsableAnchors :
     ∀ baseline,
       LeadsToAfter network.gst trace
@@ -717,22 +734,24 @@ structure CommitProgressRecoveryStages
             (requiredRecoveryAnchorCount indirectCommitDepth)))
         (fun state =>
           CommitAdvancedFrom view baseline state ∨
-            HasUsableAnchorWindowAt view baseline
+            HasCoveredUsableAnchorWindowAt view baseline indirectCommitDepth
               (requiredRecoveryAnchorCount indirectCommitDepth) state)
-  /-- A usable anchor window either has already advanced the commit or makes the
-  deterministic FlexCommitter transition increase the commit index. Derive this
-  stage from an executable model of the Rust scan. -/
-  anchorWindowToCommit :
+  /-- When the proved local FlexCommitter transition is enabled, Core eventually
+  runs it and publishes the greater commit index. This is the weak task fairness
+  and Rust-transition refinement boundary. The FlexCommitter algorithm itself is
+  proved in `covered_usable_anchor_window_enables_flex_committer`. -/
+  enabledFlexCommitterTaskRuns :
     ∀ baseline,
       LeadsToAfter network.gst trace
-        (HasUsableAnchorWindowAt view baseline
-          (requiredRecoveryAnchorCount indirectCommitDepth))
+        (FlexCommitterStepEnabledAt view baseline indirectCommitDepth)
         (CommitAdvancedFrom view baseline)
 
-/-- The four derived recovery stages compose to commit-index progress.
+/-- The recovery stages and local execution boundary compose to commit-index
+progress.
 
 This theorem is a composition lemma. It is not the end-to-end recovery liveness
-theorem because it does not derive the stages from process and network rules. -/
+theorem because it does not derive the distributed stages or the Rust task
+transition from process and network rules. -/
 theorem commit_progress_recovery_stages_compose
     {State : Type} {protocolPacket : Packet → Prop}
     {trace : Trace State}
@@ -765,8 +784,10 @@ theorem commit_progress_recovery_stages_compose
           advanced⟩
       · have anchorAfterGst : network.gst ≤ anchorTime :=
           Nat.le_trans layerAfterGst layersToAnchors
-        rcases stages.anchorWindowToCommit baseline anchorTime
-            anchorAfterGst anchorWindowAt with
+        have enabled := covered_usable_anchor_window_enables_flex_committer view
+          (depthPositive := by simp [indirectCommitDepth]) anchorWindowAt
+        rcases stages.enabledFlexCommitterTaskRuns baseline anchorTime
+            anchorAfterGst enabled with
           ⟨commitTime, anchorsToCommit, advanced⟩
         exact ⟨commitTime,
           Nat.le_trans startToRecovery

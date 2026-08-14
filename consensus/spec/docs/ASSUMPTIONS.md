@@ -367,9 +367,11 @@ other open conditions define the remaining refinement and environment boundary.
 - **Status:** Known mismatch.
 - **Effect if false:** Liveness.
 - **Lean use:** `NextRoundProposalTargets` models the local proposal target.
-  `CommitProgressRecoveryStages` names four derived stage theorems that are still
-  open. `commit_progress_recovery_stages_compose` proves only that these stages
-  compose. It is not the end-to-end liveness theorem.
+  `CommitProgressRecoveryStages` names three open distributed stages and one local
+  execution boundary. `covered_usable_anchor_window_enables_flex_committer` and
+  `full_flex_anchor_window_advances_commit_index` prove the deterministic
+  FlexCommitter step. `commit_progress_recovery_stages_compose` proves that the
+  remaining stages compose. It is not the end-to-end liveness theorem.
 - **Rust evidence:** `DagState::last_commit_timestamp_ms` exposes the current
   in-memory commit timestamp. `DagState::flush` makes buffered commits durable, and
   `DagState::new` loads the last flushed commit after restart. `Context::clock`
@@ -380,8 +382,10 @@ other open conditions define the remaining refinement and environment boundary.
   recovery, and the live correct stake bound; consecutive quorum block layers from
   the next-round proposal rule, parent synchronization, persistence, and broadcast;
   a usable anchor window from partial synchrony, growing propagation delay, and
-  first-slot sampling; and commit-index progress from an executable model of the
-  `FlexCommitter` scan. Use the epoch start timestamp when the commit index is zero.
+  first-slot sampling. The status-level FlexCommitter step is discharged in Lean.
+  Prove that Rust's ordered pending-round state refines this model, that retained
+  committed blocks let `build_commit` complete, and that weak task fairness runs the
+  enabled Core action. Use the epoch start timestamp when the commit index is zero.
   Use saturating subtraction for a future commit timestamp. Add deterministic v3
   simulation tests.
 

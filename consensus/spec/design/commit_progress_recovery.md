@@ -12,9 +12,11 @@ liveness gap. The recovery mode is not implemented.
 
 Lean proves
 [`commit_progress_recovery_stages_compose`](../lean/Mysticeti/CommitProgressRecovery.lean).
-This is a composition lemma. It shows that four recovery-stage results imply a
-greater commit index. It does not derive those results from the local Rust rules or
-the network model. The end-to-end recovery liveness theorem remains open.
+This is a composition lemma. It shows that three distributed recovery results and
+one local execution boundary imply a greater commit index. Lean also proves the
+deterministic FlexCommitter step behind that local boundary. It does not derive the
+distributed results or the Rust task transition from the local Rust rules and the
+network model. The end-to-end recovery liveness theorem remains open.
 
 The required property is commit progress:
 
@@ -240,9 +242,18 @@ usable anchor in each candidate round. Full finality for every selected leader s
 with at least one commit result, is one stronger sufficient condition. The theorem
 does not derive either condition from quorum stake alone.
 
-Lean checks the count arithmetic. It does not yet prove that the current Rust scan
-advances from the `d + 1` anchor window. That result needs the executable
-`FlexCommitter` transition model described below.
+Lean also has an executable status-level model of `find_anchor_block`, the
+descending indirect scan, `find_commit_leader_round`, and one Core commit-index
+step. [`full_flex_anchor_window_advances_commit_index`](../lean/Mysticeti/FlexCommitter.lean)
+proves that an in-range window of `d + 1` usable anchors makes the complete scan
+advance. The theorem permits any indirect commit-or-skip result. It does not assume
+network timing, task scheduling, or a favorable indirect result.
+
+The model indexes the pending-round array from zero. Index zero corresponds to
+Rust's `min_next_leader_round`. The Rust refinement must show that the ordered slot
+lists, pending-round count, highest indirect-decision index, and commit index match
+the Lean state. It must also show that `build_commit` uses retained blocks and that
+Core applies its result.
 
 More layers do not by themselves fix split votes for one selected leader slot.
 Byzantine equivocation, missing blocks, or a schedule mismatch can require a
@@ -467,7 +478,9 @@ The Lean model uses `UsableAnchorOrder` for one round of this scan. The complete
 Rust scan concatenates this round's selected leader slot order with the orders for
 later pending rounds. Lean also proves that “all selected leader slots are final
 and at least one slot has a commit result” is a stronger sufficient condition for
-one usable scan fragment for one round.
+one usable scan fragment for one round. `summarizeFlexRound` proves the exact
+connection from an ordered selected leader slot list to the five round states in
+the executable scan model.
 
 `FlexCommitter::find_commit_leader_round` has a stronger output condition. Every
 selected leader slot in that round and each earlier pending round must be final.
@@ -732,8 +745,9 @@ round.
 commit progress recovery separate from the strong theorem for old leader blocks.
 
 The current theorem is `commit_progress_recovery_stages_compose`. It proves that
-four derived stages compose to commit-index progress. It does not prove those stages
-from the network and process rules.
+three distributed stages and one local execution boundary compose to commit-index
+progress. It does not prove the distributed stages or the Rust task transition from
+the network and process rules.
 
 The Lean model defines or proves these facts:
 
@@ -752,13 +766,17 @@ The Lean model defines or proves these facts:
 - the required usable anchor count is the indirect depth plus one;
 - the required quorum block layer count adds the direct-vote offset;
 - for current v3, these counts are three usable anchors and four block layers;
+- two usable anchors do not always produce a commit at the current depth;
+- an in-range window of `depth + 1` usable anchors makes the complete modeled
+  descending scan find a commit for every indirect result;
 - the recovery-window base is existential, not selected by the protocol;
 - every layer in the witness window is above the modeled block-GC boundary;
 - each recovering authority's permitted proposal target is exactly one round above
   its highest known own proposal round, and that target cannot skip forward or
   reuse an old round;
 - on the no-progress branch, each stage ends at the baseline commit index;
-- the four derived stages compose to eventual commit-index growth.
+- the three distributed stages and local execution boundary compose to eventual
+  commit-index growth.
 
 ### Proof plan from simple contracts
 
@@ -783,7 +801,8 @@ Model these items as local transitions or deterministic functions:
 - GC and the legal recovery frontier;
 - parent selection for a timely correct first-slot block;
 - the v3 direct decision function;
-- the exact `FlexCommitter` descending scan and commit step.
+- the mapping from Rust's pending-round state and commit step to the proved
+  executable `FlexCommitter` model.
 
 Then prove these distributed results. Do not add them as assumptions:
 
@@ -795,14 +814,17 @@ Then prove these distributed results. Do not add them as assumptions:
    persistence, broadcast, and post-GST delivery.
 3. Repeated recovery layers create the required usable anchor run or advance. Use
    a recovery wait that grows beyond the complete derived timing bound, timely
-   parent inclusion, the direct decision lemma, and first-slot sampling.
-4. The usable anchor run advances the commit index. Use an executable Lean model of
-   `find_anchor_block`, indirect decisions, `find_commit_leader_round`, and the Core
-   commit step.
+   parent inclusion, the direct decision lemma, first-slot sampling, and retained
+   pending-round state.
 
-The current Lean structure `CommitProgressRecoveryStages` names these four open
-results. They are temporary theorem inputs for the composition lemma. They are not
-accepted process or network assumptions.
+The fourth deterministic result is now proved. A covered usable anchor run enables
+the modeled `FlexCommitter` step for every indirect result. The remaining local
+boundary says that weak task fairness schedules the enabled Core action and that
+the Rust action refines the modeled transition.
+
+The current Lean structure `CommitProgressRecoveryStages` names the three open
+distributed results and this local execution boundary. They are inputs to the
+composition lemma. They are not additional network assumptions.
 
 The next operational model must store the commit index, local clock, recovery state,
 highest known own proposal round, and pending actions for each validator. It must

@@ -27,7 +27,8 @@ proposed Rust behavior, proof obligations, and test plan.
 
 This is a confirmed implementation gap and an activation blocker. The strong Lean
 liveness theorem uses a catch-up condition for old leader opportunities. The new
-Lean recovery result only composes four unproved recovery stages. It is not an
+Lean recovery result proves the status-level FlexCommitter step, but it still has
+three open distributed stages and one Rust task-transition boundary. It is not an
 end-to-end liveness theorem for the current Rust code.
 
 [`ThresholdClock::add_block`](../../core/src/threshold_clock.rs) accepts one block
@@ -70,7 +71,9 @@ The current Rust code does not have these parts:
 - one exact local event that starts each recovery pacing interval, and a proof that
   bounds proposal skew from that event during a stable recovery period;
 - proofs from the local process and network contracts to recovery overlap, quorum
-  block layers, usable anchors, and a greater `FlexCommitter` commit index;
+  block layers, and a covered usable anchor window;
+- a Rust refinement from the ordered pending-round state to the proved executable
+  `FlexCommitter` model, plus fair execution of the enabled Core commit action;
 - deterministic simulation tests for schedule changes, stake bounds, selective
   delivery, synchronization, GC, restart, and future timestamps.
 
@@ -323,6 +326,10 @@ stable data format. Check these Rust functions against the vectors:
 
 - `LeaderSlotDecider::try_direct_decide`;
 - `LeaderSlotDecider::try_indirect_decide`;
+- `FlexCommitter::find_anchor_block`;
+- the descending loop in `FlexCommitter::try_indirect_commit`;
+- `FlexCommitter::find_commit_leader_round`;
+- `FlexCommitter::build_commit` and the Core commit-index update;
 - `CommitFinalizerV3::compute_direct_decisions`;
 - `CommitFinalizerV3::compute_indirect_decisions`;
 - the first depth-two trigger selection;

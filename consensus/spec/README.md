@@ -21,11 +21,19 @@ GC round. The proof keeps live DAG evidence separate from the finalizer's buffer
 committed-prefix evidence.
 
 The liveness model also includes commit progress recovery. Lean records and checks
-the recovery count arithmetic from the v3 indirect depth and direct-vote offset. A
-proof that the resulting anchor window makes the Rust `FlexCommitter` advance is
-still open. The current recovery result is a composition lemma over four unproved
-stages. It is not an end-to-end liveness theorem for Rust. It does not claim
-liveness for old leader blocks or transaction inclusion.
+the recovery count arithmetic from the v3 indirect depth and direct-vote offset.
+The executable status-level model proves that an in-range window of `depth + 1`
+usable anchor rounds makes the complete descending `FlexCommitter` scan find a
+commit candidate and increase its modeled commit index. The proof holds for every
+commit-or-skip result from the indirect rule. It also proves that two anchors are
+not sufficient in one current depth-two execution.
+
+The end-to-end recovery theorem for Rust is still open. Three distributed stages
+must derive a recovery quorum, retained quorum block layers, and a covered usable
+anchor window. A local refinement must show that Rust's pending-round array and
+slot results match the executable model. Weak task fairness must then schedule the
+enabled Core step. The result does not claim liveness for old leader blocks or
+transaction inclusion.
 
 The primitive timing model uses standard post-GST message delivery. Local consensus
 computation takes at most the symbolic time `epsilon`; instantaneous computation is

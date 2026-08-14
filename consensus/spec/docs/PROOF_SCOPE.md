@@ -204,8 +204,10 @@ Lean proves these results:
 - `good_window_commits_within`: the modeled network steps finish within
   `10 * delta` after a good leader window starts;
 - `consensus_liveness`: a post-activation open round eventually produces a commit;
-- `commit_progress_recovery_stages_compose`: four stated recovery-stage results
-  compose to a greater commit index;
+- `full_flex_anchor_window_advances_commit_index`: an in-range usable anchor
+  window makes the complete modeled FlexCommitter scan advance;
+- `commit_progress_recovery_stages_compose`: three distributed recovery results
+  and one local execution boundary compose to a greater commit index;
 - `finalizer_liveness`: a pending transaction on a continuous commit stream
   eventually gets a durable decision;
 - `transaction_liveness`: the consensus and finalizer results compose.
@@ -289,13 +291,14 @@ above the modeled block-GC boundary. The Rust refinement must show that block sy
 obtains the recent blocks before Core evaluates the window.
 
 [`commit_progress_recovery_stages_compose`](../lean/Mysticeti/CommitProgressRecovery.lean)
-is a composition lemma. It does not prove end-to-end recovery liveness. The four
-input stages are these results:
+is a composition lemma. It does not prove end-to-end recovery liveness. Its inputs
+contain these three distributed results and one local execution boundary:
 
 1. a stalled commit reaches a recovery quorum or advances;
 2. a recovery quorum produces consecutive quorum block layers or advances;
-3. repeated recovery layers produce a usable anchor window or advance;
-4. the usable anchor window makes `FlexCommitter` advance the commit index.
+3. repeated recovery layers produce an in-range usable anchor window or advance;
+4. weak task fairness runs the enabled Core step, and the Rust step refines the
+   proved FlexCommitter transition.
 
 The proof must derive these results from simple process and environment contracts.
 These contracts include post-GST delivery, bounded post-GST local processing, weak
@@ -303,7 +306,8 @@ task fairness, local clock progress, the local recovery-entry rule, recovery
 persistence, the next-round proposal rule, parent synchronization, durable proposal
 storage, broadcast, a growing recovery wait, and the stated first-slot sampling
 model. The direct decision function and the `FlexCommitter` scan are deterministic
-transition models to prove, not environmental assumptions.
+transition models, not environmental assumptions. The status-level FlexCommitter
+scan is now proved. Its Rust-state mapping and task transition remain open.
 
 The Lean view includes an abstract committed-prefix identity. The recovery
 transition model must show when equal commit indices identify one common prefix.
@@ -409,8 +413,10 @@ These distributed protocol results remain open refinement theorems:
 1. [`ASM-LIVE-BLOCK-SYNC`](ASSUMPTIONS.md#asm-live-block-sync).
 2. [`ASM-LIVE-COMMIT-SYNC`](ASSUMPTIONS.md#asm-live-commit-sync).
 
-The recovery quorum, quorum block layers, usable anchor window, and commit advance
-are derived proof goals. They are not additional assumptions.
+The recovery quorum, quorum block layers, and usable anchor window are derived proof
+goals. The status-level commit advance is proved. Its Rust refinement and scheduled
+Core execution remain proof goals. None of these results is an additional network
+assumption.
 
 The finalizer phase of `transaction_liveness` composes three more derived goals:
 `ASM-LIVE-COMMIT-SYNC`, `ASM-LIVE-FINALIZER-TRIGGER`, and
