@@ -50,6 +50,7 @@ use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
 use crate::pagination::StreamConnection;
 use crate::scope::Scope;
+use crate::task::streaming::StreamedTransactionStore;
 
 /// The execution status of this transaction: success or failure.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -583,6 +584,20 @@ impl EffectsContents {
         // Execution context is not backed by the index yet.
         if self.scope.is_executed() {
             return Ok(self.clone());
+        }
+
+        // A streamed checkpoint runs ahead of the KV backend, so a just-streamed transaction (e.g. a
+        // live `previousTransaction`) is not in the backend yet; serve it from the in-memory streamed
+        // store while it is. Only in a live context (`checkpoint_viewed_at` is `None`): a
+        // checkpoint-bounded read only references transactions the backend already has.
+        if self.scope.checkpoint_viewed_at().is_none()
+            && let Some(streaming_transactions) = ctx.data_opt::<Arc<StreamedTransactionStore>>()
+            && let Some(contents) = streaming_transactions.get(&digest)
+        {
+            return Ok(Self {
+                scope: self.scope.clone(),
+                contents: Some(contents),
+            });
         }
 
         let kv_loader: &KvLoader = ctx.data()?;
