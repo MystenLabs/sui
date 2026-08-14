@@ -20,6 +20,17 @@ the maximum of the causal-history block-GC round and the transaction vote-tracke
 GC round. The proof keeps live DAG evidence separate from the finalizer's buffered
 committed-prefix evidence.
 
+The conditional liveness proof also includes commit progress recovery. It derives
+the recovery layer count from the v3 direct-vote offset and indirect depth. It does
+not claim liveness for old leader blocks or transaction inclusion. Read the implementation
+gaps before you treat the theorem as a Rust guarantee.
+
+The recovery proof separates the validator set, the leader schedule, the round
+leader selection, and each selected leader slot. Current v3 uses the full leader
+schedule as the round leader selection in every pending leader round. The general
+schedule and selection lemmas do not assume this equality. The v3 commit progress
+recovery theorem does.
+
 The model uses Lean only. It does not use mathlib. The project pins Lean 4.33.0 in
 `lean/lean-toolchain`.
 
@@ -131,5 +142,5 @@ changes, when you check the proof-to-Rust mapping.
 Read [the assumption ledger](docs/ASSUMPTIONS.md) and
 [the proof scope](docs/PROOF_SCOPE.md) before you use a theorem as a protocol claim.
 Read [the implementation gaps](docs/IMPLEMENTATION_GAPS.md) before v3 activation.
-Read [the round-jump recovery design](design/ROUND_JUMP_RECOVERY.md) before you
-change threshold-clock advancement or recovery block production.
+Read [the commit progress recovery design](design/commit_progress_recovery.md)
+before you change threshold-clock advancement or recovery block production.

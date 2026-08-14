@@ -15,9 +15,9 @@ Applying these theorems to Rust requires the assumption ledger. Key obligations 
 `ASM-LIVE-PARTIAL-SYNCHRONY`, `ASM-LIVE-ROUND-CATCHUP`,
 `ASM-LIVE-BLOCK-SYNC`, and `ASM-LIVE-COMMIT-SYNC`.
 
-The safe intermediate-proposal rule is sufficient for old-leader liveness. A
-weaker theorem for commit-index progress from commit recovery is the
-separate `ASM-LIVE-COMMIT-RECOVERY` obligation.
+The safe intermediate-proposal rule gives liveness for old leader blocks.
+`CommitProgressRecovery.lean` gives a separate, conditional theorem for the weaker
+commit-index progress property.
 -/
 
 abbrev Trace (State : Type) := Time → State
@@ -92,7 +92,7 @@ theorem trans {State : Type} {stableStart leftBound rightBound : Time}
 
 end WithinAfter
 
-/-- These predicates are the liveness checkpoints for one target leader opportunity. -/
+/-- These predicates are the liveness checkpoints for one selected leader slot. -/
 structure ConsensusPhases (State : Type) where
   roundOpen : State → Prop
   goodLeaderWindow : State → Prop
@@ -132,9 +132,9 @@ structure ConsensusLivenessAssumptions
   /-- `ASM-LIVE-ROUND-CATCHUP`. -/
   safeRoundChanges :
     SafeRoundChanges roundState trace (stableStart network catchupActivation)
-  /-- The selected leader set eventually has a live correct leader opportunity.
-  `ASM-LIVE-LEADER`. -/
-  fairLiveLeader :
+  /-- The round leader selection eventually selects a correct, non-crashed
+  validator. `ASM-LIVE-LEADER`. -/
+  fairRoundLeaderSelection :
     SafeRoundChanges roundState trace (stableStart network catchupActivation) →
     LeadsToAfter (stableStart network catchupActivation) trace
       phases.roundOpen phases.goodLeaderWindow
@@ -222,7 +222,7 @@ theorem consensus_liveness
     LeadsToAfter (stableStart network catchupActivation) trace
       phases.roundOpen phases.commitProduced := by
   have leaderOpportunity :=
-    assumptions.fairLiveLeader assumptions.safeRoundChanges
+    assumptions.fairRoundLeaderSelection assumptions.safeRoundChanges
   have boundedCommit := (good_window_commits_within assumptions).toLeadsTo
   exact leaderOpportunity.trans boundedCommit
 

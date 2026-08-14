@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 
 This ledger records the assumptions that connect the Lean model to the Mysticeti
 v3 Rust implementation and its operating environment. The review date is
-2026-08-13. The analysis baseline is in the parent
+2026-08-14. The analysis baseline is in the parent
 [`README`](../README.md#analysis-baseline).
 
 Lean checks each theorem from its stated inputs. An input to an assumption
@@ -41,7 +41,7 @@ identifies a remaining condition. It is not a proof failure inside Lean.
 | Discharged in Lean | 1 |
 | Enforced in Rust | 1 |
 | Partially verified | 8 |
-| Environmental assumption | 4 |
+| Environmental assumption | 5 |
 | Open proof obligation | 3 |
 | Abstraction gap | 2 |
 | Known mismatch | 6 |
@@ -68,15 +68,19 @@ other open conditions define the remaining refinement and environment boundary.
 - **Effect if false:** Safety.
 - **Lean use:** [`Thresholds.nominalHybrid`](../lean/Mysticeti/Thresholds.lean)
   constructs the required inequalities.
-- **Rust evidence:** Rust uses equivalent formulas in the reviewed v3 committee
-  construction. Parameter agreement and integer bounds are separate assumptions.
+- **Rust evidence:** `Committee::new_v3` uses these formulas only as the nominal
+  case. It scales `f` and `c` to the actual validator set stake, sets
+  `A = 2f + c + 1`, and sets `Q = N - f - c`. It then checks the two safety
+  inequalities. Actual `N` does not always equal `5f + 3c + 1`.
 - **Discharge:** No Lean work is required. Close the Rust mapping through
   `ASM-SAFE-PARAMETERS` and `ASM-REFINE-INTEGERS`.
 
 ## ASM-SAFE-PARAMETERS
 
-- **Claim:** All correct nodes in one epoch use the same committee, `N`, `f`, `Q`,
-  `A`, validity threshold, `gc_depth`, and v3 leader configuration.
+- **Claim:** All correct nodes in one epoch use the same validator set, `N`, `f`,
+  `Q`, `A`, validity threshold, `gc_depth`, and v3 leader configuration. From one
+  common committed prefix, they derive the same leader schedule membership, round
+  leader selection, and selected leader slot order.
 - **Type:** Configuration refinement.
 - **Status:** Known mismatch.
 - **Effect if false:** Safety.
@@ -86,7 +90,8 @@ other open conditions define the remaining refinement and environment boundary.
   process environment variables. Correct nodes can therefore derive different
   values.
 - **Discharge:** Put all threshold inputs in authenticated epoch protocol state. Add
-  all proof-relevant configuration values to the same state. Add
+  all proof-relevant configuration values to the same state. Prove deterministic
+  schedule and selection derivation from the common commit chain. Add
   mixed-configuration rejection tests.
 
 ## ASM-SAFE-FAULT-BOUND
@@ -319,44 +324,127 @@ other open conditions define the remaining refinement and environment boundary.
   create required intermediate blocks.
 - **Discharge:** Implement the safe intermediate-proposal loop and add a
   deterministic v3 simulation test. This rule is sufficient for the stronger
-  old-leader liveness property.
+  liveness property for old leader blocks.
 
-## ASM-LIVE-COMMIT-RECOVERY
+## ASM-LIVE-COMMIT-PROGRESS-RECOVERY
 
-- **Claim:** After a commit stall, each correct validator that is not behind its
-  observed quorum commit index eventually enters commit recovery mode and stays in
-  that mode until its commit index advances. The validator computes the stall time
-  from the persisted last-commit timestamp, or from the epoch start timestamp before
-  the first commit. Here, a stall means that this consensus timestamp is older than
-  the recovery timeout. The validators stay in recovery until they create enough
-  consecutive quorum-backed block layers for `FlexCommitter` to produce a commit.
+- **Claim:** After a commit stall, each correct, non-crashed validator that is not
+  behind its observed quorum commit index eventually enters commit progress
+  recovery and stays eligible at the same commit index until that index advances.
+  During one process run, the validator computes stall time from the current
+  last-commit timestamp in `DagState`. After restart, it uses the last flushed
+  commit timestamp. Before the
+  first commit, it uses the epoch start timestamp. Correct local clocks progress
+  with bounded drift. If no earlier commit occurs, at least quorum stake of
+  correct, non-crashed validators overlaps in recovery. Schedule-independent
+  per-round pacing and future-round handling then create a recent consecutive
+  quorum block layer window. The window gives usable anchors under common leader
+  schedule membership, round leader selection, and selected leader slot order. The
+  `FlexCommitter` scan then increases the commit index.
 - **Type:** Protocol and Rust refinement.
 - **Status:** Known mismatch.
 - **Effect if false:** Liveness.
-- **Lean use:** This is the intended input to a weaker v3 commit-progress theorem.
-  The current Lean model has only the stronger `SafeRoundChanges` theorem.
-- **Rust evidence:** `DagState::new` loads the last commit from storage,
-  `DagState::last_commit_timestamp_ms` exposes its timestamp, and `Context::clock`
-  exposes the current local time. The current code does not have commit recovery
-  state or a commit-stall trigger for block production.
-- **Discharge:** Implement commit recovery. Prove that, after GST, all
-  correct stake eventually overlaps in recovery and produces the consecutive v3
-  anchors needed for commit progress. Use the epoch start timestamp when the commit
-  index is zero and use saturating subtraction for a future commit timestamp. Add
-  deterministic v3 simulation tests.
+- **Lean use:** `CommitProgressRecoveryAssumptions` states the temporal and Rust
+  refinement inputs. Each stage keeps `commitIndex = baseline` or reports that the
+  index has advanced. `RecoveryQuorum` requires quorum stake from validators outside
+  the non-progress set, and the model requires every Byzantine validator to be in
+  that set. `commit_progress_recovery_liveness` proves that these inputs
+  cause eventual commit-index growth. `requiredRecoveryLayerCount` derives the
+  current layer count from depth and the one-round direct-vote offset.
+- **Rust evidence:** `DagState::last_commit_timestamp_ms` exposes the current
+  in-memory commit timestamp. `DagState::flush` makes buffered commits durable, and
+  `DagState::new` loads the last flushed commit after restart. `Context::clock`
+  exposes local time. The current code does not have commit progress recovery, a
+  commit-stall trigger for block production, or adaptive recovery pacing.
+- **Discharge:** Implement commit progress recovery. Prove that, after GST, correct,
+  non-crashed validators with quorum stake are in recovery at the same time and
+  produce the recent v3 anchor window.
+  Keep a schedule-independent delay between recovery layers; under standard
+  partial synchrony, let it eventually exceed the post-GST message delay. Prove
+  one common committed prefix, leader schedule, round leader selection, and
+  selected leader slot order at the baseline commit index. Equal numeric commit
+  indices are not sufficient without the common committed-prefix condition.
+  Prove that the `FlexCommitter` scan maps the window to a greater commit index. Use
+  the epoch start timestamp when the commit index is zero and use saturating
+  subtraction for a future commit timestamp. Add deterministic v3 simulation tests.
 
 ## ASM-LIVE-LEADER
 
-- **Claim:** The leader schedule eventually selects a live correct leader with
-  enough live support for proposal and certificate progress.
+- **Claim:** Let `N` be actual validator set stake, `S` be leader schedule stake,
+  and `P_r` be round leader selection stake for one pending leader round `r`.
+  Byzantine stake is at most `f`. After GST, the combined Byzantine and crashed
+  or otherwise non-progressing stake is at most `f + c`, and a stable set of
+  correct, non-crashed validators continues to run. The structural relation is
+  `P_r <= S <= N`. The schedule viability bound is `f + c < S`. A protocol that
+  uses a smaller round leader selection also needs a leader fairness condition.
+  The sufficient quorum-coverage bound is `A <= P_r`. Current v3 selects the full
+  leader schedule for every pending leader round, so its structural and coverage
+  bounds are `A <= S = P_r <= N`. Message delivery, pacing, and selected leader
+  slot order must also let the anchor scan find a commit before its first undecided
+  slot. The per-slot safety proof and the quorum-coverage lemma do not use the
+  optional resource policy `P_r <= Q`. Its effect on anchor-scan liveness remains
+  in the usable-anchor obligation.
 - **Type:** Protocol and configuration refinement.
 - **Status:** Open proof obligation.
 - **Effect if false:** Liveness.
-- **Lean use:** `ConsensusLivenessAssumptions.fairLiveLeader`.
-- **Rust evidence:** `LeaderScheduleV3` can exclude low-score stake. The reviewed
-  configuration has no proved bound that preserves a live correct leader.
-- **Discharge:** Connect maximum excluded stake, `f`, crash stake, and required live
-  stake. Add boundary property tests.
+- **Lean use:** `ConsensusLivenessAssumptions.fairRoundLeaderSelection` covers
+  strong leader liveness. For commit progress recovery,
+  `LeaderScheduleViabilityBounds` and
+  `RoundLeaderSelectionCoverageBounds` separate schedule viability from per-round
+  quorum coverage. `V3LeaderScheduleCoverageBounds` and
+  `v3_coverage_applies_to_schedule_and_round` derive the v3 specialization from
+  actual set weights.
+  `quorum_and_round_leader_selection_intersect_outside_byzantine_stake` proves the
+  per-round weighted intersection. The optional work cap has separate
+  `RoundLeaderSelectionResourceBound` and `V3LeaderScheduleResourceBound` types.
+- **Rust evidence:** `LeaderScheduleV3` builds the Rust `allowed_leaders` field by
+  excluding low-score stake. This ordered field is the leader schedule.
+  `FlexCommitter` creates one selected leader slot for every listed validator in
+  each pending round at or above `min_next_leader_round`. It applies a
+  deterministic round-based permutation to the slot order. Thus, current v3 uses
+  the full leader schedule as the round leader selection for those rounds. The
+  percentage rule does not directly enforce `A <= S`. The deterministic order has
+  no proved fairness property that supplies the required anchor.
+- **Discharge:** Define and enforce the schedule viability and round leader
+  selection coverage bounds from the actual committee weights. Report `P_r <= Q`
+  only if the deployment enables this resource policy. Prove a usable anchor scan under partial
+  synchrony, schedule-independent pacing, and Byzantine selective delivery. Add
+  stake-bound, equivocation, selection, and slot-order tests.
+
+## ASM-LIVE-FIRST-SLOT-SAMPLING
+
+- **Claim:** While one commit index is stalled, the leader schedule and the set of
+  Byzantine, crashed, or unavailable validators are fixed. For each pending leader
+  round, all correct validators use one common permutation sampled uniformly from
+  all permutations of the leader schedule. Samples for different rounds are
+  independent. If the schedule has `m` members and `h > 0` of them are correct and
+  non-crashed, the probability that the first selected leader slot is correct is
+  `p = h / m`. The probability that two adjacent rounds both have a correct first
+  slot is `p^2`. The two correct validators can be the same or different. Repeated
+  disjoint round pairs contain such a pair with probability one.
+- **Type:** Probabilistic liveness and environment assumption.
+- **Status:** Environmental assumption.
+- **Effect if false:** Liveness.
+- **Lean use:** The deterministic Lean trace does not model probability.
+  `CommitProgressRecoveryAssumptions.usableAnchorFromRecoveryConditions` assumes
+  the eventual usable-anchor result that this random-permutation claim supplies
+  together with post-GST delivery and adaptive pacing. A future probabilistic model
+  can prove that the failure probability after `k` disjoint pairs is
+  `(1 - p^2)^k`, which approaches zero.
+- **Rust evidence:** `FlexCommitter` seeds `StdRng` from the round number and
+  shuffles the complete ordered leader schedule for each pending round. This is a
+  deterministic pseudorandom sequence. The `rand` interface does not specify
+  independence or a consecutive-seed coverage bound.
+- **Discharge:** This ideal random-permutation model is explicitly accepted for the
+  current recovery design. Rust approximates it with a deterministic pseudorandom
+  permutation. To remove the abstraction, use protocol randomness with a stated
+  probabilistic model, prove a weighted first-slot coverage bound for the exact
+  deterministic order, or use a deterministic order with a bounded
+  adjacent-correct-slot guarantee.
+- **Decision, 2026-08-14:** Model each round's seeded shuffle as one common,
+  independent, uniform random permutation of the leader schedule. This is an
+  accepted liveness abstraction for the deterministic Rust shuffle. It is not a
+  safety assumption or a deterministic theorem about `StdRng`.
 
 ## ASM-LIVE-BLOCK-SYNC
 

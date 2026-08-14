@@ -132,14 +132,15 @@ theorem intersection_lower_bound (authorityCount : Nat) (stake : Nat → Nat)
   have identity := weight_union_add_inter authorityCount stake left right
   omega
 
-/-- The threshold facts used by the safety proof. `ASM-MATH-THRESHOLDS` proves the
-nominal values in Lean. `ASM-SAFE-PARAMETERS` maps them to one epoch configuration. -/
+/-- The threshold facts used by the safety proof. `ASM-MATH-THRESHOLDS` gives one
+nominal instance. `ASM-SAFE-PARAMETERS` maps the actual values and inequalities to
+one epoch configuration. -/
 structure Thresholds (authorityCount : Nat) (stake : Nat → Nat) where
   /-- Maximum Byzantine stake. -/
   fault : Nat
   /-- Direct decision threshold. -/
   quorum : Nat
-  /-- Indirect certificate threshold. -/
+  /-- Indirect certification threshold. -/
   certificate : Nat
   certificate_positive : 0 < certificate
   quorum_certificate_intersection :

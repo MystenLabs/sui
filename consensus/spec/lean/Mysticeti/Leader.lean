@@ -8,9 +8,9 @@ import Mysticeti.Thresholds
 
 namespace Mysticeti
 
-/-! Safety of one Mysticeti v3 leader slot. -/
+/-! Safety of one Mysticeti v3 selected leader slot. -/
 
-/-- Voting evidence for one leader block in one leader slot. The mapping from signed
+/-- Voting evidence for one leader block in one selected leader slot. The mapping from signed
 Rust blocks to these sets is `ASM-SAFE-AUTHENTICATION` and
 `ASM-SAFE-EVIDENCE-REFINEMENT`. -/
 structure LeaderEvidence (authorityCount : Nat) (stake : Nat → Nat)
