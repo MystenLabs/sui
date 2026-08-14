@@ -252,11 +252,6 @@ integration invariant that covers both v3 sub-DAG paths, commit-sync recovery, t
 pending finalizer prefix, and the exact GC boundary. This item is still a
 proof-closure gap.
 
-The `CommitFinalizerV3` constructor comment says that the proof depends on
-`Linearizer::linearize_sub_dag`. This statement is stale for v3. Replace it with the
-`FlexCommitter::build_commit` and `Core::post_commit` ordering contract. Add a
-separate statement for `FlexCommitter::handle_certified_commit`.
-
 `prepare_direct_voting_blocks` reads live cached blocks. A slow finalizer can lose a
 direct-decision opportunity after DAG GC. This loss does not make a false quorum,
 but it affects liveness. Test that the buffered indirect path completes after this
