@@ -10,13 +10,11 @@ SPDX-License-Identifier: Apache-2.0
 This document specifies commit progress recovery for the Mysticeti v3 round-jump
 liveness gap. The recovery mode is not implemented.
 
-Lean proves the conditional
-[`commit_progress_recovery_liveness`](../lean/Mysticeti/CommitProgressRecovery.lean)
-theorem. The theorem proves the composition from a commit stall, through an
-overlapping recovery interval and a recent anchor window, to a greater commit
-index. It does not prove that the current Rust code supplies those inputs. The
-multi-leader, synchronization, and `FlexCommitter` refinement inputs remain known
-implementation gaps.
+Lean proves
+[`commit_progress_recovery_stages_compose`](../lean/Mysticeti/CommitProgressRecovery.lean).
+This is a composition lemma. It shows that four recovery-stage results imply a
+greater commit index. It does not derive those results from the local Rust rules or
+the network model. The end-to-end recovery liveness theorem remains open.
 
 The required property is commit progress:
 
@@ -27,12 +25,14 @@ This document does not require every old honest leader block or transaction to
 commit. It does not change the safety rules for leader or transaction decisions.
 
 The chosen design uses
-[`ASM-LIVE-COMMIT-PROGRESS-RECOVERY`](../docs/ASSUMPTIONS.md#asm-live-commit-progress-recovery)
+[`ASM-LIVE-COMMIT-PROGRESS-RECOVERY`](../docs/ASSUMPTIONS.md#asm-live-commit-progress-recovery),
 [`ASM-LIVE-LEADER`](../docs/ASSUMPTIONS.md#asm-live-leader), and
 [`ASM-LIVE-FIRST-SLOT-SAMPLING`](../docs/ASSUMPTIONS.md#asm-live-first-slot-sampling).
+The timing proof also uses
+[`ASM-LIVE-LOCAL-RESPONSE`](../docs/ASSUMPTIONS.md#asm-live-local-response).
 [`ASM-LIVE-ROUND-CATCHUP`](../docs/ASSUMPTIONS.md#asm-live-round-catchup) is a
 stronger alternative. It gives liveness for old leader blocks. It is not an input
-to the commit progress recovery theorem.
+to the target commit progress recovery theorem.
 
 ## Problem
 
@@ -47,12 +47,16 @@ This restriction is necessary:
 > in round `R` or any earlier round.
 
 Therefore, recovery cannot first create a block in `R` and then create old blocks.
-The proposed fix creates only blocks at the current threshold-clock round.
+Let `P` be the highest round in which this authority is known to have proposed a
+block. The proposed fix does not use a jumped threshold-clock round as the next
+proposal round. During recovery, the authority proposes only in round `P + 1`.
+If it does not have quorum parent stake in round `P`, it waits for those parents or
+uses block sync.
 
-The current Lean liveness theorem uses a stronger rule. It creates each required
-intermediate proposal before it creates the future-round proposal. That rule proves
-liveness for old leader blocks. It is not known to be necessary for commit progress
-in v3.
+The Lean strong leader-liveness theorem uses a stronger rule. It creates each
+required intermediate proposal before it creates the future-round proposal. That
+rule proves liveness for old leader blocks. It is not known to be necessary for
+commit progress in v3.
 
 ## Proposed behavior
 
@@ -116,14 +120,19 @@ block in every selected leader slot for that round. One slot can contain zero, o
 or multiple blocks. The wait set is empty when `R - 1` is below
 `min_next_leader_round`.
 
-When recovery is active, an authority does this for each new threshold-clock round:
+When recovery is active, an authority does this for each proposal attempt:
 
-1. Read the current threshold-clock round `R`.
-2. Check that `R` is greater than the last block round signed by this authority.
-3. Check that quorum stake of valid parents exists in round `R - 1`.
-4. Do not use the selected leader slot availability wait for round `R - 1`.
-5. Create one normal `BlockV3` in round `R`.
-6. Persist the block before broadcast.
+1. Read the highest known own proposal round `P` after own-block recovery.
+2. Set the only permitted proposal target to `P + 1`.
+3. Check that the threshold clock has reached at least `P + 1`.
+4. Check that quorum stake of valid parents is available in round `P`.
+5. Do not use the selected leader slot availability wait for round `P`.
+6. Create one normal `BlockV3` in round `P + 1`.
+7. Persist the block before broadcast.
+
+A locally accepted block in round `P + 1` has quorum parent references in round
+`P`. This fact can trigger synchronization, but the proposer must still have the
+parent blocks available in the live DAG before it creates its own block.
 
 The recovery block is not a new wire type. It has no new transactions. It still
 carries the valid v3 transaction votes, transaction vote cutoff, and commit votes
@@ -132,7 +141,7 @@ that a normal block requires.
 The proposal path must keep these existing checks:
 
 - one block per authority and round;
-- a proposal round greater than the last known own proposal round;
+- a proposal round equal to the last known own proposal round plus one;
 - quorum stake from the immediate parent round;
 - normal signature and block verification;
 - the transaction vote cutoff below the proposal round;
@@ -148,8 +157,9 @@ The recovery mode must not remove all pacing. A recovery proposal needs both a
 mature schedule-independent pacing deadline and an immediate parent quorum. Key the
 pacing state by commit index, not by target round. The delay must increase while the
 commit index is unchanged, or the liveness model must state a known upper bound for
-`delta`. Reset the pacing state only after commit progress. This wait does not
-require the leader schedule. It gives blocks from correct validators in the round
+the complete derived timing bound. Reset the pacing state only after commit
+progress. This wait does not require the leader schedule. It gives blocks from
+correct validators in the round
 leader selection more time to reach the next-round voters. It does not by itself
 prevent selective delivery by a Byzantine validator.
 
@@ -159,11 +169,11 @@ it eventually clears. Otherwise, recovery needs a rate-limited override for that
 gate. This gate is different from the schedule-independent recovery delay.
 
 If a new high-round block moves the threshold clock while recovery is active,
-record the new clock round and create the next recovery block only at that round. Do
-not create any omitted old block. A target-round change must not reset the recovery
-attempt count, the pacing deadline, or a deadline that is already mature. If the
-deadline is mature but the new target has no parent quorum, retry as soon as the
-parent quorum becomes available.
+record the new clock round as observed progress. Do not change the proposal target.
+The target remains one round after the highest known own proposal. The clock change
+must not reset the recovery attempt count, the pacing deadline, or a deadline that
+is already mature. If the deadline is mature but the target has no parent quorum,
+retry as soon as the parent quorum becomes available.
 
 ### Exit and re-entry
 
@@ -181,12 +191,11 @@ This behavior does not require a durable recovery-mode flag.
 
 The protocol does not select or certify one recovery round `R`.
 
-After GST, assume that block sync and commit sync complete, protocol tasks at
-correct, non-crashed validators continue to run, correct local clocks progress with
-bounded drift, and no commit occurs. Each correct, non-crashed validator then
-satisfies its local timeout condition and stays eligible for recovery. The entry
-times can differ. Eventually, correct, non-crashed validators with quorum stake are
-in recovery at the same time.
+The proof must derive recovery overlap from simple contracts. If no commit occurs,
+each correct local clock continues to advance, each continuously enabled recovery
+task eventually runs, and an entered validator stays in recovery. If stable correct,
+non-crashed validators have quorum stake, they therefore are eventually in recovery
+at the same time. Their entry times can differ.
 
 The refinement proof must show that a round `R` exists during that overlap. It must
 not assume that Core knows `R` in advance. A valid block at round `R + 1` already
@@ -200,27 +209,28 @@ recovery layers forever.
 ## Recovery distances
 
 The proof does not use an independent constant for the recovery window. It derives
-the required layer count from two protocol distances:
+the required count from the indirect depth and the direct-vote offset:
 
 - `directVoteRoundOffset` is the distance from a leader block to its direct-vote
   blocks. Its current value is one.
 - `indirectCommitDepth` is the minimum distance from a decision round to an
   indirect anchor. Its current value is two.
 
-The current Lean model fixes the direct-vote offset at one. For indirect depth `d`,
-it therefore needs `d + 1` consecutive quorum block layers. The first `d` layers
-are candidate anchor rounds. The next layer supplies direct votes for the last
-candidate round. Current v3 has depth two, so the window contains layers `R`,
-`R + 1`, and `R + 2`. The value three is derived from these two protocol rules. It
-is not a separate configuration value or a fixed completion bound.
+For indirect depth `d`, the scan needs `d` usable anchors to cover the older pending
+prefix. It needs one more usable anchor to finalize the first recovery round. Thus,
+the required anchor count is `d + 1`. The last anchor also needs its direct-vote
+layer. With the current direct-vote offset of one, the required block-layer count is
+`d + 2`.
 
-For a future protocol with direct-vote offset `v`, `d + v` is the expected general
-form. The current Lean theorem does not prove that general form.
+Current v3 has depth two. It therefore needs usable anchors in rounds `R`, `R + 1`,
+and `R + 2`, with quorum block layers through `R + 3`. These values are derived from
+the scan and vote distances. They are not separate configuration values or fixed
+completion bounds.
 
-For depth two, usable anchors in adjacent rounds `R` and `R + 1` cover the two rounds
-immediately below the recovery window. The descending indirect scan can then
-continue through the older pending prefix. A single anchor can leave one of these
-rounds blocked.
+Two usable anchors can resolve the two older rounds. They are not sufficient when
+the first recovery round has an undecided selected leader slot after its first
+commit result. The third anchor indirectly finalizes that round, which lets
+`find_commit_leader_round` return a commit round.
 
 The Lean theorem
 [`quorum_block_layer_window_yields_anchor_window`](../lean/Mysticeti/CommitProgressRecovery.lean)
@@ -229,6 +239,10 @@ stronger than a quorum block layer statement. It assumes that the Rust scan has 
 usable anchor in each candidate round. Full finality for every selected leader slot,
 with at least one commit result, is one stronger sufficient condition. The theorem
 does not derive either condition from quorum stake alone.
+
+Lean checks the count arithmetic. It does not yet prove that the current Rust scan
+advances from the `d + 1` anchor window. That result needs the executable
+`FlexCommitter` transition model described below.
 
 More layers do not by themselves fix split votes for one selected leader slot.
 Byzantine equivocation, missing blocks, or a schedule mismatch can require a
@@ -462,30 +476,67 @@ slot. A direct commit status can act as an indirect anchor before Core builds a
 commit from it. The reverse scan uses later anchors to make older selected leader
 slots final.
 
-The remaining proof obligation is to show that commit progress recovery repeatedly
-creates enough usable anchor rounds despite Byzantine vote splits. One valid option
-is a protocol rule that gives all correct validators the same commit-or-skip result
-for each selected leader slot. Another option is a proved fairness rule for the
-selected leader slot order. The current code enforces neither option as a protocol
-invariant.
+The proof must show that recovery repeatedly creates enough usable anchor rounds
+despite Byzantine vote splits. For a correct validator in the first selected leader
+slot, the local direct-decision lemma needs quorum stake of next-round blocks to
+reference its block. Partial synchrony can give this result only when:
+
+- local consensus computation takes at most `epsilon` time;
+- the correct first-slot block is delivered and becomes visible within
+  `delta + epsilon`;
+- the recovery wait before the next-round proposals eventually exceeds the total
+  bound;
+- recovery proposals include that timely block as an immediate parent.
+
+Weak task fairness alone is not sufficient. A fair scheduler can run the first-slot
+proposal after the next-round proposals in every candidate round. The deterministic
+proof therefore uses a simple post-GST local-processing bound. The idealized model
+can set `epsilon` to zero as an explicit instantaneous-computation idealization. The
+general model keeps a finite symbolic `epsilon` for each covered local action. The
+proof does not assume a minimum network delay. A
+probabilistic task scheduler is an alternative, but it needs a separate probability
+model.
+
+The network bound is not yet a bound for the Rust recovery timer. The timer starts
+from a local event, but the correct first-slot block can be produced at a different
+validator. Let `proposal_skew` be the additional time from the local timer-start
+event to that remote block's transport-send event, or zero if the send occurred
+earlier. The timer must eventually exceed:
+
+```text
+proposal_skew + delta + epsilon
+```
+
+The Rust design must name the local timer-start event. One candidate is the time at
+which the validator flushes and hands its own round-`r` proposal to the broadcast
+path. The layer-production proof must then derive a finite bound on
+`proposal_skew`; it must not assume that all validators start the round at the same
+time. The increasing wait eventually covers this bound. A Rust timing refinement
+must also include proposal flush, local task and queue delays, and remote receive
+processing. It can use one symbolic aggregate bound or separate symbolic bounds.
+
+The current ancestor-selection rule can omit a received block after it has selected
+enough parent stake. Recovery needs a direct rule that includes the timely first-slot
+block, or all available immediate-round parents. This is a local Rust rule to model
+and prove.
 
 #### Current seeded shuffle
 
-Two adjacent usable anchor rounds can have different correct validators in their
-first selected leader slots. They do not need the same validator. Let `a_r` be the
-validator in the first selected leader slot for round `r`. For a fixed set `F` of
-Byzantine, crashed, or unavailable validators, the required order property is:
+The required usable anchor run can have different correct validators in its first
+selected leader slots. Let `a_r` be the validator in the first selected leader slot
+for round `r`. For a fixed set `F` of Byzantine, crashed, or unavailable validators,
+and required anchor count `h`, the order property is:
 
 ```text
-eventually a_r is not in F and a_(r + 1) is not in F
+eventually a_r through a_(r + h - 1) are not in F
 ```
 
 If each round used an independent uniform random permutation, and `p > 0` were the
-fraction of leader schedule members outside `F`, one disjoint pair of rounds would
-satisfy this property with probability `p^2`. The probability that none of `k`
-disjoint pairs satisfies it would be `(1 - p^2)^k`, which approaches zero. This
-would give almost-sure liveness. The two correct validators can be the same or
-different.
+fraction of leader schedule members outside `F`, one disjoint run would satisfy
+this property with probability `p^h`. The probability that none of `k` disjoint
+runs satisfies it would be `(1 - p^h)^k`, which approaches zero. This gives
+almost-sure occurrence of a good run. The correct validators can be the same or
+different. For current v3, `h = indirectCommitDepth + 1 = 3`.
 
 The Rust implementation does not make independent random choices. It creates a new
 `StdRng` from the public round number and shuffles the ordered leader schedule. This
@@ -493,34 +544,22 @@ is one deterministic function of the round and schedule. The `rand` library does
 not give a coverage property for consecutive seeds. Thus, the probabilistic
 calculation is not a proof for the Rust order.
 
-The exact deterministic condition can be stated as a graph property. For a finite
-round window, create one vertex for each leader schedule member and add the edge
-`(a_r, a_(r + 1))` for each adjacent round pair. A set `F` prevents every adjacent
-correct pair exactly when `F` is a vertex cover of this graph. Therefore, the
-window guarantees an adjacent correct pair when every vertex cover has stake
-greater than the Byzantine-plus-unavailable stake bound. This condition permits
-two different correct validators.
-
-The current implementation does not check this weighted vertex-cover condition,
-and its seeded shuffle has no specified bound that implies it for every future
-round window. The Lean counterexample `alternating_order_has_no_adjacent_correct_first`
-also shows that a valid per-round permutation and ordinary leader fairness are not
-sufficient. For example, the first slots can repeat as `B, H1, B, H2`, where `B`
-is Byzantine and `H1` and `H2` are correct. Both correct validators are selected
-first repeatedly, but no two adjacent first slots are correct.
-A deterministic repeated-first-slot order is a simple sufficient alternative, but
-it is not the only possible order.
+The seeded shuffle has no specified bound that implies a good run for every future
+round suffix. The Lean counterexample
+`alternating_order_has_no_adjacent_correct_first` shows that a valid per-round
+permutation and ordinary leader fairness are not sufficient. A deterministic
+repeated-first-slot order is one sufficient alternative.
 
 **Decision, 2026-08-14:** The current recovery design accepts
 `ASM-LIVE-FIRST-SLOT-SAMPLING`. While the commit index is stalled, model each
 round's shuffle as one common, independent, uniform random permutation of the
-stable leader schedule. The non-progress set is fixed during this period. If `p`
-is the fraction of schedule members that are correct and non-crashed, an adjacent
-round pair has two correct first slots with probability `p^2`. The correct
-validators can be the same or different. Repeated disjoint pairs succeed with
-probability one. The deterministic round-seeded `StdRng` shuffle is accepted as a
-pseudorandom implementation of this model; this is not a deterministic coverage
-claim.
+stable leader schedule. The network and task scheduler do not control the samples.
+The non-progress set is fixed during this period. If `p` is the fraction of schedule
+members that are correct and non-crashed, a run of `h` rounds has correct first
+slots with probability `p^h`. Repeated disjoint runs succeed with probability one.
+For current v3, `h = 3`. The deterministic
+round-seeded `StdRng` shuffle is accepted as a pseudorandom implementation of this
+model; this is not a deterministic coverage claim.
 
 Leader decisions still use the schedule derived from the local commit chain. The
 Rust refinement must show one of these facts:
@@ -543,9 +582,12 @@ condition.
 
 ## Garbage collection and synchronization
 
-Recovery creates recent blocks only. It does not create a block at or below the GC
-round. The existing parent-quorum check requires the parent blocks to remain
-available in the live DAG.
+Recovery can create blocks below the observed threshold-clock round. It does not
+create a block at or below the GC round. The next-round proposal policy can run only
+when round `P` is above the GC boundary and quorum parent stake is available in that
+round. If it is not, commit sync and own-block recovery must first establish a legal
+proposal frontier. This resume rule is a separate implementation and refinement
+obligation.
 
 Commit sync can install commits and move the GC boundary while recovery is active.
 Core must recompute all recovery conditions after it installs those commits.
@@ -585,12 +627,12 @@ the task before `CoreThread` during authority shutdown.
 
 Track a recovery attempt count and pacing deadline for the current commit index.
 Increase the schedule-independent recovery delay after each recovery proposal that
-does not lead to a commit. A threshold-clock change updates only the target round.
-It does not reset the attempt count or deadline. When the deadline expires, keep it
+does not lead to a commit. A threshold-clock change does not change the exact
+next-round target, attempt count, or deadline. When the deadline expires, keep it
 mature until Core creates a recovery block or the commit index changes. Use checked
 time arithmetic. A finite maximum delay requires an explicit deployment bound for
-`delta`; otherwise, the delay must be able to grow until it exceeds the post-GST
-message delay.
+the complete derived timing bound. Otherwise, the delay must be able to grow until
+it exceeds that bound.
 
 Add a named command such as:
 
@@ -611,9 +653,9 @@ Add one helper that returns a reason, not only a Boolean. Its checks are:
 3. `local_commit_index >= quorum_commit_index`.
 4. The current `DagState` commit timestamp is stale by at least
    `commit_progress_recovery_timeout`.
-5. The threshold-clock round is greater than both the last local proposal round and
-   the last known own proposal round.
-6. The current DAG has quorum parent stake in the immediate preceding round.
+5. The recovered highest known own proposal round is `P`, and the threshold clock
+   has reached at least `P + 1`.
+6. The current DAG has quorum parent stake in round `P`.
 
 If the local commit index is lower than the quorum commit index, return a
 `commit_sync_ahead` reason. Commit sync keeps priority. If the indices are equal or
@@ -646,7 +688,8 @@ enum ProposalMode {
 
 `CommitProgressRecovery` has these rules:
 
-- use the current threshold-clock round only;
+- use only the highest known own proposal round plus one, even when the threshold
+  clock is higher;
 - bypass the selected leader slot availability wait;
 - use a schedule-independent recovery delay that increases while the commit index
   is unchanged;
@@ -662,7 +705,7 @@ Do not use the existing `force = true` behavior without change. It bypasses both
 the selected leader slot availability wait and `min_round_delay`. The named recovery mode
 must separate these two controls. The recovery delay must not depend on selected
 leader slots. Under standard partial synchrony, it must eventually exceed the
-post-GST message delay.
+complete derived timing bound.
 
 The high-propagation-delay gate needs an explicit policy. The liveness theorem
 assumes that it cannot block recovery forever. The first implementation can either
@@ -678,26 +721,24 @@ stake. Current v3 reports equal values for the last two metrics. Use stable reas
 labels such as `timeout_not_reached`, `commit_sync_ahead`, `own_round_unknown`,
 `no_parent_quorum`, `propagation_gate`, and `proposed`.
 
-Do not change the threshold clock to create old blocks. Do not add an exact-round
-proposal API that can sign below the last proposed round.
+Do not rewind the threshold clock. Add a targeted proposal API that can sign
+below the current threshold-clock round, but only at one round above the highest
+known own proposal round. It must never sign at or below the previous proposal
+round.
 
 ## Formal verification
 
 [`CommitProgressRecovery.lean`](../lean/Mysticeti/CommitProgressRecovery.lean) keeps
 commit progress recovery separate from the strong theorem for old leader blocks.
 
-The main theorem states:
-
-> Under partial synchrony, eventual block and commit synchronization, fair task
-> execution, correct clock progress, a finite recovery timeout, and the v3
-> recovery quorum block layer obligations, a
-> stalled correct, non-crashed validator eventually observes a greater commit
-> index.
+The current theorem is `commit_progress_recovery_stages_compose`. It proves that
+four derived stages compose to commit-index progress. It does not prove those stages
+from the network and process rules.
 
 The Lean model defines or proves these facts:
 
-- the non-progress set contains every Byzantine validator, and a recovery quorum
-  contains only correct, non-crashed validators;
+- `RecoveryQuorum` excludes the abstract non-progress set; a future operational
+  model must define that set from Byzantine and crashed validators;
 - `f + c < S <= N` gives a leader schedule with positive stake from a correct,
   non-crashed validator;
 - leader schedule viability bounds alone do not give round leader selection
@@ -708,26 +749,79 @@ The Lean model defines or proves these facts:
 - v3 selection of the full schedule gives `A <= S = P_r <= N`;
 - full finality of the selected leader slots plus one selected leader slot with a
   commit result gives a usable scan fragment for one round;
-- for current v3, the recovery layer count is the indirect depth plus one direct
-  vote layer;
+- the required usable anchor count is the indirect depth plus one;
+- the required quorum block layer count adds the direct-vote offset;
+- for current v3, these counts are three usable anchors and four block layers;
 - the recovery-window base is existential, not selected by the protocol;
 - every layer in the witness window is above the modeled block-GC boundary;
-- a recovery proposal cannot be at or below the authority's last signed round;
-- each temporal recovery stage stays at the baseline commit index until the final
-  stage increases it;
-- the assumed temporal recovery stages compose to eventual commit-index growth.
+- each recovering authority's permitted proposal target is exactly one round above
+  its highest known own proposal round, and that target cannot skip forward or
+  reuse an old round;
+- on the no-progress branch, each stage ends at the baseline commit index;
+- the four derived stages compose to eventual commit-index growth.
 
-These items remain Rust refinement assumptions:
+### Proof plan from simple contracts
 
-- the current commit timestamp, the last flushed restart value, and correct local
-  clocks cause staggered recovery entry and eventual recovery quorum overlap;
-- future threshold-clock jumps cannot prevent a consecutive recent layer window;
-- schedule-independent pacing and direct voting give a usable ordered anchor scan
-  in each required anchor round;
+Use only these primitive environment assumptions:
+
+- bounded Byzantine and unavailable stake;
+- post-GST delivery of one authenticated message between correct validators;
+- progress of each correct local clock;
+- weak fairness for a continuously enabled task;
+- local consensus computation bounded by `epsilon`, with `epsilon = 0` as the
+  instantaneous special case;
+- durability of a completed storage write;
+- the accepted independent first-slot sampling model.
+
+Model these items as local transitions or deterministic functions:
+
+- the recovery-entry guard and its persistence until a commit;
+- the next-round proposal target and immediate-parent quorum gate;
+- block-sync and commit-sync retries;
+- growing recovery delay that a threshold-clock jump does not reset;
+- persist before broadcast;
+- GC and the legal recovery frontier;
+- parent selection for a timely correct first-slot block;
+- the v3 direct decision function;
+- the exact `FlexCommitter` descending scan and commit step.
+
+Then prove these distributed results. Do not add them as assumptions:
+
+1. A stalled commit reaches a recovery quorum or advances. Use local clock progress,
+   recovery persistence, weak task fairness, the finite validator set, and the live
+   correct stake bound.
+2. A recovery quorum creates consecutive retained quorum block layers or advances.
+   Use the next-round proposal rule, a synchronized legal frontier, task fairness,
+   persistence, broadcast, and post-GST delivery.
+3. Repeated recovery layers create the required usable anchor run or advance. Use
+   a recovery wait that grows beyond the complete derived timing bound, timely
+   parent inclusion, the direct decision lemma, and first-slot sampling.
+4. The usable anchor run advances the commit index. Use an executable Lean model of
+   `find_anchor_block`, indirect decisions, `find_commit_leader_round`, and the Core
+   commit step.
+
+The current Lean structure `CommitProgressRecoveryStages` names these four open
+results. They are temporary theorem inputs for the composition lemma. They are not
+accepted process or network assumptions.
+
+The next operational model must store the commit index, local clock, recovery state,
+highest known own proposal round, and pending actions for each validator. It must
+also record one task event per transition. The current `NextRoundProposalTargets`
+predicate states only a state invariant. It does not yet prove that a proposer runs,
+retries, or preserves this target across a threshold-clock jump.
+
+These items remain local refinement work:
+
+- the Rust proposal path uses the modeled next-round proposal target and waits or
+  synchronizes when quorum parents for that target are not available;
+- the proposer includes the timely first selected leader block used by the anchor
+  proof;
+- the legal recovery frontier stays above block GC;
+- future threshold-clock jumps do not reset the next-round target or pacing state;
+- the pacing timer uses one named local start event, and the layer proof derives a
+  finite bound on proposal skew from that event;
 - correct validators use the same committed prefix, leader schedule membership,
   round leader selection, and selected leader slot order for the relevant scans;
-- the `FlexCommitter` descending scan maps the anchor window to a greater commit
-  index;
 - leader schedule changes are derived from committed history;
 - block GC and transaction vote GC;
 - block sync, commit sync, and restart.
@@ -744,7 +838,9 @@ Add focused unit tests for these cases:
 - an old synchronized commit keeps recovery eligible;
 - a recent commit ends recovery;
 - a local commit index below the quorum commit index selects commit sync;
-- a recovery proposal never uses the same or an earlier round;
+- a recovery proposal uses exactly the round after the highest known own proposal;
+- a higher threshold-clock round does not change the recovery proposal target;
+- recovery waits or synchronizes when the target has no available parent quorum;
 - a recovery block keeps the parent quorum and transaction vote cutoff rules.
 
 Add deterministic simulation tests for these cases:
@@ -752,8 +848,8 @@ Add deterministic simulation tests for these cases:
 - correct, non-crashed validators enter recovery at different times;
 - one future block causes a large round jump;
 - a layer window shorter than
-  `indirectCommitDepth + directVoteRoundOffset` does not give the assumed anchor
-  window;
+  `requiredRecoveryLayerCount (requiredRecoveryAnchorCount indirectCommitDepth)`
+  does not give the required anchor window;
 - a sufficient derived layer window advances the commit index;
 - a Byzantine leader equivocates or withholds its block;
 - leader schedule stake is at and below `f + c`, and above that bound;
@@ -780,8 +876,8 @@ Run the tests with v3, `FlexCommitter`, and the v3 leader schedule enabled.
 
 Do not treat the timer and recent-block implementation as a complete fix by
 themselves. Activate this policy only after the simulation tests pass and the Rust
-refinement supplies the inputs to `commit_progress_recovery_liveness`. The Lean
-composition theorem alone does not discharge
+refinement proves the stages used by `commit_progress_recovery_stages_compose`. The
+Lean composition lemma alone does not discharge
 `ASM-LIVE-COMMIT-PROGRESS-RECOVERY` for the implementation. The stronger
 `ASM-LIVE-ROUND-CATCHUP` rule is not an activation condition for this narrower
 commit-progress design.

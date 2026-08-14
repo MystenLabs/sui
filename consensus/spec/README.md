@@ -20,16 +20,24 @@ the maximum of the causal-history block-GC round and the transaction vote-tracke
 GC round. The proof keeps live DAG evidence separate from the finalizer's buffered
 committed-prefix evidence.
 
-The conditional liveness proof also includes commit progress recovery. It derives
-the recovery layer count from the v3 direct-vote offset and indirect depth. It does
-not claim liveness for old leader blocks or transaction inclusion. Read the implementation
-gaps before you treat the theorem as a Rust guarantee.
+The liveness model also includes commit progress recovery. Lean records and checks
+the recovery count arithmetic from the v3 indirect depth and direct-vote offset. A
+proof that the resulting anchor window makes the Rust `FlexCommitter` advance is
+still open. The current recovery result is a composition lemma over four unproved
+stages. It is not an end-to-end liveness theorem for Rust. It does not claim
+liveness for old leader blocks or transaction inclusion.
+
+The primitive timing model uses standard post-GST message delivery. Local consensus
+computation takes at most the symbolic time `epsilon`; instantaneous computation is
+the special case `epsilon = 0`. The proposed recovery rule grows its wait until it
+exceeds the applicable network and proposal-skew bound. The current Lean theorem
+does not yet derive this rule.
 
 The recovery proof separates the validator set, the leader schedule, the round
 leader selection, and each selected leader slot. Current v3 uses the full leader
 schedule as the round leader selection in every pending leader round. The general
 schedule and selection lemmas do not assume this equality. The v3 commit progress
-recovery theorem does.
+recovery model does.
 
 The model uses Lean only. It does not use mathlib. The project pins Lean 4.33.0 in
 `lean/lean-toolchain`.

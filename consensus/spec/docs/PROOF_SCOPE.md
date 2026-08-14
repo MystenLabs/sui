@@ -190,8 +190,9 @@ The model for liveness of old leader blocks also has a catch-up activation time.
 liveness result starts after both GST and this activation time. The commit progress recovery
 theorem does not use this activation time.
 
-[`ConsensusLivenessAssumptions`](../lean/Mysticeti/Liveness.lean) states the Rust
-refinement obligations for the progress checkpoints. It requires:
+[`ConsensusLivenessStageObligations`](../lean/Mysticeti/Liveness.lean) collects
+temporary Rust refinement goals for the progress checkpoints. Its fields are
+derived stage results, not primitive assumptions. It requires:
 
 - safe intermediate proposals during a round jump;
 - the eventual selection of a correct, non-crashed leader;
@@ -203,8 +204,8 @@ Lean proves these results:
 - `good_window_commits_within`: the modeled network steps finish within
   `10 * delta` after a good leader window starts;
 - `consensus_liveness`: a post-activation open round eventually produces a commit;
-- `commit_progress_recovery_liveness`: a post-GST commit stall eventually produces
-  a greater commit index when the commit progress recovery inputs hold;
+- `commit_progress_recovery_stages_compose`: four stated recovery-stage results
+  compose to a greater commit index;
 - `finalizer_liveness`: a pending transaction on a continuous commit stream
   eventually gets a durable decision;
 - `transaction_liveness`: the consensus and finalizer results compose.
@@ -216,16 +217,23 @@ progress recovery targets only commit-index growth. In that design, validators
 enter recovery after local commit progress stalls and stay eligible until a commit
 occurs. The validators do not select a common round.
 
-[`CommitProgressRecoveryAssumptions`](../lean/Mysticeti/CommitProgressRecovery.lean)
-states the recovery inputs. The recovery-window base is existential. Current v3
-uses direct votes in the next round. Thus, the derived window length is the
-indirect depth plus one direct-vote layer, not an independent constant.
+[`CommitProgressRecoveryStages`](../lean/Mysticeti/CommitProgressRecovery.lean)
+names the current unproved recovery-stage results. These results are theorem goals,
+not basic assumptions. The recovery-window base is existential. Current v3 uses
+direct votes in the next round. Thus, any layer count must be derived from the
+required anchor count and the direct-vote offset.
 
-The proof separates these sets:
+For each correct authority in the recovery quorum, the Lean view defines the only
+permitted proposal target as one round above that authority's highest known own
+proposal. A higher threshold-clock round does not change this target. The theorem
+does not yet model the transition that creates the proposal. The layer-production
+stage is also not yet derived from synchronization and weak task fairness.
+
+The recovery view separates these sets:
 
 - the validator set contains all epoch validators;
-- the non-progress set contains Byzantine and crashed validators;
-- the recovery quorum contains only validators outside the non-progress set;
+- the non-progress set is intended to contain Byzantine and crashed validators;
+- `RecoveryQuorum` contains only validators outside the stated non-progress set;
 - the leader schedule is a subset of the validator set for one commit-index
   leader schedule interval;
 - the round leader selection is a subset of the leader schedule;
@@ -280,20 +288,27 @@ The consecutive quorum block layer window also requires each witness layer to be
 above the modeled block-GC boundary. The Rust refinement must show that block sync
 obtains the recent blocks before Core evaluates the window.
 
-[`commit_progress_recovery_liveness`](../lean/Mysticeti/CommitProgressRecovery.lean)
-proves that the recovery stages compose to a greater commit index. It remains a
-conditional theorem. The model composes assumed progress stages. It does not derive
-them directly from `network.postGstDelivery`. The assumptions state that correct
-clock progress and staggered recovery entry create a recent consecutive quorum
-block layer window, that the multi-leader rule creates usable anchors under common
-leader schedule membership and selected leader slot order, and that the
-`FlexCommitter` descending scan advances the commit index. These are Rust refinement
-obligations under `ASM-LIVE-COMMIT-PROGRESS-RECOVERY` and `ASM-LIVE-LEADER`.
+[`commit_progress_recovery_stages_compose`](../lean/Mysticeti/CommitProgressRecovery.lean)
+is a composition lemma. It does not prove end-to-end recovery liveness. The four
+input stages are these results:
+
+1. a stalled commit reaches a recovery quorum or advances;
+2. a recovery quorum produces consecutive quorum block layers or advances;
+3. repeated recovery layers produce a usable anchor window or advance;
+4. the usable anchor window makes `FlexCommitter` advance the commit index.
+
+The proof must derive these results from simple process and environment contracts.
+These contracts include post-GST delivery, bounded post-GST local processing, weak
+task fairness, local clock progress, the local recovery-entry rule, recovery
+persistence, the next-round proposal rule, parent synchronization, durable proposal
+storage, broadcast, a growing recovery wait, and the stated first-slot sampling
+model. The direct decision function and the `FlexCommitter` scan are deterministic
+transition models to prove, not environmental assumptions.
 
 The Lean view includes an abstract committed-prefix identity. The recovery
-assumptions require equal commit indices in the modeled execution to identify one
-common prefix. The leader schedule and selected leader slot order are stable for
-that prefix. The Rust refinement can map the abstract identity to the commit digest.
+transition model must show when equal commit indices identify one common prefix.
+It must then derive one leader schedule and selected leader slot order from that
+prefix. The Rust refinement can map the abstract identity to the commit digest.
 
 During one process run, the Rust recovery trigger can use the current `DagState`
 commit timestamp as its base. After restart, it uses the last flushed commit that
@@ -347,44 +362,60 @@ The safety result needs all these implementation facts:
     GC rounds, and v3 sub-DAG construction copies required voting blocks before
     later DAG GC.
 
-`consensus_liveness` and the consensus phase of `transaction_liveness` need these
-facts:
+`consensus_liveness` and the consensus phase of `transaction_liveness` are also
+composition theorems. Their primitive environment inputs are
+`ASM-LIVE-PARTIAL-SYNCHRONY`, the availability part of
+`ASM-LIVE-PEER-FAIRNESS`, and `ASM-LIVE-TASK-FAIRNESS`. Their local refinement
+goals are `ASM-LIVE-ROUND-CATCHUP` and the static parts of `ASM-LIVE-LEADER`.
+`ASM-LIVE-BLOCK-SYNC` and `ASM-LIVE-PIPELINE-BOUNDS` are derived stage goals, not
+primitive assumptions.
 
-1. [`ASM-LIVE-PARTIAL-SYNCHRONY`](ASSUMPTIONS.md#asm-live-partial-synchrony).
-2. [`ASM-LIVE-ROUND-CATCHUP`](ASSUMPTIONS.md#asm-live-round-catchup).
-3. [`ASM-LIVE-LEADER`](ASSUMPTIONS.md#asm-live-leader).
-4. [`ASM-LIVE-BLOCK-SYNC`](ASSUMPTIONS.md#asm-live-block-sync).
-5. [`ASM-LIVE-PEER-FAIRNESS`](ASSUMPTIONS.md#asm-live-peer-fairness).
-6. [`ASM-LIVE-TASK-FAIRNESS`](ASSUMPTIONS.md#asm-live-task-fairness).
-7. [`ASM-LIVE-PIPELINE-BOUNDS`](ASSUMPTIONS.md#asm-live-pipeline-bounds).
+The target end-to-end commit progress recovery theorem does not use
+`ASM-LIVE-ROUND-CATCHUP`.
 
-`commit_progress_recovery_liveness` does not use
-`ASM-LIVE-ROUND-CATCHUP`. It needs these facts:
+Its primitive environment assumptions are:
 
-1. [`ASM-SAFE-PARAMETERS`](ASSUMPTIONS.md#asm-safe-parameters) and
-   [`ASM-SAFE-FAULT-BOUND`](ASSUMPTIONS.md#asm-safe-fault-bound) for common actual
-   thresholds, schedule state, and Byzantine stake.
-2. [`ASM-LIVE-PARTIAL-SYNCHRONY`](ASSUMPTIONS.md#asm-live-partial-synchrony).
-3. [`ASM-LIVE-COMMIT-PROGRESS-RECOVERY`](ASSUMPTIONS.md#asm-live-commit-progress-recovery)
-   for clock progress, recovery overlap, pacing, the quorum block layer window,
-   and the `FlexCommitter` bridge.
-4. [`ASM-LIVE-LEADER`](ASSUMPTIONS.md#asm-live-leader) for schedule viability,
-   round leader selection coverage, and usable anchor order.
+1. [`ASM-SAFE-FAULT-BOUND`](ASSUMPTIONS.md#asm-safe-fault-bound) for bounded
+   Byzantine and unavailable stake.
+2. [`ASM-LIVE-PARTIAL-SYNCHRONY`](ASSUMPTIONS.md#asm-live-partial-synchrony) for
+   post-GST message delivery.
+3. [`ASM-LIVE-PEER-FAIRNESS`](ASSUMPTIONS.md#asm-live-peer-fairness) and
+   [`ASM-LIVE-TASK-FAIRNESS`](ASSUMPTIONS.md#asm-live-task-fairness). The peer entry
+   supplies only retention and service by a known correct peer. Retry selection is
+   a local proof goal.
+4. [`ASM-LIVE-LOCAL-RESPONSE`](ASSUMPTIONS.md#asm-live-local-response) for
+   local computation bounded by symbolic `epsilon`. Instantaneous computation is
+   the special case `epsilon = 0`.
 5. [`ASM-LIVE-FIRST-SLOT-SAMPLING`](ASSUMPTIONS.md#asm-live-first-slot-sampling)
-   for the independent uniform shuffle abstraction and the probabilistic occurrence
-   of adjacent correct first slots.
-6. [`ASM-LIVE-BLOCK-SYNC`](ASSUMPTIONS.md#asm-live-block-sync) and
-   [`ASM-LIVE-COMMIT-SYNC`](ASSUMPTIONS.md#asm-live-commit-sync).
-7. [`ASM-LIVE-PEER-FAIRNESS`](ASSUMPTIONS.md#asm-live-peer-fairness) and
-   [`ASM-LIVE-TASK-FAIRNESS`](ASSUMPTIONS.md#asm-live-task-fairness).
-8. [`ASM-SAFE-GC`](ASSUMPTIONS.md#asm-safe-gc) for retained recent parents and
+   for the independent uniform shuffle abstraction. Its fixed-schedule and
+   common-order preconditions are separate refinement goals.
+
+Its local rules and deterministic refinement goals are:
+
+1. [`ASM-SAFE-PARAMETERS`](ASSUMPTIONS.md#asm-safe-parameters) for common actual
+   thresholds and common schedule derivation.
+2. [`ASM-LIVE-COMMIT-PROGRESS-RECOVERY`](ASSUMPTIONS.md#asm-live-commit-progress-recovery)
+   for the local recovery rule, next-round proposal target, and growing pacing
+   delay.
+3. [`ASM-LIVE-LEADER`](ASSUMPTIONS.md#asm-live-leader) for schedule construction,
+   schedule viability, and round leader selection coverage.
+4. [`ASM-SAFE-GC`](ASSUMPTIONS.md#asm-safe-gc) for retained recent parents and
    decision evidence.
+5. The peer-retry transition and its deterministic fairness or probabilistic
+   selection theorem.
 
-The finalizer phase of `transaction_liveness` also needs these facts:
+These distributed protocol results remain open refinement theorems:
 
-1. [`ASM-LIVE-COMMIT-SYNC`](ASSUMPTIONS.md#asm-live-commit-sync).
-2. [`ASM-LIVE-FINALIZER-TRIGGER`](ASSUMPTIONS.md#asm-live-finalizer-trigger).
-3. [`ASM-LIVE-DURABILITY`](ASSUMPTIONS.md#asm-live-durability).
+1. [`ASM-LIVE-BLOCK-SYNC`](ASSUMPTIONS.md#asm-live-block-sync).
+2. [`ASM-LIVE-COMMIT-SYNC`](ASSUMPTIONS.md#asm-live-commit-sync).
+
+The recovery quorum, quorum block layers, usable anchor window, and commit advance
+are derived proof goals. They are not additional assumptions.
+
+The finalizer phase of `transaction_liveness` composes three more derived goals:
+`ASM-LIVE-COMMIT-SYNC`, `ASM-LIVE-FINALIZER-TRIGGER`, and
+`ASM-LIVE-DURABILITY`. These goals must be proved from the process, network, and
+storage rules.
 
 The [gap report](IMPLEMENTATION_GAPS.md) gives the code changes that are needed to
 discharge these proof obligations.

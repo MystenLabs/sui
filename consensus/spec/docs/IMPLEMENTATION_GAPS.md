@@ -27,9 +27,8 @@ proposed Rust behavior, proof obligations, and test plan.
 
 This is a confirmed implementation gap and an activation blocker. The strong Lean
 liveness theorem uses a catch-up condition for old leader opportunities. The new
-conditional Lean theorem proves the narrower property: after a commit stall, the
-commit index increases when the recovery refinement inputs hold. The current Rust
-code does not supply those inputs.
+Lean recovery result only composes four unproved recovery stages. It is not an
+end-to-end liveness theorem for the current Rust code.
 
 [`ThresholdClock::add_block`](../../core/src/threshold_clock.rs) accepts one block
 from a future round. It clears the old aggregator and moves the local clock to that
@@ -57,13 +56,21 @@ property, implement the linked commit progress recovery design.
 The current Rust code does not have these parts:
 
 - a `commit_progress_recovery_timeout` configuration value and stall trigger;
-- a named proposal mode that keeps the immediate-parent quorum and forward-round
-  checks, bypasses the selected leader slot availability wait, and keeps
-  schedule-independent pacing;
+- a named proposal mode that proposes exactly one round above the highest known own
+  proposal, keeps the immediate-parent quorum check, bypasses the selected leader
+  slot availability wait, and keeps schedule-independent pacing;
 - recovery state and pacing that remain keyed by commit index across future round
   jumps;
-- a refinement proof from recovery overlap and recent quorum block layers to
-  usable anchors and a greater `FlexCommitter` commit index;
+- a recovery legal-frontier rule for a highest own proposal round at or below GC;
+- a recovery parent-selection rule that includes the timely correct first-slot
+  block used by the liveness proof;
+- a symbolic post-GST processing bound `epsilon` if the Rust timing refinement does
+  not use instantaneous local computation, and a recovery wait that can grow beyond
+  the applicable network and processing bound;
+- one exact local event that starts each recovery pacing interval, and a proof that
+  bounds proposal skew from that event during a stable recovery period;
+- proofs from the local process and network contracts to recovery overlap, quorum
+  block layers, usable anchors, and a greater `FlexCommitter` commit index;
 - deterministic simulation tests for schedule changes, stake bounds, selective
   delivery, synchronization, GC, restart, and future timestamps.
 
@@ -152,11 +159,11 @@ window and update interval. Add property tests for all boundary values.
 
 Related assumptions: `ASM-LIVE-BLOCK-SYNC`, `ASM-LIVE-COMMIT-SYNC`,
 `ASM-LIVE-PEER-FAIRNESS`, `ASM-LIVE-TASK-FAIRNESS`, and
-`ASM-LIVE-PIPELINE-BOUNDS`.
+`ASM-LIVE-LOCAL-RESPONSE`.
 
 The Lean model does not represent missing DAG blocks, suspended blocks, peers,
-request retries, commit ranges, or consumer backpressure. It assumes the progress
-that these mechanisms must provide.
+request retries, commit ranges, or consumer backpressure. The related eventual
+progress claims are open theorem goals. They are not primitive assumptions.
 
 The implementation has important recovery mechanisms:
 
@@ -166,20 +173,23 @@ The implementation has important recovery mechanisms:
 - `CommitSyncer` retries commit ranges, verifies the commit chain and certificate,
   buffers ranges across gaps, and sends consecutive ranges to Core.
 
-These mechanisms do not by themselves prove liveness. Add explicit contracts for
-these conditions:
+Use these simple environment contracts:
 
 1. A correct known peer retains each required DAG block and, for commit sync, each
    required commit range and its certifying vote blocks for the recovery period.
 2. Peer discovery eventually provides such a peer.
 3. Retry selection is fair. If selection remains random, use a probabilistic model
    and prove almost-sure progress.
-4. Correct protocol tasks continue to run, and sustained consumer backpressure
-   eventually clears.
-5. A missing block above the GC boundary is eventually accepted, or an installed
-   commit advances the committed history and GC boundary so that Core no longer
-   needs the block.
-6. Commit sync and the live block path together process the trailing partial batch.
+4. A continuously enabled task at a correct validator eventually runs.
+5. A correct peer answers a valid request for retained data.
+
+Then model the request, response, verification, acceptance, installation, retry,
+queue, and GC transitions. Prove these results:
+
+- a missing block above GC is eventually accepted, or a commit removes the need;
+- commit sync and the live block path process the trailing partial batch;
+- sustained backpressure clears when the consumer has its own stated progress
+  contract.
 
 Add separate Lean state and progress theorems for block sync and commit sync. Use an
 eventual-progress property unless a bound includes the exact scheduler periods,

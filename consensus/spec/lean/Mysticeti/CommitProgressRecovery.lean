@@ -8,14 +8,13 @@ import Mysticeti.Liveness
 
 namespace Mysticeti
 
-/-! Conditional commit-progress liveness for Mysticeti v3 recovery.
+/-! Commit-progress recovery definitions and stage composition for Mysticeti v3.
 
-This theorem does not prove liveness for old leader blocks or transaction
-inclusion. It proves that a stalled commit index eventually increases, subject to
-the explicit recovery, multi-leader, synchronization, first-slot sampling, and
-`FlexCommitter` refinement obligations in
-`ASM-LIVE-COMMIT-PROGRESS-RECOVERY`, `ASM-LIVE-LEADER`, and
-`ASM-LIVE-FIRST-SLOT-SAMPLING`.
+The final theorem composes four derived recovery stages. It does not yet derive the
+stages from simple process and network assumptions. It does not prove liveness for
+old leader blocks or transaction inclusion. See
+`ASM-LIVE-COMMIT-PROGRESS-RECOVERY`, `ASM-LIVE-LEADER`,
+`ASM-LIVE-FIRST-SLOT-SAMPLING`, and `ASM-LIVE-LOCAL-RESPONSE`.
 -/
 
 /-- Nominal v3 validator set stake for Byzantine stake bound `f` and crash stake
@@ -347,6 +346,17 @@ theorem all_selected_leader_slots_final_with_commit_is_usable
             exact allFinal status (by simp [member])
           · simpa [HasCommitResultInSelectedLeaderSlot] using hasCommit
 
+/-- A usable scan fragment can still contain an undecided slot after its first
+commit. Thus, usable anchors for older rounds do not by themselves make the anchor
+round eligible for commit construction. -/
+theorem usable_anchor_order_need_not_be_fully_final :
+    UsableAnchorOrder [.commit, .undecided] ∧
+      ¬AllSelectedLeaderSlotsFinal [.commit, .undecided] := by
+  constructor
+  · simp [UsableAnchorOrder]
+  · intro allFinal
+    exact allFinal .undecided (by simp) rfl
+
 /-! ### Per-round shuffle does not give adjacent correct first slots
 
 The next definitions give a small counterexample. Each round uses a permutation of
@@ -409,15 +419,26 @@ theorem alternating_order_has_no_adjacent_correct_first (round : Nat) :
 /-- V3 leader blocks receive direct votes from the next block round. -/
 def directVoteRoundOffset : Nat := 1
 
+/-- A depth-`d` descending scan needs `d` anchors for the older prefix and one
+later anchor to finalize the first recovery round. -/
+def requiredRecoveryAnchorCount (depth : Nat) : Nat :=
+  depth + 1
+
 /-- A window of `anchorCount` adjacent anchors needs the candidate quorum block
 layers and the last anchor's direct-vote layer. -/
 def requiredRecoveryLayerCount (anchorCount : Nat) : Nat :=
   anchorCount + directVoteRoundOffset
 
-/-- The current v3 distances derive the layer count. The value is not an independent
-recovery constant. -/
+/-- The current v3 indirect depth requires three usable anchor rounds. -/
+theorem current_v3_recovery_anchor_count :
+    requiredRecoveryAnchorCount indirectCommitDepth = 3 := by
+  rfl
+
+/-- The current v3 distances derive four quorum block layers. The value is not an
+independent recovery constant. -/
 theorem current_v3_recovery_layer_count :
-    requiredRecoveryLayerCount indirectCommitDepth = 3 := by
+    requiredRecoveryLayerCount
+      (requiredRecoveryAnchorCount indirectCommitDepth) = 4 := by
   rfl
 
 /-- An abstract identity for one committed prefix. The Rust refinement can use the
@@ -433,6 +454,8 @@ structure CommitProgressRecoveryView (State : Type) where
   committedPrefixId : State → CommitPrefixId
   stallExpired : State → Prop
   correctRecoveryAuthorities : State → VoterSet
+  highestKnownOwnProposalRound : Nat → State → Nat
+  recoveryProposalTarget : Nat → State → Nat
   quorumBlockLayerAuthors : Nat → State → VoterSet
   byzantine : State → VoterSet
   crashedOrUnavailable : State → VoterSet
@@ -503,6 +526,16 @@ def AtCommitIndex {State : Type}
     (view : CommitProgressRecoveryView State) (baseline : Nat) : State → Prop :=
   fun state => view.commitIndex state = baseline
 
+/-- Every correct authority in recovery can target only the round after its highest
+known own proposal. A higher threshold-clock round does not change this target. -/
+def NextRoundProposalTargets {State : Type}
+    (view : CommitProgressRecoveryView State) : State → Prop :=
+  fun state => ∀ authority,
+    authority < view.authorityCount →
+    view.correctRecoveryAuthorities state authority = true →
+    view.recoveryProposalTarget authority state =
+      view.highestKnownOwnProposalRound authority state + 1
+
 def RecoveryQuorum {State : Type}
     (view : CommitProgressRecoveryView State)
     (thresholds : Thresholds view.authorityCount view.stake) : State → Prop :=
@@ -510,7 +543,8 @@ def RecoveryQuorum {State : Type}
     thresholds.quorum ≤ view.correctRecoveryStake state ∧
       VoterSet.SubsetAt view.authorityCount
         (view.correctRecoveryAuthorities state)
-        (VoterSet.diff VoterSet.full (view.nonProgress state))
+        (VoterSet.diff VoterSet.full (view.nonProgress state)) ∧
+      NextRoundProposalTargets view state
 
 def RetainedQuorumBlockLayer {State : Type}
     (view : CommitProgressRecoveryView State)
@@ -560,6 +594,14 @@ def HasQuorumBlockLayerWindowAt {State : Type}
     (baseline count : Nat) : State → Prop :=
   fun state => AtCommitIndex view baseline state ∧
     HasQuorumBlockLayerWindow view thresholds count state
+
+/-- One state contains both a recovery quorum and the required quorum block layers. -/
+def RecoveryLayerWindowAt {State : Type}
+    (view : CommitProgressRecoveryView State)
+    (thresholds : Thresholds view.authorityCount view.stake)
+    (baseline count : Nat) : State → Prop :=
+  fun state => RecoveryQuorumAt view thresholds baseline state ∧
+    HasQuorumBlockLayerWindowAt view thresholds baseline count state
 
 def HasUsableAnchorWindowAt {State : Type}
     (view : CommitProgressRecoveryView State)
@@ -612,206 +654,124 @@ theorem quorum_block_layer_window_yields_usable_anchor_window
   exact ⟨base, quorum_block_layer_window_yields_anchor_window view thresholds
     usableAnchorFromLayers layers⟩
 
-/-- A recovery proposal must move forward from the last block signed by the same
-authority. -/
-structure RecoveryProposal where
-  lastSignedRound : Nat
-  proposalRound : Nat
-  strictlyForward : lastSignedRound < proposalRound
+/-- A next-round recovery target cannot skip forward or reuse an old own
+proposal round. -/
+theorem next_round_proposal_target_is_not_old
+    {State : Type} (view : CommitProgressRecoveryView State)
+    {state : State} {authority : Nat}
+    (nextRoundTargets : NextRoundProposalTargets view state)
+    (authorityInRange : authority < view.authorityCount)
+    (authorityInRecovery :
+      view.correctRecoveryAuthorities state authority = true) :
+    ¬view.recoveryProposalTarget authority state ≤
+      view.highestKnownOwnProposalRound authority state := by
+  rw [nextRoundTargets authority authorityInRange authorityInRecovery]
+  omega
 
-theorem recovery_proposal_is_not_old (proposal : RecoveryProposal) :
-    ¬proposal.proposalRound ≤ proposal.lastSignedRound := by
-  exact Nat.not_le_of_gt proposal.strictlyForward
+/-- Derived stages for commit progress recovery.
 
-/-- Refinement obligations for commit progress recovery.
-
-The temporal fields are assumed progress stages. They include post-GST delivery,
-correct clock progress, block sync, fair task execution, persistent recovery despite
-future round jumps, and retained recent evidence. The selected leader slot field is
-the main multi-leader obligation. The last field maps the anchor window to the
-descending `FlexCommitter` scan. -/
-structure CommitProgressRecoveryAssumptions
+These fields are theorem goals. They are not basic process or network assumptions.
+A complete proof must derive them from partial synchrony, bounded post-GST local
+processing, weak task fairness, recovery persistence, the next-round proposal
+policy, parent availability, pacing, and executable models of the Rust decision
+rules. -/
+structure CommitProgressRecoveryStages
     {State : Type} {protocolPacket : Packet → Prop}
     (trace : Trace State)
     (network : PartialSynchrony protocolPacket)
     (view : CommitProgressRecoveryView State)
-    (thresholds : Thresholds view.authorityCount view.stake)
-    (nonProgressStakeBound : Nat) where
-  recoveryTimeout : Time
-  recoveryTimeoutPositive : 0 < recoveryTimeout
-  /-- Byzantine stake is bounded in every modeled state. -/
-  faultBounded :
-    ∀ state, FaultBounded thresholds (view.byzantine state)
-  /-- Byzantine plus crashed stake is at most the non-progress bound after GST. -/
-  nonProgressStakeBounded :
-    ∀ state,
-      weight view.authorityCount view.stake (view.nonProgress state) ≤
-        nonProgressStakeBound
-  certificationExceedsNonProgress :
-    nonProgressStakeBound < thresholds.certificate
-  /-- The v3 leader schedule reaches the certification threshold. -/
-  scheduleReachesCertification :
-    ∀ state, thresholds.certificate ≤ view.leaderScheduleStake state
-  /-- Current v3 selects the full leader schedule for each pending leader round. -/
-  v3SelectsFullSchedule :
-    ∀ state round,
-      view.pendingLeaderRound round state →
-      view.roundLeaderSelection round state = view.leaderSchedule state
-  /-- Equal commit indices identify one common committed prefix in the modeled
-  execution. This is the common commit chain assumption. -/
-  commonCommittedPrefixAtIndex :
-    ∀ left right,
-      view.commitIndex left = view.commitIndex right →
-      view.committedPrefixId left = view.committedPrefixId right
-  /-- One committed prefix determines one leader schedule membership set. -/
-  scheduleStableAtCommittedPrefix :
-    ∀ left right,
-      view.committedPrefixId left = view.committedPrefixId right →
-      view.leaderSchedule left = view.leaderSchedule right
-  /-- One committed prefix and round determine one selected leader slot order. -/
-  selectedLeaderSlotOrderStableAtCommittedPrefix :
-    ∀ left right round,
-      view.committedPrefixId left = view.committedPrefixId right →
-      view.selectedLeaderSlotValidators round left =
-        view.selectedLeaderSlotValidators round right
-  /-- The non-progress set is the union of Byzantine and crashed or unavailable
-  validators. This equality also puts every Byzantine validator in the
-  non-progress set. -/
-  nonProgressSetDefinition :
-    ∀ state,
-      view.nonProgress state =
-        VoterSet.union
-          (view.byzantine state) (view.crashedOrUnavailable state)
-  /-- A commit can advance before the timers overlap. Otherwise, correct,
-  non-crashed validators with quorum stake are eventually in recovery at the same
-  time. This stage includes local clock progress and bounded drift.
-  `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`. -/
+    (thresholds : Thresholds view.authorityCount view.stake) where
+  /-- A stalled commit either advances or reaches a recovery quorum. Derive this
+  stage from local clock progress, weak task fairness, bounded local processing,
+  the local recovery-entry rule, recovery persistence, and the live correct stake
+  bound. -/
   stalledToRecoveryQuorum :
-    0 < recoveryTimeout →
     ∀ baseline,
       LeadsToAfter network.gst trace
         (CommitStalledAt view baseline)
         (fun state =>
           CommitAdvancedFrom view baseline state ∨
             RecoveryQuorumAt view thresholds baseline state)
-  /-- Persistent recovery at the baseline commit index eventually creates a recent
-  consecutive quorum block layer window. This includes future jumps and does not
-  choose a base round in advance.
-  `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`. -/
+  /-- A recovery quorum either advances the commit or reaches a state that contains
+  both a recovery quorum and a consecutive layer window. Derive this stage from the
+  next-round proposal policy, parent synchronization, persistence, broadcast, and
+  task fairness. -/
   recoveryQuorumToLayers :
     ∀ baseline,
       LeadsToAfter network.gst trace
         (RecoveryQuorumAt view thresholds baseline)
         (fun state =>
           CommitAdvancedFrom view baseline state ∨
-            HasQuorumBlockLayerWindowAt view thresholds baseline
-              (requiredRecoveryLayerCount indirectCommitDepth) state)
-  /-- Recovery conditions make the per-round Rust scan fragment find a commit
-  result before an undecided selected leader slot. Quorum coverage alone does not
-  prove this property. The current design combines a schedule-independent
-  propagation delay with the accepted independent uniform shuffle abstraction. This
-  abstraction makes required adjacent rounds eventually have correct validators in
-  their first selected leader slots. `ASM-LIVE-LEADER` and
-  `ASM-LIVE-FIRST-SLOT-SAMPLING`. -/
-  usableAnchorFromRecoveryConditions :
-    ∀ state round,
-      RoundLeaderSelectionCoverageBounds thresholds.certificate
-        (view.leaderScheduleStake state)
-        (view.roundLeaderSelectionStake round state) →
-      0 < weight view.authorityCount view.stake
-        (VoterSet.diff
-          (VoterSet.inter
-            (view.roundLeaderSelection round state)
-            (view.quorumBlockLayerAuthors round state))
-          (view.byzantine state)) →
-      RetainedQuorumBlockLayer view thresholds round state →
-      RetainedQuorumBlockLayer view thresholds
-        (round + directVoteRoundOffset) state →
-      UsableAnchorRound view round state
-  /-- A depth-sized usable anchor window at the baseline commit index lets the
-  descending indirect scan finish an older pending prefix and increase the index.
-  `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`. -/
+            RecoveryLayerWindowAt view thresholds baseline
+              (requiredRecoveryLayerCount
+                (requiredRecoveryAnchorCount indirectCommitDepth)) state)
+  /-- Repeated recovery layers either advance the commit or contain the required
+  usable adjacent anchors. Derive this stage from propagation delay, first-slot
+  sampling, the direct decision rule, and recovery persistence. One arbitrary
+  quorum-layer pair does not imply a usable anchor. -/
+  recoveryLayersToUsableAnchors :
+    ∀ baseline,
+      LeadsToAfter network.gst trace
+        (RecoveryLayerWindowAt view thresholds baseline
+          (requiredRecoveryLayerCount
+            (requiredRecoveryAnchorCount indirectCommitDepth)))
+        (fun state =>
+          CommitAdvancedFrom view baseline state ∨
+            HasUsableAnchorWindowAt view baseline
+              (requiredRecoveryAnchorCount indirectCommitDepth) state)
+  /-- A usable anchor window either has already advanced the commit or makes the
+  deterministic FlexCommitter transition increase the commit index. Derive this
+  stage from an executable model of the Rust scan. -/
   anchorWindowToCommit :
     ∀ baseline,
       LeadsToAfter network.gst trace
-        (HasUsableAnchorWindowAt view baseline indirectCommitDepth)
+        (HasUsableAnchorWindowAt view baseline
+          (requiredRecoveryAnchorCount indirectCommitDepth))
         (CommitAdvancedFrom view baseline)
 
-/-- Under standard partial synchrony and the stated recovery refinement
-obligations, a stalled commit index eventually increases. -/
-theorem commit_progress_recovery_liveness
+/-- The four derived recovery stages compose to commit-index progress.
+
+This theorem is a composition lemma. It is not the end-to-end recovery liveness
+theorem because it does not derive the stages from process and network rules. -/
+theorem commit_progress_recovery_stages_compose
     {State : Type} {protocolPacket : Packet → Prop}
     {trace : Trace State}
     {network : PartialSynchrony protocolPacket}
     {view : CommitProgressRecoveryView State}
     {thresholds : Thresholds view.authorityCount view.stake}
-    {nonProgressStakeBound baseline : Nat}
-    (assumptions : CommitProgressRecoveryAssumptions
-      trace network view thresholds nonProgressStakeBound) :
+    {baseline : Nat}
+    (stages : CommitProgressRecoveryStages trace network view thresholds) :
     LeadsToAfter network.gst trace
       (CommitStalledAt view baseline)
       (CommitAdvancedFrom view baseline) := by
   intro start afterGst stalled
-  rcases assumptions.stalledToRecoveryQuorum
-      assumptions.recoveryTimeoutPositive baseline start afterGst stalled with
+  rcases stages.stalledToRecoveryQuorum baseline start afterGst stalled with
     ⟨recoveryTime, startToRecovery, advanced | recoveryQuorumAt⟩
   · exact ⟨recoveryTime, startToRecovery, advanced⟩
   · have recoveryAfterGst : network.gst ≤ recoveryTime :=
       Nat.le_trans afterGst startToRecovery
-    rcases assumptions.recoveryQuorumToLayers baseline recoveryTime
+    rcases stages.recoveryQuorumToLayers baseline recoveryTime
         recoveryAfterGst recoveryQuorumAt with
       ⟨layerTime, recoveryToLayers, advanced | layerWindowAt⟩
     · exact ⟨layerTime, Nat.le_trans startToRecovery recoveryToLayers, advanced⟩
     · have layerAfterGst : network.gst ≤ layerTime :=
         Nat.le_trans recoveryAfterGst recoveryToLayers
-      rcases layerWindowAt with ⟨sameCommitIndex, layerWindow⟩
-      have usableAnchors :
-          ∀ round,
-            RetainedQuorumBlockLayer view thresholds round (trace layerTime) →
-            RetainedQuorumBlockLayer view thresholds
-              (round + directVoteRoundOffset) (trace layerTime) →
-            UsableAnchorRound view round (trace layerTime) := by
-        intro round leaderLayer voteLayer
-        have fullSchedule := assumptions.v3SelectsFullSchedule
-          (trace layerTime) round leaderLayer.1
-        have selectionStakeEqSchedule :
-            view.roundLeaderSelectionStake round (trace layerTime) =
-              view.leaderScheduleStake (trace layerTime) := by
-          simp [CommitProgressRecoveryView.roundLeaderSelectionStake,
-            CommitProgressRecoveryView.leaderScheduleStake, fullSchedule]
-        have selectionStakeLeSchedule :
-            view.roundLeaderSelectionStake round (trace layerTime) ≤
-              view.leaderScheduleStake (trace layerTime) := by
-          exact weight_mono view.stake
-            (view.roundSelectionFromSchedule (trace layerTime) round)
-        have selectionCoverage :
-            RoundLeaderSelectionCoverageBounds thresholds.certificate
-              (view.leaderScheduleStake (trace layerTime))
-              (view.roundLeaderSelectionStake round (trace layerTime)) := by
-          constructor
-          · have scheduleLower := assumptions.scheduleReachesCertification
-              (trace layerTime)
-            omega
-          · exact selectionStakeLeSchedule
-        have correctSelectionInLayer :=
-          quorum_and_round_leader_selection_intersect_outside_byzantine_stake
-            (assumptions.faultBounded (trace layerTime))
-            selectionCoverage.reachesCertification leaderLayer.2.1
-        exact assumptions.usableAnchorFromRecoveryConditions
-          (trace layerTime) round selectionCoverage correctSelectionInLayer
-          leaderLayer voteLayer
-      have anchorWindow :=
-        quorum_block_layer_window_yields_usable_anchor_window view thresholds
-          usableAnchors layerWindow
-      have anchorWindowAt :
-          HasUsableAnchorWindowAt view baseline indirectCommitDepth
-            (trace layerTime) :=
-        ⟨sameCommitIndex, anchorWindow⟩
-      rcases assumptions.anchorWindowToCommit baseline layerTime
-          layerAfterGst anchorWindowAt with
-        ⟨commitTime, layersToCommit, advanced⟩
-      exact ⟨commitTime,
-        Nat.le_trans startToRecovery (Nat.le_trans recoveryToLayers layersToCommit),
-        advanced⟩
+      rcases stages.recoveryLayersToUsableAnchors baseline layerTime
+          layerAfterGst layerWindowAt with
+        ⟨anchorTime, layersToAnchors, advanced | anchorWindowAt⟩
+      · exact ⟨anchorTime,
+          Nat.le_trans startToRecovery
+            (Nat.le_trans recoveryToLayers layersToAnchors),
+          advanced⟩
+      · have anchorAfterGst : network.gst ≤ anchorTime :=
+          Nat.le_trans layerAfterGst layersToAnchors
+        rcases stages.anchorWindowToCommit baseline anchorTime
+            anchorAfterGst anchorWindowAt with
+          ⟨commitTime, anchorsToCommit, advanced⟩
+        exact ⟨commitTime,
+          Nat.le_trans startToRecovery
+            (Nat.le_trans recoveryToLayers
+              (Nat.le_trans layersToAnchors anchorsToCommit)),
+          advanced⟩
 
 end Mysticeti

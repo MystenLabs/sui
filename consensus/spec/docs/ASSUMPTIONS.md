@@ -15,6 +15,25 @@ structure is not a declared Lean `axiom`, but the theorem is still conditional o
 that input. Apply a theorem to Rust only when each proof obligation is discharged or
 each environmental assumption is explicitly accepted.
 
+## Assumption boundary
+
+A primitive liveness assumption must describe one simple boundary:
+
+- one authenticated message is delivered after GST;
+- one continuously enabled task at a correct validator eventually runs;
+- one local consensus action that stays enabled at a correct validator completes
+  within a stated post-GST bound;
+- one correct local clock continues to advance;
+- one durable write remains available after restart;
+- one stated set of validators is Byzantine, crashed, or available;
+- one random source has a stated distribution and independence rule.
+
+A deterministic Rust function or state transition is a refinement theorem target.
+It is not an environmental assumption. A quorum entering recovery, consecutive
+quorum block layers, a usable anchor, and a greater commit index are protocol
+results. The proof must derive them. It must not accept them as primitive
+assumptions.
+
 ## Status values
 
 - **Discharged in Lean**: Lean proves the complete claim inside the model.
@@ -43,7 +62,7 @@ identifies a remaining condition. It is not a proof failure inside Lean.
 | Partially verified | 8 |
 | Environmental assumption | 5 |
 | Open proof obligation | 3 |
-| Abstraction gap | 2 |
+| Abstraction gap | 3 |
 | Known mismatch | 6 |
 
 The six known mismatches block an end-to-end claim for the reviewed baseline. The
@@ -57,6 +76,8 @@ other open conditions define the remaining refinement and environment boundary.
 3. Reference the identifier from each implementation-gap item that can close it.
 4. Change a status only with code, a proof, a test, or stated environment evidence.
 5. Recheck all implementation evidence when the analysis baseline changes.
+6. Do not add a protocol result as a primitive assumption. Put an unproved result
+   under an open proof obligation and list the simple contracts that must derive it.
 
 ## ASM-MATH-THRESHOLDS
 
@@ -96,16 +117,20 @@ other open conditions define the remaining refinement and environment boundary.
 
 ## ASM-SAFE-FAULT-BOUND
 
-- **Claim:** Byzantine authority stake is at most the configured `f` value.
-- **Type:** Adversary model.
+- **Claim:** Byzantine validator stake is at most the configured `f` value. After
+  GST, Byzantine plus crashed or otherwise non-progressing validator stake is at
+  most `f + c`. A stable set of correct, non-crashed validators remains active.
+- **Type:** Adversary and availability model.
 - **Status:** Environmental assumption.
-- **Effect if false:** Safety.
+- **Effect if false:** Safety for the `f` bound; liveness for the `f + c` bound.
 - **Lean use:** [`FaultBounded`](../lean/Mysticeti/Thresholds.lean) bounds the
-  intersection of incompatible voter sets.
+  intersection of incompatible voter sets. The commit progress recovery view uses
+  `nonProgress` for the union of Byzantine and crashed or unavailable validators.
 - **Rust evidence:** The implementation cannot identify all Byzantine authorities
   while the protocol runs.
-- **Discharge:** State this bound in the protocol threat model. Ensure that epoch
-  configuration does not claim a smaller `f` than the supported deployment model.
+- **Discharge:** State both bounds in the protocol threat model. Ensure that epoch
+  configuration does not claim smaller `f` or `c` values than the supported
+  deployment model.
 
 ## ASM-SAFE-AUTHENTICATION
 
@@ -318,7 +343,8 @@ other open conditions define the remaining refinement and environment boundary.
 - **Type:** Rust refinement.
 - **Status:** Known mismatch.
 - **Effect if false:** Liveness.
-- **Lean use:** `SafeRoundChanges` and `ConsensusLivenessAssumptions.safeRoundChanges`.
+- **Lean use:** `SafeRoundChanges` and
+  `ConsensusLivenessStageObligations.safeRoundChanges`.
 - **Rust evidence:** `ThresholdClock` jumps to the observed round, and `Proposer`
   creates at most one block for the final clock round. The current code does not
   create required intermediate blocks.
@@ -328,67 +354,55 @@ other open conditions define the remaining refinement and environment boundary.
 
 ## ASM-LIVE-COMMIT-PROGRESS-RECOVERY
 
-- **Claim:** After a commit stall, each correct, non-crashed validator that is not
-  behind its observed quorum commit index eventually enters commit progress
-  recovery and stays eligible at the same commit index until that index advances.
-  During one process run, the validator computes stall time from the current
-  last-commit timestamp in `DagState`. After restart, it uses the last flushed
-  commit timestamp. Before the
-  first commit, it uses the epoch start timestamp. Correct local clocks progress
-  with bounded drift. If no earlier commit occurs, at least quorum stake of
-  correct, non-crashed validators overlaps in recovery. Schedule-independent
-  per-round pacing and future-round handling then create a recent consecutive
-  quorum block layer window. The window gives usable anchors under common leader
-  schedule membership, round leader selection, and selected leader slot order. The
-  `FlexCommitter` scan then increases the commit index.
+- **Claim:** The local recovery rule at one correct validator has these parts. The
+  validator reads its current last-commit timestamp, or the last flushed timestamp
+  after restart. It enters recovery when the local timeout expires and it is not
+  behind the observed quorum commit index. It stays in recovery until its commit
+  index changes. If `P` is its highest known own proposal round, its only recovery
+  proposal target is `P + 1`. It waits or starts block sync when quorum parents in
+  round `P` are not available. It persists an enabled proposal before broadcast.
+  While the commit index is unchanged, its schedule-independent proposal delay can
+  grow without a fixed bound.
 - **Type:** Protocol and Rust refinement.
 - **Status:** Known mismatch.
 - **Effect if false:** Liveness.
-- **Lean use:** `CommitProgressRecoveryAssumptions` states the temporal and Rust
-  refinement inputs. Each stage keeps `commitIndex = baseline` or reports that the
-  index has advanced. `RecoveryQuorum` requires quorum stake from validators outside
-  the non-progress set, and the model requires every Byzantine validator to be in
-  that set. `commit_progress_recovery_liveness` proves that these inputs
-  cause eventual commit-index growth. `requiredRecoveryLayerCount` derives the
-  current layer count from depth and the one-round direct-vote offset.
+- **Lean use:** `NextRoundProposalTargets` models the local proposal target.
+  `CommitProgressRecoveryStages` names four derived stage theorems that are still
+  open. `commit_progress_recovery_stages_compose` proves only that these stages
+  compose. It is not the end-to-end liveness theorem.
 - **Rust evidence:** `DagState::last_commit_timestamp_ms` exposes the current
   in-memory commit timestamp. `DagState::flush` makes buffered commits durable, and
   `DagState::new` loads the last flushed commit after restart. `Context::clock`
   exposes local time. The current code does not have commit progress recovery, a
   commit-stall trigger for block production, or adaptive recovery pacing.
-- **Discharge:** Implement commit progress recovery. Prove that, after GST, correct,
-  non-crashed validators with quorum stake are in recovery at the same time and
-  produce the recent v3 anchor window.
-  Keep a schedule-independent delay between recovery layers; under standard
-  partial synchrony, let it eventually exceed the post-GST message delay. Prove
-  one common committed prefix, leader schedule, round leader selection, and
-  selected leader slot order at the baseline commit index. Equal numeric commit
-  indices are not sufficient without the common committed-prefix condition.
-  Prove that the `FlexCommitter` scan maps the window to a greater commit index. Use
-  the epoch start timestamp when the commit index is zero and use saturating
-  subtraction for a future commit timestamp. Add deterministic v3 simulation tests.
+- **Discharge:** Implement the local rule. Then derive these results in Lean:
+  recovery-quorum overlap from local clock progress, weak task fairness, persistent
+  recovery, and the live correct stake bound; consecutive quorum block layers from
+  the next-round proposal rule, parent synchronization, persistence, and broadcast;
+  a usable anchor window from partial synchrony, growing propagation delay, and
+  first-slot sampling; and commit-index progress from an executable model of the
+  `FlexCommitter` scan. Use the epoch start timestamp when the commit index is zero.
+  Use saturating subtraction for a future commit timestamp. Add deterministic v3
+  simulation tests.
 
 ## ASM-LIVE-LEADER
 
 - **Claim:** Let `N` be actual validator set stake, `S` be leader schedule stake,
-  and `P_r` be round leader selection stake for one pending leader round `r`.
-  Byzantine stake is at most `f`. After GST, the combined Byzantine and crashed
-  or otherwise non-progressing stake is at most `f + c`, and a stable set of
-  correct, non-crashed validators continues to run. The structural relation is
-  `P_r <= S <= N`. The schedule viability bound is `f + c < S`. A protocol that
-  uses a smaller round leader selection also needs a leader fairness condition.
-  The sufficient quorum-coverage bound is `A <= P_r`. Current v3 selects the full
-  leader schedule for every pending leader round, so its structural and coverage
-  bounds are `A <= S = P_r <= N`. Message delivery, pacing, and selected leader
-  slot order must also let the anchor scan find a commit before its first undecided
-  slot. The per-slot safety proof and the quorum-coverage lemma do not use the
-  optional resource policy `P_r <= Q`. Its effect on anchor-scan liveness remains
-  in the usable-anchor obligation.
+  and `P_r` be round leader selection stake for one pending leader round `r`. The
+  structural relation is `P_r <= S <= N`. Given the separate non-progress stake
+  bound `f + c`, the schedule viability bound is `f + c < S`. A protocol that uses
+  a smaller round leader selection also needs a leader fairness rule. The sufficient
+  quorum-coverage bound is `A <= P_r`. Current v3 selects the full leader schedule
+  for every pending leader round, so its structural and coverage bounds are
+  `A <= S = P_r <= N`. The per-slot safety proof and the quorum-coverage lemma do
+  not use the optional resource policy `P_r <= Q`. These static bounds do not prove
+  a usable anchor.
 - **Type:** Protocol and configuration refinement.
 - **Status:** Open proof obligation.
 - **Effect if false:** Liveness.
-- **Lean use:** `ConsensusLivenessAssumptions.fairRoundLeaderSelection` covers
-  strong leader liveness. For commit progress recovery,
+- **Lean use:** `ConsensusLivenessStageObligations.fairRoundLeaderSelection` is a
+  temporary stage obligation that must use these bounds with a separate fairness
+  result. For commit progress recovery,
   `LeaderScheduleViabilityBounds` and
   `RoundLeaderSelectionCoverageBounds` separate schedule viability from per-round
   quorum coverage. `V3LeaderScheduleCoverageBounds` and
@@ -407,30 +421,31 @@ other open conditions define the remaining refinement and environment boundary.
   no proved fairness property that supplies the required anchor.
 - **Discharge:** Define and enforce the schedule viability and round leader
   selection coverage bounds from the actual committee weights. Report `P_r <= Q`
-  only if the deployment enables this resource policy. Prove a usable anchor scan under partial
-  synchrony, schedule-independent pacing, and Byzantine selective delivery. Add
-  stake-bound, equivocation, selection, and slot-order tests.
+  only if the deployment enables this resource policy. Prove usable-anchor progress
+  only in recovery stage 3. Add stake-bound, equivocation, selection, and slot-order
+  tests.
 
 ## ASM-LIVE-FIRST-SLOT-SAMPLING
 
-- **Claim:** While one commit index is stalled, the leader schedule and the set of
-  Byzantine, crashed, or unavailable validators are fixed. For each pending leader
-  round, all correct validators use one common permutation sampled uniformly from
-  all permutations of the leader schedule. Samples for different rounds are
-  independent. If the schedule has `m` members and `h > 0` of them are correct and
-  non-crashed, the probability that the first selected leader slot is correct is
-  `p = h / m`. The probability that two adjacent rounds both have a correct first
-  slot is `p^2`. The two correct validators can be the same or different. Repeated
-  disjoint round pairs contain such a pair with probability one.
-- **Type:** Probabilistic liveness and environment assumption.
-- **Status:** Environmental assumption.
+- **Claim:** Assume that separate refinement results give one fixed leader schedule,
+  one fixed non-progress set, and one common selected leader slot order at all
+  correct validators while a commit index is stalled. Conditional on this state,
+  each pending leader round samples one uniform random permutation of the leader
+  schedule. Samples for different rounds are independent and are not controlled by
+  the network or task scheduler. If the schedule has `m` members and `h > 0` of them
+  are correct and non-crashed, the probability that the first selected leader slot
+  is correct is `p = h / m`. A run of `k` rounds has a correct first slot in every
+  round with probability `p^k`. The correct validators can be the same or different.
+  Repeated disjoint runs contain such a run with probability one. Current v3 uses
+  `k = indirectCommitDepth + 1 = 3` for the recovery proof.
+- **Type:** Accepted probabilistic abstraction and Rust refinement.
+- **Status:** Abstraction gap.
 - **Effect if false:** Liveness.
 - **Lean use:** The deterministic Lean trace does not model probability.
-  `CommitProgressRecoveryAssumptions.usableAnchorFromRecoveryConditions` assumes
-  the eventual usable-anchor result that this random-permutation claim supplies
-  together with post-GST delivery and adaptive pacing. A future probabilistic model
-  can prove that the failure probability after `k` disjoint pairs is
-  `(1 - p^2)^k`, which approaches zero.
+  `CommitProgressRecoveryStages.recoveryLayersToUsableAnchors` is the open theorem
+  that must use this assumption with post-GST delivery and adaptive pacing. A future
+  probabilistic model can prove that the failure probability after `j` disjoint
+  three-round runs is `(1 - p^3)^j`, which approaches zero.
 - **Rust evidence:** `FlexCommitter` seeds `StdRng` from the round number and
   shuffles the complete ordered leader schedule for each pending round. This is a
   deterministic pseudorandom sequence. The `rand` interface does not specify
@@ -439,19 +454,22 @@ other open conditions define the remaining refinement and environment boundary.
   current recovery design. Rust approximates it with a deterministic pseudorandom
   permutation. To remove the abstraction, use protocol randomness with a stated
   probabilistic model, prove a weighted first-slot coverage bound for the exact
-  deterministic order, or use a deterministic order with a bounded
-  adjacent-correct-slot guarantee.
+  deterministic order, or use a deterministic order with a bounded correct-first
+  run guarantee. Discharge the fixed schedule and common-order preconditions through
+  `ASM-SAFE-PARAMETERS` and the committed-prefix refinement. They are not random-source
+  assumptions.
 - **Decision, 2026-08-14:** Model each round's seeded shuffle as one common,
-  independent, uniform random permutation of the leader schedule. This is an
-  accepted liveness abstraction for the deterministic Rust shuffle. It is not a
-  safety assumption or a deterministic theorem about `StdRng`.
+  independent, uniform random permutation of the leader schedule. Use a run of
+  `indirectCommitDepth + 1` correct first slots. This is an accepted liveness
+  abstraction for the deterministic Rust shuffle. It is not a safety assumption or
+  a deterministic theorem about `StdRng`.
 
 ## ASM-LIVE-BLOCK-SYNC
 
-- **Claim:** Each required missing DAG block is eventually verified and accepted, or
-  an installed commit advances the committed history and GC boundary so that Core
-  no longer needs that block.
-- **Type:** Rust refinement.
+- **Claim:** Target theorem: each required missing DAG block is eventually verified
+  and accepted, or an installed commit advances the committed history and GC
+  boundary so that Core no longer needs that block.
+- **Type:** Derived Rust progress theorem.
 - **Status:** Abstraction gap.
 - **Effect if false:** Liveness.
 - **Lean use:** Missing-ancestor recovery is hidden inside the bounded consensus
@@ -466,14 +484,14 @@ other open conditions define the remaining refinement and environment boundary.
 
 ## ASM-LIVE-COMMIT-SYNC
 
-- **Claim:** Each missing commit needed for progress is eventually installed through
-  commit sync from a verified commit range whose tip has quorum commit votes, or
-  the local commit rule reproduces it after the live block path supplies the
-  required DAG blocks.
-- **Type:** Rust refinement.
+- **Claim:** Target theorem: each missing commit needed for progress is eventually
+  installed through commit sync from a verified commit range whose tip has quorum
+  commit votes, or the local commit rule reproduces it after the live block path
+  supplies the required DAG blocks.
+- **Type:** Derived Rust progress theorem.
 - **Status:** Partially verified.
 - **Effect if false:** Liveness.
-- **Lean use:** `FinalizerLivenessAssumptions.continuousCommitStream` and
+- **Lean use:** `FinalizerLivenessStageObligations.continuousCommitStream` and
   `triggerEventually` assume the resulting stream.
 - **Rust evidence:** Commit sync schedules complete batches, retries across peers,
   verifies the chain and the quorum certificate for the final commit in each range,
@@ -486,42 +504,87 @@ other open conditions define the remaining refinement and environment boundary.
 
 ## ASM-LIVE-PEER-FAIRNESS
 
-- **Claim:** At least one known correct peer retains each required block and commit,
-  serves it after GST, and is eventually selected by the retry path.
-- **Type:** Network, storage, and selection environment.
+- **Claim:** For each required block or commit, at least one known correct peer
+  retains the item and returns it when requested after GST.
+- **Type:** Network, storage, and peer-availability environment.
 - **Status:** Environmental assumption.
 - **Effect if false:** Liveness.
-- **Lean use:** Required by the abstract block-sync and commit-sync progress claims.
+- **Lean use:** This is the useful-peer environment input for the open block-sync
+  and commit-sync progress theorems. Eventual selection of that peer must be derived
+  from the retry transition and its fairness or random-selection rule.
 - **Rust evidence:** Sync paths shuffle peers. The block-sync fallback selects one
   random peer per attempt. Some paths assume that the known-peer set is not empty.
-- **Discharge:** State a retention period and peer-discovery contract. Use deterministic
-  fair peer rotation, or use an explicit probabilistic model and prove almost-sure
-  selection of a useful peer.
+- **Discharge:** State a retention, peer-discovery, and request-service contract.
+  Then prove eventual useful-peer selection from deterministic fair peer rotation,
+  or use an explicit probabilistic selection model.
 
 ## ASM-LIVE-TASK-FAIRNESS
 
-- **Claim:** Correct proposer, block synchronizer, commit synchronizer, Core,
-  finalizer, storage, and consumer tasks continue to run. Sustained backpressure
-  eventually clears.
+- **Claim:** If one action in a correct proposer, block synchronizer, commit
+  synchronizer, Core, finalizer, storage, or consumer task stays enabled, the
+  runtime eventually schedules that action. This is weak task fairness. Queue
+  capacity and consumer progress are separate conditions.
 - **Type:** Runtime environment.
 - **Status:** Environmental assumption.
 - **Effect if false:** Liveness.
-- **Lean use:** All `LeadsToAfter` and `WithinAfter` phase obligations need local
-  execution progress.
+- **Lean use:** A future transition model will use weak fairness to prove local
+  enabled actions run. The current stage composition does not model the scheduler.
 - **Rust evidence:** Tokio tasks, channels, retry loops, and monitors implement the
   work. The Lean trace does not model scheduling, shutdown, queue capacity, or task
   failure.
-- **Discharge:** Define which shutdowns are outside the theorem. Add progress monitors
+- **Discharge:** Define which shutdowns are outside the theorem. Model task guards
+  and actions. State queue and consumer progress separately. Add progress monitors
   and tests for saturated queues, stalled consumers, task restart, and storage delay.
+
+## ASM-LIVE-LOCAL-RESPONSE
+
+- **Claim:** Local consensus computation takes at most `epsilon` time. The
+  instantaneous model is the special case `epsilon = 0`. For Rust refinement,
+  `epsilon` is a finite symbolic bound for one local consensus
+  action that stays enabled at a correct, running validator. The aggregate bound
+  includes task and queue scheduling, message verification, DAG acceptance,
+  proposal construction, a required proposal flush, and handoff to the network
+  transport. It also includes making a received result visible to the next local
+  consensus action. The idealized model uses `epsilon = 0`. A Rust refinement can
+  keep `epsilon` symbolic. The same uniform bound applies separately to each
+  covered action. The message `sentAt` event is the transport send. The
+  `deliveredAt` event is delivery to the receiving handler.
+- **Type:** Runtime environment.
+- **Status:** Environmental assumption.
+- **Effect if false:** Commit progress liveness.
+- **Lean use:** `BoundedLocalProcessing` states the general boundary.
+  `protocol_packet_becomes_locally_visible` uses `delta + epsilon`.
+  `protocol_packet_is_immediately_visible_after_delivery` proves the special case
+  with `epsilon = 0`.
+  Weak task fairness alone cannot ensure that a correct first-slot proposal runs
+  and becomes visible before the next-round proposals.
+- **Rust evidence:** The receive path includes task queues, blocking-pool
+  verification, the Core channel, Core processing, and DAG insertion. The proposal
+  path flushes the block before Core hands it to the broadcast path. Tokio, storage,
+  and the operating system do not give one hard bound for this complete path.
+  Production load controls and task monitoring try to keep local response finite.
+- **Discharge:** This proof accepts the guaranteed bound as the processor-speed
+  part of the partial-synchrony environment. Define the covered Rust actions. A
+  probabilistic response bound is also possible, but it needs a separate
+  probability model.
+- **Decision, 2026-08-14:** Use a symbolic local-computation bound `epsilon`, or set
+  `epsilon = 0` as an explicit instantaneous-computation idealization. Do not use a
+  fixed processing constant. Do not infer a minimum network delay. With a finite
+  `epsilon`, `delta + epsilon`
+  bounds transport send through remote DAG visibility, and
+  `delta + 2 * epsilon` bounds local proposal enablement through remote DAG
+  visibility. A recovery timer also needs a derived bound from its local start
+  event to the relevant proposal-enable or transport-send event.
 
 ## ASM-LIVE-PIPELINE-BOUNDS
 
-- **Claim:** Each modeled proposal, delivery, support, certificate, decision, and
-  commit transition completes within its stated `delta` or `2 * delta` bound.
-- **Type:** Timing refinement.
+- **Claim:** Target theorem: each modeled proposal, delivery, support, certificate,
+  decision, and commit transition completes within its stated `delta` or
+  `2 * delta` bound.
+- **Type:** Derived timing refinement.
 - **Status:** Abstraction gap.
 - **Effect if false:** Liveness bound.
-- **Lean use:** The fields of `ConsensusLivenessAssumptions` produce the
+- **Lean use:** The fields of `ConsensusLivenessStageObligations` produce the
   `10 * delta` result.
 - **Rust evidence:** Rust has separate scheduler periods, request timeouts, retry
   delays, processing time, and backpressure. They are not derived from the network
@@ -532,12 +595,12 @@ other open conditions define the remaining refinement and environment boundary.
 
 ## ASM-LIVE-FINALIZER-TRIGGER
 
-- **Claim:** Every pending transaction eventually receives a later first eligible
-  depth-two trigger, including at shutdown and the epoch tail.
-- **Type:** Protocol and lifecycle refinement.
+- **Claim:** Target theorem: every pending transaction eventually receives a later
+  first eligible depth-two trigger, including at shutdown and the epoch tail.
+- **Type:** Derived protocol and lifecycle theorem.
 - **Status:** Known mismatch.
 - **Effect if false:** Liveness.
-- **Lean use:** `FinalizerLivenessAssumptions.triggerEventually`.
+- **Lean use:** `FinalizerLivenessStageObligations.triggerEventually`.
 - **Rust evidence:** Normal continued commits can provide the trigger. Shutdown can
   leave pending finalizer state without a later same-epoch commit, and no explicit
   epoch-tail rule defines the result.
@@ -546,10 +609,10 @@ other open conditions define the remaining refinement and environment boundary.
 
 ## ASM-LIVE-DURABILITY
 
-- **Claim:** A produced commit enters the finalizer, a trigger produces one decision,
-  and the decision becomes durable and reaches the consumer within the modeled
-  bounds.
-- **Type:** Rust and timing refinement.
+- **Claim:** Target theorem: a produced commit enters the finalizer, a trigger
+  produces one decision, and the decision becomes durable and reaches the consumer
+  within the modeled bounds.
+- **Type:** Derived Rust and timing theorem.
 - **Status:** Partially verified.
 - **Effect if false:** Safety and liveness.
 - **Lean use:** `triggerToDecision`, `decisionToDurableOutput`, and

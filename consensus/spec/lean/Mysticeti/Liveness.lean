@@ -8,10 +8,11 @@ import Mysticeti.PartialSynchrony
 
 namespace Mysticeti
 
-/-! Conditional strong leader liveness under partial synchrony and a safe catch-up
-rule.
+/-! Stage composition for strong leader liveness under partial synchrony and a safe
+catch-up rule.
 
-Applying these theorems to Rust requires the assumption ledger. Key obligations are
+Applying these theorems to Rust requires proofs for the stage ledger. Key
+obligations are
 `ASM-LIVE-PARTIAL-SYNCHRONY`, `ASM-LIVE-ROUND-CATCHUP`,
 `ASM-LIVE-BLOCK-SYNC`, and `ASM-LIVE-COMMIT-SYNC`.
 
@@ -120,9 +121,10 @@ def SafeRoundChanges {State : Type} (roundState : State → RoundState)
       (roundState (trace (time + 1)))
       (roundState (trace (time + 1))).currentRound
 
-/-- Refinement obligations from the Rust protocol to the liveness checkpoints.
+/-- Temporary stage obligations from the Rust protocol to the liveness checkpoints.
+These fields are derived theorem goals, not primitive environment assumptions.
 `ASM-LIVE-PIPELINE-BOUNDS` records the common timing abstraction. -/
-structure ConsensusLivenessAssumptions
+structure ConsensusLivenessStageObligations
     {State : Type} {protocolPacket : Packet → Prop}
     (trace : Trace State)
     (network : PartialSynchrony protocolPacket)
@@ -189,7 +191,7 @@ theorem good_window_commits_within
     {catchupActivation : Time}
     {roundState : State → RoundState}
     {phases : ConsensusPhases State}
-    (assumptions : ConsensusLivenessAssumptions trace network
+    (assumptions : ConsensusLivenessStageObligations trace network
       catchupActivation roundState phases) :
     WithinAfter (stableStart network catchupActivation) (10 * network.delta) trace
       phases.goodLeaderWindow phases.commitProduced := by
@@ -217,7 +219,7 @@ theorem consensus_liveness
     {catchupActivation : Time}
     {roundState : State → RoundState}
     {phases : ConsensusPhases State}
-    (assumptions : ConsensusLivenessAssumptions trace network
+    (assumptions : ConsensusLivenessStageObligations trace network
       catchupActivation roundState phases) :
     LeadsToAfter (stableStart network catchupActivation) trace
       phases.roundOpen phases.commitProduced := by
@@ -233,8 +235,10 @@ structure FinalizerPhases (State : Type) where
   decided : State → Prop
   durableOutput : State → Prop
 
-/-- Refinement obligations for finalizer progress on a continuous commit stream. -/
-structure FinalizerLivenessAssumptions
+/-- Temporary stage obligations for finalizer progress on a continuous commit
+stream. These fields are derived theorem goals, not primitive environment
+assumptions. -/
+structure FinalizerLivenessStageObligations
     {State : Type} {protocolPacket : Packet → Prop}
     (trace : Trace State)
     (network : PartialSynchrony protocolPacket)
@@ -266,7 +270,7 @@ theorem finalizer_liveness
     {catchupActivation : Time}
     {commitStream : CommitStream}
     {phases : FinalizerPhases State}
-    (assumptions : FinalizerLivenessAssumptions trace network
+    (assumptions : FinalizerLivenessStageObligations trace network
       catchupActivation commitStream phases) :
     LeadsToAfter (stableStart network catchupActivation) trace
       phases.pending phases.durableOutput := by
@@ -287,9 +291,9 @@ theorem transaction_liveness
     {consensusPhases : ConsensusPhases State}
     {commitStream : CommitStream}
     {finalizerPhases : FinalizerPhases State}
-    (consensus : ConsensusLivenessAssumptions trace network
+    (consensus : ConsensusLivenessStageObligations trace network
       catchupActivation roundState consensusPhases)
-    (finalizer : FinalizerLivenessAssumptions trace network
+    (finalizer : FinalizerLivenessStageObligations trace network
       catchupActivation commitStream finalizerPhases)
     (commitEntersFinalizer :
       WithinAfter (stableStart network catchupActivation) network.delta trace
