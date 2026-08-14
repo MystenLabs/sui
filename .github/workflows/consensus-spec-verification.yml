@@ -1,0 +1,49 @@
+name: Consensus design verification
+
+on:
+  pull_request:
+    paths:
+      - "consensus/design/**"
+  push:
+    branches:
+      - main
+    paths:
+      - "consensus/design/**"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify Lean proofs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
+
+      - name: Build Lean proofs
+        uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # pin@v1
+        with:
+          lake-package-directory: consensus/design/lean
+          auto-config: false
+          build: true
+          build-args: "--wfail"
+          test: false
+          lint: false
+          use-mathlib-cache: false
+
+      - name: Reject unchecked proof declarations
+        working-directory: consensus/design/lean
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          rg -n '\b(sorry|admit|axiom)\b' Mysticeti.lean Mysticeti
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            exit 1
+          fi
+          if [ "$status" -ne 1 ]; then
+            exit "$status"
+          fi
