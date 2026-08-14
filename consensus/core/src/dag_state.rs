@@ -268,10 +268,11 @@ impl DagState {
                     break;
                 }
 
-                // On the v3 path, last_committed_rounds are recovered from this scan
+                // On the v3 path, last_committed_rounds are recovered from committed blocks
                 // instead of CommitInfo. Authorities without committed blocks above
-                // gc_round keep under-estimated values, which is fine because nothing
-                // on the v3 path reads last_committed_rounds at or below gc_round.
+                // gc_round will not recover its highest committed round accurately.
+                // This is fine because nothing on the v3 path reads last_committed_rounds at
+                // or below gc_round.
                 if context.protocol_config.enable_v3() {
                     for block_ref in commit.blocks() {
                         state.last_committed_rounds[block_ref.author] = max(
@@ -1206,10 +1207,10 @@ impl DagState {
 
     /// Returns the highest committed block round known for each authority.
     ///
-    /// On the v3 path with GC enabled, restart recovery scans only commits whose leader
-    /// round is above `gc_round`. Each entry is therefore a lower bound on the full commit
-    /// history. It is exact if the authority has a committed block above `gc_round`.
-    /// Otherwise, it can omit committed blocks at or below `gc_round`.
+    /// On the v3 path, restart recovery scans only blocks from commits whose leader
+    /// round is above `gc_round`. So the recovered info may be inaccurate if the last
+    /// committed block of an authority is at or below `gc_round`. This is ok because
+    /// this info is only used in metrics and testing.
     pub(crate) fn last_committed_rounds(&self) -> Vec<Round> {
         self.last_committed_rounds.clone()
     }

@@ -131,6 +131,36 @@ fn build_blocks(rounds_x_authorities: &[(Round, u32)]) -> Vec<VerifiedBlock> {
         .collect()
 }
 
+/// `committed_leaders_total` counts of one authority, per commit type.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct LeaderCounts {
+    direct_commit: u64,
+    direct_skip: u64,
+    indirect_skip: u64,
+}
+
+/// Reads the leader commit counters of `authority`. Each test gets its own metrics
+/// registry, so the counts start at zero.
+fn leader_counts(context: &Context, authority: u32) -> LeaderCounts {
+    let leader_host = &context
+        .committee
+        .authority(AuthorityIndex::new_for_test(authority))
+        .hostname;
+    let count = |commit_type: &str| {
+        context
+            .metrics
+            .node_metrics
+            .committed_leaders_total
+            .with_label_values(&[leader_host, commit_type])
+            .get()
+    };
+    LeaderCounts {
+        direct_commit: count("direct-commit"),
+        direct_skip: count("direct-skip"),
+        indirect_skip: count("indirect-skip"),
+    }
+}
+
 // =================== Unit tests ===================
 
 #[tokio::test]
@@ -470,6 +500,37 @@ async fn find_commit_leader_round_none_when_round_partially_decided() {
     assert!(committer.find_commit_leader_round().is_none());
 }
 
+/// Every decided slot through the commit leader round is reported, and no later round.
+#[tokio::test]
+async fn report_decided_prefix_metrics_reports_through_commit_round() {
+    let (context, _dag_state, mut committer) = setup(4);
+    let mut indirect_skip = round_state(2, vec![skip(2, 0)]);
+    indirect_skip.leader_slots[0].decision = Some(Decision::Indirect);
+    install_rounds(
+        &mut committer,
+        1,
+        vec![
+            round_state(1, vec![skip(1, 0)]),
+            indirect_skip,
+            round_state(3, vec![LeaderStatus::Commit(commit_block(3, 0))]),
+            round_state(4, vec![skip(4, 0)]),
+        ],
+    );
+
+    committer.report_decided_prefix_metrics(3);
+
+    // Round 4 is above the commit leader round, so it stays unreported. The next
+    // commit reports it, after the refresh drops rounds 1 to 3.
+    assert_eq!(
+        leader_counts(&context, 0),
+        LeaderCounts {
+            direct_commit: 1,
+            direct_skip: 1,
+            indirect_skip: 1,
+        },
+    );
+}
+
 // =================== Functional `try_commit` tests ===================
 
 /// One leader per round, fully connected DAG → committer emits a commit
@@ -509,10 +570,14 @@ async fn try_commit_single_leader_all_skipped() {
         .into_iter()
         .filter(|r| r.author != AuthorityIndex::new_for_test(0))
         .collect();
-    build_dag(context, dag_state, Some(refs_without_leader), 2);
+    build_dag(context.clone(), dag_state, Some(refs_without_leader), 2);
 
     let next = next_commit_leader_schedule(vec![AuthorityIndex::new_for_test(0)]);
     assert!(committer.try_commit(next).is_none());
+
+    // Leader metrics are reported with the commit that covers the round, so a
+    // round that never reaches a commit reports nothing.
+    assert_eq!(leader_counts(&context, 0), LeaderCounts::default());
 }
 
 /// One leader per round, no round-2 blocks at all → slot Undecided, no
@@ -677,6 +742,31 @@ async fn try_commit_multi_leader_all_skipped() {
     assert!(committer.try_commit(next).is_none());
 }
 
+/// Retained round decisions report one metric for each local commit.
+#[tokio::test]
+async fn try_commit_retained_rounds_report_metrics_once() {
+    telemetry_subscribers::init_for_testing();
+    let (context, dag_state, mut committer) = setup(4);
+    build_dag(context.clone(), dag_state, None, 4);
+
+    // The schedule keeps the same leader, so each refresh retains the round state
+    // instead of resetting it.
+    for commit_index in 1..=3 {
+        let (commit, _) = committer
+            .try_commit(schedule(commit_index, commit_index, &[0]))
+            .expect("the fully connected DAG must produce a commit");
+        assert_eq!(commit.leader().round, commit_index);
+    }
+
+    assert_eq!(
+        leader_counts(&context, 0),
+        LeaderCounts {
+            direct_commit: 3,
+            ..Default::default()
+        },
+    );
+}
+
 /// Drives the committer across three schedules — varying the allowed-leader
 /// count each time — with a fully-skipped leader round in the middle.
 ///
@@ -750,5 +840,16 @@ async fn try_commit_multiple_schedules_with_skipped_round() {
     assert_eq!(
         round_4_leaders, expected,
         "all four round-4 leaders committed",
+    );
+
+    // Leader 0 commits at rounds 1, 3 and 4, and is skipped at round 2. The skip is
+    // reported by the round-3 commit, which is the commit that covers round 2.
+    assert_eq!(
+        leader_counts(&context, 0),
+        LeaderCounts {
+            direct_commit: 3,
+            direct_skip: 1,
+            indirect_skip: 0,
+        },
     );
 }
