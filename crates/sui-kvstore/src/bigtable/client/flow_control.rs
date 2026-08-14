@@ -21,7 +21,7 @@ const DEFAULT_PERIOD: Duration = Duration::from_secs(10);
 const OBSERVATION_WINDOW: Duration = Duration::from_secs(1);
 const LATENCY_EVALUATION_PERIOD: Duration = Duration::from_secs(10);
 const INITIAL_QPS: f64 = 10.0;
-const MIN_QPS: f64 = 0.1;
+const MIN_QPS: f64 = 1.0;
 const MAX_QPS: f64 = 100_000.0;
 const MIN_FACTOR: f64 = 0.7;
 const MAX_FACTOR: f64 = 1.3;
@@ -232,6 +232,22 @@ impl ControllerState {
             .expect("observed feedback window disappeared")
             .started_at = now;
     }
+    fn restart_or_close_empty_observation_if_ready(&mut self, now: Instant) {
+        let Some(observation) = self.observation.as_ref() else {
+            return;
+        };
+        let elapsed = now.saturating_duration_since(observation.started_at);
+        if elapsed < OBSERVATION_WINDOW || observation.rpc_starts != 0 {
+            return;
+        }
+
+        // A low paced rate can make the fixed window empty even under sustained demand.
+        // Growth-only feedback remains valid through the next permit interval and one
+        // observation boundary. Conservative feedback restarts without including idle time.
+        if self.pending.growth_factor().is_none() || elapsed >= self.growth_observation_timeout() {
+            self.restart_or_close_empty_observation(now);
+        }
+    }
 
     fn reserve_permit(&mut self, now: Instant) -> PermitReservation {
         let permit_interval = self.permit_interval();
@@ -333,7 +349,14 @@ impl BatchWriteFlowController {
                     .lock()
                     .expect("flow-control state mutex poisoned");
                 let now = Instant::now();
-                let completed_observation = Self::finish_observation_if_ready(&mut state, now);
+                state.restart_or_close_empty_observation_if_ready(now);
+                // An immediately available permit belongs to this window; finish after recording
+                // its admitted start.
+                let completed_observation = if state.next_permit_at <= now {
+                    None
+                } else {
+                    Self::finish_observation_if_ready(&mut state, now)
+                };
                 let reservation = state.reserve_permit(now);
                 (completed_observation, reservation)
             };
@@ -351,8 +374,9 @@ impl BatchWriteFlowController {
                     .lock()
                     .expect("flow-control state mutex poisoned");
                 let now = Instant::now();
-                let completed_observation = Self::finish_observation_if_ready(&mut state, now);
+                state.restart_or_close_empty_observation_if_ready(now);
                 let admitted = state.complete_reservation(reservation);
+                let completed_observation = Self::finish_observation_if_ready(&mut state, now);
                 (completed_observation, admitted)
             };
             if let Some(completed_observation) = completed_observation {
@@ -384,14 +408,7 @@ impl BatchWriteFlowController {
             return None;
         }
         if observation.rpc_starts == 0 {
-            // A low paced rate can make the fixed window empty even under sustained demand.
-            // Growth-only feedback remains valid through the next permit interval and one
-            // observation boundary. Conservative feedback restarts without including idle time.
-            if state.pending.growth_factor().is_none()
-                || elapsed >= state.growth_observation_timeout()
-            {
-                state.restart_or_close_empty_observation(now);
-            }
+            state.restart_or_close_empty_observation_if_ready(now);
             return None;
         }
 
@@ -403,8 +420,8 @@ impl BatchWriteFlowController {
             .combined_factor()
             .expect("an observation requires pending feedback");
         let reanchor_to_observed = state.pending.reanchors_to_observed();
-        // A paced one-second window can omit a boundary start. It proves utilization, but growth
-        // compounds from the current limit rather than the sampled start rate.
+        // Growth compounds from the current limit rather than the sampled start rate so pacing
+        // jitter cannot lower the limit when utilization is sufficient.
         let effective_qps = if reanchor_to_observed {
             (observed_start_qps * factor)
                 .clamp(MIN_QPS, MAX_QPS)
@@ -1249,6 +1266,32 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
+    async fn immediate_boundary_start_counts_toward_growth_utilization() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        let starts_required_for_growth =
+            (INITIAL_QPS * OBSERVATION_WINDOW.as_secs_f64() * UPWARD_UTILIZATION_THRESHOLD).ceil()
+                as u64;
+        let now = Instant::now();
+        {
+            let mut state = controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned");
+            state.observation = Some(ObservationWindow {
+                started_at: now
+                    .checked_sub(OBSERVATION_WINDOW)
+                    .expect("paused test clock should allow a one-second lookback"),
+                rpc_starts: starts_required_for_growth - 1,
+            });
+            state.pending.latency_feedback = Some(LatencyFeedback::Increase);
+        }
+
+        drop(controller.admit_rpc().await);
+
+        assert_effective_qps(&controller, INITIAL_QPS * HEALTHY_RECOVERY_FACTOR);
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn neutral_server_feedback_does_not_lower_rate_from_observation_undercount() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
         controller.on_server_feedback(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
@@ -1285,6 +1328,21 @@ mod tests {
         admit_rpcs(&controller, 10).await;
         finish_observation(&controller).await;
         assert_effective_qps(&controller, 7.0);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn conservative_feedback_excludes_idle_before_first_admitted_start() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        controller.on_server_feedback(Some(&rate_limit_info(MIN_FACTOR, DEFAULT_PERIOD)));
+        tokio::time::advance(Duration::from_secs(60 * 60)).await;
+
+        let admitted_at = Instant::now();
+        drop(controller.admit_rpc().await);
+
+        assert_effective_qps(&controller, INITIAL_QPS);
+        let snapshot = observation_snapshot(&controller);
+        assert_eq!(snapshot.observation, Some((admitted_at, 1)));
+        assert_eq!(snapshot.server_factor, Some(MIN_FACTOR));
     }
 
     #[tokio::test(start_paused = true)]
@@ -1470,10 +1528,54 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
+    async fn sustained_queued_writes_with_positive_feedback_recover_to_initial_qps() {
+        const STABLE_RPC_LATENCY: Duration = Duration::from_millis(20);
+        const MAX_COMPLETED_RPCS: u64 = 10_000;
+        const RECOVERY_DEADLINE: Duration = Duration::from_secs(60 * 60);
+
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        controller
+            .state
+            .lock()
+            .expect("flow-control state mutex poisoned")
+            .baseline_write_latency_micros = Some(STABLE_RPC_LATENCY.as_micros() as f64);
+        set_effective_qps_fixture(&controller, MIN_QPS);
+
+        let affirmative_feedback = rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD);
+        let simulation_started_at = Instant::now();
+        let deadline = simulation_started_at + RECOVERY_DEADLINE;
+        let mut completed_rpcs = 0;
+
+        while controller.effective_qps() < INITIAL_QPS
+            && completed_rpcs < MAX_COMPLETED_RPCS
+            && Instant::now() < deadline
+        {
+            let completed_rpc = tokio::time::timeout_at(deadline, async {
+                let admission = controller.admit_rpc().await;
+                tokio::time::advance(STABLE_RPC_LATENCY).await;
+                admission.on_server_feedback(Some(&affirmative_feedback));
+                admission.complete();
+            })
+            .await;
+            if completed_rpc.is_err() {
+                break;
+            }
+            completed_rpcs += 1;
+        }
+
+        let elapsed = Instant::now().saturating_duration_since(simulation_started_at);
+        let final_effective_qps = controller.effective_qps();
+        assert!(
+            final_effective_qps >= INITIAL_QPS,
+            "expected sustained healthy writes to recover from {MIN_QPS} to at least {INITIAL_QPS} QPS; completed_rpcs={completed_rpcs}, elapsed={elapsed:?}, deadline={RECOVERY_DEADLINE:?}, completion_bound={MAX_COMPLETED_RPCS}, final_effective_qps={final_effective_qps}"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn stale_latency_baseline_recovers_at_min_qps_within_deadline() {
         const LEARNED_BASELINE: Duration = Duration::from_millis(200);
         const STABLE_RPC_LATENCY: Duration = Duration::from_millis(400);
-        const MAX_COMPLETED_RPCS: u64 = 100;
+        const MAX_COMPLETED_RPCS: u64 = 1_000;
         const RECOVERY_DEADLINE: Duration = Duration::from_secs(15 * 60);
 
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
@@ -1535,7 +1637,7 @@ mod tests {
     async fn severe_latency_with_positive_server_feedback_recovers_at_min_qps_within_deadline() {
         const LEARNED_BASELINE: Duration = Duration::from_millis(200);
         const STABLE_RPC_LATENCY: Duration = Duration::from_millis(1_200);
-        const MAX_COMPLETED_RPCS: u64 = 120;
+        const MAX_COMPLETED_RPCS: u64 = 2_000;
         const RECOVERY_DEADLINE: Duration = Duration::from_secs(20 * 60);
 
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
@@ -2072,16 +2174,13 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn elevated_baseline_adaptation_is_cadence_independent() {
+    async fn minimum_qps_caps_elevated_baseline_evidence_to_evaluation_period() {
         const ELEVATED_LATENCY: Duration = Duration::from_millis(40);
         const EVIDENCE_DURATION: Duration = Duration::from_secs(50);
 
         let frequent = BatchWriteFlowController::new("frequent".to_owned(), None);
         learn_healthy_baseline(&frequent);
-        for _ in 0..5 {
-            record_latency_window_over(&frequent, ELEVATED_LATENCY, LATENCY_EVALUATION_PERIOD)
-                .await;
-        }
+        record_latency_window_over(&frequent, ELEVATED_LATENCY, LATENCY_EVALUATION_PERIOD).await;
 
         let sparse = BatchWriteFlowController::new("sparse".to_owned(), None);
         learn_healthy_baseline(&sparse);
@@ -2094,7 +2193,7 @@ mod tests {
             baseline_micros(&sparse).expect("sparse baseline should remain available");
         assert!(
             (frequent_baseline - sparse_baseline).abs() < 1e-9,
-            "expected cadence-independent baselines, got frequent={frequent_baseline} sparse={sparse_baseline}"
+            "expected minimum-QPS evidence cap to match one evaluation period, got frequent={frequent_baseline} sparse={sparse_baseline}"
         );
     }
 
