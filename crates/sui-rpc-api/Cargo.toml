@@ -62,6 +62,8 @@ tonic-web.workspace = true
 
 [dev-dependencies]
 base64.workspace = true
+insta.workspace = true
+typed-store-error.workspace = true
 # `test-util` enables `#[tokio::test(start_paused = true)]` for the
 # virtual-time deadline tests in `grpc::deadline`.
 tokio = { workspace = true, features = ["test-util"] }

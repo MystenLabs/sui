@@ -1,0 +1,5 @@
+---
+source: crates/sui-rpc-api/tests/ledger_history_pins.rs
+expression: output
+---
+#0 no-item | wm.cursor=boundary(cp=0,tx=0,ev=0) wm.cp=0 | end=QUERY_END_REASON_CHECKPOINT_BOUND

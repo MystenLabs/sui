@@ -1,0 +1,12 @@
+---
+source: crates/sui-rpc-api/tests/ledger_history_pins.rs
+expression: output
+---
+#0 item tx_seq=1 | wm.cursor=item(cp=1,tx=1) wm.cp=- | end=-
+#1 item tx_seq=2 | wm.cursor=item(cp=1,tx=2) wm.cp=- | end=-
+#2 item tx_seq=3 | wm.cursor=item(cp=1,tx=3) wm.cp=- | end=-
+#3 item tx_seq=4 | wm.cursor=item(cp=3,tx=4) wm.cp=2 | end=-
+#4 item tx_seq=5 | wm.cursor=item(cp=3,tx=5) wm.cp=2 | end=-
+#5 item tx_seq=6 | wm.cursor=item(cp=4,tx=6) wm.cp=3 | end=-
+#6 item tx_seq=7 | wm.cursor=item(cp=4,tx=7) wm.cp=3 | end=-
+#7 no-item | wm.cursor=boundary(cp=5,tx=8) wm.cp=4 | end=QUERY_END_REASON_LEDGER_TIP

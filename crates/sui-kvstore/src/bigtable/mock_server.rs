@@ -645,11 +645,6 @@ impl Bigtable for MockBigtableServer {
             .map(|(_, t)| t.to_string())
             .unwrap_or_default();
 
-        if req.reversed {
-            return Err(Status::unimplemented(
-                "mock ReadRows does not support reversed scans",
-            ));
-        }
         if req.rows_limit < 0 {
             return Err(Status::unimplemented(
                 "mock ReadRows does not support negative rows_limit",
@@ -687,6 +682,12 @@ impl Bigtable for MockBigtableServer {
                 .map(|(_, row_key)| row_key.clone())
                 .collect();
             requested_keys.sort_unstable();
+        }
+        // Reversed scans return rows in descending key order; the row limit
+        // applies to that order (pin-test harness support, mirrors BigTable).
+        if req.reversed {
+            requested_keys.sort_unstable();
+            requested_keys.reverse();
         }
         if req.rows_limit != 0 {
             requested_keys.truncate(req.rows_limit as usize);

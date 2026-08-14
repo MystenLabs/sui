@@ -1,0 +1,10 @@
+---
+source: crates/sui-kv-rpc/src/v2/pin_tests.rs
+expression: output
+---
+#0 item cp=0 | wm.cursor=item(cp=0) wm.cp=0 | end=-
+#1 item cp=1 | wm.cursor=item(cp=1) wm.cp=1 | end=-
+#2 item cp=2 | wm.cursor=item(cp=2) wm.cp=2 | end=-
+#3 item cp=3 | wm.cursor=item(cp=3) wm.cp=3 | end=-
+#4 item cp=4 | wm.cursor=item(cp=4) wm.cp=4 | end=-
+#5 no-item | wm.cursor=boundary(cp=5) wm.cp=4 | end=QUERY_END_REASON_LEDGER_TIP

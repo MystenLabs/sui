@@ -1,0 +1,21 @@
+---
+source: crates/sui-kv-rpc/src/v2/pin_tests.rs
+expression: transcript
+---
+== page 0 ==
+#0 item cp=4 | wm.cursor=item(cp=4) wm.cp=4 | end=QUERY_END_REASON_ITEM_LIMIT
+
+== page 1 ==
+#0 item cp=3 | wm.cursor=item(cp=3) wm.cp=3 | end=QUERY_END_REASON_ITEM_LIMIT
+
+== page 2 ==
+#0 item cp=2 | wm.cursor=item(cp=2) wm.cp=2 | end=QUERY_END_REASON_ITEM_LIMIT
+
+== page 3 ==
+#0 item cp=1 | wm.cursor=item(cp=1) wm.cp=1 | end=QUERY_END_REASON_ITEM_LIMIT
+
+== page 4 ==
+#0 item cp=0 | wm.cursor=item(cp=0) wm.cp=0 | end=QUERY_END_REASON_ITEM_LIMIT
+
+== page 5 ==
+#0 no-item | wm.cursor=boundary(cp=0) wm.cp=- | end=QUERY_END_REASON_CURSOR_BOUND

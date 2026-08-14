@@ -1,0 +1,5 @@
+---
+source: crates/sui-rpc-api/tests/ledger_history_pins.rs
+expression: output
+---
+#0 ERROR code=OutOfRange msg="requested data below earliest available; lowest available tx_seq is 4"

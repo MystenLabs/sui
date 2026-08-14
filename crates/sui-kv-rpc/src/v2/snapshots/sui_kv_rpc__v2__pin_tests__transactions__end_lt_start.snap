@@ -1,0 +1,5 @@
+---
+source: crates/sui-kv-rpc/src/v2/pin_tests.rs
+expression: output
+---
+INIT ERROR code=InvalidArgument msg="end_checkpoint must be greater than or equal to start_checkpoint"

@@ -1,0 +1,6 @@
+---
+source: crates/sui-rpc-api/tests/ledger_history_pins.rs
+expression: output
+---
+#0 item cp=4 | wm.cursor=item(cp=4) wm.cp=4 | end=-
+#1 no-item | wm.cursor=boundary(cp=5) wm.cp=4 | end=QUERY_END_REASON_LEDGER_TIP

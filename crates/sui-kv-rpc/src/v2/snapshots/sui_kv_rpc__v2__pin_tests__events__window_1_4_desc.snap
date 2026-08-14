@@ -1,0 +1,11 @@
+---
+source: crates/sui-kv-rpc/src/v2/pin_tests.rs
+expression: output
+---
+#0 item ev=(cp=3,tx_idx=0,ev=2) | wm.cursor=item(cp=3,tx=4,ev=2) wm.cp=- | end=-
+#1 item ev=(cp=3,tx_idx=0,ev=1) | wm.cursor=item(cp=3,tx=4,ev=1) wm.cp=- | end=-
+#2 item ev=(cp=3,tx_idx=0,ev=0) | wm.cursor=item(cp=3,tx=4,ev=0) wm.cp=- | end=-
+#3 item ev=(cp=1,tx_idx=2,ev=0) | wm.cursor=item(cp=1,tx=3,ev=0) wm.cp=2 | end=-
+#4 item ev=(cp=1,tx_idx=0,ev=1) | wm.cursor=item(cp=1,tx=1,ev=1) wm.cp=2 | end=-
+#5 item ev=(cp=1,tx_idx=0,ev=0) | wm.cursor=item(cp=1,tx=1,ev=0) wm.cp=2 | end=-
+#6 no-item | wm.cursor=boundary(cp=1,tx=1,ev=0) wm.cp=1 | end=QUERY_END_REASON_CHECKPOINT_BOUND

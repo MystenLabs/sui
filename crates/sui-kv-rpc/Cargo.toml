@@ -53,6 +53,7 @@ prost.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+insta.workspace = true
 # `test-util` powers `#[tokio::test(start_paused = true)]` in the limiter tests.
 tokio = { workspace = true, features = ["test-util"] }
 # Enables the in-memory mock BigTable server for the real-stage resolver tests.
