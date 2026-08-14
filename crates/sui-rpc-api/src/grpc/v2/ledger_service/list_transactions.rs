@@ -51,9 +51,9 @@ use super::chunked_scan::scan_limit_or_range;
 use super::chunked_scan::spawn_list_chunk;
 use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_range;
-use super::ledger_read::clamp_to_serving_floor;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::get_tx_seq_digest_rows;
+use super::ledger_read::probe_serving_floor;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::sequence_frontier_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
@@ -635,7 +635,7 @@ fn resolve_tx_range(
     let mut resolved = options.resolve_scan(cp_range, tx_range);
     if !resolved.range.is_empty()
         && let Some(floor) =
-            clamp_to_serving_floor(service, resolved.range.start, start_checkpoint, options)?
+            probe_serving_floor(service, resolved.range.start, start_checkpoint, options)?
     {
         resolved.apply_serving_floor(floor.tx_seq, floor.checkpoint, options);
     }

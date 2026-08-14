@@ -49,8 +49,8 @@ use super::event_scan::event_frontier_checkpoint;
 use super::event_scan::next_unfiltered_event_refs;
 use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_range;
-use super::ledger_read::clamp_to_serving_floor;
 use super::ledger_read::get_tx_seq_digest_multi;
+use super::ledger_read::probe_serving_floor;
 use super::ledger_read::validate_checkpoint_bounds;
 use crate::ledger_history::watermark::ScanTerminal;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
@@ -761,7 +761,7 @@ fn resolve_event_range(
             Bound::Included(position) | Bound::Excluded(position) => position.tx_seq,
             Bound::Unbounded => 0,
         };
-        if let Some(floor) = clamp_to_serving_floor(service, start_tx, start_checkpoint, options)? {
+        if let Some(floor) = probe_serving_floor(service, start_tx, start_checkpoint, options)? {
             resolved.apply_serving_floor(floor.tx_seq, floor.checkpoint, options);
         }
     }

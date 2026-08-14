@@ -94,19 +94,32 @@ fn lowest_available_tx_seq(service: &RpcService) -> Result<u64, RpcError> {
     checkpoint_to_tx_boundary(service, lowest_checkpoint)
 }
 
-/// Enforce the pruning `floor` on a resolved scan's low end (`start`, tx-seq space).
-/// Returns the effective start: unchanged when at/above the floor; clamped up to
-/// the floor when the low end was open-ended; or `OutOfRange` when an explicitly
-/// requested low end (a `start_checkpoint` or `after` cursor) is below the floor —
-/// that data was pruned and is permanently gone.
-fn apply_tx_seq_floor(start: u64, explicit_lower: bool, floor: u64) -> Result<u64, RpcError> {
+/// The decide stage of the serving floor: given a scan's low end (`start`)
+/// and the pruning floor, in the units `unit` names — unchanged when
+/// at/above the floor (`None`); clamped up when the low end was open-ended
+/// (`Some(floor)`); `OutOfRange` when an explicitly requested low end (a
+/// `start_checkpoint` or `after` cursor) is below the floor — that data was
+/// pruned and is permanently gone.
+fn decide_floor(
+    start: u64,
+    explicit_lower: bool,
+    floor: u64,
+    unit: &str,
+) -> Result<Option<u64>, RpcError> {
     if start >= floor {
-        Ok(start)
+        Ok(None)
     } else if explicit_lower {
-        Err(out_of_range(floor))
+        Err(out_of_range(unit, floor))
     } else {
-        Ok(floor)
+        Ok(Some(floor))
     }
+}
+
+fn out_of_range(unit: &str, floor: u64) -> RpcError {
+    RpcError::new(
+        tonic::Code::OutOfRange,
+        format!("requested data below earliest available; lowest available {unit} is {floor}"),
+    )
 }
 
 /// The serving floor resolved onto a scan: the effective first scannable
@@ -117,18 +130,13 @@ pub(super) struct ServingFloor {
     pub(super) checkpoint: u64,
 }
 
-/// Clamp a resolved scan's low end (`start_tx`, tx-seq space) to the serving
-/// floor. Returns the resolved floor only when it actually moved the low end
-/// (an implicit-genesis low); an explicitly requested low below the floor
-/// (`start_checkpoint` or `after` cursor) errors `OutOfRange` instead, and an
-/// untouched low returns `None`. Callers MUST reconcile their interval and
-/// watermark metadata from the returned floor, so no watermark ever claims
-/// pruned, never-scanned checkpoints: for a nonempty retained intersection,
-/// ascending scans raise their entry claim to `checkpoint` and descending
-/// scans pin their terminal to it; a floor that consumes the interval leaves
-/// the request-derived terminal boundary in place and marks the interval
-/// empty.
-pub(super) fn clamp_to_serving_floor(
+/// The probe stage of the serving floor, tx-seq space: fetch the pruning
+/// floor and run [`decide_floor`]. `Some` carries the effective first
+/// scannable transaction and its containing checkpoint; the caller runs the
+/// apply stage (`ResolvedScan::apply_serving_floor`, or the filtered
+/// checkpoint scan's two-space composition), which keeps watermarks from
+/// claiming pruned, never-scanned history.
+pub(super) fn probe_serving_floor(
     service: &RpcService,
     start_tx: u64,
     start_checkpoint: Option<u64>,
@@ -136,31 +144,19 @@ pub(super) fn clamp_to_serving_floor(
 ) -> Result<Option<ServingFloor>, RpcError> {
     let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
     let floor = lowest_available_tx_seq(service)?;
-    let clamped = apply_tx_seq_floor(start_tx, explicit_lower, floor)?;
-    if clamped == start_tx {
+    let Some(clamped) = decide_floor(start_tx, explicit_lower, floor, "tx_seq")? else {
         return Ok(None);
-    }
+    };
     Ok(Some(ServingFloor {
         tx_seq: clamped,
         checkpoint: tx_checkpoint(service, clamped)?,
     }))
 }
 
-fn out_of_range(floor: u64) -> RpcError {
-    RpcError::new(
-        tonic::Code::OutOfRange,
-        format!("requested data below earliest available; lowest available tx_seq is {floor}"),
-    )
-}
-
-/// Checkpoint-space analogue of [`clamp_to_serving_floor`] for scans that
-/// walk checkpoint sequence numbers directly (the unfiltered
-/// `list_checkpoints` path). Returns the floor checkpoint only when it
-/// actually moves the resolved low end (an implicit-genesis low); an
-/// explicitly requested low below the floor (`start_checkpoint` or `after`
-/// cursor) errors `OutOfRange` — that data was pruned and is permanently
-/// gone — and an untouched low returns `None`.
-pub(super) fn clamp_checkpoints_to_serving_floor(
+/// Checkpoint-space analogue of [`probe_serving_floor`] for scans that walk
+/// checkpoint sequence numbers directly (the unfiltered `list_checkpoints`
+/// path).
+pub(super) fn probe_checkpoint_serving_floor(
     service: &RpcService,
     start: u64,
     start_checkpoint: Option<u64>,
@@ -168,18 +164,7 @@ pub(super) fn clamp_checkpoints_to_serving_floor(
 ) -> Result<Option<u64>, RpcError> {
     let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
     let floor = service.reader.get_lowest_available_checkpoint()?;
-    if start >= floor {
-        return Ok(None);
-    }
-    if explicit_lower {
-        return Err(RpcError::new(
-            tonic::Code::OutOfRange,
-            format!(
-                "requested data below earliest available; lowest available checkpoint is {floor}"
-            ),
-        ));
-    }
-    Ok(Some(floor))
+    decide_floor(start, explicit_lower, floor, "checkpoint")
 }
 
 pub(super) fn get_tx_seq_digest_multi(
@@ -297,7 +282,7 @@ pub(super) fn sequence_frontier_checkpoint(
 /// latter.
 fn missing_row_error(service: &RpcService, tx_seq: u64) -> RpcError {
     match lowest_available_tx_seq(service) {
-        Ok(floor) if tx_seq < floor => out_of_range(floor),
+        Ok(floor) if tx_seq < floor => out_of_range("tx_seq", floor),
         _ => missing_tx_seq_digest(tx_seq),
     }
 }
@@ -327,31 +312,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn apply_tx_seq_floor_passes_through_at_or_above_floor() {
-        assert_eq!(apply_tx_seq_floor(10, false, 10).unwrap(), 10);
-        assert_eq!(apply_tx_seq_floor(15, true, 10).unwrap(), 15);
+    fn decide_floor_passes_through_at_or_above_floor() {
+        assert_eq!(decide_floor(10, false, 10, "tx_seq").unwrap(), None);
+        assert_eq!(decide_floor(15, true, 10, "tx_seq").unwrap(), None);
     }
 
     #[test]
-    fn apply_tx_seq_floor_clamps_open_ended_low_end() {
+    fn decide_floor_clamps_open_ended_low_end() {
         // No explicit low bound below the floor → clamp up to the floor.
-        assert_eq!(apply_tx_seq_floor(0, false, 10).unwrap(), 10);
-        assert_eq!(apply_tx_seq_floor(7, false, 10).unwrap(), 10);
+        assert_eq!(decide_floor(0, false, 10, "tx_seq").unwrap(), Some(10));
+        assert_eq!(decide_floor(7, false, 10, "tx_seq").unwrap(), Some(10));
     }
 
     #[test]
-    fn apply_tx_seq_floor_errors_on_explicit_below_floor() {
+    fn decide_floor_errors_on_explicit_below_floor() {
         for start in [0u64, 9] {
-            let status = tonic::Status::from(apply_tx_seq_floor(start, true, 10).unwrap_err());
+            let status = tonic::Status::from(decide_floor(start, true, 10, "tx_seq").unwrap_err());
             assert_eq!(status.code(), tonic::Code::OutOfRange);
         }
     }
 
     #[test]
-    fn apply_tx_seq_floor_zero_floor_never_clamps_or_errors() {
+    fn decide_floor_zero_floor_never_clamps_or_errors() {
         // Empty/unpruned index (floor 0): every start is at/above the floor.
-        assert_eq!(apply_tx_seq_floor(0, true, 0).unwrap(), 0);
-        assert_eq!(apply_tx_seq_floor(0, false, 0).unwrap(), 0);
-        assert_eq!(apply_tx_seq_floor(123, true, 0).unwrap(), 123);
+        assert_eq!(decide_floor(0, true, 0, "tx_seq").unwrap(), None);
+        assert_eq!(decide_floor(0, false, 0, "tx_seq").unwrap(), None);
+        assert_eq!(decide_floor(123, true, 0, "tx_seq").unwrap(), None);
     }
 }

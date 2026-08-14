@@ -47,9 +47,9 @@ use super::chunked_scan::scan_limit_or_range;
 use super::chunked_scan::spawn_list_chunk;
 use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_range;
-use super::ledger_read::clamp_checkpoints_to_serving_floor;
-use super::ledger_read::clamp_to_serving_floor;
 use super::ledger_read::get_tx_seq_digest_multi;
+use super::ledger_read::probe_checkpoint_serving_floor;
+use super::ledger_read::probe_serving_floor;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::sequence_frontier_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
@@ -302,7 +302,7 @@ fn next_checkpoint_chunk(
             // arm's tx-space clamp below derives from the same floor
             // and becomes a no-op backstop.)
             if !cp_range.is_empty()
-                && let Some(floor) = clamp_checkpoints_to_serving_floor(
+                && let Some(floor) = probe_checkpoint_serving_floor(
                     &service,
                     cp_range.range.start,
                     start_checkpoint,
@@ -339,12 +339,8 @@ fn next_checkpoint_chunk(
             let state = if let Some(query) = filter_query {
                 let mut tx_range = checkpoint_to_tx_range(&service, range)?;
                 if !tx_range.is_empty()
-                    && let Some(floor) = clamp_to_serving_floor(
-                        &service,
-                        tx_range.start,
-                        start_checkpoint,
-                        &options,
-                    )?
+                    && let Some(floor) =
+                        probe_serving_floor(&service, tx_range.start, start_checkpoint, &options)?
                 {
                     let consumed = apply_serving_floor_to_filtered_window(
                         &mut tx_range,
