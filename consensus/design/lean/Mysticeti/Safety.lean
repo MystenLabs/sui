@@ -12,7 +12,7 @@ namespace Mysticeti
 
 Applying this theorem to Rust requires the assumption ledger. Key obligations are
 `ASM-SAFE-EVIDENCE-REFINEMENT`, `ASM-SAFE-COMMIT-CHAIN`, and
-`ASM-SAFE-FIRST-TRIGGER`.
+`ASM-SAFE-FIRST-TRIGGER`, `ASM-SAFE-COMMITTED-PREFIX`, and `ASM-SAFE-GC`.
 -/
 
 theorem mysticeti_v3_safety
@@ -21,11 +21,15 @@ theorem mysticeti_v3_safety
     (leader : LeaderEvidence authorityCount stake thresholds)
     (transaction : TransactionEvidence authorityCount stake thresholds)
     (stream : CommitStream) (hasCertificate : Nat → Bool)
-    {targetRound start leftLength rightLength leftTrigger rightTrigger : Nat}
+    {start leftLength rightLength leftTrigger rightTrigger : Nat}
+    (startLeader :
+      (stream start).leaderRound = transaction.gcWindow.firstCommitLeaderRound)
     (leftVisible :
-      VisibleFirst stream targetRound start leftLength leftTrigger)
+      VisibleFirst stream transaction.gcWindow.firstCommitLeaderRound
+        start leftLength leftTrigger)
     (rightVisible :
-      VisibleFirst stream targetRound start rightLength rightTrigger) :
+      VisibleFirst stream transaction.gcWindow.firstCommitLeaderRound
+        start rightLength rightTrigger) :
     (¬(leader.CanDecide .commit ∧ leader.CanDecide .skip)) ∧
     (¬(transaction.CanDecide .accept ∧ transaction.CanDecide .reject)) ∧
     indirectAt hasCertificate leftTrigger =
@@ -35,7 +39,10 @@ theorem mysticeti_v3_safety
     exact leader.safety conflicting.1 conflicting.2
   · constructor
     · intro conflicting
-      exact transaction.safety conflicting.1 conflicting.2
+      have predecessor := firstEligible_predecessor stream startLeader leftVisible.2
+      have ready : transaction.IndirectEvidenceReady
+          (stream (leftTrigger - 1)).leaderRound := predecessor.2
+      exact transaction.safety ready conflicting.1 conflicting.2
     · exact first_trigger_agreement stream hasCertificate leftVisible rightVisible
 
 end Mysticeti

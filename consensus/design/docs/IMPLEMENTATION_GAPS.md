@@ -216,16 +216,51 @@ The transaction indirect rule counts accept voters from the complete buffered
 commit prefix. This is necessary because one v3 commit can have more than one
 leader. The rule rejects when that prefix has less than certificate stake.
 
-The proof needs these implementation facts:
+Lean now checks the GC arithmetic in the protocol model:
+
+- Core calculates `gc_round = last_commit_round - gc_depth` before it records the
+  new commit.
+- The next v3 leader decision round is after `last_commit_round`. Thus, the leader
+  decision, next-round votes, and anchor path are above the old GC boundary.
+- A transaction voting block uses the signed numeric cutoff. The cutoff is the
+  maximum of the causal-history block-GC round and the vote-tracker GC round.
+- A target at or below either proposer-side GC boundary is a reject vote.
+- For a target far below its commit leader, the first commit preserves next-round
+  evidence. For a target near its commit leader, the first trigger preserves it.
+  The second case uses `gc_depth > 2` and the commit before the first trigger.
+- Later DAG GC does not change the modeled pending committed-prefix store.
+
+The proof still needs these implementation facts:
 
 1. A correct accept voter cannot commit before its target block.
 2. A depth-two leader has a verified immediate-parent quorum.
-3. The linearizer includes each committed accept voter before the trigger.
-4. Garbage collection does not remove the evidence first.
+3. `FlexCommitter::build_commit` includes the target only above the GC boundary
+   that it read before `Core::post_commit` records the new commit.
+4. The complete anchor causal history has a quorum of voting-round blocks, not only
+   a quorum of immediate parents at the anchor round.
+5. Local `FlexCommitter::build_commit` and certified
+   `FlexCommitter::handle_certified_commit` include each required accept voter in
+   the exact `CommittedSubDag` sequence before the first trigger.
+6. Commit sync, replay, and recovery produce the same prefix and first trigger.
+7. A slow finalizer keeps the blocks in its pending `CommittedSubDag` values after
+   the live DAG cache removes those rounds.
 
 The constructor checks `gc_depth > 2`. The block verifier checks immediate-parent
-quorum stake. Add an integration invariant that covers the linearizer order,
-commit-sync recovery, and the exact GC boundary. This item is a proof-closure gap.
+quorum stake. The proposer signs both GC sources through one maximum cutoff. These
+checks discharge only the arithmetic and local vote-classification parts. Add an
+integration invariant that covers both v3 sub-DAG paths, commit-sync recovery, the
+pending finalizer prefix, and the exact GC boundary. This item is still a
+proof-closure gap.
+
+The `CommitFinalizerV3` constructor comment says that the proof depends on
+`Linearizer::linearize_sub_dag`. This statement is stale for v3. Replace it with the
+`FlexCommitter::build_commit` and `Core::post_commit` ordering contract. Add a
+separate statement for `FlexCommitter::handle_certified_commit`.
+
+`prepare_direct_voting_blocks` reads live cached blocks. A slow finalizer can lose a
+direct-decision opportunity after DAG GC. This loss does not make a false quorum,
+but it affects liveness. Test that the buffered indirect path completes after this
+event.
 
 ## P2: close the natural-number to Rust-integer refinement
 
@@ -260,7 +295,8 @@ stable data format. Check these Rust functions against the vectors:
 - `CommitFinalizerV3::compute_direct_decisions`;
 - `CommitFinalizerV3::compute_indirect_decisions`;
 - the first depth-two trigger selection;
-- the v3 transaction cutoff rule.
+- the v3 transaction cutoff rule, including both source GC rounds;
+- the deep-target and near-target v3 sub-DAG GC cases.
 
 Include equivocation vectors. One Byzantine authority can count once on each side,
 but it cannot count more than once on either side.

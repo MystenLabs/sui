@@ -76,7 +76,7 @@ other open conditions define the remaining refinement and environment boundary.
 ## ASM-SAFE-PARAMETERS
 
 - **Claim:** All correct nodes in one epoch use the same committee, `N`, `f`, `Q`,
-  `A`, validity threshold, and v3 leader configuration.
+  `A`, validity threshold, `gc_depth`, and v3 leader configuration.
 - **Type:** Configuration refinement.
 - **Status:** Known mismatch.
 - **Effect if false:** Safety.
@@ -86,6 +86,7 @@ other open conditions define the remaining refinement and environment boundary.
   process environment variables. Correct nodes can therefore derive different
   values.
 - **Discharge:** Put all threshold inputs in authenticated epoch protocol state. Add
+  all proof-relevant configuration values to the same state. Add
   mixed-configuration rejection tests.
 
 ## ASM-SAFE-FAULT-BOUND
@@ -146,14 +147,18 @@ other open conditions define the remaining refinement and environment boundary.
 ## ASM-SAFE-EVIDENCE-REFINEMENT
 
 - **Claim:** The Rust leader and transaction decision functions create the same
-  voter sets, cutoffs, unique-authority counts, and outcomes as the Lean evidence
-  relations.
+  voter sets, signed vote witnesses, cutoffs, unique-authority counts, and outcomes
+  as the Lean evidence relations. A v3 proposer sets
+  `transaction_votes_cutoff_round` to the maximum of its causal-history GC round
+  and transaction vote-tracker GC round.
 - **Type:** Rust refinement.
 - **Status:** Partially verified.
 - **Effect if false:** Safety.
 - **Lean use:** [`LeaderEvidence`](../lean/Mysticeti/Leader.lean),
-  [`TransactionVote`](../lean/Mysticeti/Finalizer.lean), and
-  [`TransactionEvidence`](../lean/Mysticeti/Finalizer.lean).
+  [`TransactionVote`](../lean/Mysticeti/Finalizer.lean),
+  [`TransactionVoteProduction`](../lean/Mysticeti/Finalizer.lean), and
+  [`TransactionEvidence`](../lean/Mysticeti/Finalizer.lean). A counted direct
+  accept has a signed witness that passes the numeric cutoff classifier.
 - **Rust evidence:** Focused Rust tests cover direct and indirect decisions,
   cutoffs, and Byzantine equivocation. The Lean model is hand written and has no
   executable conformance suite.
@@ -185,6 +190,8 @@ other open conditions define the remaining refinement and environment boundary.
 - **Effect if false:** Safety.
 - **Lean use:** [`first_trigger_agreement`](../lean/Mysticeti/CommitChain.lean) uses
   two views of the same stream and the same first-eligible rule.
+  [`firstEligible_predecessor`](../lean/Mysticeti/CommitChain.lean) proves that the
+  commit before this trigger is still below the depth-two boundary.
 - **Rust evidence:** The finalizer consumes consecutive commits in order. There is
   no complete cross-node proof that all input paths select the same trigger.
 - **Discharge:** Derive trigger equality from `ASM-SAFE-COMMIT-CHAIN`, and check trigger
@@ -198,28 +205,48 @@ other open conditions define the remaining refinement and environment boundary.
 - **Status:** Open proof obligation.
 - **Effect if false:** Safety.
 - **Lean use:** `correctCommitAnchorInCertificate` and
-  `correctAcceptAnchorInCommittedCertificate` supply the key direct-versus-indirect
-  inclusion facts.
-- **Rust evidence:** The linearizer and v3 finalizer are designed to process the
-  committed sub-DAG in order. No complete lemma connects linearizer order, a
-  multi-leader commit, commit sync, and the finalizer prefix.
+  `anchorInCommittedPrefix` are the remaining refinement inputs. Lean combines
+  `anchorInCommittedPrefix` with the GC theorem and the signed transaction vote
+  witness to derive the direct-versus-indirect inclusion fact.
+- **Rust evidence:** `FlexCommitter::build_commit` constructs each local v3 sub-DAG.
+  `FlexCommitter::handle_certified_commit` reconstructs each synced v3 sub-DAG from
+  the certified commit's block list. The v3 finalizer processes these sub-DAGs in
+  order. No complete lemma connects both paths, a multi-leader commit, commit sync,
+  and the finalizer prefix.
 - **Discharge:** Prove the committed-prefix lemma for local commits and certified
   commits. Add an integration invariant for the exact first trigger.
 
 ## ASM-SAFE-GC
 
-- **Claim:** Garbage collection does not remove a block or vote that an indirect
-  decision needs before the first eligible trigger processes it.
+- **Claim:** Core reads the GC boundary from the preceding commit before it records
+  the new commit. The v3 schedule starts each next leader decision after the last
+  committed leader round. For transaction votes, the signed cutoff covers both
+  causal-history block GC and vote-tracker GC. V3 sub-DAG construction copies the
+  required next-round anchor blocks into the finalizer's pending committed prefix
+  before a later DAG GC operation can remove them.
 - **Type:** Rust refinement.
 - **Status:** Partially verified.
 - **Effect if false:** Safety.
-- **Lean use:** Indirect certificate membership assumes that the complete required
-  prefix remains visible.
-- **Rust evidence:** The v3 constructor checks `gc_depth > 2`, and block verification
-  checks immediate-parent quorum. The exact linearizer, commit-sync, and GC boundary
-  is not proved.
-- **Discharge:** Prove one retention lemma for local execution, synchronized commits,
-  and recovery. Test the boundary at the minimum supported GC depth.
+- **Lean use:** [`CoreGcState.evidence_retained`](../lean/Mysticeti/GarbageCollection.lean)
+  proves the Core decision-to-anchor window.
+  [`TransactionGcWindow.voting_round_retained`](../lean/Mysticeti/GarbageCollection.lean)
+  proves the deep-target and near-target transaction cases.
+  [`causal_history_gc_rejects`](../lean/Mysticeti/Finalizer.lean) and
+  [`vote_tracker_gc_rejects`](../lean/Mysticeti/Finalizer.lean) prove the signed
+  cutoff behavior. `BlockEvidenceStore` keeps the live DAG and pending committed
+  prefix separate.
+- **Rust evidence:** The v3 constructor checks `gc_depth > 2`. The proposer signs the
+  maximum of the causal-history and vote-tracker GC rounds.
+  `FlexCommitter::build_commit` reads the old `DagState::gc_round()` before
+  `Core::post_commit` records the new commit. The finalizer keeps each pending
+  `CommittedSubDag`. The certified-commit path uses the certified block list instead
+  of the local DFS. The complete local, commit-sync, replay, and recovery refinement
+  is not proved. The `CommitFinalizerV3` constructor comment still names the legacy
+  `Linearizer`; that comment does not match the active v3 path.
+- **Discharge:** Prove that every required anchor voting block enters the exact
+  `CommittedSubDag` prefix on all input paths. Prove that the finalizer processes
+  that prefix before it can lose the evidence. Test the minimum supported GC depth,
+  a slow finalizer, commit sync, and restart recovery.
 
 ## ASM-CONFIG-V3-ACTIVATION
 

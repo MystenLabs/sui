@@ -13,6 +13,12 @@ The model has two parts:
 - `docs/` contains the assumption ledger, proof scope, and implementation gap
   report.
 
+The safety proof includes the Core garbage-collection boundary, the v3 sub-DAG
+retention window, and the signed transaction vote cutoff. The transaction cutoff is
+the maximum of the causal-history block-GC round and the transaction vote-tracker
+GC round. The proof keeps live DAG evidence separate from the finalizer's buffered
+committed-prefix evidence.
+
 The model uses Lean only. It does not use mathlib. The project pins Lean 4.33.0 in
 `lean/lean-toolchain`.
 

@@ -7,8 +7,9 @@ SPDX-License-Identifier: Apache-2.0
 
 ## Result
 
-The Lean project checks the core safety arithmetic and a conditional liveness
-argument. The project has no `sorry`, `admit`, or declared `axiom`.
+The Lean project checks the core safety arithmetic, the modeled GC retention
+rules, the signed transaction cutoff rule, and a conditional liveness argument.
+The project has no `sorry`, `admit`, or declared `axiom`.
 
 This work is not an end-to-end proof of the Rust program. The Lean model states the
 remaining Rust refinement conditions as explicit assumptions. A theorem is a valid
@@ -59,6 +60,10 @@ block cannot have both a commit result and a skip result. It covers these cases:
 
 The direct-commit against indirect-skip case uses the second threshold inequality.
 A direct quorum and an anchor quorum preserve at least `A` correct commit votes.
+The proof also uses the Core GC state. The GC boundary is calculated from the last
+committed leader before Core records the new commit. The next leader decision round
+is greater than that last committed round. Lean proves that the decision block, its
+next-round votes, and the complete path to a valid anchor are above this boundary.
 
 [`TransactionEvidence.safety`](../lean/Mysticeti/Finalizer.lean) proves the same
 four cases for one transaction. The model also specifies the v3 vote rule. A
@@ -69,6 +74,74 @@ next-round block accepts a transaction only when all these conditions are true:
 - the voting block does not contain an explicit reject for the transaction.
 
 Every other next-round block is a reject vote.
+
+The model uses the numeric signed `transaction_votes_cutoff_round`. It does not use
+an abstract `targetAboveCutoff` input. The modeled proposer sets the cutoff to the
+maximum of these values:
+
+- the causal-history block-GC round;
+- the transaction vote-tracker GC round.
+
+Lean proves these properties:
+
+- A target at or below either source GC round is a reject vote.
+- An accept vote is above both source GC rounds.
+- A valid next-round block has a cutoff that is before or equal to the target round.
+
+Each counted direct accept voter has a signed vote witness. The committed-prefix
+proof uses the same witness for a correct authority. Thus, the direct-against-
+indirect proof uses the signed cutoff classifier.
+
+## Garbage collection and the committed prefix
+
+[`GarbageCollection.lean`](../lean/Mysticeti/GarbageCollection.lean) models two GC
+paths.
+
+The Rust `Linearizer` type is not on the active v3 path in the reviewed combined
+state. `FlexCommitter::build_commit` performs local v3 sub-DAG construction. It
+reads the old GC round, selects uncommitted ancestors above that round, and returns
+the commit and `CommittedSubDag`. `Core::post_commit` then records the commit and
+sends the saved sub-DAG to the finalizer. For a synced certified commit,
+`FlexCommitter::handle_certified_commit` reconstructs the sub-DAG from the signed
+commit block list. The proof uses the term "v3 sub-DAG construction" for these two
+paths.
+
+For the leader rule, `CoreGcState` uses this boundary:
+
+```text
+gc_round = last_commit_round - gc_depth
+```
+
+The v3 schedule starts the next decision round after `last_commit_round`. Lean
+therefore proves that all leader evidence from the decision round through the
+depth-two anchor is retained when Core makes the decision.
+
+For transaction finalization, the target block can be far below its commit leader.
+The proof uses two cases:
+
+1. If the first commit leader is at least two rounds above the target,
+   `FlexCommitter::build_commit` preserves the target's next-round voting blocks in
+   the local path.
+2. If the target is near the first commit leader, the first depth-two trigger
+   preserves the voting blocks. The preceding trigger commit is still below the
+   depth-two boundary. With `gc_depth > 2`, its GC boundary is below the voting
+   round.
+
+[`firstEligible_predecessor`](../lean/Mysticeti/CommitChain.lean) proves the
+preceding-commit bound from the first-trigger rule.
+[`TransactionGcWindow.voting_round_retained`](../lean/Mysticeti/GarbageCollection.lean)
+proves the two-case GC arithmetic.
+
+The model also separates live DAG evidence from the finalizer's buffered committed
+prefix. Block GC can change the live DAG store. It cannot change evidence that the
+finalizer already copied into the pending committed prefix.
+
+This result does not prove that every Rust input path copies the required anchor
+voting blocks into that prefix. `anchorInCommittedPrefix` is still a Rust refinement
+obligation. It covers local `FlexCommitter::build_commit`, certified commit
+reconstruction, replay, and recovery. The proof also does not give a direct-decision
+liveness guarantee when a slow finalizer loses live cached blocks. The indirect
+buffered-prefix path must provide progress in that case.
 
 ## Common commit chain
 
@@ -136,7 +209,8 @@ used by this liveness theorem.
 The safety result needs all these implementation facts:
 
 1. [`ASM-SAFE-PARAMETERS`](ASSUMPTIONS.md#asm-safe-parameters): all correct nodes use
-   the same epoch committee and the same `N`, `f`, `Q`, and `A` values.
+   the same epoch committee and the same `N`, `f`, `Q`, `A`, and `gc_depth`
+   values.
 2. [`ASM-SAFE-FAULT-BOUND`](ASSUMPTIONS.md#asm-safe-fault-bound): Byzantine stake is
    at most `f`.
 3. [`ASM-SAFE-AUTHENTICATION`](ASSUMPTIONS.md#asm-safe-authentication): signatures
@@ -153,8 +227,10 @@ The safety result needs all these implementation facts:
    process one certified commit chain with no gap.
 9. [`ASM-SAFE-FIRST-TRIGGER`](ASSUMPTIONS.md#asm-safe-first-trigger): correct nodes
    use the same first depth-two trigger.
-10. [`ASM-SAFE-GC`](ASSUMPTIONS.md#asm-safe-gc): garbage collection does not remove
-    required evidence before the trigger uses it.
+10. [`ASM-SAFE-GC`](ASSUMPTIONS.md#asm-safe-gc): Core uses the pre-commit GC
+    boundary, the signed transaction cutoff is the maximum of both proposer-side
+    GC rounds, and v3 sub-DAG construction copies required voting blocks before
+    later DAG GC.
 
 The liveness result also needs these facts:
 

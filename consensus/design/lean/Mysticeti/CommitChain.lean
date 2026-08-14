@@ -36,21 +36,24 @@ theorem continuous_index (stream : CommitStream) (continuous : Continuous stream
       change (stream (position + 1)).index = (stream 0).index + (position + 1)
       omega
 
-/-- A commit is deep enough to trigger indirect finalization for a target round. -/
-def DepthTwoEligible (targetRound : Nat) (commit : Commit) : Prop :=
-  targetRound + 2 ≤ commit.leaderRound
+/-- A commit is deep enough to trigger indirect finalization for the first pending
+commit leader round. -/
+def DepthTwoEligible (pendingLeaderRound : Nat) (commit : Commit) : Prop :=
+  pendingLeaderRound + indirectCommitDepth ≤ commit.leaderRound
 
 /-- `position` is the first eligible commit after `start`.
 `ASM-SAFE-FIRST-TRIGGER` maps this choice to the Rust finalizer. -/
-def FirstEligible (stream : CommitStream) (targetRound start position : Nat) : Prop :=
+def FirstEligible (stream : CommitStream)
+    (pendingLeaderRound start position : Nat) : Prop :=
   start ≤ position ∧
-    DepthTwoEligible targetRound (stream position) ∧
+    DepthTwoEligible pendingLeaderRound (stream position) ∧
     ∀ earlier, start ≤ earlier → earlier < position →
-      ¬DepthTwoEligible targetRound (stream earlier)
+      ¬DepthTwoEligible pendingLeaderRound (stream earlier)
 
-theorem firstEligible_unique (stream : CommitStream) {targetRound start left right : Nat}
-    (leftFirst : FirstEligible stream targetRound start left)
-    (rightFirst : FirstEligible stream targetRound start right) : left = right := by
+theorem firstEligible_unique (stream : CommitStream)
+    {pendingLeaderRound start left right : Nat}
+    (leftFirst : FirstEligible stream pendingLeaderRound start left)
+    (rightFirst : FirstEligible stream pendingLeaderRound start right) : left = right := by
   apply Nat.le_antisymm
   · apply Nat.le_of_not_gt
     intro rightBeforeLeft
@@ -59,15 +62,46 @@ theorem firstEligible_unique (stream : CommitStream) {targetRound start left rig
     intro leftBeforeRight
     exact (rightFirst.2.2 left leftFirst.1 leftBeforeRight) leftFirst.2.1
 
+/-- The commit before the first trigger is still below the depth-two boundary.
+This fact selects the GC boundary that v3 trigger sub-DAG construction reads. -/
+theorem firstEligible_predecessor (stream : CommitStream)
+    {pendingLeaderRound start position : Nat}
+    (startLeader : (stream start).leaderRound = pendingLeaderRound)
+    (first : FirstEligible stream pendingLeaderRound start position) :
+    start < position ∧
+      (stream (position - 1)).leaderRound <
+        pendingLeaderRound + indirectCommitDepth := by
+  have startBefore : start < position := by
+    have notSame : start ≠ position := by
+      intro samePosition
+      subst position
+      have eligible := first.2.1
+      unfold DepthTwoEligible at eligible
+      rw [startLeader] at eligible
+      simp [indirectCommitDepth] at eligible
+      omega
+    have startAtPosition := first.1
+    omega
+  constructor
+  · exact startBefore
+  · have startAtPredecessor : start ≤ position - 1 := by omega
+    have predecessorBefore : position - 1 < position := by omega
+    have notEligible := first.2.2 (position - 1)
+      startAtPredecessor predecessorBefore
+    unfold DepthTwoEligible at notEligible
+    omega
+
 /-- A node can see the first trigger in a prefix of this length. -/
-def VisibleFirst (stream : CommitStream) (targetRound start prefixLength position : Nat) : Prop :=
-  position < prefixLength ∧ FirstEligible stream targetRound start position
+def VisibleFirst (stream : CommitStream)
+    (pendingLeaderRound start prefixLength position : Nat) : Prop :=
+  position < prefixLength ∧
+    FirstEligible stream pendingLeaderRound start position
 
 theorem first_trigger_is_prefix_stable (stream : CommitStream)
-    {targetRound start shortLength longLength position : Nat}
-    (visible : VisibleFirst stream targetRound start shortLength position)
+    {pendingLeaderRound start shortLength longLength position : Nat}
+    (visible : VisibleFirst stream pendingLeaderRound start shortLength position)
     (extension : shortLength ≤ longLength) :
-    VisibleFirst stream targetRound start longLength position := by
+    VisibleFirst stream pendingLeaderRound start longLength position := by
   constructor
   · have positionShort := visible.1
     omega
@@ -80,9 +114,9 @@ def indirectAt (hasCertificate : Nat → Bool) (position : Nat) :
 
 /-- Nodes with the same stream and first trigger choose the same indirect result. -/
 theorem first_trigger_agreement (stream : CommitStream) (hasCertificate : Nat → Bool)
-    {targetRound start leftLength rightLength left right : Nat}
-    (leftVisible : VisibleFirst stream targetRound start leftLength left)
-    (rightVisible : VisibleFirst stream targetRound start rightLength right) :
+    {pendingLeaderRound start leftLength rightLength left right : Nat}
+    (leftVisible : VisibleFirst stream pendingLeaderRound start leftLength left)
+    (rightVisible : VisibleFirst stream pendingLeaderRound start rightLength right) :
     indirectAt hasCertificate left = indirectAt hasCertificate right := by
   have samePosition := firstEligible_unique stream leftVisible.2 rightVisible.2
   subst right
@@ -101,11 +135,11 @@ theorem arbitrary_prefix_decision_can_flip :
 /-- The safe rule uses the same first trigger, so later prefixes cannot flip its result. -/
 theorem first_trigger_result_is_prefix_stable
     (stream : CommitStream) (hasCertificate : Nat → Bool)
-    {targetRound start shortLength longLength position : Nat}
-    (visible : VisibleFirst stream targetRound start shortLength position)
+    {pendingLeaderRound start shortLength longLength position : Nat}
+    (visible : VisibleFirst stream pendingLeaderRound start shortLength position)
     (extension : shortLength ≤ longLength) :
     ∃ stablePosition,
-      VisibleFirst stream targetRound start longLength stablePosition ∧
+      VisibleFirst stream pendingLeaderRound start longLength stablePosition ∧
         indirectAt hasCertificate stablePosition = indirectAt hasCertificate position := by
   exact ⟨position, first_trigger_is_prefix_stable stream visible extension, rfl⟩
 

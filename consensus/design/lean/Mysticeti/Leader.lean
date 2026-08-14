@@ -3,6 +3,7 @@ Copyright (c) Mysten Labs, Inc.
 SPDX-License-Identifier: Apache-2.0
 -/
 
+import Mysticeti.GarbageCollection
 import Mysticeti.Thresholds
 
 namespace Mysticeti
@@ -14,6 +15,13 @@ Rust blocks to these sets is `ASM-SAFE-AUTHENTICATION` and
 `ASM-SAFE-EVIDENCE-REFINEMENT`. -/
 structure LeaderEvidence (authorityCount : Nat) (stake : Nat → Nat)
     (thresholds : Thresholds authorityCount stake) where
+  /-- The GC boundary that Core reads before this decision. `ASM-SAFE-GC`. -/
+  coreGc : CoreGcState
+  /-- The anchor used by the indirect rule. -/
+  anchorRound : Nat
+  /-- The anchor is at least two rounds above the decision slot. -/
+  anchorDepth :
+    coreGc.decisionRound + indirectCommitDepth <= anchorRound
   faulty : VoterSet
   commitVotes : VoterSet
   skipVotes : VoterSet
@@ -29,12 +37,14 @@ structure LeaderEvidence (authorityCount : Nat) (stake : Nat → Nat)
   `ASM-SAFE-NON-EQUIVOCATION`. -/
   skipCertificateOverlap :
     OnlyFaultyOverlap authorityCount faulty skipVotes certificateVotes
-  /-- Correct direct voters in an anchor quorum occur in the committed certificate.
+  /-- When the decision-to-anchor window is above GC, correct direct voters in
+  the anchor quorum occur in the certificate. `ASM-SAFE-GC` and
   `ASM-SAFE-COMMITTED-PREFIX`. -/
   correctCommitAnchorInCertificate :
-    VoterSet.SubsetAt authorityCount
-      (VoterSet.diff (VoterSet.inter commitVotes anchorVotes) faulty)
-      certificateVotes
+    coreGc.EvidenceRetained anchorRound →
+      VoterSet.SubsetAt authorityCount
+        (VoterSet.diff (VoterSet.inter commitVotes anchorVotes) faulty)
+        certificateVotes
 
 namespace LeaderEvidence
 
@@ -42,16 +52,13 @@ variable {authorityCount : Nat} {stake : Nat → Nat}
 variable {thresholds : Thresholds authorityCount stake}
 
 def DirectCommit (evidence : LeaderEvidence authorityCount stake thresholds) : Prop :=
-  thresholds.quorum ≤
-    weight authorityCount stake evidence.commitVotes
+  thresholds.quorum ≤ weight authorityCount stake evidence.commitVotes
 
 def DirectSkip (evidence : LeaderEvidence authorityCount stake thresholds) : Prop :=
-  thresholds.quorum ≤
-    weight authorityCount stake evidence.skipVotes
+  thresholds.quorum ≤ weight authorityCount stake evidence.skipVotes
 
 def IndirectCommit (evidence : LeaderEvidence authorityCount stake thresholds) : Prop :=
-  thresholds.certificate ≤
-    weight authorityCount stake evidence.certificateVotes
+  thresholds.certificate ≤ weight authorityCount stake evidence.certificateVotes
 
 /-- The indirect rule skips when the first depth-two anchor has no certificate. -/
 def IndirectSkip (evidence : LeaderEvidence authorityCount stake thresholds) : Prop :=
@@ -80,7 +87,9 @@ theorem direct_commit_forces_anchor_certificate
       weight authorityCount stake evidence.certificateVotes := by
   have preserved := quorum_intersection_preserves_certificate
     evidence.faultBounded committed anchorQuorum
-  have included := weight_mono stake evidence.correctCommitAnchorInCertificate
+  have retained := evidence.coreGc.evidence_retained evidence.anchorDepth
+  have included := weight_mono stake
+    (evidence.correctCommitAnchorInCertificate retained)
   omega
 
 theorem direct_commit_not_indirect_skip

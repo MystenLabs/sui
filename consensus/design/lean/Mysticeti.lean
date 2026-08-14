@@ -5,6 +5,7 @@ SPDX-License-Identifier: Apache-2.0
 
 import Mysticeti.CommitChain
 import Mysticeti.Finalizer
+import Mysticeti.GarbageCollection
 import Mysticeti.Leader
 import Mysticeti.Liveness
 import Mysticeti.PartialSynchrony
