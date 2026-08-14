@@ -16000,7 +16000,6 @@ dependencies = [
  "sui-rpc",
  "sui-rpc-api",
  "sui-rpc-cursor",
- "sui-sdk-types",
  "sui-types",
  "telemetry-subscribers",
  "thiserror 1.0.69",
