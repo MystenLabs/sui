@@ -2055,6 +2055,7 @@ dependencies = [
  "move-core-types",
  "move-package",
  "move-stdlib",
+ "move-vm-config",
  "move-vm-runtime",
 ]
 
