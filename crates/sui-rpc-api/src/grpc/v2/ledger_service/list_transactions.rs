@@ -286,14 +286,13 @@ fn next_transaction_chunk(
                 end_checkpoint,
                 filter_query,
             } => {
-                let checkpoint_range = ResolvedCheckpointRange::from_request(
+                let cp_range = ResolvedCheckpointRange::from_request(
                     start_checkpoint,
                     end_checkpoint,
                     checkpoint_hi_exclusive(&service)?,
                     &options,
                 )?;
-                let tx_range =
-                    resolve_tx_range(&service, start_checkpoint, checkpoint_range, &options)?;
+                let tx_range = resolve_tx_range(&service, start_checkpoint, cp_range, &options)?;
                 let entry_checkpoint = tx_range.entry_checkpoint;
                 // Emptiness is a store-edge fact under symbolic resume: a
                 // dense window cursors collapsed only becomes empty in

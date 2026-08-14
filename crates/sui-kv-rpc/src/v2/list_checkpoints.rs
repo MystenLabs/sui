@@ -120,15 +120,15 @@ pub(crate) async fn list_checkpoints(
         endpoint.default_limit_items,
         endpoint.max_limit_items,
     )?;
+    let limit_items = options.limit_items;
+    let ordering = options.ordering;
+    let direction = options.scan_direction();
     let checkpoint_range = ResolvedCheckpointRange::from_request(
         request.start_checkpoint,
         request.end_checkpoint,
         checkpoint_hi_exclusive,
         &options,
     )?;
-    let limit_items = options.limit_items;
-    let ordering = options.ordering;
-    let direction = options.scan_direction();
 
     let cp_range = async { Ok::<_, RpcError>(resolve_cp_range(checkpoint_range, &options)) }
         .instrument(debug_span!("resolve_cp_range"))

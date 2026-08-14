@@ -9,7 +9,7 @@
 //!
 //! - **Cycle body**: [`derive_scan`], invoked with a stage's
 //!   [`Contribution`]s. The checkpoint stage
-//!   (`CheckpointRange::resolve`) narrows by cursor checkpoint hints
+//!   ([`ResolvedCheckpointRange::from_request`]) narrows by cursor hints
 //!   WITHOUT attributing — collapsed windows flow through the empty-safe
 //!   projection so the scan stage attributes once, with full-fidelity
 //!   echo. The serving floor is the same body split into halves
@@ -199,18 +199,6 @@ pub trait ScanCoordinate: Copy + Ord {
     fn from_boundary(boundary: u64) -> Self;
 }
 
-/// A request's checkpoint bounds, validated and clamped to the indexed tip. `start..end` is an
-/// Ordering-agnostic ascending-normalized half-open interval. `high_exhaustion` records why the
-/// high edge stops where it does (explicit `end_checkpoint` vs. the tip clamp). The low edge is
-/// always the caller's `start_checkpoint`, so its reason needs no field.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct CheckpointRange {
-    start: u64,
-    end: u64,
-    high_exhaustion: RangeExhaustion,
-    indexed_tip: u64,
-}
-
 /// One cursor's offer to [`derive_scan`]: the bound it imposes on the
 /// window, and the candidate stamp the scan reports if this cursor ends
 /// it. An installed stamp is always `CursorBound`.
@@ -398,20 +386,77 @@ impl QueryOptions {
 }
 
 impl ResolvedCheckpointRange {
-    /// Validate and tip-clamp the requested window, then narrow it by the
-    /// cursors' checkpoint hints — request to resolved window in one call.
+    /// Validate and tip-clamp the requested checkpoint window, narrow it
+    /// by the cursors' checkpoint hints (`after` inclusive — a hint may
+    /// carry sub-checkpoint information; a `before` Item's checkpoint
+    /// stays in range, a Boundary's is already exclusive), and carry the
+    /// request-derived reason for the ordering-side terminal edge. No
+    /// cursor attribution here: a collapsed window flows through the
+    /// empty-safe projection and [`derive_scan`] attributes once, with
+    /// the full-fidelity echo.
     pub fn from_request(
         start_checkpoint: Option<u64>,
         end_checkpoint: Option<u64>,
         checkpoint_hi_exclusive: u64,
         options: &QueryOptions,
     ) -> Result<Self, RpcError> {
-        Ok(CheckpointRange::from_request(
-            start_checkpoint,
-            end_checkpoint,
-            checkpoint_hi_exclusive,
-        )?
-        .resolve(options))
+        let start = start_checkpoint.unwrap_or(0);
+        if let Some(end) = end_checkpoint
+            && end < start
+        {
+            return Err(FieldViolation::new("end_checkpoint")
+                .with_description(
+                    "end_checkpoint must be greater than or equal to start_checkpoint",
+                )
+                .with_reason(ErrorReason::FieldInvalid)
+                .into());
+        }
+        let requested_end = end_checkpoint.unwrap_or(checkpoint_hi_exclusive);
+        let high_exhaustion = if end_checkpoint.is_none() || requested_end > checkpoint_hi_exclusive
+        {
+            RangeExhaustion::LedgerTip
+        } else {
+            RangeExhaustion::CheckpointBound
+        };
+        let end = requested_end.min(checkpoint_hi_exclusive);
+
+        let start = match &options.after {
+            Some(cursor) if cursor.position.checkpoint() >= start => cursor.position.checkpoint(),
+            _ => start,
+        };
+        let before_upper = options
+            .before
+            .as_ref()
+            .and_then(|cursor| match cursor.kind {
+                sui_rpc_cursor::CursorKind::Item => cursor.position.checkpoint().checked_add(1),
+                sui_rpc_cursor::CursorKind::Boundary => Some(cursor.position.checkpoint()),
+            });
+        let end = match before_upper {
+            Some(upper) if upper <= end => upper,
+            _ => end,
+        };
+
+        if start >= checkpoint_hi_exclusive {
+            return Ok(Self::empty_at(
+                checkpoint_hi_exclusive,
+                RangeExhaustion::LedgerTip,
+            ));
+        }
+        let exhaustion = match options.ordering {
+            Ordering::Ascending => high_exhaustion,
+            Ordering::Descending => RangeExhaustion::CheckpointBound,
+        };
+        if start >= end {
+            let checkpoint = match options.ordering {
+                Ordering::Ascending => end,
+                Ordering::Descending => start,
+            };
+            return Ok(Self::empty_at(checkpoint, exhaustion));
+        }
+        Ok(Self {
+            range: start..end,
+            exhaustion,
+        })
     }
 
     pub fn empty_at(checkpoint: u64, exhaustion: RangeExhaustion) -> Self {
@@ -473,107 +518,6 @@ impl ResolvedCheckpointRange {
             end_checkpoint: self.terminal_checkpoint(ordering),
             end_coordinate,
             exhaustion: self.exhaustion,
-        }
-    }
-}
-
-impl CheckpointRange {
-    fn from_request(
-        start_checkpoint: Option<u64>,
-        end_checkpoint: Option<u64>,
-        checkpoint_hi_exclusive: u64,
-    ) -> Result<Self, RpcError> {
-        let start = start_checkpoint.unwrap_or(0);
-        if let Some(end) = end_checkpoint
-            && end < start
-        {
-            return Err(FieldViolation::new("end_checkpoint")
-                .with_description(
-                    "end_checkpoint must be greater than or equal to start_checkpoint",
-                )
-                .with_reason(ErrorReason::FieldInvalid)
-                .into());
-        }
-
-        let requested_end = end_checkpoint.unwrap_or(checkpoint_hi_exclusive);
-        let high_exhaustion = if end_checkpoint.is_none() || requested_end > checkpoint_hi_exclusive
-        {
-            RangeExhaustion::LedgerTip
-        } else {
-            RangeExhaustion::CheckpointBound
-        };
-        let end = requested_end.min(checkpoint_hi_exclusive);
-
-        Ok(Self {
-            start,
-            end,
-            high_exhaustion,
-            indexed_tip: checkpoint_hi_exclusive,
-        })
-    }
-
-    /// Narrow the scan-window start by the `after` cursor's checkpoint
-    /// hint, inclusively — the cursor may carry sub-checkpoint information,
-    /// so the finer scan-stage bound owns exclusivity (and all cursor
-    /// attribution; see [`derive_scan`]).
-    fn clamp_start_cp(&self, options: &QueryOptions) -> u64 {
-        match &options.after {
-            Some(cursor) if cursor.position.checkpoint() >= self.start => {
-                cursor.position.checkpoint()
-            }
-            _ => self.start,
-        }
-    }
-
-    /// Narrow the scan-window end by the `before` cursor's checkpoint
-    /// hint: an Item's checkpoint may still hold admissible items before
-    /// it, so it stays in range (`cp + 1`); a Boundary's checkpoint is
-    /// already an exclusive upper (descending frontiers are emitted
-    /// pre-bumped). Pure narrowing — attribution belongs to the scan stage.
-    fn clamp_end_cp(&self, options: &QueryOptions) -> u64 {
-        let upper = options
-            .before
-            .as_ref()
-            .and_then(|cursor| match cursor.kind {
-                sui_rpc_cursor::CursorKind::Item => cursor.position.checkpoint().checked_add(1),
-                sui_rpc_cursor::CursorKind::Boundary => Some(cursor.position.checkpoint()),
-            });
-        match upper {
-            Some(upper) if upper <= self.end => upper,
-            _ => self.end,
-        }
-    }
-
-    /// Narrow the interval by the cursors' checkpoint hints and carry the
-    /// request-derived reason for the ordering-side terminal edge. Cursor
-    /// attribution deliberately does NOT happen here: a
-    /// checkpoint-collapsed window flows through the (empty-safe)
-    /// projection into the scan stage, whose [`derive_scan`] re-wins every
-    /// edge the hints clamped and echoes the client's full cursor on
-    /// collapse — one attribution site, full-fidelity echo.
-    fn resolve(self, options: &QueryOptions) -> ResolvedCheckpointRange {
-        let start = self.clamp_start_cp(options);
-        let end = self.clamp_end_cp(options);
-
-        if start >= self.indexed_tip {
-            return ResolvedCheckpointRange::empty_at(self.indexed_tip, RangeExhaustion::LedgerTip);
-        }
-        // The low edge's request-derived reason is always the caller's
-        // start_checkpoint; the high edge's records explicit-end vs tip.
-        let exhaustion = match options.ordering {
-            Ordering::Ascending => self.high_exhaustion,
-            Ordering::Descending => RangeExhaustion::CheckpointBound,
-        };
-        if start >= end {
-            let checkpoint = match options.ordering {
-                Ordering::Ascending => end,
-                Ordering::Descending => start,
-            };
-            return ResolvedCheckpointRange::empty_at(checkpoint, exhaustion);
-        }
-        ResolvedCheckpointRange {
-            range: start..end,
-            exhaustion,
         }
     }
 }
@@ -1316,9 +1260,11 @@ mod tests {
         request.ordering = Some(ProtoOrdering::Descending as i32);
 
         let options = query_options_from_proto(Some(&request)).unwrap();
-        let range = CheckpointRange::from_request(Some(1_000), Some(1_100), 2_000).unwrap();
+        let resolved =
+            ResolvedCheckpointRange::from_request(Some(1_000), Some(1_100), 2_000, &options)
+                .unwrap();
 
-        assert_eq!(range.resolve(&options).range, 1_000..1_100);
+        assert_eq!(resolved.range, 1_000..1_100);
     }
 
     #[test]
@@ -1468,23 +1414,21 @@ mod tests {
 
     #[test]
     fn resolves_checkpoint_range_with_terminal_reason() {
+        let options = query_options_from_proto(None).unwrap();
         assert_eq!(
-            CheckpointRange::from_request(None, None, 20)
+            ResolvedCheckpointRange::from_request(None, None, 20, &options)
                 .unwrap()
-                .resolve(&query_options_from_proto(None).unwrap())
                 .exhaustion,
             RangeExhaustion::LedgerTip
         );
-        assert!(CheckpointRange::from_request(Some(10), Some(9), 20).is_err());
+        assert!(ResolvedCheckpointRange::from_request(Some(10), Some(9), 20, &options).is_err());
 
-        let range = CheckpointRange::from_request(Some(10), None, 20).unwrap();
-        let resolved = range.resolve(&query_options_from_proto(None).unwrap());
+        let resolved = ResolvedCheckpointRange::from_request(Some(10), None, 20, &options).unwrap();
         assert_eq!(resolved.range, 10..20);
         assert_eq!(resolved.exhaustion, RangeExhaustion::LedgerTip);
 
-        let range = CheckpointRange::from_request(Some(30), None, 20).unwrap();
         assert_eq!(
-            range.resolve(&query_options_from_proto(None).unwrap()),
+            ResolvedCheckpointRange::from_request(Some(30), None, 20, &options).unwrap(),
             ResolvedCheckpointRange::empty_at(20, RangeExhaustion::LedgerTip)
         );
     }
@@ -1495,8 +1439,9 @@ mod tests {
     #[test]
     fn resolves_checkpoint_range_no_longer_clamped_by_width() {
         let options = query_options_from_proto(None).unwrap();
-        let range = CheckpointRange::from_request(Some(10), Some(10_000_000), 10_000_000).unwrap();
-        let resolved = range.resolve(&options);
+        let resolved =
+            ResolvedCheckpointRange::from_request(Some(10), Some(10_000_000), 10_000_000, &options)
+                .unwrap();
         assert_eq!(resolved.range, 10..10_000_000);
         assert_eq!(resolved.exhaustion, RangeExhaustion::CheckpointBound);
     }
@@ -1514,9 +1459,7 @@ mod tests {
     #[test]
     fn resolves_checkpoint_range_with_cursor_clamps() {
         let resolve = |options: &QueryOptions| {
-            CheckpointRange::from_request(Some(10), Some(20), 100)
-                .unwrap()
-                .resolve(options)
+            ResolvedCheckpointRange::from_request(Some(10), Some(20), 100, options).unwrap()
         };
 
         let after_item = QueryOptions {
@@ -1577,9 +1520,8 @@ mod tests {
             after: Some(cp_item(25)),
             before: None,
         };
-        let cp_range = CheckpointRange::from_request(Some(10), Some(20), 100)
-            .unwrap()
-            .resolve(&options);
+        let cp_range =
+            ResolvedCheckpointRange::from_request(Some(10), Some(20), 100, &options).unwrap();
         assert_eq!(
             cp_range,
             ResolvedCheckpointRange::empty_at(20, RangeExhaustion::CheckpointBound)
@@ -1612,9 +1554,7 @@ mod tests {
             after: Some(cp_boundary(20)),
             before: None,
         };
-        let cp_range = CheckpointRange::from_request(None, None, 20)
-            .unwrap()
-            .resolve(&options);
+        let cp_range = ResolvedCheckpointRange::from_request(None, None, 20, &options).unwrap();
         assert_eq!(
             cp_range,
             ResolvedCheckpointRange::empty_at(20, RangeExhaustion::LedgerTip)
@@ -1646,9 +1586,7 @@ mod tests {
             after: Some(cp_item(25)),
             before: None,
         };
-        let cp_range = CheckpointRange::from_request(None, None, 20)
-            .unwrap()
-            .resolve(&options);
+        let cp_range = ResolvedCheckpointRange::from_request(None, None, 20, &options).unwrap();
         assert_eq!(
             cp_range,
             ResolvedCheckpointRange::empty_at(20, RangeExhaustion::LedgerTip)
@@ -1678,9 +1616,8 @@ mod tests {
             after: None,
             before: Some(cp_item(3)),
         };
-        let cp_range = CheckpointRange::from_request(Some(5), Some(5), 100)
-            .unwrap()
-            .resolve(&options);
+        let cp_range =
+            ResolvedCheckpointRange::from_request(Some(5), Some(5), 100, &options).unwrap();
         assert_eq!(
             cp_range,
             ResolvedCheckpointRange::empty_at(4, RangeExhaustion::CheckpointBound)

@@ -101,17 +101,17 @@ pub(crate) async fn list_transactions(
         endpoint.default_limit_items,
         endpoint.max_limit_items,
     )?;
-    let checkpoint_range = ResolvedCheckpointRange::from_request(
+    let limit_items = options.limit_items;
+    let ordering = options.ordering;
+    let direction = options.scan_direction();
+    let cp_range = ResolvedCheckpointRange::from_request(
         request.start_checkpoint,
         request.end_checkpoint,
         checkpoint_hi_exclusive,
         &options,
     )?;
-    let limit_items = options.limit_items;
-    let ordering = options.ordering;
-    let direction = options.scan_direction();
 
-    let tx_range = resolve_tx_range(&client, checkpoint_range, &options)
+    let tx_range = resolve_tx_range(&client, cp_range, &options)
         .instrument(debug_span!("resolve_tx_range"))
         .await?;
     let exhaustion = tx_range.terminal.exhaustion;

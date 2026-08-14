@@ -284,14 +284,13 @@ fn next_event_chunk(
             end_checkpoint,
             filter_query,
         } => {
-            let checkpoint_range = ResolvedCheckpointRange::from_request(
+            let cp_range = ResolvedCheckpointRange::from_request(
                 start_checkpoint,
                 end_checkpoint,
                 checkpoint_hi_exclusive(&service)?,
                 &options,
             )?;
-            let event_range =
-                resolve_event_range(&service, start_checkpoint, checkpoint_range, &options)?;
+            let event_range = resolve_event_range(&service, start_checkpoint, cp_range, &options)?;
             if cancel.is_cancelled() {
                 return Err(cancelled());
             }
