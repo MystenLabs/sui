@@ -101,10 +101,10 @@ The Rust `Linearizer` type is not on the active v3 path in the reviewed combined
 state. `FlexCommitter::build_commit` performs local v3 sub-DAG construction. It
 reads the old GC round, selects uncommitted ancestors above that round, and returns
 the commit and `CommittedSubDag`. `Core::post_commit` then records the commit and
-sends the saved sub-DAG to the finalizer. For a synced certified commit,
-`FlexCommitter::handle_certified_commit` reconstructs the sub-DAG from the signed
-commit block list. The proof uses the term "v3 sub-DAG construction" for these two
-paths.
+sends the saved sub-DAG to the finalizer. For a commit installed through commit
+sync, `FlexCommitter::handle_certified_commit` reconstructs the sub-DAG from the
+explicit block list in `CertifiedCommit`. The proof uses the term "v3 sub-DAG
+construction" for these two paths.
 
 For the leader rule, `CoreGcState` uses this boundary:
 
@@ -138,12 +138,22 @@ finalizer already copied into the pending committed prefix.
 
 This result does not prove that every Rust input path copies the required anchor
 voting blocks into that prefix. `anchorInCommittedPrefix` is still a Rust refinement
-obligation. It covers local `FlexCommitter::build_commit`, certified commit
+obligation. It covers local `FlexCommitter::build_commit`, commit-sync
 reconstruction, replay, and recovery. The proof also does not give a direct-decision
 liveness guarantee when a slow finalizer loses live cached blocks. The indirect
 buffered-prefix path must provide progress in that case.
 
 ## Common commit chain
+
+In this model, a commit is the normal output of the commit rule. Core can produce
+it locally or install it through commit sync. `CertifiedCommit` is specific to the
+commit-sync path: it carries a synchronized commit and the blocks needed to
+reconstruct its sub-DAG after the syncer verifies the chain and quorum commit votes
+for the range tip. `CommitStream` models the resulting ordered commits. It does not
+require each commit to be a `CertifiedCommit`.
+
+The term "committed prefix" means the prefix of `CommittedSubDag` inputs already
+buffered by the finalizer. It does not mean a prefix of certified commits.
 
 Indirect rejection is not monotone for an arbitrary larger prefix. A later prefix
 can contain a new accept certificate. The theorem
@@ -187,6 +197,21 @@ Lean proves these results:
   eventually gets a durable decision;
 - `transaction_liveness`: the consensus and finalizer results compose.
 
+This theorem proves the stronger old-leader liveness property. Its safe
+intermediate-proposal condition is sufficient but is not known to be necessary for
+commit-index progress. A commit recovery mode can target only commit progress. In
+that design, validators enter recovery after local commit progress
+stalls and stay there until a commit occurs. The validators do not select a common
+round. The proof must derive an eventual quorum-backed recovery round from their
+overlapping recovery intervals and the normal immediate-parent quorum rule. This
+weaker v3 theorem is not yet in the Lean model. Its refinement obligation is
+`ASM-LIVE-COMMIT-RECOVERY`.
+
+The Rust recovery trigger can use the persisted commit timestamp as its base. It
+uses the epoch start timestamp before the first commit. It computes elapsed time
+with saturating subtraction because a commit timestamp can be ahead of the local
+clock. This rule survives restart without a separate persisted timer.
+
 The `10 * delta` value is a model bound. It is not a measured Rust latency bound.
 The Rust timers and pipeline can use smaller or larger constants. A later refinement
 proof must map each checkpoint to the exact code timer and message path.
@@ -224,7 +249,7 @@ The safety result needs all these implementation facts:
 7. [`ASM-SAFE-COMMITTED-PREFIX`](ASSUMPTIONS.md#asm-safe-committed-prefix): the
    committed prefix contains the causal evidence used by the indirect rules.
 8. [`ASM-SAFE-COMMIT-CHAIN`](ASSUMPTIONS.md#asm-safe-commit-chain): correct nodes
-   process one certified commit chain with no gap.
+   process one continuous commit chain with no gap.
 9. [`ASM-SAFE-FIRST-TRIGGER`](ASSUMPTIONS.md#asm-safe-first-trigger): correct nodes
    use the same first depth-two trigger.
 10. [`ASM-SAFE-GC`](ASSUMPTIONS.md#asm-safe-gc): Core uses the pre-commit GC
@@ -243,7 +268,8 @@ The liveness result also needs these facts:
 4. [`ASM-LIVE-BLOCK-SYNC`](ASSUMPTIONS.md#asm-live-block-sync): block synchronization
    eventually resolves each required missing block.
 5. [`ASM-LIVE-COMMIT-SYNC`](ASSUMPTIONS.md#asm-live-commit-sync): commit
-   synchronization eventually extends the certified commit stream.
+   synchronization eventually installs each missing commit that it must supply to
+   the continuous commit stream.
 6. [`ASM-LIVE-PEER-FAIRNESS`](ASSUMPTIONS.md#asm-live-peer-fairness): a correct peer
    retains the required data and is eventually selected.
 7. [`ASM-LIVE-TASK-FAIRNESS`](ASSUMPTIONS.md#asm-live-task-fairness): correct protocol

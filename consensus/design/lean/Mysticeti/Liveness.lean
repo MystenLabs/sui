@@ -8,11 +8,16 @@ import Mysticeti.PartialSynchrony
 
 namespace Mysticeti
 
-/-! Conditional liveness under partial synchrony and a safe catch-up rule.
+/-! Conditional strong leader liveness under partial synchrony and a safe catch-up
+rule.
 
 Applying these theorems to Rust requires the assumption ledger. Key obligations are
 `ASM-LIVE-PARTIAL-SYNCHRONY`, `ASM-LIVE-ROUND-CATCHUP`,
 `ASM-LIVE-BLOCK-SYNC`, and `ASM-LIVE-COMMIT-SYNC`.
+
+The safe intermediate-proposal rule is sufficient for old-leader liveness. A
+weaker theorem for commit-index progress from commit recovery is the
+separate `ASM-LIVE-COMMIT-RECOVERY` obligation.
 -/
 
 abbrev Trace (State : Type) := Time → State

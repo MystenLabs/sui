@@ -44,9 +44,9 @@ identifies a remaining condition. It is not a proof failure inside Lean.
 | Environmental assumption | 4 |
 | Open proof obligation | 3 |
 | Abstraction gap | 2 |
-| Known mismatch | 5 |
+| Known mismatch | 6 |
 
-The five known mismatches block an end-to-end claim for the reviewed baseline. The
+The six known mismatches block an end-to-end claim for the reviewed baseline. The
 other open conditions define the remaining refinement and environment boundary.
 
 ## Maintenance rules
@@ -167,19 +167,23 @@ other open conditions define the remaining refinement and environment boundary.
 
 ## ASM-SAFE-COMMIT-CHAIN
 
-- **Claim:** Correct nodes process one quorum-certified commit chain with no index
-  gap and with each `previous_digest` equal to the preceding commit digest.
+- **Claim:** Correct nodes process one common commit chain with no index gap and
+  with each `previous_digest` equal to the preceding commit digest. A commit can be
+  produced by the local commit rule or installed through commit sync.
 - **Type:** Protocol and Rust refinement.
 - **Status:** Partially verified.
 - **Effect if false:** Safety.
 - **Lean use:** [`CommitStream`](../lean/Mysticeti/CommitChain.lean) represents one
   common stream. Its current `Continuous` predicate checks indices only.
-- **Rust evidence:** Commit sync verifies the fetched index and digest chain, buffers
-  gaps, and verifies a quorum certificate. The v3 Core path checks the local digest
-  boundary. The finalizer checks consecutive indices.
-- **Discharge:** Extend the Lean commit model with digests, previous digests, and
-  certification. Prove the local, synchronized, replayed, and recovered paths refine
-  this model.
+- **Rust evidence:** `FlexCommitter::build_commit` produces local commits. Commit
+  sync verifies the fetched index and digest chain, buffers gaps, and verifies
+  quorum commit votes before Core installs the commits. The v3 Core path checks the
+  local digest boundary. The finalizer checks consecutive indices.
+- **Discharge:** Extend the Lean commit model with digests and previous digests.
+  Prove that local commit production, commit-sync installation, replay, and recovery
+  refine the same commit chain. Prove verification of quorum commit votes for the
+  synced range tip as a condition of commit-sync installation, not as a condition
+  of every commit.
 
 ## ASM-SAFE-FIRST-TRIGGER
 
@@ -209,12 +213,14 @@ other open conditions define the remaining refinement and environment boundary.
   `anchorInCommittedPrefix` with the GC theorem and the signed transaction vote
   witness to derive the direct-versus-indirect inclusion fact.
 - **Rust evidence:** `FlexCommitter::build_commit` constructs each local v3 sub-DAG.
-  `FlexCommitter::handle_certified_commit` reconstructs each synced v3 sub-DAG from
-  the certified commit's block list. The v3 finalizer processes these sub-DAGs in
-  order. No complete lemma connects both paths, a multi-leader commit, commit sync,
-  and the finalizer prefix.
-- **Discharge:** Prove the committed-prefix lemma for local commits and certified
-  commits. Add an integration invariant for the exact first trigger.
+  For a commit installed through commit sync,
+  `FlexCommitter::handle_certified_commit` reconstructs the v3 sub-DAG from the
+  explicit block list in `CertifiedCommit`. The v3 finalizer processes these
+  sub-DAGs in order. No complete lemma connects both paths, a multi-leader commit,
+  commit sync, and the finalizer prefix.
+- **Discharge:** Prove the committed-prefix lemma for local commit production and
+  commit-sync installation. Add an integration invariant for the exact first
+  trigger.
 
 ## ASM-SAFE-GC
 
@@ -239,10 +245,9 @@ other open conditions define the remaining refinement and environment boundary.
   maximum of the causal-history and vote-tracker GC rounds.
   `FlexCommitter::build_commit` reads the old `DagState::gc_round()` before
   `Core::post_commit` records the new commit. The finalizer keeps each pending
-  `CommittedSubDag`. The certified-commit path uses the certified block list instead
-  of the local DFS. The complete local, commit-sync, replay, and recovery refinement
-  is not proved. The `CommitFinalizerV3` constructor comment still names the legacy
-  `Linearizer`; that comment does not match the active v3 path.
+  `CommittedSubDag`. The commit-sync path uses the explicit block list in
+  `CertifiedCommit` instead of the local DFS. The complete local, commit-sync,
+  replay, and recovery refinement is not proved.
 - **Discharge:** Prove that every required anchor voting block enters the exact
   `CommittedSubDag` prefix on all input paths. Prove that the finalizer processes
   that prefix before it can lose the evidence. Test the minimum supported GC depth,
@@ -310,9 +315,35 @@ other open conditions define the remaining refinement and environment boundary.
 - **Effect if false:** Liveness.
 - **Lean use:** `SafeRoundChanges` and `ConsensusLivenessAssumptions.safeRoundChanges`.
 - **Rust evidence:** `ThresholdClock` jumps to the observed round, and `Proposer`
-  creates at most one block for the final clock round.
-- **Discharge:** Implement the safe intermediate-proposal loop and add a deterministic
-  v3 simulation test.
+  creates at most one block for the final clock round. The current code does not
+  create required intermediate blocks.
+- **Discharge:** Implement the safe intermediate-proposal loop and add a
+  deterministic v3 simulation test. This rule is sufficient for the stronger
+  old-leader liveness property.
+
+## ASM-LIVE-COMMIT-RECOVERY
+
+- **Claim:** After a commit stall, each correct validator that is not behind its
+  observed quorum commit index eventually enters commit recovery mode and stays in
+  that mode until its commit index advances. The validator computes the stall time
+  from the persisted last-commit timestamp, or from the epoch start timestamp before
+  the first commit. Here, a stall means that this consensus timestamp is older than
+  the recovery timeout. The validators stay in recovery until they create enough
+  consecutive quorum-backed block layers for `FlexCommitter` to produce a commit.
+- **Type:** Protocol and Rust refinement.
+- **Status:** Known mismatch.
+- **Effect if false:** Liveness.
+- **Lean use:** This is the intended input to a weaker v3 commit-progress theorem.
+  The current Lean model has only the stronger `SafeRoundChanges` theorem.
+- **Rust evidence:** `DagState::new` loads the last commit from storage,
+  `DagState::last_commit_timestamp_ms` exposes its timestamp, and `Context::clock`
+  exposes the current local time. The current code does not have commit recovery
+  state or a commit-stall trigger for block production.
+- **Discharge:** Implement commit recovery. Prove that, after GST, all
+  correct stake eventually overlaps in recovery and produces the consecutive v3
+  anchors needed for commit progress. Use the epoch start timestamp when the commit
+  index is zero and use saturating subtraction for a future commit timestamp. Add
+  deterministic v3 simulation tests.
 
 ## ASM-LIVE-LEADER
 
@@ -330,7 +361,8 @@ other open conditions define the remaining refinement and environment boundary.
 ## ASM-LIVE-BLOCK-SYNC
 
 - **Claim:** Each required missing DAG block is eventually verified and accepted, or
-  a certified committed prefix makes that block unnecessary.
+  an installed commit advances the committed history and GC boundary so that Core
+  no longer needs that block.
 - **Type:** Rust refinement.
 - **Status:** Abstraction gap.
 - **Effect if false:** Liveness.
@@ -346,8 +378,10 @@ other open conditions define the remaining refinement and environment boundary.
 
 ## ASM-LIVE-COMMIT-SYNC
 
-- **Claim:** Each missing certified commit needed for progress eventually enters
-  Core in index and digest order, through commit sync or the live block path.
+- **Claim:** Each missing commit needed for progress is eventually installed through
+  commit sync from a verified commit range whose tip has quorum commit votes, or
+  the local commit rule reproduces it after the live block path supplies the
+  required DAG blocks.
 - **Type:** Rust refinement.
 - **Status:** Partially verified.
 - **Effect if false:** Liveness.
@@ -359,7 +393,8 @@ other open conditions define the remaining refinement and environment boundary.
   delegated to broadcast, subscription, and block sync.
 - **Discharge:** Prove eventual stream extension under the peer and task assumptions.
   Model full batches, partial results, the incomplete tail, backpressure, and
-  certified block retention.
+  retention of the commits, certifying vote blocks, and sub-DAG blocks used by
+  commit sync.
 
 ## ASM-LIVE-PEER-FAIRNESS
 

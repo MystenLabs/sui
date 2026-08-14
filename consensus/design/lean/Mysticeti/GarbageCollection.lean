@@ -110,8 +110,9 @@ structure TransactionGcWindow where
   gcDepth : Nat
   targetRound : Nat
   firstCommitLeaderRound : Nat
-  /-- The GC boundary used when the first commit sub-DAG was built. For a synced
-  commit, this is a property of the certified block list. -/
+  /-- The GC boundary used when the first commit sub-DAG was built. For a commit
+  installed through commit sync, this is a property of the explicit block list in
+  `CertifiedCommit`. -/
   firstCommitGcRound : Nat
   depthExceedsIndirect : indirectCommitDepth < gcDepth
   targetInFirstCommit : targetRound <= firstCommitLeaderRound

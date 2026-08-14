@@ -12,6 +12,11 @@ namespace Mysticeti
 
 The Rust refinement obligations are `ASM-SAFE-COMMIT-CHAIN`,
 `ASM-SAFE-FIRST-TRIGGER`, and `ASM-LIVE-COMMIT-SYNC`.
+
+`CommitStream` models commits produced by the local commit rule and commits
+installed through commit sync. It does not depend on how Core obtained each commit.
+Verification of quorum commit votes for the synced range tip is a condition of the
+commit-sync refinement path, not a condition of every commit in the stream.
 -/
 
 structure Commit where

@@ -15,10 +15,12 @@ environmental assumption is explicitly accepted.
 
 ## P0: implement and test a safe round-jump rule
 
-Related assumption: `ASM-LIVE-ROUND-CATCHUP`.
+Related assumptions: `ASM-LIVE-ROUND-CATCHUP` and
+`ASM-LIVE-COMMIT-RECOVERY`.
 
-This is a confirmed proof gap and an activation blocker. The current transition
-does not establish the safe catch-up condition that the liveness proof needs.
+This is a confirmed proof gap and an activation blocker. The current Lean theorem
+uses a strong catch-up condition for old leader opportunities. The required Rust
+property is narrower: after a commit stall, the commit index must increase.
 
 [`ThresholdClock::add_block`](../../core/src/threshold_clock.rs) accepts one block
 from a future round. It clears the old aggregator and moves the local clock to that
@@ -38,20 +40,71 @@ However, the same direct-jump mechanism is present, and the Lean counterexample
 shows that the v3 code cannot satisfy the stated liveness contract without another
 rule.
 
-The implementation must do this after the v3 catch-up rule is active:
+The intermediate-proposal rule is sufficient for strong leader liveness, but it is
+not known to be necessary for commit-index progress. For the narrower property,
+implement a commit recovery mode:
 
-1. Update leader decisions from the current DAG.
-2. For each intermediate round `r`, check the decision for round `r - 2`.
-3. If that decision is not final, create and persist a block in round `r`.
-4. Create the block in the observed future round only after this loop.
+1. Read the base timestamp from the persisted committed state. Use
+   `DagState::last_commit_timestamp_ms()` after the first commit. Before the first
+   commit, use `Context::epoch_start_timestamp_ms`.
+2. Compute the stall time as the local clock minus the base timestamp. Use
+   saturating subtraction.
+3. Enter recovery when the stall time reaches the recovery timeout and the local
+   commit index is not behind the locally observed quorum commit index.
+4. Stay in recovery until `Core::post_commit` advances the commit index.
+5. During recovery, continue to make valid blocks at the threshold-clock proposal
+   round. Keep the immediate-parent quorum check and the normal leader timeout.
+6. Do not create a block at or below the authority's last proposed round.
 
-The implementation must keep the immediate-parent quorum rule for each generated
-block. It must also prevent an unbounded block burst. A protocol rule can skip an
-intermediate block only when the related old leader decision is final and can be
-shared with other nodes.
+The trigger can use this Rust logic:
 
-Add a deterministic simulation test for the published round-jump trace. The test
-must run with v3, FlexCommitter, and the v3 leader schedule active.
+```rust
+let stall_base_timestamp_ms = dag_state
+    .last_commit_timestamp_ms()
+    .max(context.epoch_start_timestamp_ms);
+let stalled_for_ms = context
+    .clock
+    .timestamp_utc_ms()
+    .saturating_sub(stall_base_timestamp_ms);
+```
+
+The recovery state does not need separate persistence. `DagState::new` loads the
+last durable commit from storage, so its timestamp survives a restart. Local
+commits and commits installed by commit sync update the same `DagState` value.
+
+The commit timestamp is consensus time. It is not the local time when Core applied
+the commit. After Core installs an old commit and exits recovery, the timestamp
+condition can cause it to enter recovery again. This behavior lets recovery
+continue until the chain reaches a recent commit. The current block-verification
+path can also accept a block timestamp that is ahead of the local clock. Saturating
+subtraction returns zero in this case and delays recovery until the local clock
+catches up. Tests must cover both cases.
+
+The validators do not have to select one recovery round. If no commit occurs after
+GST, every correct validator eventually enters recovery and stays there. Therefore,
+all correct stake eventually overlaps in recovery. A valid future-round block has
+quorum parents in the preceding round, so a clock jump exposes a quorum-backed
+round instead of requiring old proposals.
+
+The recovery timers do not have to expire together. A fixed 10-second entry
+timeout only starts recovery. It does not replace the post-GST message-delivery,
+block-sync, leader-timeout, and task-scheduling assumptions.
+
+Recovery uses each validator's current committed state. It does not require a
+certified commit prefix. `CertifiedCommit` remains an input type for commit sync.
+The refinement proof must derive schedule consistency from the common commit chain
+and must cover validators at different local commit indices.
+
+The missing v3 proof must show that validators stay in recovery long enough to
+produce consecutive quorum-backed layers and direct anchors for `FlexCommitter` to
+advance the commit index. Three block layers are the minimum proof shape, not a
+fixed completion bound. The proof must also cover different recovery-entry times,
+Byzantine future blocks, leader-schedule changes, GC, block sync, and restart.
+
+Add deterministic simulation tests for staggered recovery entry, a large round
+jump, two layers versus three layers, a schedule change, and commit progress after
+GC and restart. Run each test with v3, `FlexCommitter`, and the v3 leader schedule
+active.
 
 ## P0: put v3 activation in epoch protocol state
 
@@ -144,15 +197,16 @@ The implementation has important recovery mechanisms:
 These mechanisms do not by themselves prove liveness. Add explicit contracts for
 these conditions:
 
-1. A correct known peer retains each required block and certified commit for the
-   required recovery period.
+1. A correct known peer retains each required DAG block and, for commit sync, each
+   required commit range and its certifying vote blocks for the recovery period.
 2. Peer discovery eventually provides such a peer.
 3. Retry selection is fair. If selection remains random, use a probabilistic model
    and prove almost-sure progress.
 4. Correct protocol tasks continue to run, and sustained consumer backpressure
    eventually clears.
-5. A missing block above the GC boundary is eventually accepted, or a certified
-   commit makes it unnecessary.
+5. A missing block above the GC boundary is eventually accepted, or an installed
+   commit advances the committed history and GC boundary so that Core no longer
+   needs the block.
 6. Commit sync and the live block path together process the trailing partial batch.
 
 Add separate Lean state and progress theorems for block sync and commit sync. Use an
@@ -196,13 +250,13 @@ The indirect safety proof requires one continuous common commit stream and the s
 first eligible trigger. The implementation has useful checks:
 
 - the finalizer checks consecutive commit indices;
-- the v3 certified-commit path checks the previous digest;
+- the v3 commit-sync path checks the previous digest before it installs a commit;
 - recovery checks for an index gap.
 
-Complete the refinement proof for local commits, certified commits, commit sync,
-recovery, and garbage collection. Add one invariant helper that validates the index,
-previous digest, and trigger order at every input boundary. Use the helper in tests
-and in debug builds.
+Complete the refinement proof for local commit production, commit-sync
+installation, recovery, and garbage collection. Add one invariant helper that
+validates the index, previous digest, and trigger order at every input boundary.
+Use the helper in tests and in debug builds.
 
 This item is a proof-closure gap. The current review did not find a concrete fork in
 the combined branch.
@@ -238,9 +292,9 @@ The proof still needs these implementation facts:
    that it read before `Core::post_commit` records the new commit.
 4. The complete anchor causal history has a quorum of voting-round blocks, not only
    a quorum of immediate parents at the anchor round.
-5. Local `FlexCommitter::build_commit` and certified
-   `FlexCommitter::handle_certified_commit` include each required accept voter in
-   the exact `CommittedSubDag` sequence before the first trigger.
+5. Local `FlexCommitter::build_commit` and the commit-sync
+   `FlexCommitter::handle_certified_commit` path include each required accept voter
+   in the exact `CommittedSubDag` sequence before the first trigger.
 6. Commit sync, replay, and recovery produce the same prefix and first trigger.
 7. A slow finalizer keeps the blocks in its pending `CommittedSubDag` values after
    the live DAG cache removes those rounds.
