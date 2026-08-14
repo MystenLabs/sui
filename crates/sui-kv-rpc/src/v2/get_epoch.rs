@@ -14,7 +14,6 @@ use sui_rpc_api::{
     grpc::v2::protocol_config_to_proto,
     proto::{google::rpc::bad_request::FieldViolation, timestamp_ms_to_proto},
 };
-use sui_sdk_types::ValidatorCommittee;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 
 pub const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::EPOCH;
@@ -81,12 +80,11 @@ pub async fn get_epoch(
     }
     if read_mask.contains(Epoch::COMMITTEE_FIELD.name) {
         message.committee = epoch_info.system_state.as_ref().map(|system_state| {
-            let committee: ValidatorCommittee = system_state
+            system_state
                 .get_current_epoch_committee()
                 .committee()
                 .clone()
-                .into();
-            committee.into()
+                .into()
         });
     }
     if read_mask.contains(Epoch::SYSTEM_STATE_FIELD.name) {
