@@ -656,12 +656,11 @@ async fn test_fake_coin_conversion_with_references_in_ptbs() {
     if has_mainnet_protocol_config_override() {
         return;
     }
-    // The synthesized withdrawal-conversion command injects `&mut TxContext`. With references
-    // allowed in PTBs, the memory-safety checkers root TxContext borrows at the borrowing
-    // command's position in the command list, and the synthesized command is exactly the case
-    // where that position differs from `Command::idx`. This is the only path that produces
-    // synthesized commands, and it is unreachable from the adapter transactional tests (the
-    // simulator never rewrites coin reservations), so it is covered here.
+    // The synthesized withdrawal-conversion command injects `&mut TxContext`, so it exercises
+    // the references-in-PTBs handling of injected TxContext borrows on a synthesized command.
+    // This is the only path that produces synthesized commands, and it is unreachable from the
+    // adapter transactional tests (the simulator never rewrites coin reservations), so it is
+    // covered here.
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_coin_reservation_for_testing();

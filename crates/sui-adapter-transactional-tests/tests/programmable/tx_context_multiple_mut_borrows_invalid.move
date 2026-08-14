@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Even under --enable-feature-flags allow_references_in_ptbs, `&mut`/`&` TxContext combinations within a
-// single call obey the usual exclusivity rules: TxContext borrows made by one command
-// share a borrow root, so a `&mut TxContext` cannot coexist with any other TxContext
+// single call obey the usual exclusivity rules: the strip only removes TxContext borrows
+// from what results extend, so a `&mut TxContext` cannot coexist with any other TxContext
 // borrow in the same call. Mirrors tx_context_multiple_borrows_invalid, which pins the
 // same rejections without the flag.
 

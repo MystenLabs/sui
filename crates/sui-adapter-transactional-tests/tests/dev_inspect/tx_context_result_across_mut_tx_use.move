@@ -5,8 +5,8 @@
 // --enable-feature-flags allow_references_in_ptbs, a `&mut Y` returned from `borrow_mut(&mut X, &mut TxContext)`
 // roots only in the object, so it stays valid across a later mutable TxContext use.
 // Compare with tx_context_result_across_mut_tx_use_invalid: dev-inspect permits reference
-// return values even without the flag, so the pair isolates exactly what the TxContext
-// per-command rooting of TxContext borrows changes.
+// return values even without the flag, so the pair isolates exactly what stripping
+// TxContext borrows from call sources changes.
 
 //# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
 
