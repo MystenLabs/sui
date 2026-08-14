@@ -529,6 +529,23 @@ impl TransactionContents {
         }))
     }
 
+    /// A minimal instance whose `digest()` returns `digest`, for tests that only need identity. All
+    /// other accessors resolve to empty or absent values.
+    #[cfg(feature = "testing")]
+    pub fn for_test(digest: TransactionDigest) -> Self {
+        Self::Bigtable(KVTransactionData {
+            digest,
+            transaction_data: None,
+            signatures: None,
+            effects: None,
+            events: None,
+            checkpoint_number: 0,
+            timestamp: 0,
+            balance_changes: vec![],
+            unchanged_loaded_runtime_objects: vec![],
+        })
+    }
+
     pub fn data(&self) -> anyhow::Result<TransactionData> {
         match self {
             Self::Pg(stored) => bcs::from_bytes(&stored.raw_transaction)

@@ -42,6 +42,12 @@ use crate::metrics::RpcMetrics;
 /// store are consistent with data from this snapshot.
 pub(crate) const KV_PACKAGES_PIPELINE: &str = "kv_packages";
 
+/// Watermark pipeline keys for the KV backends that `KvLoader` may read (see `watermark_from_*`).
+/// The streamed transaction store evicts against whichever one matches the active backend.
+pub(crate) const KV_TRANSACTIONS_PIPELINE: &str = "kv_transactions";
+pub(crate) const BIGTABLE_PIPELINE: &str = "bigtable";
+pub(crate) const LEDGER_GRPC_PIPELINE: &str = "ledger_grpc";
+
 pub(crate) struct WatermarkTask {
     /// Thread-safe watermark that avoids writer starvation. The outer `Arc` is used to share the
     /// watermarks between the schema and this task. The inner `Arc` is used to allow the task to
@@ -456,7 +462,7 @@ async fn watermark_from_bigtable(bigtable_reader: &BigtableReader) -> anyhow::Re
         .context("Checkpoint watermark not found")?;
 
     Ok(WatermarkRow {
-        pipeline: "bigtable".to_owned(),
+        pipeline: BIGTABLE_PIPELINE.to_owned(),
         epoch_hi_inclusive: wm.epoch_hi_inclusive as i64,
         checkpoint_hi_inclusive: checkpoint_hi_inclusive as i64,
         tx_hi: wm.tx_hi as i64,
@@ -476,7 +482,7 @@ async fn watermark_from_ledger_grpc(
         .context("Failed to get checkpoint watermark")?;
 
     Ok(WatermarkRow {
-        pipeline: "ledger_grpc".to_owned(),
+        pipeline: LEDGER_GRPC_PIPELINE.to_owned(),
         epoch_hi_inclusive: summary.epoch as i64,
         checkpoint_hi_inclusive: summary.sequence_number as i64,
         tx_hi: summary.network_total_transactions as i64,
