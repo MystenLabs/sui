@@ -9,8 +9,10 @@ use anyhow::Context as _;
 use async_graphql::Context;
 use itertools::Either;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
-use sui_indexer_alt_reader::kv_loader::TransactionEventsContents;
+use sui_rpc::proto::proto_to_timestamp_ms;
+use sui_rpc::proto::sui::rpc::v2;
 use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEvents;
 use tokio::sync::OnceCell;
 
 use crate::api::types::event::CEvent;
@@ -62,7 +64,7 @@ fn tx_events_paginated<'e>(
     scope: &Scope,
     page: &Page<CEvent>,
     contents: impl Iterator<
-        Item = anyhow::Result<(u64, TransactionDigest, &'e TransactionEventsContents)>,
+        Item = anyhow::Result<(u64, TransactionDigest, &'e v2::ExecutedTransaction)>,
     >,
     filter: &EventFilter,
 ) -> Result<Vec<(EventCursor, Event)>, RpcError> {
@@ -71,7 +73,25 @@ fn tx_events_paginated<'e>(
 
     'outer: for events in contents {
         let (tx_sequence_number, transaction_digest, contents) = events?;
-        let events = contents.events()?;
+
+        let tx_events: TransactionEvents = contents
+            .events
+            .as_ref()
+            .and_then(|e| e.bcs.as_ref())
+            .map(|bcs| {
+                bcs.deserialize()
+                    .context("Failed to deserialize transaction events")
+            })
+            .transpose()?
+            .unwrap_or_default();
+        let events = &tx_events.data;
+
+        let timestamp_ms = contents
+            .timestamp
+            .map(proto_to_timestamp_ms)
+            .transpose()
+            .context("Failed to parse timestamp")?
+            .unwrap_or(0);
 
         let bounds: Either<Range<usize>, Rev<Range<usize>>> = if page.is_from_front() {
             Either::Left(tx_ev_bounds(page, tx_sequence_number, events.len()))
@@ -97,7 +117,7 @@ fn tx_events_paginated<'e>(
                 native: Arc::new(native.clone()),
                 transaction_digest,
                 sequence_number: ev_sequence_number as u64,
-                timestamp_ms: OnceCell::from(contents.timestamp_ms()),
+                timestamp_ms: OnceCell::from(Some(timestamp_ms)),
             };
 
             results.push((event_cursor, event));

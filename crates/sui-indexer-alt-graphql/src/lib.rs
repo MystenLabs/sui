@@ -302,7 +302,7 @@ struct SubscriptionThrottleRate(u32);
 /// command-line).
 ///
 /// Access to most reads is controlled by the `database_url` -- if it is `None`, those reads will
-/// not work. KV queries can optionally be served by a Ledger gRPC service via `kv_args`.
+/// not work. KV point-lookups require a Ledger gRPC service, configured via `kv_args`.
 ///
 /// `version` is the version string reported in response headers by the service as part of every
 /// request.
@@ -355,7 +355,11 @@ pub async fn start_rpc(
 
     let pg_loader = Arc::new(pg_reader.as_data_loader());
 
-    let kv_loader = KvLoader::from_kv_sources(ledger_grpc_reader.clone(), pg_loader.clone());
+    let kv_loader = KvLoader::new(
+        ledger_grpc_reader
+            .clone()
+            .context("--ledger-grpc-url must be configured")?,
+    );
 
     let package_store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
 

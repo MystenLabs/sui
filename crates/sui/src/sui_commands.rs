@@ -1227,12 +1227,24 @@ async fn start(
         let mut graphql_config = GraphQlConfig::default();
         graphql_config.zklogin.env = sui_indexer_alt_graphql::config::ZkLoginEnv::Test;
 
+        // The local fullnode already serves the `LedgerService` gRPC API that
+        // `--ledger-grpc-url` points at, so KV point-lookups can be served from it directly.
+        let kv_args = KvArgs {
+            ledger_grpc_url: Some(
+                fullnode_grpc_url
+                    .as_str()
+                    .parse()
+                    .context("Failed to parse fullnode gRPC URL into a ledger gRPC URI")?,
+            ),
+            ..Default::default()
+        };
+
         rpc_services = rpc_services.merge(
             start_graphql(
                 database_url.clone(),
                 fullnode_args,
                 DbArgs::default(),
-                KvArgs::default(),
+                kv_args,
                 consistent_reader_args,
                 graphql_args,
                 SystemPackageTaskArgs::default(),

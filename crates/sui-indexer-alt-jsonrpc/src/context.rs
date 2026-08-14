@@ -39,8 +39,7 @@ pub(crate) struct Context {
     /// query.
     pg_loader: Arc<DataLoader<PgReader>>,
 
-    /// Access to the kv store for performing point look-ups. This may either be backed by the
-    /// Ledger gRPC service or Postgres db, depending on the configuration.
+    /// Access to the kv store for performing point look-ups, backed by the Ledger gRPC service.
     kv_loader: KvLoader,
 
     /// Access to the database for accessing information about types from their packages (again
@@ -67,8 +66,7 @@ pub(crate) struct Context {
 impl Context {
     /// Set-up access to the stores through all the interfaces available in the context.
     ///
-    /// KV lookups are routed based on `kv_args`: if a Ledger gRPC URL is configured, lookups go
-    /// through kv-rpc; otherwise they fall back to Postgres.
+    /// KV lookups require `kv_args` to configure a Ledger gRPC URL.
     ///
     /// If `database_url` is `None`, the Postgres-backed interfaces will be set-up but will fail to
     /// accept any connections.
@@ -86,11 +84,11 @@ impl Context {
         let pg_reader = PgReader::new(None, database_url, db_args, registry).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
-        let kv_loader = KvLoader::from_kv_sources(
+        let kv_loader = KvLoader::new(
             kv_args
                 .ledger_grpc_reader(Some("jsonrpc_ledger_grpc"), registry, None, None)
-                .await?,
-            pg_loader.clone(),
+                .await?
+                .context("--ledger-grpc-url must be configured")?,
         );
 
         let store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
