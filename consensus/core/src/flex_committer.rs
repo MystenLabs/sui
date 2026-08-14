@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     sync::Arc,
 };
 
@@ -71,41 +71,66 @@ impl FlexCommitter {
         &mut self,
         next_commit_leaders: NextCommitLeaderSchedule,
     ) {
-        // pending_commit_state.next_commit_leaders contain the schedule for next commit,
-        // and are associated with the other internal state.
-        if self
-            .pending_commit_state
-            .next_commit_leaders
-            .next_commit_index
-            == next_commit_leaders.next_commit_index
-        {
-            // Use cached pending commit state for the same commit index.
+        let current = &self.pending_commit_state.next_commit_leaders;
+        if current.next_commit_index == next_commit_leaders.next_commit_index {
+            assert_eq!(
+                current.min_next_leader_round, next_commit_leaders.min_next_leader_round,
+                "minimum leader round must not change at the same commit index"
+            );
+            assert_eq!(
+                current.allowed_leaders, next_commit_leaders.allowed_leaders,
+                "leader schedule must not change at the same commit index"
+            );
             return;
         }
         assert!(
-            self.pending_commit_state
-                .next_commit_leaders
-                .next_commit_index
-                < next_commit_leaders.next_commit_index,
+            current.next_commit_index < next_commit_leaders.next_commit_index,
             "next_commit_index should only move forward: {} vs {}",
-            self.pending_commit_state
-                .next_commit_leaders
-                .next_commit_index,
+            current.next_commit_index,
             next_commit_leaders.next_commit_index
         );
-        tracing::debug!(
-            "Refreshing pending commit state: old_commit_index={}, new_commit_index={}, min_next_leader_round={}, num_leaders={}",
-            self.pending_commit_state
-                .next_commit_leaders
-                .next_commit_index,
-            next_commit_leaders.next_commit_index,
-            next_commit_leaders.min_next_leader_round,
-            next_commit_leaders.num_leaders(),
+        assert!(
+            current.min_next_leader_round < next_commit_leaders.min_next_leader_round,
+            "min_next_leader_round should only move forward: {} vs {}",
+            current.min_next_leader_round,
+            next_commit_leaders.min_next_leader_round
         );
-        self.pending_commit_state = PendingCommitState {
-            next_commit_leaders,
-            rounds: vec![],
-        };
+
+        if current.allowed_leaders != next_commit_leaders.allowed_leaders {
+            tracing::debug!(
+                "Resetting pending commit state for a leader schedule change: old_commit_index={}, new_commit_index={}, min_next_leader_round={}, num_leaders={}",
+                current.next_commit_index,
+                next_commit_leaders.next_commit_index,
+                next_commit_leaders.min_next_leader_round,
+                next_commit_leaders.num_leaders(),
+            );
+            self.pending_commit_state = PendingCommitState {
+                next_commit_leaders,
+                rounds: VecDeque::new(),
+            };
+            return;
+        }
+
+        let min_next_leader_round = next_commit_leaders.min_next_leader_round;
+        while self
+            .pending_commit_state
+            .rounds
+            .front()
+            .is_some_and(|state| state.round < min_next_leader_round)
+        {
+            self.pending_commit_state.rounds.pop_front();
+        }
+        if let Some(first) = self.pending_commit_state.rounds.front() {
+            assert_eq!(first.round, min_next_leader_round);
+        }
+        tracing::debug!(
+            "Advancing pending commit state: old_commit_index={}, new_commit_index={}, min_next_leader_round={}, retained_rounds={}",
+            current.next_commit_index,
+            next_commit_leaders.next_commit_index,
+            min_next_leader_round,
+            self.pending_commit_state.rounds.len(),
+        );
+        self.pending_commit_state.next_commit_leaders = next_commit_leaders;
     }
 
     /// Runs the direct commit rule on every leader slot pending to be decided.
@@ -419,14 +444,16 @@ impl FlexCommitter {
     }
 }
 
-/// Tracks intermediate state related to generating the next commit.
-/// This state resets when encountering a more advanced leader schedule.
+/// Tracks intermediate state for future commits.
+///
+/// An advanced commit removes the old round prefix. The remaining decisions stay valid while the
+/// ordered leader schedule is unchanged. A schedule change resets all round state.
 #[derive(Clone, Debug, Default)]
 struct PendingCommitState {
     // Leader schedule for generating the upcoming commit.
     next_commit_leaders: NextCommitLeaderSchedule,
     // Intermediate state per round.
-    rounds: Vec<RoundState>,
+    rounds: VecDeque<RoundState>,
 }
 
 impl PendingCommitState {
@@ -443,7 +470,7 @@ impl PendingCommitState {
     fn get_or_create_round_state(&mut self, round: Round) -> &mut RoundState {
         let add_from_round = self
             .rounds
-            .last()
+            .back()
             .map(|state| state.round + 1)
             .unwrap_or(self.next_commit_leaders.min_next_leader_round);
         // No-op if the round's state exists.
@@ -465,7 +492,7 @@ impl PendingCommitState {
                 })
                 .collect();
             let undecided_slots: BTreeSet<Slot> = leader_slots.iter().map(|s| s.slot).collect();
-            self.rounds.push(RoundState {
+            self.rounds.push_back(RoundState {
                 round: r,
                 leader_slots,
                 undecided_slots,

@@ -121,7 +121,7 @@ fn install_rounds(
     rounds: Vec<RoundState>,
 ) {
     committer.maybe_refresh_pending_commit_state(schedule(1, min_next_leader_round, &[0]));
-    committer.pending_commit_state.rounds = rounds;
+    committer.pending_commit_state.rounds = rounds.into();
 }
 
 fn build_blocks(rounds_x_authorities: &[(Round, u32)]) -> Vec<VerifiedBlock> {
@@ -213,47 +213,88 @@ async fn committed_blocks_within_round_order_depends_on_seed() {
     assert!(changed, "within-round order must depend on the seed");
 }
 
-/// Refreshing with the same `next_commit_index` is a no-op: the accumulated
-/// round state and existing schedule are preserved.
+/// Refreshing the same schedule state is a no-op.
 #[tokio::test]
 async fn maybe_refresh_is_noop_on_same_index() {
     let (_context, _dag_state, mut committer) = setup(4);
-    committer.maybe_refresh_pending_commit_state(schedule(1, 1, &[0]));
+    let next_schedule = schedule(1, 1, &[0]);
+    committer.maybe_refresh_pending_commit_state(next_schedule.clone());
     committer.pending_commit_state.get_or_create_round_state(3);
     let rounds_len = committer.pending_commit_state.rounds.len();
     assert!(rounds_len > 0);
 
-    // Same index but different allowed_leaders → must not reset.
-    committer.maybe_refresh_pending_commit_state(schedule(1, 1, &[0, 1, 2]));
+    committer.maybe_refresh_pending_commit_state(next_schedule);
     assert_eq!(committer.pending_commit_state.rounds.len(), rounds_len);
-    assert_eq!(
-        committer
-            .pending_commit_state
-            .next_commit_leaders
-            .allowed_leaders
-            .len(),
-        1,
-        "same-index refresh must not replace the schedule",
-    );
 }
 
-/// A higher `next_commit_index` resets the pending state and installs the new schedule.
+/// A higher commit index keeps cached rounds when the ordered leader schedule is unchanged.
 #[tokio::test]
-async fn maybe_refresh_resets_on_higher_index() {
+async fn maybe_refresh_rebases_on_higher_index_with_same_schedule() {
     let (_context, _dag_state, mut committer) = setup(4);
-    committer.maybe_refresh_pending_commit_state(schedule(1, 1, &[0]));
+    committer.maybe_refresh_pending_commit_state(schedule(1, 1, &[0, 1]));
+    committer.pending_commit_state.get_or_create_round_state(5);
+    let retained_slot = committer
+        .pending_commit_state
+        .get_round_state(4)
+        .leader_slots[0]
+        .slot;
+    committer
+        .pending_commit_state
+        .get_round_state(4)
+        .update_slot_decision(
+            retained_slot,
+            LeaderStatus::Skip(retained_slot),
+            Decision::Direct,
+        );
+
+    committer.maybe_refresh_pending_commit_state(schedule(4, 4, &[0, 1]));
+
+    let retained_rounds = committer
+        .pending_commit_state
+        .rounds
+        .iter()
+        .map(|state| state.round)
+        .collect::<Vec<_>>();
+    assert_eq!(retained_rounds, vec![4, 5]);
+    let retained_state = committer.pending_commit_state.get_round_state(4);
+    assert!(!retained_state.undecided_slots.contains(&retained_slot));
+    assert_eq!(
+        retained_state
+            .leader_slots
+            .iter()
+            .find(|state| state.slot == retained_slot)
+            .unwrap()
+            .decision,
+        Some(Decision::Direct),
+    );
+    let installed = &committer.pending_commit_state.next_commit_leaders;
+    assert_eq!(installed.next_commit_index, 4);
+    assert_eq!(installed.min_next_leader_round, 4);
+    assert_eq!(installed.allowed_leaders.len(), 2);
+}
+
+/// A different ordered leader schedule clears all cached round decisions.
+#[tokio::test]
+async fn maybe_refresh_resets_on_schedule_change() {
+    let (_context, _dag_state, mut committer) = setup(4);
+    committer.maybe_refresh_pending_commit_state(schedule(1, 1, &[0, 1, 2]));
     committer.pending_commit_state.get_or_create_round_state(3);
     assert!(!committer.pending_commit_state.rounds.is_empty());
 
-    committer.maybe_refresh_pending_commit_state(schedule(2, 5, &[0, 1, 2, 3]));
-    assert!(
-        committer.pending_commit_state.rounds.is_empty(),
-        "rounds must be cleared on reset",
-    );
+    committer.maybe_refresh_pending_commit_state(schedule(2, 2, &[1, 0, 2]));
+
+    assert!(committer.pending_commit_state.rounds.is_empty());
     let installed = &committer.pending_commit_state.next_commit_leaders;
     assert_eq!(installed.next_commit_index, 2);
-    assert_eq!(installed.min_next_leader_round, 5);
-    assert_eq!(installed.allowed_leaders.len(), 4);
+    assert_eq!(installed.min_next_leader_round, 2);
+    assert_eq!(
+        installed.allowed_leaders,
+        vec![
+            AuthorityIndex::new_for_test(1),
+            AuthorityIndex::new_for_test(0),
+            AuthorityIndex::new_for_test(2),
+        ]
+    );
 }
 
 /// `next_commit_index` must move forward; a lower index panics.
