@@ -10,7 +10,8 @@ This directory contains a Lean 4 proof model for Mysticeti v3.
 The model has two parts:
 
 - `lean/` contains the machine-checked definitions and theorems.
-- `docs/` contains the proof scope and the implementation gap report.
+- `docs/` contains the assumption ledger, proof scope, and implementation gap
+  report.
 
 The model uses Lean only. It does not use mathlib. The project pins Lean 4.33.0 in
 `lean/lean-toolchain`.
@@ -94,6 +95,15 @@ rg -n '\b(sorry|admit|axiom)\b' Mysticeti.lean Mysticeti
 
 An empty result is correct.
 
+Check that each assumption identifier is defined and referenced:
+
+```sh
+bash consensus/design/check-assumption-ledger.sh
+```
+
+Run this command from the repository root. A successful result reports the number
+of checked identifiers.
+
 ## Analysis baseline
 
 The proof maps to a synthetic combined state of these pull requests:
@@ -111,6 +121,6 @@ This branch contains only the formal artifacts on top of `origin/main`. It does 
 copy the PR commits. Use the listed PR heads, or a later main commit with equivalent
 changes, when you check the proof-to-Rust mapping.
 
-Read [the proof scope](docs/PROOF_SCOPE.md) before you use a theorem as a protocol
-claim. Read [the implementation gaps](docs/IMPLEMENTATION_GAPS.md) before v3
-activation.
+Read [the assumption ledger](docs/ASSUMPTIONS.md) and
+[the proof scope](docs/PROOF_SCOPE.md) before you use a theorem as a protocol claim.
+Read [the implementation gaps](docs/IMPLEMENTATION_GAPS.md) before v3 activation.

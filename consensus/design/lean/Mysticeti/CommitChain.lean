@@ -8,7 +8,11 @@ import Mysticeti.Finalizer
 
 namespace Mysticeti
 
-/-! The continuous common commit chain used by indirect decisions. -/
+/-! The continuous common commit chain used by indirect decisions.
+
+The Rust refinement obligations are `ASM-SAFE-COMMIT-CHAIN`,
+`ASM-SAFE-FIRST-TRIGGER`, and `ASM-LIVE-COMMIT-SYNC`.
+-/
 
 structure Commit where
   index : Nat
@@ -17,7 +21,8 @@ structure Commit where
 
 abbrev CommitStream := Nat → Commit
 
-/-- Commit indices have no gap. This is checked by the observer and finalizer. -/
+/-- Commit indices have no gap. This models only the index part of
+`ASM-SAFE-COMMIT-CHAIN`. -/
 def Continuous (stream : CommitStream) : Prop :=
   ∀ position, (stream (position + 1)).index = (stream position).index + 1
 
@@ -35,7 +40,8 @@ theorem continuous_index (stream : CommitStream) (continuous : Continuous stream
 def DepthTwoEligible (targetRound : Nat) (commit : Commit) : Prop :=
   targetRound + 2 ≤ commit.leaderRound
 
-/-- `position` is the first eligible commit after `start`. -/
+/-- `position` is the first eligible commit after `start`.
+`ASM-SAFE-FIRST-TRIGGER` maps this choice to the Rust finalizer. -/
 def FirstEligible (stream : CommitStream) (targetRound start position : Nat) : Prop :=
   start ≤ position ∧
     DepthTwoEligible targetRound (stream position) ∧

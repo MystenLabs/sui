@@ -9,7 +9,9 @@ namespace Mysticeti
 
 /-! Safety of Mysticeti v3 transaction voting and finalization. -/
 
-/-- The facts in one round `R + 1` block for one transaction in a round `R` block. -/
+/-- The facts in one round `R + 1` block for one transaction in a round `R` block.
+The Rust mapping is `ASM-SAFE-AUTHENTICATION` and
+`ASM-SAFE-EVIDENCE-REFINEMENT`. -/
 structure TransactionVote where
   targetAboveCutoff : Bool
   targetReferenced : Bool
@@ -47,7 +49,8 @@ theorem explicit_reject_rejects (vote : TransactionVote)
 
 end TransactionVote
 
-/-- Voting evidence for one transaction in one committed block. -/
+/-- Voting evidence for one transaction in one committed block. The Rust mapping is
+`ASM-SAFE-EVIDENCE-REFINEMENT`. -/
 structure TransactionEvidence (authorityCount : Nat) (stake : Nat → Nat)
     (thresholds : Thresholds authorityCount stake) where
   faulty : VoterSet
@@ -55,14 +58,18 @@ structure TransactionEvidence (authorityCount : Nat) (stake : Nat → Nat)
   directRejectVotes : VoterSet
   anchorVotes : VoterSet
   committedAcceptVotes : VoterSet
+  /-- `ASM-SAFE-FAULT-BOUND`. -/
   faultBounded : FaultBounded thresholds faulty
-  /-- A correct authority has one transaction vote. Byzantine equivocation can count once per side. -/
+  /-- A correct authority has one transaction vote. Byzantine equivocation can count
+  once on each side. `ASM-SAFE-NON-EQUIVOCATION`. -/
   acceptRejectOverlap :
     OnlyFaultyOverlap authorityCount faulty directAcceptVotes directRejectVotes
-  /-- A correct reject voter cannot be in an accept certificate for this transaction. -/
+  /-- A correct reject voter cannot be in an accept certificate for this transaction.
+  `ASM-SAFE-NON-EQUIVOCATION`. -/
   rejectCertificateOverlap :
     OnlyFaultyOverlap authorityCount faulty directRejectVotes committedAcceptVotes
-  /-- Correct accept voters that are in the depth-two anchor quorum occur in the commit prefix. -/
+  /-- Correct accept voters in the depth-two anchor quorum occur in the commit prefix.
+  `ASM-SAFE-COMMITTED-PREFIX` and `ASM-SAFE-GC`. -/
   correctAcceptAnchorInCommittedCertificate :
     VoterSet.SubsetAt authorityCount
       (VoterSet.diff (VoterSet.inter directAcceptVotes anchorVotes) faulty)

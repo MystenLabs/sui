@@ -21,6 +21,10 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
 
+      - name: Check proof assumption ledger
+        shell: bash
+        run: bash consensus/design/check-assumption-ledger.sh
+
       - name: Build Lean proofs
         uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # pin@v1
         with:

@@ -9,7 +9,9 @@ namespace Mysticeti
 
 /-! Safety of one Mysticeti v3 leader slot. -/
 
-/-- Voting evidence for one leader block in one leader slot. -/
+/-- Voting evidence for one leader block in one leader slot. The mapping from signed
+Rust blocks to these sets is `ASM-SAFE-AUTHENTICATION` and
+`ASM-SAFE-EVIDENCE-REFINEMENT`. -/
 structure LeaderEvidence (authorityCount : Nat) (stake : Nat → Nat)
     (thresholds : Thresholds authorityCount stake) where
   faulty : VoterSet
@@ -17,14 +19,18 @@ structure LeaderEvidence (authorityCount : Nat) (stake : Nat → Nat)
   skipVotes : VoterSet
   anchorVotes : VoterSet
   certificateVotes : VoterSet
+  /-- `ASM-SAFE-FAULT-BOUND`. -/
   faultBounded : FaultBounded thresholds faulty
-  /-- A correct authority does not both link and omit the same leader block. -/
+  /-- A correct authority does not both link and omit the same leader block.
+  `ASM-SAFE-NON-EQUIVOCATION`. -/
   commitSkipOverlap :
     OnlyFaultyOverlap authorityCount faulty commitVotes skipVotes
-  /-- A correct skip voter does not occur in a certificate for the same block. -/
+  /-- A correct skip voter does not occur in a certificate for the same block.
+  `ASM-SAFE-NON-EQUIVOCATION`. -/
   skipCertificateOverlap :
     OnlyFaultyOverlap authorityCount faulty skipVotes certificateVotes
-  /-- Correct direct voters in an anchor quorum occur in the committed certificate. -/
+  /-- Correct direct voters in an anchor quorum occur in the committed certificate.
+  `ASM-SAFE-COMMITTED-PREFIX`. -/
   correctCommitAnchorInCertificate :
     VoterSet.SubsetAt authorityCount
       (VoterSet.diff (VoterSet.inter commitVotes anchorVotes) faulty)

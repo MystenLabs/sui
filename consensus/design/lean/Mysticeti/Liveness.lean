@@ -8,7 +8,12 @@ import Mysticeti.PartialSynchrony
 
 namespace Mysticeti
 
-/-! Conditional liveness under partial synchrony and a safe catch-up rule. -/
+/-! Conditional liveness under partial synchrony and a safe catch-up rule.
+
+Applying these theorems to Rust requires the assumption ledger. Key obligations are
+`ASM-LIVE-PARTIAL-SYNCHRONY`, `ASM-LIVE-ROUND-CATCHUP`,
+`ASM-LIVE-BLOCK-SYNC`, and `ASM-LIVE-COMMIT-SYNC`.
+-/
 
 abbrev Trace (State : Type) := Time → State
 
@@ -110,7 +115,8 @@ def SafeRoundChanges {State : Type} (roundState : State → RoundState)
       (roundState (trace (time + 1)))
       (roundState (trace (time + 1))).currentRound
 
-/-- Refinement obligations from the Rust protocol to the liveness checkpoints. -/
+/-- Refinement obligations from the Rust protocol to the liveness checkpoints.
+`ASM-LIVE-PIPELINE-BOUNDS` records the common timing abstraction. -/
 structure ConsensusLivenessAssumptions
     {State : Type} {protocolPacket : Packet → Prop}
     (trace : Trace State)
@@ -118,34 +124,54 @@ structure ConsensusLivenessAssumptions
     (catchupActivation : Time)
     (roundState : State → RoundState)
     (phases : ConsensusPhases State) where
+  /-- `ASM-LIVE-ROUND-CATCHUP`. -/
   safeRoundChanges :
     SafeRoundChanges roundState trace (stableStart network catchupActivation)
-  /-- The selected leader set eventually has a live correct leader opportunity. -/
+  /-- The selected leader set eventually has a live correct leader opportunity.
+  `ASM-LIVE-LEADER`. -/
   fairLiveLeader :
     SafeRoundChanges roundState trace (stableStart network catchupActivation) →
     LeadsToAfter (stableStart network catchupActivation) trace
       phases.roundOpen phases.goodLeaderWindow
+  /-- Local proposal progress uses `ASM-LIVE-TASK-FAIRNESS` and
+  `ASM-LIVE-PIPELINE-BOUNDS`. -/
   windowToProposal :
     WithinAfter (stableStart network catchupActivation) network.delta trace
       phases.goodLeaderWindow phases.leaderProposed
+  /-- Proposal delivery uses `ASM-LIVE-PARTIAL-SYNCHRONY` and
+  `ASM-LIVE-PIPELINE-BOUNDS`. -/
   proposalToDelivery :
     WithinAfter (stableStart network catchupActivation) network.delta trace
       phases.leaderProposed phases.leaderDelivered
+  /-- Supporter production can require missing ancestors. The hidden obligations are
+  `ASM-LIVE-BLOCK-SYNC`, `ASM-LIVE-PEER-FAIRNESS`,
+  `ASM-LIVE-TASK-FAIRNESS`, and `ASM-LIVE-PIPELINE-BOUNDS`. -/
   deliveryToSupporters :
     WithinAfter (stableStart network catchupActivation) (2 * network.delta) trace
       phases.leaderDelivered phases.supportersProduced
+  /-- Supporter delivery uses `ASM-LIVE-PARTIAL-SYNCHRONY` and
+  `ASM-LIVE-PIPELINE-BOUNDS`. -/
   supporterDelivery :
     WithinAfter (stableStart network catchupActivation) network.delta trace
       phases.supportersProduced phases.supportersDelivered
+  /-- Certificate production can require missing ancestors. The hidden obligations
+  are `ASM-LIVE-BLOCK-SYNC`, `ASM-LIVE-TASK-FAIRNESS`, and
+  `ASM-LIVE-PIPELINE-BOUNDS`. -/
   deliveryToCertificates :
     WithinAfter (stableStart network catchupActivation) (2 * network.delta) trace
       phases.supportersDelivered phases.certificatesProduced
+  /-- Certificate delivery uses `ASM-LIVE-PARTIAL-SYNCHRONY` and
+  `ASM-LIVE-PIPELINE-BOUNDS`. -/
   certificateDelivery :
     WithinAfter (stableStart network catchupActivation) network.delta trace
       phases.certificatesProduced phases.certificatesDelivered
+  /-- Local decision progress uses `ASM-LIVE-TASK-FAIRNESS` and
+  `ASM-LIVE-PIPELINE-BOUNDS`. -/
   deliveryToDecision :
     WithinAfter (stableStart network catchupActivation) network.delta trace
       phases.certificatesDelivered phases.leaderDecided
+  /-- Commit production uses `ASM-LIVE-TASK-FAIRNESS` and
+  `ASM-LIVE-PIPELINE-BOUNDS`. -/
   decisionToCommit :
     WithinAfter (stableStart network catchupActivation) network.delta trace
       phases.leaderDecided phases.commitProduced
@@ -210,14 +236,19 @@ structure FinalizerLivenessAssumptions
     (catchupActivation : Time)
     (commitStream : CommitStream)
     (phases : FinalizerPhases State) where
+  /-- `ASM-SAFE-COMMIT-CHAIN` and `ASM-LIVE-COMMIT-SYNC`. -/
   continuousCommitStream : Continuous commitStream
+  /-- `ASM-LIVE-COMMIT-SYNC`, `ASM-LIVE-FINALIZER-TRIGGER`, and
+  `ASM-LIVE-TASK-FAIRNESS`. -/
   triggerEventually :
     Continuous commitStream →
     LeadsToAfter (stableStart network catchupActivation) trace
       phases.pending phases.depthTwoTrigger
+  /-- `ASM-LIVE-DURABILITY` and `ASM-LIVE-PIPELINE-BOUNDS`. -/
   triggerToDecision :
     WithinAfter (stableStart network catchupActivation) network.delta trace
       phases.depthTwoTrigger phases.decided
+  /-- `ASM-LIVE-DURABILITY` and `ASM-LIVE-PIPELINE-BOUNDS`. -/
   decisionToDurableOutput :
     WithinAfter (stableStart network catchupActivation) network.delta trace
       phases.decided phases.durableOutput
@@ -240,7 +271,8 @@ theorem finalizer_liveness
   have output := assumptions.decisionToDurableOutput.toLeadsTo
   exact (trigger.trans decide).trans output
 
-/-- End-to-end liveness for a target transaction represented by the phase predicates. -/
+/-- End-to-end liveness for a target transaction represented by the phase predicates.
+The input-to-finalizer mapping is `ASM-LIVE-DURABILITY`. -/
 theorem transaction_liveness
     {State : Type} {protocolPacket : Packet → Prop}
     {trace : Trace State}

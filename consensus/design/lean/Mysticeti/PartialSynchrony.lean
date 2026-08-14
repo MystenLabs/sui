@@ -17,7 +17,8 @@ structure Packet where
   deliveredAt : Time
   deriving DecidableEq, Repr
 
-/-- Standard partial synchrony: GST is unknown, and post-GST delay is at most `delta`. -/
+/-- Standard partial synchrony: GST is unknown, and post-GST delay is at most
+`delta`. This is the environmental assumption `ASM-LIVE-PARTIAL-SYNCHRONY`. -/
 structure PartialSynchrony (protocolPacket : Packet → Prop) where
   gst : Time
   delta : Nat
@@ -48,7 +49,8 @@ structure RoundState where
   proposed : Nat → Bool
   decided : Nat → Bool
 
-/-- The required part of the modified Mysticeti catch-up rule. -/
+/-- The required part of the modified Mysticeti catch-up rule. The Rust refinement
+obligation is `ASM-LIVE-ROUND-CATCHUP`. -/
 def SafeIntermediateProposals
     (before after : RoundState) (observedRound : Nat) : Prop :=
   ∀ intermediate,

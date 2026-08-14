@@ -7,7 +7,11 @@ import Lean.Elab.Tactic.Omega
 
 namespace Mysticeti
 
-/-! Weighted voting facts used by the v3 leader decider and transaction finalizer. -/
+/-! Weighted voting facts used by the v3 leader decider and transaction finalizer.
+
+The Rust refinement uses `ASM-SAFE-PARAMETERS`, `ASM-SAFE-FAULT-BOUND`, and
+`ASM-REFINE-INTEGERS` from the assumption ledger.
+-/
 
 /-- A voter set indexed by the same natural numbers as `AuthorityIndex`. -/
 abbrev VoterSet := Nat → Bool
@@ -128,7 +132,8 @@ theorem intersection_lower_bound (authorityCount : Nat) (stake : Nat → Nat)
   have identity := weight_union_add_inter authorityCount stake left right
   omega
 
-/-- The two threshold inequalities checked by `CommitFinalizerV3::new`. -/
+/-- The threshold facts used by the safety proof. `ASM-MATH-THRESHOLDS` proves the
+nominal values in Lean. `ASM-SAFE-PARAMETERS` maps them to one epoch configuration. -/
 structure Thresholds (authorityCount : Nat) (stake : Nat → Nat) where
   /-- Maximum Byzantine stake. -/
   fault : Nat
@@ -167,12 +172,14 @@ theorem two_quorums_intersect {authorityCount : Nat} {stake : Nat → Nat}
 
 end Thresholds
 
-/-- The selected Byzantine authorities have at most the configured fault stake. -/
+/-- The selected Byzantine authorities have at most the configured fault stake.
+This is the adversary assumption `ASM-SAFE-FAULT-BOUND`. -/
 def FaultBounded {authorityCount : Nat} {stake : Nat → Nat}
     (thresholds : Thresholds authorityCount stake) (faulty : VoterSet) : Prop :=
   weight authorityCount stake faulty ≤ thresholds.fault
 
-/-- A correct authority cannot occur in both incompatible voter sets. -/
+/-- A correct authority cannot occur in both incompatible voter sets. The Rust
+refinement obligation is `ASM-SAFE-NON-EQUIVOCATION`. -/
 def OnlyFaultyOverlap (authorityCount : Nat)
     (faulty left right : VoterSet) : Prop :=
   VoterSet.SubsetAt authorityCount (VoterSet.inter left right) faulty

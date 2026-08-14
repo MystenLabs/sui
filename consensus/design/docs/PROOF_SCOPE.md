@@ -14,10 +14,15 @@ This work is not an end-to-end proof of the Rust program. The Lean model states 
 remaining Rust refinement conditions as explicit assumptions. A theorem is a valid
 protocol claim only when the implementation establishes these conditions.
 
+The [assumption ledger](ASSUMPTIONS.md) gives each condition a stable identifier,
+status, refinement mapping, and discharge condition. A project with no declared
+Lean `axiom` can still have conditional theorems because assumptions can be theorem
+inputs.
+
 ## Safety model
 
-The safety proof uses weighted authority sets. An authority can count one time on
-each side after equivocation. It cannot count two times on one side.
+The safety proof uses weighted authority sets. A Byzantine authority can count once
+on each side after equivocation. It cannot count more than once on either side.
 
 The model uses these names:
 
@@ -96,7 +101,7 @@ GST and this activation time.
 refinement obligations for the progress checkpoints. It requires:
 
 - safe intermediate proposals during a round jump;
-- an eventual live correct leader opportunity;
+- the eventual selection of a live correct leader;
 - bounded proposal, supporter, certificate, decision, and commit steps;
 - continued operation of the protocol tasks.
 
@@ -130,25 +135,49 @@ used by this liveness theorem.
 
 The safety result needs all these implementation facts:
 
-1. All correct nodes use the same epoch committee and the same `N`, `f`, `Q`, and
-   `A` values.
-2. Byzantine stake is at most `f`.
-3. Signatures bind an authority, round, block contents, cutoff, and transaction
-   votes.
-4. A correct authority does not equivocate.
-5. Every accepted non-genesis block has `Q` immediate-parent stake.
-6. The DAG keeps the causal evidence that the indirect rules use.
-7. Correct nodes process one continuous common commit chain.
-8. Correct nodes use the same first depth-two trigger.
-9. Garbage collection does not remove evidence before the trigger can use it.
+1. [`ASM-SAFE-PARAMETERS`](ASSUMPTIONS.md#asm-safe-parameters): all correct nodes use
+   the same epoch committee and the same `N`, `f`, `Q`, and `A` values.
+2. [`ASM-SAFE-FAULT-BOUND`](ASSUMPTIONS.md#asm-safe-fault-bound): Byzantine stake is
+   at most `f`.
+3. [`ASM-SAFE-AUTHENTICATION`](ASSUMPTIONS.md#asm-safe-authentication): signatures
+   bind the authority, round, block contents, cutoff, and votes.
+4. [`ASM-SAFE-NON-EQUIVOCATION`](ASSUMPTIONS.md#asm-safe-non-equivocation): a correct
+   authority does not produce incompatible votes.
+5. [`ASM-SAFE-PARENT-QUORUM`](ASSUMPTIONS.md#asm-safe-parent-quorum): every accepted
+   non-genesis block has `Q` immediate-parent stake.
+6. [`ASM-SAFE-EVIDENCE-REFINEMENT`](ASSUMPTIONS.md#asm-safe-evidence-refinement): the
+   Rust decision rules create the same evidence and outcomes as the Lean model.
+7. [`ASM-SAFE-COMMITTED-PREFIX`](ASSUMPTIONS.md#asm-safe-committed-prefix): the
+   committed prefix contains the causal evidence used by the indirect rules.
+8. [`ASM-SAFE-COMMIT-CHAIN`](ASSUMPTIONS.md#asm-safe-commit-chain): correct nodes
+   process one certified commit chain with no gap.
+9. [`ASM-SAFE-FIRST-TRIGGER`](ASSUMPTIONS.md#asm-safe-first-trigger): correct nodes
+   use the same first depth-two trigger.
+10. [`ASM-SAFE-GC`](ASSUMPTIONS.md#asm-safe-gc): garbage collection does not remove
+    required evidence before the trigger uses it.
 
 The liveness result also needs these facts:
 
-1. The standard partial synchrony condition holds.
-2. Round catch-up follows the safe intermediate-proposal rule after activation.
-3. The allowed leader set has a live correct leader opportunity.
-4. Correct proposers, synchronizers, committers, and finalizers continue to run.
-5. Commit synchronization eventually extends the continuous common stream.
-6. A pending transaction receives a later depth-two trigger.
+1. [`ASM-LIVE-PARTIAL-SYNCHRONY`](ASSUMPTIONS.md#asm-live-partial-synchrony): the
+   standard partial synchrony condition holds.
+2. [`ASM-LIVE-ROUND-CATCHUP`](ASSUMPTIONS.md#asm-live-round-catchup): round catch-up
+   follows the safe intermediate-proposal rule after activation.
+3. [`ASM-LIVE-LEADER`](ASSUMPTIONS.md#asm-live-leader): the leader schedule
+   eventually selects a live correct leader.
+4. [`ASM-LIVE-BLOCK-SYNC`](ASSUMPTIONS.md#asm-live-block-sync): block synchronization
+   eventually resolves each required missing block.
+5. [`ASM-LIVE-COMMIT-SYNC`](ASSUMPTIONS.md#asm-live-commit-sync): commit
+   synchronization eventually extends the certified commit stream.
+6. [`ASM-LIVE-PEER-FAIRNESS`](ASSUMPTIONS.md#asm-live-peer-fairness): a correct peer
+   retains the required data and is eventually selected.
+7. [`ASM-LIVE-TASK-FAIRNESS`](ASSUMPTIONS.md#asm-live-task-fairness): correct protocol
+   tasks and consumers continue to make progress.
+8. [`ASM-LIVE-PIPELINE-BOUNDS`](ASSUMPTIONS.md#asm-live-pipeline-bounds): each modeled
+   phase completes within its stated bound.
+9. [`ASM-LIVE-FINALIZER-TRIGGER`](ASSUMPTIONS.md#asm-live-finalizer-trigger): a pending
+   transaction receives a later depth-two trigger.
+10. [`ASM-LIVE-DURABILITY`](ASSUMPTIONS.md#asm-live-durability): a decision becomes
+    durable and reaches the consumer.
 
-The gap report gives the code changes that are needed to establish these facts.
+The [gap report](IMPLEMENTATION_GAPS.md) gives the code changes that are needed to
+discharge these proof obligations.

@@ -9,7 +9,13 @@ This report applies to the synthetic combined state of PR 27505 and PR 27655. It
 uses the PR heads that are listed in the parent README. This branch contains only
 the formal artifacts on top of `origin/main`.
 
+The [assumption ledger](ASSUMPTIONS.md) defines the stable identifiers used in this
+report. A gap closes only when its related proof obligation is discharged or its
+environmental assumption is explicitly accepted.
+
 ## P0: implement and test a safe round-jump rule
+
+Related assumption: `ASM-LIVE-ROUND-CATCHUP`.
 
 This is a confirmed proof gap and an activation blocker. The current transition
 does not establish the safe catch-up condition that the liveness proof needs.
@@ -49,6 +55,8 @@ must run with v3, FlexCommitter, and the v3 leader schedule active.
 
 ## P0: put v3 activation in epoch protocol state
 
+Related assumption: `ASM-CONFIG-V3-ACTIVATION`.
+
 This is a confirmed activation gap.
 
 [`to_consensus_protocol_config`](../../../crates/sui-core/src/consensus_manager/mod.rs)
@@ -59,6 +67,9 @@ Add a versioned `ProtocolConfig` field. Use an epoch-bound activation value. Add
 rollback plan and mixed-version tests. Do not use a node-local flag for activation.
 
 ## P0: remove node-local threshold inputs
+
+Related assumptions: `ASM-MATH-THRESHOLDS`, `ASM-SAFE-PARAMETERS`, and
+`ASM-REFINE-INTEGERS`.
 
 This is a confirmed safety boundary.
 
@@ -78,6 +89,8 @@ v3 activation.
 
 ## P0: make v3 and transaction voting one valid configuration
 
+Related assumptions: `ASM-CONFIG-VOTING` and `ASM-SAFE-EVIDENCE-REFINEMENT`.
+
 [`CommitFinalizerV3::run`](../../core/src/commit_finalizer_v3.rs) bypasses voting
 when `transaction_voting_enabled` is false. The current Sui conversion sets this
 value to true. A future configuration change can still enable v3 without the vote
@@ -93,9 +106,11 @@ A single versioned v3 feature value is safer than two independent values.
 
 ## P1: establish the allowed-leader liveness condition
 
+Related assumption: `ASM-LIVE-LEADER`.
+
 [`LeaderScheduleV3::select_allowed_leaders_with_fixed_config`](../../core/src/leader_schedule_v3.rs)
-can remove low-score stake. The Lean liveness theorem requires an eventual live
-correct leader opportunity in the remaining set.
+can remove low-score stake. The Lean liveness theorem requires the schedule to
+eventually select a live correct leader from the remaining set.
 
 Add a runtime and protocol-config condition that connects these values:
 
@@ -108,7 +123,52 @@ Prove that the allowed set cannot contain only Byzantine or crashed authorities.
 Also require a positive schedule window and update interval. Add property tests for
 all boundary values.
 
+## P1: specify block-sync and commit-sync liveness
+
+Related assumptions: `ASM-LIVE-BLOCK-SYNC`, `ASM-LIVE-COMMIT-SYNC`,
+`ASM-LIVE-PEER-FAIRNESS`, `ASM-LIVE-TASK-FAIRNESS`, and
+`ASM-LIVE-PIPELINE-BOUNDS`.
+
+The Lean model does not represent missing DAG blocks, suspended blocks, peers,
+request retries, commit ranges, or consumer backpressure. It assumes the progress
+that these mechanisms must provide.
+
+The implementation has important recovery mechanisms:
+
+- `BlockManager` suspends a block until its required ancestors are accepted.
+- `Synchronizer` uses direct fetches, periodic fetches, and stored-history fetches.
+- Periodic block sync resumes when commit sync does not make commit progress.
+- `CommitSyncer` retries commit ranges, verifies the commit chain and certificate,
+  buffers ranges across gaps, and sends consecutive ranges to Core.
+
+These mechanisms do not by themselves prove liveness. Add explicit contracts for
+these conditions:
+
+1. A correct known peer retains each required block and certified commit for the
+   required recovery period.
+2. Peer discovery eventually provides such a peer.
+3. Retry selection is fair. If selection remains random, use a probabilistic model
+   and prove almost-sure progress.
+4. Correct protocol tasks continue to run, and sustained consumer backpressure
+   eventually clears.
+5. A missing block above the GC boundary is eventually accepted, or a certified
+   commit makes it unnecessary.
+6. Commit sync and the live block path together process the trailing partial batch.
+
+Add separate Lean state and progress theorems for block sync and commit sync. Use an
+eventual-progress property unless a bound includes the exact scheduler periods,
+timeouts, retry delays, storage time, and processing time. Do not derive this bound
+from the network `delta` alone.
+
+For the implementation, replace an empty-peer assertion with wait-and-retry behavior
+where an empty peer set is valid. Use deterministic fair peer rotation, or document
+the random selection model. Add tests for peer loss, data retention at the GC
+boundary, commit-sync stall fallback, incomplete commit batches, and consumer
+backpressure.
+
 ## P1: define finalizer tail behavior at shutdown
+
+Related assumptions: `ASM-LIVE-FINALIZER-TRIGGER` and `ASM-LIVE-DURABILITY`.
 
 [`CommitFinalizerHandle::stop`](../../core/src/commit_finalizer.rs) closes the input
 channel and waits for the task. The task drains received commits. However,
@@ -129,6 +189,9 @@ has no depth-two successor.
 
 ## P1: make the common commit-chain contract explicit
 
+Related assumptions: `ASM-SAFE-COMMIT-CHAIN`, `ASM-SAFE-FIRST-TRIGGER`, and
+`ASM-LIVE-COMMIT-SYNC`.
+
 The indirect safety proof requires one continuous common commit stream and the same
 first eligible trigger. The implementation has useful checks:
 
@@ -145,6 +208,9 @@ This item is a proof-closure gap. The current review did not find a concrete for
 the combined branch.
 
 ## P1: prove the committed-prefix and garbage-collection lemma
+
+Related assumptions: `ASM-SAFE-COMMITTED-PREFIX`, `ASM-SAFE-GC`, and
+`ASM-SAFE-PARENT-QUORUM`.
 
 The transaction indirect rule counts accept voters from the complete buffered
 commit prefix. This is necessary because one v3 commit can have more than one
@@ -163,6 +229,8 @@ commit-sync recovery, and the exact GC boundary. This item is a proof-closure ga
 
 ## P2: close the natural-number to Rust-integer refinement
 
+Related assumption: `ASM-REFINE-INTEGERS`.
+
 Lean uses unbounded natural numbers. Rust uses `u32`, `u64`, `u128`, `u16`, and
 `usize` in this path.
 
@@ -178,6 +246,9 @@ exhaustive values and large boundary values.
 
 ## P2: add a Rust-to-Lean conformance suite
 
+Related assumptions: `ASM-SAFE-AUTHENTICATION`, `ASM-SAFE-NON-EQUIVOCATION`, and
+`ASM-SAFE-EVIDENCE-REFINEMENT`.
+
 The Lean model is hand written. It does not yet prove that the Rust decision
 functions implement the same relation.
 
@@ -191,5 +262,5 @@ stable data format. Check these Rust functions against the vectors:
 - the first depth-two trigger selection;
 - the v3 transaction cutoff rule.
 
-Include equivocation vectors. One Byzantine authority must count one time on each
-side and no more than one time on one side.
+Include equivocation vectors. One Byzantine authority can count once on each side,
+but it cannot count more than once on either side.
