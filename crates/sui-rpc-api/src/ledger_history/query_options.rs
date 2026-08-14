@@ -1,6 +1,51 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Request → scan resolution for the ledger-history list endpoints.
+//!
+//! The pipeline is one cycle — **lookup, translate, constrain-and-account**
+//! — iterated from request space down to store keys. Every item in this
+//! module is one of three species:
+//!
+//! - **Cycle body**: [`derive_scan`], invoked with a stage's
+//!   [`Contribution`]s. The checkpoint stage
+//!   (`CheckpointRange::resolve`) narrows by cursor checkpoint hints
+//!   WITHOUT attributing — collapsed windows flow through the empty-safe
+//!   projection so the scan stage attributes once, with full-fidelity
+//!   echo. The serving floor is the same body split into halves
+//!   ([`ScanBounds::clamp_to_available_lo`] +
+//!   [`TerminalRecord::absorb_raised_lo`]) because the filtered
+//!   checkpoint scan pairs transaction-space bounds with a
+//!   checkpoint-space record.
+//! - **Translations** at representation changes:
+//!   [`ResolvedCheckpointRange::with_range`] via
+//!   [`ScanCoordinate::from_boundary`] into a lane's scan space;
+//!   [`ScanBounds::to_range`] (and the packed event range) out to store
+//!   keys — the store edge is where symbolic resume-from-excluded
+//!   resolves.
+//! - **Backend lookups** that force the staging: the checkpoint→tx
+//!   projection, the serving-floor probe, and the scan itself.
+//!
+//! Vocabulary: a **position** is wire-side — a checkpoint plus a
+//! coordinate; a **coordinate** is a lane's scan-space key.
+//!
+//! Hard invariants (wire contract):
+//! - **Faithful echo**: a cursor-collapsed window's response surfaces the
+//!   client's own cursor — raw coordinate and kind — so resume neither
+//!   repeats nor skips.
+//! - **No unscanned coverage**: watermarks never claim checkpoints the
+//!   scan did not fully traverse (entry gates below, terminal pins above,
+//!   the serving floor and store-edge emptiness respected).
+//! - **Frontier monotonicity**: an empty response never moves the
+//!   client's frontier — not forward past unscanned space (the floor
+//!   rule), not backward below their cursor (the echo rule).
+//!
+//! Conventions (inherited wire behavior, changeable only with sign-off):
+//! ties go to the cursor at every granularity (bound-key ordering), but
+//! the ledger tip preempts attribution on a tip-collapsed seed; `before`
+//! wins collapse precedence over `after`; entry checkpoints fold on
+//! cursor presence alone.
+
 use std::ops::{Bound, Range};
 
 use bytes::Bytes;
@@ -166,15 +211,12 @@ struct CheckpointRange {
     indexed_tip: u64,
 }
 
-/// What the pure bounds clamp did, consumed by terminal attribution: which
-/// cursor tightened its edge, and where emptiness appeared.
-/// `after_left_empty` is checked before the `before` clamp applies — the
-/// after echo may only claim a collapse it caused alone.
-struct BoundsClampReport {
-    after_won: bool,
-    after_left_empty: bool,
-    before_won: bool,
-    empty: bool,
+/// One cursor's offer to [`derive_scan`]: the bound it imposes on the
+/// window, and the candidate stamp the scan reports if this cursor ends
+/// it. An installed stamp is always `CursorBound`.
+struct Contribution<P> {
+    bound: Bound<P>,
+    stamp: TerminalRecord<P>,
 }
 
 impl IntraTxCoordinate {
@@ -303,18 +345,6 @@ impl QueryOptions {
         self.after.is_some()
     }
 
-    /// Tighten the resolved scan by the request's cursors. Decoding splits
-    /// each cursor into its two products: the bound it imposes on the
-    /// window (role-selected — resume for `after`, limit for `before`;
-    /// exclusions stay symbolic for the store edge to resolve) for
-    /// [`clamp_scan_bounds`], and its candidate stamp — the
-    /// [`TerminalRecord`] the scan reports IF this cursor ends it — for
-    /// [`attribute_cursor_terminal`] to install or discard. The stamp's
-    /// kind is decidable at decode because the ordering is known: only an
-    /// ascending window emptied by an `after` Item echoes the Item kind
-    /// (resume must not re-include the delivered row); every other stamp is
-    /// Boundary. An installed cursor stamp is always `CursorBound` — no
-    /// path reports a cursor win as any other exhaustion.
     /// Project the store-space `range` under the resolved checkpoint window
     /// and apply the cursors — the endpoints' one entry point past
     /// checkpoint-range resolution, for every lane coordinate `P`.
@@ -326,64 +356,44 @@ impl QueryOptions {
         self.apply_cursor_bounds(cp_range.with_range(range, self.ordering))
     }
 
-    fn apply_cursor_bounds<P: ScanCoordinate>(
-        &self,
-        mut resolved: ResolvedScan<P>,
-    ) -> ResolvedScan<P> {
-        if resolved.is_empty() {
-            return resolved;
-        }
-
+    /// Decode each cursor into its [`Contribution`] and run one
+    /// [`derive_scan`] iteration. Empty seeds flow through so a
+    /// checkpoint-stage collapse can echo the client's full cursor.
+    fn apply_cursor_bounds<P: ScanCoordinate>(&self, resolved: ResolvedScan<P>) -> ResolvedScan<P> {
         let ascending = matches!(self.ordering, Ordering::Ascending);
         let after = self.after.as_ref().map(|cursor| {
             let coordinate = P::from_cursor(cursor);
+            // Kind is decidable at decode: only an ascending window emptied
+            // by an `after` Item echoes the Item kind (resume must not
+            // re-include the delivered row); every other stamp is Boundary.
             let kind = if ascending {
                 cursor.kind
             } else {
                 sui_rpc_cursor::CursorKind::Boundary
             };
-            (
-                cursor.kind.resume_bound(coordinate),
-                TerminalRecord {
+            Contribution {
+                bound: cursor.kind.resume_bound(coordinate),
+                stamp: TerminalRecord {
                     end_checkpoint: cursor.position.checkpoint(),
                     end_coordinate: coordinate,
                     exhaustion: RangeExhaustion::CursorBound { kind },
                 },
-            )
+            }
         });
         let before = self.before.as_ref().map(|cursor| {
             let coordinate = P::from_cursor(cursor);
-            (
-                cursor.kind.limit_bound(coordinate),
-                TerminalRecord {
+            Contribution {
+                bound: cursor.kind.limit_bound(coordinate),
+                stamp: TerminalRecord {
                     end_checkpoint: cursor.position.checkpoint(),
                     end_coordinate: coordinate,
                     exhaustion: RangeExhaustion::CursorBound {
                         kind: sui_rpc_cursor::CursorKind::Boundary,
                     },
                 },
-            )
+            }
         });
-
-        let report = clamp_scan_bounds(
-            &mut resolved.bounds,
-            after.as_ref().map(|(bound, _)| *bound),
-            before.as_ref().map(|(bound, _)| *bound),
-        );
-        attribute_cursor_terminal(
-            self.ordering,
-            after.as_ref().map(|(_, stamp)| stamp),
-            before.as_ref().map(|(_, stamp)| stamp),
-            &report,
-            &mut resolved.entry_checkpoint,
-            &mut resolved.terminal,
-        );
-        if report.empty {
-            // Canonical empty form everywhere in this module: the interval
-            // collapses onto its reported terminal bound.
-            resolved.bounds = ScanBounds::empty_at(resolved.terminal.end_coordinate);
-        }
-        resolved
+        derive_scan(self.ordering, resolved, after, before)
     }
 }
 
@@ -502,29 +512,25 @@ impl CheckpointRange {
         })
     }
 
-    /// Clamped scan-window start, paired with the terminal reason to report if the scan drains into
-    /// this edge (descending). The `after` cursor's checkpoint is treated as an inclusive start as
-    /// the underlying item's cursor may be sub-checkpoint information (e.g transactions or events
-    /// of a checkpoint.) Finer-granularity exclusivity should be handled downstream.
-    fn clamp_start_cp(&self, options: &QueryOptions) -> (u64, RangeExhaustion) {
+    /// Narrow the scan-window start by the `after` cursor's checkpoint
+    /// hint, inclusively — the cursor may carry sub-checkpoint information,
+    /// so the finer scan-stage bound owns exclusivity (and all cursor
+    /// attribution; see [`derive_scan`]).
+    fn clamp_start_cp(&self, options: &QueryOptions) -> u64 {
         match &options.after {
-            Some(cursor) if cursor.position.checkpoint() >= self.start => (
-                cursor.position.checkpoint(),
-                RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
-                },
-            ),
-            _ => (self.start, RangeExhaustion::CheckpointBound),
+            Some(cursor) if cursor.position.checkpoint() >= self.start => {
+                cursor.position.checkpoint()
+            }
+            _ => self.start,
         }
     }
 
-    /// Clamped scan-window end, paired with the terminal reason to report if the scan drains into
-    /// this edge (ascending); when the cursor doesn't win, the reason is the request-derived one
-    /// from construction (explicit end vs. tip clamp). The `before` cursor always enters as an
-    /// exclusive end (the window is half-open): an Item's checkpoint may still hold admissible
-    /// items before it, so it stays in range (`cp + 1`); a Boundary's checkpoint is already an
-    /// exclusive upper (descending frontiers are emitted pre-bumped).
-    fn clamp_end_cp(&self, options: &QueryOptions) -> (u64, RangeExhaustion) {
+    /// Narrow the scan-window end by the `before` cursor's checkpoint
+    /// hint: an Item's checkpoint may still hold admissible items before
+    /// it, so it stays in range (`cp + 1`); a Boundary's checkpoint is
+    /// already an exclusive upper (descending frontiers are emitted
+    /// pre-bumped). Pure narrowing — attribution belongs to the scan stage.
+    fn clamp_end_cp(&self, options: &QueryOptions) -> u64 {
         let upper = options
             .before
             .as_ref()
@@ -533,53 +539,38 @@ impl CheckpointRange {
                 sui_rpc_cursor::CursorKind::Boundary => Some(cursor.position.checkpoint()),
             });
         match upper {
-            Some(upper) if upper <= self.end => (
-                upper,
-                RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
-                },
-            ),
-            _ => (self.end, self.high_exhaustion),
+            Some(upper) if upper <= self.end => upper,
+            _ => self.end,
         }
     }
 
-    /// Tighten the interval by the request's cursors and attribute the exhaustion reason the scan
-    /// will report once it drains it. Also designates the terminal edge and consequently which
-    /// exhaustion reason the client sees.
+    /// Narrow the interval by the cursors' checkpoint hints and carry the
+    /// request-derived reason for the ordering-side terminal edge. Cursor
+    /// attribution deliberately does NOT happen here: a
+    /// checkpoint-collapsed window flows through the (empty-safe)
+    /// projection into the scan stage, whose [`derive_scan`] re-wins every
+    /// edge the hints clamped and echoes the client's full cursor on
+    /// collapse — one attribution site, full-fidelity echo.
     fn resolve(self, options: &QueryOptions) -> ResolvedCheckpointRange {
-        let (start, low_exhaustion) = self.clamp_start_cp(options);
-        let (end, high_exhaustion) = self.clamp_end_cp(options);
+        let start = self.clamp_start_cp(options);
+        let end = self.clamp_end_cp(options);
 
         if start >= self.indexed_tip {
             return ResolvedCheckpointRange::empty_at(self.indexed_tip, RangeExhaustion::LedgerTip);
         }
+        // The low edge's request-derived reason is always the caller's
+        // start_checkpoint; the high edge's records explicit-end vs tip.
+        let exhaustion = match options.ordering {
+            Ordering::Ascending => self.high_exhaustion,
+            Ordering::Descending => RangeExhaustion::CheckpointBound,
+        };
         if start >= end {
-            // A cursor-collapsed interval reports CursorBound no matter which
-            // edge is terminal: the paging itself consumed the range.
-            let cursor_bound = matches!(low_exhaustion, RangeExhaustion::CursorBound { .. })
-                || matches!(high_exhaustion, RangeExhaustion::CursorBound { .. });
-            let exhaustion = if cursor_bound {
-                RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
-                }
-            } else {
-                match options.ordering {
-                    Ordering::Ascending => high_exhaustion,
-                    Ordering::Descending => low_exhaustion,
-                }
-            };
             let checkpoint = match options.ordering {
                 Ordering::Ascending => end,
                 Ordering::Descending => start,
             };
             return ResolvedCheckpointRange::empty_at(checkpoint, exhaustion);
         }
-
-        // Terminal-edge selection.
-        let exhaustion = match options.ordering {
-            Ordering::Ascending => high_exhaustion,
-            Ordering::Descending => low_exhaustion,
-        };
         ResolvedCheckpointRange {
             range: start..end,
             exhaustion,
@@ -734,14 +725,15 @@ impl<P: Copy + Ord> ScanBounds<P> {
 }
 
 impl<T: Copy> TerminalRecord<T> {
-    /// The watermark half of a serving-floor clamp whose floor did NOT
-    /// empty the window: an ascending scan must not claim coverage below
-    /// the floor (entry rises), a descending scan terminates at it
-    /// (terminal pinned) — so no watermark ever claims unscanned history.
-    /// The floor arrives as a (checkpoint, terminal-coordinate) pair
-    /// because the scan bounds and the terminal may live in different
+    /// The window's low edge just rose to `floor_position` (contained in
+    /// `floor_checkpoint`); move the watermark field that describes the
+    /// low edge along with it, so nothing claims the truncated gap.
+    /// Ascending, the low edge is the entry side: the coverage gate rises.
+    /// Descending, it is the terminal side: the record pins to the floor.
+    /// Exhaustion is untouched — the floor corrects where, not why. Two
+    /// arguments because the bounds and the record may live in different
     /// coordinate spaces.
-    pub fn reconcile_floor(
+    pub fn absorb_raised_lo(
         &mut self,
         entry_checkpoint: &mut u64,
         floor_checkpoint: u64,
@@ -799,7 +791,7 @@ impl<P: Copy + Ord> ResolvedScan<P> {
             self.bounds = ScanBounds::empty_at(self.terminal.end_coordinate);
             return;
         }
-        self.terminal.reconcile_floor(
+        self.terminal.absorb_raised_lo(
             &mut self.entry_checkpoint,
             floor_checkpoint,
             floor_position,
@@ -808,101 +800,76 @@ impl<P: Copy + Ord> ResolvedScan<P> {
     }
 }
 
-/// The pure bounds half of cursor application, shared by every lane: an
-/// `after` cursor may raise the low edge, a `before` cursor may lower the
-/// high edge. A cursor "wins" only when its bound is at least as tight as
-/// the window's current edge — ties go to the cursor, so a cursor
-/// coinciding with a range edge still claims terminal attribution.
-/// Returns the report terminal attribution consumes.
-fn clamp_scan_bounds<P: Copy + Ord>(
-    bounds: &mut ScanBounds<P>,
-    after_lo: Option<Bound<P>>,
-    before_hi: Option<Bound<P>>,
-) -> BoundsClampReport {
-    let mut after_won = false;
-    let mut after_left_empty = false;
-    if let Some(lo) = after_lo
-        && lower_bound_gte(lo, bounds.lo)
-    {
-        bounds.lo = lo;
-        after_won = true;
-        after_left_empty = bounds.is_empty();
-    }
-    let mut before_won = false;
-    if let Some(hi) = before_hi
-        && upper_bound_lte(hi, bounds.hi)
-    {
-        bounds.hi = hi;
-        before_won = true;
-    }
-    BoundsClampReport {
-        after_won,
-        after_left_empty,
-        before_won,
-        empty: bounds.is_empty(),
-    }
-}
-
-/// Turn the bounds clamp's report into watermark metadata — the policy
-/// half of cursor application. Each cursor arrives as its candidate stamp
-/// (built at decode with the correct kind); this function only installs or
-/// discards whole records: a terminal-edge winner (descending `after`,
-/// ascending `before`) installs its stamp on a nonempty window; a
-/// cursor-collapsed window installs the last-recorded winner (`before`
-/// over `after`). Stamps carry the cursor's RAW coordinate and kind so a
-/// stamped resume cursor reproduces the client's cursor exactly — resume
-/// must neither repeat nor skip an item. Entry checkpoints advance on
-/// cursor presence alone, win or lose.
-fn attribute_cursor_terminal<P: Copy>(
+/// The resolution cycle's constrain-and-account body: fold the cursors'
+/// bounds into the seed window and account for who owns each edge — all
+/// by comparison against the seed, no mutation order.
+///
+/// The ordering-side winner (descending `after`, ascending `before`)
+/// stamps a nonempty window's terminal; a collapsed window installs
+/// `before` over `after`, and the after echo only claims a collapse it
+/// caused alone (measured before the before-clamp). Ties go to the
+/// cursor; a tip-collapsed seed keeps `LedgerTip` (polling back-off; no
+/// echo for unindexed space). Stamps carry the cursor's raw coordinate
+/// and kind so the echo reproduces the client's cursor exactly. Entry
+/// advances on cursor presence, win or lose.
+//
+// TODO: graphql-style empties (omit the cursor; the client's frontier
+// stands) would retire the echo machinery — raw stamps, kind retention,
+// collapse precedence. Needs client-contract sign-off.
+fn derive_scan<P: Copy + Ord>(
     ordering: Ordering,
-    after: Option<&TerminalRecord<P>>,
-    before: Option<&TerminalRecord<P>>,
-    report: &BoundsClampReport,
-    entry_checkpoint: &mut u64,
-    terminal: &mut TerminalRecord<P>,
-) {
+    seed: ResolvedScan<P>,
+    after: Option<Contribution<P>>,
+    before: Option<Contribution<P>>,
+) -> ResolvedScan<P> {
     let ascending = matches!(ordering, Ordering::Ascending);
-    let mut cursor_terminal = None;
+    let tip_preempts = bounds_empty(seed.bounds.lo, seed.bounds.hi)
+        && matches!(seed.terminal.exhaustion, RangeExhaustion::LedgerTip);
 
-    if let Some(stamp) = after {
-        if ascending {
-            *entry_checkpoint = (*entry_checkpoint).max(stamp.end_checkpoint);
-        }
-        if report.after_won {
-            if !ascending || report.after_left_empty {
-                cursor_terminal = Some(stamp);
-            }
-            if !ascending {
-                *terminal = *stamp;
-            }
-        }
-    }
+    // Constrain: win-or-keep on each edge (ties to the cursor); the tip
+    // preempts attribution on an already tip-collapsed seed.
+    let after_win = after
+        .as_ref()
+        .filter(|_| !tip_preempts)
+        .filter(|c| lower_bound_gte(c.bound, seed.bounds.lo));
+    let before_win = before
+        .as_ref()
+        .filter(|_| !tip_preempts)
+        .filter(|c| upper_bound_lte(c.bound, seed.bounds.hi));
+    let lo = after_win.map_or(seed.bounds.lo, |c| c.bound);
+    let hi = before_win.map_or(seed.bounds.hi, |c| c.bound);
+    let empty = bounds_empty(lo, hi);
+    let after_emptied_alone = after_win.is_some() && bounds_empty(lo, seed.bounds.hi);
 
-    if let Some(stamp) = before {
-        if !ascending {
-            *entry_checkpoint = (*entry_checkpoint).min(stamp.end_checkpoint);
-        }
-        if report.before_won {
-            if ascending || report.empty {
-                cursor_terminal = Some(stamp);
-            }
-            if ascending {
-                *terminal = *stamp;
-            }
-        }
-    }
+    // Account: the entry side folds on presence alone ...
+    let entry_checkpoint = match (ascending, &after, &before) {
+        (true, Some(c), _) => seed.entry_checkpoint.max(c.stamp.end_checkpoint),
+        (false, _, Some(c)) => seed.entry_checkpoint.min(c.stamp.end_checkpoint),
+        _ => seed.entry_checkpoint,
+    };
 
-    if report.empty {
-        if let Some(stamp) = cursor_terminal {
-            *terminal = *stamp;
-        } else if after.is_some() || before.is_some() {
-            // The lone partial write: a window that was already empty when
-            // the cursors lost their clamps re-attributes the reason
-            // without moving the coordinates.
-            terminal.exhaustion = RangeExhaustion::CursorBound {
-                kind: sui_rpc_cursor::CursorKind::Boundary,
-            };
-        }
+    // ... and the terminal side installs whole candidate records.
+    let terminal = if empty {
+        before_win
+            .or(after_win.filter(|_| !ascending || after_emptied_alone))
+            .map(|c| c.stamp)
+            .unwrap_or(seed.terminal)
+    } else {
+        let winner = if ascending { before_win } else { after_win };
+        winner.map_or(seed.terminal, |c| c.stamp)
+    };
+
+    let bounds = if empty {
+        // Canonical empty form everywhere in this module: the interval
+        // collapses onto its reported terminal bound.
+        ScanBounds::empty_at(terminal.end_coordinate)
+    } else {
+        ScanBounds { lo, hi }
+    };
+    ResolvedScan {
+        bounds,
+        entry_checkpoint,
+        terminal,
     }
 }
 
@@ -1538,14 +1505,19 @@ mod tests {
         CursorToken::boundary(Position::Checkpoints { checkpoint })
     }
 
-    /// Cursor clamps at checkpoint granularity: `after` keeps its checkpoint
-    /// as the inclusive start, `before` keeps an Item's checkpoint in range
-    /// (`cp + 1`) but takes a Boundary's as-is, the exhaustion reason follows
-    /// the ordering-side terminal edge, and a cursor-collapsed interval
-    /// reports CursorBound.
+    /// Cursor checkpoint hints only NARROW at resolve: `after` keeps its
+    /// checkpoint as the inclusive start, `before` keeps an Item's
+    /// checkpoint in range (`cp + 1`) but takes a Boundary's as-is, and the
+    /// exhaustion stays the request-derived ordering-side reason — cursor
+    /// attribution belongs to the scan stage (see the flow-through pins
+    /// below).
     #[test]
     fn resolves_checkpoint_range_with_cursor_clamps() {
-        let range = || CheckpointRange::from_request(Some(10), Some(20), 100).unwrap();
+        let resolve = |options: &QueryOptions| {
+            CheckpointRange::from_request(Some(10), Some(20), 100)
+                .unwrap()
+                .resolve(options)
+        };
 
         let after_item = QueryOptions {
             limit_items: 100,
@@ -1553,21 +1525,16 @@ mod tests {
             after: Some(cp_item(12)),
             before: None,
         };
-        let resolved = range().resolve(&after_item);
+        let resolved = resolve(&after_item);
         assert_eq!(resolved.range, 12..20);
         assert_eq!(resolved.exhaustion, RangeExhaustion::CheckpointBound);
 
-        let resolved = range().resolve(&QueryOptions {
+        let resolved = resolve(&QueryOptions {
             ordering: Ordering::Descending,
             ..after_item.clone()
         });
         assert_eq!(resolved.range, 12..20);
-        assert_eq!(
-            resolved.exhaustion,
-            RangeExhaustion::CursorBound {
-                kind: sui_rpc_cursor::CursorKind::Boundary,
-            }
-        );
+        assert_eq!(resolved.exhaustion, RangeExhaustion::CheckpointBound);
 
         let before_item = QueryOptions {
             limit_items: 100,
@@ -1575,16 +1542,11 @@ mod tests {
             after: None,
             before: Some(cp_item(15)),
         };
-        let resolved = range().resolve(&before_item);
+        let resolved = resolve(&before_item);
         assert_eq!(resolved.range, 10..16);
-        assert_eq!(
-            resolved.exhaustion,
-            RangeExhaustion::CursorBound {
-                kind: sui_rpc_cursor::CursorKind::Boundary,
-            }
-        );
+        assert_eq!(resolved.exhaustion, RangeExhaustion::CheckpointBound);
 
-        let resolved = range().resolve(&QueryOptions {
+        let resolved = resolve(&QueryOptions {
             before: Some(cp_boundary(15)),
             ..before_item.clone()
         });
@@ -1597,13 +1559,145 @@ mod tests {
             before: Some(cp_boundary(18)),
         };
         assert_eq!(
-            range().resolve(&collapsed),
-            ResolvedCheckpointRange::empty_at(
-                18,
-                RangeExhaustion::CursorBound {
+            resolve(&collapsed),
+            ResolvedCheckpointRange::empty_at(18, RangeExhaustion::CheckpointBound)
+        );
+    }
+
+    /// A checkpoint-stage collapse flows through the (empty-safe)
+    /// projection into the scan stage, which echoes the client's FULL
+    /// cursor — raw coordinate and kind, the frontier's fixed point —
+    /// instead of a Boundary at the clamped range edge (which would hand
+    /// back a cursor BELOW the client's own position).
+    #[test]
+    fn cp_collapse_flows_through_to_the_full_cursor_echo() {
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Ascending,
+            after: Some(cp_item(25)),
+            before: None,
+        };
+        let cp_range = CheckpointRange::from_request(Some(10), Some(20), 100)
+            .unwrap()
+            .resolve(&options);
+        assert_eq!(
+            cp_range,
+            ResolvedCheckpointRange::empty_at(20, RangeExhaustion::CheckpointBound)
+        );
+
+        let range = cp_range.range.clone();
+        let bounded: ResolvedScan<u64> =
+            options.apply_cursor_bounds(cp_range.with_range(range, options.ordering));
+        assert!(bounded.is_empty());
+        assert_eq!(
+            bounded.terminal,
+            TerminalRecord {
+                end_checkpoint: 25,
+                end_coordinate: 25,
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Item,
+                },
+            }
+        );
+    }
+
+    /// The tip preempts cursor attribution on a tip-collapsed seed: an
+    /// at-tip polling cursor is told LedgerTip, keeping the back-off
+    /// signal (same behavior as before the flow-through).
+    #[test]
+    fn at_tip_cursor_keeps_ledger_tip() {
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Ascending,
+            after: Some(cp_boundary(20)),
+            before: None,
+        };
+        let cp_range = CheckpointRange::from_request(None, None, 20)
+            .unwrap()
+            .resolve(&options);
+        assert_eq!(
+            cp_range,
+            ResolvedCheckpointRange::empty_at(20, RangeExhaustion::LedgerTip)
+        );
+
+        let range = cp_range.range.clone();
+        let bounded: ResolvedScan<u64> =
+            options.apply_cursor_bounds(cp_range.with_range(range, options.ordering));
+        assert!(bounded.is_empty());
+        assert_eq!(
+            bounded.terminal,
+            TerminalRecord {
+                end_checkpoint: 20,
+                end_coordinate: 20,
+                exhaustion: RangeExhaustion::LedgerTip,
+            }
+        );
+    }
+
+    /// A cursor strictly beyond the tip is also preempted: the server's
+    /// frontier (LedgerTip at the tip edge) is the honest answer for
+    /// space this server has not indexed — no echo is fabricated for it
+    /// (same behavior as before the flow-through).
+    #[test]
+    fn beyond_tip_cursor_keeps_ledger_tip() {
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Ascending,
+            after: Some(cp_item(25)),
+            before: None,
+        };
+        let cp_range = CheckpointRange::from_request(None, None, 20)
+            .unwrap()
+            .resolve(&options);
+        assert_eq!(
+            cp_range,
+            ResolvedCheckpointRange::empty_at(20, RangeExhaustion::LedgerTip)
+        );
+
+        let range = cp_range.range.clone();
+        let bounded: ResolvedScan<u64> =
+            options.apply_cursor_bounds(cp_range.with_range(range, options.ordering));
+        assert_eq!(
+            bounded.terminal,
+            TerminalRecord {
+                end_checkpoint: 20,
+                end_coordinate: 20,
+                exhaustion: RangeExhaustion::LedgerTip,
+            }
+        );
+    }
+
+    /// On a degenerate (request-empty, non-tip) window, a participating
+    /// before cursor attributes CursorBound with the before's echo — ties
+    /// to the cursor, as at every granularity.
+    #[test]
+    fn empty_seed_before_cursor_participates() {
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Ascending,
+            after: None,
+            before: Some(cp_item(3)),
+        };
+        let cp_range = CheckpointRange::from_request(Some(5), Some(5), 100)
+            .unwrap()
+            .resolve(&options);
+        assert_eq!(
+            cp_range,
+            ResolvedCheckpointRange::empty_at(4, RangeExhaustion::CheckpointBound)
+        );
+
+        let range = cp_range.range.clone();
+        let bounded: ResolvedScan<u64> =
+            options.apply_cursor_bounds(cp_range.with_range(range, options.ordering));
+        assert_eq!(
+            bounded.terminal,
+            TerminalRecord {
+                end_checkpoint: 3,
+                end_coordinate: 3,
+                exhaustion: RangeExhaustion::CursorBound {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
-                }
-            )
+                },
+            }
         );
     }
 

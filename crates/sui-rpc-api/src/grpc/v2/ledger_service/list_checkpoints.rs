@@ -354,7 +354,7 @@ fn next_checkpoint_chunk(
                     if consumed {
                         tx_range = tx_range.end..tx_range.end;
                     } else {
-                        terminal_record.reconcile_floor(
+                        terminal_record.absorb_raised_lo(
                             &mut entry_checkpoint,
                             floor.checkpoint,
                             floor.checkpoint,
@@ -971,7 +971,7 @@ mod tests {
 
     /// The filtered checkpoint scan's serving-floor reconciliation composes
     /// the shared pieces across two coordinate spaces — `clamp_to_available_lo` on
-    /// the transaction-space window, `reconcile_floor` on the
+    /// the transaction-space window, `absorb_raised_lo` on the
     /// checkpoint-space terminal record. Floor inside the window moves the
     /// scan start plus the direction-relevant checkpoint metadata; a floor
     /// at/past the window's end consumes it — the window canonicalizes to
@@ -1022,7 +1022,7 @@ mod tests {
             if got_consumed {
                 tx_range = tx_range.end..tx_range.end;
             } else {
-                terminal_record.reconcile_floor(
+                terminal_record.absorb_raised_lo(
                     &mut entry_checkpoint,
                     floor_cp,
                     floor_cp,
