@@ -200,11 +200,24 @@ pub trait ScanCoordinate: Copy + Ord {
 }
 
 /// One cursor's offer to [`derive_scan`]: the bound it imposes on the
-/// window, and the candidate stamp the scan reports if this cursor ends
-/// it. An installed stamp is always `CursorBound`.
+/// window, plus the raw token facts the install site builds a stamp from.
 struct Contribution<P> {
     bound: Bound<P>,
-    stamp: TerminalRecord<P>,
+    checkpoint: u64,
+    coordinate: P,
+    kind: sui_rpc_cursor::CursorKind,
+}
+
+impl<P: Copy> Contribution<P> {
+    /// The stamp installed if this cursor ends the scan; `kind` is chosen
+    /// at the install site. An installed stamp is always `CursorBound`.
+    fn record(&self, kind: sui_rpc_cursor::CursorKind) -> TerminalRecord<P> {
+        TerminalRecord {
+            end_checkpoint: self.checkpoint,
+            end_coordinate: self.coordinate,
+            exhaustion: RangeExhaustion::CursorBound { kind },
+        }
+    }
 }
 
 impl IntraTxCoordinate {
@@ -344,41 +357,27 @@ impl QueryOptions {
         self.apply_cursor_bounds(cp_range.with_range(range, self.ordering))
     }
 
-    /// Decode each cursor into its [`Contribution`] and run one
-    /// [`derive_scan`] iteration. Empty seeds flow through so a
-    /// checkpoint-stage collapse can echo the client's full cursor.
+    /// Decode each cursor into its [`Contribution`] — pure translation,
+    /// no policy — and run one [`derive_scan`] iteration. Empty seeds
+    /// flow through so a checkpoint-stage collapse can echo the client's
+    /// full cursor.
     fn apply_cursor_bounds<P: ScanCoordinate>(&self, resolved: ResolvedScan<P>) -> ResolvedScan<P> {
-        let ascending = matches!(self.ordering, Ordering::Ascending);
         let after = self.after.as_ref().map(|cursor| {
             let coordinate = P::from_cursor(cursor);
-            // Kind is decidable at decode: only an ascending window emptied
-            // by an `after` Item echoes the Item kind (resume must not
-            // re-include the delivered row); every other stamp is Boundary.
-            let kind = if ascending {
-                cursor.kind
-            } else {
-                sui_rpc_cursor::CursorKind::Boundary
-            };
             Contribution {
                 bound: cursor.kind.resume_bound(coordinate),
-                stamp: TerminalRecord {
-                    end_checkpoint: cursor.position.checkpoint(),
-                    end_coordinate: coordinate,
-                    exhaustion: RangeExhaustion::CursorBound { kind },
-                },
+                checkpoint: cursor.position.checkpoint(),
+                coordinate,
+                kind: cursor.kind,
             }
         });
         let before = self.before.as_ref().map(|cursor| {
             let coordinate = P::from_cursor(cursor);
             Contribution {
                 bound: cursor.kind.limit_bound(coordinate),
-                stamp: TerminalRecord {
-                    end_checkpoint: cursor.position.checkpoint(),
-                    end_coordinate: coordinate,
-                    exhaustion: RangeExhaustion::CursorBound {
-                        kind: sui_rpc_cursor::CursorKind::Boundary,
-                    },
-                },
+                checkpoint: cursor.position.checkpoint(),
+                coordinate,
+                kind: cursor.kind,
             }
         });
         derive_scan(self.ordering, resolved, after, before)
@@ -750,12 +749,13 @@ impl<P: Copy + Ord> ResolvedScan<P> {
 ///
 /// The ordering-side winner (descending `after`, ascending `before`)
 /// stamps a nonempty window's terminal; a collapsed window installs
-/// `before` over `after`, and the after echo only claims a collapse it
-/// caused alone (measured before the before-clamp). Ties go to the
-/// cursor; a tip-collapsed seed keeps `LedgerTip` (polling back-off; no
-/// echo for unindexed space). Stamps carry the cursor's raw coordinate
-/// and kind so the echo reproduces the client's cursor exactly. Entry
-/// advances on cursor presence, win or lose.
+/// `before` over `after`. Ties go to the cursor; a tip-collapsed seed
+/// keeps `LedgerTip` (polling back-off; no echo for unindexed space).
+/// Stamps echo the cursor's raw coordinate; only a stamp resumed on the
+/// lo side (an ascending response's cursor returns as `after`) keeps the
+/// raw kind — on the hi side Item and Boundary denote the same
+/// constraint, so Boundary is canonical. Entry advances on cursor
+/// presence, win or lose.
 //
 // TODO: graphql-style empties (omit the cursor; the client's frontier
 // stands) would retire the echo machinery — raw stamps, kind retention,
@@ -767,41 +767,55 @@ fn derive_scan<P: Copy + Ord>(
     before: Option<Contribution<P>>,
 ) -> ResolvedScan<P> {
     let ascending = matches!(ordering, Ordering::Ascending);
-    let tip_preempts = bounds_empty(seed.bounds.lo, seed.bounds.hi)
-        && matches!(seed.terminal.exhaustion, RangeExhaustion::LedgerTip);
 
-    // Constrain: win-or-keep on each edge (ties to the cursor); the tip
-    // preempts attribution on an already tip-collapsed seed.
+    // Account, entry side: folds on presence alone — max/min make a
+    // losing cursor a no-op.
+    let entry_checkpoint = match (ascending, &after, &before) {
+        (true, Some(c), _) => seed.entry_checkpoint.max(c.checkpoint),
+        (false, _, Some(c)) => seed.entry_checkpoint.min(c.checkpoint),
+        _ => seed.entry_checkpoint,
+    };
+
+    // A tip-collapsed seed is already decided: the tip preempts cursor
+    // attribution, keeping the back-off signal for at- and beyond-tip
+    // pollers.
+    if seed.bounds.is_empty() && matches!(seed.terminal.exhaustion, RangeExhaustion::LedgerTip) {
+        return ResolvedScan {
+            bounds: ScanBounds::empty_at(seed.terminal.end_coordinate),
+            entry_checkpoint,
+            terminal: seed.terminal,
+        };
+    }
+
+    // Constrain: win-or-keep on each edge (ties to the cursor).
     let after_win = after
         .as_ref()
-        .filter(|_| !tip_preempts)
         .filter(|c| lower_bound_gte(c.bound, seed.bounds.lo));
     let before_win = before
         .as_ref()
-        .filter(|_| !tip_preempts)
         .filter(|c| upper_bound_lte(c.bound, seed.bounds.hi));
     let lo = after_win.map_or(seed.bounds.lo, |c| c.bound);
     let hi = before_win.map_or(seed.bounds.hi, |c| c.bound);
     let empty = bounds_empty(lo, hi);
-    let after_emptied_alone = after_win.is_some() && bounds_empty(lo, seed.bounds.hi);
 
-    // Account: the entry side folds on presence alone ...
-    let entry_checkpoint = match (ascending, &after, &before) {
-        (true, Some(c), _) => seed.entry_checkpoint.max(c.stamp.end_checkpoint),
-        (false, _, Some(c)) => seed.entry_checkpoint.min(c.stamp.end_checkpoint),
-        _ => seed.entry_checkpoint,
-    };
-
-    // ... and the terminal side installs whole candidate records.
-    let terminal = if empty {
-        before_win
-            .or(after_win.filter(|_| !ascending || after_emptied_alone))
-            .map(|c| c.stamp)
-            .unwrap_or(seed.terminal)
-    } else {
-        let winner = if ascending { before_win } else { after_win };
-        winner.map_or(seed.terminal, |c| c.stamp)
-    };
+    // Account, terminal side: stamps are built where installed, kind
+    // chosen here next to the precedence it serves.
+    let after_record = after_win.map(|c| {
+        c.record(if ascending {
+            c.kind
+        } else {
+            sui_rpc_cursor::CursorKind::Boundary
+        })
+    });
+    let before_record = before_win.map(|c| c.record(sui_rpc_cursor::CursorKind::Boundary));
+    let terminal = match (empty, ascending) {
+        // Collapsed window: echo precedence `before` over `after`.
+        (true, _) => before_record.or(after_record),
+        // Nonempty: the ordering-side exit edge owns the stop.
+        (false, true) => before_record,
+        (false, false) => after_record,
+    }
+    .unwrap_or(seed.terminal);
 
     let bounds = if empty {
         // Canonical empty form everywhere in this module: the interval
