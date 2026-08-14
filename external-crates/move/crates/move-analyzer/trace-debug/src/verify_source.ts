@@ -24,6 +24,7 @@ import * as cp from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as semver from 'semver';
 import * as vscode from 'vscode';
 
 /**
@@ -38,6 +39,17 @@ const CACHE_SUMMARY_FILE_NAME = 'replay_cache_summary.json';
  * completes in seconds.
  */
 const VERIFY_TIMEOUT_MS = 60_000;
+
+/**
+ * Minimum Sui binary version supporting the verification check (the CLI's
+ * `--verify-only` mode was introduced in sui v1.77.0).
+ */
+const MIN_SUI_VERSION = '1.77.0';
+
+/**
+ * How long to wait for the `sui --version` pre-flight check.
+ */
+const VERSION_CHECK_TIMEOUT_MS = 10_000;
 
 /**
  * Maximum length of the verification tool's output relayed in a warning
@@ -130,14 +142,31 @@ function readTraceNetwork(traceDir: string): string | undefined {
  * does not succeed (nothing is reported on success, or when cancelled through
  * the progress notification).
  */
-function runVerification(
+async function runVerification(
     pkgRoot: string,
     pkgDirName: string,
     traceDir: string,
     token: vscode.CancellationToken
 ): Promise<void> {
+    const suiPath = resolveSuiPath();
+    // A binary predating `--verify-only` would fail with an obscure usage
+    // error; check the version up front to report something meaningful
+    // instead (an unknown version is let through to attempt verification).
+    const suiVersion = semanticVersion(await version(suiPath, ['--version']));
+    if (suiVersion !== null && semver.lt(suiVersion, MIN_SUI_VERSION)) {
+        vscode.window.showWarningMessage(
+            cannotVerifyPrefix(pkgRoot)
+            + `the Sui binary is too old (v${suiVersion.version}) - `
+            + `v${MIN_SUI_VERSION} or later is required.`
+        );
+        return;
+    }
+    // the user may have cancelled during the version check, before the
+    // verification process (and its cancellation handler below) existed
+    if (token.isCancellationRequested) {
+        return;
+    }
     return new Promise(resolve => {
-        const suiPath = resolveSuiPath();
         const network = readTraceNetwork(traceDir);
         // specify network on the commmand line only if it is one of the standard ones,
         // otherwise fall back on the client's active environment
@@ -199,11 +228,7 @@ function verificationFailureMessage(
     pkgRoot: string,
     network: string | undefined
 ): string {
-    const pkgName = path.basename(pkgRoot);
-    // every message leads with the consequence for the user, as the relayed
-    // tool output is not always self-contained in this regard
-    const cannotVerify = `Could not verify local debugging metadata for '${pkgName}' `
-        + `against on-chain bytecode - source-level debugging may be unreliable: `;
+    const cannotVerify = cannotVerifyPrefix(pkgRoot);
 
     if (error.code === 'ENOENT') {
         return cannotVerify
@@ -238,4 +263,52 @@ function collapseOutput(text: string): string | undefined {
     return collapsed.length > MAX_DETAIL_LENGTH
         ? collapsed.slice(0, MAX_DETAIL_LENGTH) + '...'
         : collapsed;
+}
+
+/**
+ * Common lead-in for verification warnings: every message leads with the
+ * consequence for the user, as the failure details that follow are not always
+ * self-contained in this regard.
+ */
+function cannotVerifyPrefix(pkgRoot: string): string {
+    return `Could not verify local debugging metadata for '${path.basename(pkgRoot)}' `
+        + `against on-chain bytecode - source-level debugging may be unreliable: `;
+}
+
+/**
+ * Raw output of invoking the binary at `binaryPath` with the given
+ * (version-printing) arguments, or `null` if the binary cannot be run or
+ * prints nothing.
+ */
+function version(binaryPath: string, args?: readonly string[]): Promise<string | null> {
+    return new Promise(resolve => {
+        cp.execFile(
+            binaryPath,
+            args,
+            { timeout: VERSION_CHECK_TIMEOUT_MS, windowsHide: true },
+            (_error, stdout, _stderr) => resolve(stdout || null)
+        );
+    });
+}
+
+/**
+ * Semantic version parsed from a binary's version string.
+ */
+function semanticVersion(versionString: string | null): semver.SemVer | null {
+    if (versionString !== null) {
+        // Version string looks as follows: 'COMMAND_NAME SEMVER-SHA'
+        const versionStringWords = versionString.split(' ', 2);
+        if (versionStringWords.length < 2) {
+            return null;
+        }
+        const versionParts = versionStringWords[1]?.split('-', 2);
+        if (!versionParts) {
+            return null;
+        }
+        if (versionParts.length < 2) {
+            return null;
+        }
+        return semver.parse(versionParts[0]);
+    }
+    return null;
 }
