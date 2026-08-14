@@ -330,6 +330,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_processed: IntCounterVec,
     pub consensus_handler_processed_user_transactions: IntCounterVec,
     pub consensus_handler_transaction_sizes: HistogramVec,
+    pub consensus_handler_max_transaction_size: IntGaugeVec,
     pub consensus_handler_deferred_transactions: IntCounter,
     pub consensus_handler_congested_transactions: IntCounter,
     pub consensus_handler_unpaid_amplification_deferrals: IntCounter,
@@ -385,6 +386,12 @@ const POSITIVE_INT_BUCKETS: &[f64] = &[
     1., 2., 5., 7., 10., 20., 50., 70., 100., 200., 500., 700., 1000., 2000., 5000., 7000., 10000.,
     20000., 50000., 70000., 100000., 200000., 500000., 700000., 1000000., 2000000., 5000000.,
     7000000., 10000000.,
+];
+
+const CONSENSUS_TRANSACTION_SIZE_BUCKETS: &[f64] = &[
+    1., 2., 5., 7., 10., 20., 50., 70., 100., 200., 500., 700., 1000., 2000., 5000., 7000., 10000.,
+    20000., 50000., 70000., 100000., 150000., 200000., 250000., 300000., 500000., 700000.,
+    1000000., 2000000., 5000000., 7000000., 10000000.,
 ];
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -663,8 +670,14 @@ impl AuthorityMetrics {
                 "consensus_handler_transaction_sizes",
                 "Sizes of each type of transactions processed by consensus handler, sliced by class and commit outcome (accepted/rejected)",
                 &["class", "outcome"],
-                POSITIVE_INT_BUCKETS.to_vec(),
+                CONSENSUS_TRANSACTION_SIZE_BUCKETS.to_vec(),
                 registry
+            ).unwrap(),
+            consensus_handler_max_transaction_size: register_int_gauge_vec_with_registry!(
+                "consensus_handler_max_transaction_size",
+                "Maximum transaction size in bytes received by the consensus handler for each class",
+                &["class"],
+                registry,
             ).unwrap(),
             consensus_handler_deferred_transactions: register_int_counter_with_registry!(
                 "consensus_handler_deferred_transactions",
@@ -808,6 +821,22 @@ impl AuthorityMetrics {
             txn_ready_rate_tracker: Arc::new(Mutex::new(RateTracker::new(Duration::from_secs(10)))),
             execution_rate_tracker: Arc::new(Mutex::new(RateTracker::new(Duration::from_secs(10)))),
         }
+    }
+
+    pub(crate) fn observe_consensus_handler_transaction_size(
+        &self,
+        class: &str,
+        outcome: &str,
+        size: usize,
+    ) {
+        self.consensus_handler_transaction_sizes
+            .with_label_values(&[class, outcome])
+            .observe(size as f64);
+
+        let max_transaction_size = self
+            .consensus_handler_max_transaction_size
+            .with_label_values(&[class]);
+        max_transaction_size.set(max_transaction_size.get().max(size as i64));
     }
 }
 
