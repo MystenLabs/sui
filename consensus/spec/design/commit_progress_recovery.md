@@ -694,7 +694,7 @@ The main theorem states:
 > stalled correct, non-crashed validator eventually observes a greater commit
 > index.
 
-Lean checks these facts:
+The Lean model defines or proves these facts:
 
 - the non-progress set contains every Byzantine validator, and a recovery quorum
   contains only correct, non-crashed validators;
@@ -757,7 +757,7 @@ Add deterministic simulation tests for these cases:
 - a sufficient derived layer window advances the commit index;
 - a Byzantine leader equivocates or withholds its block;
 - leader schedule stake is at and below `f + c`, and above that bound;
-- round leader selection stake is below `A` and at `A`;
+- a smaller round leader selection has stake below `A` and then at `A`;
 - the optional resource policy reports round leader selection stake at `Q` and
   above `Q` without treating the latter as a correctness failure;
 - v3 round leader selection equals the leader schedule as a set, and the two sets

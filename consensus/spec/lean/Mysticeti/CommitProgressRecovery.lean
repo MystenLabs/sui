@@ -374,7 +374,10 @@ schedule. -/
 theorem alternating_round_order_is_schedule_permutation (round : Nat) :
     List.Perm (alternatingRoundLeaderOrder round) [.correct, .byzantine] := by
   unfold alternatingRoundLeaderOrder
-  split <;> simp_all
+  split
+  · simp
+  · exact List.Perm.swap ShuffleExampleValidator.correct
+      ShuffleExampleValidator.byzantine []
 
 /-- The first selected leader slot in the counterexample. -/
 def alternatingFirstSelectedLeader (round : Nat) : ShuffleExampleValidator :=
@@ -383,7 +386,8 @@ def alternatingFirstSelectedLeader (round : Nat) : ShuffleExampleValidator :=
 theorem alternating_round_order_has_expected_first (round : Nat) :
     (alternatingRoundLeaderOrder round).head? =
       some (alternatingFirstSelectedLeader round) := by
-  simp [alternatingRoundLeaderOrder, alternatingFirstSelectedLeader]
+  by_cases evenRound : round % 2 = 0 <;>
+    simp [alternatingRoundLeaderOrder, alternatingFirstSelectedLeader, evenRound]
 
 /-- A correct validator is first after every start round. -/
 theorem alternating_order_has_eventual_correct_first (start : Nat) :
@@ -391,7 +395,7 @@ theorem alternating_order_has_eventual_correct_first (start : Nat) :
       alternatingFirstSelectedLeader round = .correct := by
   refine ⟨2 * start, ?_, ?_⟩
   · omega
-  · simp [alternatingFirstSelectedLeader, Nat.mul_mod]
+  · simp [alternatingFirstSelectedLeader]
 
 /-- No two adjacent rounds put a correct validator first. This proves that a valid
 per-round shuffle plus ordinary leader fairness is not sufficient for the adjacent
@@ -532,13 +536,6 @@ def HasQuorumBlockLayerWindow {State : Type}
     (count : Nat) : State → Prop :=
   fun state => ∃ base, ConsecutiveQuorumBlockLayers view thresholds base count state
 
-def FullyDecidedCommitRound {State : Type}
-    (view : CommitProgressRecoveryView State) (round : Nat) : State → Prop :=
-  fun state =>
-    let statuses := view.selectedLeaderSlotStatuses round state
-    AllSelectedLeaderSlotsFinal statuses ∧
-      HasCommitResultInSelectedLeaderSlot statuses
-
 def UsableAnchorRound {State : Type}
     (view : CommitProgressRecoveryView State) (round : Nat) : State → Prop :=
   fun state => UsableAnchorOrder (view.selectedLeaderSlotStatuses round state)
@@ -677,24 +674,14 @@ structure CommitProgressRecoveryAssumptions
       view.committedPrefixId left = view.committedPrefixId right →
       view.selectedLeaderSlotValidators round left =
         view.selectedLeaderSlotValidators round right
-  /-- Every Byzantine validator is in the non-progress set. -/
-  byzantineIncludedInNonProgress :
-    ∀ state,
-      VoterSet.SubsetAt view.authorityCount
-        (view.byzantine state) (view.nonProgress state)
   /-- The non-progress set is the union of Byzantine and crashed or unavailable
-  validators. -/
+  validators. This equality also puts every Byzantine validator in the
+  non-progress set. -/
   nonProgressSetDefinition :
     ∀ state,
       view.nonProgress state =
         VoterSet.union
           (view.byzantine state) (view.crashedOrUnavailable state)
-  /-- Each validator counted in the recovery quorum is correct and non-crashed. -/
-  correctRecoveryAuthoritiesExcludeNonProgress :
-    ∀ state,
-      VoterSet.SubsetAt view.authorityCount
-        (view.correctRecoveryAuthorities state)
-        (VoterSet.diff VoterSet.full (view.nonProgress state))
   /-- A commit can advance before the timers overlap. Otherwise, correct,
   non-crashed validators with quorum stake are eventually in recovery at the same
   time. This stage includes local clock progress and bounded drift.

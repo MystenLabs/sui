@@ -130,19 +130,6 @@ theorem safety (evidence : LeaderEvidence authorityCount stake thresholds)
     · exact evidence.direct_skip_not_indirect_commit directSkip indirectCommit
     · exact evidence.indirect_commit_not_indirect_skip indirectCommit indirectSkip
 
-/-- A direct commit quorum excludes an incompatible certificate. -/
-theorem direct_commit_excludes_other_certificate
-    (faulty directVotes otherCertificate : VoterSet)
-    (faultBounded : FaultBounded thresholds faulty)
-    (onlyFaulty :
-      OnlyFaultyOverlap authorityCount faulty directVotes otherCertificate)
-    (directQuorum :
-      thresholds.quorum ≤ weight authorityCount stake directVotes)
-    (certificate :
-      thresholds.certificate ≤ weight authorityCount stake otherCertificate) : False := by
-  exact incompatible_quorum_certificate_impossible faultBounded onlyFaulty
-    directQuorum certificate
-
 end LeaderEvidence
 
 end Mysticeti

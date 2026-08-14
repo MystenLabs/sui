@@ -50,138 +50,28 @@ However, the same direct-jump mechanism is present, and the Lean counterexample
 shows that the v3 code cannot satisfy the stated liveness contract without another
 rule.
 
-The intermediate-proposal rule is sufficient for strong leader liveness, but it is
-not known to be necessary for commit-index progress. For the narrower property,
-implement commit progress recovery:
+The intermediate-proposal rule is sufficient for liveness for old leader blocks.
+It is not known to be necessary for commit-index progress. For the narrower
+property, implement the linked commit progress recovery design.
 
-1. Read the base timestamp from the current committed state in `DagState`. Use
-   `DagState::last_commit_timestamp_ms()` after the first commit. Before the first
-   commit, use `Context::epoch_start_timestamp_ms`. After restart, `DagState::new`
-   supplies the last flushed commit.
-2. Compute the stall time as the local clock minus the base timestamp. Use
-   saturating subtraction.
-3. Enter recovery when the stall time reaches the recovery timeout and the local
-   commit index is not behind the locally observed quorum commit index.
-4. Stay eligible for recovery until `Core::post_commit` advances the commit index.
-5. During recovery, continue to make valid blocks at the threshold-clock proposal
-   round. Keep the immediate-parent quorum check. Bypass the selected leader slot
-   availability wait after the commit progress recovery timeout.
-6. Do not create a block at or below the authority's last proposed round.
-7. Keep a schedule-independent delay between recovery layers. Increase the delay
-   while the commit index is unchanged so that it eventually exceeds the post-GST
-   message delay.
+The current Rust code does not have these parts:
 
-The maximum leader timeout already calls `Proposer::try_new_block(true)`. This path
-bypasses the selected leader slot availability wait and `min_round_delay`. Commit progress
-recovery must use a named proposal mode that separates these controls. It must keep
-schedule-independent pacing.
+- a `commit_progress_recovery_timeout` configuration value and stall trigger;
+- a named proposal mode that keeps the immediate-parent quorum and forward-round
+  checks, bypasses the selected leader slot availability wait, and keeps
+  schedule-independent pacing;
+- recovery state and pacing that remain keyed by commit index across future round
+  jumps;
+- a refinement proof from recovery overlap and recent quorum block layers to
+  usable anchors and a greater `FlexCommitter` commit index;
+- deterministic simulation tests for schedule changes, stake bounds, selective
+  delivery, synchronization, GC, restart, and future timestamps.
 
-Key the recovery attempt count and pacing deadline by commit index, not by target
-round. A higher threshold-clock round must not reset this state. If a deadline is
-already mature, keep it mature until Core creates a recovery block or the commit
-index changes.
-
-### Known gap: commit timestamp stall trigger
-
-The Rust implementation does not yet have this trigger. Add
-`commit_progress_recovery_timeout` to `consensus_config::Parameters` and use the
-current `DagState` commit timestamp as the stall base.
-
-The trigger can use this Rust logic:
-
-```rust
-let stall_base_timestamp_ms = dag_state
-    .last_commit_timestamp_ms()
-    .max(context.epoch_start_timestamp_ms);
-let stalled_for_ms = context
-    .clock
-    .timestamp_utc_ms()
-    .saturating_sub(stall_base_timestamp_ms);
-```
-
-The recovery mode does not need a separate persisted flag. Local commits and
-commits installed by commit sync update the current `DagState` value.
-`DagState::flush` makes buffered commits durable. `DagState::new` loads the last
-flushed commit after restart.
-
-The commit timestamp is consensus time. It is not the local time when Core applied
-the commit. After Core installs an old commit and exits recovery, the timestamp
-condition can cause it to enter recovery again. This behavior lets recovery
-continue until the chain reaches a recent commit. The current block-verification
-path can also accept a block timestamp that is ahead of the local clock. Saturating
-subtraction returns zero in this case and delays recovery until the local clock
-catches up. Tests must cover both cases.
-
-The validators do not select one recovery round. The Lean model makes the base of
-the recent layer window existential. Its temporal input says that, if no earlier
-commit occurs after GST, correct, non-crashed validators with quorum stake are
-eventually in recovery at the same time and produce a consecutive recent layer
-window. The Rust refinement must prove this input for staggered timers and future
-round jumps. A valid future-round block has
-quorum parents in the preceding round, but this fact alone does not prove a complete
-window.
-
-The recovery timers do not have to expire together. A fixed 10-second entry
-timeout only starts recovery. It does not replace the post-GST message-delivery,
-clock-progress, block-sync, proposal-scheduling, pacing, and task-scheduling
-assumptions.
-
-Recovery uses each validator's current committed state. It does not require a
-certified commit prefix. `CertifiedCommit` remains an input type for commit sync.
-The refinement proof must derive schedule consistency from the common commit chain
-and must cover validators at different local commit indices.
-
-The Lean theorem fixes the current one-round direct-vote offset. It derives the
-sufficient layer-window length as `indirectCommitDepth + 1`. It also separates the
-validator set, the leader schedule, and the round leader selection.
-
-Let `N` be actual validator set stake, `S` be leader schedule stake, and `P_r` be
-round leader selection stake in pending leader round `r`. The structural relation
-is `P_r <= S <= N`. If Byzantine and crashed or otherwise non-progressing stake is
-at most `f + c`, the schedule viability bound is:
-
-```text
-f + c < S <= N
-```
-
-This condition ensures that the schedule contains positive stake from a correct,
-non-crashed validator. A smaller round leader selection still needs a leader
-fairness condition. The sufficient quorum-coverage bound is:
-
-```text
-A <= P_r
-```
-
-Current v3 selects the full leader schedule in every pending leader round at or
-above `min_next_leader_round`. Therefore, its structural and quorum-coverage bounds
-are:
-
-```text
-A <= S = P_r <= N
-```
-
-The lower bound uses the actual certification threshold from the Rust committee.
-It makes every quorum block layer contain positive stake from a correct validator
-in the round leader selection. This coverage result does not make each selected
-leader slot final.
-The optional `P_r <= Q` bound limits work. The per-slot safety proof and the
-quorum-coverage lemma do not use it. Its effect on anchor-scan liveness remains in
-the usable-anchor obligation.
-
-The missing Rust refinement must show that schedule-independent pacing and the
-recent layers produce the required usable anchors. It must also show that the
-`FlexCommitter` descending scan advances the commit index. It must cover different
-recovery-entry times, split votes from Byzantine validators, future blocks, ordered
-schedule consistency, schedule changes, GC, block sync, and restart.
-
-Add deterministic simulation tests for staggered recovery entry, a large round
-jump, a window shorter than the derived length, a sufficient derived window,
-leader schedule and round leader selection stake at their lower bounds, the
-optional resource bound, a smaller round leader selection, a schedule change, and
-commit progress after GC and restart. Include a threshold-mapping case where actual
-`N = 55` and reference inputs `malicious_stake = crash_stake = 1250`. Rust must
-scale these inputs to `f = c = 6`, `A = 19`, and `Q = 43`. Run each test with v3,
-`FlexCommitter`, and the v3 leader schedule active.
+The [design document](../design/commit_progress_recovery.md) is the canonical source
+for the trigger logic, proposal rules, derived recovery distances, leader schedule
+and round leader selection bounds, synchronization rules, test plan, and activation
+condition. `CertifiedCommit` remains an input to commit sync. Commit progress
+recovery does not require a separate certified commit prefix.
 
 ## P0: put v3 activation in epoch protocol state
 
