@@ -17,10 +17,13 @@ fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
 
     let test_module_names = common::read_test_module_names(file_path)?;
 
-    let compiled_package = common::run_test_package_build(pkg_dir, |writer, root_pkg, config| {
-        BuildPlan::create(root_pkg, config)?.compile_no_exit(writer, |compiler| compiler)
-    })?;
-    let root_package_name = compiled_package.compiled_package_info.package_name;
+    let (root_package_name, compiled_package) =
+        common::run_test_package_build(pkg_dir, |writer, root_pkg, config| {
+            let canonical_package_name = Symbol::from(root_pkg.package_info().name().as_str());
+            let compiled_package = BuildPlan::create(root_pkg, config)?
+                .compile_no_exit(writer, |compiler| compiler)?;
+            Ok((canonical_package_name, compiled_package))
+        })?;
 
     let root_modules = compiled_package
         .root_modules()
