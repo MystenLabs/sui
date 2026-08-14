@@ -26,7 +26,7 @@ use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
-use sui_rpc_api::ledger_history::query_options::ResolvedRange;
+use sui_rpc_api::ledger_history::query_options::ResolvedScan;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
@@ -114,11 +114,11 @@ pub(crate) async fn list_transactions(
     let tx_range = resolve_tx_range(&client, checkpoint_range, &options)
         .instrument(debug_span!("resolve_tx_range"))
         .await?;
-    let exhaustion = tx_range.exhaustion;
-    let range_end_checkpoint = tx_range.end_checkpoint;
-    let range_end_position = tx_range.end_position;
+    let exhaustion = tx_range.terminal.exhaustion;
+    let range_end_checkpoint = tx_range.terminal.end_checkpoint;
+    let range_end_position = tx_range.terminal.end_coordinate;
     let entry_checkpoint = tx_range.entry_checkpoint;
-    let tx_range = tx_range.range;
+    let tx_range = tx_range.bounds.to_range();
 
     if tx_range.is_empty() {
         info!(
@@ -622,14 +622,19 @@ async fn resolve_tx_range(
     client: &BigTableClient,
     cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedRange, RpcError> {
+) -> Result<ResolvedScan<u64>, RpcError> {
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
     if cp_range.is_empty() {
-        return Ok(cp_range.with_range(tx_range, options.ordering));
+        // Empty windows still resolve a tx coordinate: the terminal frame
+        // needs a full resume cursor, and `tx_range` collapsed to the
+        // fencepost of the terminal checkpoint. `resolve_scan` leaves an
+        // empty window untouched by cursor bounds, so it is the entry point
+        // here too.
+        return Ok(options.resolve_scan(cp_range, tx_range));
     }
-    Ok(options.apply_cursor_bounds(cp_range.with_range(tx_range, options.ordering)))
+    Ok(options.resolve_scan(cp_range, tx_range))
 }
 
 fn transaction_item_response(

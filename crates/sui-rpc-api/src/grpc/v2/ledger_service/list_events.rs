@@ -31,7 +31,7 @@ use crate::ledger_history::filter::event_filter_to_query;
 use crate::ledger_history::query_options::IntraTxScanBounds;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::ResolvedCheckpointRange;
-use crate::ledger_history::query_options::ResolvedIntraTxRange;
+use crate::ledger_history::query_options::ResolvedScan;
 use crate::metrics::ListRequestMetrics;
 use crate::metrics::ListStreamMetrics;
 use crate::read_mask_defaults;
@@ -296,12 +296,12 @@ fn next_event_chunk(
                 return Err(cancelled());
             }
             let terminal_position = Position::Events {
-                checkpoint: event_range.end_checkpoint,
-                tx_seq: event_range.end_position.tx_seq,
-                event_index: event_range.end_position.event_index,
+                checkpoint: event_range.terminal.end_checkpoint,
+                tx_seq: event_range.terminal.end_coordinate.tx_seq,
+                event_index: event_range.terminal.end_coordinate.event_index,
             };
             let terminal = ScanTerminal::from_range_exhaustion(
-                event_range.exhaustion,
+                event_range.terminal.exhaustion,
                 terminal_position,
                 event_range.is_empty(),
             );
@@ -321,17 +321,17 @@ fn next_event_chunk(
                     bounds: Some(bounds),
                     entry_checkpoint: event_range.entry_checkpoint,
                     pending_bucket: None,
-                    exhaustion: event_range.exhaustion,
-                    end_checkpoint: event_range.end_checkpoint,
-                    end_position: event_range.end_position,
+                    exhaustion: event_range.terminal.exhaustion,
+                    end_checkpoint: event_range.terminal.end_checkpoint,
+                    end_position: event_range.terminal.end_coordinate,
                 },
                 None => EventScanState::Unfiltered {
                     bounds,
                     entry_checkpoint: event_range.entry_checkpoint,
                     row_scan_budget: unfiltered_row_scan_budget,
-                    exhaustion: event_range.exhaustion,
-                    end_checkpoint: event_range.end_checkpoint,
-                    end_position: event_range.end_position,
+                    exhaustion: event_range.terminal.exhaustion,
+                    end_checkpoint: event_range.terminal.end_checkpoint,
+                    end_position: event_range.terminal.end_coordinate,
                 },
             };
             return next_event_chunk(
@@ -753,42 +753,20 @@ fn resolve_event_range(
     start_checkpoint: Option<u64>,
     cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedIntraTxRange, RpcError> {
+) -> Result<ResolvedScan<IntraTxCoordinate>, RpcError> {
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
-    if cp_range.is_empty() {
-        return Ok(ResolvedIntraTxRange::empty_at(
-            cp_range.terminal_checkpoint(options.ordering),
-            IntraTxCoordinate::start_of_tx(tx_range.start),
-            cp_range.exhaustion,
-        ));
-    }
-
-    let mut resolved = ResolvedIntraTxRange {
-        bounds: IntraTxScanBounds::tx_span(tx_range.start, tx_range.end),
-        entry_checkpoint: if options.is_ascending() {
-            cp_range.range.start
-        } else {
-            cp_range.range.end.saturating_sub(1)
-        },
-        end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
-        end_position: match options.ordering {
-            crate::ledger_history::query_options::Ordering::Ascending => {
-                IntraTxCoordinate::start_of_tx(tx_range.end)
-            }
-            crate::ledger_history::query_options::Ordering::Descending => {
-                IntraTxCoordinate::start_of_tx(tx_range.start)
-            }
-        },
-        exhaustion: cp_range.exhaustion,
-    };
-    resolved = options.apply_intra_tx_cursor_bounds(resolved);
+    let mut resolved: ResolvedScan<IntraTxCoordinate> = options.resolve_scan(cp_range, tx_range);
     if !resolved.is_empty() {
         let start_tx = match resolved.bounds.lo {
             Bound::Included(position) | Bound::Excluded(position) => position.tx_seq,
             Bound::Unbounded => 0,
         };
         if let Some(floor) = clamp_to_serving_floor(service, start_tx, start_checkpoint, options)? {
-            resolved.apply_serving_floor(floor.tx_seq, floor.checkpoint, options);
+            resolved.apply_serving_floor(
+                IntraTxCoordinate::start_of_tx(floor.tx_seq),
+                floor.checkpoint,
+                options,
+            );
         }
     }
     Ok(resolved)

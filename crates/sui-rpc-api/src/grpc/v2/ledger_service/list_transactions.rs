@@ -29,7 +29,7 @@ use crate::ledger_history::filter::transaction_filter_to_query;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::query_options::ResolvedCheckpointRange;
-use crate::ledger_history::query_options::ResolvedRange;
+use crate::ledger_history::query_options::ResolvedScan;
 use crate::ledger_history::watermark::ScanTerminal;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
@@ -295,15 +295,18 @@ fn next_transaction_chunk(
                 let tx_range =
                     resolve_tx_range(&service, start_checkpoint, checkpoint_range, &options)?;
                 let entry_checkpoint = tx_range.entry_checkpoint;
+                // Emptiness is a store-edge fact under symbolic resume: a
+                // dense window cursors collapsed only becomes empty in
+                // to_range, and an empty scan must not claim coverage.
+                let range = tx_range.bounds.to_range();
                 let terminal = ScanTerminal::from_range_exhaustion(
-                    tx_range.exhaustion,
+                    tx_range.terminal.exhaustion,
                     Position::Transactions {
-                        checkpoint: tx_range.end_checkpoint,
-                        tx_seq: tx_range.end_position,
+                        checkpoint: tx_range.terminal.end_checkpoint,
+                        tx_seq: tx_range.terminal.end_coordinate,
                     },
-                    tx_range.is_empty(),
+                    range.is_empty(),
                 );
-                let range = tx_range.range;
                 if range.is_empty() {
                     return Ok(TransactionChunkDone {
                         items: Vec::new(),
@@ -319,16 +322,16 @@ fn next_transaction_chunk(
                         range: Some(range),
                         entry_checkpoint,
                         pending_bucket: None,
-                        exhaustion: tx_range.exhaustion,
-                        end_checkpoint: tx_range.end_checkpoint,
-                        end_position: tx_range.end_position,
+                        exhaustion: tx_range.terminal.exhaustion,
+                        end_checkpoint: tx_range.terminal.end_checkpoint,
+                        end_position: tx_range.terminal.end_coordinate,
                     },
                     None => TransactionScanState::Unfiltered {
                         range,
                         entry_checkpoint,
-                        exhaustion: tx_range.exhaustion,
-                        end_checkpoint: tx_range.end_checkpoint,
-                        end_position: tx_range.end_position,
+                        exhaustion: tx_range.terminal.exhaustion,
+                        end_checkpoint: tx_range.terminal.end_checkpoint,
+                        end_position: tx_range.terminal.end_coordinate,
                     },
                 };
                 continue;
@@ -630,17 +633,16 @@ fn resolve_tx_range(
     start_checkpoint: Option<u64>,
     cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedRange, RpcError> {
+) -> Result<ResolvedScan<u64>, RpcError> {
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
-    if cp_range.is_empty() {
-        return Ok(cp_range.with_range(tx_range, options.ordering));
-    }
-
-    let resolved = cp_range.with_range(tx_range, options.ordering);
-    let mut resolved = options.apply_cursor_bounds(resolved);
-    if !resolved.range.is_empty()
-        && let Some(floor) =
-            clamp_to_serving_floor(service, resolved.range.start, start_checkpoint, options)?
+    let mut resolved = options.resolve_scan(cp_range, tx_range);
+    if !resolved.is_empty()
+        && let Some(floor) = clamp_to_serving_floor(
+            service,
+            resolved.bounds.to_range().start,
+            start_checkpoint,
+            options,
+        )?
     {
         resolved.apply_serving_floor(floor.tx_seq, floor.checkpoint, options);
     }
