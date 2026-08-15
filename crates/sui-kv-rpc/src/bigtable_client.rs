@@ -50,7 +50,7 @@ use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
 use sui_rpc_api::RpcError;
-use sui_rpc_api::ledger_history::query_options::EventPosition;
+use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
@@ -410,7 +410,7 @@ impl BigTableClient {
     pub(crate) fn event_wm_resolver(
         &self,
         direction: ScanDirection,
-    ) -> impl Fn(EventPosition) -> WmResolverFut + Send + 'static {
+    ) -> impl Fn(IntraTxCoordinate) -> WmResolverFut + Send + 'static {
         let client = self.clone();
         move |position| {
             let client = client.clone();
