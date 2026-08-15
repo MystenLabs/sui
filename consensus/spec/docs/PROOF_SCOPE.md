@@ -3,79 +3,38 @@ Copyright (c) Mysten Labs, Inc.
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Mysticeti v3 Lean proof scope
+# Mysticeti v3 proof scope
 
 ## Result
 
-The Lean project checks the core safety arithmetic, the modeled GC retention
-rules, the signed transaction cutoff rule, and a conditional liveness argument.
-The project has no `sorry`, `admit`, or declared `axiom`.
+The formal model has no unfinished proof placeholders or declared axioms. It
+proves safety, evidence retention, and conditional progress properties for
+Mysticeti v3.
 
-This work is not an end-to-end proof of the Rust program. The Lean model states the
-remaining Rust refinement conditions as explicit assumptions. A theorem is a valid
-protocol claim only when the implementation establishes these conditions.
+The model is not an end-to-end proof of the product. A result applies to the
+product only when all related environment conditions and product-mapping
+conditions hold. The [assumption ledger](ASSUMPTIONS.md) is the complete list
+for these conditions. The [gap report](IMPLEMENTATION_GAPS.md) lists required
+product changes.
 
-In the current `consensus/` tree, the leader-rule model maps to the
-`FlexCommitter` path in `Core`. The proposer does not create `BlockV3`, and the
-tree does not contain the modeled v3 transaction finalizer. Thus, the transaction
-cutoff and transaction-finalization results do not yet have a current Rust mapping.
+## Safety
 
-The [assumption ledger](ASSUMPTIONS.md) gives each condition a stable identifier,
-status, refinement mapping, and discharge condition. A project with no declared
-Lean `axiom` can still have conditional theorems because assumptions can be theorem
-inputs.
+The safety model uses weighted validator sets:
 
-## Shared proof assumptions
-
-The proof suite uses one global
-[assumption catalog](ASSUMPTIONS.md#shared-proof-model). Commit progress recovery
-does not own the network, fault, runtime, storage, configuration, or leader
-conditions. Safety and liveness theorems use the applicable parts of the same
-catalog.
-
-The standard conditions are bounded Byzantine stake, authenticated votes,
-post-GST message delivery, and weak task fairness. The separate unavailable-stake
-budget `c` is part of the v3 hybrid fault model.
-
-These conditions are stronger or less standard:
-
-- local consensus actions have a positive finite bound `epsilon`, with
-  `epsilon < delta`, when a bounded liveness result needs it;
-- each pending round's complete leader-slot order uses an accepted independent
-  uniform permutation model.
-
-All correct validators still compute the same deterministic leader-slot order. The
-probabilistic statement describes its distribution for liveness analysis. The
-leader schedule bounds `f + c < S` and `A <= P_r` are configuration and protocol
-conditions. They are not environment assumptions.
-
-Useful-peer retention is conditional. Steady-state consensus does not need it for
-new messages that arrive under partial synchrony. A lagging or restarted validator
-needs either an available peer for old consensus blocks and commits or verified
-commit sync that moves it past those items. Transaction payloads can be resubmitted
-and are not part of this condition.
-
-## Safety model
-
-The safety proof uses weighted authority sets. A Byzantine authority can count once
-on each side after equivocation. It cannot count more than once on either side.
-
-The model uses these names:
-
-- `N` is actual validator set stake.
+- `N` is total validator-set stake.
 - `f` is the maximum Byzantine stake.
-- `Q` is the direct quorum threshold.
-- `A` is the indirect certification threshold.
+- `Q` is the quorum threshold.
+- `A` is the certification threshold.
+- `c` is the additional unavailable-stake budget.
 
-The proof requires these inequalities:
+Safety requires:
 
 ```text
 N + f < Q + A
 N + f + A <= 2Q
 ```
 
-[`Thresholds.nominalHybrid`](../lean/Mysticeti/Thresholds.lean) constructs the
-nominal v3 values:
+The nominal v3 construction is:
 
 ```text
 N = 5f + 3c + 1
@@ -83,509 +42,169 @@ Q = 4f + 2c + 1
 A = 2f + c + 1
 ```
 
-Lean proves both required inequalities for all natural `f` and `c`. This is a
-nominal instance. The main safety and recovery structures use actual set weights
-and actual threshold values. Rust `Committee::new_v3` can scale `f` and `c` to an
-actual `N` that is not `5f + 3c + 1`. It sets `A = 2f + c + 1` and
-`Q = N - f - c`, then checks the two inequalities.
+The proof shows that this construction satisfies both inequalities. The main
+results use actual stake and actual thresholds. They do not require every
+committee to have the nominal total. For actual `N`, v3 uses `A = 2f + c + 1`
+and `Q = N - f - c`, then checks both inequalities.
 
-[`LeaderEvidence.safety`](../lean/Mysticeti/Leader.lean) proves that one leader
-block cannot have both a commit result and a skip result. It covers these cases:
+### Leader decisions
 
-- direct commit against direct skip;
-- direct skip against indirect commit;
-- direct commit against indirect skip;
-- indirect commit against indirect skip.
+For one fixed selected leader slot, a commit result and a skip result cannot both
+be valid. This covers all direct and indirect result pairs. An equivocating
+validator can count once on each side, but it cannot count twice on one side.
 
-This is a per-slot threshold result for one fixed, common selected leader slot.
-Global commit safety also requires correct validators to derive the same
-leader schedule version, round leader selection, and selected leader slot order
-from the common commit chain.
+This is a per-slot result. Global safety also requires all correct validators to
+use one commit chain, leader schedule, round leader selection, and selected leader
+slot order.
 
-The direct-commit against indirect-skip case uses the second threshold inequality.
-A direct quorum and an anchor quorum preserve at least `A` correct commit votes.
-The proof also uses the Core GC state. The GC boundary is calculated from the last
-committed leader before Core records the new commit. The next leader decision round
-is greater than that last committed round. Lean proves that the decision block, its
-next-round votes, and the complete path to a valid anchor are above this boundary.
+### Transaction decisions
 
-[`TransactionEvidence.safety`](../lean/Mysticeti/Finalizer.lean) proves the same
-four cases for one transaction. The model also specifies the v3 vote rule. A
-next-round block accepts a transaction only when all these conditions are true:
+For one transaction, an accept result and a reject result cannot both be valid. A
+next-round block votes to accept only when it references the target, the target is
+above the signed vote cutoff, and the block has no explicit rejection. Every
+other present next-round block votes to reject. A missing block supplies no vote.
 
-- the target round is above the signed cutoff;
-- the voting block references the target block;
-- the voting block does not contain an explicit reject for the transaction.
+The proof covers direct against direct, direct against indirect, and indirect
+against indirect results. Durable restart behavior remains a product obligation.
 
-Every other next-round block is a reject vote.
+The signed cutoff is the maximum of the block-cleanup round and the
+transaction-vote cleanup round. A target at or below either boundary receives a
+reject vote. An accept vote is above both boundaries.
 
-The model uses the numeric signed `transaction_votes_cutoff_round`. It does not use
-an abstract `targetAboveCutoff` input. The modeled proposer sets the cutoff to the
-maximum of these values:
+## Evidence retention and old-block cleanup
 
-- the causal-history block-GC round;
-- the transaction vote-tracker GC round.
+The model proves that the pre-commit cleanup boundary keeps the leader block, its
+next-round votes, and the path to a depth-two anchor.
 
-Lean proves these properties:
+For transactions, the proof covers targets that are far below or close to their
+first commit leader. The close case uses the first eligible depth-two trigger and
+requires a cleanup depth greater than two.
 
-- A target at or below either source GC round is a reject vote.
-- An accept vote is above both source GC rounds.
-- A valid next-round block has a cutoff that is before or equal to the target round.
+Evidence already copied into a pending committed prefix is separate from the live
+block cache. Later cleanup of the live cache cannot remove that copied evidence.
+The product still needs an end-to-end guarantee that all required evidence enters
+the prefix on local, synchronization, replay, and restart paths.
 
-Each counted direct accept voter has a signed vote witness. The committed-prefix
-proof uses the same witness for a correct authority. Thus, the direct-against-
-indirect proof uses the signed cutoff classifier.
+For one continuous common commit stream, the first eligible trigger is unique and
+stays first as the visible prefix grows. Correct validators with the same stream
+and trigger make the same indirect decision.
 
-## Garbage collection and the committed prefix
+This result does not apply to an arbitrary larger prefix. A later prefix can
+introduce a new accept certificate and change an earlier indirect reject
+calculation. Safety depends on ordered processing and the same first trigger.
 
-[`GarbageCollection.lean`](../lean/Mysticeti/GarbageCollection.lean) models two GC
-paths.
+## Conditional progress
 
-GC does not require permanent transaction retention. A validator or user can
-resubmit a transaction. Its safety role is different: deleting consensus evidence
-must not make two validators decide the same leader slot or transaction
-differently. Data can be deleted after the decision rule no longer needs it, or
-after the required evidence has moved into the committed prefix. For liveness, old
-data availability matters only when a lagging or restarted validator still needs
-that consensus state.
+The progress model uses partial synchrony. Before the network stabilization time,
+messages can have any delay. After that time, messages between correct validators
+arrive within `delta`. Required local work completes within `epsilon`, where
+`0 < epsilon < delta`, and enabled protocol tasks eventually run.
 
-The Rust `Linearizer` type is not on the current v3 path.
-`FlexCommitter::build_commit` performs local v3 sub-DAG construction. It
-reads the old GC round, selects uncommitted ancestors above that round, and returns
-the commit and `CommittedSubDag`. `Core::post_commit` then records the commit and
-sends the saved sub-DAG to the finalizer. For a commit installed through commit
-sync, `FlexCommitter::handle_certified_commit` reconstructs the sub-DAG from the
-explicit block list in `CertifiedCommit`. The proof uses the term "v3 sub-DAG
-construction" for these two paths.
+### Consensus progress
 
-For the leader rule, `CoreGcState` uses this boundary:
+The consensus progress result starts after both network stabilization and catch-up
+activation. It requires safe intermediate proposals after round jumps, a
+live-leader rule, bounded protocol stages, and continued task execution. This
+strong result covers old leader blocks.
 
-```text
-gc_round = last_commit_round - gc_depth
-```
+The model includes a local counterexample in which a direct jump omits one required
+proposal. It does not claim that the complete published attack applies unchanged
+to v3.
 
-The v3 schedule starts the next decision round after `last_commit_round`. Lean
-therefore proves that all leader evidence from the decision round through the
-depth-two anchor is retained when Core makes the decision.
-
-For transaction finalization, the target block can be far below its commit leader.
-The proof uses two cases:
-
-1. If the first commit leader is at least two rounds above the target,
-   `FlexCommitter::build_commit` preserves the target's next-round voting blocks in
-   the local path.
-2. If the target is near the first commit leader, the first depth-two trigger
-   preserves the voting blocks. The preceding trigger commit is still below the
-   depth-two boundary. With `gc_depth > 2`, its GC boundary is below the voting
-   round.
-
-[`firstEligible_predecessor`](../lean/Mysticeti/CommitChain.lean) proves the
-preceding-commit bound from the first-trigger rule.
-[`TransactionGcWindow.voting_round_retained`](../lean/Mysticeti/GarbageCollection.lean)
-proves the two-case GC arithmetic.
-
-The model also separates live DAG evidence from the finalizer's buffered committed
-prefix. Block GC can change the live DAG store. It cannot change evidence that the
-finalizer already copied into the pending committed prefix.
-
-This is a model property. The current proposer does not produce the signed v3
-cutoff, and the current `CommitFinalizer` uses a different transaction rule. The
-transaction GC theorem therefore does not make a claim about current Rust behavior.
-
-This result does not prove that every Rust input path copies the required anchor
-voting blocks into that prefix. `anchorInCommittedPrefix` is still a Rust refinement
-obligation. It covers local `FlexCommitter::build_commit`, commit-sync
-reconstruction, replay, and recovery. The proof also does not give a direct-decision
-liveness guarantee when a slow finalizer loses live cached blocks. The indirect
-buffered-prefix path must provide progress in that case.
-
-## Common commit chain
-
-In this model, a commit is the normal output of the commit rule. Core can produce
-it locally or install it through commit sync. `CertifiedCommit` is specific to the
-commit-sync path: it carries a synchronized commit and the blocks needed to
-reconstruct its sub-DAG after the syncer verifies the chain and quorum commit votes
-for the range tip. `CommitStream` models the resulting ordered commits. It does not
-require each commit to be a `CertifiedCommit`.
-
-The term "committed prefix" means the prefix of `CommittedSubDag` inputs already
-buffered by the finalizer. It does not mean a prefix of certified commits.
-
-Indirect rejection is not monotone for an arbitrary larger prefix. A later prefix
-can contain a new accept certificate. The theorem
-[`arbitrary_prefix_decision_can_flip`](../lean/Mysticeti/CommitChain.lean) gives a
-small checked example of this fact.
-
-The safe rule uses the first eligible depth-two trigger in one continuous common
-commit stream. Lean proves these properties:
-
-- the first eligible trigger is unique;
-- it stays the first trigger when the visible prefix grows;
-- two nodes with the same stream and trigger make the same indirect decision.
-
-This is the proof boundary for the modeled v3 transaction finalizer. That finalizer
-is not present in the current tree. A proof that only compares two arbitrary commit
-prefixes is not sufficient.
-
-## Liveness model
-
-[`PartialSynchrony`](../lean/Mysticeti/PartialSynchrony.lean) specifies standard
-partial synchrony. GST is unknown. Before GST, a message can have an arbitrary
-delay. After GST, each authenticated protocol message between correct processes is
-delivered within `delta`.
-
-The liveness results also use the applicable shared fault, runtime, storage,
-configuration, and leader conditions. Derived protocol stages, such as block sync,
-commit sync, a recovery quorum, or a usable anchor window, are proof goals. They are
-not primitive assumptions.
-
-Lean proves these results:
-
-- `good_window_commits_within`: the modeled network steps finish within
-  `10 * delta` after a good leader window starts;
-- `consensus_liveness`: a post-activation open round eventually produces a commit;
-- `full_flex_anchor_window_advances_commit_index`: an in-range usable anchor
-  window makes the complete modeled FlexCommitter scan advance;
-- `commit_progress_recovery_stages_compose`: three distributed recovery results
-  and one Rust mapping condition compose to a greater commit index;
-- `finalizer_liveness`: a pending transaction on a continuous commit stream
-  eventually gets a durable decision;
-- `transaction_liveness`: the consensus and finalizer results compose.
-
-### Consensus and liveness for old leader blocks
-
-The model for liveness of old leader blocks also has a catch-up activation time. Its
-liveness result starts after both GST and this activation time. The commit progress
-recovery theorem does not use this activation time.
-
-[`ConsensusLivenessStageObligations`](../lean/Mysticeti/Liveness.lean) collects
-temporary Rust refinement goals for the progress checkpoints. Its fields are
-derived stage results, not primitive assumptions. It requires:
-
-- safe intermediate proposals during a round jump;
-- the eventual selection of a correct, non-crashed leader;
-- bounded proposal, supporter, certificate, decision, and commit steps;
-- continued operation of the protocol tasks.
-
-`consensus_liveness` and the consensus part of `transaction_liveness` prove the
-stronger liveness property for old leader blocks. Their safe intermediate-proposal
-condition is sufficient but is not known to be necessary for commit-index progress.
-
-The `10 * delta` value is a model bound. It is not a measured Rust latency bound.
-The Rust timers and pipeline can use smaller or larger constants. A later refinement
-proof must map each checkpoint to the exact code timer and message path.
+For one favorable leader window, the modeled stages finish within `10 * delta`.
+This is a model bound, not a measured product latency.
 
 ### Commit progress recovery
 
-Commit progress recovery targets only commit-index growth. In that design,
-validators enter recovery after local commit progress stalls and stay eligible
-until a commit occurs. The validators do not select a common round.
+The model proves that the recovery policy can increase the commit index. The
+proof derives these stages from local and network rules:
 
-[`CommitProgressRecoveryStages`](../lean/Mysticeti/CommitProgressRecovery.lean)
-is the stable interface for the recovery-stage composition. The theorem
-`recovery_stages_from_processes` now constructs this interface from local process
-rules, network delivery, bounded local processing, timely voting, the accepted
-leader-order trace, and Rust-state mapping rules. The recovery-window base is
-the largest last signed round among the recovery quorum when its common recovery
-period starts. The protocol does not select this proof value. Current v3 uses
-direct votes in the next round. Thus,
-the layer count is derived from the required anchor count and the direct-vote
-offset.
+1. Correct available validators with quorum stake stay in recovery while no
+   commit occurs.
+2. Next-round proposals and synchronization create consecutive quorum block
+   layers.
+3. Growing pacing, immediate-parent inclusion, and a favorable leader order create
+   a usable anchor window.
+4. The modeled commit scan resolves the older prefix and returns a higher commit
+   candidate.
 
-For each correct authority in the recovery quorum, the Lean view defines the only
-permitted proposal target as one round above that authority's highest known own
-proposal. A higher threshold-clock round does not change this target. The theorem
-models proposal, network delivery, and acceptance as separate local and network
-actions. A Rust refinement must still show that its next-round proposal path,
-parent synchronization, persistence, and block acceptance implement these action
-effects.
+The proof does not assume these four modeled results. It derives them from the
+lower-level conditions in the assumption ledger. Product commit-index advancement
+also needs the verified mapping that records the returned candidate.
 
-The recovery view separates these sets:
+Commit progress recovery does not prove that every old correct leader block or
+every transaction commits. See the
+[recovery design](../design/commit_progress_recovery.md).
 
-- the validator set contains all epoch validators;
-- the non-progress set is intended to contain Byzantine and crashed validators;
-- `RecoveryQuorum` contains only validators outside the stated non-progress set;
-- the leader schedule is a subset of the validator set for one commit-index
-  leader schedule interval;
-- the round leader selection is a subset of the leader schedule;
-- each member of the round leader selection has one selected leader slot.
+### Transaction progress
 
-`progress_stake_reaches_quorum` proves the recovery-entry stake premise from the
-standard bound `non-progress stake + Q <= N`. Thus, the process model does not need
-a separate fault-independent source of quorum live stake.
-`actual_hybrid_fault_budgets_leave_quorum` derives this inequality from the actual
-v3 definition `Q = N - (f + c)` and the bound that non-progress stake is at most
-`f + c`.
+A pending transaction eventually receives a durable decision when consensus keeps
+producing one continuous commit stream, a later eligible trigger occurs, and the
+finalizer and storage stages continue to run. The epoch-tail case remains open.
 
-`recoveryFrontierRound` takes the finite maximum of the last signed rounds in the
-recovery quorum. Lean proves that this maximum is attained and that each recovery
-validator starts at or below it. If the required causal parent quorums are
-available, `recovery_authority_has_exact_next_path_to_frontier` gives each lower
-validator a finite path to that frontier with no skipped proposal round.
+Transaction payload retention is not required. A validator or user can submit a
+transaction again.
 
-Let `N` be actual validator set stake, `S` be leader schedule stake, and `P_r` be
-round leader selection stake in pending leader round `r`. The structural relation
-is:
+## Leader conditions
+
+Let `S` be leader-schedule stake and `P_r` be round-leader-selection stake in
+round `r`. Progress uses:
 
 ```text
 P_r <= S <= N
-```
-
-If Byzantine and crashed or otherwise non-progressing stake is at most `f + c`,
-the leader schedule viability bound is:
-
-```text
-f + c < S <= N
-```
-
-This condition ensures that the schedule contains positive stake from a correct,
-non-crashed validator. It does not ensure that a smaller round leader selection
-chooses that validator. Such a selector needs a leader fairness condition.
-
-For one round, the quorum-coverage lemma uses this sufficient lower bound:
-
-```text
+f + c < S
 A <= P_r
 ```
 
-The lower bound makes a quorum block layer contain positive stake from a correct
-validator in the round leader selection. It does not prove direct finality or
-commit progress. The optional `P_r <= Q` rule limits work for selected leader
-slots. The per-slot safety proof and the quorum-coverage lemma do not use it. A
-larger selection can add an undecided slot, so its effect on anchor-scan liveness
-remains in the usable-anchor obligation.
+Current v3 selects the full schedule in each pending leader round, so `P_r = S`.
+The optional `P_r <= Q` limit controls work. Per-slot safety and quorum coverage
+do not require it. A larger selection can still affect the ordered anchor scan.
 
-Current v3 selects the full leader schedule in every pending leader round at or
-above `min_next_leader_round`. Therefore, `P_r = S`, and the structural and
-quorum-coverage bounds reduce to:
+The leader-order model treats each round's complete order as a common independent
+uniform permutation. The formal trace assumes the almost-sure favorable run from
+this probability model. It does not prove the probability result. The product uses
+a deterministic round-based shuffle, and the proof does not establish the same
+coverage for that exact sequence.
 
-```text
-A <= S = P_r <= N
-```
+## Main boundaries
 
-If the optional resource policy is enabled, it adds `P_r <= Q`. The Lean model
-proves the coverage derivation and the resource derivation separately. It also
-proves that a viable leader schedule does not by itself give round leader selection
-coverage.
+The results depend on these groups of conditions:
 
-An ancestor exclusion cap gives only a local existence result. When the combined
-non-progress and local-exclusion stake is smaller than `S`, some schedule stake is
-both progressing and locally included. The cap does not protect one fixed first
-selected leader slot, and different proposers can use different exclusion sets.
-The anchor proof therefore disables score-based ancestor exclusion for the
-immediate parent round during recovery. It includes each locally unique available
-block and keeps equivocation handling.
+- **Safety:** `ASM-MATH-THRESHOLDS`, `ASM-SAFE-PARAMETERS`,
+  `ASM-SAFE-FAULT-BOUND`, `ASM-SAFE-AUTHENTICATION`,
+  `ASM-SAFE-NON-EQUIVOCATION`, `ASM-SAFE-PARENT-QUORUM`,
+  `ASM-SAFE-EVIDENCE-REFINEMENT`, `ASM-SAFE-COMMIT-CHAIN`,
+  `ASM-SAFE-FIRST-TRIGGER`, `ASM-SAFE-COMMITTED-PREFIX`, and `ASM-SAFE-GC`.
+- **Configuration:** `ASM-CONFIG-V3-ACTIVATION`, `ASM-CONFIG-VOTING`, and
+  `ASM-REFINE-INTEGERS`.
+- **Network and runtime:** `ASM-LIVE-PARTIAL-SYNCHRONY`,
+  `ASM-LIVE-PEER-FAIRNESS`, `ASM-LIVE-TASK-FAIRNESS`,
+  `ASM-LIVE-LOCAL-RESPONSE`, and `ASM-LIVE-PIPELINE-BOUNDS`.
+- **Consensus progress:** `ASM-LIVE-ROUND-CATCHUP`,
+  `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`, `ASM-LIVE-LEADER`,
+  `ASM-LIVE-FIRST-SLOT-SAMPLING`, `ASM-LIVE-BLOCK-SYNC`, and
+  `ASM-LIVE-COMMIT-SYNC`.
+- **Transaction progress:** `ASM-LIVE-FINALIZER-TRIGGER` and
+  `ASM-LIVE-DURABILITY`, with `ASM-LIVE-COMMIT-SYNC` when commits are missing.
 
-The consecutive quorum block layer window also requires each layer author to be in
-the recovery set and each witness layer to be above the modeled block-GC boundary.
-The Rust refinement must show that block sync obtains the recent blocks before Core
-evaluates the window.
+Commit progress recovery does not use `ASM-LIVE-ROUND-CATCHUP`. Useful-peer
+fairness applies only when a lagging or restarted validator needs old consensus
+state.
 
-[`commit_progress_recovery_stages_compose`](../lean/Mysticeti/CommitProgressRecovery.lean)
-is the stable stage-composition lemma. Its interface contains these three
-distributed results and one Rust mapping condition:
+## Current product status
 
-1. unless a commit occurs first, one set of correct validators with quorum stake
-   stays in commit progress recovery;
-2. unless a commit occurs first, these validators are all in commit progress
-   recovery in the same proposal rounds and produce and exchange blocks for enough
-   consecutive rounds, with quorum stake in each round;
-3. unless a commit occurs first, enough consecutive rounds start with a correct
-   leader whose block gets enough next-round votes for FlexCommitter to resolve old
-   undecided rounds;
-4. Rust records the commit that the executable Lean FlexCommitter model finds.
+Source review and focused tests support the current leader-decision mapping,
+including thresholds, authentication, unique voter stake, parent quorum, common
+ordering from fixed compatible inputs, decision scans, local evidence ownership,
+and commit recording. This evidence is not a machine-checked proof that the source
+follows the model.
 
-The theorem `commit_progress_recovery_from_processes` now derives the first three
-results. It uses these smaller contracts:
+The current product does not implement commit progress recovery. Normal startup
+does not enable the analyzed v3 path from shared epoch state. The product also does
+not implement the modeled signed v3 transaction voting and finalization path.
+Therefore, the related recovery and transaction results do not yet describe
+product behavior.
 
-- one local recovery-entry action per live correct validator, with persistence
-  while the commit index is unchanged;
-- one next-round proposal action after its immediate-parent quorum and pacing wait
-  are ready;
-- an unbounded nondecreasing wait that eventually covers proposal timing
-  difference, one message delay, and one local acceptance action;
-- persistence before broadcast, post-GST delivery, and one local block-acceptance
-  action;
-- pending-round and GC-retention mappings for the produced layers;
-- timely availability of a progressing first-slot block to the next quorum layer;
-- the schedule-independent recovery rule that disables score-based exclusion for
-  each locally unique immediate-round parent;
-- the deterministic direct decision rule;
-- an eventual favorable first-slot run from the accepted leader-order sampling
-  model;
-- the mapping from the candidate rounds to the pending-round array and indirect
-  scan.
-
-The proof uses `delta` for message delivery and `epsilon` for the local proposal
-and acceptance actions. The direct decision function and the `FlexCommitter` scan
-are deterministic transition models, not environmental assumptions.
-
-The following items remain Rust refinement or accepted-model boundaries. They are
-not the old distributed stage results:
-
-- prove that the local commit timestamp and timer enable the modeled entry action;
-- map the common layer base to the maximum last signed round among the recovery
-  quorum at the start of its common recovery period;
-- prove that the valid causal history at that frontier and block sync make the
-  finite parent interval available, or that a commit occurs first;
-- prove immediate-parent quorum availability or start synchronization before a
-  next-round proposal;
-- prove that the Rust proposal action persists and broadcasts the required block;
-- implement and prove the recovery rule that disables score-based exclusion for
-  each locally unique available immediate-round parent;
-- verify the two `PendingRoundArrayRules`: each pending leader round is inside the
-  stored range, and the descending indirect scan visits the base of each complete
-  anchor window;
-- map retained blocks and selected leader slots to the pending array used by
-  `FlexCommitter`;
-- accept the almost-sure first-slot trace, or formalize its probability proof;
-- preserve the current Rust call path that records the modeled commit result.
-
-The current Rust code satisfies the call-sequence part of the fourth result. There
-is no separate queued commit action. The
-[design evidence](../design/commit_progress_recovery.md#current-flexcommitter-to-core-path)
-traces the call path and lists the tests that cover it. Lean does not verify Rust
-source, so the Rust-state mapping remains a mapping condition. One focused
-old-prefix recovery-window regression test is still missing. Future Rust changes
-must preserve this call path and these results, or the model and proof must change.
-
-The
-[periodic Lean-to-Rust refinement review](ASSUMPTIONS.md#periodic-lean-to-rust-refinement-review)
-is the canonical list of these mappings and their current status.
-
-`recovery_anchor_window_mapping_from_pending_round_rules` now calculates the
-candidate base index and proves that the anchor window is in range. The Rust
-refinement does not need to assume this complete mapping as one result.
-
-The Lean view includes an abstract committed-prefix identity. The recovery
-transition model must show when equal commit indices identify one common prefix.
-It must then derive one leader schedule and selected leader slot order from that
-prefix. The Rust refinement can map the abstract identity to the commit digest.
-
-During one process run, the Rust recovery trigger can use the current `DagState`
-commit timestamp as its base. After restart, it uses the last flushed commit that
-`DagState::new` loads. It uses the epoch start timestamp before the first commit.
-It computes elapsed time with saturating subtraction because a commit timestamp can
-be ahead of the local clock. This rule does not need a separate persisted recovery
-flag. It is not implemented and remains a known implementation gap.
-
-### Transaction finalization liveness
-
-`FinalizerLivenessStageObligations` requires a continuous common commit stream, an
-eventual eligible trigger, and durable output. `finalizer_liveness` proves that
-these stages give a durable transaction decision. `transaction_liveness` composes
-the consensus and finalizer results. Commit progress recovery can help supply the
-continuous commit stream, but it is not the complete transaction-liveness proof.
-
-The current Rust tree does not implement the modeled v3 transaction finalizer.
-Thus, its trigger and durability conditions remain model-to-implementation goals.
-
-## Checked implementation counterexample
-
-[`direct_jump_can_violate_safe_catchup`](../lean/Mysticeti/PartialSynchrony.lean)
-proves a local counterexample. If a node jumps to one future round and proposes only
-in that round, it can omit a required intermediate proposal. Partial synchrony does
-not repair this omission.
-
-This result matches the round-jump risk in
-[`ThresholdClock::add_block`](../../core/src/threshold_clock.rs). It does not by
-itself prove the full published infinite attack for the new v3 code. It proves that
-the present catch-up transition cannot establish the safe round-change assumption
-used by `consensus_liveness`.
-
-## Rust refinement conditions
-
-The safety result needs all these implementation facts:
-
-1. [`ASM-SAFE-PARAMETERS`](ASSUMPTIONS.md#asm-safe-parameters): all correct nodes use
-   the same epoch committee and the same `N`, `f`, `Q`, `A`, and `gc_depth`
-   values.
-2. [`ASM-SAFE-FAULT-BOUND`](ASSUMPTIONS.md#asm-safe-fault-bound): Byzantine stake is
-   at most `f`.
-3. [`ASM-SAFE-AUTHENTICATION`](ASSUMPTIONS.md#asm-safe-authentication): signatures
-   bind the authority, round, block contents, cutoff, and votes.
-4. [`ASM-SAFE-NON-EQUIVOCATION`](ASSUMPTIONS.md#asm-safe-non-equivocation): a correct
-   authority does not produce incompatible votes.
-5. [`ASM-SAFE-PARENT-QUORUM`](ASSUMPTIONS.md#asm-safe-parent-quorum): every accepted
-   non-genesis block has `Q` immediate-parent stake.
-6. [`ASM-SAFE-EVIDENCE-REFINEMENT`](ASSUMPTIONS.md#asm-safe-evidence-refinement): the
-   Rust decision rules create the same evidence and outcomes as the Lean model.
-7. [`ASM-SAFE-COMMITTED-PREFIX`](ASSUMPTIONS.md#asm-safe-committed-prefix): the
-   committed prefix contains the causal evidence used by the indirect rules.
-8. [`ASM-SAFE-COMMIT-CHAIN`](ASSUMPTIONS.md#asm-safe-commit-chain): correct nodes
-   process one continuous commit chain with no gap.
-9. [`ASM-SAFE-FIRST-TRIGGER`](ASSUMPTIONS.md#asm-safe-first-trigger): correct nodes
-   use the same first depth-two trigger.
-10. [`ASM-SAFE-GC`](ASSUMPTIONS.md#asm-safe-gc): Core uses the pre-commit GC
-    boundary, the signed transaction cutoff is the maximum of both proposer-side
-    GC rounds, and v3 sub-DAG construction copies required voting blocks before
-    later DAG GC.
-
-Items 6, 7, 9, and 10 include v3 transaction-finalization conditions that the
-current Rust tree does not implement. They are model-to-implementation requirements,
-not verified current behavior.
-
-`consensus_liveness` and the consensus phase of `transaction_liveness` are also
-composition theorems. Their primitive environment inputs are
-`ASM-LIVE-PARTIAL-SYNCHRONY` and `ASM-LIVE-TASK-FAIRNESS`. Their local refinement
-goals are `ASM-LIVE-ROUND-CATCHUP` and the static parts of `ASM-LIVE-LEADER`.
-When a theorem starts from missing local consensus state, it also uses the
-conditional availability part of `ASM-LIVE-PEER-FAIRNESS`.
-`ASM-LIVE-BLOCK-SYNC` and `ASM-LIVE-PIPELINE-BOUNDS` are derived stage goals, not
-primitive assumptions.
-
-The end-to-end Lean commit progress recovery theorem does not use
-`ASM-LIVE-ROUND-CATCHUP`.
-
-Its primitive environment assumptions are:
-
-1. [`ASM-SAFE-FAULT-BOUND`](ASSUMPTIONS.md#asm-safe-fault-bound) for bounded
-   Byzantine and unavailable stake.
-2. [`ASM-LIVE-PARTIAL-SYNCHRONY`](ASSUMPTIONS.md#asm-live-partial-synchrony) for
-   post-GST message delivery.
-3. [`ASM-LIVE-TASK-FAIRNESS`](ASSUMPTIONS.md#asm-live-task-fairness) for enabled
-   local work.
-4. [`ASM-LIVE-LOCAL-RESPONSE`](ASSUMPTIONS.md#asm-live-local-response) for
-   local computation bounded by a positive symbolic `epsilon`, with
-   `epsilon < delta`.
-5. [`ASM-LIVE-FIRST-SLOT-SAMPLING`](ASSUMPTIONS.md#asm-live-first-slot-sampling)
-   for the accepted independent uniform shuffle model. Its fixed-schedule and
-   common-order preconditions are separate refinement goals.
-
-If a validator starts without required old consensus state, recovery also uses
-[`ASM-LIVE-PEER-FAIRNESS`](ASSUMPTIONS.md#asm-live-peer-fairness). The peer supplies
-only an old consensus block or commit that remains necessary. Retry selection is a
-local proof goal. Transaction payload retention is not required.
-
-Its local rules and deterministic refinement goals are:
-
-1. [`ASM-SAFE-PARAMETERS`](ASSUMPTIONS.md#asm-safe-parameters) for common actual
-   thresholds and common schedule derivation.
-2. [`ASM-LIVE-COMMIT-PROGRESS-RECOVERY`](ASSUMPTIONS.md#asm-live-commit-progress-recovery)
-   for the local recovery rule, next-round proposal target, and growing pacing
-   delay.
-3. [`ASM-LIVE-LEADER`](ASSUMPTIONS.md#asm-live-leader) for schedule construction,
-   schedule viability, and round leader selection coverage.
-4. [`ASM-SAFE-GC`](ASSUMPTIONS.md#asm-safe-gc) for retained recent parents and
-   decision evidence.
-5. The peer-retry transition and its deterministic fairness or probabilistic
-   selection theorem.
-
-These distributed protocol results remain open refinement theorems:
-
-1. [`ASM-LIVE-BLOCK-SYNC`](ASSUMPTIONS.md#asm-live-block-sync).
-2. [`ASM-LIVE-COMMIT-SYNC`](ASSUMPTIONS.md#asm-live-commit-sync).
-
-The recovery quorum, quorum block layers, usable anchor window, and status-level
-commit advance are now proved from the local process structures. The current Rust
-call path implements the final local sequence, but the action and state mappings
-are not machine checked. None of these results is an additional network
-assumption.
-
-The finalizer phase of `transaction_liveness` composes three more derived goals:
-`ASM-LIVE-COMMIT-SYNC`, `ASM-LIVE-FINALIZER-TRIGGER`, and
-`ASM-LIVE-DURABILITY`. These goals must be proved from the process, network, and
-storage rules.
-
-The [gap report](IMPLEMENTATION_GAPS.md) gives the code changes that are needed to
-discharge these proof obligations.
+Other open work includes common epoch parameters, complete commit-chain agreement,
+synchronization progress, committed-prefix evidence, integer bounds, stable leader
+ordering across compatible versions, and finalizer shutdown behavior.
