@@ -80,7 +80,7 @@ pub struct DagState {
     // Last wall time when commit round advanced. Does not persist across restarts.
     last_commit_round_advancement_time: Option<std::time::Instant>,
 
-    // Last committed rounds per authority.
+    // Highest committed block round currently known for each authority.
     last_committed_rounds: Vec<Round>,
 
     /// The committed subdags that have been scored but scores have not been used
@@ -144,7 +144,15 @@ impl DagState {
         let mut unscored_committed_subdags = Vec::new();
         let mut scoring_subdag = ScoringSubdag::new(context.clone());
 
-        if let Some(last_commit) = last_commit.as_ref() {
+        // The v3 path does not need this scan, which covers all commits since the last
+        // CommitInfo (potentially the epoch start, since v3 never persists CommitInfo)
+        // and loads each commit's full subdag: reputation scores are replayed by
+        // LeaderScheduleV3 instead of the scoring subdag, and last_committed_rounds
+        // only matter above gc_round, so they are recovered from the bounded commit
+        // scan below together with block committed statuses.
+        if !context.protocol_config.enable_v3()
+            && let Some(last_commit) = last_commit.as_ref()
+        {
             store
                 .scan_commits((commit_recovery_start_index..=last_commit.index()).into())
                 .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
@@ -258,6 +266,20 @@ impl DagState {
                         gc_round
                     );
                     break;
+                }
+
+                // On the v3 path, last_committed_rounds are recovered from committed blocks
+                // instead of CommitInfo. Authorities without committed blocks above
+                // gc_round will not recover its highest committed round accurately.
+                // This is fine because nothing on the v3 path reads last_committed_rounds at
+                // or below gc_round.
+                if context.protocol_config.enable_v3() {
+                    for block_ref in commit.blocks() {
+                        state.last_committed_rounds[block_ref.author] = max(
+                            state.last_committed_rounds[block_ref.author],
+                            block_ref.round,
+                        );
+                    }
                 }
 
                 commit.blocks().iter().filter(|b| b.round > gc_round).for_each(|block_ref|{
@@ -1183,7 +1205,12 @@ impl DagState {
         }
     }
 
-    /// Last committed round per authority.
+    /// Returns the highest committed block round known for each authority.
+    ///
+    /// On the v3 path, restart recovery scans only blocks from commits whose leader
+    /// round is above `gc_round`. So the recovered info may be inaccurate if the last
+    /// committed block of an authority is at or below `gc_round`. This is ok because
+    /// this info is only used in metrics and testing.
     pub(crate) fn last_committed_rounds(&self) -> Vec<Round> {
         self.last_committed_rounds.clone()
     }

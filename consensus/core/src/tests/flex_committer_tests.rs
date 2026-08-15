@@ -121,7 +121,7 @@ fn install_rounds(
     rounds: Vec<RoundState>,
 ) {
     committer.maybe_refresh_pending_commit_state(schedule(1, min_next_leader_round, &[0]));
-    committer.pending_commit_state.rounds = rounds;
+    committer.pending_commit_state.rounds = rounds.into();
 }
 
 fn build_blocks(rounds_x_authorities: &[(Round, u32)]) -> Vec<VerifiedBlock> {
@@ -129,6 +129,36 @@ fn build_blocks(rounds_x_authorities: &[(Round, u32)]) -> Vec<VerifiedBlock> {
         .iter()
         .map(|(r, a)| VerifiedBlock::new_for_test(TestBlock::new(*r, *a).build()))
         .collect()
+}
+
+/// `committed_leaders_total` counts of one authority, per commit type.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct LeaderCounts {
+    direct_commit: u64,
+    direct_skip: u64,
+    indirect_skip: u64,
+}
+
+/// Reads the leader commit counters of `authority`. Each test gets its own metrics
+/// registry, so the counts start at zero.
+fn leader_counts(context: &Context, authority: u32) -> LeaderCounts {
+    let leader_host = &context
+        .committee
+        .authority(AuthorityIndex::new_for_test(authority))
+        .hostname;
+    let count = |commit_type: &str| {
+        context
+            .metrics
+            .node_metrics
+            .committed_leaders_total
+            .with_label_values(&[leader_host, commit_type])
+            .get()
+    };
+    LeaderCounts {
+        direct_commit: count("direct-commit"),
+        direct_skip: count("direct-skip"),
+        indirect_skip: count("indirect-skip"),
+    }
 }
 
 // =================== Unit tests ===================
@@ -213,47 +243,88 @@ async fn committed_blocks_within_round_order_depends_on_seed() {
     assert!(changed, "within-round order must depend on the seed");
 }
 
-/// Refreshing with the same `next_commit_index` is a no-op: the accumulated
-/// round state and existing schedule are preserved.
+/// Refreshing the same schedule state is a no-op.
 #[tokio::test]
 async fn maybe_refresh_is_noop_on_same_index() {
     let (_context, _dag_state, mut committer) = setup(4);
-    committer.maybe_refresh_pending_commit_state(schedule(1, 1, &[0]));
+    let next_schedule = schedule(1, 1, &[0]);
+    committer.maybe_refresh_pending_commit_state(next_schedule.clone());
     committer.pending_commit_state.get_or_create_round_state(3);
     let rounds_len = committer.pending_commit_state.rounds.len();
     assert!(rounds_len > 0);
 
-    // Same index but different allowed_leaders → must not reset.
-    committer.maybe_refresh_pending_commit_state(schedule(1, 1, &[0, 1, 2]));
+    committer.maybe_refresh_pending_commit_state(next_schedule);
     assert_eq!(committer.pending_commit_state.rounds.len(), rounds_len);
-    assert_eq!(
-        committer
-            .pending_commit_state
-            .next_commit_leaders
-            .allowed_leaders
-            .len(),
-        1,
-        "same-index refresh must not replace the schedule",
-    );
 }
 
-/// A higher `next_commit_index` resets the pending state and installs the new schedule.
+/// A higher commit index keeps cached rounds when the ordered leader schedule is unchanged.
 #[tokio::test]
-async fn maybe_refresh_resets_on_higher_index() {
+async fn maybe_refresh_rebases_on_higher_index_with_same_schedule() {
     let (_context, _dag_state, mut committer) = setup(4);
-    committer.maybe_refresh_pending_commit_state(schedule(1, 1, &[0]));
+    committer.maybe_refresh_pending_commit_state(schedule(1, 1, &[0, 1]));
+    committer.pending_commit_state.get_or_create_round_state(5);
+    let retained_slot = committer
+        .pending_commit_state
+        .get_round_state(4)
+        .leader_slots[0]
+        .slot;
+    committer
+        .pending_commit_state
+        .get_round_state(4)
+        .update_slot_decision(
+            retained_slot,
+            LeaderStatus::Skip(retained_slot),
+            Decision::Direct,
+        );
+
+    committer.maybe_refresh_pending_commit_state(schedule(4, 4, &[0, 1]));
+
+    let retained_rounds = committer
+        .pending_commit_state
+        .rounds
+        .iter()
+        .map(|state| state.round)
+        .collect::<Vec<_>>();
+    assert_eq!(retained_rounds, vec![4, 5]);
+    let retained_state = committer.pending_commit_state.get_round_state(4);
+    assert!(!retained_state.undecided_slots.contains(&retained_slot));
+    assert_eq!(
+        retained_state
+            .leader_slots
+            .iter()
+            .find(|state| state.slot == retained_slot)
+            .unwrap()
+            .decision,
+        Some(Decision::Direct),
+    );
+    let installed = &committer.pending_commit_state.next_commit_leaders;
+    assert_eq!(installed.next_commit_index, 4);
+    assert_eq!(installed.min_next_leader_round, 4);
+    assert_eq!(installed.allowed_leaders.len(), 2);
+}
+
+/// A different ordered leader schedule clears all cached round decisions.
+#[tokio::test]
+async fn maybe_refresh_resets_on_schedule_change() {
+    let (_context, _dag_state, mut committer) = setup(4);
+    committer.maybe_refresh_pending_commit_state(schedule(1, 1, &[0, 1, 2]));
     committer.pending_commit_state.get_or_create_round_state(3);
     assert!(!committer.pending_commit_state.rounds.is_empty());
 
-    committer.maybe_refresh_pending_commit_state(schedule(2, 5, &[0, 1, 2, 3]));
-    assert!(
-        committer.pending_commit_state.rounds.is_empty(),
-        "rounds must be cleared on reset",
-    );
+    committer.maybe_refresh_pending_commit_state(schedule(2, 2, &[1, 0, 2]));
+
+    assert!(committer.pending_commit_state.rounds.is_empty());
     let installed = &committer.pending_commit_state.next_commit_leaders;
     assert_eq!(installed.next_commit_index, 2);
-    assert_eq!(installed.min_next_leader_round, 5);
-    assert_eq!(installed.allowed_leaders.len(), 4);
+    assert_eq!(installed.min_next_leader_round, 2);
+    assert_eq!(
+        installed.allowed_leaders,
+        vec![
+            AuthorityIndex::new_for_test(1),
+            AuthorityIndex::new_for_test(0),
+            AuthorityIndex::new_for_test(2),
+        ]
+    );
 }
 
 /// `next_commit_index` must move forward; a lower index panics.
@@ -429,6 +500,37 @@ async fn find_commit_leader_round_none_when_round_partially_decided() {
     assert!(committer.find_commit_leader_round().is_none());
 }
 
+/// Every decided slot through the commit leader round is reported, and no later round.
+#[tokio::test]
+async fn report_decided_prefix_metrics_reports_through_commit_round() {
+    let (context, _dag_state, mut committer) = setup(4);
+    let mut indirect_skip = round_state(2, vec![skip(2, 0)]);
+    indirect_skip.leader_slots[0].decision = Some(Decision::Indirect);
+    install_rounds(
+        &mut committer,
+        1,
+        vec![
+            round_state(1, vec![skip(1, 0)]),
+            indirect_skip,
+            round_state(3, vec![LeaderStatus::Commit(commit_block(3, 0))]),
+            round_state(4, vec![skip(4, 0)]),
+        ],
+    );
+
+    committer.report_decided_prefix_metrics(3);
+
+    // Round 4 is above the commit leader round, so it stays unreported. The next
+    // commit reports it, after the refresh drops rounds 1 to 3.
+    assert_eq!(
+        leader_counts(&context, 0),
+        LeaderCounts {
+            direct_commit: 1,
+            direct_skip: 1,
+            indirect_skip: 1,
+        },
+    );
+}
+
 // =================== Functional `try_commit` tests ===================
 
 /// One leader per round, fully connected DAG → committer emits a commit
@@ -468,10 +570,14 @@ async fn try_commit_single_leader_all_skipped() {
         .into_iter()
         .filter(|r| r.author != AuthorityIndex::new_for_test(0))
         .collect();
-    build_dag(context, dag_state, Some(refs_without_leader), 2);
+    build_dag(context.clone(), dag_state, Some(refs_without_leader), 2);
 
     let next = next_commit_leader_schedule(vec![AuthorityIndex::new_for_test(0)]);
     assert!(committer.try_commit(next).is_none());
+
+    // Leader metrics are reported with the commit that covers the round, so a
+    // round that never reaches a commit reports nothing.
+    assert_eq!(leader_counts(&context, 0), LeaderCounts::default());
 }
 
 /// One leader per round, no round-2 blocks at all → slot Undecided, no
@@ -636,6 +742,31 @@ async fn try_commit_multi_leader_all_skipped() {
     assert!(committer.try_commit(next).is_none());
 }
 
+/// Retained round decisions report one metric for each local commit.
+#[tokio::test]
+async fn try_commit_retained_rounds_report_metrics_once() {
+    telemetry_subscribers::init_for_testing();
+    let (context, dag_state, mut committer) = setup(4);
+    build_dag(context.clone(), dag_state, None, 4);
+
+    // The schedule keeps the same leader, so each refresh retains the round state
+    // instead of resetting it.
+    for commit_index in 1..=3 {
+        let (commit, _) = committer
+            .try_commit(schedule(commit_index, commit_index, &[0]))
+            .expect("the fully connected DAG must produce a commit");
+        assert_eq!(commit.leader().round, commit_index);
+    }
+
+    assert_eq!(
+        leader_counts(&context, 0),
+        LeaderCounts {
+            direct_commit: 3,
+            ..Default::default()
+        },
+    );
+}
+
 /// Drives the committer across three schedules — varying the allowed-leader
 /// count each time — with a fully-skipped leader round in the middle.
 ///
@@ -709,5 +840,16 @@ async fn try_commit_multiple_schedules_with_skipped_round() {
     assert_eq!(
         round_4_leaders, expected,
         "all four round-4 leaders committed",
+    );
+
+    // Leader 0 commits at rounds 1, 3 and 4, and is skipped at round 2. The skip is
+    // reported by the round-3 commit, which is the commit that covers round 2.
+    assert_eq!(
+        leader_counts(&context, 0),
+        LeaderCounts {
+            direct_commit: 3,
+            direct_skip: 1,
+            indirect_skip: 0,
+        },
     );
 }
