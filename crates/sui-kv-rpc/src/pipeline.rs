@@ -13,10 +13,28 @@ use futures::TryStreamExt;
 use futures::future;
 use futures::stream;
 use futures::stream::BoxStream;
+use prost::Message;
+use std::time::Duration;
+use std::time::Instant;
 use sui_futures::task::TaskGuard;
+use sui_inverted_index::ScanDirection;
 use sui_inverted_index::ScanStop;
+use sui_rpc::proto::sui::rpc::v2::QueryEnd;
+use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
+use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::RpcError;
+use sui_rpc_api::ledger_history::query_options::QueryOptions;
+use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
+use sui_rpc_api::ledger_history::response::ListResponseFrame;
+use sui_rpc_api::ledger_history::response::end_response;
+use sui_rpc_api::ledger_history::response::range_end_response;
+use sui_rpc_api::ledger_history::response::watermark_response;
+use sui_rpc_api::ledger_history::watermark::ScanTerminal;
+use sui_rpc_api::ledger_history::watermark::item_watermark;
+use sui_rpc_cursor::Position;
 use tokio::sync::OwnedSemaphorePermit;
+
+use crate::operation::QueryContext;
 use tokio::sync::Semaphore;
 use tokio::sync::mpsc;
 use tokio::task::JoinError;
@@ -1257,6 +1275,246 @@ where
         }
     }
     .boxed()
+}
+
+/// One lane of the list-endpoint emit driver: how the lane's rendered items
+/// dissect into scan coordinates, how coordinates map onto wire positions,
+/// and how the lane builds its watermark frontiers. [`drive_emit`] owns the
+/// rest — the four-arm emit loop, metrics choreography, item limits, and
+/// terminal frames.
+pub(crate) trait EmitLane {
+    type Rendered;
+    type Coordinate: Copy;
+    type Frame: ListResponseFrame + Message;
+
+    /// The rendered item's scan coordinate and containing checkpoint.
+    fn dissect(&self, rendered: &Self::Rendered) -> (Self::Coordinate, u64);
+    /// Fold an emitted item's checkpoint into the covered bound.
+    fn cover_on_item(
+        &self,
+        covered: &mut Option<u64>,
+        item_checkpoint: u64,
+        entry_checkpoint: u64,
+        options: &QueryOptions,
+    );
+    /// The wire position of `coordinate` inside `checkpoint`.
+    fn position(&self, checkpoint: u64, coordinate: Self::Coordinate) -> Position;
+    /// Build the item frame; returns the render duration to observe.
+    fn item_frame(&self, rendered: Self::Rendered, watermark: Watermark)
+    -> (Self::Frame, Duration);
+    /// Watermark for an ordinary frontier frame (checkpoint known).
+    fn frontier_watermark(
+        &self,
+        options: &QueryOptions,
+        direction: ScanDirection,
+        entry_checkpoint: u64,
+        covered: &mut Option<u64>,
+        position: Self::Coordinate,
+        checkpoint: u64,
+    ) -> Result<Watermark, RpcError>;
+    /// Watermark for a scan-limit stop (checkpoint possibly unknown).
+    fn scan_limit_watermark(
+        &self,
+        options: &QueryOptions,
+        direction: ScanDirection,
+        entry_checkpoint: u64,
+        covered: &mut Option<u64>,
+        position: Self::Coordinate,
+        checkpoint: Option<u64>,
+    ) -> Result<Watermark, RpcError>;
+    /// The endpoint's completion log line.
+    fn log_completion(&self, emitted: usize, terminal_reason: QueryEndReason, elapsed: Duration);
+}
+
+/// [`drive_emit`]'s input stream: resolved frames or a terminal stop.
+pub(crate) type EmitStream<R, P> = BoxStream<
+    'static,
+    Result<ResolvedWatermarked<R, P>, RenderAheadError<ResolvedScanStop<P>, RpcError>>,
+>;
+
+/// The lane-uniform inputs of one emit run.
+pub(crate) struct EmitInputs {
+    pub(crate) resolution: &'static str,
+    pub(crate) limit_items: usize,
+    pub(crate) direction: ScanDirection,
+    pub(crate) entry_checkpoint: u64,
+    pub(crate) exhaustion: RangeExhaustion,
+    pub(crate) range_end_checkpoint: u64,
+    pub(crate) started: Instant,
+}
+
+/// The list endpoints' emit loop: pull resolved frames, emit item frames
+/// with item watermarks (closing on the item limit), pass frontier
+/// watermarks through, terminate on scan-limit stops, and stamp the
+/// natural-completion terminal when the source drains.
+pub(crate) fn drive_emit<L>(
+    lane: L,
+    ctx: QueryContext,
+    options: QueryOptions,
+    inputs: EmitInputs,
+    range_end_coordinate: L::Coordinate,
+    mut rendered_stream: EmitStream<L::Rendered, L::Coordinate>,
+) -> BoxStream<'static, Result<L::Frame, RpcError>>
+where
+    L: EmitLane + Send + 'static,
+    L::Rendered: Send,
+    L::Coordinate: Send,
+    L::Frame: Send,
+{
+    async_stream::try_stream! {
+        let mut emitted = 0usize;
+        let mut first_frame_emitted = false;
+        let mut covered_checkpoint_bound: Option<u64> = None;
+        let terminal_reason = loop {
+            let Some(item) = ctx
+                .next_response_item(inputs.resolution, &mut rendered_stream)
+                .await
+            else {
+                let (response, reason) = range_end_response::<L::Frame>(
+                    &options,
+                    inputs.exhaustion,
+                    lane.position(inputs.range_end_checkpoint, range_end_coordinate),
+                    covered_checkpoint_bound,
+                    false,
+                );
+                ctx.inc_stream_watermark_frames();
+                if !first_frame_emitted {
+                    ctx.observe_stream_first_frame_latency(inputs.resolution, inputs.started.elapsed());
+                }
+                let yield_started = Instant::now();
+                yield response;
+                ctx.observe_stream_frame_yield_wait(inputs.resolution, yield_started.elapsed());
+                break reason;
+            };
+            match item {
+                Ok(ResolvedWatermarked::Item(rendered)) => {
+                    let (coordinate, item_checkpoint) = lane.dissect(&rendered);
+                    lane.cover_on_item(
+                        &mut covered_checkpoint_bound,
+                        item_checkpoint,
+                        inputs.entry_checkpoint,
+                        &options,
+                    );
+                    let watermark = item_watermark(
+                        lane.position(item_checkpoint, coordinate),
+                        covered_checkpoint_bound,
+                    );
+                    let (mut response, render_duration) = lane.item_frame(rendered, watermark);
+                    ctx.observe_response_render(inputs.resolution, render_duration);
+                    emitted += 1;
+                    let item_limit = emitted == inputs.limit_items;
+                    if item_limit {
+                        let mut end = QueryEnd::default();
+                        end.reason = Some(QueryEndReason::ItemLimit as i32);
+                        response.set_end(end);
+                    }
+                    ctx.observe_response_page_bytes(inputs.resolution, response.encoded_len());
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(inputs.resolution, inputs.started.elapsed());
+                        first_frame_emitted = true;
+                    }
+                    let yield_started = Instant::now();
+                    yield response;
+                    ctx.observe_stream_frame_yield_wait(inputs.resolution, yield_started.elapsed());
+                    if item_limit {
+                        break QueryEndReason::ItemLimit;
+                    }
+                }
+                Ok(ResolvedWatermarked::Watermark {
+                    position,
+                    cp: checkpoint_at_frontier,
+                }) => {
+                    let watermark = lane.frontier_watermark(
+                        &options,
+                        inputs.direction,
+                        inputs.entry_checkpoint,
+                        &mut covered_checkpoint_bound,
+                        position,
+                        checkpoint_at_frontier,
+                    )?;
+                    let response: L::Frame = watermark_response(watermark);
+                    ctx.inc_stream_watermark_frames();
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(inputs.resolution, inputs.started.elapsed());
+                        first_frame_emitted = true;
+                    }
+                    let yield_started = Instant::now();
+                    yield response;
+                    ctx.observe_stream_frame_yield_wait(inputs.resolution, yield_started.elapsed());
+                }
+                Err(RenderAheadError::Upstream(stop)) => {
+                    let response = scan_limit_response(
+                        &lane,
+                        &options,
+                        inputs.direction,
+                        inputs.entry_checkpoint,
+                        &mut covered_checkpoint_bound,
+                        stop,
+                    )?;
+                    ctx.inc_stream_watermark_frames();
+                    if !first_frame_emitted {
+                        ctx.observe_stream_first_frame_latency(inputs.resolution, inputs.started.elapsed());
+                    }
+                    let yield_started = Instant::now();
+                    yield response;
+                    ctx.observe_stream_frame_yield_wait(inputs.resolution, yield_started.elapsed());
+                    break QueryEndReason::ScanLimit;
+                }
+                Err(RenderAheadError::Render(error)) => Err(error)?,
+            }
+        };
+        lane.log_completion(emitted, terminal_reason, inputs.started.elapsed());
+    }
+    .boxed()
+}
+
+/// A one-frame stream for requests whose window resolved empty: the terminal
+/// frame is already built; only the stream metrics choreography remains.
+pub(crate) fn terminal_only_stream<F>(
+    ctx: QueryContext,
+    resolution: &'static str,
+    started: Instant,
+    response: F,
+) -> BoxStream<'static, Result<F, RpcError>>
+where
+    F: Send + 'static,
+{
+    async_stream::try_stream! {
+        ctx.inc_stream_watermark_frames();
+        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+        let yield_started = Instant::now();
+        yield response;
+        ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
+    }
+    .boxed()
+}
+
+/// A scan-limit stop's terminal frame: the lane's frontier watermark wrapped
+/// as a `ScanLimit` terminal. Cancellation and faults surface as errors.
+pub(crate) fn scan_limit_response<L: EmitLane>(
+    lane: &L,
+    options: &QueryOptions,
+    direction: ScanDirection,
+    entry_checkpoint: u64,
+    covered: &mut Option<u64>,
+    stop: ResolvedScanStop<L::Coordinate>,
+) -> Result<L::Frame, RpcError> {
+    let (position, checkpoint) = stop.into_scan_limit()?;
+    let terminal = ScanTerminal::ScanLimit {
+        watermark: lane.scan_limit_watermark(
+            options,
+            direction,
+            entry_checkpoint,
+            covered,
+            position,
+            checkpoint,
+        )?,
+    };
+    let reason = terminal.reason();
+    Ok(end_response(
+        terminal.into_watermark(options, *covered),
+        reason,
+    ))
 }
 
 #[cfg(test)]

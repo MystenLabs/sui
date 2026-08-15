@@ -9,7 +9,6 @@ use std::time::Instant;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
-use prost::Message;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::ScanStop;
 use sui_kvstore::BitmapIndexSpec;
@@ -19,21 +18,17 @@ use sui_rpc::field::FieldMaskTree;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsResponse;
-use sui_rpc::proto::sui::rpc::v2::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::CheckpointRange;
+use sui_rpc_api::ledger_history::query_options::Ordering;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::ResolvedRange;
-use sui_rpc_api::ledger_history::response::end_response;
 use sui_rpc_api::ledger_history::response::item_response;
 use sui_rpc_api::ledger_history::response::range_end_response;
-use sui_rpc_api::ledger_history::response::watermark_response;
-use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
-use sui_rpc_api::ledger_history::watermark::item_watermark;
 use sui_rpc_api::ledger_history::watermark::scan_frontier_cursor_cp;
 use sui_rpc_cursor::Position;
 use sui_types::digests::TransactionDigest;
@@ -45,15 +40,16 @@ use crate::bigtable_client::BigTableClient;
 use crate::config::PipelineStage;
 use crate::object_cache::ObjectMap;
 use crate::operation::QueryContext;
+use crate::pipeline::EmitInputs;
+use crate::pipeline::EmitLane;
 use crate::pipeline::InputOrderEmitter;
-use crate::pipeline::RenderAheadError;
-use crate::pipeline::ResolvedScanStop;
-use crate::pipeline::ResolvedWatermarked;
 use crate::pipeline::Watermarked;
+use crate::pipeline::drive_emit;
 use crate::pipeline::pipelined_chunks;
 use crate::pipeline::render_ahead;
 use crate::pipeline::resolve_scan_watermarks;
 use crate::pipeline::take_items;
+use crate::pipeline::terminal_only_stream;
 use crate::render::transaction_to_response;
 use crate::resolve;
 use crate::resolve::compute_object_keys;
@@ -78,6 +74,130 @@ enum RenderedTransactionItem {
         executed: Box<ExecutedTransaction>,
         render_elapsed: Duration,
     },
+}
+
+struct TransactionEmitLane {
+    read_mask: FieldMaskTree,
+    filtered: bool,
+    limit_items: usize,
+    ordering: Ordering,
+}
+
+impl EmitLane for TransactionEmitLane {
+    type Rendered = RenderedTransactionItem;
+    type Coordinate = u64;
+    type Frame = ListTransactionsResponse;
+
+    fn dissect(&self, rendered: &Self::Rendered) -> (u64, u64) {
+        match rendered {
+            RenderedTransactionItem::Digest(row) => (row.tx_sequence_number, row.checkpoint_number),
+            RenderedTransactionItem::Full {
+                tx_seq, checkpoint, ..
+            } => (*tx_seq, *checkpoint),
+        }
+    }
+
+    fn cover_on_item(
+        &self,
+        covered: &mut Option<u64>,
+        item_checkpoint: u64,
+        entry_checkpoint: u64,
+        options: &QueryOptions,
+    ) {
+        *covered = advance_covered_bound_before_checkpoint(
+            *covered,
+            item_checkpoint,
+            entry_checkpoint,
+            options,
+        );
+    }
+
+    fn position(&self, checkpoint: u64, coordinate: u64) -> Position {
+        Position::Transactions {
+            checkpoint,
+            tx_seq: coordinate,
+        }
+    }
+
+    fn item_frame(
+        &self,
+        rendered: Self::Rendered,
+        watermark: Watermark,
+    ) -> (ListTransactionsResponse, Duration) {
+        match rendered {
+            RenderedTransactionItem::Digest(row) => {
+                let render_started = Instant::now();
+                let response =
+                    transaction_response_from_tx_seq_digest(row, &self.read_mask, watermark);
+                (response, render_started.elapsed())
+            }
+            RenderedTransactionItem::Full {
+                tx_offset,
+                executed,
+                render_elapsed,
+                ..
+            } => {
+                let mut executed = *executed;
+                if self
+                    .read_mask
+                    .contains(ExecutedTransaction::TRANSACTION_INDEX_FIELD.name)
+                {
+                    executed.transaction_index = Some(tx_offset as u64);
+                }
+                (item_response(executed, watermark), render_elapsed)
+            }
+        }
+    }
+
+    fn frontier_watermark(
+        &self,
+        options: &QueryOptions,
+        direction: ScanDirection,
+        entry_checkpoint: u64,
+        covered: &mut Option<u64>,
+        position: u64,
+        checkpoint: u64,
+    ) -> Result<Watermark, RpcError> {
+        transaction_frontier_watermark(
+            options,
+            direction,
+            entry_checkpoint,
+            covered,
+            position,
+            Some(checkpoint),
+        )
+    }
+
+    fn scan_limit_watermark(
+        &self,
+        options: &QueryOptions,
+        direction: ScanDirection,
+        entry_checkpoint: u64,
+        covered: &mut Option<u64>,
+        position: u64,
+        checkpoint: Option<u64>,
+    ) -> Result<Watermark, RpcError> {
+        transaction_frontier_watermark(
+            options,
+            direction,
+            entry_checkpoint,
+            covered,
+            position,
+            checkpoint,
+        )
+    }
+
+    fn log_completion(&self, emitted: usize, terminal_reason: QueryEndReason, elapsed: Duration) {
+        info!(
+            filtered = self.filtered,
+            limit_items = self.limit_items,
+            ordering = ?self.ordering,
+            emitted,
+            ?terminal_reason,
+            elapsed_ms = elapsed.as_millis(),
+            "list_transactions: done"
+        );
+    }
 }
 
 pub(crate) async fn list_transactions(
@@ -143,14 +263,7 @@ pub(crate) async fn list_transactions(
             true,
         )
         .0;
-        return Ok(async_stream::try_stream! {
-            ctx.inc_stream_watermark_frames();
-            ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
-            let yield_started = Instant::now();
-            yield response;
-            ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
-        }
-        .boxed());
+        return Ok(terminal_only_stream(ctx, resolution, started, response));
     }
 
     // Stage 1: discover tx_seq_digest rows for the requested response.
@@ -245,7 +358,7 @@ pub(crate) async fn list_transactions(
         client.tx_wm_resolver(direction),
         std::convert::identity,
     );
-    let mut rendered_stream = render_ahead(transaction_stream, endpoint.render_ahead, {
+    let rendered_stream = render_ahead(transaction_stream, endpoint.render_ahead, {
         let read_mask = read_mask.clone();
         let resolver = resolver.clone();
         move |item| {
@@ -273,154 +386,27 @@ pub(crate) async fn list_transactions(
         }
     });
 
-    Ok(async_stream::try_stream! {
-        let mut emitted = 0usize;
-        let mut first_frame_emitted = false;
-        let mut covered_checkpoint_bound: Option<u64> = None;
-        let terminal_reason = loop {
-            let Some(item) = ctx
-                .next_response_item(resolution, &mut rendered_stream)
-                .await
-            else {
-                let (response, reason) = range_end_response(
-                    &options,
-                    exhaustion,
-                    Position::Transactions {
-                        checkpoint: range_end_checkpoint,
-                        tx_seq: range_end_position,
-                    },
-                    covered_checkpoint_bound,
-                    false,
-                );
-                ctx.inc_stream_watermark_frames();
-                if !first_frame_emitted {
-                    ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
-                }
-                let yield_started = Instant::now();
-                yield response;
-                ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
-                break reason;
-            };
-            match item {
-                Ok(ResolvedWatermarked::Item(item)) => {
-                    let (tx_seq, item_checkpoint) = match &item {
-                        RenderedTransactionItem::Digest(row) => {
-                            (row.tx_sequence_number, row.checkpoint_number)
-                        }
-                        RenderedTransactionItem::Full {
-                            tx_seq, checkpoint, ..
-                        } => (*tx_seq, *checkpoint),
-                    };
-                    covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
-                        covered_checkpoint_bound,
-                        item_checkpoint,
-                        entry_checkpoint,
-                        &options,
-                    );
-                    let watermark = item_watermark(
-                        Position::Transactions {
-                            checkpoint: item_checkpoint,
-                            tx_seq,
-                        },
-                        covered_checkpoint_bound,
-                    );
-                    let mut response = match item {
-                        RenderedTransactionItem::Digest(row) => {
-                            let render_started = Instant::now();
-                            let response =
-                                transaction_response_from_tx_seq_digest(row, &read_mask, watermark);
-                            ctx.observe_response_render(resolution, render_started.elapsed());
-                            response
-                        }
-                        RenderedTransactionItem::Full {
-                            tx_offset,
-                            executed,
-                            render_elapsed,
-                            ..
-                        } => {
-                            ctx.observe_response_render(resolution, render_elapsed);
-                            let mut executed = *executed;
-                            if read_mask
-                                .contains(ExecutedTransaction::TRANSACTION_INDEX_FIELD.name)
-                            {
-                                executed.transaction_index = Some(tx_offset as u64);
-                            }
-                            item_response(executed, watermark)
-                        }
-                    };
-                    emitted += 1;
-                    let item_limit = emitted == limit_items;
-                    if item_limit {
-                        let mut end = QueryEnd::default();
-                        end.reason = Some(QueryEndReason::ItemLimit as i32);
-                        response.end = Some(end);
-                    }
-                    ctx.observe_response_page_bytes(resolution, response.encoded_len());
-                    if !first_frame_emitted {
-                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
-                        first_frame_emitted = true;
-                    }
-                    let yield_started = Instant::now();
-                    yield response;
-                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
-                    if item_limit {
-                        break QueryEndReason::ItemLimit;
-                    }
-                }
-                Ok(ResolvedWatermarked::Watermark {
-                    position,
-                    cp: checkpoint_at_frontier,
-                }) => {
-                    let watermark = transaction_frontier_watermark(
-                        &options,
-                        direction,
-                        entry_checkpoint,
-                        &mut covered_checkpoint_bound,
-                        position,
-                        Some(checkpoint_at_frontier),
-                    )?;
-                    let response = watermark_response(watermark);
-                    ctx.inc_stream_watermark_frames();
-                    if !first_frame_emitted {
-                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
-                        first_frame_emitted = true;
-                    }
-                    let yield_started = Instant::now();
-                    yield response;
-                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
-                }
-                Err(RenderAheadError::Upstream(stop)) => {
-                    let response = terminal_response_from_scan_stop(
-                        stop,
-                        &options,
-                        direction,
-                        entry_checkpoint,
-                        &mut covered_checkpoint_bound,
-                    )?;
-                    ctx.inc_stream_watermark_frames();
-                    if !first_frame_emitted {
-                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
-                    }
-                    let yield_started = Instant::now();
-                    yield response;
-                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
-                    break QueryEndReason::ScanLimit;
-                }
-                Err(RenderAheadError::Render(error)) => Err(error)?,
-            }
-        };
-
-        info!(
+    Ok(drive_emit(
+        TransactionEmitLane {
+            read_mask,
             filtered,
             limit_items,
-            ?ordering,
-            emitted,
-            ?terminal_reason,
-            elapsed_ms = started.elapsed().as_millis(),
-            "list_transactions: done"
-        );
-    }
-    .boxed())
+            ordering,
+        },
+        ctx,
+        options,
+        EmitInputs {
+            resolution,
+            limit_items,
+            direction,
+            entry_checkpoint,
+            exhaustion,
+            range_end_checkpoint,
+            started,
+        },
+        range_end_position,
+        rendered_stream,
+    ))
 }
 
 fn transaction_frontier_watermark(
@@ -452,31 +438,6 @@ fn transaction_frontier_watermark(
             tx_seq: position,
         },
         *covered_checkpoint_bound,
-    ))
-}
-
-fn terminal_response_from_scan_stop(
-    stop: ResolvedScanStop<u64>,
-    options: &QueryOptions,
-    direction: ScanDirection,
-    entry_checkpoint: u64,
-    covered_checkpoint_bound: &mut Option<u64>,
-) -> Result<ListTransactionsResponse, RpcError> {
-    let (position, checkpoint) = stop.into_scan_limit()?;
-    let terminal = ScanTerminal::ScanLimit {
-        watermark: transaction_frontier_watermark(
-            options,
-            direction,
-            entry_checkpoint,
-            covered_checkpoint_bound,
-            position,
-            checkpoint,
-        )?,
-    };
-    let reason = terminal.reason();
-    Ok(end_response(
-        terminal.into_watermark(options, *covered_checkpoint_bound),
-        reason,
     ))
 }
 
@@ -666,7 +627,11 @@ async fn checkpoint_to_tx_boundary(
 
 #[cfg(test)]
 mod tests {
+    use crate::pipeline::ResolvedScanStop;
+    use crate::pipeline::scan_limit_response;
+    use prost::Message;
     use std::collections::BTreeSet;
+    use sui_rpc_api::ledger_history::watermark::item_watermark;
 
     use sui_kvstore::testing::insert_checkpoint_rows;
     use sui_rpc::field::FieldMask;
@@ -988,15 +953,22 @@ mod tests {
             let options =
                 QueryOptions::transactions_from_proto(Some(&proto_options), 10, 100).unwrap();
             let mut covered = initial_proof;
-            let response = terminal_response_from_scan_stop(
-                ResolvedScanStop::ScanLimit {
-                    position,
-                    checkpoint,
-                },
+            let lane = TransactionEmitLane {
+                read_mask: read_mask(&[]),
+                filtered: false,
+                limit_items: 10,
+                ordering: options.ordering,
+            };
+            let response = scan_limit_response(
+                &lane,
                 &options,
                 direction,
                 entry_checkpoint,
                 &mut covered,
+                ResolvedScanStop::ScanLimit {
+                    position,
+                    checkpoint,
+                },
             )
             .expect("representable transaction frontier");
 
@@ -1043,15 +1015,22 @@ mod tests {
                 u64::MAX
             };
             let mut covered = None;
-            let error = terminal_response_from_scan_stop(
-                ResolvedScanStop::ScanLimit {
-                    position,
-                    checkpoint: None,
-                },
+            let lane = TransactionEmitLane {
+                read_mask: read_mask(&[]),
+                filtered: false,
+                limit_items: 10,
+                ordering: options.ordering,
+            };
+            let error = scan_limit_response(
+                &lane,
                 &options,
                 direction,
                 entry_checkpoint,
                 &mut covered,
+                ResolvedScanStop::ScanLimit {
+                    position,
+                    checkpoint: None,
+                },
             )
             .expect_err("only numeric-edge frontiers may omit a checkpoint mapping");
 

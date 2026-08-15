@@ -3,12 +3,12 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
-use prost::Message;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::ScanStop;
 use sui_inverted_index::event_seq;
@@ -23,7 +23,6 @@ use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::Event as ProtoEvent;
 use sui_rpc::proto::sui::rpc::v2::ListEventsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListEventsResponse;
-use sui_rpc::proto::sui::rpc::v2::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::ErrorReason;
@@ -31,16 +30,13 @@ use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::CheckpointRange;
 use sui_rpc_api::ledger_history::query_options::EventPosition;
 use sui_rpc_api::ledger_history::query_options::EventScanBounds;
+use sui_rpc_api::ledger_history::query_options::Ordering;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::ResolvedEventRange;
-use sui_rpc_api::ledger_history::response::end_response;
 use sui_rpc_api::ledger_history::response::item_response;
 use sui_rpc_api::ledger_history::response::range_end_response;
-use sui_rpc_api::ledger_history::response::watermark_response;
-use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
-use sui_rpc_api::ledger_history::watermark::item_watermark;
 use sui_rpc_api::ledger_history::watermark::scan_frontier_cursor_cp;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc_cursor::Position;
@@ -53,15 +49,16 @@ use crate::PackageResolver;
 use crate::bigtable_client::BigTableClient;
 use crate::config::PipelineStage;
 use crate::operation::QueryContext;
+use crate::pipeline::EmitInputs;
+use crate::pipeline::EmitLane;
 use crate::pipeline::InputOrderEmitter;
-use crate::pipeline::RenderAheadError;
-use crate::pipeline::ResolvedScanStop;
-use crate::pipeline::ResolvedWatermarked;
 use crate::pipeline::Watermarked;
+use crate::pipeline::drive_emit;
 use crate::pipeline::pipelined_chunks;
 use crate::pipeline::render_ahead;
 use crate::pipeline::resolve_scan_watermarks;
 use crate::pipeline::take_items;
+use crate::pipeline::terminal_only_stream;
 use crate::render::render_json;
 
 const EVENT_READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::EVENT;
@@ -130,14 +127,7 @@ pub(crate) async fn list_events(
             event_index: range_end_position.event_index,
         };
         let response = range_end_response(&options, exhaustion, terminal_position, None, true).0;
-        return Ok(async_stream::try_stream! {
-            ctx.inc_stream_watermark_frames();
-            ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
-            let yield_started = Instant::now();
-            yield response;
-            ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
-        }
-        .boxed());
+        return Ok(terminal_only_stream(ctx, resolution, started, response));
     }
 
     let scan_budget = ctx.scan_budget(BitmapIndexSpec::event());
@@ -254,7 +244,7 @@ pub(crate) async fn list_events(
     // TODO: add global single-flight dedupe around package cache misses so
     // concurrent requests for the same uncached package share one BigTable
     // fetch.
-    let mut rendered_stream = render_ahead(event_stream, endpoint.render_ahead, {
+    let rendered_stream = render_ahead(event_stream, endpoint.render_ahead, {
         let resolver = resolver.clone();
         let read_mask = read_mask.clone();
         move |(event_ref, tx)| {
@@ -269,125 +259,27 @@ pub(crate) async fn list_events(
         }
     });
 
-    Ok(async_stream::try_stream! {
-        let mut emitted = 0usize;
-        let mut first_frame_emitted = false;
-        let mut covered_checkpoint_bound: Option<u64> = None;
-        let terminal_reason = loop {
-            let Some(item) = ctx.next_response_item(resolution, &mut rendered_stream).await else {
-                let terminal_position = Position::Events {
-                    checkpoint: range_end_checkpoint,
-                    tx_seq: range_end_position.tx_seq,
-                    event_index: range_end_position.event_index,
-                };
-                let (response, reason) = range_end_response(
-                    &options,
-                    exhaustion,
-                    terminal_position,
-                    covered_checkpoint_bound,
-                    false,
-                );
-                ctx.inc_stream_watermark_frames();
-                if !first_frame_emitted {
-                    ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
-                }
-                let yield_started = Instant::now();
-                yield response;
-                ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
-                break reason;
-            };
-            match item {
-                Ok(ResolvedWatermarked::Item((rendered, render_elapsed))) => {
-                    let item_checkpoint = rendered.checkpoint_number;
-                    covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
-                        covered_checkpoint_bound,
-                        item_checkpoint,
-                        entry_checkpoint,
-                        &options,
-                    );
-                    let watermark = item_watermark(
-                        Position::Events {
-                            checkpoint: item_checkpoint,
-                            tx_seq: rendered.position.tx_seq,
-                            event_index: rendered.position.event_index,
-                        },
-                        covered_checkpoint_bound,
-                    );
-                    emitted += 1;
-                    ctx.observe_response_render(resolution, render_elapsed);
-                    let mut response: ListEventsResponse = item_response(rendered.event, watermark);
-                    let item_limit = emitted == limit_items;
-                    if item_limit {
-                        let mut end = QueryEnd::default();
-                        end.reason = Some(QueryEndReason::ItemLimit as i32);
-                        response.end = Some(end);
-                    }
-                    ctx.observe_response_page_bytes(resolution, response.encoded_len());
-                    if !first_frame_emitted {
-                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
-                        first_frame_emitted = true;
-                    }
-                    let yield_started = Instant::now();
-                    yield response;
-                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
-                    if item_limit {
-                        break QueryEndReason::ItemLimit;
-                    }
-                }
-                Ok(ResolvedWatermarked::Watermark {
-                    position,
-                    cp: checkpoint_at_frontier,
-                }) => {
-                    let watermark = event_frontier_watermark(
-                        &options,
-                        direction,
-                        entry_checkpoint,
-                        &mut covered_checkpoint_bound,
-                        position,
-                        Some(checkpoint_at_frontier),
-                    )?;
-                    let response = watermark_response(watermark);
-                    ctx.inc_stream_watermark_frames();
-                    if !first_frame_emitted {
-                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
-                        first_frame_emitted = true;
-                    }
-                    let yield_started = Instant::now();
-                    yield response;
-                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
-                }
-                Err(RenderAheadError::Upstream(stop)) => {
-                    let response = terminal_response_from_scan_stop(
-                        stop,
-                        &options,
-                        direction,
-                        entry_checkpoint,
-                        &mut covered_checkpoint_bound,
-                    )?;
-                    ctx.inc_stream_watermark_frames();
-                    if !first_frame_emitted {
-                        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
-                    }
-                    let yield_started = Instant::now();
-                    yield response;
-                    ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
-                    break QueryEndReason::ScanLimit;
-                }
-                Err(RenderAheadError::Render(error)) => Err(error)?,
-            }
-        };
-        info!(
+    Ok(drive_emit(
+        EventEmitLane {
             filtered,
             wants_json,
             limit_items,
-            ?ordering,
-            emitted,
-            ?terminal_reason,
-            elapsed_ms = started.elapsed().as_millis(),
-            "list_events: done"
-        );
-    }
-    .boxed())
+            ordering,
+        },
+        ctx,
+        options,
+        EmitInputs {
+            resolution,
+            limit_items,
+            direction,
+            entry_checkpoint,
+            exhaustion,
+            range_end_checkpoint,
+            started,
+        },
+        range_end_position,
+        rendered_stream,
+    ))
 }
 
 /// Stage B: for filtered refs (no `tx_seq_digest`), dedupe tx_seqs in the
@@ -520,6 +412,105 @@ struct RenderedEvent {
     position: EventPosition,
 }
 
+struct EventEmitLane {
+    filtered: bool,
+    wants_json: bool,
+    limit_items: usize,
+    ordering: Ordering,
+}
+
+impl EmitLane for EventEmitLane {
+    type Rendered = (RenderedEvent, Duration);
+    type Coordinate = EventPosition;
+    type Frame = ListEventsResponse;
+
+    fn dissect(&self, (rendered, _): &Self::Rendered) -> (EventPosition, u64) {
+        (rendered.position, rendered.checkpoint_number)
+    }
+
+    fn cover_on_item(
+        &self,
+        covered: &mut Option<u64>,
+        item_checkpoint: u64,
+        entry_checkpoint: u64,
+        options: &QueryOptions,
+    ) {
+        *covered = advance_covered_bound_before_checkpoint(
+            *covered,
+            item_checkpoint,
+            entry_checkpoint,
+            options,
+        );
+    }
+
+    fn position(&self, checkpoint: u64, coordinate: EventPosition) -> Position {
+        Position::Events {
+            checkpoint,
+            tx_seq: coordinate.tx_seq,
+            event_index: coordinate.event_index,
+        }
+    }
+
+    fn item_frame(
+        &self,
+        (rendered, render_elapsed): Self::Rendered,
+        watermark: Watermark,
+    ) -> (ListEventsResponse, Duration) {
+        (item_response(rendered.event, watermark), render_elapsed)
+    }
+
+    fn frontier_watermark(
+        &self,
+        options: &QueryOptions,
+        direction: ScanDirection,
+        entry_checkpoint: u64,
+        covered: &mut Option<u64>,
+        position: EventPosition,
+        checkpoint: u64,
+    ) -> Result<Watermark, RpcError> {
+        event_frontier_watermark(
+            options,
+            direction,
+            entry_checkpoint,
+            covered,
+            position,
+            Some(checkpoint),
+        )
+    }
+
+    fn scan_limit_watermark(
+        &self,
+        options: &QueryOptions,
+        direction: ScanDirection,
+        entry_checkpoint: u64,
+        covered: &mut Option<u64>,
+        position: EventPosition,
+        checkpoint: Option<u64>,
+    ) -> Result<Watermark, RpcError> {
+        event_frontier_watermark(
+            options,
+            direction,
+            entry_checkpoint,
+            covered,
+            position,
+            checkpoint,
+        )
+    }
+
+    fn log_completion(&self, emitted: usize, terminal_reason: QueryEndReason, elapsed: Duration) {
+        info!(
+            filtered = self.filtered,
+            wants_json = self.wants_json,
+            limit_items = self.limit_items,
+            ordering = ?self.ordering,
+            emitted,
+            ?terminal_reason,
+            elapsed_ms = elapsed.as_millis(),
+            "list_events: done"
+        );
+    }
+}
+
 async fn render_event(
     event_ref: EventRef,
     tx: TransactionData,
@@ -615,31 +606,6 @@ fn event_frontier_watermark(
             event_index: position.event_index,
         },
         *covered_checkpoint_bound,
-    ))
-}
-
-fn terminal_response_from_scan_stop(
-    stop: ResolvedScanStop<EventPosition>,
-    options: &QueryOptions,
-    direction: ScanDirection,
-    entry_checkpoint: u64,
-    covered_checkpoint_bound: &mut Option<u64>,
-) -> Result<ListEventsResponse, RpcError> {
-    let (position, checkpoint) = stop.into_scan_limit()?;
-    let terminal = ScanTerminal::ScanLimit {
-        watermark: event_frontier_watermark(
-            options,
-            direction,
-            entry_checkpoint,
-            covered_checkpoint_bound,
-            position,
-            checkpoint,
-        )?,
-    };
-    let reason = terminal.reason();
-    Ok(end_response(
-        terminal.into_watermark(options, *covered_checkpoint_bound),
-        reason,
     ))
 }
 
@@ -818,6 +784,7 @@ async fn checkpoint_to_tx_boundary(
 
 #[cfg(test)]
 mod tests {
+    use prost::Message;
     use sui_kvstore::testing::insert_checkpoint_rows;
     use sui_types::digests::TransactionDigest;
 
