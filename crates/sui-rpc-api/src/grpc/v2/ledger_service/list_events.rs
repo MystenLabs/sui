@@ -295,12 +295,12 @@ fn next_event_chunk(
                 return Err(cancelled());
             }
             let terminal_position = Position::Events {
-                checkpoint: event_range.terminal.end_checkpoint,
-                tx_seq: event_range.terminal.end_coordinate.tx_seq,
-                event_index: event_range.terminal.end_coordinate.event_index,
+                checkpoint: event_range.edges.terminal.end_checkpoint,
+                tx_seq: event_range.edges.terminal.end_coordinate.tx_seq,
+                event_index: event_range.edges.terminal.end_coordinate.event_index,
             };
             let terminal = ScanTerminal::from_range_exhaustion(
-                event_range.terminal.exhaustion,
+                event_range.edges.terminal.exhaustion,
                 terminal_position,
                 event_range.is_empty(),
             );
@@ -318,19 +318,19 @@ fn next_event_chunk(
                 Some(query) => EventScanState::Filtered {
                     query,
                     bounds: Some(bounds),
-                    entry_checkpoint: event_range.entry_checkpoint,
+                    entry_checkpoint: event_range.edges.entry_checkpoint,
                     pending_bucket: None,
-                    exhaustion: event_range.terminal.exhaustion,
-                    end_checkpoint: event_range.terminal.end_checkpoint,
-                    end_position: event_range.terminal.end_coordinate,
+                    exhaustion: event_range.edges.terminal.exhaustion,
+                    end_checkpoint: event_range.edges.terminal.end_checkpoint,
+                    end_position: event_range.edges.terminal.end_coordinate,
                 },
                 None => EventScanState::Unfiltered {
                     bounds,
-                    entry_checkpoint: event_range.entry_checkpoint,
+                    entry_checkpoint: event_range.edges.entry_checkpoint,
                     row_scan_budget: unfiltered_row_scan_budget,
-                    exhaustion: event_range.terminal.exhaustion,
-                    end_checkpoint: event_range.terminal.end_checkpoint,
-                    end_position: event_range.terminal.end_coordinate,
+                    exhaustion: event_range.edges.terminal.exhaustion,
+                    end_checkpoint: event_range.edges.terminal.end_checkpoint,
+                    end_position: event_range.edges.terminal.end_coordinate,
                 },
             };
             return next_event_chunk(

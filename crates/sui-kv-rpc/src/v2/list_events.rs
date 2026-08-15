@@ -104,10 +104,10 @@ pub(crate) async fn list_events(
     let event_range = resolve_event_range(&client, cp_range, &options)
         .instrument(debug_span!("resolve_event_range"))
         .await?;
-    let exhaustion = event_range.terminal.exhaustion;
-    let entry_checkpoint = event_range.entry_checkpoint;
-    let range_end_checkpoint = event_range.terminal.end_checkpoint;
-    let range_end_position = event_range.terminal.end_coordinate;
+    let exhaustion = event_range.edges.terminal.exhaustion;
+    let entry_checkpoint = event_range.edges.entry_checkpoint;
+    let range_end_checkpoint = event_range.edges.terminal.end_checkpoint;
+    let range_end_position = event_range.edges.terminal.end_coordinate;
     let event_bounds = event_range.bounds;
 
     if event_range.is_empty() {

@@ -31,6 +31,7 @@ use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::query_options::ResolvedCheckpointRange;
 use crate::ledger_history::query_options::ResolvedScan;
 use crate::ledger_history::query_options::ScanBounds;
+use crate::ledger_history::query_options::WatermarkEdges;
 use crate::metrics::ListRequestMetrics;
 use crate::metrics::ListStreamMetrics;
 use crate::read_mask_defaults;
@@ -317,19 +318,21 @@ fn next_checkpoint_chunk(
             // an empty scan must not claim coverage.
             let range = cp_range.bounds.to_range();
             let interval_empty = range.is_empty();
-            let mut terminal_record = cp_range.terminal;
+            let mut edges = WatermarkEdges {
+                entry_checkpoint: if options.is_ascending() {
+                    range.start
+                } else {
+                    range.end.saturating_sub(1)
+                },
+                terminal: cp_range.edges.terminal,
+            };
             let mut terminal = ScanTerminal::from_range_exhaustion(
-                terminal_record.exhaustion,
+                edges.terminal.exhaustion,
                 Position::Checkpoints {
-                    checkpoint: terminal_record.end_coordinate,
+                    checkpoint: edges.terminal.end_coordinate,
                 },
                 interval_empty,
             );
-            let mut entry_checkpoint = if options.is_ascending() {
-                range.start
-            } else {
-                range.end.saturating_sub(1)
-            };
             if range.is_empty() {
                 return Ok(CheckpointChunkDone {
                     items: Vec::new(),
@@ -346,16 +349,15 @@ fn next_checkpoint_chunk(
                         probe_serving_floor(&service, tx_range.start, start_checkpoint, &options)?
                 {
                     // The scan window is transaction-space while the
-                    // watermark metadata stays checkpoint-space, so the
-                    // floor's halves route separately: tx fencepost to the
-                    // bounds, checkpoint to the terminal record.
+                    // watermark edges stay checkpoint-space, so the floor's
+                    // halves route separately: tx fencepost to the bounds,
+                    // checkpoint to the edges.
                     let mut bounds = ScanBounds::from_range(tx_range.clone());
                     let consumed = bounds.clamp_to_available_lo(floor.tx_seq);
                     if consumed {
                         tx_range = tx_range.end..tx_range.end;
                     } else {
-                        terminal_record.absorb_raised_lo(
-                            &mut entry_checkpoint,
+                        edges.absorb_raised_lo(
                             floor.checkpoint,
                             floor.checkpoint,
                             options.is_ascending(),
@@ -363,9 +365,9 @@ fn next_checkpoint_chunk(
                         tx_range = bounds.to_range();
                     }
                     terminal = ScanTerminal::from_range_exhaustion(
-                        terminal_record.exhaustion,
+                        edges.terminal.exhaustion,
                         Position::Checkpoints {
-                            checkpoint: terminal_record.end_coordinate,
+                            checkpoint: edges.terminal.end_coordinate,
                         },
                         consumed,
                     );
@@ -386,17 +388,17 @@ fn next_checkpoint_chunk(
                     buffered_cp_seqs: VecDeque::new(),
                     last_cp_seq: None,
                     covered_checkpoint_bound: None,
-                    entry_checkpoint,
-                    exhaustion: terminal_record.exhaustion,
-                    end_checkpoint: terminal_record.end_checkpoint,
-                    end_position: terminal_record.end_coordinate,
+                    entry_checkpoint: edges.entry_checkpoint,
+                    exhaustion: edges.terminal.exhaustion,
+                    end_checkpoint: edges.terminal.end_checkpoint,
+                    end_position: edges.terminal.end_coordinate,
                 }
             } else {
                 CheckpointScanState::Unfiltered {
                     range,
-                    exhaustion: terminal_record.exhaustion,
-                    end_checkpoint: terminal_record.end_checkpoint,
-                    end_position: terminal_record.end_coordinate,
+                    exhaustion: edges.terminal.exhaustion,
+                    end_checkpoint: edges.terminal.end_checkpoint,
+                    end_position: edges.terminal.end_coordinate,
                 }
             };
             next_checkpoint_chunk(
@@ -998,36 +1000,31 @@ mod tests {
             (false, 50, 10, true, 40..40, 8, 0, 0),
         ] {
             let mut tx_range = 0..40u64;
-            let (mut entry_checkpoint, mut terminal_record) = if ascending {
-                (
-                    0u64,
-                    TerminalRecord {
+            let mut edges = if ascending {
+                WatermarkEdges {
+                    entry_checkpoint: 0u64,
+                    terminal: TerminalRecord {
                         end_checkpoint: 8,
                         end_coordinate: 40u64,
                         exhaustion: RangeExhaustion::CheckpointBound,
                     },
-                )
+                }
             } else {
-                (
-                    8u64,
-                    TerminalRecord {
+                WatermarkEdges {
+                    entry_checkpoint: 8u64,
+                    terminal: TerminalRecord {
                         end_checkpoint: 0,
                         end_coordinate: 0u64,
                         exhaustion: RangeExhaustion::CheckpointBound,
                     },
-                )
+                }
             };
             let mut bounds = ScanBounds::from_range(tx_range.clone());
             let got_consumed = bounds.clamp_to_available_lo(floor_tx);
             if got_consumed {
                 tx_range = tx_range.end..tx_range.end;
             } else {
-                terminal_record.absorb_raised_lo(
-                    &mut entry_checkpoint,
-                    floor_cp,
-                    floor_cp,
-                    ascending,
-                );
+                edges.absorb_raised_lo(floor_cp, floor_cp, ascending);
                 tx_range = bounds.to_range();
             }
             assert_eq!(
@@ -1039,15 +1036,15 @@ mod tests {
                 "floor_tx {floor_tx} asc {ascending}"
             );
             assert_eq!(
-                entry_checkpoint, entry,
+                edges.entry_checkpoint, entry,
                 "floor_tx {floor_tx} asc {ascending}"
             );
             assert_eq!(
-                terminal_record.end_checkpoint, end_cp,
+                edges.terminal.end_checkpoint, end_cp,
                 "floor_tx {floor_tx} asc {ascending}"
             );
             assert_eq!(
-                terminal_record.end_coordinate, end_pos,
+                edges.terminal.end_coordinate, end_pos,
                 "floor_tx {floor_tx} asc {ascending}"
             );
         }

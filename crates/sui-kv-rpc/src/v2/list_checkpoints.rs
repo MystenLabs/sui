@@ -133,8 +133,8 @@ pub(crate) async fn list_checkpoints(
     let cp_range = async { Ok::<_, RpcError>(resolve_cp_range(checkpoint_range, &options)) }
         .instrument(debug_span!("resolve_cp_range"))
         .await?;
-    let exhaustion = cp_range.terminal.exhaustion;
-    let range_end_position = cp_range.terminal.end_coordinate;
+    let exhaustion = cp_range.edges.terminal.exhaustion;
+    let range_end_position = cp_range.edges.terminal.end_coordinate;
     let cp_range = cp_range.bounds.to_range();
     let entry_checkpoint = if direction.is_ascending() {
         cp_range.start

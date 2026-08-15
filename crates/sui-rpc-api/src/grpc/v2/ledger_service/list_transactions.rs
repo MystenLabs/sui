@@ -293,16 +293,16 @@ fn next_transaction_chunk(
                     &options,
                 )?;
                 let tx_range = resolve_tx_range(&service, start_checkpoint, cp_range, &options)?;
-                let entry_checkpoint = tx_range.entry_checkpoint;
+                let entry_checkpoint = tx_range.edges.entry_checkpoint;
                 // Emptiness is a store-edge fact under symbolic resume: a
                 // dense window cursors collapsed only becomes empty in
                 // to_range, and an empty scan must not claim coverage.
                 let range = tx_range.bounds.to_range();
                 let terminal = ScanTerminal::from_range_exhaustion(
-                    tx_range.terminal.exhaustion,
+                    tx_range.edges.terminal.exhaustion,
                     Position::Transactions {
-                        checkpoint: tx_range.terminal.end_checkpoint,
-                        tx_seq: tx_range.terminal.end_coordinate,
+                        checkpoint: tx_range.edges.terminal.end_checkpoint,
+                        tx_seq: tx_range.edges.terminal.end_coordinate,
                     },
                     range.is_empty(),
                 );
@@ -321,16 +321,16 @@ fn next_transaction_chunk(
                         range: Some(range),
                         entry_checkpoint,
                         pending_bucket: None,
-                        exhaustion: tx_range.terminal.exhaustion,
-                        end_checkpoint: tx_range.terminal.end_checkpoint,
-                        end_position: tx_range.terminal.end_coordinate,
+                        exhaustion: tx_range.edges.terminal.exhaustion,
+                        end_checkpoint: tx_range.edges.terminal.end_checkpoint,
+                        end_position: tx_range.edges.terminal.end_coordinate,
                     },
                     None => TransactionScanState::Unfiltered {
                         range,
                         entry_checkpoint,
-                        exhaustion: tx_range.terminal.exhaustion,
-                        end_checkpoint: tx_range.terminal.end_checkpoint,
-                        end_position: tx_range.terminal.end_coordinate,
+                        exhaustion: tx_range.edges.terminal.exhaustion,
+                        end_checkpoint: tx_range.edges.terminal.end_checkpoint,
+                        end_position: tx_range.edges.terminal.end_coordinate,
                     },
                 };
                 continue;

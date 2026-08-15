@@ -114,10 +114,10 @@ pub(crate) async fn list_transactions(
     let tx_range = resolve_tx_range(&client, cp_range, &options)
         .instrument(debug_span!("resolve_tx_range"))
         .await?;
-    let exhaustion = tx_range.terminal.exhaustion;
-    let range_end_checkpoint = tx_range.terminal.end_checkpoint;
-    let range_end_position = tx_range.terminal.end_coordinate;
-    let entry_checkpoint = tx_range.entry_checkpoint;
+    let exhaustion = tx_range.edges.terminal.exhaustion;
+    let range_end_checkpoint = tx_range.edges.terminal.end_checkpoint;
+    let range_end_position = tx_range.edges.terminal.end_coordinate;
+    let entry_checkpoint = tx_range.edges.entry_checkpoint;
     let tx_range = tx_range.bounds.to_range();
 
     if tx_range.is_empty() {

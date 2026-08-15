@@ -173,6 +173,16 @@ pub struct ResolvedScan<P> {
     /// The interval to scan (numeric order regardless of request ordering;
     /// a descending scan walks it from the high end down).
     pub bounds: ScanBounds<P>,
+    /// The wire-space half of the resolution.
+    pub edges: WatermarkEdges<P>,
+}
+
+/// The wire-facing half of a resolution: the checkpoint-space shadow the
+/// scan-space bounds carry because wire watermarks speak checkpoints. The
+/// filtered checkpoint scan pairs this (checkpoint-space) with
+/// transaction-space bounds — scan in one language, report in the other.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WatermarkEdges<T> {
     /// Checkpoint containing the interval's first position in scan
     /// direction. Checkpoint-only because its sole consumer — the
     /// covered-bound fold — claims coverage at checkpoint granularity: a
@@ -181,7 +191,24 @@ pub struct ResolvedScan<P> {
     /// covered.
     pub entry_checkpoint: u64,
     /// The terminal edge the scan reports once it drains the interval.
-    pub terminal: TerminalRecord<P>,
+    pub terminal: TerminalRecord<T>,
+}
+
+impl<T: Copy> WatermarkEdges<T> {
+    /// The window's low edge just rose to `floor_position` (contained in
+    /// `floor_checkpoint`); move the watermark field that describes the
+    /// low edge along with it, so nothing claims the truncated gap.
+    /// Ascending, the low edge is the entry side: the coverage gate rises.
+    /// Descending, it is the terminal side: the record pins to the floor.
+    /// Exhaustion is untouched — the floor corrects where, not why.
+    pub fn absorb_raised_lo(&mut self, floor_checkpoint: u64, floor_position: T, ascending: bool) {
+        if ascending {
+            self.entry_checkpoint = self.entry_checkpoint.max(floor_checkpoint);
+        } else {
+            self.terminal.end_checkpoint = floor_checkpoint;
+            self.terminal.end_coordinate = floor_position;
+        }
+    }
 }
 
 /// A lane's scan coordinate: how a cursor token projects into the lane's
@@ -497,8 +524,10 @@ impl ResolvedCheckpointRange {
                 lo: Bound::Included(P::from_boundary(range.start)),
                 hi: Bound::Excluded(P::from_boundary(range.end)),
             },
-            entry_checkpoint,
-            terminal,
+            edges: WatermarkEdges {
+                entry_checkpoint,
+                terminal,
+            },
         }
     }
 
@@ -667,40 +696,17 @@ impl<P: Copy + Ord> ScanBounds<P> {
     }
 }
 
-impl<T: Copy> TerminalRecord<T> {
-    /// The window's low edge just rose to `floor_position` (contained in
-    /// `floor_checkpoint`); move the watermark field that describes the
-    /// low edge along with it, so nothing claims the truncated gap.
-    /// Ascending, the low edge is the entry side: the coverage gate rises.
-    /// Descending, it is the terminal side: the record pins to the floor.
-    /// Exhaustion is untouched — the floor corrects where, not why. Two
-    /// arguments because the bounds and the record may live in different
-    /// coordinate spaces.
-    pub fn absorb_raised_lo(
-        &mut self,
-        entry_checkpoint: &mut u64,
-        floor_checkpoint: u64,
-        floor_position: T,
-        ascending: bool,
-    ) {
-        if ascending {
-            *entry_checkpoint = (*entry_checkpoint).max(floor_checkpoint);
-        } else {
-            self.end_checkpoint = floor_checkpoint;
-            self.end_coordinate = floor_position;
-        }
-    }
-}
-
 impl<P: Copy + Ord> ResolvedScan<P> {
     pub fn empty_at(end_checkpoint: u64, end_coordinate: P, exhaustion: RangeExhaustion) -> Self {
         Self {
             bounds: ScanBounds::empty_at(end_coordinate),
-            entry_checkpoint: end_checkpoint,
-            terminal: TerminalRecord {
-                end_checkpoint,
-                end_coordinate,
-                exhaustion,
+            edges: WatermarkEdges {
+                entry_checkpoint: end_checkpoint,
+                terminal: TerminalRecord {
+                    end_checkpoint,
+                    end_coordinate,
+                    exhaustion,
+                },
             },
         }
     }
@@ -731,15 +737,11 @@ impl<P: Copy + Ord> ResolvedScan<P> {
         if self.bounds.clamp_to_available_lo(floor_position) {
             // Canonical empty form everywhere in this module: the interval
             // collapses onto its reported terminal bound.
-            self.bounds = ScanBounds::empty_at(self.terminal.end_coordinate);
+            self.bounds = ScanBounds::empty_at(self.edges.terminal.end_coordinate);
             return;
         }
-        self.terminal.absorb_raised_lo(
-            &mut self.entry_checkpoint,
-            floor_checkpoint,
-            floor_position,
-            options.is_ascending(),
-        );
+        self.edges
+            .absorb_raised_lo(floor_checkpoint, floor_position, options.is_ascending());
     }
 }
 
@@ -771,19 +773,23 @@ fn derive_scan<P: Copy + Ord>(
     // Account, entry side: folds on presence alone — max/min make a
     // losing cursor a no-op.
     let entry_checkpoint = match (ascending, &after, &before) {
-        (true, Some(c), _) => seed.entry_checkpoint.max(c.checkpoint),
-        (false, _, Some(c)) => seed.entry_checkpoint.min(c.checkpoint),
-        _ => seed.entry_checkpoint,
+        (true, Some(c), _) => seed.edges.entry_checkpoint.max(c.checkpoint),
+        (false, _, Some(c)) => seed.edges.entry_checkpoint.min(c.checkpoint),
+        _ => seed.edges.entry_checkpoint,
     };
 
     // A tip-collapsed seed is already decided: the tip preempts cursor
     // attribution, keeping the back-off signal for at- and beyond-tip
     // pollers.
-    if seed.bounds.is_empty() && matches!(seed.terminal.exhaustion, RangeExhaustion::LedgerTip) {
+    if seed.bounds.is_empty()
+        && matches!(seed.edges.terminal.exhaustion, RangeExhaustion::LedgerTip)
+    {
         return ResolvedScan {
-            bounds: ScanBounds::empty_at(seed.terminal.end_coordinate),
-            entry_checkpoint,
-            terminal: seed.terminal,
+            bounds: ScanBounds::empty_at(seed.edges.terminal.end_coordinate),
+            edges: WatermarkEdges {
+                entry_checkpoint,
+                terminal: seed.edges.terminal,
+            },
         };
     }
 
@@ -815,7 +821,7 @@ fn derive_scan<P: Copy + Ord>(
         (false, true) => before_record,
         (false, false) => after_record,
     }
-    .unwrap_or(seed.terminal);
+    .unwrap_or(seed.edges.terminal);
 
     let bounds = if empty {
         // Canonical empty form everywhere in this module: the interval
@@ -826,8 +832,10 @@ fn derive_scan<P: Copy + Ord>(
     };
     ResolvedScan {
         bounds,
-        entry_checkpoint,
-        terminal,
+        edges: WatermarkEdges {
+            entry_checkpoint,
+            terminal,
+        },
     }
 }
 
@@ -927,11 +935,13 @@ mod tests {
     fn resolved_range(range: Range<u64>) -> ResolvedScan<u64> {
         ResolvedScan {
             bounds: ScanBounds::from_range(range),
-            entry_checkpoint: 0,
-            terminal: TerminalRecord {
-                end_checkpoint: 20,
-                end_coordinate: 20,
-                exhaustion: RangeExhaustion::CheckpointBound,
+            edges: WatermarkEdges {
+                entry_checkpoint: 0,
+                terminal: TerminalRecord {
+                    end_checkpoint: 20,
+                    end_coordinate: 20,
+                    exhaustion: RangeExhaustion::CheckpointBound,
+                },
             },
         }
     }
@@ -970,35 +980,39 @@ mod tests {
         // entry claim rises to the floor checkpoint; terminal untouched.
         let mut resolved = ResolvedScan {
             bounds: ScanBounds::from_range(0..100),
-            entry_checkpoint: 0,
-            terminal: TerminalRecord {
-                end_checkpoint: 20,
-                end_coordinate: 100,
-                exhaustion: RangeExhaustion::CheckpointBound,
+            edges: WatermarkEdges {
+                entry_checkpoint: 0,
+                terminal: TerminalRecord {
+                    end_checkpoint: 20,
+                    end_coordinate: 100,
+                    exhaustion: RangeExhaustion::CheckpointBound,
+                },
             },
         };
         resolved.apply_serving_floor(50, 10, &asc);
         assert_eq!(resolved.bounds.to_range(), 50..100);
-        assert_eq!(resolved.entry_checkpoint, 10);
-        assert_eq!(resolved.terminal.end_checkpoint, 20);
-        assert_eq!(resolved.terminal.end_coordinate, 100);
+        assert_eq!(resolved.edges.entry_checkpoint, 10);
+        assert_eq!(resolved.edges.terminal.end_checkpoint, 20);
+        assert_eq!(resolved.edges.terminal.end_coordinate, 100);
 
         // Descending, floor inside: entry (the high edge) untouched; the
         // terminal pins to the floor.
         let mut resolved = ResolvedScan {
             bounds: ScanBounds::from_range(0..100),
-            entry_checkpoint: 20,
-            terminal: TerminalRecord {
-                end_checkpoint: 0,
-                end_coordinate: 0,
-                exhaustion: RangeExhaustion::CheckpointBound,
+            edges: WatermarkEdges {
+                entry_checkpoint: 20,
+                terminal: TerminalRecord {
+                    end_checkpoint: 0,
+                    end_coordinate: 0,
+                    exhaustion: RangeExhaustion::CheckpointBound,
+                },
             },
         };
         resolved.apply_serving_floor(50, 10, &desc);
         assert_eq!(resolved.bounds.to_range(), 50..100);
-        assert_eq!(resolved.entry_checkpoint, 20);
-        assert_eq!(resolved.terminal.end_checkpoint, 10);
-        assert_eq!(resolved.terminal.end_coordinate, 50);
+        assert_eq!(resolved.edges.entry_checkpoint, 20);
+        assert_eq!(resolved.edges.terminal.end_checkpoint, 10);
+        assert_eq!(resolved.edges.terminal.end_coordinate, 50);
 
         // Floor at/past the high end (covers the == boundary), both
         // directions: empty intersection, canonicalized at the reported
@@ -1008,35 +1022,39 @@ mod tests {
         for floor_tx in [40, 50] {
             let mut resolved = ResolvedScan {
                 bounds: ScanBounds::from_range(0..40),
-                entry_checkpoint: 0,
-                terminal: TerminalRecord {
-                    end_checkpoint: 8,
-                    end_coordinate: 40,
-                    exhaustion: RangeExhaustion::CheckpointBound,
+                edges: WatermarkEdges {
+                    entry_checkpoint: 0,
+                    terminal: TerminalRecord {
+                        end_checkpoint: 8,
+                        end_coordinate: 40,
+                        exhaustion: RangeExhaustion::CheckpointBound,
+                    },
                 },
             };
             resolved.apply_serving_floor(floor_tx, 10, &asc);
             assert!(resolved.is_empty());
             assert_eq!(resolved.bounds.to_range(), 40..40);
-            assert_eq!(resolved.entry_checkpoint, 0);
-            assert_eq!(resolved.terminal.end_checkpoint, 8);
-            assert_eq!(resolved.terminal.end_coordinate, 40);
+            assert_eq!(resolved.edges.entry_checkpoint, 0);
+            assert_eq!(resolved.edges.terminal.end_checkpoint, 8);
+            assert_eq!(resolved.edges.terminal.end_coordinate, 40);
 
             let mut resolved = ResolvedScan {
                 bounds: ScanBounds::from_range(0..40),
-                entry_checkpoint: 8,
-                terminal: TerminalRecord {
-                    end_checkpoint: 0,
-                    end_coordinate: 0,
-                    exhaustion: RangeExhaustion::CheckpointBound,
+                edges: WatermarkEdges {
+                    entry_checkpoint: 8,
+                    terminal: TerminalRecord {
+                        end_checkpoint: 0,
+                        end_coordinate: 0,
+                        exhaustion: RangeExhaustion::CheckpointBound,
+                    },
                 },
             };
             resolved.apply_serving_floor(floor_tx, 10, &desc);
             assert!(resolved.is_empty());
             assert_eq!(resolved.bounds.to_range(), 0..0);
-            assert_eq!(resolved.entry_checkpoint, 8);
-            assert_eq!(resolved.terminal.end_checkpoint, 0);
-            assert_eq!(resolved.terminal.end_coordinate, 0);
+            assert_eq!(resolved.edges.entry_checkpoint, 8);
+            assert_eq!(resolved.edges.terminal.end_checkpoint, 0);
+            assert_eq!(resolved.edges.terminal.end_coordinate, 0);
         }
     }
 
@@ -1051,11 +1069,13 @@ mod tests {
         // untouched.
         let mut resolved = ResolvedScan {
             bounds: IntraTxScanBounds::tx_span(0, 100),
-            entry_checkpoint: 0,
-            terminal: TerminalRecord {
-                end_checkpoint: 20,
-                end_coordinate: IntraTxCoordinate::start_of_tx(100),
-                exhaustion: RangeExhaustion::CheckpointBound,
+            edges: WatermarkEdges {
+                entry_checkpoint: 0,
+                terminal: TerminalRecord {
+                    end_checkpoint: 20,
+                    end_coordinate: IntraTxCoordinate::start_of_tx(100),
+                    exhaustion: RangeExhaustion::CheckpointBound,
+                },
             },
         };
         resolved.apply_serving_floor(IntraTxCoordinate::start_of_tx(50), 10, &asc);
@@ -1063,21 +1083,23 @@ mod tests {
             resolved.bounds.lo,
             Bound::Included(IntraTxCoordinate::start_of_tx(50))
         );
-        assert_eq!(resolved.entry_checkpoint, 10);
-        assert_eq!(resolved.terminal.end_checkpoint, 20);
+        assert_eq!(resolved.edges.entry_checkpoint, 10);
+        assert_eq!(resolved.edges.terminal.end_checkpoint, 20);
         assert_eq!(
-            resolved.terminal.end_coordinate,
+            resolved.edges.terminal.end_coordinate,
             IntraTxCoordinate::start_of_tx(100)
         );
 
         // Descending, floor inside: terminal pins to the floor.
         let mut resolved = ResolvedScan {
             bounds: IntraTxScanBounds::tx_span(0, 100),
-            entry_checkpoint: 20,
-            terminal: TerminalRecord {
-                end_checkpoint: 0,
-                end_coordinate: IntraTxCoordinate::start_of_tx(0),
-                exhaustion: RangeExhaustion::CheckpointBound,
+            edges: WatermarkEdges {
+                entry_checkpoint: 20,
+                terminal: TerminalRecord {
+                    end_checkpoint: 0,
+                    end_coordinate: IntraTxCoordinate::start_of_tx(0),
+                    exhaustion: RangeExhaustion::CheckpointBound,
+                },
             },
         };
         resolved.apply_serving_floor(IntraTxCoordinate::start_of_tx(50), 10, &desc);
@@ -1085,10 +1107,10 @@ mod tests {
             resolved.bounds.lo,
             Bound::Included(IntraTxCoordinate::start_of_tx(50))
         );
-        assert_eq!(resolved.entry_checkpoint, 20);
-        assert_eq!(resolved.terminal.end_checkpoint, 10);
+        assert_eq!(resolved.edges.entry_checkpoint, 20);
+        assert_eq!(resolved.edges.terminal.end_checkpoint, 10);
         assert_eq!(
-            resolved.terminal.end_coordinate,
+            resolved.edges.terminal.end_coordinate,
             IntraTxCoordinate::start_of_tx(50)
         );
 
@@ -1098,11 +1120,13 @@ mod tests {
         for floor_tx in [40, 50] {
             let mut resolved = ResolvedScan {
                 bounds: IntraTxScanBounds::tx_span(0, 40),
-                entry_checkpoint: 0,
-                terminal: TerminalRecord {
-                    end_checkpoint: 8,
-                    end_coordinate: IntraTxCoordinate::start_of_tx(40),
-                    exhaustion: RangeExhaustion::CheckpointBound,
+                edges: WatermarkEdges {
+                    entry_checkpoint: 0,
+                    terminal: TerminalRecord {
+                        end_checkpoint: 8,
+                        end_coordinate: IntraTxCoordinate::start_of_tx(40),
+                        exhaustion: RangeExhaustion::CheckpointBound,
+                    },
                 },
             };
             resolved.apply_serving_floor(IntraTxCoordinate::start_of_tx(floor_tx), 10, &asc);
@@ -1111,20 +1135,22 @@ mod tests {
                 resolved.bounds,
                 IntraTxScanBounds::empty_at(IntraTxCoordinate::start_of_tx(40))
             );
-            assert_eq!(resolved.entry_checkpoint, 0);
-            assert_eq!(resolved.terminal.end_checkpoint, 8);
+            assert_eq!(resolved.edges.entry_checkpoint, 0);
+            assert_eq!(resolved.edges.terminal.end_checkpoint, 8);
             assert_eq!(
-                resolved.terminal.end_coordinate,
+                resolved.edges.terminal.end_coordinate,
                 IntraTxCoordinate::start_of_tx(40)
             );
 
             let mut resolved = ResolvedScan {
                 bounds: IntraTxScanBounds::tx_span(0, 40),
-                entry_checkpoint: 8,
-                terminal: TerminalRecord {
-                    end_checkpoint: 0,
-                    end_coordinate: IntraTxCoordinate::start_of_tx(0),
-                    exhaustion: RangeExhaustion::CheckpointBound,
+                edges: WatermarkEdges {
+                    entry_checkpoint: 8,
+                    terminal: TerminalRecord {
+                        end_checkpoint: 0,
+                        end_coordinate: IntraTxCoordinate::start_of_tx(0),
+                        exhaustion: RangeExhaustion::CheckpointBound,
+                    },
                 },
             };
             resolved.apply_serving_floor(IntraTxCoordinate::start_of_tx(floor_tx), 10, &desc);
@@ -1133,10 +1159,10 @@ mod tests {
                 resolved.bounds,
                 IntraTxScanBounds::empty_at(IntraTxCoordinate::start_of_tx(0))
             );
-            assert_eq!(resolved.entry_checkpoint, 8);
-            assert_eq!(resolved.terminal.end_checkpoint, 0);
+            assert_eq!(resolved.edges.entry_checkpoint, 8);
+            assert_eq!(resolved.edges.terminal.end_checkpoint, 0);
             assert_eq!(
-                resolved.terminal.end_coordinate,
+                resolved.edges.terminal.end_coordinate,
                 IntraTxCoordinate::start_of_tx(0)
             );
         }
@@ -1326,7 +1352,7 @@ mod tests {
         let bounded = options.apply_cursor_bounds(resolved_range(10..20));
         assert_eq!(bounded.bounds.to_range(), 12..19);
         assert_eq!(
-            bounded.terminal.exhaustion,
+            bounded.edges.terminal.exhaustion,
             RangeExhaustion::CursorBound {
                 kind: sui_rpc_cursor::CursorKind::Boundary,
             }
@@ -1334,7 +1360,7 @@ mod tests {
         // The terminal stamp stores the winning cursor's RAW coordinate (the
         // Item at 11), not its resume successor; the stamp sets CursorBound
         // and is never emitted as a terminal frame.
-        assert_eq!(bounded.terminal.end_coordinate, 11);
+        assert_eq!(bounded.edges.terminal.end_coordinate, 11);
 
         // A dense window collapsed by cursors is a store-edge fact under
         // symbolic resume: resolution's emptiness predicate cannot see that
@@ -1350,7 +1376,7 @@ mod tests {
         assert!(!bounded.is_empty());
         assert_eq!(bounded.bounds.to_range(), 12..12);
         assert_eq!(
-            bounded.terminal,
+            bounded.edges.terminal,
             TerminalRecord {
                 end_checkpoint: 1,
                 end_coordinate: 11,
@@ -1377,7 +1403,7 @@ mod tests {
         let bounded = item_tie.apply_cursor_bounds(resolved_range(10..20));
         assert_eq!(bounded.bounds.to_range(), 10..20);
         assert_eq!(
-            bounded.terminal.exhaustion,
+            bounded.edges.terminal.exhaustion,
             RangeExhaustion::CheckpointBound
         );
 
@@ -1388,7 +1414,7 @@ mod tests {
         let bounded = boundary_tie.apply_cursor_bounds(resolved_range(10..20));
         assert_eq!(bounded.bounds.to_range(), 10..20);
         assert_eq!(
-            bounded.terminal.exhaustion,
+            bounded.edges.terminal.exhaustion,
             RangeExhaustion::CursorBound {
                 kind: sui_rpc_cursor::CursorKind::Boundary,
             }
@@ -1546,7 +1572,7 @@ mod tests {
             options.apply_cursor_bounds(cp_range.with_range(range, options.ordering));
         assert!(bounded.is_empty());
         assert_eq!(
-            bounded.terminal,
+            bounded.edges.terminal,
             TerminalRecord {
                 end_checkpoint: 25,
                 end_coordinate: 25,
@@ -1579,7 +1605,7 @@ mod tests {
             options.apply_cursor_bounds(cp_range.with_range(range, options.ordering));
         assert!(bounded.is_empty());
         assert_eq!(
-            bounded.terminal,
+            bounded.edges.terminal,
             TerminalRecord {
                 end_checkpoint: 20,
                 end_coordinate: 20,
@@ -1610,7 +1636,7 @@ mod tests {
         let bounded: ResolvedScan<u64> =
             options.apply_cursor_bounds(cp_range.with_range(range, options.ordering));
         assert_eq!(
-            bounded.terminal,
+            bounded.edges.terminal,
             TerminalRecord {
                 end_checkpoint: 20,
                 end_coordinate: 20,
@@ -1641,7 +1667,7 @@ mod tests {
         let bounded: ResolvedScan<u64> =
             options.apply_cursor_bounds(cp_range.with_range(range, options.ordering));
         assert_eq!(
-            bounded.terminal,
+            bounded.edges.terminal,
             TerminalRecord {
                 end_checkpoint: 3,
                 end_coordinate: 3,
@@ -1676,11 +1702,13 @@ mod tests {
     fn event_collapse_prefers_before_record_over_after_echo() {
         let resolved = ResolvedScan {
             bounds: IntraTxScanBounds::tx_span(0, 10),
-            entry_checkpoint: 0,
-            terminal: TerminalRecord {
-                end_checkpoint: 5,
-                end_coordinate: IntraTxCoordinate::start_of_tx(10),
-                exhaustion: RangeExhaustion::CheckpointBound,
+            edges: WatermarkEdges {
+                entry_checkpoint: 0,
+                terminal: TerminalRecord {
+                    end_checkpoint: 5,
+                    end_coordinate: IntraTxCoordinate::start_of_tx(10),
+                    exhaustion: RangeExhaustion::CheckpointBound,
+                },
             },
         };
 
@@ -1692,16 +1720,16 @@ mod tests {
         };
         let bounded = options.apply_cursor_bounds(resolved.clone());
         assert!(bounded.is_empty());
-        assert_eq!(bounded.terminal.end_checkpoint, 1);
+        assert_eq!(bounded.edges.terminal.end_checkpoint, 1);
         assert_eq!(
-            bounded.terminal.end_coordinate,
+            bounded.edges.terminal.end_coordinate,
             IntraTxCoordinate {
                 tx_seq: 3,
                 event_index: 0,
             }
         );
         assert_eq!(
-            bounded.terminal.exhaustion,
+            bounded.edges.terminal.exhaustion,
             RangeExhaustion::CursorBound {
                 kind: sui_rpc_cursor::CursorKind::Boundary,
             }
@@ -1716,16 +1744,16 @@ mod tests {
         };
         let bounded = options.apply_cursor_bounds(resolved);
         assert!(bounded.is_empty());
-        assert_eq!(bounded.terminal.end_checkpoint, 2);
+        assert_eq!(bounded.edges.terminal.end_checkpoint, 2);
         assert_eq!(
-            bounded.terminal.end_coordinate,
+            bounded.edges.terminal.end_coordinate,
             IntraTxCoordinate {
                 tx_seq: 10,
                 event_index: 0,
             }
         );
         assert_eq!(
-            bounded.terminal.exhaustion,
+            bounded.edges.terminal.exhaustion,
             RangeExhaustion::CursorBound {
                 kind: sui_rpc_cursor::CursorKind::Item,
             }
@@ -1740,11 +1768,13 @@ mod tests {
     fn event_terminal_edge_winner_sets_end_metadata() {
         let resolved = ResolvedScan {
             bounds: IntraTxScanBounds::tx_span(0, 10),
-            entry_checkpoint: 50,
-            terminal: TerminalRecord {
-                end_checkpoint: 99,
-                end_coordinate: IntraTxCoordinate::start_of_tx(0),
-                exhaustion: RangeExhaustion::CheckpointBound,
+            edges: WatermarkEdges {
+                entry_checkpoint: 50,
+                terminal: TerminalRecord {
+                    end_checkpoint: 99,
+                    end_coordinate: IntraTxCoordinate::start_of_tx(0),
+                    exhaustion: RangeExhaustion::CheckpointBound,
+                },
             },
         };
 
@@ -1756,22 +1786,22 @@ mod tests {
         };
         let bounded = descending.apply_cursor_bounds(resolved.clone());
         assert!(!bounded.is_empty());
-        assert_eq!(bounded.terminal.end_checkpoint, 2);
+        assert_eq!(bounded.edges.terminal.end_checkpoint, 2);
         assert_eq!(
-            bounded.terminal.end_coordinate,
+            bounded.edges.terminal.end_coordinate,
             IntraTxCoordinate {
                 tx_seq: 4,
                 event_index: 1,
             }
         );
         assert_eq!(
-            bounded.terminal.exhaustion,
+            bounded.edges.terminal.exhaustion,
             RangeExhaustion::CursorBound {
                 kind: sui_rpc_cursor::CursorKind::Boundary,
             }
         );
         // Descending entry edge is the before cursor, win or lose.
-        assert_eq!(bounded.entry_checkpoint, 8);
+        assert_eq!(bounded.edges.entry_checkpoint, 8);
 
         let ascending = QueryOptions {
             limit_items: 100,
@@ -1781,22 +1811,22 @@ mod tests {
         };
         let bounded = ascending.apply_cursor_bounds(resolved);
         assert!(!bounded.is_empty());
-        assert_eq!(bounded.terminal.end_checkpoint, 8);
+        assert_eq!(bounded.edges.terminal.end_checkpoint, 8);
         assert_eq!(
-            bounded.terminal.end_coordinate,
+            bounded.edges.terminal.end_coordinate,
             IntraTxCoordinate {
                 tx_seq: 9,
                 event_index: 0,
             }
         );
         assert_eq!(
-            bounded.terminal.exhaustion,
+            bounded.edges.terminal.exhaustion,
             RangeExhaustion::CursorBound {
                 kind: sui_rpc_cursor::CursorKind::Boundary,
             }
         );
         // Ascending entry edge is the after cursor, win or lose.
-        assert_eq!(bounded.entry_checkpoint, 50);
+        assert_eq!(bounded.edges.entry_checkpoint, 50);
     }
 
     #[test]
@@ -1808,11 +1838,13 @@ mod tests {
         };
         let resolved = ResolvedScan {
             bounds: IntraTxScanBounds::tx_span(0, 3),
-            entry_checkpoint: 0,
-            terminal: TerminalRecord {
-                end_checkpoint: 1,
-                end_coordinate: IntraTxCoordinate::start_of_tx(3),
-                exhaustion: RangeExhaustion::CheckpointBound,
+            edges: WatermarkEdges {
+                entry_checkpoint: 0,
+                terminal: TerminalRecord {
+                    end_checkpoint: 1,
+                    end_coordinate: IntraTxCoordinate::start_of_tx(3),
+                    exhaustion: RangeExhaustion::CheckpointBound,
+                },
             },
         };
 
@@ -1823,14 +1855,14 @@ mod tests {
 
         assert!(item_bounded.is_empty());
         assert_eq!(
-            item_bounded.terminal.end_coordinate,
+            item_bounded.edges.terminal.end_coordinate,
             IntraTxCoordinate {
                 tx_seq: 3,
                 event_index: 0,
             }
         );
         assert_eq!(
-            item_bounded.terminal.exhaustion,
+            item_bounded.edges.terminal.exhaustion,
             RangeExhaustion::CursorBound {
                 kind: sui_rpc_cursor::CursorKind::Item,
             }
@@ -1842,14 +1874,14 @@ mod tests {
 
         assert!(boundary_bounded.is_empty());
         assert_eq!(
-            boundary_bounded.terminal.end_coordinate,
+            boundary_bounded.edges.terminal.end_coordinate,
             IntraTxCoordinate {
                 tx_seq: 3,
                 event_index: 0,
             }
         );
         assert_eq!(
-            boundary_bounded.terminal.exhaustion,
+            boundary_bounded.edges.terminal.exhaustion,
             RangeExhaustion::CursorBound {
                 kind: sui_rpc_cursor::CursorKind::Boundary,
             }
@@ -1866,16 +1898,19 @@ mod tests {
         };
         let resolved = ResolvedScan {
             bounds: ScanBounds::from_range(20..40),
-            entry_checkpoint: 5,
-            terminal: TerminalRecord {
-                end_checkpoint: 9,
-                end_coordinate: 40,
-                exhaustion: RangeExhaustion::CheckpointBound,
+            edges: WatermarkEdges {
+                entry_checkpoint: 5,
+                terminal: TerminalRecord {
+                    end_checkpoint: 9,
+                    end_coordinate: 40,
+                    exhaustion: RangeExhaustion::CheckpointBound,
+                },
             },
         };
         assert_eq!(
             ascending
                 .apply_cursor_bounds(resolved.clone())
+                .edges
                 .entry_checkpoint,
             7
         );
@@ -1887,10 +1922,19 @@ mod tests {
             before: Some(tx_boundary(7, 30)),
         };
         let resolved = ResolvedScan {
-            entry_checkpoint: 9,
+            edges: WatermarkEdges {
+                entry_checkpoint: 9,
+                ..resolved.edges.clone()
+            },
             ..resolved
         };
-        assert_eq!(descending.apply_cursor_bounds(resolved).entry_checkpoint, 7);
+        assert_eq!(
+            descending
+                .apply_cursor_bounds(resolved)
+                .edges
+                .entry_checkpoint,
+            7
+        );
     }
 
     #[test]
