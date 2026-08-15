@@ -5,9 +5,10 @@ SPDX-License-Identifier: Apache-2.0
 
 # Mysticeti v3 implementation gaps
 
-This report applies to the synthetic combined state of PR 27505 and PR 27655. It
-uses the PR heads that are listed in the parent README. This branch contains only
-the formal artifacts on top of `origin/main`.
+This report describes the current `consensus/` tree. `FlexCommitter` is wired into
+`Core` on the v3 path. The current proposer does not create `BlockV3`, and the tree
+does not contain `CommitFinalizerV3`. The Lean v3 transaction-finalization model
+therefore has no current Rust implementation mapping.
 
 The [assumption ledger](ASSUMPTIONS.md) defines the stable identifiers used in this
 report. A gap closes only when its related proof obligation is discharged or its
@@ -25,10 +26,17 @@ See the
 [commit progress recovery design](../design/commit_progress_recovery.md) for the
 proposed Rust behavior, proof obligations, and test plan.
 
+The
+[assumption ledger](ASSUMPTIONS.md#asm-live-commit-progress-recovery) separates
+this work into three categories: missing Rust logic, Rust logic that is present but
+not fully verified, and current Rust behavior that tests protect. Only the first
+category is a missing implementation feature. The second category is a verification
+gap. The third category is a behavior contract for future changes.
+
 This is a confirmed implementation gap and an activation blocker. The strong Lean
 liveness theorem uses a catch-up condition for old leader opportunities. The new
-Lean recovery result proves the status-level FlexCommitter step, but it still has
-three open distributed stages and one Rust task-transition boundary. It is not an
+Lean recovery result proves the status-level FlexCommitter result, but it still has
+three open distributed stages and one Rust mapping condition. It is not an
 end-to-end liveness theorem for the current Rust code.
 
 [`ThresholdClock::add_block`](../../core/src/threshold_clock.rs) accepts one block
@@ -65,17 +73,24 @@ The current Rust code does not have these parts:
 - a recovery legal-frontier rule for a highest own proposal round at or below GC;
 - a recovery parent-selection rule that includes the timely correct first-slot
   block used by the liveness proof;
-- a symbolic post-GST processing bound `epsilon` if the Rust timing refinement does
-  not use instantaneous local computation, and a recovery wait that can grow beyond
-  the applicable network and processing bound;
+- a positive symbolic post-GST processing bound `epsilon`, with
+  `epsilon < delta`, and a recovery wait that can grow beyond the applicable
+  network and processing bound;
 - one exact local event that starts each recovery pacing interval, and a proof that
   bounds proposal skew from that event during a stable recovery period;
 - proofs from the local process and network contracts to recovery overlap, quorum
   block layers, and a covered usable anchor window;
-- a Rust refinement from the ordered pending-round state to the proved executable
-  `FlexCommitter` model, plus fair execution of the enabled Core commit action;
 - deterministic simulation tests for schedule changes, stake bounds, selective
   delivery, synchronization, GC, restart, and future timestamps.
+
+The final local FlexCommitter-to-Core call path is not a missing implementation
+feature. The
+[design evidence](../design/commit_progress_recovery.md#current-flexcommitter-to-core-path)
+traces the current synchronous call path and lists the tests that cover it. The
+Rust-to-Lean state mapping is not machine checked. One focused old-prefix
+recovery-window regression test is still missing. Future changes to the scan order,
+pending-state cache, commit construction, or Core loop must keep the tests and the
+Lean result valid.
 
 The [design document](../design/commit_progress_recovery.md) is the canonical source
 for the trigger logic, proposal rules, derived recovery distances, leader schedule
@@ -91,7 +106,8 @@ This is a confirmed activation gap.
 
 [`to_consensus_protocol_config`](../../../crates/sui-core/src/consensus_manager/mod.rs)
 sets `enable_v3` to `false`. Therefore, normal Sui startup does not use the new
-FlexCommitter and finalizer code.
+FlexCommitter commit path. The modeled v3 proposal and transaction-finalization
+path is also not present in the current `consensus/` tree.
 
 Add a versioned `ProtocolConfig` field. Use an epoch-bound activation value. Add a
 rollback plan and mixed-version tests. Do not use a node-local flag for activation.
@@ -117,22 +133,25 @@ Use checked arithmetic in
 `5 * f + 3 * c` calculation and all threshold additions and multiplications before
 v3 activation.
 
-## P0: make v3 and transaction voting one valid configuration
+## P0: implement and bind v3 transaction voting
 
 Related assumptions: `ASM-CONFIG-VOTING` and `ASM-SAFE-EVIDENCE-REFINEMENT`.
 
-[`CommitFinalizerV3::run`](../../core/src/commit_finalizer_v3.rs) bypasses voting
-when `transaction_voting_enabled` is false. The current Sui conversion sets this
-value to true. A future configuration change can still enable v3 without the vote
-semantics that the safety proof uses.
+The current proposer creates `BlockV1` or `BlockV2`. It does not create `BlockV3`,
+so it does not produce the signed v3 transaction cutoff used by the Lean proof.
+The current tree uses [`CommitFinalizer`](../../core/src/commit_finalizer.rs); it
+does not contain the modeled v3 transaction-finalization rule.
 
-Add a constructor check for this condition:
+Implement the v3 proposal and transaction-finalization rules. Then add a constructor
+check for this condition:
 
 ```text
 enable_v3 implies transaction_voting_enabled
 ```
 
-A single versioned v3 feature value is safer than two independent values.
+A single versioned v3 feature value is safer than two independent values. Until
+this work is complete, the Lean transaction theorems do not make a claim about the
+current Rust implementation.
 
 ## P1: establish the leader schedule and round leader selection liveness conditions
 
@@ -176,15 +195,21 @@ The implementation has important recovery mechanisms:
 - `CommitSyncer` retries commit ranges, verifies the commit chain and certificate,
   buffers ranges across gaps, and sends consecutive ranges to Core.
 
-Use these simple environment contracts:
+Use these contracts only when a lagging or restarted validator needs old consensus
+state:
 
-1. A correct known peer retains each required DAG block and, for commit sync, each
-   required commit range and its certifying vote blocks for the recovery period.
+1. A correct known peer retains each still-required DAG block and, for commit sync,
+   each still-required commit range and its certifying vote blocks. Alternatively,
+   verified commit sync moves the validator to a state that no longer needs the
+   old item.
 2. Peer discovery eventually provides such a peer.
 3. Retry selection is fair. If selection remains random, use a probabilistic model
    and prove almost-sure progress.
 4. A continuously enabled task at a correct validator eventually runs.
 5. A correct peer answers a valid request for retained data.
+
+These contracts do not require retention of transaction payloads. A validator or
+user can resubmit a transaction.
 
 Then model the request, response, verification, acceptance, installation, retry,
 queue, and GC transitions. Prove these results:
@@ -211,8 +236,8 @@ Related assumptions: `ASM-LIVE-FINALIZER-TRIGGER` and `ASM-LIVE-DURABILITY`.
 
 [`CommitFinalizerHandle::stop`](../../core/src/commit_finalizer.rs) closes the input
 channel and waits for the task. The task drains received commits. However,
-[`CommitFinalizerV3`](../../core/src/commit_finalizer_v3.rs) can still contain
-pending commits that need a later depth-two trigger.
+`CommitFinalizer` can still contain pending commits that need a later trigger. The
+modeled v3 finalizer also needs a later depth-two trigger.
 
 Same-epoch recovery can replay unfinalized commits from storage. This does not by
 itself define the epoch-end result for the last pending commits.
@@ -243,8 +268,7 @@ installation, recovery, and garbage collection. Add one invariant helper that
 validates the index, previous digest, and trigger order at every input boundary.
 Use the helper in tests and in debug builds.
 
-This item is a proof-closure gap. The current review did not find a concrete fork in
-the combined branch.
+This item is a proof-closure gap. No concrete fork is known in the current code.
 
 ## P1: prove the committed-prefix and garbage-collection lemma
 
@@ -284,17 +308,16 @@ The proof still needs these implementation facts:
 7. A slow finalizer keeps the blocks in its pending `CommittedSubDag` values after
    the live DAG cache removes those rounds.
 
-The constructor checks `gc_depth > 2`. The block verifier checks immediate-parent
-quorum stake. The proposer signs both GC sources through one maximum cutoff. These
-checks discharge only the arithmetic and local vote-classification parts. Add an
-integration invariant that covers both v3 sub-DAG paths, commit-sync recovery, the
-pending finalizer prefix, and the exact GC boundary. This item is still a
-proof-closure gap.
+The constructor checks `gc_depth > 2`, and the block verifier checks
+immediate-parent quorum stake. The current proposer does not produce the signed v3
+cutoff. Implement and test that rule before the transaction GC theorem is applied
+to Rust. Then add an integration invariant that covers both v3 sub-DAG paths,
+commit-sync recovery, the pending finalizer prefix, and the exact GC boundary.
 
-`prepare_direct_voting_blocks` reads live cached blocks. A slow finalizer can lose a
-direct-decision opportunity after DAG GC. This loss does not make a false quorum,
-but it affects liveness. Test that the buffered indirect path completes after this
-event.
+The current `CommitFinalizer` direct path reads live DAG state. A slow finalizer can
+lose a direct-decision opportunity after DAG GC. This loss does not make a false
+quorum, but it affects liveness. The modeled buffered indirect path must complete
+after this event.
 
 ## P2: close the natural-number to Rust-integer refinement
 
@@ -330,10 +353,10 @@ stable data format. Check these Rust functions against the vectors:
 - the descending loop in `FlexCommitter::try_indirect_commit`;
 - `FlexCommitter::find_commit_leader_round`;
 - `FlexCommitter::build_commit` and the Core commit-index update;
-- `CommitFinalizerV3::compute_direct_decisions`;
-- `CommitFinalizerV3::compute_indirect_decisions`;
-- the first depth-two trigger selection;
-- the v3 transaction cutoff rule, including both source GC rounds;
+- after implementation, the v3 direct and indirect transaction decisions;
+- after implementation, the first depth-two transaction trigger;
+- after implementation, the v3 transaction cutoff rule, including both source GC
+  rounds;
 - the deep-target and near-target v3 sub-DAG GC cases.
 
 Include equivocation vectors. One Byzantine authority can count once on each side,

@@ -15,10 +15,45 @@ This work is not an end-to-end proof of the Rust program. The Lean model states 
 remaining Rust refinement conditions as explicit assumptions. A theorem is a valid
 protocol claim only when the implementation establishes these conditions.
 
+In the current `consensus/` tree, the leader-rule model maps to the
+`FlexCommitter` path in `Core`. The proposer does not create `BlockV3`, and the
+tree does not contain the modeled v3 transaction finalizer. Thus, the transaction
+cutoff and transaction-finalization results do not yet have a current Rust mapping.
+
 The [assumption ledger](ASSUMPTIONS.md) gives each condition a stable identifier,
 status, refinement mapping, and discharge condition. A project with no declared
 Lean `axiom` can still have conditional theorems because assumptions can be theorem
 inputs.
+
+## Shared proof assumptions
+
+The proof suite uses one global
+[assumption catalog](ASSUMPTIONS.md#shared-proof-model). Commit progress recovery
+does not own the network, fault, runtime, storage, configuration, or leader
+conditions. Safety and liveness theorems use the applicable parts of the same
+catalog.
+
+The standard conditions are bounded Byzantine stake, authenticated votes,
+post-GST message delivery, and weak task fairness. The separate unavailable-stake
+budget `c` is part of the v3 hybrid fault model.
+
+These conditions are stronger or less standard:
+
+- local consensus actions have a positive finite bound `epsilon`, with
+  `epsilon < delta`, when a bounded liveness result needs it;
+- each pending round's complete leader-slot order uses an accepted independent
+  uniform permutation model.
+
+All correct validators still compute the same deterministic leader-slot order. The
+probabilistic statement describes its distribution for liveness analysis. The
+leader schedule bounds `f + c < S` and `A <= P_r` are configuration and protocol
+conditions. They are not environment assumptions.
+
+Useful-peer retention is conditional. Steady-state consensus does not need it for
+new messages that arrive under partial synchrony. A lagging or restarted validator
+needs either an available peer for old consensus blocks and commits or verified
+commit sync that moves it past those items. Transaction payloads can be resubmitted
+and are not part of this condition.
 
 ## Safety model
 
@@ -106,8 +141,16 @@ indirect proof uses the signed cutoff classifier.
 [`GarbageCollection.lean`](../lean/Mysticeti/GarbageCollection.lean) models two GC
 paths.
 
-The Rust `Linearizer` type is not on the active v3 path in the reviewed combined
-state. `FlexCommitter::build_commit` performs local v3 sub-DAG construction. It
+GC does not require permanent transaction retention. A validator or user can
+resubmit a transaction. Its safety role is different: deleting consensus evidence
+must not make two validators decide the same leader slot or transaction
+differently. Data can be deleted after the decision rule no longer needs it, or
+after the required evidence has moved into the committed prefix. For liveness, old
+data availability matters only when a lagging or restarted validator still needs
+that consensus state.
+
+The Rust `Linearizer` type is not on the current v3 path.
+`FlexCommitter::build_commit` performs local v3 sub-DAG construction. It
 reads the old GC round, selects uncommitted ancestors above that round, and returns
 the commit and `CommittedSubDag`. `Core::post_commit` then records the commit and
 sends the saved sub-DAG to the finalizer. For a commit installed through commit
@@ -145,6 +188,10 @@ The model also separates live DAG evidence from the finalizer's buffered committ
 prefix. Block GC can change the live DAG store. It cannot change evidence that the
 finalizer already copied into the pending committed prefix.
 
+This is a model property. The current proposer does not produce the signed v3
+cutoff, and the current `CommitFinalizer` uses a different transaction rule. The
+transaction GC theorem therefore does not make a claim about current Rust behavior.
+
 This result does not prove that every Rust input path copies the required anchor
 voting blocks into that prefix. `anchorInCommittedPrefix` is still a Rust refinement
 obligation. It covers local `FlexCommitter::build_commit`, commit-sync
@@ -176,8 +223,9 @@ commit stream. Lean proves these properties:
 - it stays the first trigger when the visible prefix grows;
 - two nodes with the same stream and trigger make the same indirect decision.
 
-This is the proof boundary for `CommitFinalizerV3`. A proof that only compares two
-arbitrary commit prefixes is not sufficient.
+This is the proof boundary for the modeled v3 transaction finalizer. That finalizer
+is not present in the current tree. A proof that only compares two arbitrary commit
+prefixes is not sufficient.
 
 ## Liveness model
 
@@ -186,9 +234,29 @@ partial synchrony. GST is unknown. Before GST, a message can have an arbitrary
 delay. After GST, each authenticated protocol message between correct processes is
 delivered within `delta`.
 
+The liveness results also use the applicable shared fault, runtime, storage,
+configuration, and leader conditions. Derived protocol stages, such as block sync,
+commit sync, a recovery quorum, or a usable anchor window, are proof goals. They are
+not primitive assumptions.
+
+Lean proves these results:
+
+- `good_window_commits_within`: the modeled network steps finish within
+  `10 * delta` after a good leader window starts;
+- `consensus_liveness`: a post-activation open round eventually produces a commit;
+- `full_flex_anchor_window_advances_commit_index`: an in-range usable anchor
+  window makes the complete modeled FlexCommitter scan advance;
+- `commit_progress_recovery_stages_compose`: three distributed recovery results
+  and one Rust mapping condition compose to a greater commit index;
+- `finalizer_liveness`: a pending transaction on a continuous commit stream
+  eventually gets a durable decision;
+- `transaction_liveness`: the consensus and finalizer results compose.
+
+### Consensus and liveness for old leader blocks
+
 The model for liveness of old leader blocks also has a catch-up activation time. Its
-liveness result starts after both GST and this activation time. The commit progress recovery
-theorem does not use this activation time.
+liveness result starts after both GST and this activation time. The commit progress
+recovery theorem does not use this activation time.
 
 [`ConsensusLivenessStageObligations`](../lean/Mysticeti/Liveness.lean) collects
 temporary Rust refinement goals for the progress checkpoints. Its fields are
@@ -199,25 +267,19 @@ derived stage results, not primitive assumptions. It requires:
 - bounded proposal, supporter, certificate, decision, and commit steps;
 - continued operation of the protocol tasks.
 
-Lean proves these results:
-
-- `good_window_commits_within`: the modeled network steps finish within
-  `10 * delta` after a good leader window starts;
-- `consensus_liveness`: a post-activation open round eventually produces a commit;
-- `full_flex_anchor_window_advances_commit_index`: an in-range usable anchor
-  window makes the complete modeled FlexCommitter scan advance;
-- `commit_progress_recovery_stages_compose`: three distributed recovery results
-  and one local execution boundary compose to a greater commit index;
-- `finalizer_liveness`: a pending transaction on a continuous commit stream
-  eventually gets a durable decision;
-- `transaction_liveness`: the consensus and finalizer results compose.
-
 `consensus_liveness` and the consensus part of `transaction_liveness` prove the
-stronger liveness property for old leader blocks. Their safe intermediate-proposal condition
-is sufficient but is not known to be necessary for commit-index progress. Commit
-progress recovery targets only commit-index growth. In that design, validators
-enter recovery after local commit progress stalls and stay eligible until a commit
-occurs. The validators do not select a common round.
+stronger liveness property for old leader blocks. Their safe intermediate-proposal
+condition is sufficient but is not known to be necessary for commit-index progress.
+
+The `10 * delta` value is a model bound. It is not a measured Rust latency bound.
+The Rust timers and pipeline can use smaller or larger constants. A later refinement
+proof must map each checkpoint to the exact code timer and message path.
+
+### Commit progress recovery
+
+Commit progress recovery targets only commit-index growth. In that design,
+validators enter recovery after local commit progress stalls and stay eligible
+until a commit occurs. The validators do not select a common round.
 
 [`CommitProgressRecoveryStages`](../lean/Mysticeti/CommitProgressRecovery.lean)
 names the current unproved recovery-stage results. These results are theorem goals,
@@ -292,22 +354,34 @@ obtains the recent blocks before Core evaluates the window.
 
 [`commit_progress_recovery_stages_compose`](../lean/Mysticeti/CommitProgressRecovery.lean)
 is a composition lemma. It does not prove end-to-end recovery liveness. Its inputs
-contain these three distributed results and one local execution boundary:
+contain these three distributed results and one Rust mapping condition:
 
-1. a stalled commit reaches a recovery quorum or advances;
-2. a recovery quorum produces consecutive quorum block layers or advances;
-3. repeated recovery layers produce an in-range usable anchor window or advance;
-4. weak task fairness runs the enabled Core step, and the Rust step refines the
-   proved FlexCommitter transition.
+1. unless a commit occurs first, correct validators with quorum stake eventually
+   enter recovery at the same time;
+2. unless a commit occurs first, they produce and exchange blocks for enough
+   consecutive rounds, with quorum stake in each round;
+3. unless a commit occurs first, enough consecutive rounds start with a correct
+   leader whose block gets enough next-round votes for FlexCommitter to resolve old
+   undecided rounds;
+4. Rust records the commit that the executable Lean FlexCommitter model finds.
 
-The proof must derive these results from simple process and environment contracts.
+The proof must derive the first three results from simple process and environment
+contracts.
 These contracts include post-GST delivery, bounded post-GST local processing, weak
 task fairness, local clock progress, the local recovery-entry rule, recovery
 persistence, the next-round proposal rule, parent synchronization, durable proposal
-storage, broadcast, a growing recovery wait, and the stated first-slot sampling
+storage, broadcast, a growing recovery wait, and the stated leader-order sampling
 model. The direct decision function and the `FlexCommitter` scan are deterministic
 transition models, not environmental assumptions. The status-level FlexCommitter
-scan is now proved. Its Rust-state mapping and task transition remain open.
+scan is now proved.
+
+The current Rust code satisfies the call-sequence part of the fourth
+result. There is no separate queued commit action. The
+[design evidence](../design/commit_progress_recovery.md#current-flexcommitter-to-core-path)
+traces the call path and lists the tests that cover it. Lean does not verify Rust
+source, so the Rust-state mapping remains a mapping condition. One focused
+old-prefix recovery-window regression test is still missing. Future Rust changes
+must preserve this call path and these results, or the model and proof must change.
 
 The Lean view includes an abstract committed-prefix identity. The recovery
 transition model must show when equal commit indices identify one common prefix.
@@ -321,9 +395,16 @@ It computes elapsed time with saturating subtraction because a commit timestamp 
 be ahead of the local clock. This rule does not need a separate persisted recovery
 flag. It is not implemented and remains a known implementation gap.
 
-The `10 * delta` value is a model bound. It is not a measured Rust latency bound.
-The Rust timers and pipeline can use smaller or larger constants. A later refinement
-proof must map each checkpoint to the exact code timer and message path.
+### Transaction finalization liveness
+
+`FinalizerLivenessStageObligations` requires a continuous common commit stream, an
+eventual eligible trigger, and durable output. `finalizer_liveness` proves that
+these stages give a durable transaction decision. `transaction_liveness` composes
+the consensus and finalizer results. Commit progress recovery can help supply the
+continuous commit stream, but it is not the complete transaction-liveness proof.
+
+The current Rust tree does not implement the modeled v3 transaction finalizer.
+Thus, its trigger and durability conditions remain model-to-implementation goals.
 
 ## Checked implementation counterexample
 
@@ -366,11 +447,16 @@ The safety result needs all these implementation facts:
     GC rounds, and v3 sub-DAG construction copies required voting blocks before
     later DAG GC.
 
+Items 6, 7, 9, and 10 include v3 transaction-finalization conditions that the
+current Rust tree does not implement. They are model-to-implementation requirements,
+not verified current behavior.
+
 `consensus_liveness` and the consensus phase of `transaction_liveness` are also
 composition theorems. Their primitive environment inputs are
-`ASM-LIVE-PARTIAL-SYNCHRONY`, the availability part of
-`ASM-LIVE-PEER-FAIRNESS`, and `ASM-LIVE-TASK-FAIRNESS`. Their local refinement
+`ASM-LIVE-PARTIAL-SYNCHRONY` and `ASM-LIVE-TASK-FAIRNESS`. Their local refinement
 goals are `ASM-LIVE-ROUND-CATCHUP` and the static parts of `ASM-LIVE-LEADER`.
+When a theorem starts from missing local consensus state, it also uses the
+conditional availability part of `ASM-LIVE-PEER-FAIRNESS`.
 `ASM-LIVE-BLOCK-SYNC` and `ASM-LIVE-PIPELINE-BOUNDS` are derived stage goals, not
 primitive assumptions.
 
@@ -383,16 +469,19 @@ Its primitive environment assumptions are:
    Byzantine and unavailable stake.
 2. [`ASM-LIVE-PARTIAL-SYNCHRONY`](ASSUMPTIONS.md#asm-live-partial-synchrony) for
    post-GST message delivery.
-3. [`ASM-LIVE-PEER-FAIRNESS`](ASSUMPTIONS.md#asm-live-peer-fairness) and
-   [`ASM-LIVE-TASK-FAIRNESS`](ASSUMPTIONS.md#asm-live-task-fairness). The peer entry
-   supplies only retention and service by a known correct peer. Retry selection is
-   a local proof goal.
+3. [`ASM-LIVE-TASK-FAIRNESS`](ASSUMPTIONS.md#asm-live-task-fairness) for enabled
+   local work.
 4. [`ASM-LIVE-LOCAL-RESPONSE`](ASSUMPTIONS.md#asm-live-local-response) for
-   local computation bounded by symbolic `epsilon`. Instantaneous computation is
-   the special case `epsilon = 0`.
+   local computation bounded by a positive symbolic `epsilon`, with
+   `epsilon < delta`.
 5. [`ASM-LIVE-FIRST-SLOT-SAMPLING`](ASSUMPTIONS.md#asm-live-first-slot-sampling)
-   for the independent uniform shuffle abstraction. Its fixed-schedule and
+   for the accepted independent uniform shuffle model. Its fixed-schedule and
    common-order preconditions are separate refinement goals.
+
+If a validator starts without required old consensus state, recovery also uses
+[`ASM-LIVE-PEER-FAIRNESS`](ASSUMPTIONS.md#asm-live-peer-fairness). The peer supplies
+only an old consensus block or commit that remains necessary. Retry selection is a
+local proof goal. Transaction payload retention is not required.
 
 Its local rules and deterministic refinement goals are:
 
@@ -414,9 +503,9 @@ These distributed protocol results remain open refinement theorems:
 2. [`ASM-LIVE-COMMIT-SYNC`](ASSUMPTIONS.md#asm-live-commit-sync).
 
 The recovery quorum, quorum block layers, and usable anchor window are derived proof
-goals. The status-level commit advance is proved. Its Rust refinement and scheduled
-Core execution remain proof goals. None of these results is an additional network
-assumption.
+goals. The status-level commit advance is proved. The current Rust call path
+implements the final local sequence, but its state mapping is not machine checked.
+None of these results is an additional network assumption.
 
 The finalizer phase of `transaction_liveness` composes three more derived goals:
 `ASM-LIVE-COMMIT-SYNC`, `ASM-LIVE-FINALIZER-TRIGGER`, and

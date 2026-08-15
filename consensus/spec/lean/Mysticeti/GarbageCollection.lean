@@ -33,7 +33,7 @@ structure BlockEvidenceStore (Evidence : Type) where
 namespace BlockEvidenceStore
 
 /-- Block GC changes the DAG store. It does not change the pending committed
-prefix that `CommitFinalizerV3` owns. -/
+prefix that the modeled v3 transaction finalizer owns. -/
 def collectDag {Evidence : Type} (store : BlockEvidenceStore Evidence)
     (remainingDag : Evidence) : BlockEvidenceStore Evidence :=
   { dag := remainingDag

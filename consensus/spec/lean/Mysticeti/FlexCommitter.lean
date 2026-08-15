@@ -824,8 +824,9 @@ def findFlexCommitRoundFrom
 def findFlexCommitRound (state : FlexCommitState) : Option Nat :=
   findFlexCommitRoundFrom state.rounds 0 state.roundCount
 
-/-- The abstract Core effect after the FlexCommitter finds a commit round. -/
-def flexCommitStep (state : FlexCommitState) : FlexCommitState :=
+/-- The abstract Core result after FlexCommitter finds a commit round and Core
+records the returned commit. -/
+def recordFlexCommitResult (state : FlexCommitState) : FlexCommitState :=
   match findFlexCommitRound state with
   | none => state
   | some _ => { state with commitIndex := state.commitIndex + 1 }
@@ -919,8 +920,8 @@ theorem complete_flex_indirect_prefix_finds_commit
   exact find_flex_commit_after_final_prefix base result.roundCount
     baseInRange finalBefore commitAtEnd
 
-/-- The executable FlexCommitter scan and one abstract Core commit step increase
-the commit index. The theorem uses no network, scheduler, or outcome assumption. -/
+/-- The executable FlexCommitter scan and the abstract recorded result increase the
+commit index. The theorem uses no network, scheduler, or outcome assumption. -/
 theorem flex_anchor_window_advances_commit_index
     {depth base : Nat}
     {outcome : Nat → IndirectRoundOutcome}
@@ -930,7 +931,7 @@ theorem flex_anchor_window_advances_commit_index
     (windowInRange : base + depth < state.roundCount) :
     let result :=
       runFlexIndirectDescending depth outcome base (base + 1) state
-    (flexCommitStep result).commitIndex = state.commitIndex + 1 := by
+    (recordFlexCommitResult result).commitIndex = state.commitIndex + 1 := by
   let result := runFlexIndirectDescending depth outcome base (base + 1) state
   rcases complete_flex_indirect_prefix_finds_commit
       (outcome := outcome) depthPositive anchorWindow windowInRange with
@@ -939,8 +940,8 @@ theorem flex_anchor_window_advances_commit_index
     simp [result]
   have foundResult : findFlexCommitRound result = some round := by
     simpa [result] using found
-  change (flexCommitStep result).commitIndex = state.commitIndex + 1
-  rw [flexCommitStep, foundResult]
+  change (recordFlexCommitResult result).commitIndex = state.commitIndex + 1
+  rw [recordFlexCommitResult, foundResult]
   exact congrArg (fun index => index + 1) resultIndex
 
 /-- The same result holds for the complete Rust-style descending scan. Steps above
@@ -956,7 +957,7 @@ theorem full_flex_anchor_window_advances_commit_index
     (windowInRange : base + depth < state.roundCount) :
     let result := runFlexIndirectDescending depth outcome highestRound
       (highestRound + 1) state
-    (flexCommitStep result).commitIndex = state.commitIndex + 1 := by
+    (recordFlexCommitResult result).commitIndex = state.commitIndex + 1 := by
   let prefixCount := highestRound - base
   let prefixState := runFlexIndirectDescending depth outcome highestRound
     prefixCount state
@@ -1016,7 +1017,7 @@ def threeAnchorExampleState : FlexCommitState :=
 /-- The additional anchor closes the first anchor index. The same descending scan
 then exposes a commit candidate and increases the commit index. -/
 theorem three_anchors_find_a_depth_two_commit :
-    (flexCommitStep
+    (recordFlexCommitResult
       (runFlexIndirectDescending indirectCommitDepth
         (fun _ => .skip) 2 3 threeAnchorExampleState)).commitIndex = 1 := by
   rfl

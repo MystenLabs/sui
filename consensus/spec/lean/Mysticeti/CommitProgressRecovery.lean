@@ -580,9 +580,9 @@ def HasCoveredUsableAnchorWindowAt {State : Type}
             UsableAnchorRound view
               (view.firstPendingLeaderRound state + baseIndex + offset) state
 
-/-- The local FlexCommitter transition is enabled for every valid indirect result.
-The remaining liveness step is to schedule Core and apply the Rust refinement. -/
-def FlexCommitterStepEnabledAt {State : Type}
+/-- The executable Lean FlexCommitter model advances for every valid indirect
+result. Lean cannot inspect the Rust call path that records this result. -/
+def ModeledFlexCommitterAdvancesAt {State : Type}
     (view : CommitProgressRecoveryView State)
     (baseline depth : Nat) : State → Prop :=
   fun state =>
@@ -592,17 +592,17 @@ def FlexCommitterStepEnabledAt {State : Type}
         let result := runFlexIndirectDescending depth outcome
           (view.highestIndirectDecisionIndex state)
           (view.highestIndirectDecisionIndex state + 1) model
-        (flexCommitStep result).commitIndex = baseline + 1
+        (recordFlexCommitResult result).commitIndex = baseline + 1
 
-/-- A covered usable anchor window enables the executable FlexCommitter commit
-step. This is the deterministic fourth recovery stage. -/
-theorem covered_usable_anchor_window_enables_flex_committer
+/-- A covered usable anchor window advances the executable Lean FlexCommitter
+model. This is the deterministic fourth recovery result. -/
+theorem covered_usable_anchor_window_advances_modeled_flex_committer
     {State : Type} (view : CommitProgressRecoveryView State)
     {state : State} {baseline depth : Nat}
     (depthPositive : 0 < depth)
     (window : HasCoveredUsableAnchorWindowAt view baseline depth
       (depth + 1) state) :
-    FlexCommitterStepEnabledAt view baseline depth state := by
+    ModeledFlexCommitterAdvancesAt view baseline depth state := by
   rcases window with
     ⟨atBaseline, baseIndex, baseLeHighest, windowInRange, anchors⟩
   constructor
@@ -682,11 +682,11 @@ theorem next_round_proposal_target_is_not_old
   rw [nextRoundTargets authority authorityInRange authorityInRecovery]
   omega
 
-/-- Distributed stages and the local execution boundary for commit progress
+/-- Distributed stages and the Rust mapping condition for commit progress
 recovery.
 
-The first three fields are theorem goals. The last field is the weak task-fairness
-and Rust-transition refinement boundary for an already proved enabled local step.
+The first three fields are theorem goals. The last field states that Rust records
+the commit that the executable Lean model finds.
 A complete implementation proof must derive the first three fields from partial
 synchrony, bounded post-GST local processing, recovery persistence, the next-round
 proposal policy, parent availability, pacing, and the executable direct decision
@@ -697,10 +697,10 @@ structure CommitProgressRecoveryStages
     (network : PartialSynchrony protocolPacket)
     (view : CommitProgressRecoveryView State)
     (thresholds : Thresholds view.authorityCount view.stake) where
-  /-- A stalled commit either advances or reaches a recovery quorum. Derive this
-  stage from local clock progress, weak task fairness, bounded local processing,
-  the local recovery-entry rule, recovery persistence, and the live correct stake
-  bound. -/
+  /-- Unless a commit occurs first, correct validators with quorum stake eventually
+  enter recovery at the same time. Derive this result from local clock progress,
+  weak task fairness, bounded local processing, recovery entry, recovery
+  persistence, and the live correct stake bound. -/
   stalledToRecoveryQuorum :
     ∀ baseline,
       LeadsToAfter network.gst trace
@@ -708,10 +708,10 @@ structure CommitProgressRecoveryStages
         (fun state =>
           CommitAdvancedFrom view baseline state ∨
             RecoveryQuorumAt view thresholds baseline state)
-  /-- A recovery quorum either advances the commit or reaches a state that contains
-  both a recovery quorum and a consecutive layer window. Derive this stage from the
-  next-round proposal policy, parent synchronization, persistence, broadcast, and
-  task fairness. -/
+  /-- Unless a commit occurs first, recovering validators produce and exchange
+  blocks for enough consecutive rounds. Each round contains blocks from quorum
+  stake. Derive this result from next-round proposals, parent synchronization,
+  persistence, broadcast, and task fairness. -/
   recoveryQuorumToLayers :
     ∀ baseline,
       LeadsToAfter network.gst trace
@@ -721,11 +721,11 @@ structure CommitProgressRecoveryStages
             RecoveryLayerWindowAt view thresholds baseline
               (requiredRecoveryLayerCount
                 (requiredRecoveryAnchorCount indirectCommitDepth)) state)
-  /-- Repeated recovery layers either advance the commit or contain the required
-  usable adjacent anchors inside the pending FlexCommitter scan. Derive this stage
-  from propagation delay, first-slot sampling, the direct decision rule, recovery
-  persistence, and retained pending-round state. One arbitrary quorum-layer pair
-  does not imply a usable anchor. -/
+  /-- Unless a commit occurs first, enough consecutive rounds start with a correct
+  leader whose block receives enough next-round votes. FlexCommitter can use these
+  blocks to resolve older undecided rounds. Derive this result from timely delivery,
+  leader-order sampling, the direct decision rule, recovery persistence, and
+  retained pending-round state. -/
   recoveryLayersToUsableAnchors :
     ∀ baseline,
       LeadsToAfter network.gst trace
@@ -736,22 +736,24 @@ structure CommitProgressRecoveryStages
           CommitAdvancedFrom view baseline state ∨
             HasCoveredUsableAnchorWindowAt view baseline indirectCommitDepth
               (requiredRecoveryAnchorCount indirectCommitDepth) state)
-  /-- When the proved local FlexCommitter transition is enabled, Core eventually
-  runs it and publishes the greater commit index. This is the weak task fairness
-  and Rust-transition refinement boundary. The FlexCommitter algorithm itself is
-  proved in `covered_usable_anchor_window_enables_flex_committer`. -/
-  enabledFlexCommitterTaskRuns :
+  /-- When the executable Lean FlexCommitter model finds a commit, the Rust
+  `FlexCommitter::try_commit` result is passed to `Core::post_commit`, which records
+  the greater commit index. The current Rust code does this synchronously. This
+  behavior is verified by code trace and focused Rust tests, and future changes
+  must preserve it. The exact Rust-state mapping is not machine checked, so this
+  field remains because Lean does not inspect Rust source. -/
+  rustFlexCommitterResultIsRecorded :
     ∀ baseline,
       LeadsToAfter network.gst trace
-        (FlexCommitterStepEnabledAt view baseline indirectCommitDepth)
+        (ModeledFlexCommitterAdvancesAt view baseline indirectCommitDepth)
         (CommitAdvancedFrom view baseline)
 
-/-- The recovery stages and local execution boundary compose to commit-index
+/-- The recovery stages and Rust mapping condition compose to commit-index
 progress.
 
 This theorem is a composition lemma. It is not the end-to-end recovery liveness
-theorem because it does not derive the distributed stages or the Rust task
-transition from process and network rules. -/
+theorem because it does not derive the distributed stages from process and network
+rules. -/
 theorem commit_progress_recovery_stages_compose
     {State : Type} {protocolPacket : Packet → Prop}
     {trace : Trace State}
@@ -784,10 +786,11 @@ theorem commit_progress_recovery_stages_compose
           advanced⟩
       · have anchorAfterGst : network.gst ≤ anchorTime :=
           Nat.le_trans layerAfterGst layersToAnchors
-        have enabled := covered_usable_anchor_window_enables_flex_committer view
+        have modeledAdvance :=
+          covered_usable_anchor_window_advances_modeled_flex_committer view
           (depthPositive := by simp [indirectCommitDepth]) anchorWindowAt
-        rcases stages.enabledFlexCommitterTaskRuns baseline anchorTime
-            anchorAfterGst enabled with
+        rcases stages.rustFlexCommitterResultIsRecorded baseline anchorTime
+            anchorAfterGst modeledAdvance with
           ⟨commitTime, anchorsToCommit, advanced⟩
         exact ⟨commitTime,
           Nat.le_trans startToRecovery

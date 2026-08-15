@@ -51,9 +51,9 @@ structure LocalConsensusAction where
   completedAt : Time
   deriving DecidableEq, Repr
 
-/-- Bounded post-GST local processing for actions that stay enabled. `epsilon` can
-be zero in an idealized model. The proof uses this bound with the network delay
-bound. It does not require a positive lower bound on network delay.
+/-- Bounded post-GST local processing for actions that stay enabled. `epsilon` is
+positive and smaller than the post-GST network-delay bound. The proof uses both
+bounds and does not treat local processing as instantaneous.
 
 This is the environmental assumption `ASM-LIVE-LOCAL-RESPONSE`. -/
 structure BoundedLocalProcessing
@@ -61,6 +61,8 @@ structure BoundedLocalProcessing
     (network : PartialSynchrony protocolPacket)
     (protocolAction : LocalConsensusAction → Prop) where
   epsilon : Nat
+  epsilonPositive : 0 < epsilon
+  epsilonLessThanNetworkDelay : epsilon < network.delta
   postGstCompletion : ∀ action,
     protocolAction action →
     network.gst ≤ action.enabledAt →
@@ -108,22 +110,27 @@ theorem protocol_packet_becomes_locally_visible
     Nat.add_le_add_right deliveryBound processing.epsilon
   exact Nat.le_trans completionBound deliveryWithProcessing
 
-/-- Under the proof's instantaneous-local-computation idealization, the network
-delay bound also bounds when the message becomes visible to consensus logic. -/
-theorem protocol_packet_is_immediately_visible_after_delivery
+/-- When local processing is faster than the network-delay bound, a post-GST
+message becomes visible before two network-delay bounds have passed. -/
+theorem protocol_packet_becomes_locally_visible_before_two_delays
     {protocolPacket : Packet → Prop}
     {network : PartialSynchrony protocolPacket}
     {protocolAction : LocalConsensusAction → Prop}
     (processing : BoundedLocalProcessing network protocolAction)
-    (instantaneous : processing.epsilon = 0)
     (packet : Packet) (validPacket : protocolPacket packet)
     (action : LocalConsensusAction) (validAction : protocolAction action)
     (actionStartsAtDelivery : action.enabledAt = packet.deliveredAt)
     (afterGst : network.gst ≤ packet.sentAt) :
-    action.completedAt ≤ packet.sentAt + network.delta := by
+    action.completedAt <
+      packet.sentAt + network.delta + network.delta := by
   have visible := protocol_packet_becomes_locally_visible processing packet
     validPacket action validAction actionStartsAtDelivery afterGst
-  simpa [instantaneous] using visible
+  have localFaster :
+      packet.sentAt + network.delta + processing.epsilon <
+        packet.sentAt + network.delta + network.delta :=
+    Nat.add_lt_add_left processing.epsilonLessThanNetworkDelay
+      (packet.sentAt + network.delta)
+  exact Nat.lt_of_le_of_lt visible localFaster
 
 end BoundedLocalProcessing
 

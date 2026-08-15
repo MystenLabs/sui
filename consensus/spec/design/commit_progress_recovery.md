@@ -13,10 +13,10 @@ liveness gap. The recovery mode is not implemented.
 Lean proves
 [`commit_progress_recovery_stages_compose`](../lean/Mysticeti/CommitProgressRecovery.lean).
 This is a composition lemma. It shows that three distributed recovery results and
-one local execution boundary imply a greater commit index. Lean also proves the
-deterministic FlexCommitter step behind that local boundary. It does not derive the
-distributed results or the Rust task transition from the local Rust rules and the
-network model. The end-to-end recovery liveness theorem remains open.
+one Rust mapping condition imply a greater commit index. Lean also proves the
+deterministic FlexCommitter result behind that boundary. It does not derive the
+distributed results from the local Rust rules and the network model. The end-to-end
+recovery liveness theorem remains open.
 
 The required property is commit progress:
 
@@ -503,10 +503,8 @@ reference its block. Partial synchrony can give this result only when:
 
 Weak task fairness alone is not sufficient. A fair scheduler can run the first-slot
 proposal after the next-round proposals in every candidate round. The deterministic
-proof therefore uses a simple post-GST local-processing bound. The idealized model
-can set `epsilon` to zero as an explicit instantaneous-computation idealization. The
-general model keeps a finite symbolic `epsilon` for each covered local action. The
-proof does not assume a minimum network delay. A
+proof therefore uses a simple post-GST local-processing bound. The model uses a
+positive symbolic `epsilon` with `epsilon < delta` for each covered local action. A
 probabilistic task scheduler is an alternative, but it needs a separate probability
 model.
 
@@ -563,7 +561,7 @@ round suffix. The Lean counterexample
 permutation and ordinary leader fairness are not sufficient. A deterministic
 repeated-first-slot order is one sufficient alternative.
 
-**Decision, 2026-08-14:** The current recovery design accepts
+**Accepted model:** The current recovery design accepts
 `ASM-LIVE-FIRST-SLOT-SAMPLING`. While the commit index is stalled, model each
 round's shuffle as one common, independent, uniform random permutation of the
 stable leader schedule. The network and task scheduler do not control the samples.
@@ -745,9 +743,9 @@ round.
 commit progress recovery separate from the strong theorem for old leader blocks.
 
 The current theorem is `commit_progress_recovery_stages_compose`. It proves that
-three distributed stages and one local execution boundary compose to commit-index
-progress. It does not prove the distributed stages or the Rust task transition from
-the network and process rules.
+three distributed stages and one Rust mapping condition compose to commit-index
+progress. It does not prove the distributed stages from the network and process
+rules.
 
 The Lean model defines or proves these facts:
 
@@ -775,7 +773,7 @@ The Lean model defines or proves these facts:
   its highest known own proposal round, and that target cannot skip forward or
   reuse an old round;
 - on the no-progress branch, each stage ends at the baseline commit index;
-- the three distributed stages and local execution boundary compose to eventual
+- the three distributed stages and Rust mapping condition compose to eventual
   commit-index growth.
 
 ### Proof plan from simple contracts
@@ -786,10 +784,10 @@ Use only these primitive environment assumptions:
 - post-GST delivery of one authenticated message between correct validators;
 - progress of each correct local clock;
 - weak fairness for a continuously enabled task;
-- local consensus computation bounded by `epsilon`, with `epsilon = 0` as the
-  instantaneous special case;
+- local consensus computation bounded by a positive `epsilon`, with
+  `epsilon < delta`;
 - durability of a completed storage write;
-- the accepted independent first-slot sampling model.
+- the accepted independent leader-order sampling model.
 
 Model these items as local transitions or deterministic functions:
 
@@ -801,29 +799,84 @@ Model these items as local transitions or deterministic functions:
 - GC and the legal recovery frontier;
 - parent selection for a timely correct first-slot block;
 - the v3 direct decision function;
-- the mapping from Rust's pending-round state and commit step to the proved
+- the mapping from Rust's pending-round state and commit result to the proved
   executable `FlexCommitter` model.
 
 Then prove these distributed results. Do not add them as assumptions:
 
-1. A stalled commit reaches a recovery quorum or advances. Use local clock progress,
-   recovery persistence, weak task fairness, the finite validator set, and the live
-   correct stake bound.
-2. A recovery quorum creates consecutive retained quorum block layers or advances.
-   Use the next-round proposal rule, a synchronized legal frontier, task fairness,
+1. Unless a commit occurs first, correct validators with quorum stake eventually
+   enter recovery at the same time. Use local clock progress, recovery persistence,
+   weak task fairness, the finite validator set, and the live correct stake bound.
+2. Unless a commit occurs first, these validators produce and exchange blocks for
+   enough consecutive rounds. Each round contains blocks from quorum stake. Use the
+   next-round proposal rule, a synchronized legal frontier, task fairness,
    persistence, broadcast, and post-GST delivery.
-3. Repeated recovery layers create the required usable anchor run or advance. Use
-   a recovery wait that grows beyond the complete derived timing bound, timely
-   parent inclusion, the direct decision lemma, first-slot sampling, and retained
-   pending-round state.
+3. Unless a commit occurs first, enough consecutive rounds start with a correct
+   leader whose block receives enough next-round votes. FlexCommitter can then use
+   these blocks to resolve older undecided rounds. Use a recovery wait that grows
+   beyond the complete timing bound, timely parent inclusion, the direct decision
+   lemma, leader-order sampling, and retained pending-round state.
 
-The fourth deterministic result is now proved. A covered usable anchor run enables
-the modeled `FlexCommitter` step for every indirect result. The remaining local
-boundary says that weak task fairness schedules the enabled Core action and that
-the Rust action refines the modeled transition.
+The fourth deterministic result is now proved. A covered usable anchor run makes
+the executable Lean `FlexCommitter` model advance for every indirect result. Lean
+keeps one Rust mapping condition because it cannot inspect Rust source.
+
+### Current FlexCommitter-to-Core path
+
+**Status: verified in the current Rust code; preserve this behavior.** The code
+trace and focused tests below verify the local call sequence. This status does not
+mean that Lean verifies Rust source.
+
+The current Rust code supplies this final local sequence:
+
+1. `Core::add_blocks` accepts blocks and calls `Core::try_commit_local`.
+2. The v3 path calls `Core::try_commit_v3`.
+3. `Core::try_commit_v3` calls `FlexCommitter::try_commit` in a loop.
+4. `FlexCommitter::try_commit` runs direct decisions, checks for a commit round,
+   runs descending indirect decisions when necessary, checks again, and calls
+   `build_commit`.
+5. Core passes each returned commit to `Core::post_commit`.
+6. `Core::post_commit` adds the commit to `DagState`. `DagState::flush` later makes
+   buffered data durable.
+
+These calls are synchronous. Weak task fairness is needed so that Core processes
+input events. It is not needed for a separate action between `try_commit` and
+`post_commit`.
+
+The current tests cover this sequence in parts:
+
+- `find_anchor_block_*` checks the ordered anchor scan, including stops at an
+  undecided selected leader slot and passes over skipped slots;
+- `find_commit_leader_round_*` checks prefix finality and selection of the first
+  fully decided round with a commit result;
+- `try_indirect_decide_*` checks indirect commit and skip results;
+- `try_commit_*` checks commit construction, skipped rounds, an undecided prefix,
+  and multiple selected leader slots;
+- `try_commit_v3_local_commits` checks that Core records consecutive local commits
+  and advances the commit index.
+
+These test commands pass for the current Rust mapping:
+
+```sh
+cargo test -p consensus-core --lib flex_committer_tests
+cargo test -p consensus-core --lib leader_slot_decider_tests
+cargo test -p consensus-core --lib try_commit_v3_local_commits
+```
+
+They do not include one complete test with an old undecided prefix and the full
+usable anchor window from the Lean theorem. Add that focused regression test, and
+keep a negative case with a shorter window. This test is a maintenance guard. It
+is not new consensus logic.
+
+**Status: present in Rust, but not fully verified.** The exact mapping from Rust's
+pending-round array, ordered selected leader slots, status updates, scan bounds, and
+GC-retained blocks to the Lean state is still a proof obligation. The code trace
+supports this mapping, but the review is not a machine-checked cross-language proof.
+See the
+[three implementation categories](../docs/ASSUMPTIONS.md#asm-live-commit-progress-recovery).
 
 The current Lean structure `CommitProgressRecoveryStages` names the three open
-distributed results and this local execution boundary. They are inputs to the
+distributed results and this Rust mapping condition. They are inputs to the
 composition lemma. They are not additional network assumptions.
 
 The next operational model must store the commit index, local clock, recovery state,

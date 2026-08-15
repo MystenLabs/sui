@@ -5,10 +5,8 @@ SPDX-License-Identifier: Apache-2.0
 
 # Mysticeti v3 proof assumptions and refinement obligations
 
-This ledger records the assumptions that connect the Lean model to the Mysticeti
-v3 Rust implementation and its operating environment. The review date is
-2026-08-14. The analysis baseline is in the parent
-[`README`](../README.md#analysis-baseline).
+This ledger records the assumptions that connect the Lean model to the current
+Mysticeti v3 Rust implementation and its operating environment.
 
 Lean checks each theorem from its stated inputs. An input to an assumption
 structure is not a declared Lean `axiom`, but the theorem is still conditional on
@@ -34,19 +32,61 @@ quorum block layers, a usable anchor, and a greater commit index are protocol
 results. The proof must derive them. It must not accept them as primitive
 assumptions.
 
+## Shared proof model
+
+This is one global assumption catalog for the safety and liveness proofs. Commit
+progress recovery does not own these assumptions. Each theorem uses only the
+conditions that apply to its result.
+
+| Shared condition | Main use | Classification |
+|---|---|---|
+| Byzantine stake is at most `f`. Byzantine plus crashed or otherwise non-progressing stake is at most `f + c`, and a stable correct set remains active. | Safety and liveness | Standard fault bound with a protocol-specific crash budget. |
+| Correct validators use the same authenticated epoch configuration. They derive the same leader schedule, round leader selection, and selected leader slot order from one common committed prefix. | Safety and liveness | Standard agreement requirement and Rust refinement target. The current node-local threshold overrides do not enforce this condition. |
+| Signatures bind all modeled vote fields. One validator identity counts at most once on each side of one decision. | Safety | Standard authentication and vote-accounting requirement. |
+| After GST, each protocol message between correct validators arrives within `delta`. | Liveness | Standard partial synchrony. |
+| Each covered local consensus action completes within a positive bound `epsilon`, with `epsilon < delta`. | Bounded liveness and recovery timing | Additional processor-synchrony assumption. Message partial synchrony does not imply it. |
+| Each continuously enabled protocol task at a correct validator eventually runs. | Liveness | Standard weak task fairness. A finite `epsilon` already gives a stronger result for the actions that it covers. |
+| Evidence used by a decision is in the common commit chain or retained committed prefix before live DAG GC removes it. | Safety and liveness | Protocol and Rust refinement target, not an environment assumption. |
+| The leader schedule has stake `S` with `f + c < S`. Each applicable round leader selection has stake `P_r` with `A <= P_r`. Current v3 has `P_r = S`. | Leader-based liveness | Protocol configuration conditions. They are not network assumptions and do not by themselves prove an anchor. |
+| While one commit index is stalled, each pending round has one common leader-slot order that is modeled as an independent uniform permutation of the leader schedule. | Leader-based liveness | Accepted probabilistic model of the deterministic seeded shuffle. The current proof uses the first slot from each permutation. |
+
+The Byzantine fault bound, authentication, post-GST delivery, and weak task
+fairness are conventional assumptions. The separate crash budget `c` is specific to
+the v3 hybrid threshold model, but it is not an unusual proof technique.
+
+The less standard assumptions are the finite local-processing bound and independent
+uniform leader-order sampling. The schedule and selection stake bounds should be
+enforced or derived from epoch state. They should not remain deployment
+assumptions.
+
+Useful-peer retention is not a base assumption for steady-state consensus. It is a
+conditional requirement for block sync and commit sync after a validator misses
+old consensus data or restarts. A correct peer must then supply the required block
+or commit, or verified commit sync must move the validator to a state that no
+longer needs it. This requirement does not apply to transaction payloads. A
+validator or user can resubmit a transaction.
+
+The safety proof also needs the common commit-chain, evidence-refinement,
+first-trigger, and GC conditions below. The liveness proof also needs derived block
+sync, commit sync, pipeline, finalizer-trigger, and durability results. These are
+proof or refinement goals. They are not additional primitive environment
+assumptions.
+
 ## Status values
 
 - **Discharged in Lean**: Lean proves the complete claim inside the model.
-- **Enforced in Rust**: the reviewed Rust path rejects or prevents a violation.
+- **Enforced in Rust**: the current Rust path rejects or prevents a violation.
 - **Partially verified**: code checks or tests cover part of the claim, but no
   complete refinement proof exists.
 - **Abstraction gap**: the Lean predicate does not yet map to exact Rust events or
   time.
+- **Accepted modeling assumption**: the proof intentionally uses the stated model
+  for a protocol mechanism.
 - **Environmental assumption**: the claim is an operating, network, or adversary
   assumption outside the local decision function.
-- **Open proof obligation**: the proof needs the claim, but the review found no
-  sufficient evidence.
-- **Known mismatch**: the reviewed implementation contradicts the claim or does not
+- **Open proof obligation**: the proof needs the claim, but current evidence does
+  not establish it.
+- **Known mismatch**: the current implementation contradicts the claim or does not
   implement a required rule.
 
 A `Known mismatch` blocks the affected implementation claim. An `Abstraction gap`,
@@ -58,14 +98,15 @@ identifies a remaining condition. It is not a proof failure inside Lean.
 | Status | Count |
 |---|---:|
 | Discharged in Lean | 1 |
-| Enforced in Rust | 1 |
-| Partially verified | 8 |
+| Enforced in Rust | 2 |
+| Partially verified | 7 |
 | Environmental assumption | 5 |
 | Open proof obligation | 3 |
-| Abstraction gap | 3 |
+| Abstraction gap | 2 |
+| Accepted modeling assumption | 1 |
 | Known mismatch | 6 |
 
-The six known mismatches block an end-to-end claim for the reviewed baseline. The
+The six known mismatches block an end-to-end claim for the current implementation. The
 other open conditions define the remaining refinement and environment boundary.
 
 ## Maintenance rules
@@ -75,9 +116,12 @@ other open conditions define the remaining refinement and environment boundary.
 2. Reference the identifier in the Lean comment next to the related model input.
 3. Reference the identifier from each implementation-gap item that can close it.
 4. Change a status only with code, a proof, a test, or stated environment evidence.
-5. Recheck all implementation evidence when the analysis baseline changes.
+5. Recheck all implementation evidence after relevant Rust changes.
 6. Do not add a protocol result as a primitive assumption. Put an unproved result
    under an open proof obligation and list the simple contracts that must derive it.
+7. If one identifier contains mixed Rust status, separate its subclaims into
+   missing implementation, present but not fully verified, and verified behavior
+   that future changes must preserve.
 
 ## ASM-MATH-THRESHOLDS
 
@@ -137,14 +181,24 @@ other open conditions define the remaining refinement and environment boundary.
 - **Claim:** A verified signature binds the authority, epoch, round, block contents,
   transaction cutoff, transaction votes, and commit votes that the model uses.
 - **Type:** Rust refinement.
-- **Status:** Partially verified.
+- **Status:** Enforced in Rust.
 - **Effect if false:** Safety.
 - **Lean use:** Voter-set membership assumes that one authenticated block supplies
   the modeled vote for its named authority.
-- **Rust evidence:** The block verifier checks signed blocks before Core accepts
-  them. The model does not contain the serialization or signature relation.
-- **Discharge:** Add conformance vectors for every signed field used by the v3 leader
-  and transaction decision rules.
+- **Rust evidence:** The
+  [Tonic validator network](../../core/src/network/tonic_network.rs) uses mutual
+  TLS. The server accepts validator certificates whose network public keys are in
+  the committee, and the client verifies the remote validator's committee network
+  key. TLS identifies the connection peer. Consensus vote attribution uses a
+  separate protocol signature. [`SignedBlock`](../../core/src/block.rs) serializes
+  and hashes the complete `Block`, signs the digest with the author's protocol key,
+  and verifies it with that author's committee protocol key before Core accepts the
+  block. Thus, the signature covers every serialized block field, including v3
+  transaction cutoffs and votes. Tests reject a wrong author, wrong key, and
+  malformed signature.
+- **Discharge:** Keep the TLS allowlist, complete-block signature, author-key check,
+  and negative signature tests. Lean treats signature unforgeability as a
+  cryptographic primitive and does not model TLS or Ed25519 internals.
 
 ## ASM-SAFE-NON-EQUIVOCATION
 
@@ -156,9 +210,15 @@ other open conditions define the remaining refinement and environment boundary.
 - **Effect if false:** Safety.
 - **Lean use:** `OnlyFaultyOverlap` is used by `LeaderEvidence` and
   `TransactionEvidence`.
-- **Rust evidence:** Vote aggregation uses authority identity, and the proposer
-  persists its own block state. Restart and recovery behavior remains part of the
-  refinement boundary.
+- **Rust evidence:** Vote aggregation uses validator identity, and the proposer
+  persists its own block state.
+  [`StakeAggregator`](../../core/src/stake_aggregator.rs) stores validator
+  identities in a `BTreeSet`; `add` and `add_unique` count one validator's stake
+  only once. The leader decision code, transaction vote tracker, current finalizer,
+  and commit sync use this aggregator. The block verifier also rejects two parent
+  references from the same validator. Thus, vote deduplication is enforced. The
+  remaining partial condition is that a correct validator never signs incompatible
+  votes across proposal, crash, restart, and amnesia recovery.
 - **Discharge:** Add one invariant across proposal, restart, replay, and vote
   aggregation. Keep equivocation conformance vectors for one vote on each side.
 
@@ -189,9 +249,11 @@ other open conditions define the remaining refinement and environment boundary.
   [`TransactionVoteProduction`](../lean/Mysticeti/Finalizer.lean), and
   [`TransactionEvidence`](../lean/Mysticeti/Finalizer.lean). A counted direct
   accept has a signed witness that passes the numeric cutoff classifier.
-- **Rust evidence:** Focused Rust tests cover direct and indirect decisions,
-  cutoffs, and Byzantine equivocation. The Lean model is hand written and has no
-  executable conformance suite.
+- **Rust evidence:** Focused Rust tests cover the current leader decisions and the
+  current transaction-voting path. The current proposer does not create `BlockV3`,
+  and the current tree does not contain the modeled v3 transaction finalizer.
+  Therefore, the v3 cutoff and transaction-decision mapping is not implemented.
+  The Lean model is hand written and has no executable conformance suite.
 - **Discharge:** Add shared decision vectors for leader decisions, transaction
   decisions, cutoffs, first-trigger selection, and equivocation.
 
@@ -226,8 +288,10 @@ other open conditions define the remaining refinement and environment boundary.
   two views of the same stream and the same first-eligible rule.
   [`firstEligible_predecessor`](../lean/Mysticeti/CommitChain.lean) proves that the
   commit before this trigger is still below the depth-two boundary.
-- **Rust evidence:** The finalizer consumes consecutive commits in order. There is
-  no complete cross-node proof that all input paths select the same trigger.
+- **Rust evidence:** The current `CommitFinalizer` consumes consecutive commits in
+  order, but it does not implement the modeled v3 depth-two transaction trigger.
+  There is no complete cross-node proof that all input paths select the same
+  trigger.
 - **Discharge:** Derive trigger equality from `ASM-SAFE-COMMIT-CHAIN`, and check trigger
   order at every finalizer input boundary.
 
@@ -245,9 +309,10 @@ other open conditions define the remaining refinement and environment boundary.
 - **Rust evidence:** `FlexCommitter::build_commit` constructs each local v3 sub-DAG.
   For a commit installed through commit sync,
   `FlexCommitter::handle_certified_commit` reconstructs the v3 sub-DAG from the
-  explicit block list in `CertifiedCommit`. The v3 finalizer processes these
-  sub-DAGs in order. No complete lemma connects both paths, a multi-leader commit,
-  commit sync, and the finalizer prefix.
+  explicit block list in `CertifiedCommit`. The current `CommitFinalizer` receives
+  these sub-DAGs in order, but it does not implement the modeled v3 transaction
+  rule. No complete lemma connects both paths, a multi-leader commit, commit sync,
+  and the modeled finalizer prefix.
 - **Discharge:** Prove the committed-prefix lemma for local commit production and
   commit-sync installation. Add an integration invariant for the exact first
   trigger.
@@ -271,13 +336,13 @@ other open conditions define the remaining refinement and environment boundary.
   [`vote_tracker_gc_rejects`](../lean/Mysticeti/Finalizer.lean) prove the signed
   cutoff behavior. `BlockEvidenceStore` keeps the live DAG and pending committed
   prefix separate.
-- **Rust evidence:** The v3 constructor checks `gc_depth > 2`. The proposer signs the
-  maximum of the causal-history and vote-tracker GC rounds.
+- **Rust evidence:** The v3 constructor checks `gc_depth > 2`.
   `FlexCommitter::build_commit` reads the old `DagState::gc_round()` before
-  `Core::post_commit` records the new commit. The finalizer keeps each pending
-  `CommittedSubDag`. The commit-sync path uses the explicit block list in
-  `CertifiedCommit` instead of the local DFS. The complete local, commit-sync,
-  replay, and recovery refinement is not proved.
+  `Core::post_commit` records the new commit. The current proposer does not create
+  `BlockV3` and does not produce the signed v3 cutoff. The current finalizer keeps
+  pending `CommittedSubDag` values, and the commit-sync path uses the explicit block
+  list in `CertifiedCommit` instead of the local DFS. The transaction-cutoff and
+  complete local, commit-sync, replay, and recovery mapping is not proved.
 - **Discharge:** Prove that every required anchor voting block enters the exact
   `CommittedSubDag` prefix on all input paths. Prove that the finalizer processes
   that prefix before it can lose the evidence. Test the minimum supported GC depth,
@@ -285,13 +350,15 @@ other open conditions define the remaining refinement and environment boundary.
 
 ## ASM-CONFIG-V3-ACTIVATION
 
-- **Claim:** The analyzed FlexCommitter and v3 finalizer path is active for the epoch
-  to which a proof claim is applied.
+- **Claim:** The analyzed FlexCommitter and modeled v3 transaction-finalization path
+  is active for the epoch to which a proof claim is applied.
 - **Type:** Configuration applicability.
 - **Status:** Known mismatch.
 - **Effect if false:** Applicability.
 - **Lean use:** All model definitions describe the v3 path.
-- **Rust evidence:** The reviewed normal Sui startup path sets `enable_v3` to false.
+- **Rust evidence:** Normal Sui startup sets `enable_v3` to false. The current tree
+  contains the FlexCommitter path but not the modeled v3 proposal and transaction
+  finalizer.
 - **Discharge:** Add versioned epoch activation, rollback rules, and mixed-version
   tests. Do not use a local process flag.
 
@@ -303,8 +370,10 @@ other open conditions define the remaining refinement and environment boundary.
 - **Status:** Known mismatch.
 - **Effect if false:** Safety.
 - **Lean use:** The transaction safety theorem always uses the v3 voting rule.
-- **Rust evidence:** `CommitFinalizerV3` bypasses voting when transaction voting is
-  disabled. No constructor invariant connects the two flags.
+- **Rust evidence:** The current `CommitFinalizer` bypasses voting when transaction
+  voting is disabled. No constructor invariant connects the two flags. The current
+  proposer also does not create `BlockV3`, so the implication alone does not supply
+  the modeled v3 transaction rule.
 - **Discharge:** Use one versioned feature value, or reject a configuration that
   enables v3 without transaction voting.
 
@@ -367,27 +436,55 @@ other open conditions define the remaining refinement and environment boundary.
 - **Status:** Known mismatch.
 - **Effect if false:** Liveness.
 - **Lean use:** `NextRoundProposalTargets` models the local proposal target.
-  `CommitProgressRecoveryStages` names three open distributed stages and one local
-  execution boundary. `covered_usable_anchor_window_enables_flex_committer` and
+  `CommitProgressRecoveryStages` names three open distributed stages and one Rust
+  mapping condition.
+  `covered_usable_anchor_window_advances_modeled_flex_committer` and
   `full_flex_anchor_window_advances_commit_index` prove the deterministic
-  FlexCommitter step. `commit_progress_recovery_stages_compose` proves that the
+  FlexCommitter result. `commit_progress_recovery_stages_compose` proves that the
   remaining stages compose. It is not the end-to-end liveness theorem.
 - **Rust evidence:** `DagState::last_commit_timestamp_ms` exposes the current
   in-memory commit timestamp. `DagState::flush` makes buffered commits durable, and
   `DagState::new` loads the last flushed commit after restart. `Context::clock`
   exposes local time. The current code does not have commit progress recovery, a
   commit-stall trigger for block production, or adaptive recovery pacing.
-- **Discharge:** Implement the local rule. Then derive these results in Lean:
-  recovery-quorum overlap from local clock progress, weak task fairness, persistent
-  recovery, and the live correct stake bound; consecutive quorum block layers from
-  the next-round proposal rule, parent synchronization, persistence, and broadcast;
-  a usable anchor window from partial synchrony, growing propagation delay, and
-  first-slot sampling. The status-level FlexCommitter step is discharged in Lean.
-  Prove that Rust's ordered pending-round state refines this model, that retained
-  committed blocks let `build_commit` complete, and that weak task fairness runs the
-  enabled Core action. Use the epoch start timestamp when the commit index is zero.
-  Use saturating subtraction for a future commit timestamp. Add deterministic v3
-  simulation tests.
+
+  The final local commit sequence is present in the current code.
+  `Core::add_blocks` accepts blocks and calls `Core::try_commit_local`.
+  `Core::try_commit_v3` calls `FlexCommitter::try_commit` in a loop.
+  `FlexCommitter::try_commit` runs direct decisions, checks for a commit round,
+  runs descending indirect decisions when necessary, checks again, and calls
+  `build_commit`. When it returns a commit, `Core::try_commit_v3` calls
+  `Core::post_commit`, which adds the commit to `DagState`. There is no separate
+  queued commit action between these calls. The
+  [design evidence](../design/commit_progress_recovery.md#current-flexcommitter-to-core-path)
+  lists the component tests, Core test, and test commands for this path.
+
+The `Known mismatch` status applies to the recovery policy as a whole. It does not
+apply to every Rust fact in this section.
+
+| Rust implementation category | Current result |
+|---|---|
+| **Missing from Rust** | The commit-stall trigger, persistent recovery state, next-round proposal mode, adaptive recovery delay, recovery parent synchronization, and timely first-slot parent rule are not implemented. |
+| **Present in Rust, but not fully verified** | The Rust pending-round array, slot order, status updates, scan bounds, GC retention, and commit construction appear to implement the Lean model. A manual code review supports the mapping. It has no machine-checked Rust-to-Lean proof and no single old-prefix recovery-window regression test. |
+| **Verified in the current Rust code; preserve this behavior** | `FlexCommitter::try_commit` runs the direct rule, then the descending indirect rule when needed, finds a commit round, and builds the commit. `Core::try_commit_v3` passes each returned commit to `Core::post_commit`, and `post_commit` adds it to `DagState`. The focused Rust tests for these functions and the Core commit-index test pass. Future changes can refactor the code, but they must preserve this result or update the Lean model and tests. |
+
+- **Discharge:** Implement the local rule. Then prove these results in Lean. Unless
+  a commit occurs first, correct validators with quorum stake eventually enter
+  recovery at the same time. They produce and exchange blocks for enough
+  consecutive rounds, with quorum stake in each round. Eventually, enough
+  consecutive rounds start with a correct leader whose block gets enough
+  next-round votes for FlexCommitter to resolve older undecided rounds. The
+  status-level FlexCommitter result is discharged in Lean.
+  The current Rust call path records this result. Weak task fairness is
+  still needed so that Core processes input events; it is not needed for a separate
+  action between `try_commit` and `post_commit`. Keep the Rust-to-Lean state mapping
+  as a mapping obligation. Add one focused regression test with an old
+  undecided prefix and the required usable anchor window. The test must show that
+  `try_commit_v3` records a commit and advances the commit index. Also keep a
+  negative test with a shorter anchor window. Future changes to these Rust functions
+  must preserve these results or update the model and proof. Use the epoch start
+  timestamp when the commit index is zero. Use saturating subtraction for a future
+  commit timestamp. Add deterministic v3 simulation tests.
 
 ## ASM-LIVE-LEADER
 
@@ -442,8 +539,8 @@ other open conditions define the remaining refinement and environment boundary.
   round with probability `p^k`. The correct validators can be the same or different.
   Repeated disjoint runs contain such a run with probability one. Current v3 uses
   `k = indirectCommitDepth + 1 = 3` for the recovery proof.
-- **Type:** Accepted probabilistic abstraction and Rust refinement.
-- **Status:** Abstraction gap.
+- **Type:** Accepted probabilistic protocol model and Rust refinement.
+- **Status:** Accepted modeling assumption.
 - **Effect if false:** Liveness.
 - **Lean use:** The deterministic Lean trace does not model probability.
   `CommitProgressRecoveryStages.recoveryLayersToUsableAnchors` is the open theorem
@@ -451,18 +548,17 @@ other open conditions define the remaining refinement and environment boundary.
   probabilistic model can prove that the failure probability after `j` disjoint
   three-round runs is `(1 - p^3)^j`, which approaches zero.
 - **Rust evidence:** `FlexCommitter` seeds `StdRng` from the round number and
-  shuffles the complete ordered leader schedule for each pending round. This is a
-  deterministic pseudorandom sequence. The `rand` interface does not specify
-  independence or a consecutive-seed coverage bound.
-- **Discharge:** This ideal random-permutation model is explicitly accepted for the
-  current recovery design. Rust approximates it with a deterministic pseudorandom
-  permutation. To remove the abstraction, use protocol randomness with a stated
-  probabilistic model, prove a weighted first-slot coverage bound for the exact
-  deterministic order, or use a deterministic order with a bounded correct-first
-  run guarantee. Discharge the fixed schedule and common-order preconditions through
-  `ASM-SAFE-PARAMETERS` and the committed-prefix refinement. They are not random-source
+  shuffles the complete ordered leader schedule for each pending round. All correct
+  validators with the same schedule compute the same deterministic permutation.
+  The liveness analysis accepts the permutation output as independent and uniform
+  relative to the fixed fault set.
+- **Discharge:** No code change is required for the accepted probabilistic model.
+  A strict proof of the exact deterministic sequence would instead need a weighted
+  coverage theorem or a deterministic order with a bounded correct-first run.
+  Discharge the fixed schedule and common-order preconditions through
+  `ASM-SAFE-PARAMETERS` and the committed-prefix refinement. They are not sampling
   assumptions.
-- **Decision, 2026-08-14:** Model each round's seeded shuffle as one common,
+- **Accepted model:** Model each round's seeded shuffle as one common,
   independent, uniform random permutation of the leader schedule. Use a run of
   `indirectCommitDepth + 1` correct first slots. This is an accepted liveness
   abstraction for the deterministic Rust shuffle. It is not a safety assumption or
@@ -508,19 +604,25 @@ other open conditions define the remaining refinement and environment boundary.
 
 ## ASM-LIVE-PEER-FAIRNESS
 
-- **Claim:** For each required block or commit, at least one known correct peer
-  retains the item and returns it when requested after GST.
+- **Claim:** This condition applies only when a lagging or restarted validator must
+  fetch old consensus state. For each block or commit that the validator still
+  needs, at least one known correct peer returns the item after GST, or verified
+  commit sync moves the validator to a state that no longer needs it.
 - **Type:** Network, storage, and peer-availability environment.
 - **Status:** Environmental assumption.
-- **Effect if false:** Liveness.
+- **Effect if false:** Liveness after missing state or restart.
 - **Lean use:** This is the useful-peer environment input for the open block-sync
   and commit-sync progress theorems. Eventual selection of that peer must be derived
-  from the retry transition and its fairness or random-selection rule.
+  from the retry transition and its fairness or random-selection rule. The
+  steady-state consensus theorem does not need this condition for messages that
+  post-GST delivery already supplies.
 - **Rust evidence:** Sync paths shuffle peers. The block-sync fallback selects one
   random peer per attempt. Some paths assume that the known-peer set is not empty.
-- **Discharge:** State a retention, peer-discovery, and request-service contract.
-  Then prove eventual useful-peer selection from deterministic fair peer rotation,
-  or use an explicit probabilistic selection model.
+- **Discharge:** State a consensus-block and commit retention, peer-discovery, and
+  request-service contract. Then prove eventual useful-peer selection from
+  deterministic fair peer rotation, or use an explicit probabilistic selection
+  model. Transaction payloads are outside this contract because a validator or
+  user can resubmit them.
 
 ## ASM-LIVE-TASK-FAIRNESS
 
@@ -542,24 +644,22 @@ other open conditions define the remaining refinement and environment boundary.
 
 ## ASM-LIVE-LOCAL-RESPONSE
 
-- **Claim:** Local consensus computation takes at most `epsilon` time. The
-  instantaneous model is the special case `epsilon = 0`. For Rust refinement,
-  `epsilon` is a finite symbolic bound for one local consensus
+- **Claim:** Local consensus computation takes at most a positive symbolic time
+  `epsilon`, with `epsilon < delta`. This bound applies to one local consensus
   action that stays enabled at a correct, running validator. The aggregate bound
   includes task and queue scheduling, message verification, DAG acceptance,
   proposal construction, a required proposal flush, and handoff to the network
   transport. It also includes making a received result visible to the next local
-  consensus action. The idealized model uses `epsilon = 0`. A Rust refinement can
-  keep `epsilon` symbolic. The same uniform bound applies separately to each
-  covered action. The message `sentAt` event is the transport send. The
-  `deliveredAt` event is delivery to the receiving handler.
+  consensus action. The same uniform bound applies separately to each covered
+  action. The message `sentAt` event is the transport send. The `deliveredAt` event
+  is delivery to the receiving handler.
 - **Type:** Runtime environment.
 - **Status:** Environmental assumption.
-- **Effect if false:** Commit progress liveness.
+- **Effect if false:** Liveness results that require timely local voting.
 - **Lean use:** `BoundedLocalProcessing` states the general boundary.
   `protocol_packet_becomes_locally_visible` uses `delta + epsilon`.
-  `protocol_packet_is_immediately_visible_after_delivery` proves the special case
-  with `epsilon = 0`.
+  `protocol_packet_becomes_locally_visible_before_two_delays` uses
+  `epsilon < delta`.
   Weak task fairness alone cannot ensure that a correct first-slot proposal runs
   and becomes visible before the next-round proposals.
 - **Rust evidence:** The receive path includes task queues, blocking-pool
@@ -571,11 +671,9 @@ other open conditions define the remaining refinement and environment boundary.
   part of the partial-synchrony environment. Define the covered Rust actions. A
   probabilistic response bound is also possible, but it needs a separate
   probability model.
-- **Decision, 2026-08-14:** Use a symbolic local-computation bound `epsilon`, or set
-  `epsilon = 0` as an explicit instantaneous-computation idealization. Do not use a
-  fixed processing constant. Do not infer a minimum network delay. With a finite
-  `epsilon`, `delta + epsilon`
-  bounds transport send through remote DAG visibility, and
+- **Accepted model:** Use a positive symbolic local-computation bound `epsilon`
+  with `epsilon < delta`. Do not use a fixed processing constant. With this bound,
+  `delta + epsilon` bounds transport send through remote DAG visibility, and
   `delta + 2 * epsilon` bounds local proposal enablement through remote DAG
   visibility. A recovery timer also needs a derived bound from its local start
   event to the relevant proposal-enable or transport-send event.
@@ -605,9 +703,10 @@ other open conditions define the remaining refinement and environment boundary.
 - **Status:** Known mismatch.
 - **Effect if false:** Liveness.
 - **Lean use:** `FinalizerLivenessStageObligations.triggerEventually`.
-- **Rust evidence:** Normal continued commits can provide the trigger. Shutdown can
-  leave pending finalizer state without a later same-epoch commit, and no explicit
-  epoch-tail rule defines the result.
+- **Rust evidence:** The current finalizer uses a different transaction trigger.
+  For both the current path and the modeled v3 path, shutdown can leave pending
+  state without a later same-epoch commit, and no explicit epoch-tail rule defines
+  the result.
 - **Discharge:** Keep consensus active through all required triggers, persist and
   replay pending state across the boundary, or define and prove a safe tail rule.
 
@@ -621,9 +720,10 @@ other open conditions define the remaining refinement and environment boundary.
 - **Effect if false:** Safety and liveness.
 - **Lean use:** `triggerToDecision`, `decisionToDurableOutput`, and
   `transaction_liveness.commitEntersFinalizer`.
-- **Rust evidence:** The v3 path sends ordered committed sub-DAGs to the finalizer.
-  The finalizer persists finalized results before it sends them to the consumer.
-  The model does not map crashes, channel delay, storage latency, or replay to the
-  `delta` bound.
+- **Rust evidence:** The v3 commit path sends ordered committed sub-DAGs to the
+  current finalizer. The current finalizer persists finalized results before it
+  sends them to the consumer. The modeled v3 transaction decisions are not
+  implemented. The model also does not map crashes, channel delay, storage latency,
+  or replay to the `delta` bound.
 - **Discharge:** Define the durable event, crash boundary, and replay relation. Test a
   crash before persistence, after persistence, and before consumer delivery.

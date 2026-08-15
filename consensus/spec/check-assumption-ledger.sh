@@ -53,6 +53,7 @@ status_values=(
     "Environmental assumption"
     "Open proof obligation"
     "Abstraction gap"
+    "Accepted modeling assumption"
     "Known mismatch"
 )
 status_total=0

@@ -330,7 +330,8 @@ inductive Outcome where
   | reject
   deriving DecidableEq, Repr
 
-/-- All ways in which `CommitFinalizerV3` can produce an outcome. -/
+/-- All ways in which the modeled v3 transaction finalizer can produce an
+outcome. -/
 def CanDecide (evidence : TransactionEvidence authorityCount stake thresholds) :
     Outcome → Prop
   | .accept => evidence.DirectAccept ∨ evidence.IndirectAccept
