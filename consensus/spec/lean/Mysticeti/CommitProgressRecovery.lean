@@ -10,11 +10,11 @@ namespace Mysticeti
 
 /-! Commit-progress recovery definitions and stage composition for Mysticeti v3.
 
-The local FlexCommitter scan is executable and proved. The final theorem composes
-three distributed recovery stages with one local task-fairness and Rust-refinement
-boundary. It does not yet derive the distributed stages from simple process and
-network assumptions. It does not prove liveness for old leader blocks or
-transaction inclusion. See
+The local FlexCommitter scan is executable and proved. The final theorem derives
+three distributed recovery stages from per-validator process rules, partial
+synchrony, bounded local processing, and a trace-level leader-order sampling
+property. It keeps the exact Rust-state mapping as a refinement boundary. It does
+not prove liveness for old leader blocks or transaction inclusion. See
 `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`, `ASM-LIVE-LEADER`,
 `ASM-LIVE-FIRST-SLOT-SAMPLING`, and `ASM-LIVE-LOCAL-RESPONSE`.
 -/
@@ -179,6 +179,40 @@ theorem leader_schedule_contains_progress_stake
     have subset := VoterSet.inter_subset_right authorityCount schedule nonProgress
     have mono := weight_mono stake subset
     omega
+  omega
+
+/-- If non-progress stake plus the quorum threshold is at most total validator set
+stake, the validators outside the non-progress set have quorum stake. -/
+theorem progress_stake_reaches_quorum
+    {authorityCount : Nat} {stake : Nat → Nat}
+    {thresholds : Thresholds authorityCount stake}
+    {nonProgress : VoterSet}
+    (nonProgressLeavesQuorum :
+      weight authorityCount stake nonProgress + thresholds.quorum ≤
+        totalWeight authorityCount stake) :
+    thresholds.quorum ≤
+      weight authorityCount stake
+        (VoterSet.diff VoterSet.full nonProgress) := by
+  have fullIntersection :
+      VoterSet.inter VoterSet.full nonProgress = nonProgress := by
+    funext authority
+    simp [VoterSet.inter, VoterSet.full]
+  have partition := weight_diff_add_inter authorityCount stake
+    VoterSet.full nonProgress
+  rw [fullIntersection] at partition
+  simp [totalWeight] at nonProgressLeavesQuorum
+  omega
+
+/-- The actual v3 definition `Q = N - (f + c)` supplies the stake inequality used
+by `progress_stake_reaches_quorum`. -/
+theorem actual_hybrid_fault_budgets_leave_quorum
+    {totalStake byzantineBound unavailableBound quorum nonProgressStake : Nat}
+    (faultBudgetsFit : byzantineBound + unavailableBound ≤ totalStake)
+    (nonProgressBound :
+      nonProgressStake ≤ byzantineBound + unavailableBound)
+    (quorumDefinition :
+      quorum = totalStake - (byzantineBound + unavailableBound)) :
+    nonProgressStake + quorum ≤ totalStake := by
   omega
 
 /-- V3 schedule coverage bounds imply general schedule viability when the
@@ -687,15 +721,1140 @@ theorem next_round_proposal_target_is_not_old
   rw [nextRoundTargets authority authorityInRange authorityInRecovery]
   omega
 
+/-! ### Recovery entry from local actions -/
+
+/-- Commit indexes do not decrease along one execution trace. -/
+def CommitIndexMonotone {State : Type}
+    (trace : Trace State) (view : CommitProgressRecoveryView State) : Prop :=
+  ∀ earlier later,
+    earlier ≤ later →
+    view.commitIndex (trace earlier) ≤ view.commitIndex (trace later)
+
+/-- Local process rules for entry into commit progress recovery.
+
+Each live validator has one local recovery-entry action. Bounded local processing
+sets a common deadline for these actions. The remaining fields are local state
+invariants: commit indexes do not decrease, recovery persists while the commit
+index is unchanged, recovery contains only progressing validators, and recovery
+uses the next-round proposal policy. -/
+structure RecoveryEntryProcess
+    {State : Type} {protocolPacket : Packet → Prop}
+    (trace : Trace State)
+    (network : PartialSynchrony protocolPacket)
+    (view : CommitProgressRecoveryView State)
+    (thresholds : Thresholds view.authorityCount view.stake)
+    (protocolAction : LocalConsensusAction → Prop)
+    (processing : BoundedLocalProcessing network protocolAction) where
+  liveAuthorities : VoterSet
+  liveStakeIsQuorum :
+    thresholds.quorum ≤
+      weight view.authorityCount view.stake liveAuthorities
+  commitIndexMonotone : CommitIndexMonotone trace view
+  entryAction : Nat → Time → LocalConsensusAction
+  entryActionEnabledAt :
+    ∀ authority start,
+      (entryAction authority start).enabledAt = start
+  entryActionIsLocalConsensus :
+    ∀ authority start,
+      authority < view.authorityCount →
+      liveAuthorities authority = true →
+      protocolAction (entryAction authority start)
+  entryActionResult :
+    ∀ baseline authority start,
+      authority < view.authorityCount →
+      liveAuthorities authority = true →
+      CommitStalledAt view baseline (trace start) →
+      CommitAdvancedFrom view baseline
+          (trace (entryAction authority start).completedAt) ∨
+        view.correctRecoveryAuthorities
+          (trace (entryAction authority start).completedAt) authority = true
+  recoveryPersistsWhileStalled :
+    ∀ baseline authority entered later,
+      entered ≤ later →
+      view.commitIndex (trace later) = baseline →
+      view.correctRecoveryAuthorities (trace entered) authority = true →
+      view.correctRecoveryAuthorities (trace later) authority = true
+  recoveryAuthoritiesAreProgressing :
+    ∀ time,
+      VoterSet.SubsetAt view.authorityCount
+        (view.correctRecoveryAuthorities (trace time))
+        (VoterSet.diff VoterSet.full (view.nonProgress (trace time)))
+  recoveryUsesNextRoundPolicy :
+    ∀ time, NextRoundProposalTargets view (trace time)
+
+/-- Bounded local recovery-entry actions form a recovery quorum by one common
+deadline, unless the commit index advances first. -/
+theorem stalled_reaches_recovery_quorum_within
+    {State : Type} {protocolPacket : Packet → Prop}
+    {trace : Trace State}
+    {network : PartialSynchrony protocolPacket}
+    {view : CommitProgressRecoveryView State}
+    {thresholds : Thresholds view.authorityCount view.stake}
+    {protocolAction : LocalConsensusAction → Prop}
+    {processing : BoundedLocalProcessing network protocolAction}
+    (process : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing)
+    (baseline : Nat) :
+    WithinAfter network.gst processing.epsilon trace
+      (CommitStalledAt view baseline)
+      (fun state =>
+        CommitAdvancedFrom view baseline state ∨
+          RecoveryQuorumAt view thresholds baseline state) := by
+  intro start afterGst stalled
+  let deadline := start + processing.epsilon
+  have startIndex : view.commitIndex (trace start) = baseline := stalled.1
+  have startBeforeDeadline : start ≤ deadline := by
+    simp [deadline]
+  have baselineLeDeadline :
+      baseline ≤ view.commitIndex (trace deadline) := by
+    rw [← startIndex]
+    exact process.commitIndexMonotone start deadline startBeforeDeadline
+  by_cases advanced : baseline < view.commitIndex (trace deadline)
+  · exact ⟨deadline, startBeforeDeadline, by simp [deadline], Or.inl advanced⟩
+  · have atBaseline : view.commitIndex (trace deadline) = baseline := by omega
+    have liveInRecovery :
+        VoterSet.SubsetAt view.authorityCount process.liveAuthorities
+          (view.correctRecoveryAuthorities (trace deadline)) := by
+      intro authority authorityInRange authorityLive
+      let action := process.entryAction authority start
+      have actionValid : protocolAction action :=
+        process.entryActionIsLocalConsensus authority start authorityInRange
+          authorityLive
+      have actionAfterGst : network.gst ≤ action.enabledAt := by
+        rw [process.entryActionEnabledAt authority start]
+        exact afterGst
+      have completion := processing.postGstCompletion action actionValid actionAfterGst
+      have completionBeforeDeadline : action.completedAt ≤ deadline := by
+        have completionBound := completion.2
+        rw [process.entryActionEnabledAt authority start] at completionBound
+        exact completionBound
+      have result := process.entryActionResult baseline authority start
+        authorityInRange authorityLive stalled
+      rcases result with advancedAtCompletion | enteredRecovery
+      · have completionIndexLeDeadline := process.commitIndexMonotone
+          action.completedAt deadline completionBeforeDeadline
+        have advancedAction :
+            baseline < view.commitIndex (trace action.completedAt) := by
+          simpa [CommitAdvancedFrom, action] using advancedAtCompletion
+        omega
+      · have enteredAction :
+            view.correctRecoveryAuthorities (trace action.completedAt) authority =
+              true := by
+          simpa [action] using enteredRecovery
+        exact process.recoveryPersistsWhileStalled baseline authority
+          action.completedAt deadline completionBeforeDeadline atBaseline
+          enteredAction
+    have recoveryStake :
+        thresholds.quorum ≤ view.correctRecoveryStake (trace deadline) := by
+      have liveWeightLeRecovery := weight_mono view.stake liveInRecovery
+      exact Nat.le_trans process.liveStakeIsQuorum liveWeightLeRecovery
+    have recoveryQuorum : RecoveryQuorum view thresholds (trace deadline) := by
+      exact ⟨recoveryStake,
+        process.recoveryAuthoritiesAreProgressing deadline,
+        process.recoveryUsesNextRoundPolicy deadline⟩
+    exact ⟨deadline, startBeforeDeadline, by simp [deadline],
+      Or.inr ⟨atBaseline, recoveryQuorum⟩⟩
+
+/-- The bounded recovery-entry theorem also gives the first unbounded recovery
+stage used by commit-progress composition. -/
+theorem stalled_to_recovery_quorum
+    {State : Type} {protocolPacket : Packet → Prop}
+    {trace : Trace State}
+    {network : PartialSynchrony protocolPacket}
+    {view : CommitProgressRecoveryView State}
+    {thresholds : Thresholds view.authorityCount view.stake}
+    {protocolAction : LocalConsensusAction → Prop}
+    {processing : BoundedLocalProcessing network protocolAction}
+    (process : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing)
+    (baseline : Nat) :
+    LeadsToAfter network.gst trace
+      (CommitStalledAt view baseline)
+      (fun state =>
+        CommitAdvancedFrom view baseline state ∨
+          RecoveryQuorumAt view thresholds baseline state) :=
+  (stalled_reaches_recovery_quorum_within process baseline).toLeadsTo
+
+/-- A recovery quorum persists while the commit index remains unchanged. -/
+theorem recovery_quorum_persists_while_stalled
+    {State : Type} {protocolPacket : Packet → Prop}
+    {trace : Trace State}
+    {network : PartialSynchrony protocolPacket}
+    {view : CommitProgressRecoveryView State}
+    {thresholds : Thresholds view.authorityCount view.stake}
+    {protocolAction : LocalConsensusAction → Prop}
+    {processing : BoundedLocalProcessing network protocolAction}
+    (process : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing)
+    {baseline start later : Nat}
+    (startBeforeLater : start ≤ later)
+    (recoveryAtStart :
+      RecoveryQuorumAt view thresholds baseline (trace start))
+    (atBaselineLater : view.commitIndex (trace later) = baseline) :
+    RecoveryQuorumAt view thresholds baseline (trace later) := by
+  have recoverySubset :
+      VoterSet.SubsetAt view.authorityCount
+        (view.correctRecoveryAuthorities (trace start))
+        (view.correctRecoveryAuthorities (trace later)) := by
+    intro authority authorityInRange recoveringAtStart
+    exact process.recoveryPersistsWhileStalled baseline authority start later
+      startBeforeLater atBaselineLater recoveringAtStart
+  have recoveryStake :
+      thresholds.quorum ≤ view.correctRecoveryStake (trace later) := by
+    have startStake := recoveryAtStart.2.1
+    have stakeMonotone := weight_mono view.stake recoverySubset
+    exact Nat.le_trans startStake stakeMonotone
+  exact ⟨atBaselineLater, recoveryStake,
+    process.recoveryAuthoritiesAreProgressing later,
+    process.recoveryUsesNextRoundPolicy later⟩
+
+/-! ### Adaptive recovery pacing -/
+
+/-- A recovery wait schedule never decreases and can exceed every finite bound. -/
+structure RecoveryWaitSchedule where
+  delay : Nat → Time
+  delayMonotone : ∀ earlier later, earlier ≤ later → delay earlier ≤ delay later
+  delayUnbounded : ∀ bound, ∃ attempt, bound ≤ delay attempt
+
+/-- An unbounded recovery wait eventually covers the timing difference between two
+validators, one post-GST message delivery, and one local acceptance action. -/
+theorem recovery_wait_eventually_covers_block_visibility
+    {protocolPacket : Packet → Prop}
+    {network : PartialSynchrony protocolPacket}
+    {protocolAction : LocalConsensusAction → Prop}
+    (processing : BoundedLocalProcessing network protocolAction)
+    (wait : RecoveryWaitSchedule)
+    {timerStart proposalSendDifference : Time}
+    (packet : Packet)
+    (packetValid : protocolPacket packet)
+    (packetAfterGst : network.gst ≤ packet.sentAt)
+    (packetSentWithinDifference :
+      packet.sentAt ≤ timerStart + proposalSendDifference)
+    (accept : LocalConsensusAction)
+    (acceptValid : protocolAction accept)
+    (acceptStartsAtDelivery : accept.enabledAt = packet.deliveredAt) :
+  ∃ attempt,
+      accept.completedAt ≤ timerStart + wait.delay attempt := by
+  rcases wait.delayUnbounded
+      (proposalSendDifference + network.delta + processing.epsilon) with
+    ⟨attempt, waitCovers⟩
+  refine ⟨attempt, ?_⟩
+  have visible := processing.protocol_packet_becomes_locally_visible packet
+    packetValid accept acceptValid acceptStartsAtDelivery packetAfterGst
+  calc
+    accept.completedAt ≤
+        packet.sentAt + network.delta + processing.epsilon := visible
+    _ ≤ (timerStart + proposalSendDifference) + network.delta +
+        processing.epsilon := by
+      exact Nat.add_le_add_right
+        (Nat.add_le_add_right packetSentWithinDifference network.delta)
+        processing.epsilon
+    _ = timerStart +
+        (proposalSendDifference + network.delta + processing.epsilon) := by
+      simp [Nat.add_assoc]
+    _ ≤ timerStart + wait.delay attempt := Nat.add_le_add_left waitCovers _
+
+/-! ### Quorum block layers from per-validator proposals -/
+
+/-- One recovery block flows from a local proposal action through authenticated
+delivery and a local acceptance action.
+
+`proposalReadyAt` is when the next-round proposal has an immediate-parent quorum
+and its recovery pacing wait has expired. `deadlineCoversFlow` is arithmetic: the
+window allows one proposal action, one network delay, and one acceptance action.
+The state-transition fields state the effects of persistence and acceptance. -/
+structure RecoveryBlockFlow
+    {State : Type} {protocolPacket : Packet → Prop}
+    (trace : Trace State)
+    (network : PartialSynchrony protocolPacket)
+    (view : CommitProgressRecoveryView State)
+    (thresholds : Thresholds view.authorityCount view.stake)
+    (protocolAction : LocalConsensusAction → Prop)
+    (processing : BoundedLocalProcessing network protocolAction)
+    (entry : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing)
+    (baseRound : Time → Nat)
+    (windowBound : Nat → Time) where
+  proposalReadyAt : Time → Nat → Nat → Time
+  proposalReadyAfterStart :
+    ∀ start count offset,
+      start ≤ proposalReadyAt start count offset
+  immediateParentQuorumAvailable : Nat → State → Prop
+  parentQuorumAvailableAtProposalReady :
+    ∀ baseline authority start count offset,
+      RecoveryQuorumAt view thresholds baseline (trace start) →
+      offset < count →
+      authority < view.authorityCount →
+      view.correctRecoveryAuthorities (trace start) authority = true →
+      immediateParentQuorumAvailable (baseRound start + offset)
+        (trace (proposalReadyAt start count offset))
+  proposalAction : Nat → Time → Nat → Nat → LocalConsensusAction
+  proposalActionEnabledAt :
+    ∀ authority start count offset,
+      (proposalAction authority start count offset).enabledAt =
+        proposalReadyAt start count offset
+  proposalActionEnabledByParentQuorum :
+    ∀ authority start count offset,
+      offset < count →
+      authority < view.authorityCount →
+      view.correctRecoveryAuthorities (trace start) authority = true →
+      immediateParentQuorumAvailable (baseRound start + offset)
+        (trace (proposalReadyAt start count offset)) →
+      protocolAction (proposalAction authority start count offset)
+  blockPacket : Nat → Time → Nat → Nat → Packet
+  blockPacketSentAtProposalCompletion :
+    ∀ authority start count offset,
+      (blockPacket authority start count offset).sentAt =
+        (proposalAction authority start count offset).completedAt
+  blockPacketIsProtocolPacket :
+    ∀ authority start count offset,
+      offset < count →
+      authority < view.authorityCount →
+      view.correctRecoveryAuthorities (trace start) authority = true →
+      protocolPacket (blockPacket authority start count offset)
+  acceptAction : Nat → Time → Nat → Nat → LocalConsensusAction
+  acceptActionEnabledAtDelivery :
+    ∀ authority start count offset,
+      (acceptAction authority start count offset).enabledAt =
+        (blockPacket authority start count offset).deliveredAt
+  acceptActionIsLocalConsensus :
+    ∀ authority start count offset,
+      offset < count →
+      authority < view.authorityCount →
+      view.correctRecoveryAuthorities (trace start) authority = true →
+      protocolAction (acceptAction authority start count offset)
+  deadlineCoversFlow :
+    ∀ start count offset,
+      offset < count →
+      proposalReadyAt start count offset + processing.epsilon +
+          network.delta + processing.epsilon ≤
+        start + windowBound count
+  acceptedBlockResult :
+    ∀ baseline authority start count offset,
+      RecoveryQuorumAt view thresholds baseline (trace start) →
+      offset < count →
+      authority < view.authorityCount →
+      view.correctRecoveryAuthorities (trace start) authority = true →
+      CommitAdvancedFrom view baseline
+          (trace (acceptAction authority start count offset).completedAt) ∨
+        view.quorumBlockLayerAuthors (baseRound start + offset)
+          (trace (acceptAction authority start count offset).completedAt)
+          authority = true
+  acceptedBlockPersistsWhileStalled :
+    ∀ baseline authority round accepted later,
+      accepted ≤ later →
+      view.commitIndex (trace later) = baseline →
+      view.quorumBlockLayerAuthors round (trace accepted) authority = true →
+      view.quorumBlockLayerAuthors round (trace later) authority = true
+
+/-- The local proposal, network delivery, and local acceptance bounds make one
+recovery block visible by the common layer-window deadline. -/
+theorem recovery_block_flow_visible_at_deadline
+    {State : Type} {protocolPacket : Packet → Prop}
+    {trace : Trace State}
+    {network : PartialSynchrony protocolPacket}
+    {view : CommitProgressRecoveryView State}
+    {thresholds : Thresholds view.authorityCount view.stake}
+    {protocolAction : LocalConsensusAction → Prop}
+    {processing : BoundedLocalProcessing network protocolAction}
+    {entry : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing}
+    {baseRound : Time → Nat} {windowBound : Nat → Time}
+    (flow : RecoveryBlockFlow trace network view thresholds protocolAction
+      processing entry baseRound windowBound)
+    {baseline authority start count offset : Nat}
+    (afterGst : network.gst ≤ start)
+    (recoveryAtStart :
+      RecoveryQuorumAt view thresholds baseline (trace start))
+    (offsetInWindow : offset < count)
+    (authorityInRange : authority < view.authorityCount)
+    (authorityRecovering :
+      view.correctRecoveryAuthorities (trace start) authority = true) :
+    let deadline := start + windowBound count
+    CommitAdvancedFrom view baseline (trace deadline) ∨
+      view.quorumBlockLayerAuthors
+        (baseRound start + offset) (trace deadline) authority = true := by
+  let proposal := flow.proposalAction authority start count offset
+  let packet := flow.blockPacket authority start count offset
+  let accept := flow.acceptAction authority start count offset
+  let deadline := start + windowBound count
+  have parentQuorum := flow.parentQuorumAvailableAtProposalReady baseline authority
+    start count offset recoveryAtStart offsetInWindow authorityInRange
+    authorityRecovering
+  have proposalValid : protocolAction proposal :=
+    flow.proposalActionEnabledByParentQuorum authority start count offset
+      offsetInWindow authorityInRange authorityRecovering parentQuorum
+  have proposalAfterGst : network.gst ≤ proposal.enabledAt := by
+    rw [flow.proposalActionEnabledAt authority start count offset]
+    exact Nat.le_trans afterGst
+      (flow.proposalReadyAfterStart start count offset)
+  have proposalCompletion :=
+    processing.postGstCompletion proposal proposalValid proposalAfterGst
+  have packetValid : protocolPacket packet :=
+    flow.blockPacketIsProtocolPacket authority start count offset
+      offsetInWindow authorityInRange authorityRecovering
+  have packetAfterGst : network.gst ≤ packet.sentAt := by
+    rw [flow.blockPacketSentAtProposalCompletion authority start count offset]
+    exact Nat.le_trans proposalAfterGst proposalCompletion.1
+  have delivery := network.postGstDelivery packet packetValid packetAfterGst
+  have acceptValid : protocolAction accept :=
+    flow.acceptActionIsLocalConsensus authority start count offset
+      offsetInWindow authorityInRange authorityRecovering
+  have acceptAfterGst : network.gst ≤ accept.enabledAt := by
+    rw [flow.acceptActionEnabledAtDelivery authority start count offset]
+    exact Nat.le_trans packetAfterGst delivery.1
+  have acceptCompletion :=
+    processing.postGstCompletion accept acceptValid acceptAfterGst
+  have acceptBeforeDeadline : accept.completedAt ≤ deadline := by
+    have proposalBound := proposalCompletion.2
+    rw [flow.proposalActionEnabledAt authority start count offset] at proposalBound
+    have proposalBound' :
+        proposal.completedAt ≤
+          flow.proposalReadyAt start count offset + processing.epsilon := by
+      simpa [proposal] using proposalBound
+    have deliveryBound := delivery.2
+    rw [flow.blockPacketSentAtProposalCompletion authority start count offset]
+      at deliveryBound
+    have deliveryBound' :
+        packet.deliveredAt ≤ proposal.completedAt + network.delta := by
+      simpa [packet, proposal] using deliveryBound
+    have acceptBound := acceptCompletion.2
+    rw [flow.acceptActionEnabledAtDelivery authority start count offset]
+      at acceptBound
+    have acceptBound' :
+        accept.completedAt ≤ packet.deliveredAt + processing.epsilon := by
+      simpa [accept, packet] using acceptBound
+    have covers := flow.deadlineCoversFlow start count offset offsetInWindow
+    have covers' :
+        flow.proposalReadyAt start count offset + processing.epsilon +
+            network.delta + processing.epsilon ≤ deadline := by
+      simpa [deadline] using covers
+    calc
+      accept.completedAt ≤ packet.deliveredAt + processing.epsilon :=
+        acceptBound'
+      _ ≤ (proposal.completedAt + network.delta) + processing.epsilon :=
+        Nat.add_le_add_right deliveryBound' processing.epsilon
+      _ ≤ ((flow.proposalReadyAt start count offset + processing.epsilon) +
+            network.delta) + processing.epsilon :=
+        Nat.add_le_add_right
+          (Nat.add_le_add_right proposalBound' network.delta)
+          processing.epsilon
+      _ ≤ deadline := covers'
+  have result := flow.acceptedBlockResult baseline authority start count offset
+    recoveryAtStart offsetInWindow authorityInRange authorityRecovering
+  rcases result with advancedAtAccept | acceptedBlock
+  · have commitMonotone := entry.commitIndexMonotone
+      accept.completedAt deadline acceptBeforeDeadline
+    have advancedAccept :
+        baseline < view.commitIndex (trace accept.completedAt) := by
+      simpa [CommitAdvancedFrom, accept] using advancedAtAccept
+    have advancedDeadline :
+        baseline < view.commitIndex (trace deadline) :=
+      Nat.lt_of_lt_of_le advancedAccept commitMonotone
+    exact Or.inl advancedDeadline
+  · by_cases advancedAtDeadline :
+        baseline < view.commitIndex (trace deadline)
+    · exact Or.inl advancedAtDeadline
+    · have startBeforeDeadline : start ≤ deadline := by simp [deadline]
+      have baselineLeDeadline :
+          baseline ≤ view.commitIndex (trace deadline) := by
+        rw [← recoveryAtStart.1]
+        exact entry.commitIndexMonotone start deadline startBeforeDeadline
+      have atBaseline : view.commitIndex (trace deadline) = baseline := by omega
+      have acceptedAtAction :
+          view.quorumBlockLayerAuthors (baseRound start + offset)
+            (trace accept.completedAt) authority = true := by
+        simpa [accept] using acceptedBlock
+      exact Or.inr (flow.acceptedBlockPersistsWhileStalled baseline authority
+        (baseRound start + offset) accept.completedAt deadline
+        acceptBeforeDeadline atBaseline acceptedAtAction)
+
+/-- Local proposal and delivery rules for a finite recovery block-layer window.
+
+The central rule is pointwise: one validator that is in recovery at `start`
+produces and delivers its block for each required round by the common window
+deadline, unless a commit advances first. A Rust refinement must derive this rule
+from the next-round target, an immediate-parent quorum, block synchronization,
+bounded local processing, persistence before broadcast, and post-GST delivery.
+Lean derives the quorum stake and the consecutive block-layer window. -/
+structure RecoveryLayerProductionProcess
+    {State : Type} {protocolPacket : Packet → Prop}
+    (trace : Trace State)
+    (network : PartialSynchrony protocolPacket)
+    (view : CommitProgressRecoveryView State)
+    (thresholds : Thresholds view.authorityCount view.stake)
+    (protocolAction : LocalConsensusAction → Prop)
+    (processing : BoundedLocalProcessing network protocolAction)
+    (entry : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing) where
+  baseRound : Time → Nat
+  windowBound : Nat → Time
+  recoveryBlockVisibleAtDeadline :
+    ∀ baseline start count offset authority,
+      network.gst ≤ start →
+      RecoveryQuorumAt view thresholds baseline (trace start) →
+      offset < count →
+      authority < view.authorityCount →
+      view.correctRecoveryAuthorities (trace start) authority = true →
+      let deadline := start + windowBound count
+      CommitAdvancedFrom view baseline (trace deadline) ∨
+        view.quorumBlockLayerAuthors
+          (baseRound start + offset) (trace deadline) authority = true
+  layerContainsOnlyRecoveringValidators :
+    ∀ start count offset,
+      offset < count →
+      let deadline := start + windowBound count
+      VoterSet.SubsetAt view.authorityCount
+        (view.quorumBlockLayerAuthors
+          (baseRound start + offset) (trace deadline))
+        (view.correctRecoveryAuthorities (trace deadline))
+  layerRoundIsPendingAtDeadline :
+    ∀ baseline start count offset,
+      RecoveryQuorumAt view thresholds baseline (trace start) →
+      offset < count →
+      let deadline := start + windowBound count
+      view.commitIndex (trace deadline) = baseline →
+      view.pendingLeaderRound (baseRound start + offset) (trace deadline)
+  layerIsRetainedAtDeadline :
+    ∀ baseline start count offset,
+      RecoveryQuorumAt view thresholds baseline (trace start) →
+      offset < count →
+      let deadline := start + windowBound count
+      view.commitIndex (trace deadline) = baseline →
+      Retained (view.gcBoundary (trace deadline)) (baseRound start + offset)
+
+/-- Build the layer-production process from one local block-flow proof and the
+three state-mapping rules for recovery membership, pending rounds, and retention.
+-/
+def recovery_layer_production_from_block_flow
+    {State : Type} {protocolPacket : Packet → Prop}
+    {trace : Trace State}
+    {network : PartialSynchrony protocolPacket}
+    {view : CommitProgressRecoveryView State}
+    {thresholds : Thresholds view.authorityCount view.stake}
+    {protocolAction : LocalConsensusAction → Prop}
+    {processing : BoundedLocalProcessing network protocolAction}
+    {entry : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing}
+    {baseRound : Time → Nat} {windowBound : Nat → Time}
+    (flow : RecoveryBlockFlow trace network view thresholds protocolAction
+      processing entry baseRound windowBound)
+    (layerContainsOnlyRecoveringValidators :
+      ∀ start count offset,
+        offset < count →
+        let deadline := start + windowBound count
+        VoterSet.SubsetAt view.authorityCount
+          (view.quorumBlockLayerAuthors
+            (baseRound start + offset) (trace deadline))
+          (view.correctRecoveryAuthorities (trace deadline)))
+    (layerRoundIsPendingAtDeadline :
+      ∀ baseline start count offset,
+        RecoveryQuorumAt view thresholds baseline (trace start) →
+        offset < count →
+        let deadline := start + windowBound count
+        view.commitIndex (trace deadline) = baseline →
+        view.pendingLeaderRound (baseRound start + offset) (trace deadline))
+    (layerIsRetainedAtDeadline :
+      ∀ baseline start count offset,
+        RecoveryQuorumAt view thresholds baseline (trace start) →
+        offset < count →
+        let deadline := start + windowBound count
+        view.commitIndex (trace deadline) = baseline →
+        Retained (view.gcBoundary (trace deadline))
+          (baseRound start + offset)) :
+    RecoveryLayerProductionProcess trace network view thresholds protocolAction
+      processing entry where
+  baseRound := baseRound
+  windowBound := windowBound
+  recoveryBlockVisibleAtDeadline := by
+    intro baseline start count offset authority afterGst recoveryAtStart
+      offsetInWindow authorityInRange authorityRecovering
+    exact recovery_block_flow_visible_at_deadline flow afterGst recoveryAtStart
+      offsetInWindow authorityInRange authorityRecovering
+  layerContainsOnlyRecoveringValidators :=
+    layerContainsOnlyRecoveringValidators
+  layerRoundIsPendingAtDeadline := layerRoundIsPendingAtDeadline
+  layerIsRetainedAtDeadline := layerIsRetainedAtDeadline
+
+/-- Pointwise recovery proposals from quorum stake form consecutive quorum block
+layers at the process-selected base by the common deadline. -/
+theorem recovery_quorum_has_chosen_layers_by_deadline
+    {State : Type} {protocolPacket : Packet → Prop}
+    {trace : Trace State}
+    {network : PartialSynchrony protocolPacket}
+    {view : CommitProgressRecoveryView State}
+    {thresholds : Thresholds view.authorityCount view.stake}
+    {protocolAction : LocalConsensusAction → Prop}
+    {processing : BoundedLocalProcessing network protocolAction}
+    {entry : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing}
+    (production : RecoveryLayerProductionProcess trace network view thresholds
+      protocolAction processing entry)
+    (baseline count start : Nat)
+    (afterGst : network.gst ≤ start)
+    (recoveryAtStart :
+      RecoveryQuorumAt view thresholds baseline (trace start)) :
+    let deadline := start + production.windowBound count
+    CommitAdvancedFrom view baseline (trace deadline) ∨
+      (RecoveryQuorumAt view thresholds baseline (trace deadline) ∧
+        ConsecutiveQuorumBlockLayers view thresholds
+          (production.baseRound start) count (trace deadline)) := by
+  let deadline := start + production.windowBound count
+  have startBeforeDeadline : start ≤ deadline := by simp [deadline]
+  have startAtBaseline : view.commitIndex (trace start) = baseline :=
+    recoveryAtStart.1
+  have baselineLeDeadline :
+      baseline ≤ view.commitIndex (trace deadline) := by
+    rw [← startAtBaseline]
+    exact entry.commitIndexMonotone start deadline startBeforeDeadline
+  by_cases advanced : baseline < view.commitIndex (trace deadline)
+  · exact Or.inl advanced
+  · have atBaseline : view.commitIndex (trace deadline) = baseline := by omega
+    have startRecoverySubsetDeadline :
+        VoterSet.SubsetAt view.authorityCount
+          (view.correctRecoveryAuthorities (trace start))
+          (view.correctRecoveryAuthorities (trace deadline)) := by
+      intro authority authorityInRange recoveringAtStart
+      exact entry.recoveryPersistsWhileStalled baseline authority start deadline
+        startBeforeDeadline atBaseline recoveringAtStart
+    have recoveryStakeAtDeadline :
+        thresholds.quorum ≤ view.correctRecoveryStake (trace deadline) := by
+      have startStake := recoveryAtStart.2.1
+      have monotoneStake := weight_mono view.stake startRecoverySubsetDeadline
+      exact Nat.le_trans startStake monotoneStake
+    have recoveryAtDeadline :
+        RecoveryQuorumAt view thresholds baseline (trace deadline) := by
+      refine ⟨atBaseline, recoveryStakeAtDeadline, ?_, ?_⟩
+      · exact entry.recoveryAuthoritiesAreProgressing deadline
+      · exact entry.recoveryUsesNextRoundPolicy deadline
+    have layersAtDeadline :
+        ConsecutiveQuorumBlockLayers view thresholds
+          (production.baseRound start) count (trace deadline) := by
+      intro offset offsetInWindow
+      have startRecoverySubsetLayer :
+          VoterSet.SubsetAt view.authorityCount
+            (view.correctRecoveryAuthorities (trace start))
+            (view.quorumBlockLayerAuthors
+              (production.baseRound start + offset) (trace deadline)) := by
+        intro authority authorityInRange recoveringAtStart
+        have visible := production.recoveryBlockVisibleAtDeadline baseline start
+          count offset authority afterGst recoveryAtStart offsetInWindow
+          authorityInRange recoveringAtStart
+        rcases visible with advancedAtDeadline | blockVisible
+        · exact False.elim (advanced advancedAtDeadline)
+        · exact blockVisible
+      have layerStake :
+          thresholds.quorum ≤
+            view.quorumBlockLayerStake
+              (production.baseRound start + offset) (trace deadline) := by
+        have startStake := recoveryAtStart.2.1
+        have monotoneStake := weight_mono view.stake startRecoverySubsetLayer
+        exact Nat.le_trans startStake monotoneStake
+      exact ⟨production.layerRoundIsPendingAtDeadline baseline start count offset
+          recoveryAtStart offsetInWindow atBaseline,
+        layerStake,
+        production.layerContainsOnlyRecoveringValidators start count offset
+          offsetInWindow,
+        production.layerIsRetainedAtDeadline baseline start count offset
+          recoveryAtStart offsetInWindow atBaseline⟩
+    exact Or.inr ⟨recoveryAtDeadline, layersAtDeadline⟩
+
+/-- Pointwise recovery proposals from quorum stake form one consecutive quorum
+block-layer window by the common deadline. -/
+theorem recovery_quorum_reaches_layers_within
+    {State : Type} {protocolPacket : Packet → Prop}
+    {trace : Trace State}
+    {network : PartialSynchrony protocolPacket}
+    {view : CommitProgressRecoveryView State}
+    {thresholds : Thresholds view.authorityCount view.stake}
+    {protocolAction : LocalConsensusAction → Prop}
+    {processing : BoundedLocalProcessing network protocolAction}
+    {entry : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing}
+    (production : RecoveryLayerProductionProcess trace network view thresholds
+      protocolAction processing entry)
+    (baseline count : Nat) :
+    WithinAfter network.gst (production.windowBound count) trace
+      (RecoveryQuorumAt view thresholds baseline)
+      (fun state =>
+        CommitAdvancedFrom view baseline state ∨
+          RecoveryLayerWindowAt view thresholds baseline count state) := by
+  intro start afterGst recoveryAtStart
+  let deadline := start + production.windowBound count
+  have startBeforeDeadline : start ≤ deadline := by simp [deadline]
+  have result := recovery_quorum_has_chosen_layers_by_deadline production
+    baseline count start afterGst recoveryAtStart
+  rcases result with advanced | ⟨recoveryAtDeadline, layersAtDeadline⟩
+  · exact ⟨deadline, startBeforeDeadline, by simp [deadline], Or.inl advanced⟩
+  · have windowAtDeadline :
+        HasQuorumBlockLayerWindowAt view thresholds baseline count
+          (trace deadline) :=
+      ⟨recoveryAtDeadline.1, production.baseRound start, layersAtDeadline⟩
+    exact ⟨deadline, startBeforeDeadline, by simp [deadline],
+      Or.inr ⟨recoveryAtDeadline, windowAtDeadline⟩⟩
+
+/-- The bounded pointwise-production theorem gives the second unbounded recovery
+stage used by commit-progress composition. -/
+theorem recovery_quorum_to_layers
+    {State : Type} {protocolPacket : Packet → Prop}
+    {trace : Trace State}
+    {network : PartialSynchrony protocolPacket}
+    {view : CommitProgressRecoveryView State}
+    {thresholds : Thresholds view.authorityCount view.stake}
+    {protocolAction : LocalConsensusAction → Prop}
+    {processing : BoundedLocalProcessing network protocolAction}
+    {entry : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing}
+    (production : RecoveryLayerProductionProcess trace network view thresholds
+      protocolAction processing entry)
+    (baseline count : Nat) :
+    LeadsToAfter network.gst trace
+      (RecoveryQuorumAt view thresholds baseline)
+      (fun state =>
+        CommitAdvancedFrom view baseline state ∨
+          RecoveryLayerWindowAt view thresholds baseline count state) :=
+  (recovery_quorum_reaches_layers_within production baseline count).toLeadsTo
+
+/-! ### Usable anchors from timely first-slot voting -/
+
+/-- The validator in the first selected leader slot is outside the set that can
+fail to make progress. -/
+def FirstSelectedLeaderIsProgressing {State : Type}
+    (view : CommitProgressRecoveryView State)
+    (round : Nat) : State → Prop :=
+  fun state => ∃ validator,
+    (view.selectedLeaderSlots round state).head?.map
+        SelectedLeaderSlotView.validator = some validator ∧
+      view.nonProgress state validator = false
+
+/-- Direct-vote observations and the deterministic selected-slot status update.
+
+The first field is the pacing and parent-selection rule: when the first selected
+leader is progressing, every recovery block in the next round includes that
+leader's timely block. The second field maps a direct quorum to the Rust status
+used by the FlexCommitter scan. -/
+structure TimelyFirstSlotVoting {State : Type}
+    (view : CommitProgressRecoveryView State)
+    (thresholds : Thresholds view.authorityCount view.stake) where
+  directVoters : Nat → State → VoterSet
+  progressingFirstSlotIncludedByNextLayer :
+    ∀ state round validator,
+      (view.selectedLeaderSlots round state).head?.map
+          SelectedLeaderSlotView.validator = some validator →
+      view.nonProgress state validator = false →
+      VoterSet.SubsetAt view.authorityCount
+        (view.quorumBlockLayerAuthors (round + directVoteRoundOffset) state)
+        (directVoters round state)
+  directQuorumCommitsFirstSlot :
+    ∀ state round validator,
+      (view.selectedLeaderSlots round state).head?.map
+          SelectedLeaderSlotView.validator = some validator →
+      thresholds.quorum ≤
+        weight view.authorityCount view.stake (directVoters round state) →
+      ∃ tail,
+        view.selectedLeaderSlots round state =
+          { validator := validator, status := .commit } :: tail
+
+/-- A progressing first selected leader and one next-round quorum block layer make
+the round a usable anchor. -/
+theorem timely_progressing_first_slot_is_usable
+    {State : Type}
+    (view : CommitProgressRecoveryView State)
+    (thresholds : Thresholds view.authorityCount view.stake)
+    (voting : TimelyFirstSlotVoting view thresholds)
+    {state : State} {round : Nat}
+    (progressing : FirstSelectedLeaderIsProgressing view round state)
+    (voteLayer : RetainedQuorumBlockLayer view thresholds
+      (round + directVoteRoundOffset) state) :
+    UsableAnchorRound view round state := by
+  rcases progressing with ⟨validator, firstSlot, validatorProgressing⟩
+  have layerInVoters :=
+    voting.progressingFirstSlotIncludedByNextLayer state round validator
+      firstSlot validatorProgressing
+  have voterStake :
+      thresholds.quorum ≤
+        weight view.authorityCount view.stake (voting.directVoters round state) := by
+    have layerStake := voteLayer.2.1
+    have layerStakeLeVoters := weight_mono view.stake layerInVoters
+    exact Nat.le_trans layerStake layerStakeLeVoters
+  rcases voting.directQuorumCommitsFirstSlot state round validator firstSlot
+      voterStake with ⟨tail, committedFirst⟩
+  unfold UsableAnchorRound CommitProgressRecoveryView.selectedLeaderSlotStatuses
+  rw [committedFirst]
+  simp [UsableAnchorOrder]
+
+/-- A consecutive run of progressing first selected leaders gives the required
+usable anchors when the next-round quorum block layers are present. -/
+theorem progressing_first_slot_run_gives_usable_anchors
+    {State : Type}
+    (view : CommitProgressRecoveryView State)
+    (thresholds : Thresholds view.authorityCount view.stake)
+    (voting : TimelyFirstSlotVoting view thresholds)
+    {state : State} {base anchorCount : Nat}
+    (layers : ConsecutiveQuorumBlockLayers view thresholds base
+      (requiredRecoveryLayerCount anchorCount) state)
+    (progressingRun : ∀ offset, offset < anchorCount →
+      FirstSelectedLeaderIsProgressing view (base + offset) state) :
+    ConsecutiveUsableAnchors view base anchorCount state := by
+  intro offset offsetInRun
+  have voteLayer := layers (offset + directVoteRoundOffset) (by
+    simp [requiredRecoveryLayerCount, directVoteRoundOffset]
+    omega)
+  have voteLayerAtRound :
+      RetainedQuorumBlockLayer view thresholds
+        ((base + offset) + directVoteRoundOffset) state := by
+    simpa [Nat.add_assoc] using voteLayer
+  exact timely_progressing_first_slot_is_usable view thresholds voting
+    (progressingRun offset offsetInRun) voteLayerAtRound
+
+/-- A covered recovery layer window and a progressing first-slot run give the
+covered usable anchor window consumed by the executable FlexCommitter theorem. -/
+theorem progressing_first_slot_run_gives_covered_anchor_window
+    {State : Type}
+    (view : CommitProgressRecoveryView State)
+    (thresholds : Thresholds view.authorityCount view.stake)
+    (voting : TimelyFirstSlotVoting view thresholds)
+    {state : State} {baseline depth baseIndex : Nat}
+    (atBaseline : AtCommitIndex view baseline state)
+    (baseIndexScanned : baseIndex ≤ view.highestIndirectDecisionIndex state)
+    (windowInRange : baseIndex + depth < view.pendingRoundCount state)
+    (layers : ConsecutiveQuorumBlockLayers view thresholds
+      (view.firstPendingLeaderRound state + baseIndex)
+      (requiredRecoveryLayerCount (depth + 1)) state)
+    (progressingRun : ∀ offset, offset < depth + 1 →
+      FirstSelectedLeaderIsProgressing view
+        (view.firstPendingLeaderRound state + baseIndex + offset) state) :
+    HasCoveredUsableAnchorWindowAt view baseline depth (depth + 1) state := by
+  refine ⟨atBaseline, baseIndex, baseIndexScanned, windowInRange, ?_⟩
+  have anchors := progressing_first_slot_run_gives_usable_anchors
+    view thresholds voting layers progressingRun
+  intro offset offsetInRun
+  exact anchors offset offsetInRun
+
+/-- The almost-sure trace property supplied by independent uniform first-slot
+sampling.
+
+After a recovery layer window exists, it eventually selects a later candidate
+window whose first selected leader slots are progressing, unless the commit index
+has already changed. It selects only the leader order. It does not assume votes,
+anchors, or a commit result. A probability model must prove that almost every
+sampled trace has this property. -/
+structure FirstSlotSamplingTrace
+    {State : Type} {protocolPacket : Packet → Prop}
+    (trace : Trace State)
+    (network : PartialSynchrony protocolPacket)
+    (view : CommitProgressRecoveryView State)
+    (thresholds : Thresholds view.authorityCount view.stake)
+    (protocolAction : LocalConsensusAction → Prop)
+    (processing : BoundedLocalProcessing network protocolAction)
+    (entry : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing)
+    (production : RecoveryLayerProductionProcess trace network view thresholds
+      protocolAction processing entry)
+    (anchorCount : Nat) where
+  eventuallyProgressingCandidateWindow :
+    ∀ baseline start,
+      network.gst ≤ start →
+      RecoveryLayerWindowAt view thresholds baseline
+        (requiredRecoveryLayerCount anchorCount) (trace start) →
+      ∃ candidate, start ≤ candidate ∧
+        let deadline := candidate +
+          production.windowBound (requiredRecoveryLayerCount anchorCount)
+        view.commitIndex (trace deadline) = baseline →
+        ∀ offset, offset < anchorCount →
+          FirstSelectedLeaderIsProgressing view
+            (production.baseRound candidate + offset) (trace deadline)
+
+/-- Mapping from the process-selected candidate round to the pending-round array
+and indirect scan used by FlexCommitter. -/
+structure RecoveryAnchorWindowMapping
+    {State : Type} {protocolPacket : Packet → Prop}
+    (trace : Trace State)
+    (network : PartialSynchrony protocolPacket)
+    (view : CommitProgressRecoveryView State)
+    (thresholds : Thresholds view.authorityCount view.stake)
+    (protocolAction : LocalConsensusAction → Prop)
+    (processing : BoundedLocalProcessing network protocolAction)
+    (entry : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing)
+    (production : RecoveryLayerProductionProcess trace network view thresholds
+      protocolAction processing entry)
+    (depth : Nat) where
+  baseIndex : Time → Nat
+  chosenBaseMatchesPendingRound :
+    ∀ baseline start,
+      RecoveryQuorumAt view thresholds baseline (trace start) →
+      let deadline := start + production.windowBound
+        (requiredRecoveryLayerCount (depth + 1))
+      view.commitIndex (trace deadline) = baseline →
+      production.baseRound start =
+        view.firstPendingLeaderRound (trace deadline) + baseIndex start
+  chosenBaseIndexIsScanned :
+    ∀ baseline start,
+      RecoveryQuorumAt view thresholds baseline (trace start) →
+      let deadline := start + production.windowBound
+        (requiredRecoveryLayerCount (depth + 1))
+      view.commitIndex (trace deadline) = baseline →
+      baseIndex start ≤ view.highestIndirectDecisionIndex (trace deadline)
+  chosenWindowIsInRange :
+    ∀ baseline start,
+      RecoveryQuorumAt view thresholds baseline (trace start) →
+      let deadline := start + production.windowBound
+        (requiredRecoveryLayerCount (depth + 1))
+      view.commitIndex (trace deadline) = baseline →
+      baseIndex start + depth < view.pendingRoundCount (trace deadline)
+
+/-- Direct state rules for Rust's pending-round array and descending scan. -/
+structure PendingRoundArrayRules {State : Type}
+    (view : CommitProgressRecoveryView State) where
+  pendingRoundIsInStoredRange :
+    ∀ state round,
+      view.pendingLeaderRound round state →
+      view.firstPendingLeaderRound state ≤ round ∧
+        round < view.firstPendingLeaderRound state +
+          view.pendingRoundCount state
+  storedIndexIsScanned :
+    ∀ state index,
+      index < view.pendingRoundCount state →
+      index ≤ view.highestIndirectDecisionIndex state
+
+/-- The zero-based index of a round in the pending-round array. -/
+def pendingRoundIndex {State : Type}
+    (view : CommitProgressRecoveryView State) (round : Nat) (state : State) : Nat :=
+  round - view.firstPendingLeaderRound state
+
+/-- One pending leader round maps to one in-range index visited by the indirect
+scan. -/
+theorem pending_round_maps_to_scanned_index
+    {State : Type}
+    (view : CommitProgressRecoveryView State)
+    (rules : PendingRoundArrayRules view)
+    {state : State} {round : Nat}
+    (pending : view.pendingLeaderRound round state) :
+    round = view.firstPendingLeaderRound state +
+        pendingRoundIndex view round state ∧
+      pendingRoundIndex view round state < view.pendingRoundCount state ∧
+      pendingRoundIndex view round state ≤
+        view.highestIndirectDecisionIndex state := by
+  have bounds := rules.pendingRoundIsInStoredRange state round pending
+  have roundMatch :
+      round = view.firstPendingLeaderRound state +
+        pendingRoundIndex view round state := by
+    simp [pendingRoundIndex]
+    omega
+  have indexInRange :
+      pendingRoundIndex view round state <
+        view.pendingRoundCount state := by
+    simp [pendingRoundIndex]
+    omega
+  exact ⟨roundMatch, indexInRange,
+    rules.storedIndexIsScanned state _ indexInRange⟩
+
+/-- Pending-round range and scan rules construct the candidate-window mapping used
+by the recovery theorem. -/
+def recovery_anchor_window_mapping_from_pending_round_rules
+    {State : Type} {protocolPacket : Packet → Prop}
+    {trace : Trace State}
+    {network : PartialSynchrony protocolPacket}
+    {view : CommitProgressRecoveryView State}
+    {thresholds : Thresholds view.authorityCount view.stake}
+    {protocolAction : LocalConsensusAction → Prop}
+    {processing : BoundedLocalProcessing network protocolAction}
+    {entry : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing}
+    {production : RecoveryLayerProductionProcess trace network view thresholds
+      protocolAction processing entry}
+    (rules : PendingRoundArrayRules view)
+    (depth : Nat) :
+    RecoveryAnchorWindowMapping trace network view thresholds protocolAction
+      processing entry production depth where
+  baseIndex := fun start =>
+    let deadline := start + production.windowBound
+      (requiredRecoveryLayerCount (depth + 1))
+    pendingRoundIndex view (production.baseRound start) (trace deadline)
+  chosenBaseMatchesPendingRound := by
+    intro baseline start recoveryAtStart
+    dsimp
+    intro atBaseline
+    let layerCount := requiredRecoveryLayerCount (depth + 1)
+    let deadline := start + production.windowBound layerCount
+    have firstLayerPending := production.layerRoundIsPendingAtDeadline baseline
+      start layerCount 0 recoveryAtStart (by
+        simp [layerCount, requiredRecoveryLayerCount, directVoteRoundOffset])
+      atBaseline
+    have mapped := pending_round_maps_to_scanned_index view rules
+      firstLayerPending
+    simpa [deadline, layerCount] using mapped.1
+  chosenBaseIndexIsScanned := by
+    intro baseline start recoveryAtStart
+    dsimp
+    intro atBaseline
+    let layerCount := requiredRecoveryLayerCount (depth + 1)
+    let deadline := start + production.windowBound layerCount
+    have firstLayerPending := production.layerRoundIsPendingAtDeadline baseline
+      start layerCount 0 recoveryAtStart (by
+        simp [layerCount, requiredRecoveryLayerCount, directVoteRoundOffset])
+      atBaseline
+    have mapped := pending_round_maps_to_scanned_index view rules
+      firstLayerPending
+    simpa [deadline, layerCount] using mapped.2.2
+  chosenWindowIsInRange := by
+    intro baseline start recoveryAtStart
+    dsimp
+    intro atBaseline
+    let layerCount := requiredRecoveryLayerCount (depth + 1)
+    let deadline := start + production.windowBound layerCount
+    have firstLayerPending := production.layerRoundIsPendingAtDeadline baseline
+      start layerCount 0 recoveryAtStart (by
+        simp [layerCount, requiredRecoveryLayerCount, directVoteRoundOffset])
+      atBaseline
+    have lastAnchorPending := production.layerRoundIsPendingAtDeadline baseline
+      start layerCount depth recoveryAtStart (by
+        simp [layerCount, requiredRecoveryLayerCount, directVoteRoundOffset]
+        omega)
+      atBaseline
+    have firstMapped := pending_round_maps_to_scanned_index view rules
+      firstLayerPending
+    have lastBounds := rules.pendingRoundIsInStoredRange
+      (trace deadline) (production.baseRound start + depth) lastAnchorPending
+    have baseMatch :
+        production.baseRound start =
+          view.firstPendingLeaderRound (trace deadline) +
+            pendingRoundIndex view (production.baseRound start)
+              (trace deadline) := firstMapped.1
+    simpa [deadline, layerCount] using (show
+      pendingRoundIndex view (production.baseRound start) (trace deadline) +
+          depth < view.pendingRoundCount (trace deadline) by
+        omega)
+
+/-- One candidate recovery window with a progressing first-slot run, timely voting,
+and the pending-array mapping produces a covered usable anchor window by its
+deadline. -/
+theorem recovery_candidate_reaches_usable_anchors_by_deadline
+    {State : Type} {protocolPacket : Packet → Prop}
+    {trace : Trace State}
+    {network : PartialSynchrony protocolPacket}
+    {view : CommitProgressRecoveryView State}
+    {thresholds : Thresholds view.authorityCount view.stake}
+    {protocolAction : LocalConsensusAction → Prop}
+    {processing : BoundedLocalProcessing network protocolAction}
+    {entry : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing}
+    {production : RecoveryLayerProductionProcess trace network view thresholds
+      protocolAction processing entry}
+    (voting : TimelyFirstSlotVoting view thresholds)
+    {depth : Nat}
+    (mapping : RecoveryAnchorWindowMapping trace network view thresholds
+      protocolAction processing entry production depth)
+    {baseline start : Nat}
+    (afterGst : network.gst ≤ start)
+    (recoveryAtStart :
+      RecoveryQuorumAt view thresholds baseline (trace start))
+    (progressingIfStalled :
+      let deadline := start +
+        production.windowBound (requiredRecoveryLayerCount (depth + 1))
+      view.commitIndex (trace deadline) = baseline →
+      ∀ offset, offset < depth + 1 →
+        FirstSelectedLeaderIsProgressing view
+          (production.baseRound start + offset) (trace deadline)) :
+    let deadline := start +
+      production.windowBound (requiredRecoveryLayerCount (depth + 1))
+    CommitAdvancedFrom view baseline (trace deadline) ∨
+      HasCoveredUsableAnchorWindowAt view baseline depth (depth + 1)
+        (trace deadline) := by
+  let layerCount := requiredRecoveryLayerCount (depth + 1)
+  let deadline := start + production.windowBound layerCount
+  have result := recovery_quorum_has_chosen_layers_by_deadline production
+    baseline layerCount start afterGst recoveryAtStart
+  rcases result with advanced | ⟨recoveryAtDeadline, layersAtDeadline⟩
+  · exact Or.inl advanced
+  · have atBaseline := recoveryAtDeadline.1
+    have baseMatch := mapping.chosenBaseMatchesPendingRound baseline start
+      recoveryAtStart atBaseline
+    have baseScanned := mapping.chosenBaseIndexIsScanned baseline start
+      recoveryAtStart atBaseline
+    have windowInRange := mapping.chosenWindowIsInRange baseline start
+      recoveryAtStart atBaseline
+    have layersAtPendingBase :
+        ConsecutiveQuorumBlockLayers view thresholds
+          (view.firstPendingLeaderRound (trace deadline) + mapping.baseIndex start)
+          (requiredRecoveryLayerCount (depth + 1)) (trace deadline) := by
+      rw [← baseMatch]
+      exact layersAtDeadline
+    have sampledRun := progressingIfStalled atBaseline
+    have progressingAtPendingBase :
+        ∀ offset, offset < depth + 1 →
+          FirstSelectedLeaderIsProgressing view
+            (view.firstPendingLeaderRound (trace deadline) +
+              mapping.baseIndex start + offset) (trace deadline) := by
+      intro offset offsetInRun
+      rw [← baseMatch]
+      exact sampledRun offset offsetInRun
+    have covered := progressing_first_slot_run_gives_covered_anchor_window
+      view thresholds voting atBaseline baseScanned windowInRange
+      layersAtPendingBase progressingAtPendingBase
+    exact Or.inr covered
+
+/-- The bounded anchor-formation theorem gives the third unbounded recovery stage
+used by commit-progress composition. -/
+theorem recovery_layers_to_usable_anchors
+    {State : Type} {protocolPacket : Packet → Prop}
+    {trace : Trace State}
+    {network : PartialSynchrony protocolPacket}
+    {view : CommitProgressRecoveryView State}
+    {thresholds : Thresholds view.authorityCount view.stake}
+    {protocolAction : LocalConsensusAction → Prop}
+    {processing : BoundedLocalProcessing network protocolAction}
+    {entry : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing}
+    {production : RecoveryLayerProductionProcess trace network view thresholds
+      protocolAction processing entry}
+    (voting : TimelyFirstSlotVoting view thresholds)
+    {depth : Nat}
+    (sampling : FirstSlotSamplingTrace trace network view thresholds
+      protocolAction processing entry production (depth + 1))
+    (mapping : RecoveryAnchorWindowMapping trace network view thresholds
+      protocolAction processing entry production depth)
+    (baseline : Nat) :
+    LeadsToAfter network.gst trace
+      (RecoveryLayerWindowAt view thresholds baseline
+        (requiredRecoveryLayerCount (depth + 1)))
+      (fun state =>
+        CommitAdvancedFrom view baseline state ∨
+          HasCoveredUsableAnchorWindowAt view baseline depth (depth + 1) state) := by
+  intro start afterGst layerWindowAtStart
+  rcases sampling.eventuallyProgressingCandidateWindow baseline start afterGst
+      layerWindowAtStart with ⟨candidate, startBeforeCandidate, sampledRun⟩
+  have candidateAfterGst : network.gst ≤ candidate :=
+    Nat.le_trans afterGst startBeforeCandidate
+  have recoveryAtStart := layerWindowAtStart.1
+  have baselineAtStart := recoveryAtStart.1
+  have baselineLeCandidate :
+      baseline ≤ view.commitIndex (trace candidate) := by
+    rw [← baselineAtStart]
+    exact entry.commitIndexMonotone start candidate startBeforeCandidate
+  by_cases advancedAtCandidate :
+      baseline < view.commitIndex (trace candidate)
+  · exact ⟨candidate, startBeforeCandidate, Or.inl advancedAtCandidate⟩
+  · have atBaselineCandidate :
+        view.commitIndex (trace candidate) = baseline := by omega
+    have recoveryAtCandidate := recovery_quorum_persists_while_stalled entry
+      startBeforeCandidate recoveryAtStart atBaselineCandidate
+    let deadline := candidate +
+      production.windowBound (requiredRecoveryLayerCount (depth + 1))
+    have candidateBeforeDeadline : candidate ≤ deadline := by simp [deadline]
+    have result := recovery_candidate_reaches_usable_anchors_by_deadline
+      voting mapping candidateAfterGst recoveryAtCandidate sampledRun
+    exact ⟨deadline, Nat.le_trans startBeforeCandidate candidateBeforeDeadline,
+      result⟩
+
 /-- Distributed stages and the Rust mapping condition for commit progress
 recovery.
 
-The first three fields are theorem goals. The last field states that Rust records
-the commit that the executable Lean model finds.
-A complete implementation proof must derive the first three fields from partial
-synchrony, bounded post-GST local processing, recovery persistence, the next-round
-proposal policy, parent availability, pacing, and the executable direct decision
-rule. -/
+The first three fields form a stable interface for stage composition.
+`recovery_stages_from_processes` derives them from the local process, network,
+sampling, and Rust-state mapping rules above. The last field states that Rust
+records the commit that the executable Lean model finds. -/
 structure CommitProgressRecoveryStages
     {State : Type} {protocolPacket : Packet → Prop}
     (trace : Trace State)
@@ -703,9 +1862,9 @@ structure CommitProgressRecoveryStages
     (view : CommitProgressRecoveryView State)
     (thresholds : Thresholds view.authorityCount view.stake) where
   /-- Unless a commit occurs first, one set of correct validators with quorum stake
-  stays in commit progress recovery. Derive this result from local clock progress,
-  weak task fairness, bounded local processing, recovery entry, recovery
-  persistence, and the live correct stake bound. -/
+  stays in commit progress recovery. Once the stall predicate holds, derive this
+  result from bounded local processing, recovery entry, recovery persistence, and
+  the live correct stake bound. -/
   stalledToRecoveryQuorum :
     ∀ baseline,
       LeadsToAfter network.gst trace
@@ -716,8 +1875,8 @@ structure CommitProgressRecoveryStages
   /-- Unless a commit occurs first, these validators are all in commit progress
   recovery in the same proposal rounds. They produce and exchange blocks for enough
   consecutive rounds, with quorum stake in each round. Derive this result from
-  next-round proposals, parent synchronization, persistence, broadcast, and task
-  fairness. -/
+  next-round proposals, parent synchronization, persistence, broadcast, bounded
+  local processing, and post-GST delivery. -/
   recoveryQuorumToLayers :
     ∀ baseline,
       LeadsToAfter network.gst trace
@@ -754,12 +1913,77 @@ structure CommitProgressRecoveryStages
         (ModeledFlexCommitterAdvancesAt view baseline indirectCommitDepth)
         (CommitAdvancedFrom view baseline)
 
+/-- Construct the recovery-stage interface from local process rules, partial
+synchrony, bounded local processing, the sampled first-slot trace, and the
+pending-array mapping. The three distributed stage results are proved here. -/
+theorem recovery_stages_from_processes
+    {State : Type} {protocolPacket : Packet → Prop}
+    {trace : Trace State}
+    {network : PartialSynchrony protocolPacket}
+    {view : CommitProgressRecoveryView State}
+    {thresholds : Thresholds view.authorityCount view.stake}
+    {protocolAction : LocalConsensusAction → Prop}
+    {processing : BoundedLocalProcessing network protocolAction}
+    (entry : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing)
+    (production : RecoveryLayerProductionProcess trace network view thresholds
+      protocolAction processing entry)
+    (voting : TimelyFirstSlotVoting view thresholds)
+    (sampling : FirstSlotSamplingTrace trace network view thresholds
+      protocolAction processing entry production
+      (indirectCommitDepth + 1))
+    (mapping : RecoveryAnchorWindowMapping trace network view thresholds
+      protocolAction processing entry production indirectCommitDepth)
+    (rustRecordsResult : ∀ baseline,
+      LeadsToAfter network.gst trace
+        (ModeledFlexCommitterAdvancesAt view baseline indirectCommitDepth)
+        (CommitAdvancedFrom view baseline)) :
+    CommitProgressRecoveryStages trace network view thresholds where
+  stalledToRecoveryQuorum := fun baseline =>
+    stalled_to_recovery_quorum entry baseline
+  recoveryQuorumToLayers := fun baseline =>
+    recovery_quorum_to_layers production baseline
+      (requiredRecoveryLayerCount
+        (requiredRecoveryAnchorCount indirectCommitDepth))
+  recoveryLayersToUsableAnchors := fun baseline =>
+    recovery_layers_to_usable_anchors voting sampling mapping baseline
+  rustFlexCommitterResultIsRecorded := rustRecordsResult
+
+/-- Construct the recovery stages from the two direct pending-array rules instead
+of a complete candidate-window mapping. -/
+theorem recovery_stages_from_processes_and_pending_round_rules
+    {State : Type} {protocolPacket : Packet → Prop}
+    {trace : Trace State}
+    {network : PartialSynchrony protocolPacket}
+    {view : CommitProgressRecoveryView State}
+    {thresholds : Thresholds view.authorityCount view.stake}
+    {protocolAction : LocalConsensusAction → Prop}
+    {processing : BoundedLocalProcessing network protocolAction}
+    (entry : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing)
+    (production : RecoveryLayerProductionProcess trace network view thresholds
+      protocolAction processing entry)
+    (voting : TimelyFirstSlotVoting view thresholds)
+    (sampling : FirstSlotSamplingTrace trace network view thresholds
+      protocolAction processing entry production
+      (indirectCommitDepth + 1))
+    (pendingRules : PendingRoundArrayRules view)
+    (rustRecordsResult : ∀ baseline,
+      LeadsToAfter network.gst trace
+        (ModeledFlexCommitterAdvancesAt view baseline indirectCommitDepth)
+        (CommitAdvancedFrom view baseline)) :
+    CommitProgressRecoveryStages trace network view thresholds := by
+  let mapping := recovery_anchor_window_mapping_from_pending_round_rules
+    (production := production) pendingRules indirectCommitDepth
+  exact recovery_stages_from_processes entry production voting sampling mapping
+    rustRecordsResult
+
 /-- The recovery stages and Rust mapping condition compose to commit-index
 progress.
 
-This theorem is a composition lemma. It is not the end-to-end recovery liveness
-theorem because it does not derive the distributed stages from process and network
-rules. -/
+This theorem is the stable stage-composition lemma.
+`commit_progress_recovery_from_processes` derives its distributed stages from the
+process and network rules in this file. -/
 theorem commit_progress_recovery_stages_compose
     {State : Type} {protocolPacket : Packet → Prop}
     {trace : Trace State}
@@ -803,5 +2027,72 @@ theorem commit_progress_recovery_stages_compose
             (Nat.le_trans recoveryToLayers
               (Nat.le_trans layersToAnchors anchorsToCommit)),
           advanced⟩
+
+/-- End-to-end commit-progress recovery in the Lean process model.
+
+The only non-deterministic input is `FirstSlotSamplingTrace`, which is the
+almost-sure trace property of the accepted independent uniform leader-order model.
+The local structures state code-level action effects and state mappings. The final
+`rustRecordsResult` argument remains a Rust-to-Lean refinement condition. -/
+theorem commit_progress_recovery_from_processes
+    {State : Type} {protocolPacket : Packet → Prop}
+    {trace : Trace State}
+    {network : PartialSynchrony protocolPacket}
+    {view : CommitProgressRecoveryView State}
+    {thresholds : Thresholds view.authorityCount view.stake}
+    {protocolAction : LocalConsensusAction → Prop}
+    {processing : BoundedLocalProcessing network protocolAction}
+    (entry : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing)
+    (production : RecoveryLayerProductionProcess trace network view thresholds
+      protocolAction processing entry)
+    (voting : TimelyFirstSlotVoting view thresholds)
+    (sampling : FirstSlotSamplingTrace trace network view thresholds
+      protocolAction processing entry production
+      (indirectCommitDepth + 1))
+    (mapping : RecoveryAnchorWindowMapping trace network view thresholds
+      protocolAction processing entry production indirectCommitDepth)
+    (rustRecordsResult : ∀ baseline,
+      LeadsToAfter network.gst trace
+        (ModeledFlexCommitterAdvancesAt view baseline indirectCommitDepth)
+        (CommitAdvancedFrom view baseline))
+    (baseline : Nat) :
+    LeadsToAfter network.gst trace
+      (CommitStalledAt view baseline)
+      (CommitAdvancedFrom view baseline) := by
+  let stages := recovery_stages_from_processes entry production voting sampling
+    mapping rustRecordsResult
+  exact commit_progress_recovery_stages_compose stages
+
+/-- End-to-end commit progress from local processes and the two direct
+pending-array rules. -/
+theorem commit_progress_recovery_from_processes_and_pending_round_rules
+    {State : Type} {protocolPacket : Packet → Prop}
+    {trace : Trace State}
+    {network : PartialSynchrony protocolPacket}
+    {view : CommitProgressRecoveryView State}
+    {thresholds : Thresholds view.authorityCount view.stake}
+    {protocolAction : LocalConsensusAction → Prop}
+    {processing : BoundedLocalProcessing network protocolAction}
+    (entry : RecoveryEntryProcess trace network view thresholds
+      protocolAction processing)
+    (production : RecoveryLayerProductionProcess trace network view thresholds
+      protocolAction processing entry)
+    (voting : TimelyFirstSlotVoting view thresholds)
+    (sampling : FirstSlotSamplingTrace trace network view thresholds
+      protocolAction processing entry production
+      (indirectCommitDepth + 1))
+    (pendingRules : PendingRoundArrayRules view)
+    (rustRecordsResult : ∀ baseline,
+      LeadsToAfter network.gst trace
+        (ModeledFlexCommitterAdvancesAt view baseline indirectCommitDepth)
+        (CommitAdvancedFrom view baseline))
+    (baseline : Nat) :
+    LeadsToAfter network.gst trace
+      (CommitStalledAt view baseline)
+      (CommitAdvancedFrom view baseline) := by
+  let stages := recovery_stages_from_processes_and_pending_round_rules entry
+    production voting sampling pendingRules rustRecordsResult
+  exact commit_progress_recovery_stages_compose stages
 
 end Mysticeti

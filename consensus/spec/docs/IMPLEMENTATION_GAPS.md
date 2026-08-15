@@ -35,9 +35,11 @@ gap. The third category is a behavior contract for future changes.
 
 This is a confirmed implementation gap and an activation blocker. The strong Lean
 liveness theorem uses a catch-up condition for old leader opportunities. The new
-Lean recovery result proves the status-level FlexCommitter result, but it still has
-three open distributed stages and one Rust mapping condition. It is not an
-end-to-end liveness theorem for the current Rust code.
+Lean process theorem proves recovery-quorum formation, consecutive quorum block
+layers, usable-anchor formation, and commit-index progress from local action and
+network contracts. It is not a liveness theorem for the current Rust code because
+the recovery policy is not implemented and the Rust-to-Lean state mapping is not
+machine checked.
 
 [`ThresholdClock::add_block`](../../core/src/threshold_clock.rs) accepts one block
 from a future round. It clears the old aggregator and moves the local clock to that
@@ -78,8 +80,11 @@ The current Rust code does not have these parts:
   network and processing bound;
 - one exact local event that starts each recovery pacing interval, and a proof that
   bounds proposal skew from that event during a stable recovery period;
-- proofs from the local process and network contracts to recovery overlap, quorum
-  block layers, and a covered usable anchor window;
+- Rust mappings for the local recovery-entry action, immediate-parent quorum
+  readiness, a common execution-derived layer base, proposal persistence and
+  broadcast, block acceptance, timely parent inclusion, pending rounds, and
+  retained evidence. For the pending array, verify that each pending leader round
+  is in the stored range and that the indirect scan visits each stored index;
 - deterministic simulation tests for schedule changes, stake bounds, selective
   delivery, synchronization, GC, restart, and future timestamps.
 

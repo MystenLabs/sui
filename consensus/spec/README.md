@@ -27,7 +27,11 @@ result.
 Commit progress recovery is one liveness component. Its executable status-level
 model proves that an in-range window of `depth + 1` usable anchor rounds makes the
 complete descending `FlexCommitter` scan find a commit candidate and increase its
-modeled commit index. The end-to-end distributed recovery theorem is still open.
+modeled commit index. The process model now also proves how local recovery entry,
+next-round block flow, quorum block layers, timely first-slot voting, and an
+eventual favorable leader-order window compose to commit-index progress. The
+recovery policy is not yet implemented in Rust, and the Rust-to-Lean state mapping
+is not machine checked.
 
 The proof model separates the validator set, the leader schedule, the round leader
 selection, and each selected leader slot. Current v3 uses the full leader schedule

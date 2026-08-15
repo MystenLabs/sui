@@ -454,12 +454,18 @@ other open conditions define the remaining refinement and environment boundary.
 - **Status:** Known mismatch.
 - **Effect if false:** Liveness.
 - **Lean use:** `NextRoundProposalTargets` models the local proposal target.
-  `CommitProgressRecoveryStages` names three open distributed stages and one Rust
-  mapping condition.
+  `RecoveryEntryProcess` and `stalled_reaches_recovery_quorum_within` derive a
+  recovery quorum from one local entry action per validator.
+  `RecoveryBlockFlow`, `recovery_block_flow_visible_at_deadline`, and
+  `recovery_quorum_has_chosen_layers_by_deadline` derive consecutive quorum block
+  layers from proposal, delivery, and acceptance actions.
+  `timely_progressing_first_slot_is_usable` derives a usable anchor from a timely
+  first-slot block and its next-round quorum votes.
+  `recovery_layers_to_usable_anchors` uses the accepted eventual sampling trace.
   `covered_usable_anchor_window_advances_modeled_flex_committer` and
   `full_flex_anchor_window_advances_commit_index` prove the deterministic
-  FlexCommitter result. `commit_progress_recovery_stages_compose` proves that the
-  remaining stages compose. It is not the end-to-end liveness theorem.
+  FlexCommitter result. `commit_progress_recovery_from_processes` composes these
+  results into commit-index progress in the Lean process model.
 - **Rust evidence:** `DagState::last_commit_timestamp_ms` exposes the current
   in-memory commit timestamp. `DagState::flush` makes buffered commits durable, and
   `DagState::new` loads the last flushed commit after restart. `Context::clock`
@@ -486,16 +492,21 @@ apply to every Rust fact in this section.
 | **Present in Rust, but not fully verified** | The Rust pending-round array, slot order, status updates, scan bounds, GC retention, and commit construction appear to implement the Lean model. A manual code review supports the mapping. It has no machine-checked Rust-to-Lean proof and no single old-prefix recovery-window regression test. |
 | **Verified in the current Rust code; preserve this behavior** | `FlexCommitter::try_commit` runs the direct rule, then the descending indirect rule when needed, finds a commit round, and builds the commit. `Core::try_commit_v3` passes each returned commit to `Core::post_commit`, and `post_commit` adds it to `DagState`. The focused Rust tests for these functions and the Core commit-index test pass. Future changes can refactor the code, but they must preserve this result or update the Lean model and tests. |
 
-- **Discharge:** Implement the local rule. Then prove these results in Lean. Unless
-  a commit occurs first, one set of correct validators with quorum stake stays in
-  commit progress recovery. These validators are all in commit progress recovery in
-  the same proposal rounds, and they produce and exchange blocks for enough
-  consecutive rounds, with quorum stake in each round. Eventually, enough
-  consecutive rounds start with a correct leader whose block gets enough
-  next-round votes for FlexCommitter to resolve older undecided rounds. The
-  status-level FlexCommitter result is discharged in Lean.
-  The current Rust call path records this result. Weak task fairness is
-  still needed so that Core processes input events; it is not needed for a separate
+- **Discharge:** Implement the local recovery rule and map each local Rust event to
+  the corresponding Lean action or state effect. In particular, prove recovery
+  entry and persistence, immediate-parent quorum availability for each next-round
+  proposal, a common execution-derived layer base, persistence before broadcast,
+  block acceptance and retention, and timely inclusion of the first selected
+  leader block. Verify that each pending round is in Rust's stored pending-round
+  range and that the indirect scan visits every stored index. Lean then derives the
+  complete candidate-window mapping. Accept
+  `FirstSlotSamplingTrace` as the almost-sure trace result of
+  `ASM-LIVE-FIRST-SLOT-SAMPLING`, or add a probability model that derives it.
+  The high-level recovery quorum, quorum block layer, usable anchor, and
+  commit-progress implications are now discharged in Lean relative to these local
+  contracts.
+  The current Rust call path records the final result. Weak task fairness is still
+  needed so that Core processes input events; it is not needed for a separate
   action between `try_commit` and `post_commit`. Keep the Rust-to-Lean state mapping
   as a mapping obligation. Add one focused regression test with an old
   undecided prefix and the required usable anchor window. The test must show that
@@ -562,10 +573,13 @@ apply to every Rust fact in this section.
 - **Status:** Accepted modeling assumption.
 - **Effect if false:** Liveness.
 - **Lean use:** The deterministic Lean trace does not model probability.
-  `CommitProgressRecoveryStages.recoveryLayersToUsableAnchors` is the open theorem
-  that must use this assumption with post-GST delivery and adaptive pacing. A future
-  probabilistic model can prove that the failure probability after `j` disjoint
-  three-round runs is `(1 - p^3)^j`, which approaches zero.
+  `FirstSlotSamplingTrace` states the almost-sure trace consequence: after recovery
+  layers exist, an eventual candidate window has the required consecutive
+  progressing first slots unless a commit already occurred.
+  `recovery_layers_to_usable_anchors` combines this trace property with post-GST
+  delivery, recovery production, and timely voting. A future probability model can
+  prove that the failure probability after `j` disjoint three-round runs is
+  `(1 - p^3)^j`, which approaches zero.
 - **Rust evidence:** `FlexCommitter` seeds `StdRng` from the round number and
   shuffles the complete ordered leader schedule for each pending round. All correct
   validators with the same schedule compute the same deterministic permutation.
@@ -652,8 +666,10 @@ apply to every Rust fact in this section.
 - **Type:** Runtime environment.
 - **Status:** Environmental assumption.
 - **Effect if false:** Liveness.
-- **Lean use:** A future transition model will use weak fairness to prove local
-  enabled actions run. The current stage composition does not model the scheduler.
+- **Lean use:** `BoundedLocalProcessing` includes scheduler progress for each
+  covered recovery action. Weak fairness remains necessary for continuously
+  enabled retry loops and protocol tasks that do not have a finite response bound.
+  The Lean model does not represent Tokio scheduling directly.
 - **Rust evidence:** Tokio tasks, channels, retry loops, and monitors implement the
   work. The Lean trace does not model scheduling, shutdown, queue capacity, or task
   failure.
@@ -679,6 +695,9 @@ apply to every Rust fact in this section.
   `protocol_packet_becomes_locally_visible` uses `delta + epsilon`.
   `protocol_packet_becomes_locally_visible_before_two_delays` uses
   `epsilon < delta`.
+  `recovery_wait_eventually_covers_block_visibility` proves that an unbounded
+  recovery wait eventually covers the difference between proposal send times, one
+  message delay, and one local acceptance action.
   Weak task fairness alone cannot ensure that a correct first-slot proposal runs
   and becomes visible before the next-round proposals.
 - **Rust evidence:** The receive path includes task queues, blocking-pool

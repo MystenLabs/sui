@@ -193,20 +193,20 @@ This behavior does not require a durable recovery-mode flag.
 
 The protocol does not select or certify one recovery round `R`.
 
-The proof must derive recovery overlap from simple contracts. If no commit occurs,
-each correct local clock continues to advance, each continuously enabled recovery
-task eventually runs, and an entered validator stays in recovery. If stable correct,
-non-crashed validators have quorum stake, they therefore are eventually in recovery
-at the same time. Their entry times can differ.
+The Lean process theorem derives recovery overlap from local entry actions and
+recovery persistence. If no commit occurs, each enabled entry action completes and
+an entered validator stays in recovery. If stable correct, non-crashed validators
+have quorum stake, they are eventually in recovery at the same time. Their entry
+times can differ.
 
-The refinement proof must show that a round `R` exists during that overlap. It must
-not assume that Core knows `R` in advance. A valid block at round `R + 1` already
-has quorum parents in round `R`, so normal block validity supplies one quorum block
-layer. It does not supply the complete recovery window.
+`RecoveryLayerProductionProcess.baseRound` is the execution-derived round `R`
+during that overlap. Core does not know or certify `R` in advance. A valid block at
+round `R + 1` already has quorum parents in round `R`, so normal block validity
+supplies one quorum block layer. It does not supply the complete recovery window.
 
-This overlap argument is not yet a complete v3 liveness proof. The proof must also
-show that later high-round blocks cannot keep the correct validators on different
-recovery layers forever.
+The Lean layer theorem uses the next-round proposal and parent-ready contracts to
+show that later high-round blocks do not change the recovery targets. The Rust
+refinement must show that the implementation preserves these contracts.
 
 ## Recovery distances
 
@@ -489,10 +489,11 @@ slot. A direct commit status can act as an indirect anchor before Core builds a
 commit from it. The reverse scan uses later anchors to make older selected leader
 slots final.
 
-The proof must show that recovery repeatedly creates enough usable anchor rounds
-despite Byzantine vote splits. For a correct validator in the first selected leader
-slot, the local direct-decision lemma needs quorum stake of next-round blocks to
-reference its block. Partial synchrony can give this result only when:
+The Lean proof shows that recovery creates enough usable anchor rounds despite
+Byzantine vote splits when the local timing and parent-selection contracts hold.
+For a correct validator in the first selected leader slot, the local direct-decision
+lemma needs quorum stake of next-round blocks to reference its block. Partial
+synchrony gives this result only when:
 
 - local consensus computation takes at most `epsilon` time;
 - the correct first-slot block is delivered and becomes visible within
@@ -742,10 +743,11 @@ round.
 [`CommitProgressRecovery.lean`](../lean/Mysticeti/CommitProgressRecovery.lean) keeps
 commit progress recovery separate from the strong theorem for old leader blocks.
 
-The current theorem is `commit_progress_recovery_stages_compose`. It proves that
-three distributed stages and one Rust mapping condition compose to commit-index
-progress. It does not prove the distributed stages from the network and process
-rules.
+`commit_progress_recovery_stages_compose` is the stable stage-composition theorem.
+`commit_progress_recovery_from_processes` now derives the three distributed stages
+from per-validator action rules, post-GST delivery, bounded local processing,
+timely voting, an eventual favorable leader-order trace, and state-mapping rules.
+It then proves commit-index progress in the Lean process model.
 
 The Lean model defines or proves these facts:
 
@@ -775,10 +777,23 @@ The Lean model defines or proves these facts:
   its highest known own proposal round, and that target cannot skip forward or
   reuse an old round;
 - on the no-progress branch, each stage ends at the baseline commit index;
-- the three distributed stages and Rust mapping condition compose to eventual
-  commit-index growth.
+- bounded local recovery-entry actions form a recovery quorum;
+- `non-progress stake + Q <= N` gives quorum stake outside the non-progress set;
+- the actual definition `Q = N - (f + c)` and the non-progress bound derive that
+  inequality;
+- an unbounded nondecreasing recovery wait eventually covers the difference
+  between proposal send times, one network-delay bound, and one local-processing
+  bound;
+- one local proposal, post-GST delivery, and local acceptance make one recovery
+  block visible by a derived deadline;
+- visible blocks from recovery quorum stake form consecutive quorum block layers;
+- a progressing first selected leader with next-round quorum votes gives one
+  usable anchor;
+- an eventual favorable first-slot run gives the required usable anchor window;
+- these results and the Rust recording condition compose to eventual commit-index
+  growth.
 
-### Proof plan from simple contracts
+### Proof structure and remaining contracts
 
 Use only these primitive environment assumptions:
 
@@ -804,7 +819,7 @@ Model these items as local transitions or deterministic functions:
 - the mapping from Rust's pending-round state and commit result to the proved
   executable `FlexCommitter` model.
 
-Then prove these distributed results. Do not add them as assumptions:
+Lean now proves these distributed results:
 
 1. Unless a commit occurs first, one set of correct validators with quorum stake
    stays in commit progress recovery. Use local clock progress, recovery
@@ -821,9 +836,33 @@ Then prove these distributed results. Do not add them as assumptions:
    beyond the complete timing bound, timely parent inclusion, the direct decision
    lemma, leader-order sampling, and retained pending-round state.
 
-The fourth deterministic result is now proved. A covered usable anchor run makes
-the executable Lean `FlexCommitter` model advance for every indirect result. Lean
-keeps one Rust mapping condition because it cannot inspect Rust source.
+The proofs do not take these three results as primitive assumptions. They use local
+action effects and state mappings that a Rust refinement must supply. The remaining
+conditions are:
+
+- the commit timestamp and local timer enable each modeled recovery-entry action;
+- continued next-round proposals expose a common execution-derived layer base, or
+  an existing higher valid block supplies the required parent layers;
+- each next-round proposal waits for an immediate-parent quorum;
+- the proposal action persists the signed block before the packet is sent;
+- block delivery enables local acceptance, and accepted recovery blocks remain
+  available while the commit index is unchanged;
+- the selected parent rule includes a timely first-slot block in each next-round
+  recovery block;
+- each candidate block round is retained and pending, and the pending-array range
+  and scan rules hold;
+- the accepted independent uniform leader-order model supplies the almost-sure
+  `FirstSlotSamplingTrace` property;
+- Rust records the commit result found by the executable Lean model.
+
+The covered usable anchor theorem remains deterministic. It makes the executable
+Lean `FlexCommitter` model advance for every indirect result. Lean keeps the final
+Rust mapping conditions because it cannot inspect Rust source.
+
+The pending-array part is reduced further. `PendingRoundArrayRules` states only
+that a pending leader round is inside the stored range and that the indirect scan
+visits every stored index. Lean calculates the zero-based candidate index and
+proves the full anchor window is in range from these two rules.
 
 ### Current FlexCommitter-to-Core path
 
@@ -879,15 +918,16 @@ supports this mapping, but the review is not a machine-checked cross-language pr
 See the
 [three implementation categories](../docs/ASSUMPTIONS.md#asm-live-commit-progress-recovery).
 
-The current Lean structure `CommitProgressRecoveryStages` names the three open
-distributed results and this Rust mapping condition. They are inputs to the
-composition lemma. They are not additional network assumptions.
+The Lean structure `CommitProgressRecoveryStages` remains a stable interface for
+the composition lemma. `recovery_stages_from_processes` now constructs its first
+three fields. These fields are no longer open distributed results.
 
-The next operational model must store the commit index, local clock, recovery state,
-highest known own proposal round, and pending actions for each validator. It must
-also record one task event per transition. The current `NextRoundProposalTargets`
-predicate states only a state invariant. It does not yet prove that a proposer runs,
-retries, or preserves this target across a threshold-clock jump.
+The Rust refinement must map the commit index, local clock, recovery state, highest
+known own proposal round, and pending actions for each validator. It must also map
+each local task event to the corresponding Lean action. The current
+`NextRoundProposalTargets` predicate states the target invariant. The local action
+contract states proposal progress after its pacing wait and parent quorum are
+ready. Rust does not yet implement this path.
 
 These items remain local refinement work:
 

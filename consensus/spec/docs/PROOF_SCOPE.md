@@ -282,16 +282,21 @@ validators enter recovery after local commit progress stalls and stay eligible
 until a commit occurs. The validators do not select a common round.
 
 [`CommitProgressRecoveryStages`](../lean/Mysticeti/CommitProgressRecovery.lean)
-names the current unproved recovery-stage results. These results are theorem goals,
-not basic assumptions. The recovery-window base is existential. Current v3 uses
-direct votes in the next round. Thus, any layer count must be derived from the
-required anchor count and the direct-vote offset.
+is the stable interface for the recovery-stage composition. The theorem
+`recovery_stages_from_processes` now constructs this interface from local process
+rules, network delivery, bounded local processing, timely voting, the accepted
+leader-order trace, and Rust-state mapping rules. The recovery-window base is
+derived from the execution. Current v3 uses direct votes in the next round. Thus,
+the layer count is derived from the required anchor count and the direct-vote
+offset.
 
 For each correct authority in the recovery quorum, the Lean view defines the only
 permitted proposal target as one round above that authority's highest known own
 proposal. A higher threshold-clock round does not change this target. The theorem
-does not yet model the transition that creates the proposal. The layer-production
-stage is also not yet derived from synchronization and weak task fairness.
+models proposal, network delivery, and acceptance as separate local and network
+actions. A Rust refinement must still show that its next-round proposal path,
+parent synchronization, persistence, and block acceptance implement these action
+effects.
 
 The recovery view separates these sets:
 
@@ -302,6 +307,13 @@ The recovery view separates these sets:
   leader schedule interval;
 - the round leader selection is a subset of the leader schedule;
 - each member of the round leader selection has one selected leader slot.
+
+`progress_stake_reaches_quorum` proves the recovery-entry stake premise from the
+standard bound `non-progress stake + Q <= N`. Thus, the process model does not need
+a separate fault-independent source of quorum live stake.
+`actual_hybrid_fault_budgets_leave_quorum` derives this inequality from the actual
+v3 definition `Q = N - (f + c)` and the bound that non-progress stake is at most
+`f + c`.
 
 Let `N` be actual validator set stake, `S` be leader schedule stake, and `P_r` be
 round leader selection stake in pending leader round `r`. The structural relation
@@ -354,8 +366,8 @@ The Rust refinement must show that block sync obtains the recent blocks before C
 evaluates the window.
 
 [`commit_progress_recovery_stages_compose`](../lean/Mysticeti/CommitProgressRecovery.lean)
-is a composition lemma. It does not prove end-to-end recovery liveness. Its inputs
-contain these three distributed results and one Rust mapping condition:
+is the stable stage-composition lemma. Its interface contains these three
+distributed results and one Rust mapping condition:
 
 1. unless a commit occurs first, one set of correct validators with quorum stake
    stays in commit progress recovery;
@@ -367,23 +379,58 @@ contain these three distributed results and one Rust mapping condition:
    undecided rounds;
 4. Rust records the commit that the executable Lean FlexCommitter model finds.
 
-The proof must derive the first three results from simple process and environment
-contracts.
-These contracts include post-GST delivery, bounded post-GST local processing, weak
-task fairness, local clock progress, the local recovery-entry rule, recovery
-persistence, the next-round proposal rule, parent synchronization, durable proposal
-storage, broadcast, a growing recovery wait, and the stated leader-order sampling
-model. The direct decision function and the `FlexCommitter` scan are deterministic
-transition models, not environmental assumptions. The status-level FlexCommitter
-scan is now proved.
+The theorem `commit_progress_recovery_from_processes` now derives the first three
+results. It uses these smaller contracts:
 
-The current Rust code satisfies the call-sequence part of the fourth
-result. There is no separate queued commit action. The
+- one local recovery-entry action per live correct validator, with persistence
+  while the commit index is unchanged;
+- one next-round proposal action after its immediate-parent quorum and pacing wait
+  are ready;
+- an unbounded nondecreasing wait that eventually covers proposal timing
+  difference, one message delay, and one local acceptance action;
+- persistence before broadcast, post-GST delivery, and one local block-acceptance
+  action;
+- pending-round and GC-retention mappings for the produced layers;
+- timely inclusion of a progressing first-slot block by the next quorum layer;
+- the deterministic direct decision rule;
+- an eventual favorable first-slot run from the accepted leader-order sampling
+  model;
+- the mapping from the candidate rounds to the pending-round array and indirect
+  scan.
+
+The proof uses `delta` for message delivery and `epsilon` for the local proposal
+and acceptance actions. The direct decision function and the `FlexCommitter` scan
+are deterministic transition models, not environmental assumptions.
+
+The following items remain Rust refinement or accepted-model boundaries. They are
+not the old distributed stage results:
+
+- prove that the local commit timestamp and timer enable the modeled entry action;
+- prove that continued next-round proposals expose a common execution-derived
+  layer base, or that an existing higher valid block already supplies the required
+  parent layers;
+- prove immediate-parent quorum availability or start synchronization before a
+  next-round proposal;
+- prove that the Rust proposal action persists and broadcasts the required block;
+- prove that recovery parent selection includes a timely first-slot block;
+- verify the two `PendingRoundArrayRules`: each pending leader round is inside the
+  stored range, and the descending indirect scan visits every stored index;
+- map retained blocks and selected leader slots to the pending array used by
+  `FlexCommitter`;
+- accept the almost-sure first-slot trace, or formalize its probability proof;
+- preserve the current Rust call path that records the modeled commit result.
+
+The current Rust code satisfies the call-sequence part of the fourth result. There
+is no separate queued commit action. The
 [design evidence](../design/commit_progress_recovery.md#current-flexcommitter-to-core-path)
 traces the call path and lists the tests that cover it. Lean does not verify Rust
 source, so the Rust-state mapping remains a mapping condition. One focused
 old-prefix recovery-window regression test is still missing. Future Rust changes
 must preserve this call path and these results, or the model and proof must change.
+
+`recovery_anchor_window_mapping_from_pending_round_rules` now calculates the
+candidate base index and proves that the anchor window is in range. The Rust
+refinement does not need to assume this complete mapping as one result.
 
 The Lean view includes an abstract committed-prefix identity. The recovery
 transition model must show when equal commit indices identify one common prefix.
@@ -462,7 +509,7 @@ conditional availability part of `ASM-LIVE-PEER-FAIRNESS`.
 `ASM-LIVE-BLOCK-SYNC` and `ASM-LIVE-PIPELINE-BOUNDS` are derived stage goals, not
 primitive assumptions.
 
-The target end-to-end commit progress recovery theorem does not use
+The end-to-end Lean commit progress recovery theorem does not use
 `ASM-LIVE-ROUND-CATCHUP`.
 
 Its primitive environment assumptions are:
@@ -504,10 +551,11 @@ These distributed protocol results remain open refinement theorems:
 1. [`ASM-LIVE-BLOCK-SYNC`](ASSUMPTIONS.md#asm-live-block-sync).
 2. [`ASM-LIVE-COMMIT-SYNC`](ASSUMPTIONS.md#asm-live-commit-sync).
 
-The recovery quorum, quorum block layers, and usable anchor window are derived proof
-goals. The status-level commit advance is proved. The current Rust call path
-implements the final local sequence, but its state mapping is not machine checked.
-None of these results is an additional network assumption.
+The recovery quorum, quorum block layers, usable anchor window, and status-level
+commit advance are now proved from the local process structures. The current Rust
+call path implements the final local sequence, but the action and state mappings
+are not machine checked. None of these results is an additional network
+assumption.
 
 The finalizer phase of `transaction_liveness` composes three more derived goals:
 `ASM-LIVE-COMMIT-SYNC`, `ASM-LIVE-FINALIZER-TRIGGER`, and
