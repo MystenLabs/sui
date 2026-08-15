@@ -27,11 +27,10 @@ See the
 proposed Rust behavior, proof obligations, and test plan.
 
 The
-[assumption ledger](ASSUMPTIONS.md#asm-live-commit-progress-recovery) separates
-this work into three categories: missing Rust logic, Rust logic that is present but
-not fully verified, and current Rust behavior that tests protect. Only the first
-category is a missing implementation feature. The second category is a verification
-gap. The third category is a behavior contract for future changes.
+[periodic Lean-to-Rust review](ASSUMPTIONS.md#periodic-lean-to-rust-refinement-review)
+gives each deterministic Rust contract a binary result. Missing items are grouped
+under commit progress recovery or another feature. Verified items have a source
+trace and focused test evidence for the reviewed revision.
 
 This is a confirmed implementation gap and an activation blocker. The strong Lean
 liveness theorem uses a catch-up condition for old leader opportunities. The new
@@ -64,29 +63,40 @@ The intermediate-proposal rule is sufficient for liveness for old leader blocks.
 It is not known to be necessary for commit-index progress. For the narrower
 property, implement the linked commit progress recovery design.
 
-The current Rust code does not have these parts:
+Commit progress recovery needs these Rust changes:
 
 - a `commit_progress_recovery_timeout` configuration value and stall trigger;
 - a named proposal mode that proposes exactly one round above the highest known own
   proposal, keeps the immediate-parent quorum check, bypasses the selected leader
   slot availability wait, and keeps schedule-independent pacing;
-- recovery state and pacing that remain keyed by commit index across future round
-  jumps;
+- commit-index-keyed in-memory recovery and pacing state that future round jumps do
+  not reset; do not make recovery proposals while the observed quorum commit index
+  is ahead, and end recovery when the epoch stops;
 - a recovery legal-frontier rule for a highest own proposal round at or below GC;
+- a rule that waits for immediate-parent quorum and requests missing parents for
+  the exact recovery target;
 - a recovery parent-selection rule that disables score-based ancestor exclusion for
   the immediate parent round and includes the locally unique available block from
-  each validator;
-- a positive symbolic post-GST processing bound `epsilon`, with
-  `epsilon < delta`, and a recovery wait that can grow beyond the applicable
-  network and processing bound;
+  each validator. It includes no block from a validator when the local DAG knows
+  an equivocation;
+- a recovery wait that can grow beyond the applicable network and processing
+  bound;
 - one exact local event that starts each recovery pacing interval, and a proof that
-  bounds proposal skew from that event during a stable recovery period;
+  bounds proposal timing differences from that event during a stable recovery
+  period.
+
+The proof and test work also need:
+
+- the accepted positive symbolic post-GST processing bound `epsilon`, with
+  `epsilon < delta`;
 - Rust mappings for the local recovery-entry action, immediate-parent quorum
   readiness, the maximum last signed round that forms the execution-derived layer
   base, proposal persistence and broadcast, block acceptance, timely parent
   inclusion, pending rounds, and
   retained evidence. For the pending array, verify that each pending leader round
-  is in the stored range and that the indirect scan visits each stored index;
+  is in the stored range and that the indirect scan visits the base of each complete
+  anchor window. Newer stored rounds can supply anchor evidence without being
+  indirect-decision targets;
 - deterministic simulation tests for schedule changes, stake bounds, selective
   delivery, synchronization, GC, restart, and future timestamps.
 
@@ -106,9 +116,11 @@ condition. `CertifiedCommit` remains an input to commit sync. Commit progress
 recovery does not require a separate certified commit prefix.
 
 The immediate-parent quorum check is not missing. `BlockVerifier` rejects a child
-without quorum stake from its immediate parent round. `BlockManager` does not accept
-a child above GC until its required parents are accepted. Keep these current
-properties and add the recovery progress proof around them.
+without quorum stake from its immediate parent round. In the ordinary live block
+path, `BlockManager` does not accept a child above GC until its listed above-GC
+parents are accepted. Certified commits use a separate verified explicit-block
+path. Keep these current properties and add the recovery progress proof around
+them.
 
 ## P0: put v3 activation in epoch protocol state
 
@@ -332,19 +344,18 @@ The proof still needs these implementation facts:
    `FlexCommitter::handle_certified_commit` path include each required accept voter
    in the exact `CommittedSubDag` sequence before the first trigger.
 6. Commit sync, replay, and recovery produce the same prefix and first trigger.
-7. A slow finalizer keeps the blocks in its pending `CommittedSubDag` values after
-   the live DAG cache removes those rounds.
 
-The constructor checks `gc_depth > 2`, and the block verifier checks
-immediate-parent quorum stake. The current proposer does not produce the signed v3
-cutoff. Implement and test that rule before the transaction GC theorem is applied
-to Rust. Then add an integration invariant that covers both v3 sub-DAG paths,
-commit-sync recovery, the pending finalizer prefix, and the exact GC boundary.
+The finalizer owns its pending `CommittedSubDag` values and copies their blocks
+into a separate map. Live DAG cache eviction does not remove these values. The open
+condition is whether every required voter enters this owned prefix on all local,
+commit-sync, replay, and restart paths.
 
-The current `CommitFinalizer` direct path reads live DAG state. A slow finalizer can
-lose a direct-decision opportunity after DAG GC. This loss does not make a false
-quorum, but it affects liveness. The modeled buffered indirect path must complete
-after this event.
+The block verifier checks immediate-parent quorum stake, but the current v3 path
+does not enforce `gc_depth > 2`. Enforce the depth condition. The current proposer
+does not produce the signed v3 cutoff. Implement and test that rule before the
+transaction GC theorem is applied to Rust. Then add an integration invariant that
+covers both v3 sub-DAG paths, commit-sync recovery, the pending finalizer prefix,
+and the exact GC boundary.
 
 ## P2: close the natural-number to Rust-integer refinement
 

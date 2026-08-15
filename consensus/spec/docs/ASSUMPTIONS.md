@@ -119,40 +119,100 @@ other open conditions define the remaining refinement and environment boundary.
 5. Recheck all implementation evidence after relevant Rust changes.
 6. Do not add a protocol result as a primitive assumption. Put an unproved result
    under an open proof obligation and list the simple contracts that must derive it.
-7. If one identifier contains mixed Rust status, separate its subclaims into
-   missing implementation, present but not fully verified, and verified behavior
-   that future changes must preserve.
+7. Give each deterministic Rust subclaim one of two results: **Missing Rust
+   behavior** or **Verified current Rust behavior**. Keep environmental assumptions
+   and accepted models in separate sections.
 
 ## Periodic Lean-to-Rust refinement review
 
-This table is the canonical list of Lean concepts that need a Rust mapping. It does
-not replace the detailed `ASM-*` entries. It identifies the Rust source and the
-current verification state for periodic review.
+This section is the canonical list of Lean concepts that need a Rust mapping. It
+does not replace the detailed `ASM-*` entries. A verified item has a source trace
+and focused test evidence at the reviewed revision. This result does not mean that
+Lean reads or verifies Rust source.
 
 Last complete source review: 2026-08-15, against the `consensus/` tree at
 `d630b4452a8`.
 
-| Review ID | Lean concept | Rust meaning and source | Current state |
+### Missing Rust behavior
+
+#### Commit progress recovery
+
+| Review ID | Missing behavior or guarantee | Current evidence |
+|---|---|---|
+| `REF-RECOVERY-ENTRY` | Start commit progress recovery from the current `DagState` commit timestamp when the stall timeout expires, the validator is not behind the observed quorum commit index, own-round recovery is complete, and the epoch is active. After restart, use the last flushed commit timestamp. Before the first commit, use the epoch start. Keep eligibility and pacing keyed to the unchanged commit index. Do not make recovery proposals while the observed quorum commit index is ahead. End recovery when the epoch stops. | Rust has no proposer recovery mode or stall trigger. The existing synchronizer stall timer is only a block-sync fallback for a commit-lagging validator. |
+| `REF-NEXT-ROUND-TARGET` | In recovery, propose only at `highestKnownOwnProposalRound + 1`. A threshold-clock jump must not change this target or reset recovery pacing. | The current proposer uses the threshold-clock round. |
+| `REF-RECOVERY-PACING` | Use a schedule-independent recovery delay that grows without a fixed limit while the commit index is unchanged. Define one local event that starts each delay. | Current leader timers are fixed for one round and reset when the threshold clock changes. |
+| `REF-RECOVERY-PARENTS` | Wait for immediate-parent quorum, request missing parents, disable score-based exclusion for the immediate parent round, and include every timely, locally unique parent block. Include no block from a validator when the local DAG knows an equivocation. | General block sync exists, but recovery attempts do not start it for their target round. Smart ancestor selection can omit a score-excluded parent after it reaches quorum. The current normal proposer can still include one primary block for a known equivocator. |
+| `REF-RECOVERY-FRONTIER` | Map each recovery validator's highest known own round to a persisted signed block and the finite causal-parent interval needed to reach the proof-selected maximum round. | Lean derives the maximum. Rust must not select or announce it. The current peer recovery path returns only a round and does not import the block or its causal history. |
+| `REF-RECOVERY-GC-FRONTIER` | Keep each exact-next target above GC, or define a safe resume rule when the highest own round is at or below GC. | No commit progress recovery legal-frontier rule exists. |
+| `REF-RECOVERY-LAYER-MAPPING` | Map recovery proposals and accepted blocks to retained pending rounds for the complete anchor window. | The recovery mode does not exist, so this state mapping cannot yet be established. |
+
+#### Other features
+
+| Review ID | Feature | Missing behavior or guarantee | Current evidence |
 |---|---|---|---|
-| `REF-EPOCH-CONFIG` | Validator set, stake, `N`, `f`, `Q`, `A`, and common protocol values | `Committee`, `Committee::new_v3`, and `ConsensusProtocolConfig` | Present, but common epoch-state enforcement is incomplete. See `ASM-SAFE-PARAMETERS`. |
-| `REF-AUTHENTICATION` | One authenticated validator identity signs one complete modeled block | Block signatures, block verification, and authenticated consensus transport | Enforced for current block fields. The unimplemented v3 transaction fields remain open. See `ASM-SAFE-AUTHENTICATION`. |
-| `REF-VOTE-DEDUP` | One validator identity counts once in one voter set | `StakeAggregator`, distinct ancestor-author checks, and leader decision voter sets | Enforced in the reviewed paths. Keep conformance vectors. See `ASM-SAFE-NON-EQUIVOCATION` and `ASM-SAFE-EVIDENCE-REFINEMENT`. |
-| `REF-COMMIT-STATE` | Commit index, committed prefix identity, and last commit timestamp | `DagState::last_commit_index`, the last commit reference, and `DagState::last_commit_timestamp_ms` | Present. The current value is in memory; `DagState::flush` supplies the restart value. |
-| `REF-RECOVERY-ENTRY` | `stallExpired` and recovery persistence at one commit index | Proposed last-commit-timestamp timer and `CommitVoteMonitor::quorum_commit_index` gate | Missing from Rust. See `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`. |
-| `REF-OWN-PROPOSAL-ROUND` | `highestKnownOwnProposalRound` | Last persisted own block plus last-known-own-block recovery | Present, but complete amnesia with the same epoch key remains outside the strict invariant. See `ASM-SAFE-NON-EQUIVOCATION`. |
-| `REF-NEXT-ROUND-TARGET` | `recoveryProposalTarget = highestKnownOwnProposalRound + 1` | Proposed named recovery mode and target-round proposer API | Missing from Rust. The current proposer uses the threshold-clock round. |
-| `REF-RECOVERY-FRONTIER` | `recoveryFrontierRound` and `RecoveryLayerProductionProcess.baseRound` | The maximum last signed round among the recovery quorum at the start of their common recovery period | A proof value only. Rust must not store, select, or announce it. The state mapping is open. |
-| `REF-PARENT-QUORUM` | Immediate-parent quorum availability | `BlockVerifier` requires quorum stake from distinct round-`R - 1` parents; `BlockManager` accepts required parents before the child | Enforced for each accepted child. See `ASM-SAFE-PARENT-QUORUM`. |
-| `REF-PARENT-SYNC` | The finite causal parent interval below the recovery frontier becomes available, or a commit occurs first | `BlockManager` missing-ancestor state and `Synchronizer` direct and periodic fetch paths | Present, but the progress theorem is open. See `ASM-LIVE-BLOCK-SYNC`. |
-| `REF-RECOVERY-PACING` | The recovery delay grows while the commit index is unchanged and eventually covers delivery and local processing | Proposed commit-index-keyed recovery timer | Missing from Rust. |
-| `REF-RECOVERY-PARENTS` | `RecoveryImmediateParentRule` | Disable score-based ancestor exclusion for the immediate parent round and include the locally unique available block from each validator | Missing from Rust. Current smart ancestor selection can omit such a block after it reaches quorum. |
-| `REF-LEADER-SCHEDULE` | Leader schedule membership and version | `NextCommitLeaderSchedule::allowed_leaders` from `LeaderScheduleV3` | Present, but the common-prefix mapping is not machine checked. See `ASM-LIVE-LEADER`. |
-| `REF-ROUND-LEADER-SELECTION` | Round leader selection and selected leader slot order | `FlexCommitter::get_or_create_round_state` creates one slot for each schedule member and permutes the order | Present, but the Lean set and ordered-list mapping is not machine checked. |
-| `REF-DIRECT-DECISION` | `DirectFirstSlotDecisionRule` and selected leader slot status | `LeaderSlotDecider::try_direct_decide` | Present and covered by focused tests. A cross-language conformance suite is still open. |
-| `REF-PENDING-ROUNDS` | First pending round, pending round count, ordered slot statuses, and highest scanned index | `PendingCommitState`, its round states, and the descending indirect scan | Present, but not machine checked against Lean. |
-| `REF-GC-BOUNDARY` | `gcBoundary`, parent retention, and decision-evidence retention | `DagState::gc_round`, `BlockManager`, and v3 sub-DAG construction | Partially verified. The complete local, sync, restart, and transaction mapping is open. See `ASM-SAFE-GC`. |
-| `REF-FLEX-RESULT` | The executable Lean scan finds a commit and the Rust commit index increases | `FlexCommitter::try_commit`, `Core::try_commit_v3`, and `Core::post_commit` | Verified by code trace and focused Rust tests. Preserve this behavior. |
-| `REF-DURABLE-PROPOSAL` | A completed proposal is durable before broadcast | `ValidatorProposer::try_new_block` accepts its own block and calls `DagState::flush` before Core broadcasts it | Enforced in the reviewed path. |
+| `REF-EPOCH-CONFIG` | Epoch configuration | Put `f`, `c`, v3 activation, leader schedule parameters, GC depth, and all proof-relevant values in common authenticated epoch state. Reject incompatible values. | `f` and `c` come from process-local environment variables. Several v3 values are hard-coded during startup. See `ASM-SAFE-PARAMETERS`. |
+| `REF-INTEGER-BOUNDS` | Integer refinement | Use checked arithmetic and explicit limits for threshold calculations, rounds, commit indexes, transaction indexes, schedule counters, and collection-size conversions. | Lean uses natural numbers. Rust uses bounded integer types, and not all operations have checked bounds. |
+| `REF-V3-ACTIVATION` | V3 activation | Activate v3 from epoch protocol state. | Normal startup sets `enable_v3` to `false`. |
+| `REF-V3-TRANSACTION-PATH` | Transaction voting | Produce `BlockV3`, enforce `enable_v3` implies transaction voting, and implement the modeled v3 transaction finalizer. | Generic signatures cover `BlockV3`, but the proposer produces only `BlockV1` or `BlockV2`, and the modeled finalizer is absent. |
+| `REF-AMNESIA-SIGNER-GUARD` | Restart safety | Prevent reuse of one epoch signing key after all local consensus storage is lost. | Peer recovery is a useful availability mechanism, but it cannot find a signed block that no correct peer retained. |
+| `REF-PARENT-SYNC` | Synchronization | Under the stated useful-peer, network, and task-fairness conditions, prove that each required causal block is eventually accepted, or commit sync advances state so that the block is no longer needed. Handle an empty peer set without a panic and give retry selection a fair rule. | Direct, periodic, and commit-stall block-sync paths exist. The end-to-end progress result is not established. See `ASM-LIVE-BLOCK-SYNC`. |
+| `REF-COMMIT-SYNC-PROGRESS` | Synchronization | Under the stated peer, retention, network, task, and consumer conditions, prove that commit sync or the live block path eventually extends the local commit stream. | Commit-sync checks and retry mechanisms exist. The progress theorem, trailing partial batch, and backpressure cases remain open. See `ASM-LIVE-COMMIT-SYNC`. |
+| `REF-COMMON-COMMIT-CHAIN` | Commit safety | Establish that all correct validators refine one common index-and-digest commit chain across local commit, commit sync, and restart. | Local and synced chain checks exist. The cross-validator refinement theorem is still open. See `ASM-SAFE-COMMIT-CHAIN`. |
+| `REF-GC-EVIDENCE` | Garbage collection and finalization | Enforce the required v3 GC depth and establish complete decision-evidence retention across local commit, commit sync, replay, restart, and transaction finalization. | Local block retention is verified below. The current tree has no modeled v3 transaction path, and the complete prefix theorem is open. See `ASM-SAFE-GC`. |
+| `REF-LEADER-BOUNDS` | Leader liveness | Enforce `f + c < S` and `A <= P_r` from actual epoch weights. | Current v3 uses `P_r = S`, but startup does not enforce these liveness bounds. See `ASM-LIVE-LEADER`. |
+| `REF-LEADER-ORDER-COMPATIBILITY` | Leader order | Bind a protocol-stable or version-gated schedule tie-order and round slot-order algorithm, and add compatibility vectors. | Both orders depend on `StdRng`. Their output is deterministic for one fixed build, but it is not a stable protocol algorithm across build configurations or dependency versions. |
+| `REF-FINALIZER-TAIL` | Epoch lifecycle | Define and implement the result for pending finalizer state when an epoch stops before a later trigger exists. | Shutdown can end the epoch with a pending transaction result. See `ASM-LIVE-FINALIZER-TRIGGER`. |
+| `REF-ROUND-CATCHUP` | Liveness for old leader blocks | Implement the stronger safe intermediate-round proposal rule if this stronger liveness property is required. | The current threshold clock can jump across proposal rounds. Commit progress recovery proves only commit-index progress. See `ASM-LIVE-ROUND-CATCHUP`. |
+
+### Verified current Rust behavior
+
+| Review ID | Lean concept | Verified Rust behavior |
+|---|---|---|
+| `REF-THRESHOLD-CONSTRUCTION` | Actual `N`, scaled `f` and `c`, `Q`, `A`, and validity threshold | For non-overflowing inputs, `Committee::new_v3` computes the configured thresholds and checks both Lean safety inequalities. |
+| `REF-AUTHENTICATION` | One authenticated validator identity signs one complete modeled block | `SignedBlock` signs the hash of the complete serialized block. Block verification uses the named validator's protocol key. Validator transport uses committee-key mutual TLS. |
+| `REF-VOTE-DEDUP` | One validator identity counts once in one voter set | `StakeAggregator`, immediate-parent checks, leader decisions, transaction vote tracking, and commit certificates deduplicate by `AuthorityIndex`. |
+| `REF-COMMIT-STATE` | Local commit index, commit reference, and protocol timestamp | These values come from one `DagState` trusted commit. `DagState::flush` persists the complete commit, and restart reloads it. The separate local `Instant` for commit advancement is not persisted and is not this value. |
+| `REF-OWN-PROPOSAL-ROUND` | Highest known own proposal round during normal restart and peer-assisted recovery | Durable restart restores the latest own block and rejects proposal rounds at or below it. Empty-store recovery disables proposal until verified peer replies from validity-threshold stake establish a round floor. The strict total-amnesia guarantee is the separate missing item above. |
+| `REF-DURABLE-PROPOSAL` | A completed proposal is durable before broadcast | The proposer accepts and flushes its own block before it returns. Core broadcasts the block only after that return. |
+| `REF-PARENT-QUORUM` | Immediate-parent quorum for an ordinary verified block | `BlockVerifier` counts distinct round-`R - 1` parent validators and rejects a block below quorum. |
+| `REF-BLOCK-PARENT-ACCEPTANCE` | Parent acceptance in the ordinary live block path | `BlockManager` suspends an above-GC child until all listed above-GC parents are accepted. Certified commits use a separate verified explicit-block path. |
+| `REF-BLOCK-SYNC-MECHANISMS` | Missing-block recovery mechanisms | Rust has direct fetch, periodic fetch, stored-history fetch, and commit-stall fallback paths. This does not by itself prove eventual progress. |
+| `REF-COMMIT-SYNC-CHECKS` | Certified commit input checks | Commit sync checks start index, consecutive indexes, digest links, distinct quorum votes on the range tip, explicit block references, gap buffering, and ordered Core delivery. |
+| `REF-LEADER-SCHEDULE` | Leader schedule membership, order, and interval from fixed inputs | Given the same epoch inputs, committed prefix, and fixed build, RNG implementation, and RNG configuration, live processing and replay derive the same ordered schedule. Membership changes only at commit-index schedule boundaries. The next commit index and configured update interval identify the current schedule interval; Rust has no separate version field. |
+| `REF-ROUND-LEADER-SELECTION` | Round leader selection and selected leader slot order | Each stored pending round has one slot for every schedule member. Rust applies one deterministic round-seeded permutation and keeps status updates in that order. Current v3 therefore has `P_r = S`. |
+| `REF-DIRECT-DECISION` | Direct selected leader slot result | `LeaderSlotDecider::try_direct_decide` matches the modeled commit, skip, and undecided cases, including voter deduplication. |
+| `REF-INDIRECT-DECISION` | Indirect selected leader slot results | `LeaderSlotDecider::try_indirect_decide` scans the anchor history, forms certification-threshold evidence with unique validator stake, and returns one ordered final result for each input slot. |
+| `REF-PENDING-ROUNDS` | Pending-round range and FlexCommitter scan | Pending rounds are contiguous. A complete anchor window base is in the indirect-decision scan; newer stored rounds can be anchor evidence only. The ordered anchor scan and commit-round scan match the executable Lean functions. |
+| `REF-GC-BOUNDARY` | Local block GC boundary and retention | `gc_round` uses the preceding commit. Cache eviction does not remove blocks above GC. Local v3 commit construction copies its selected sub-DAG before Core records the new commit. The finalizer owns its pending `CommittedSubDag` values and block map, so live DAG cache eviction does not remove them. |
+| `REF-FLEX-RESULT` | Record a commit found by the executable scan | `FlexCommitter::try_commit` runs direct decisions, the descending indirect scan, and commit construction. `Core::try_commit_v3` passes each result directly to `Core::post_commit`, which adds the commit to `DagState`. |
+
+### Accepted model and environment
+
+The independent uniform first-slot interpretation is an accepted probability
+model. Rust implements a common deterministic round-seeded permutation for a fixed
+build; it does not sample independent random seeds. Post-GST delivery, local
+response bound `epsilon`, weak task fairness, and useful remote data sources are
+environmental conditions. They are not missing local Rust functions.
+
+### Review evidence
+
+The 2026-08-15 review traced the named Rust functions and ran focused tests:
+
+- v3 committee construction: 4 tests passed;
+- block signature, block verifier, TLS allowlist, and vote-deduplication tests
+  passed;
+- leader schedule: 24 tests passed;
+- FlexCommitter: 27 tests passed;
+- LeaderSlotDecider: 18 tests passed;
+- local v3 commit recording: 1 test passed;
+- durable restart and own-round recovery: 12 focused tests passed;
+- block sync, commit sync, parent handling, and GC: 10 focused tests passed.
+
+The review did not use `test_core_recover_from_store_v3` as finalizer-recovery
+evidence. The detached finalizer panics because vote information is missing, but
+the test process exits with status 0. A nonzero-GC restart test for a pending
+decision window is still needed.
 
 For each periodic review:
 
@@ -394,17 +454,17 @@ For each periodic review:
   [`vote_tracker_gc_rejects`](../lean/Mysticeti/Finalizer.lean) prove the signed
   cutoff behavior. `BlockEvidenceStore` keeps the live DAG and pending committed
   prefix separate.
-- **Rust evidence:** The v3 constructor checks `gc_depth > 2`.
+- **Rust evidence:** The current v3 path does not enforce `gc_depth > 2`.
   `FlexCommitter::build_commit` reads the old `DagState::gc_round()` before
   `Core::post_commit` records the new commit. The current proposer does not create
   `BlockV3` and does not produce the signed v3 cutoff. The current finalizer keeps
   pending `CommittedSubDag` values, and the commit-sync path uses the explicit block
   list in `CertifiedCommit` instead of the local DFS. The transaction-cutoff and
   complete local, commit-sync, replay, and recovery mapping is not proved.
-- **Discharge:** Prove that every required anchor voting block enters the exact
-  `CommittedSubDag` prefix on all input paths. Prove that the finalizer processes
-  that prefix before it can lose the evidence. Test the minimum supported GC depth,
-  a slow finalizer, commit sync, and restart recovery.
+- **Discharge:** Enforce `gc_depth > 2`. Prove that every required anchor voting
+  block enters the exact `CommittedSubDag` prefix on all input paths. Prove that the
+  finalizer processes that prefix before it can lose the evidence. Test the minimum
+  supported GC depth, a slow finalizer, commit sync, and restart recovery.
 
 ## ASM-CONFIG-V3-ACTIVATION
 
@@ -484,16 +544,18 @@ For each periodic review:
 - **Claim:** The local recovery rule at one correct validator has these parts. The
   validator reads its current last-commit timestamp, or the last flushed timestamp
   after restart. It enters recovery when the local timeout expires and it is not
-  behind the observed quorum commit index. It stays in recovery until its commit
-  index changes. If `P` is its highest known own proposal round, its only recovery
-  proposal target is `P + 1`. It waits or starts block sync when quorum parents in
-  round `P` are not available. It persists an enabled proposal before broadcast.
-  While the commit index is unchanged, its schedule-independent proposal delay can
-  grow without a fixed bound. For round `P`, a recovery proposal disables
-  score-based ancestor exclusion. It includes the available block from each
-  validator if the local DAG has exactly one such block. It omits the validator if
-  the DAG already knows an equivocation. Normal score-based ancestor selection
-  continues for older rounds.
+  behind the observed quorum commit index. Recovery eligibility and pacing stay
+  keyed to that commit index. It does not make recovery proposals while the
+  observed quorum commit index is ahead, and recovery ends when the epoch stops.
+  If `P` is its highest known own proposal round, its only
+  recovery proposal target is `P + 1`. It waits or starts block sync when quorum
+  parents in round `P` are not available. It persists an enabled proposal before
+  broadcast. While the commit index is unchanged, its schedule-independent
+  proposal delay can grow without a fixed bound. For round `P`, a recovery proposal
+  disables score-based ancestor exclusion. It includes the available block from
+  each validator if the local DAG has exactly one such block. The recovery
+  proposal includes no block from that validator when the DAG has more than one
+  block for it. Normal score-based ancestor selection continues for older rounds.
 - **Type:** Protocol and Rust refinement.
 - **Status:** Known mismatch.
 - **Effect if false:** Liveness.
@@ -537,13 +599,13 @@ For each periodic review:
   lists the component tests, Core test, and test commands for this path.
 
 The `Known mismatch` status applies to the recovery policy as a whole. It does not
-apply to every Rust fact in this section.
-
-| Rust implementation category | Current result |
-|---|---|
-| **Missing from Rust** | The commit-stall trigger, persistent recovery state, next-round proposal mode, adaptive recovery delay, recovery parent synchronization, and disabling score-based ancestor exclusion for locally unique immediate parents are not implemented. |
-| **Present in Rust, but not fully verified** | The Rust pending-round array, slot order, status updates, scan bounds, GC retention, and commit construction appear to implement the Lean model. A manual code review supports the mapping. It has no machine-checked Rust-to-Lean proof and no single old-prefix recovery-window regression test. |
-| **Verified in the current Rust code; preserve this behavior** | `FlexCommitter::try_commit` runs the direct rule, then the descending indirect rule when needed, finds a commit round, and builds the commit. `Core::try_commit_v3` passes each returned commit to `Core::post_commit`, and `post_commit` adds it to `DagState`. The focused Rust tests for these functions and the Core commit-index test pass. Future changes can refactor the code, but they must preserve this result or update the Lean model and tests. |
+apply to every Rust fact in this section. The
+[periodic Lean-to-Rust review](#periodic-lean-to-rust-refinement-review) gives the
+binary result for each smaller Rust contract. It lists recovery entry, exact-next
+targeting, pacing, parent selection, frontier history, legal GC frontier, and layer
+mapping under **Missing Rust behavior — Commit progress recovery**. It lists the
+pending-round scan and the final FlexCommitter-to-Core sequence under **Verified
+current Rust behavior**.
 
 - **Discharge:** Implement the local recovery rule and map each local Rust event to
   the corresponding Lean action or state effect. In particular, prove recovery
@@ -552,8 +614,9 @@ apply to every Rust fact in this section.
   supply the finite parent interval, or that a commit occurs first. Verify each
   exact-next proposal, persistence before broadcast, block acceptance and retention,
   and inclusion of every timely, locally unique immediate parent. Verify that
-  each pending round is in Rust's stored pending-round
-  range and that the indirect scan visits every stored index. Lean then derives the
+  each pending round is in Rust's stored pending-round range and that the indirect
+  scan visits the base of each complete anchor window. Newer stored rounds can be
+  anchor evidence without being indirect-decision targets. Lean then derives the
   complete candidate-window mapping. Accept
   `FirstSlotSamplingTrace` as the almost-sure trace result of
   `ASM-LIVE-FIRST-SLOT-SAMPLING`, or add a probability model that derives it.

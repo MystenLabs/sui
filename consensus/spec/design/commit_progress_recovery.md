@@ -968,8 +968,9 @@ Rust mapping conditions because it cannot inspect Rust source.
 
 The pending-array part is reduced further. `PendingRoundArrayRules` states only
 that a pending leader round is inside the stored range and that the indirect scan
-visits every stored index. Lean calculates the zero-based candidate index and
-proves the full anchor window is in range from these two rules.
+visits the base of a complete anchor window. Newer stored rounds can be anchor
+evidence without being indirect-decision targets. Lean calculates the zero-based
+candidate index and proves the full anchor window is in range from these rules.
 
 ### Current FlexCommitter-to-Core path
 
@@ -1018,12 +1019,14 @@ usable anchor window from the Lean theorem. Add that focused regression test, an
 keep a negative case with a shorter window. This test is a maintenance guard. It
 is not new consensus logic.
 
-**Status: present in Rust, but not fully verified.** The exact mapping from Rust's
-pending-round array, ordered selected leader slots, status updates, scan bounds, and
-GC-retained blocks to the Lean state is still a proof obligation. The code trace
-supports this mapping, but the review is not a machine-checked cross-language proof.
-See the
-[three implementation categories](../docs/ASSUMPTIONS.md#asm-live-commit-progress-recovery).
+**Status: verified current Rust behavior.** The source trace and focused tests
+verify the pending-round range, selected leader slot order, in-place status
+updates, anchor scan, commit-round scan, and final FlexCommitter-to-Core call path
+at the reviewed revision. Lean does not read Rust source. The
+[periodic Lean-to-Rust review](../docs/ASSUMPTIONS.md#periodic-lean-to-rust-refinement-review)
+is the maintenance record for this result. Commit progress recovery entry,
+exact-next proposals, parent selection, pacing, legal GC frontier, and recovery
+layer mapping remain missing Rust behavior.
 
 The Lean structure `CommitProgressRecoveryStages` remains a stable interface for
 the composition lemma. `recovery_stages_from_processes` now constructs its first
@@ -1045,7 +1048,7 @@ These items remain local refinement work:
 - the legal recovery frontier stays above block GC;
 - future threshold-clock jumps do not reset the next-round target or pacing state;
 - the pacing timer uses one named local start event, and the layer proof derives a
-  finite bound on proposal skew from that event;
+  finite bound on the proposal timing difference from that event;
 - correct validators use the same committed prefix, leader schedule membership,
   round leader selection, and selected leader slot order for the relevant scans;
 - leader schedule changes are derived from committed history;

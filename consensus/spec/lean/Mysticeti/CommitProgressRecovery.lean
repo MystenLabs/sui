@@ -1728,6 +1728,10 @@ structure RecoveryImmediateParentRule {State : Type}
       parentAvailable state round leader voter →
       parentEquivocationKnown state round leader voter = false →
       parentIncluded state round leader voter
+  omitsKnownEquivocatingParent :
+    ∀ state round leader voter,
+      parentEquivocationKnown state round leader voter = true →
+      ¬parentIncluded state round leader voter
 
 /-- Pacing and post-GST delivery make one correct first-slot block available to
 each next-round recovery proposer before that proposer selects its parents. A
@@ -1980,16 +1984,16 @@ structure RecoveryAnchorWindowMapping
 
 /-- Direct state rules for Rust's pending-round array and descending scan. -/
 structure PendingRoundArrayRules {State : Type}
-    (view : CommitProgressRecoveryView State) where
+    (view : CommitProgressRecoveryView State) (depth : Nat) where
   pendingRoundIsInStoredRange :
     ∀ state round,
       view.pendingLeaderRound round state →
       view.firstPendingLeaderRound state ≤ round ∧
         round < view.firstPendingLeaderRound state +
           view.pendingRoundCount state
-  storedIndexIsScanned :
+  coveredWindowBaseIsScanned :
     ∀ state index,
-      index < view.pendingRoundCount state →
+      index + depth < view.pendingRoundCount state →
       index ≤ view.highestIndirectDecisionIndex state
 
 /-- The zero-based index of a round in the pending-round array. -/
@@ -1997,19 +2001,17 @@ def pendingRoundIndex {State : Type}
     (view : CommitProgressRecoveryView State) (round : Nat) (state : State) : Nat :=
   round - view.firstPendingLeaderRound state
 
-/-- One pending leader round maps to one in-range index visited by the indirect
-scan. -/
-theorem pending_round_maps_to_scanned_index
+/-- One pending leader round maps to one in-range stored index. -/
+theorem pending_round_maps_to_stored_index
     {State : Type}
     (view : CommitProgressRecoveryView State)
-    (rules : PendingRoundArrayRules view)
+    {depth : Nat}
+    (rules : PendingRoundArrayRules view depth)
     {state : State} {round : Nat}
     (pending : view.pendingLeaderRound round state) :
     round = view.firstPendingLeaderRound state +
         pendingRoundIndex view round state ∧
-      pendingRoundIndex view round state < view.pendingRoundCount state ∧
-      pendingRoundIndex view round state ≤
-        view.highestIndirectDecisionIndex state := by
+      pendingRoundIndex view round state < view.pendingRoundCount state := by
   have bounds := rules.pendingRoundIsInStoredRange state round pending
   have roundMatch :
       round = view.firstPendingLeaderRound state +
@@ -2021,8 +2023,33 @@ theorem pending_round_maps_to_scanned_index
         view.pendingRoundCount state := by
     simp [pendingRoundIndex]
     omega
-  exact ⟨roundMatch, indexInRange,
-    rules.storedIndexIsScanned state _ indexInRange⟩
+  exact ⟨roundMatch, indexInRange⟩
+
+/-- If the first and last rounds of an anchor window are stored, the first round
+is in the indirect-decision scan. Newer stored rounds can be anchor evidence only. -/
+theorem pending_window_base_maps_to_scanned_index
+    {State : Type}
+    (view : CommitProgressRecoveryView State)
+    {depth : Nat}
+    (rules : PendingRoundArrayRules view depth)
+    {state : State} {round : Nat}
+    (basePending : view.pendingLeaderRound round state)
+    (lastPending : view.pendingLeaderRound (round + depth) state) :
+    round = view.firstPendingLeaderRound state +
+        pendingRoundIndex view round state ∧
+      pendingRoundIndex view round state + depth <
+        view.pendingRoundCount state ∧
+      pendingRoundIndex view round state ≤
+        view.highestIndirectDecisionIndex state := by
+  have baseMapped := pending_round_maps_to_stored_index view rules basePending
+  have lastBounds := rules.pendingRoundIsInStoredRange state (round + depth)
+    lastPending
+  have windowInRange :
+      pendingRoundIndex view round state + depth <
+        view.pendingRoundCount state := by
+    omega
+  exact ⟨baseMapped.1, windowInRange,
+    rules.coveredWindowBaseIsScanned state _ windowInRange⟩
 
 /-- Pending-round range and scan rules construct the candidate-window mapping used
 by the recovery theorem. -/
@@ -2038,8 +2065,8 @@ def recovery_anchor_window_mapping_from_pending_round_rules
       protocolAction processing}
     {production : RecoveryLayerProductionProcess trace network view thresholds
       protocolAction processing entry}
-    (rules : PendingRoundArrayRules view)
-    (depth : Nat) :
+    (depth : Nat)
+    (rules : PendingRoundArrayRules view depth) :
     RecoveryAnchorWindowMapping trace network view thresholds protocolAction
       processing entry production depth where
   baseIndex := fun start =>
@@ -2056,7 +2083,7 @@ def recovery_anchor_window_mapping_from_pending_round_rules
       start layerCount 0 recoveryAtStart (by
         simp [layerCount, requiredRecoveryLayerCount, directVoteRoundOffset])
       atBaseline
-    have mapped := pending_round_maps_to_scanned_index view rules
+    have mapped := pending_round_maps_to_stored_index view rules
       firstLayerPending
     simpa [deadline, layerCount] using mapped.1
   chosenBaseIndexIsScanned := by
@@ -2069,8 +2096,13 @@ def recovery_anchor_window_mapping_from_pending_round_rules
       start layerCount 0 recoveryAtStart (by
         simp [layerCount, requiredRecoveryLayerCount, directVoteRoundOffset])
       atBaseline
-    have mapped := pending_round_maps_to_scanned_index view rules
-      firstLayerPending
+    have lastAnchorPending := production.layerRoundIsPendingAtDeadline baseline
+      start layerCount depth recoveryAtStart (by
+        simp [layerCount, requiredRecoveryLayerCount, directVoteRoundOffset]
+        omega)
+      atBaseline
+    have mapped := pending_window_base_maps_to_scanned_index view rules
+      firstLayerPending lastAnchorPending
     simpa [deadline, layerCount] using mapped.2.2
   chosenWindowIsInRange := by
     intro baseline start recoveryAtStart
@@ -2087,19 +2119,9 @@ def recovery_anchor_window_mapping_from_pending_round_rules
         simp [layerCount, requiredRecoveryLayerCount, directVoteRoundOffset]
         omega)
       atBaseline
-    have firstMapped := pending_round_maps_to_scanned_index view rules
-      firstLayerPending
-    have lastBounds := rules.pendingRoundIsInStoredRange
-      (trace deadline) (production.baseRound start + depth) lastAnchorPending
-    have baseMatch :
-        production.baseRound start =
-          view.firstPendingLeaderRound (trace deadline) +
-            pendingRoundIndex view (production.baseRound start)
-              (trace deadline) := firstMapped.1
-    simpa [deadline, layerCount] using (show
-      pendingRoundIndex view (production.baseRound start) (trace deadline) +
-          depth < view.pendingRoundCount (trace deadline) by
-        omega)
+    have mapped := pending_window_base_maps_to_scanned_index view rules
+      firstLayerPending lastAnchorPending
+    simpa [deadline, layerCount] using mapped.2.1
 
 /-- One candidate recovery window with a progressing first-slot run, timely voting,
 and the pending-array mapping produces a covered usable anchor window by its
@@ -2342,14 +2364,14 @@ theorem recovery_stages_from_processes_and_pending_round_rules
     (sampling : FirstSlotSamplingTrace trace network view thresholds
       protocolAction processing entry production
       (indirectCommitDepth + 1))
-    (pendingRules : PendingRoundArrayRules view)
+    (pendingRules : PendingRoundArrayRules view indirectCommitDepth)
     (rustRecordsResult : ∀ baseline,
       LeadsToAfter network.gst trace
         (ModeledFlexCommitterAdvancesAt view baseline indirectCommitDepth)
         (CommitAdvancedFrom view baseline)) :
     CommitProgressRecoveryStages trace network view thresholds := by
   let mapping := recovery_anchor_window_mapping_from_pending_round_rules
-    (production := production) pendingRules indirectCommitDepth
+    (production := production) indirectCommitDepth pendingRules
   exact recovery_stages_from_processes entry production voting sampling mapping
     rustRecordsResult
 
@@ -2457,7 +2479,7 @@ theorem commit_progress_recovery_from_processes_and_pending_round_rules
     (sampling : FirstSlotSamplingTrace trace network view thresholds
       protocolAction processing entry production
       (indirectCommitDepth + 1))
-    (pendingRules : PendingRoundArrayRules view)
+    (pendingRules : PendingRoundArrayRules view indirectCommitDepth)
     (rustRecordsResult : ∀ baseline,
       LeadsToAfter network.gst trace
         (ModeledFlexCommitterAdvancesAt view baseline indirectCommitDepth)

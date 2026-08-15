@@ -434,7 +434,8 @@ not the old distributed stage results:
 - implement and prove the recovery rule that disables score-based exclusion for
   each locally unique available immediate-round parent;
 - verify the two `PendingRoundArrayRules`: each pending leader round is inside the
-  stored range, and the descending indirect scan visits every stored index;
+  stored range, and the descending indirect scan visits the base of each complete
+  anchor window;
 - map retained blocks and selected leader slots to the pending array used by
   `FlexCommitter`;
 - accept the almost-sure first-slot trace, or formalize its probability proof;
