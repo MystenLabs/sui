@@ -768,6 +768,8 @@ The Lean model defines or proves these facts:
 - an in-range window of `depth + 1` usable anchors makes the complete modeled
   descending scan find a commit for every indirect result;
 - the recovery-window base is existential, not selected by the protocol;
+- every quorum block layer in the witness window is authored by validators in the
+  recovery set;
 - every layer in the witness window is above the modeled block-GC boundary;
 - each recovering authority's permitted proposal target is exactly one round above
   its highest known own proposal round, and that target cannot skip forward or
@@ -804,13 +806,15 @@ Model these items as local transitions or deterministic functions:
 
 Then prove these distributed results. Do not add them as assumptions:
 
-1. Unless a commit occurs first, correct validators with quorum stake eventually
-   enter recovery at the same time. Use local clock progress, recovery persistence,
-   weak task fairness, the finite validator set, and the live correct stake bound.
-2. Unless a commit occurs first, these validators produce and exchange blocks for
-   enough consecutive rounds. Each round contains blocks from quorum stake. Use the
-   next-round proposal rule, a synchronized legal frontier, task fairness,
-   persistence, broadcast, and post-GST delivery.
+1. Unless a commit occurs first, one set of correct validators with quorum stake
+   stays in commit progress recovery. Use local clock progress, recovery
+   persistence, weak task fairness, the finite validator set, and the live correct
+   stake bound.
+2. Unless a commit occurs first, these validators are all in commit progress
+   recovery in the same proposal rounds. They produce and exchange blocks for
+   enough consecutive rounds, with quorum stake in each round. Use the next-round
+   proposal rule, a synchronized legal frontier, task fairness, persistence,
+   broadcast, and post-GST delivery.
 3. Unless a commit occurs first, enough consecutive rounds start with a correct
    leader whose block receives enough next-round votes. FlexCommitter can then use
    these blocks to resolve older undecided rounds. Use a recovery wait that grows

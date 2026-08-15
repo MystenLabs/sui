@@ -202,25 +202,43 @@ other open conditions define the remaining refinement and environment boundary.
 
 ## ASM-SAFE-NON-EQUIVOCATION
 
-- **Claim:** A correct authority contributes at most one compatible vote per leader
-  slot and transaction. Byzantine equivocation can count once on each side, but it
-  cannot count more than once on either side.
+- **Claim:** A correct validator contributes to only one side of each leader-slot or
+  transaction decision. Byzantine equivocation can count once on each side, but one
+  validator identity cannot count more than once on either side.
 - **Type:** Protocol and Rust refinement.
 - **Status:** Partially verified.
 - **Effect if false:** Safety.
 - **Lean use:** `OnlyFaultyOverlap` is used by `LeaderEvidence` and
   `TransactionEvidence`.
 - **Rust evidence:** Vote aggregation uses validator identity, and the proposer
-  persists its own block state.
+  persists its own block state before Core broadcasts the block.
   [`StakeAggregator`](../../core/src/stake_aggregator.rs) stores validator
   identities in a `BTreeSet`; `add` and `add_unique` count one validator's stake
   only once. The leader decision code, transaction vote tracker, current finalizer,
   and commit sync use this aggregator. The block verifier also rejects two parent
-  references from the same validator. Thus, vote deduplication is enforced. The
-  remaining partial condition is that a correct validator never signs incompatible
-  votes across proposal, crash, restart, and amnesia recovery.
-- **Discharge:** Add one invariant across proposal, restart, replay, and vote
-  aggregation. Keep equivocation conformance vectors for one vote on each side.
+  references from the same validator. Thus, vote deduplication is enforced.
+
+  The normal crash-and-restart path also prevents two published own blocks for one
+  round when the consensus store remains durable. `ValidatorProposer` adds the new
+  block to `DagState` and flushes it before Core broadcasts it. `DagState` rejects a
+  second uncommitted block in the validator's own slot. After restart,
+  `DagState::new` loads the latest stored own block, and the proposer rejects a
+  proposal round that is not greater than its recovered or synchronized highest
+  own proposal round.
+
+  Empty-store amnesia recovery has a smaller guarantee. The proposer stays disabled
+  until the synchronizer gets valid replies from at least validity-threshold stake
+  and reports the highest own round in those replies. Unit, authority, and
+  simulation tests cover the successful recovery path. This peer query is a
+  best-effort recovery mechanism. It cannot prove that it found a signed block that
+  only a Byzantine peer retained. Therefore, the strict invariant across loss of
+  all durable signer state is not yet enforced.
+- **Discharge:** Treat durable signer state as part of a correct validator. If a
+  validator can lose its consensus store and reuse the same epoch signing key, keep
+  its highest signed proposal round in separate durable signer state, or prevent it
+  from signing again in that epoch. Keep the current peer-sync recovery and tests as
+  an availability aid. Keep equivocation conformance vectors for one vote on each
+  side.
 
 ## ASM-SAFE-PARENT-QUORUM
 
@@ -469,8 +487,9 @@ apply to every Rust fact in this section.
 | **Verified in the current Rust code; preserve this behavior** | `FlexCommitter::try_commit` runs the direct rule, then the descending indirect rule when needed, finds a commit round, and builds the commit. `Core::try_commit_v3` passes each returned commit to `Core::post_commit`, and `post_commit` adds it to `DagState`. The focused Rust tests for these functions and the Core commit-index test pass. Future changes can refactor the code, but they must preserve this result or update the Lean model and tests. |
 
 - **Discharge:** Implement the local rule. Then prove these results in Lean. Unless
-  a commit occurs first, correct validators with quorum stake eventually enter
-  recovery at the same time. They produce and exchange blocks for enough
+  a commit occurs first, one set of correct validators with quorum stake stays in
+  commit progress recovery. These validators are all in commit progress recovery in
+  the same proposal rounds, and they produce and exchange blocks for enough
   consecutive rounds, with quorum stake in each round. Eventually, enough
   consecutive rounds start with a correct leader whose block gets enough
   next-round votes for FlexCommitter to resolve older undecided rounds. The

@@ -348,17 +348,19 @@ proves the coverage derivation and the resource derivation separately. It also
 proves that a viable leader schedule does not by itself give round leader selection
 coverage.
 
-The consecutive quorum block layer window also requires each witness layer to be
-above the modeled block-GC boundary. The Rust refinement must show that block sync
-obtains the recent blocks before Core evaluates the window.
+The consecutive quorum block layer window also requires each layer author to be in
+the recovery set and each witness layer to be above the modeled block-GC boundary.
+The Rust refinement must show that block sync obtains the recent blocks before Core
+evaluates the window.
 
 [`commit_progress_recovery_stages_compose`](../lean/Mysticeti/CommitProgressRecovery.lean)
 is a composition lemma. It does not prove end-to-end recovery liveness. Its inputs
 contain these three distributed results and one Rust mapping condition:
 
-1. unless a commit occurs first, correct validators with quorum stake eventually
-   enter recovery at the same time;
-2. unless a commit occurs first, they produce and exchange blocks for enough
+1. unless a commit occurs first, one set of correct validators with quorum stake
+   stays in commit progress recovery;
+2. unless a commit occurs first, these validators are all in commit progress
+   recovery in the same proposal rounds and produce and exchange blocks for enough
    consecutive rounds, with quorum stake in each round;
 3. unless a commit occurs first, enough consecutive rounds start with a correct
    leader whose block gets enough next-round votes for FlexCommitter to resolve old

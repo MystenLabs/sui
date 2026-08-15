@@ -503,6 +503,8 @@ def RecoveryQuorum {State : Type}
         (VoterSet.diff VoterSet.full (view.nonProgress state)) ∧
       NextRoundProposalTargets view state
 
+/-- One retained pending-round block layer from quorum stake of validators that are
+in commit progress recovery. -/
 def RetainedQuorumBlockLayer {State : Type}
     (view : CommitProgressRecoveryView State)
     (thresholds : Thresholds view.authorityCount view.stake)
@@ -510,6 +512,9 @@ def RetainedQuorumBlockLayer {State : Type}
   fun state =>
     view.pendingLeaderRound round state ∧
       thresholds.quorum ≤ view.quorumBlockLayerStake round state ∧
+      VoterSet.SubsetAt view.authorityCount
+        (view.quorumBlockLayerAuthors round state)
+        (view.correctRecoveryAuthorities state) ∧
       Retained (view.gcBoundary state) round
 
 def ConsecutiveQuorumBlockLayers {State : Type}
@@ -697,8 +702,8 @@ structure CommitProgressRecoveryStages
     (network : PartialSynchrony protocolPacket)
     (view : CommitProgressRecoveryView State)
     (thresholds : Thresholds view.authorityCount view.stake) where
-  /-- Unless a commit occurs first, correct validators with quorum stake eventually
-  enter recovery at the same time. Derive this result from local clock progress,
+  /-- Unless a commit occurs first, one set of correct validators with quorum stake
+  stays in commit progress recovery. Derive this result from local clock progress,
   weak task fairness, bounded local processing, recovery entry, recovery
   persistence, and the live correct stake bound. -/
   stalledToRecoveryQuorum :
@@ -708,10 +713,11 @@ structure CommitProgressRecoveryStages
         (fun state =>
           CommitAdvancedFrom view baseline state ∨
             RecoveryQuorumAt view thresholds baseline state)
-  /-- Unless a commit occurs first, recovering validators produce and exchange
-  blocks for enough consecutive rounds. Each round contains blocks from quorum
-  stake. Derive this result from next-round proposals, parent synchronization,
-  persistence, broadcast, and task fairness. -/
+  /-- Unless a commit occurs first, these validators are all in commit progress
+  recovery in the same proposal rounds. They produce and exchange blocks for enough
+  consecutive rounds, with quorum stake in each round. Derive this result from
+  next-round proposals, parent synchronization, persistence, broadcast, and task
+  fairness. -/
   recoveryQuorumToLayers :
     ∀ baseline,
       LeadsToAfter network.gst trace
