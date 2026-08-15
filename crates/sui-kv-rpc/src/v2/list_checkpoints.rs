@@ -27,9 +27,9 @@ use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
-use sui_rpc_api::ledger_history::query_options::CheckpointRange;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
+use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
 use sui_rpc_api::ledger_history::query_options::ResolvedRange;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
@@ -101,11 +101,6 @@ pub(crate) async fn list_checkpoints(
     let objects_stage = ctx.stage(PipelineStage::Objects);
     let tx_seq_digest_stage = ctx.stage(PipelineStage::TxSeqDigest);
 
-    let checkpoint_range = CheckpointRange::from_request(
-        request.start_checkpoint,
-        request.end_checkpoint,
-        checkpoint_hi_exclusive,
-    )?;
     let read_mask = {
         let read_mask = request
             .read_mask
@@ -124,6 +119,12 @@ pub(crate) async fn list_checkpoints(
         request.options.as_ref(),
         endpoint.default_limit_items,
         endpoint.max_limit_items,
+    )?;
+    let checkpoint_range = ResolvedCheckpointRange::from_request(
+        request.start_checkpoint,
+        request.end_checkpoint,
+        checkpoint_hi_exclusive,
+        &options,
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
@@ -656,8 +657,7 @@ fn range_end_response(
 /// are additionally bounded at runtime by the per-request bitmap bucket
 /// budget; that limit surfaces as SCAN_LIMIT, not as an up-front cp-range
 /// clamp.
-fn resolve_cp_range(checkpoint_range: CheckpointRange, options: &QueryOptions) -> ResolvedRange {
-    let cp_range = checkpoint_range.resolve(options);
+fn resolve_cp_range(cp_range: ResolvedCheckpointRange, options: &QueryOptions) -> ResolvedRange {
     let range = cp_range.range.clone();
     options.resolve_scan(cp_range, range)
 }
