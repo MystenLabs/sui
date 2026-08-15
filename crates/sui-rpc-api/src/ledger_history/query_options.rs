@@ -144,7 +144,7 @@ pub struct ResolvedEventRange {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct CheckpointRange {
+struct CheckpointRange {
     start: u64,
     end: u64,
     high_exhaustion: RangeExhaustion,
@@ -533,6 +533,22 @@ impl QueryOptions {
 }
 
 impl ResolvedCheckpointRange {
+    /// Validate and tip-clamp the requested window, then narrow it by the
+    /// cursors' checkpoint hints — request to resolved window in one call.
+    pub fn from_request(
+        start_checkpoint: Option<u64>,
+        end_checkpoint: Option<u64>,
+        checkpoint_hi_exclusive: u64,
+        options: &QueryOptions,
+    ) -> Result<Self, RpcError> {
+        Ok(CheckpointRange::from_request(
+            start_checkpoint,
+            end_checkpoint,
+            checkpoint_hi_exclusive,
+        )?
+        .resolve(options))
+    }
+
     pub fn empty_at(checkpoint: u64, exhaustion: RangeExhaustion) -> Self {
         Self {
             range: checkpoint..checkpoint,
@@ -732,7 +748,7 @@ impl ResolvedEventRange {
 }
 
 impl CheckpointRange {
-    pub fn from_request(
+    fn from_request(
         start_checkpoint: Option<u64>,
         end_checkpoint: Option<u64>,
         checkpoint_hi_exclusive: u64,
@@ -766,7 +782,7 @@ impl CheckpointRange {
         })
     }
 
-    pub fn resolve(self, options: &QueryOptions) -> ResolvedCheckpointRange {
+    fn resolve(self, options: &QueryOptions) -> ResolvedCheckpointRange {
         let mut start = self.start;
         let mut end = self.end;
         let mut low_exhaustion = RangeExhaustion::CheckpointBound;
