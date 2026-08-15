@@ -798,25 +798,18 @@ impl From<(u64, u32)> for IntraTxCoordinate {
 }
 
 fn u64_cursor_position(cursor: &CursorToken) -> u64 {
-    match cursor.position {
-        Position::Checkpoints { checkpoint } => checkpoint,
-        Position::Transactions { tx_seq, .. } => tx_seq,
-        Position::Events { .. } => panic!("intra-tx queries must use apply_intra_tx_cursor_bounds"),
-    }
+    cursor
+        .position
+        .scalar()
+        .unwrap_or_else(|| panic!("intra-tx queries must use apply_intra_tx_cursor_bounds"))
 }
 
 fn intra_tx_cursor_coordinate(cursor: &CursorToken) -> IntraTxCoordinate {
-    match cursor.position {
-        Position::Events {
-            tx_seq,
-            event_index,
-            ..
-        } => IntraTxCoordinate {
-            tx_seq,
-            event_index,
-        },
-        _ => unreachable!("validated at decode"),
-    }
+    cursor
+        .position
+        .intra_tx()
+        .map(IntraTxCoordinate::from)
+        .unwrap_or_else(|| unreachable!("validated at decode"))
 }
 
 fn lower_bound_gte(candidate: Bound<IntraTxCoordinate>, current: Bound<IntraTxCoordinate>) -> bool {
