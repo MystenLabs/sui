@@ -626,13 +626,7 @@ async fn resolve_tx_range(
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
-    if cp_range.is_empty() {
-        // Empty windows still resolve a tx coordinate: the terminal frame
-        // needs a full resume cursor, and `tx_range` collapsed to the
-        // fencepost of the terminal checkpoint.
-        return Ok(cp_range.with_range(tx_range, options.ordering));
-    }
-    Ok(options.apply_cursor_bounds(cp_range.with_range(tx_range, options.ordering)))
+    Ok(options.resolve_scan(cp_range, tx_range))
 }
 
 fn transaction_item_response(

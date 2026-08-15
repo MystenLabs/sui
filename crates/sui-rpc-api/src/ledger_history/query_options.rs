@@ -486,6 +486,50 @@ impl QueryOptions {
             }
         }
     }
+
+    /// Project the store-space `range` under the resolved checkpoint window
+    /// and apply the cursors — the endpoints' one entry point past
+    /// checkpoint-range resolution. Empty windows pass through untouched
+    /// (`apply_cursor_bounds` guards internally).
+    pub fn resolve_scan(
+        &self,
+        cp_range: ResolvedCheckpointRange,
+        range: Range<u64>,
+    ) -> ResolvedRange {
+        self.apply_cursor_bounds(cp_range.with_range(range, self.ordering))
+    }
+
+    /// [`Self::resolve_scan`]'s event-lane analogue: project `tx_range` into
+    /// event coordinates under the window's watermark metadata, then apply
+    /// the cursors. An empty window resolves to the terminal fencepost —
+    /// the terminal frame still needs a full resume cursor.
+    pub fn resolve_event_scan(
+        &self,
+        cp_range: ResolvedCheckpointRange,
+        tx_range: Range<u64>,
+    ) -> ResolvedEventRange {
+        if cp_range.is_empty() {
+            return ResolvedEventRange::empty_at(
+                cp_range.terminal_checkpoint(self.ordering),
+                EventPosition::start_of_tx(tx_range.start),
+                cp_range.exhaustion,
+            );
+        }
+        self.apply_event_cursor_bounds(ResolvedEventRange {
+            bounds: EventScanBounds::tx_span(tx_range.start, tx_range.end),
+            entry_checkpoint: if self.is_ascending() {
+                cp_range.range.start
+            } else {
+                cp_range.range.end.saturating_sub(1)
+            },
+            end_checkpoint: cp_range.terminal_checkpoint(self.ordering),
+            end_position: match self.ordering {
+                Ordering::Ascending => EventPosition::start_of_tx(tx_range.end),
+                Ordering::Descending => EventPosition::start_of_tx(tx_range.start),
+            },
+            exhaustion: cp_range.exhaustion,
+        })
+    }
 }
 
 impl ResolvedCheckpointRange {

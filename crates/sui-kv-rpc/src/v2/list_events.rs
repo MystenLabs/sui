@@ -816,34 +816,7 @@ async fn resolve_event_range(
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
-    if cp_range.is_empty() {
-        // Empty windows still resolve a tx coordinate: the terminal frame
-        // needs a full resume cursor, and `tx_range` collapsed to the
-        // fencepost of the terminal checkpoint.
-        return Ok(ResolvedEventRange::empty_at(
-            cp_range.terminal_checkpoint(options.ordering),
-            EventPosition::start_of_tx(tx_range.start),
-            cp_range.exhaustion,
-        ));
-    }
-    Ok(options.apply_event_cursor_bounds(ResolvedEventRange {
-        bounds: EventScanBounds::tx_span(tx_range.start, tx_range.end),
-        entry_checkpoint: if options.is_ascending() {
-            cp_range.range.start
-        } else {
-            cp_range.range.end.saturating_sub(1)
-        },
-        end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
-        end_position: match options.ordering {
-            sui_rpc_api::ledger_history::query_options::Ordering::Ascending => {
-                EventPosition::start_of_tx(tx_range.end)
-            }
-            sui_rpc_api::ledger_history::query_options::Ordering::Descending => {
-                EventPosition::start_of_tx(tx_range.start)
-            }
-        },
-        exhaustion: cp_range.exhaustion,
-    }))
+    Ok(options.resolve_event_scan(cp_range, tx_range))
 }
 
 #[cfg(test)]
