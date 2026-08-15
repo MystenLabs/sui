@@ -14,7 +14,6 @@ use sui_indexer_alt::config::PipelineLayer;
 use sui_indexer_alt::config::PrunerLayer;
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
 use sui_indexer_alt_graphql::config::WatermarkConfig;
-use sui_kv_rpc::KvRpcConfig;
 
 use sui_indexer_alt_e2e_tests::FullCluster;
 use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
@@ -150,10 +149,6 @@ async fn cluster_with_pipelines(pipeline: PipelineLayer) -> FullCluster {
                 watermark: WatermarkConfig {
                     watermark_polling_interval: Duration::from_millis(50),
                 },
-                ..Default::default()
-            },
-            kv_rpc_config: KvRpcConfig {
-                enable_list_apis: Some(true),
                 ..Default::default()
             },
             ..Default::default()

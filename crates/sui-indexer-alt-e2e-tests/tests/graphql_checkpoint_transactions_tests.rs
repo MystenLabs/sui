@@ -5,14 +5,11 @@ use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
 use serde::Deserialize;
 use serde_json::json;
-use simulacrum::Simulacrum;
 
 use sui_indexer_alt_e2e_tests::FullCluster;
-use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
 use sui_indexer_alt_e2e_tests::graphql;
 use sui_indexer_alt_e2e_tests::transaction::DEFAULT_GAS_BUDGET;
 use sui_indexer_alt_e2e_tests::transaction::send_sui;
-use sui_kv_rpc::KvRpcConfig;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 
@@ -72,19 +69,7 @@ fn digests(conn: &graphql::Connection<TxNode>) -> Vec<String> {
 /// Test cursor pagination using cursors from each Transaction edge.
 #[tokio::test]
 async fn test_checkpoint_transactions_cursor_pagination() {
-    let mut cluster = FullCluster::new_with_configs(
-        Simulacrum::new(),
-        OffchainClusterConfig {
-            kv_rpc_config: KvRpcConfig {
-                enable_list_apis: Some(true),
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        &prometheus::Registry::new(),
-    )
-    .await
-    .unwrap();
+    let mut cluster = FullCluster::new().await.unwrap();
 
     // Fund A and seal the funding in its own checkpoint, so the checkpoint under test holds only
     // A's transactions (plus the checkpoint's system transaction).

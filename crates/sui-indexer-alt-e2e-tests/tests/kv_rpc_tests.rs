@@ -113,15 +113,13 @@ struct CheckpointsResult {
 fn request_ordering(options: Option<&QueryOptions>) -> Ordering {
     options.map(|o| o.ordering()).unwrap_or(Ordering::Ascending)
 }
-/// A cluster whose kv-rpc server serves the List APIs. They are off by default,
-/// matching production, so every test in this file opts in.
+/// A cluster whose kv-rpc server serves the List APIs.
 async fn list_api_cluster() -> FullCluster {
     list_api_cluster_with_config(KvRpcConfig::default()).await
 }
 
 /// [`list_api_cluster`] for tests that also need to tune the kv-rpc config.
-async fn list_api_cluster_with_config(mut kv_rpc_config: KvRpcConfig) -> FullCluster {
-    kv_rpc_config.enable_list_apis = Some(true);
+async fn list_api_cluster_with_config(kv_rpc_config: KvRpcConfig) -> FullCluster {
     FullCluster::new_with_configs(
         Simulacrum::new(),
         OffchainClusterConfig {
@@ -1010,33 +1008,6 @@ fn ev_and(filters: Vec<EventFilter>) -> EventFilter {
 }
 
 // --- Tests ---
-
-/// Upgrading the binary must not start serving the List APIs: providers that
-/// have not backfilled the pipelines behind them opt in explicitly.
-#[tokio::test]
-async fn test_list_apis_disabled_unless_enabled() {
-    let mut cluster = FullCluster::new().await.unwrap();
-    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
-    transfer_self(&mut cluster, sender, &kp, gas).await;
-    let checkpoint = cluster.create_checkpoint().await;
-
-    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
-        .await
-        .unwrap();
-
-    let mut req = ListTransactionsRequest::default();
-    req.options = Some(query_options(10));
-    let status = client
-        .list_transactions(req)
-        .await
-        .expect_err("List APIs must be unavailable by default");
-    assert_eq!(status.code(), tonic::Code::Unimplemented, "{status:?}");
-
-    // The service-info height is still served, bounded by the base pipelines
-    // alone. Waiting for it to reach the checkpoint asserts it actually
-    // advances, which a stale cached height would not.
-    wait_for_kv_checkpoint(&cluster, checkpoint.sequence_number).await;
-}
 
 #[tokio::test]
 async fn test_json_read_mask() {

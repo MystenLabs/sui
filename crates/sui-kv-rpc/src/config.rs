@@ -417,22 +417,11 @@ pub struct KvRpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bigtable_max_pool_size: Option<usize>,
 
-    /// Deprecated and ignored: the `GetServiceInfo` watermark set is derived
-    /// from `enable-list-apis` and can no longer be chosen per pipeline.
-    /// Still parsed so existing config files keep loading.
+    /// Deprecated and ignored: the `GetServiceInfo` watermark set always
+    /// includes the List API pipelines now and can no longer be chosen per
+    /// pipeline. Still parsed so existing config files keep loading.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub watermark_pipeline: Option<Vec<String>>,
-
-    /// Serve the List APIs (`ListCheckpoints`, `ListTransactions`,
-    /// `ListEvents`) and fold the pipelines backing them into the
-    /// `GetServiceInfo` checkpoint height. Defaults to `false`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub enable_list_apis: Option<bool>,
-
-    /// Deprecated name for `enable-list-apis`. Used only when
-    /// `enable-list-apis` is unset.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub enable_experimental_query_apis: Option<bool>,
 
     /// Tunables for the ledger-history list APIs.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -500,12 +489,6 @@ impl KvRpcConfig {
 
     pub fn channel_timeout(&self) -> Option<Duration> {
         self.bigtable_channel_timeout_ms.map(Duration::from_millis)
-    }
-
-    pub fn enable_list_apis(&self) -> bool {
-        self.enable_list_apis
-            .or(self.enable_experimental_query_apis)
-            .unwrap_or(false)
     }
 
     /// TLS identity, when both cert and key are set and non-empty.
@@ -775,34 +758,13 @@ render-ahead = 3
     }
 
     #[test]
-    fn list_apis_off_by_default_and_bound_the_watermark_set() {
+    fn watermark_set_always_includes_the_list_api_pipelines() {
         let cfg = KvRpcConfig::default();
-        assert!(!cfg.enable_list_apis());
-        assert_eq!(
-            service_info_watermark_pipelines(cfg.enable_list_apis()),
-            DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.to_vec(),
-        );
-
-        let yaml = "enable-list-apis: true\n";
-        let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
-        assert!(cfg.enable_list_apis());
-        let pipelines = service_info_watermark_pipelines(cfg.enable_list_apis());
+        let pipelines = service_info_watermark_pipelines();
         for name in LIST_API_SERVICE_INFO_WATERMARK_PIPELINES {
             assert!(pipelines.contains(&name), "{name} must bound the height");
         }
-    }
-
-    #[test]
-    fn deprecated_experimental_key_still_enables_list_apis() {
-        // Configs written before the rename must keep serving the List APIs.
-        let yaml = "enable-experimental-query-apis: true\n";
-        let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
-        assert!(cfg.enable_list_apis());
-
-        // The current name wins when both are present.
-        let yaml = "enable-list-apis: false\nenable-experimental-query-apis: true\n";
-        let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
-        assert!(!cfg.enable_list_apis());
+        cfg.validate().unwrap();
     }
 
     #[test]
@@ -813,12 +775,11 @@ render-ahead = 3
 watermark-pipeline:
   - kvstore_checkpoints
   - a_pipeline_that_no_longer_exists
-enable-list-apis: true
 "#;
         let cfg: KvRpcConfig = serde_yaml::from_str(yaml).expect("stale key must not hard-fail");
         cfg.validate().unwrap();
         assert_eq!(
-            service_info_watermark_pipelines(cfg.enable_list_apis()).len(),
+            service_info_watermark_pipelines().len(),
             DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.len()
                 + LIST_API_SERVICE_INFO_WATERMARK_PIPELINES.len(),
         );

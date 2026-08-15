@@ -9,7 +9,6 @@ use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcArgs;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use sui_indexer_alt_reader::ledger_grpc_reader::MAX_BATCH_GET_OBJECTS;
 use sui_indexer_alt_reader::ledger_grpc_reader::MAX_BATCH_GET_TRANSACTIONS;
-use sui_kv_rpc::KvRpcConfig;
 use sui_kvstore::ConcurrentLayer;
 use sui_kvstore::PipelineLayer;
 use sui_kvstore::SequentialLayer;
@@ -43,10 +42,6 @@ async fn cluster_with_lagging_list_index_pipelines() -> FullCluster {
     FullCluster::new_with_configs(
         Simulacrum::new(),
         OffchainClusterConfig {
-            kv_rpc_config: KvRpcConfig {
-                enable_list_apis: Some(true),
-                ..Default::default()
-            },
             bt_pipeline_layer: PipelineLayer {
                 tx_seq_digest: throttled_concurrent,
                 transaction_bitmap_index: throttled_sequential.clone(),
