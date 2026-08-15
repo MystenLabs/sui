@@ -30,6 +30,9 @@ use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::query_options::ResolvedRange;
+use crate::ledger_history::response::end_response;
+use crate::ledger_history::response::item_response;
+use crate::ledger_history::response::watermark_response;
 use crate::ledger_history::watermark::ScanTerminal;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
@@ -185,7 +188,7 @@ pub(crate) async fn list_transactions(
         if terminal_reason != QueryEndReason::ItemLimit {
             let terminal_watermark =
                 chunk_terminal.into_watermark(&terminal_options, covered_checkpoint_bound);
-            let response = end_response(terminal_watermark, terminal_reason);
+            let response: ListTransactionsResponse = end_response(terminal_watermark, terminal_reason);
             request_metrics.observe_frame(&response, false);
             request_metrics.finish_success(terminal_reason, bitmap_buckets_evaluated);
             let yield_started = request_metrics.yield_clock();
@@ -585,14 +588,17 @@ fn render_transaction_rows(
             let (transaction_read, object_set) = transaction_reads_and_objects
                 .next()
                 .expect("transaction reads and object sets match tx_seq rows");
-            let transaction = render_executed_transaction(
+            let mut transaction = render_executed_transaction(
                 service,
                 transaction_read,
                 &object_set,
                 row.checkpoint_number,
                 read_mask,
             )?;
-            transaction_item_response(watermark, transaction, row.tx_offset, read_mask)
+            if read_mask.contains(ExecutedTransaction::TRANSACTION_INDEX_FIELD.name) {
+                transaction.transaction_index = Some(row.tx_offset as u64);
+            }
+            item_response(transaction, watermark)
         } else {
             let mut transaction = ExecutedTransaction::default();
             if read_mask.contains(ExecutedTransaction::DIGEST_FIELD.name) {
@@ -601,7 +607,10 @@ fn render_transaction_rows(
             if read_mask.contains(ExecutedTransaction::CHECKPOINT_FIELD.name) {
                 transaction.checkpoint = Some(row.checkpoint_number);
             }
-            transaction_item_response(watermark, transaction, row.tx_offset, read_mask)
+            if read_mask.contains(ExecutedTransaction::TRANSACTION_INDEX_FIELD.name) {
+                transaction.transaction_index = Some(row.tx_offset as u64);
+            }
+            item_response(transaction, watermark)
         };
         items.push(response);
         if let (Some(metrics), Some(render_started)) = (metrics, render_started) {
@@ -648,40 +657,6 @@ fn resolve_tx_range(
         resolved.apply_serving_floor(floor.tx_seq, floor.checkpoint, options);
     }
     Ok(resolved)
-}
-
-fn transaction_item_response(
-    watermark: Watermark,
-    mut transaction: ExecutedTransaction,
-    tx_offset: u32,
-    read_mask: &FieldMaskTree,
-) -> ListTransactionsResponse {
-    // The within-checkpoint position rides on the `ExecutedTransaction` rather
-    // than the response frame; populate it only when the read mask requests it.
-    if read_mask.contains(ExecutedTransaction::TRANSACTION_INDEX_FIELD.name) {
-        transaction.transaction_index = Some(tx_offset as u64);
-    }
-
-    let mut response = ListTransactionsResponse::default();
-    response.transaction = Some(transaction);
-    response.watermark = Some(watermark);
-    response
-}
-
-fn watermark_response(watermark: Watermark) -> ListTransactionsResponse {
-    let mut response = ListTransactionsResponse::default();
-    response.watermark = Some(watermark);
-    response
-}
-
-fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListTransactionsResponse {
-    let mut end = QueryEnd::default();
-    end.reason = Some(reason as i32);
-
-    let mut response = ListTransactionsResponse::default();
-    response.watermark = Some(watermark);
-    response.end = Some(end);
-    response
 }
 
 #[cfg(test)]
@@ -804,7 +779,7 @@ mod tests {
             );
             assert_eq!(watermark.checkpoint, expected_proof);
             let terminal = ScanTerminal::ScanLimit { watermark };
-            let response = end_response(
+            let response: ListTransactionsResponse = end_response(
                 terminal.into_watermark(&options, Some(123)),
                 QueryEndReason::ScanLimit,
             );

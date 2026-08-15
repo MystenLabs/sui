@@ -25,8 +25,11 @@ use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::CheckpointRange;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
-use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use sui_rpc_api::ledger_history::query_options::ResolvedRange;
+use sui_rpc_api::ledger_history::response::end_response;
+use sui_rpc_api::ledger_history::response::item_response;
+use sui_rpc_api::ledger_history::response::range_end_response;
+use sui_rpc_api::ledger_history::response::watermark_response;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
@@ -336,12 +339,13 @@ pub(crate) async fn list_transactions(
                             ..
                         } => {
                             ctx.observe_response_render(resolution, render_elapsed);
-                            transaction_item_response(
-                                watermark,
-                                *executed,
-                                tx_offset,
-                                &read_mask,
-                            )
+                            let mut executed = *executed;
+                            if read_mask
+                                .contains(ExecutedTransaction::TRANSACTION_INDEX_FIELD.name)
+                            {
+                                executed.transaction_index = Some(tx_offset as u64);
+                            }
+                            item_response(executed, watermark)
                         }
                     };
                     emitted += 1;
@@ -417,13 +421,6 @@ pub(crate) async fn list_transactions(
         );
     }
     .boxed())
-}
-
-/// Wrap a constructed `Watermark` as a progress-only wire frame.
-fn watermark_response(watermark: Watermark) -> ListTransactionsResponse {
-    let mut response = ListTransactionsResponse::default();
-    response.watermark = Some(watermark);
-    response
 }
 
 fn transaction_frontier_watermark(
@@ -607,8 +604,11 @@ fn transaction_response_from_tx_seq_digest(
     if read_mask.contains(ExecutedTransaction::CHECKPOINT_FIELD.name) {
         transaction.checkpoint = Some(row.checkpoint_number);
     }
+    if read_mask.contains(ExecutedTransaction::TRANSACTION_INDEX_FIELD.name) {
+        transaction.transaction_index = Some(row.tx_offset as u64);
+    }
 
-    transaction_item_response(watermark, transaction, row.tx_offset, read_mask)
+    item_response(transaction, watermark)
 }
 
 /// Determine the tx_sequence_number scan window from the logical checkpoint
@@ -662,55 +662,6 @@ async fn checkpoint_to_tx_boundary(
         return Ok(0);
     }
     Ok(client.checkpoint_to_tx_range(0..checkpoint).await?.end)
-}
-
-fn transaction_item_response(
-    watermark: Watermark,
-    mut transaction: ExecutedTransaction,
-    tx_offset: u32,
-    read_mask: &FieldMaskTree,
-) -> ListTransactionsResponse {
-    // The within-checkpoint position rides on the `ExecutedTransaction` rather
-    // than the response frame; populate it only when the read mask requests it.
-    if read_mask.contains(ExecutedTransaction::TRANSACTION_INDEX_FIELD.name) {
-        transaction.transaction_index = Some(tx_offset as u64);
-    }
-
-    let mut response = ListTransactionsResponse::default();
-    response.transaction = Some(transaction);
-    response.watermark = Some(watermark);
-    response
-}
-
-fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListTransactionsResponse {
-    let mut end = QueryEnd::default();
-    end.reason = Some(reason as i32);
-
-    let mut response = ListTransactionsResponse::default();
-    response.watermark = Some(watermark);
-    response.end = Some(end);
-    response
-}
-
-/// Trailing terminal frame for range exhaustion. Reason and watermark derive
-/// from one `ScanTerminal`, so they cannot disagree; natural completion of an
-/// empty interval claims no checkpoint coverage.
-fn range_end_response(
-    options: &QueryOptions,
-    exhaustion: RangeExhaustion,
-    position: Position,
-    covered_checkpoint_bound: Option<u64>,
-    interval_empty: bool,
-) -> (ListTransactionsResponse, QueryEndReason) {
-    let terminal = ScanTerminal::from_range_exhaustion(exhaustion, position, interval_empty);
-    let reason = terminal.reason();
-    (
-        end_response(
-            terminal.into_watermark(options, covered_checkpoint_bound),
-            reason,
-        ),
-        reason,
-    )
 }
 
 #[cfg(test)]
