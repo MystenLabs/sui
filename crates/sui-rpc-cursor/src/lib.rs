@@ -34,6 +34,30 @@ pub enum Position {
 }
 
 impl Position {
+    /// The scalar scan key of a single-u64 lane (checkpoint or transaction
+    /// sequence); `None` for intra-transaction positions.
+    pub fn scalar(&self) -> Option<u64> {
+        match *self {
+            Position::Checkpoints { checkpoint } => Some(checkpoint),
+            Position::Transactions { tx_seq, .. } => Some(tx_seq),
+            Position::Events { .. } => None,
+        }
+    }
+
+    /// The intra-transaction scan key `(tx_seq, index-within-tx)`; `None`
+    /// for scalar positions. Events today; any per-transaction-indexed
+    /// lane decodes through this.
+    pub fn intra_tx(&self) -> Option<(u64, u32)> {
+        match *self {
+            Position::Events {
+                tx_seq,
+                event_index,
+                ..
+            } => Some((tx_seq, event_index)),
+            _ => None,
+        }
+    }
+
     pub fn checkpoint(&self) -> u64 {
         match *self {
             Position::Checkpoints { checkpoint }
