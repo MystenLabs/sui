@@ -11,12 +11,16 @@ This document specifies commit progress recovery for the Mysticeti v3 round-jump
 liveness gap. The recovery mode is not implemented.
 
 Lean proves
-[`commit_progress_recovery_stages_compose`](../lean/Mysticeti/CommitProgressRecovery.lean).
-This is a composition lemma. It shows that three distributed recovery results and
-one Rust mapping condition imply a greater commit index. Lean also proves the
-deterministic FlexCommitter result behind that boundary. It does not derive the
-distributed results from the local Rust rules and the network model. The end-to-end
-recovery liveness theorem remains open.
+[`commit_progress_recovery_from_processes`](../lean/Mysticeti/CommitProgressRecovery.lean).
+The theorem derives the recovery quorum, quorum block layers, usable anchors, and
+the modeled commit-index increase from local process rules, partial synchrony, a
+bounded local response time, and the accepted leader-order sampling trace. Lean also
+proves the deterministic FlexCommitter result.
+
+The end-to-end Rust claim remains open because the recovery policy is not
+implemented and Lean does not inspect Rust source. The remaining work is to map the
+local Rust events to the process rules. The main open mappings are parent sync,
+timely parent inclusion, the pending-round array, and the final Rust state update.
 
 The required property is commit progress:
 
@@ -196,17 +200,37 @@ The protocol does not select or certify one recovery round `R`.
 The Lean process theorem derives recovery overlap from local entry actions and
 recovery persistence. If no commit occurs, each enabled entry action completes and
 an entered validator stays in recovery. If stable correct, non-crashed validators
-have quorum stake, they are eventually in recovery at the same time. Their entry
-times can differ.
+have quorum stake, they are eventually in recovery during the same proposal rounds.
+Their entry times and last signed rounds can differ.
 
-`RecoveryLayerProductionProcess.baseRound` is the execution-derived round `R`
-during that overlap. Core does not know or certify `R` in advance. A valid block at
-round `R + 1` already has quorum parents in round `R`, so normal block validity
-supplies one quorum block layer. It does not supply the complete recovery window.
+At the first such overlap, let `R` be the largest last signed round among these
+recovery validators. This is a proof value. Core does not select, announce, or
+certify it. Lean defines this value as `recoveryFrontierRound` and proves that each
+recovery validator starts at or below it.
 
-The Lean layer theorem uses the next-round proposal and parent-ready contracts to
-show that later high-round blocks do not change the recovery targets. The Rust
-refinement must show that the implementation preserves these contracts.
+The Rust mapping must show that `R` is backed by a valid own block in durable or
+synchronized state. If `R` is not genesis, that block has quorum parents at
+`R - 1`. Its valid causal history contains the quorum parent layers that a lower
+validator needs to reach `R`. Block sync must make this retained history available,
+or a commit must occur first. The lower validator then proposes one round at a time.
+Lean proves the finite round argument in
+`recovery_authority_has_exact_next_path_to_frontier`.
+
+When recovery validators with quorum stake have produced at `R`, round `R` is a
+quorum block layer. They can then use it as the parent layer for `R + 1`. Repeating
+this argument produces consecutive quorum block layers. If one recovery validator
+produces in `R + 1` before all recovery validators reach `R`, its valid block proves
+that some quorum parent layer exists at `R`. That layer can help the other
+validators, but it need not contain only recovery validators. The next-round
+recovery policy still makes each lower recovery validator produce in `R`. The early
+proposal cannot make another recovery validator skip `R`.
+
+`RecoveryLayerProductionProcess.baseRound` must equal this execution-derived
+frontier. Its pointwise block-flow rule then turns the exact-next proposal actions
+into the common layer window. The remaining Rust refinement must show that recent
+causal parents are retained and served, block sync accepts them, and each enabled
+exact-next proposal runs. These are local sync and task properties. They are not an
+assumption that validators select the same recovery round.
 
 ## Recovery distances
 
@@ -452,6 +476,64 @@ anchor scan must find a commit before its first undecided slot. Selective Byzant
 delivery can split votes and leave a slot undecided. The current deterministic slot
 shuffle has no proved fairness property that removes this case.
 
+### Ancestor exclusion does not prove timely inclusion
+
+`AncestorStateManager` uses two different percentages:
+
+- A validator becomes a candidate for exclusion when its propagation score is at
+  most 20 percent of the highest score.
+- The total excluded stake is at most two thirds of
+  `bad_nodes_stake_threshold`. With a configured bad-node threshold of 30 percent,
+  this stake cap is 20 percent. The protocol configuration can change this value.
+
+The stake cap gives an existence result. If the combined non-progress stake and
+one proposer's excluded stake is smaller than the leader schedule stake, then that
+proposer has at least one correct, available schedule validator that it does not
+exclude. Lean proves this result in
+`leader_schedule_contains_progress_and_locally_included_stake`.
+
+This result does not identify the first selected leader slot. It also does not make
+different proposers exclude the same validator set. All next-round proposers can
+exclude one fixed low-stake first-slot validator while each local exclusion set
+stays below its cap. Lean records this limit in
+`exclusion_cap_does_not_protect_a_fixed_first_slot`. Therefore, the exclusion cap
+does not prove that the first-slot block receives quorum direct votes.
+
+In summary, disable score-based ancestor exclusion for the immediate parent round
+while commit progress recovery is active. Do not disable equivocation handling.
+
+For a recovery proposal in round `T`:
+
+1. Read all verified blocks in round `T - 1` and group them by validator.
+2. If the local DAG has exactly one such block for a validator, include that block.
+   Ignore the validator's local `AncestorState` value for this step.
+3. If the local DAG already has more than one such block for a validator, include
+   none of those blocks.
+4. If the included parent stake is less than `Q`, wait and start block sync.
+5. For a validator that has no included immediate parent, normal ancestor selection
+   can select one older block. Thus, the proposal still has at most one ancestor
+   from each validator.
+
+This rule does not use the leader schedule. It covers a correct first-slot block
+even when validators have not yet derived the same schedule. It also keeps the
+normal one-parent-per-authority bound. A correct validator creates one block in its
+slot, so equivocation handling does not remove the block used by the proof. The
+normal score-based ancestor policy still applies to older blocks.
+
+Lean separates this rule into three small interfaces:
+
+- `TimelyFirstSlotParentAvailability` states that pacing and delivery make the
+  correct first-slot block available before parent selection.
+- `RecoveryImmediateParentRule` includes each locally unique available immediate
+  parent.
+- `DirectFirstSlotDecisionRule` maps an included parent to a direct vote and maps
+  quorum direct votes to `Commit`.
+
+`timely_first_slot_voting_from_parent_rule` proves the previous first-slot voting
+condition from these interfaces. Thus, the usable-anchor theorem no longer needs
+one combined parent-inclusion assumption. The recovery parent rule is not present
+in Rust.
+
 ### Selected leader slot finality in Rust
 
 For one selected leader slot in leader round `r`,
@@ -528,9 +610,10 @@ must also include proposal flush, local task and queue delays, and remote receiv
 processing. It can use one symbolic aggregate bound or separate symbolic bounds.
 
 The current ancestor-selection rule can omit a received block after it has selected
-enough parent stake. Recovery needs a direct rule that includes the timely first-slot
-block, or all available immediate-round parents. This is a local Rust rule to model
-and prove.
+enough immediate-parent stake. `ValidatorProposer::try_new_block(true)` does not
+change this fact. It includes score-excluded immediate parents only until it reaches
+quorum. Commit progress recovery must disable this score-based exclusion for the
+immediate parent round and include each locally unique block.
 
 #### Current seeded shuffle
 
@@ -600,6 +683,15 @@ when round `P` is above the GC boundary and quorum parent stake is available in 
 round. If it is not, commit sync and own-block recovery must first establish a legal
 proposal frontier. This resume rule is a separate implementation and refinement
 obligation.
+
+Parent availability has one current Rust invariant. If Core accepts a block in
+round `P + 1`, `BlockVerifier` has checked quorum stake of distinct immediate
+parents in round `P`, and `BlockManager` has accepted each required parent above
+GC. Therefore, an accepted child proves that its local DAG has the required parent
+quorum. If no such child exists, the recovery validators must form the parent layer
+through exact-next proposals. A validator that lacks referenced parent blocks waits
+while block sync fetches them. The liveness proof must show that sync succeeds, or
+that a commit occurs first.
 
 Commit sync can install commits and move the GC boundary while recovery is active.
 Core must recompute all recovery conditions after it installs those commits.
@@ -707,6 +799,8 @@ enum ProposalMode {
   is unchanged;
 - keep the last-known-own-round gate;
 - keep the immediate-parent quorum check;
+- disable score-based ancestor exclusion for the immediate parent round and include
+  the locally unique available block from each validator;
 - include no new transactions;
 - still include valid transaction votes, the transaction vote cutoff, and commit
   votes;
@@ -761,6 +855,9 @@ The Lean model defines or proves these facts:
   validators in the round leader selection;
 - `P_r <= Q` is a separate optional resource bound;
 - v3 selection of the full schedule gives `A <= S = P_r <= N`;
+- a combined non-progress and local-exclusion stake bound leaves positive schedule
+  stake that is both progressing and locally included;
+- an exclusion stake cap does not protect one fixed first selected leader slot;
 - full finality of the selected leader slots plus one selected leader slot with a
   commit result gives a usable scan fragment for one round;
 - the required usable anchor count is the indirect depth plus one;
@@ -769,7 +866,12 @@ The Lean model defines or proves these facts:
 - two usable anchors do not always produce a commit at the current depth;
 - an in-range window of `depth + 1` usable anchors makes the complete modeled
   descending scan find a commit for every indirect result;
-- the recovery-window base is existential, not selected by the protocol;
+- the recovery-window base is the largest last signed round among the recovery
+  validators at the start of the common recovery period;
+- this finite maximum is attained, and each recovery validator starts at or below
+  it;
+- available causal parent quorums give each lower validator an exact-next path to
+  that frontier without a skipped proposal round;
 - every quorum block layer in the witness window is authored by validators in the
   recovery set;
 - every layer in the witness window is above the modeled block-GC boundary;
@@ -789,6 +891,8 @@ The Lean model defines or proves these facts:
 - visible blocks from recovery quorum stake form consecutive quorum block layers;
 - a progressing first selected leader with next-round quorum votes gives one
   usable anchor;
+- timely parent availability, the recovery immediate-parent rule, and the direct
+  decision rule derive those next-round votes;
 - an eventual favorable first-slot run gives the required usable anchor window;
 - these results and the Rust recording condition compose to eventual commit-index
   growth.
@@ -814,7 +918,8 @@ Model these items as local transitions or deterministic functions:
 - growing recovery delay that a threshold-clock jump does not reset;
 - persist before broadcast;
 - GC and the legal recovery frontier;
-- parent selection for a timely correct first-slot block;
+- disabling score-based ancestor exclusion for locally unique immediate-round
+  parents during recovery;
 - the v3 direct decision function;
 - the mapping from Rust's pending-round state and commit result to the proved
   executable `FlexCommitter` model.
@@ -828,7 +933,7 @@ Lean now proves these distributed results:
 2. Unless a commit occurs first, these validators are all in commit progress
    recovery in the same proposal rounds. They produce and exchange blocks for
    enough consecutive rounds, with quorum stake in each round. Use the next-round
-   proposal rule, a synchronized legal frontier, task fairness, persistence,
+   proposal rule, an execution-derived legal frontier, task fairness, persistence,
    broadcast, and post-GST delivery.
 3. Unless a commit occurs first, enough consecutive rounds start with a correct
    leader whose block receives enough next-round votes. FlexCommitter can then use
@@ -841,14 +946,16 @@ action effects and state mappings that a Rust refinement must supply. The remain
 conditions are:
 
 - the commit timestamp and local timer enable each modeled recovery-entry action;
-- continued next-round proposals expose a common execution-derived layer base, or
-  an existing higher valid block supplies the required parent layers;
+- the recovery layer base equals the largest last signed round among the recovery
+  validators at the start of the common recovery period;
+- the valid causal history at that frontier, block sync, and exact-next proposals
+  supply the finite parent interval that lower validators need to reach the base;
 - each next-round proposal waits for an immediate-parent quorum;
 - the proposal action persists the signed block before the packet is sent;
 - block delivery enables local acceptance, and accepted recovery blocks remain
   available while the commit index is unchanged;
-- the selected parent rule includes a timely first-slot block in each next-round
-  recovery block;
+- the recovery parent rule disables score-based exclusion and includes each timely,
+  locally unique immediate-round block;
 - each candidate block round is retained and pending, and the pending-array range
   and scan rules hold;
 - the accepted independent uniform leader-order model supplies the almost-sure
@@ -933,8 +1040,8 @@ These items remain local refinement work:
 
 - the Rust proposal path uses the modeled next-round proposal target and waits or
   synchronizes when quorum parents for that target are not available;
-- the proposer includes the timely first selected leader block used by the anchor
-  proof;
+- the proposer disables score-based ancestor exclusion for the immediate parent
+  round and includes each locally unique available block;
 - the legal recovery frontier stays above block GC;
 - future threshold-clock jumps do not reset the next-round target or pacing state;
 - the pacing timer uses one named local start event, and the layer proof derives a
@@ -960,11 +1067,19 @@ Add focused unit tests for these cases:
 - a recovery proposal uses exactly the round after the highest known own proposal;
 - a higher threshold-clock round does not change the recovery proposal target;
 - recovery waits or synchronizes when the target has no available parent quorum;
+- an accepted child makes its verified immediate-parent quorum available to the
+  next proposal attempt;
+- a recovery proposal includes a timely, locally unique immediate parent even
+  when that authority has local `Exclude` state and other parents already reach
+  quorum;
+- a recovery proposal can still omit an equivocating authority;
 - a recovery block keeps the parent quorum and transaction vote cutoff rules.
 
 Add deterministic simulation tests for these cases:
 
 - correct, non-crashed validators enter recovery at different times;
+- recovery validators start with different last signed rounds and converge on the
+  maximum start round without selecting or announcing it;
 - one future block causes a large round jump;
 - a layer window shorter than
   `requiredRecoveryLayerCount (requiredRecoveryAnchorCount indirectCommitDepth)`

@@ -33,6 +33,14 @@ eventual favorable leader-order window compose to commit-index progress. The
 recovery policy is not yet implemented in Rust, and the Rust-to-Lean state mapping
 is not machine checked.
 
+The recovery proof defines its common layer frontier as the maximum last signed
+round among the recovery quorum. It proves the finite exact-next path to that
+frontier when the causal parent interval is available. The proposed recovery
+parent rule disables score-based ancestor exclusion for the immediate parent round.
+It includes the unique available block from each validator, but it still omits a
+validator when the local DAG already knows an equivocation. This rule is not
+implemented.
+
 The proof model separates the validator set, the leader schedule, the round leader
 selection, and each selected leader slot. Current v3 uses the full leader schedule
 as the round leader selection in every pending leader round. The general schedule
@@ -170,6 +178,9 @@ protocol-model results. Their Rust mapping is not implemented in the current tre
 
 Read [the assumption ledger](docs/ASSUMPTIONS.md) and
 [the proof scope](docs/PROOF_SCOPE.md) before you use a theorem as a protocol claim.
+Use the
+[periodic Lean-to-Rust refinement review](docs/ASSUMPTIONS.md#periodic-lean-to-rust-refinement-review)
+after a relevant Rust change.
 Read [the implementation gaps](docs/IMPLEMENTATION_GAPS.md) before v3 activation.
 Read [the commit progress recovery design](design/commit_progress_recovery.md)
 before you change threshold-clock advancement or recovery block production.

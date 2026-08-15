@@ -90,6 +90,32 @@ theorem weight_le_total (authorityCount : Nat) (stake : Nat → Nat)
     weight authorityCount stake voters ≤ totalWeight authorityCount stake := by
   exact weight_mono stake (VoterSet.subset_full authorityCount voters)
 
+/-- Positive set stake gives one in-range selected authority with positive stake. -/
+theorem positive_weight_has_member
+    {authorityCount : Nat} {stake : Nat → Nat} {voters : VoterSet}
+    (positive : 0 < weight authorityCount stake voters) :
+    ∃ authority, authority < authorityCount ∧ voters authority = true ∧
+      0 < stake authority := by
+  induction authorityCount with
+  | zero => simp [weight] at positive
+  | succ authorityCount ih =>
+      by_cases selected : voters authorityCount = true
+      · by_cases earlierPositive :
+          0 < weight authorityCount stake voters
+        · rcases ih earlierPositive with
+            ⟨authority, authorityInRange, authoritySelected, authorityStake⟩
+          exact ⟨authority, by omega, authoritySelected, authorityStake⟩
+        · have earlierZero : weight authorityCount stake voters = 0 := by omega
+          have lastPositive : 0 < stake authorityCount := by
+            simp [weight, selected, earlierZero] at positive
+            exact positive
+          exact ⟨authorityCount, by omega, selected, lastPositive⟩
+      · have earlierPositive : 0 < weight authorityCount stake voters := by
+          simpa [weight, selected] using positive
+        rcases ih earlierPositive with
+          ⟨authority, authorityInRange, authoritySelected, authorityStake⟩
+        exact ⟨authority, by omega, authoritySelected, authorityStake⟩
+
 theorem weight_union_add_inter (authorityCount : Nat) (stake : Nat → Nat)
     (left right : VoterSet) :
     weight authorityCount stake (VoterSet.union left right) +
@@ -104,6 +130,14 @@ theorem weight_union_add_inter (authorityCount : Nat) (stake : Nat → Nat)
         cases rightValue : right authorityCount <;>
         simp [VoterSet.union, VoterSet.inter, leftValue, rightValue] at * <;>
         omega
+
+/-- The stake of a union is at most the sum of the two input stakes. -/
+theorem weight_union_le_add (authorityCount : Nat) (stake : Nat → Nat)
+    (left right : VoterSet) :
+    weight authorityCount stake (VoterSet.union left right) ≤
+      weight authorityCount stake left + weight authorityCount stake right := by
+  have identity := weight_union_add_inter authorityCount stake left right
+  omega
 
 theorem weight_diff_add_inter (authorityCount : Nat) (stake : Nat → Nat)
     (left right : VoterSet) :
@@ -149,6 +183,15 @@ structure Thresholds (authorityCount : Nat) (stake : Nat → Nat) where
     totalWeight authorityCount stake + fault + certificate ≤ quorum + quorum
 
 namespace Thresholds
+
+/-- The checked threshold inequalities imply that the quorum threshold is
+positive. -/
+theorem quorum_positive {authorityCount : Nat} {stake : Nat → Nat}
+    (thresholds : Thresholds authorityCount stake) :
+    0 < thresholds.quorum := by
+  have certificatePositive := thresholds.certificate_positive
+  have preservesCertificate := thresholds.quorum_preserves_certificate
+  omega
 
 /-- The nominal v3 thresholds for `N = 5f + 3c + 1`. -/
 def nominalHybrid {authorityCount : Nat} {stake : Nat → Nat}

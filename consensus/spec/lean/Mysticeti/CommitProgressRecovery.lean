@@ -181,6 +181,45 @@ theorem leader_schedule_contains_progress_stake
     omega
   omega
 
+/-- A leader schedule contains positive stake that is both progressing and locally
+included when the two excluded stake sets together are smaller than the schedule.
+
+This is an existence result. It does not state that the first selected leader slot
+uses this stake, or that different proposers use the same local exclusion set. -/
+theorem leader_schedule_contains_progress_and_locally_included_stake
+    {authorityCount : Nat} {stake : Nat → Nat}
+    {schedule nonProgress locallyExcluded : VoterSet}
+    (combinedStakeBelowSchedule :
+      weight authorityCount stake nonProgress +
+          weight authorityCount stake locallyExcluded <
+        weight authorityCount stake schedule) :
+    0 < weight authorityCount stake
+      (VoterSet.diff schedule
+        (VoterSet.union nonProgress locallyExcluded)) := by
+  have unionBound := weight_union_le_add authorityCount stake nonProgress
+    locallyExcluded
+  have unionBelowSchedule :
+      weight authorityCount stake
+          (VoterSet.union nonProgress locallyExcluded) <
+        weight authorityCount stake schedule := by
+    omega
+  exact leader_schedule_contains_progress_stake
+    (nonProgressStakeBound :=
+      weight authorityCount stake (VoterSet.union nonProgress locallyExcluded))
+    unionBelowSchedule (Nat.le_refl _)
+
+/-- A small local exclusion set can still contain one fixed first-slot validator.
+Thus, an exclusion stake cap does not by itself give the direct votes for that
+selected leader slot. -/
+def firstSlotExclusionExample : VoterSet := fun authority => authority == 0
+
+theorem exclusion_cap_does_not_protect_a_fixed_first_slot :
+    weight 2 (fun _ => 1) firstSlotExclusionExample < 2 ∧
+      firstSlotExclusionExample 0 = true ∧
+      0 < weight 2 (fun _ => 1)
+        (VoterSet.diff VoterSet.full firstSlotExclusionExample) := by
+  decide
+
 /-- If non-progress stake plus the quorum threshold is at most total validator set
 stake, the validators outside the non-progress set have quorum stake. -/
 theorem progress_stake_reaches_quorum
@@ -461,6 +500,147 @@ structure CommitProgressRecoveryView (State : Type) where
 
 namespace CommitProgressRecoveryView
 
+/-- The largest round value selected from a finite validator range. -/
+def maxSelectedRound : Nat → VoterSet → (Nat → Nat) → Nat
+  | 0, _, _ => 0
+  | authorityCount + 1, selected, roundOf =>
+      if selected authorityCount = true then
+        max (maxSelectedRound authorityCount selected roundOf)
+          (roundOf authorityCount)
+      else
+        maxSelectedRound authorityCount selected roundOf
+
+/-- Each selected validator's round is at most the finite selected maximum. -/
+theorem selected_round_le_max_selected_round
+    {authorityCount : Nat} {selected : VoterSet} {roundOf : Nat → Nat}
+    {authority : Nat}
+    (authorityInRange : authority < authorityCount)
+    (authoritySelected : selected authority = true) :
+    roundOf authority ≤ maxSelectedRound authorityCount selected roundOf := by
+  induction authorityCount generalizing authority with
+  | zero => omega
+  | succ authorityCount ih =>
+      by_cases isLast : authority = authorityCount
+      · subst authority
+        rw [maxSelectedRound, if_pos authoritySelected]
+        exact Nat.le_max_right _ _
+      · have inEarlierRange : authority < authorityCount := by omega
+        have earlierBound := ih inEarlierRange authoritySelected
+        by_cases lastSelected : selected authorityCount = true
+        · rw [maxSelectedRound, if_pos lastSelected]
+          exact Nat.le_trans earlierBound (Nat.le_max_left _ _)
+        · simpa [maxSelectedRound, lastSelected] using earlierBound
+
+/-- The finite selected maximum is zero or is the round of one selected
+validator. -/
+theorem max_selected_round_zero_or_attained
+    (authorityCount : Nat) (selected : VoterSet) (roundOf : Nat → Nat) :
+    maxSelectedRound authorityCount selected roundOf = 0 ∨
+      ∃ authority, authority < authorityCount ∧ selected authority = true ∧
+        roundOf authority = maxSelectedRound authorityCount selected roundOf := by
+  induction authorityCount with
+  | zero => simp [maxSelectedRound]
+  | succ authorityCount ih =>
+      by_cases lastSelected : selected authorityCount = true
+      · by_cases previousLeLast :
+          maxSelectedRound authorityCount selected roundOf ≤
+            roundOf authorityCount
+        · right
+          refine ⟨authorityCount, by omega, lastSelected, ?_⟩
+          rw [maxSelectedRound, if_pos lastSelected, Nat.max_eq_right previousLeLast]
+        · have lastLtPrevious :
+            roundOf authorityCount <
+              maxSelectedRound authorityCount selected roundOf := by omega
+          rcases ih with previousZero | ⟨authority, authorityInRange,
+              authoritySelected, authorityAtMaximum⟩
+          · rw [previousZero] at lastLtPrevious
+            omega
+          · right
+            refine ⟨authority, by omega, authoritySelected, ?_⟩
+            rw [maxSelectedRound, if_pos lastSelected,
+              Nat.max_eq_left (Nat.le_of_lt lastLtPrevious)]
+            exact authorityAtMaximum
+      · rcases ih with previousZero | ⟨authority, authorityInRange,
+            authoritySelected, authorityAtMaximum⟩
+        · left
+          simpa [maxSelectedRound, lastSelected] using previousZero
+        · right
+          refine ⟨authority, by omega, authoritySelected, ?_⟩
+          simpa [maxSelectedRound, lastSelected] using authorityAtMaximum
+
+/-- A nonempty selected set has one validator at the finite selected maximum. -/
+theorem max_selected_round_is_attained
+    {authorityCount : Nat} {selected : VoterSet} {roundOf : Nat → Nat}
+    (selectedNonempty :
+      ∃ authority, authority < authorityCount ∧ selected authority = true) :
+    ∃ authority, authority < authorityCount ∧ selected authority = true ∧
+      roundOf authority = maxSelectedRound authorityCount selected roundOf := by
+  rcases max_selected_round_zero_or_attained authorityCount selected roundOf with
+    maximumZero | attained
+  · rcases selectedNonempty with ⟨authority, authorityInRange, authoritySelected⟩
+    have authorityBound := selected_round_le_max_selected_round
+      (roundOf := roundOf) authorityInRange authoritySelected
+    rw [maximumZero] at authorityBound
+    exact ⟨authority, authorityInRange, authoritySelected, by omega⟩
+  · exact attained
+
+/-- The proof-selected recovery frontier is the largest last signed round among
+the validators that are in commit progress recovery. The protocol does not send or
+agree on this value. -/
+def recoveryFrontierRound {State : Type}
+    (view : CommitProgressRecoveryView State) (state : State) : Nat :=
+  maxSelectedRound view.authorityCount
+    (view.correctRecoveryAuthorities state)
+    (fun authority => view.highestKnownOwnProposalRound authority state)
+
+/-- Every validator in commit progress recovery starts at or below the
+proof-selected recovery frontier. -/
+theorem recovery_authority_round_le_frontier
+    {State : Type} (view : CommitProgressRecoveryView State)
+    {state : State} {authority : Nat}
+    (authorityInRange : authority < view.authorityCount)
+    (authorityInRecovery :
+      view.correctRecoveryAuthorities state authority = true) :
+    view.highestKnownOwnProposalRound authority state ≤
+      view.recoveryFrontierRound state := by
+  exact selected_round_le_max_selected_round
+    (roundOf := fun selectedAuthority =>
+      view.highestKnownOwnProposalRound selectedAuthority state)
+    authorityInRange authorityInRecovery
+
+/-- A recovery quorum contains one validator whose last signed round attains the
+proof-selected recovery frontier. -/
+theorem recovery_frontier_is_attained
+    {State : Type} (view : CommitProgressRecoveryView State)
+    (thresholds : Thresholds view.authorityCount view.stake)
+    {state : State}
+    (recoveryStake : thresholds.quorum ≤
+      weight view.authorityCount view.stake
+        (view.correctRecoveryAuthorities state)) :
+    ∃ authority,
+      authority < view.authorityCount ∧
+      view.correctRecoveryAuthorities state authority = true ∧
+      view.highestKnownOwnProposalRound authority state =
+        view.recoveryFrontierRound state := by
+  have positiveRecoveryStake : 0 <
+      weight view.authorityCount view.stake
+        (view.correctRecoveryAuthorities state) := by
+    have quorumPositive := thresholds.quorum_positive
+    omega
+  rcases positive_weight_has_member positiveRecoveryStake with
+    ⟨someAuthority, someAuthorityInRange, someAuthorityRecovering,
+      someAuthorityStake⟩
+  have selectedNonempty :
+      ∃ authority, authority < view.authorityCount ∧
+        view.correctRecoveryAuthorities state authority = true :=
+    ⟨someAuthority, someAuthorityInRange, someAuthorityRecovering⟩
+  rcases max_selected_round_is_attained
+      (roundOf := fun authority =>
+        view.highestKnownOwnProposalRound authority state)
+      selectedNonempty with
+    ⟨authority, authorityInRange, authorityRecovering, authorityAtFrontier⟩
+  exact ⟨authority, authorityInRange, authorityRecovering, authorityAtFrontier⟩
+
 def leaderScheduleStake {State : Type}
     (view : CommitProgressRecoveryView State) (state : State) : Nat :=
   weight view.authorityCount view.stake (view.leaderSchedule state)
@@ -550,6 +730,26 @@ def RetainedQuorumBlockLayer {State : Type}
         (view.quorumBlockLayerAuthors round state)
         (view.correctRecoveryAuthorities state) ∧
       Retained (view.gcBoundary state) round
+
+/-- A proposer has quorum stake of immediate-round parent blocks in its retained
+local DAG. The parent authors do not need to be in commit progress recovery. -/
+def AvailableImmediateParentQuorum {State : Type}
+    (view : CommitProgressRecoveryView State)
+    (thresholds : Thresholds view.authorityCount view.stake)
+    (round : Nat) : State → Prop :=
+  fun state =>
+    thresholds.quorum ≤ view.quorumBlockLayerStake round state ∧
+      Retained (view.gcBoundary state) round
+
+/-- Each retained recovery quorum block layer is an available immediate-parent
+quorum for the next exact proposal round. -/
+theorem retained_recovery_layer_gives_parent_quorum
+    {State : Type} (view : CommitProgressRecoveryView State)
+    (thresholds : Thresholds view.authorityCount view.stake)
+    {state : State} {round : Nat}
+    (layer : RetainedQuorumBlockLayer view thresholds round state) :
+    AvailableImmediateParentQuorum view thresholds round state :=
+  ⟨layer.2.1, layer.2.2.2⟩
 
 def ConsecutiveQuorumBlockLayers {State : Type}
     (view : CommitProgressRecoveryView State)
@@ -720,6 +920,75 @@ theorem next_round_proposal_target_is_not_old
       view.highestKnownOwnProposalRound authority state := by
   rw [nextRoundTargets authority authorityInRange authorityInRecovery]
   omega
+
+/-! ### Exact-next catch-up to an execution-derived frontier -/
+
+/-- A finite proposal path that increases the last signed round by exactly one at
+each step. Each step needs a quorum of immediate parents in its source round. -/
+inductive ExactNextCatchUp (parentQuorumAvailable : Nat → Prop) : Nat → Nat → Prop
+  | done (round : Nat) : ExactNextCatchUp parentQuorumAvailable round round
+  | next {round target : Nat} :
+      parentQuorumAvailable round →
+      ExactNextCatchUp parentQuorumAvailable (round + 1) target →
+      ExactNextCatchUp parentQuorumAvailable round target
+
+/-- Parent quorums for one finite round interval give an exact-next path across the
+interval. No proposal in the path skips a round. -/
+theorem parent_quorums_give_exact_next_catch_up
+    (parentQuorumAvailable : Nat → Prop) (start count : Nat)
+    (parents : ∀ offset, offset < count →
+      parentQuorumAvailable (start + offset)) :
+    ExactNextCatchUp parentQuorumAvailable start (start + count) := by
+  induction count generalizing start with
+  | zero =>
+      simpa using (ExactNextCatchUp.done (parentQuorumAvailable :=
+        parentQuorumAvailable) start)
+  | succ count ih =>
+      apply ExactNextCatchUp.next
+      · simpa using parents 0 (by omega)
+      · have remainingParents : ∀ offset, offset < count →
+            parentQuorumAvailable ((start + 1) + offset) := by
+          intro offset offsetInRange
+          have parent := parents (offset + 1) (by omega)
+          simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using parent
+        have remainingPath := ih (start + 1) remainingParents
+        simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using remainingPath
+
+/-- A validator in recovery has an exact-next path from its last signed round to
+the execution-derived recovery frontier when the finite causal parent interval is
+available. -/
+theorem recovery_authority_has_exact_next_path_to_frontier
+    {State : Type} (view : CommitProgressRecoveryView State)
+    {state : State} {authority : Nat}
+    (authorityInRange : authority < view.authorityCount)
+    (authorityInRecovery :
+      view.correctRecoveryAuthorities state authority = true)
+    (parentQuorumAvailable : Nat → Prop)
+    (parentsUntilFrontier : ∀ round,
+      view.highestKnownOwnProposalRound authority state ≤ round →
+      round < view.recoveryFrontierRound state →
+      parentQuorumAvailable round) :
+    ExactNextCatchUp parentQuorumAvailable
+      (view.highestKnownOwnProposalRound authority state)
+      (view.recoveryFrontierRound state) := by
+  let start := view.highestKnownOwnProposalRound authority state
+  let frontier := view.recoveryFrontierRound state
+  have startLeFrontier : start ≤ frontier :=
+    view.recovery_authority_round_le_frontier authorityInRange authorityInRecovery
+  let count := frontier - start
+  have parentsByOffset : ∀ offset, offset < count →
+      parentQuorumAvailable (start + offset) := by
+    intro offset offsetInRange
+    apply parentsUntilFrontier
+    · omega
+    · dsimp [count] at offsetInRange
+      omega
+  have path := parent_quorums_give_exact_next_catch_up
+    parentQuorumAvailable start count parentsByOffset
+  have endpoint : start + count = frontier := by
+    dsimp [count]
+    omega
+  simpa [endpoint] using path
 
 /-! ### Recovery entry from local actions -/
 
@@ -979,14 +1248,13 @@ structure RecoveryBlockFlow
   proposalReadyAfterStart :
     ∀ start count offset,
       start ≤ proposalReadyAt start count offset
-  immediateParentQuorumAvailable : Nat → State → Prop
   parentQuorumAvailableAtProposalReady :
     ∀ baseline authority start count offset,
       RecoveryQuorumAt view thresholds baseline (trace start) →
       offset < count →
       authority < view.authorityCount →
       view.correctRecoveryAuthorities (trace start) authority = true →
-      immediateParentQuorumAvailable (baseRound start + offset)
+      AvailableImmediateParentQuorum view thresholds (baseRound start + offset)
         (trace (proposalReadyAt start count offset))
   proposalAction : Nat → Time → Nat → Nat → LocalConsensusAction
   proposalActionEnabledAt :
@@ -998,7 +1266,7 @@ structure RecoveryBlockFlow
       offset < count →
       authority < view.authorityCount →
       view.correctRecoveryAuthorities (trace start) authority = true →
-      immediateParentQuorumAvailable (baseRound start + offset)
+      AvailableImmediateParentQuorum view thresholds (baseRound start + offset)
         (trace (proposalReadyAt start count offset)) →
       protocolAction (proposalAction authority start count offset)
   blockPacket : Nat → Time → Nat → Nat → Packet
@@ -1188,6 +1456,10 @@ structure RecoveryLayerProductionProcess
     (entry : RecoveryEntryProcess trace network view thresholds
       protocolAction processing) where
   baseRound : Time → Nat
+  baseRoundIsRecoveryFrontier :
+    ∀ baseline start,
+      RecoveryQuorumAt view thresholds baseline (trace start) →
+      baseRound start = view.recoveryFrontierRound (trace start)
   windowBound : Nat → Time
   recoveryBlockVisibleAtDeadline :
     ∀ baseline start count offset authority,
@@ -1239,6 +1511,10 @@ def recovery_layer_production_from_block_flow
     {baseRound : Time → Nat} {windowBound : Nat → Time}
     (flow : RecoveryBlockFlow trace network view thresholds protocolAction
       processing entry baseRound windowBound)
+    (baseRoundIsRecoveryFrontier :
+      ∀ baseline start,
+        RecoveryQuorumAt view thresholds baseline (trace start) →
+        baseRound start = view.recoveryFrontierRound (trace start))
     (layerContainsOnlyRecoveringValidators :
       ∀ start count offset,
         offset < count →
@@ -1265,6 +1541,7 @@ def recovery_layer_production_from_block_flow
     RecoveryLayerProductionProcess trace network view thresholds protocolAction
       processing entry where
   baseRound := baseRound
+  baseRoundIsRecoveryFrontier := baseRoundIsRecoveryFrontier
   windowBound := windowBound
   recoveryBlockVisibleAtDeadline := by
     intro baseline start count offset authority afterGst recoveryAtStart
@@ -1277,7 +1554,7 @@ def recovery_layer_production_from_block_flow
   layerIsRetainedAtDeadline := layerIsRetainedAtDeadline
 
 /-- Pointwise recovery proposals from quorum stake form consecutive quorum block
-layers at the process-selected base by the common deadline. -/
+layers at the proof-selected recovery frontier by the common deadline. -/
 theorem recovery_quorum_has_chosen_layers_by_deadline
     {State : Type} {protocolPacket : Packet → Prop}
     {trace : Trace State}
@@ -1298,7 +1575,7 @@ theorem recovery_quorum_has_chosen_layers_by_deadline
     CommitAdvancedFrom view baseline (trace deadline) ∨
       (RecoveryQuorumAt view thresholds baseline (trace deadline) ∧
         ConsecutiveQuorumBlockLayers view thresholds
-          (production.baseRound start) count (trace deadline)) := by
+          (view.recoveryFrontierRound (trace start)) count (trace deadline)) := by
   let deadline := start + production.windowBound count
   have startBeforeDeadline : start ≤ deadline := by simp [deadline]
   have startAtBaseline : view.commitIndex (trace start) = baseline :=
@@ -1357,7 +1634,12 @@ theorem recovery_quorum_has_chosen_layers_by_deadline
           offsetInWindow,
         production.layerIsRetainedAtDeadline baseline start count offset
           recoveryAtStart offsetInWindow atBaseline⟩
-    exact Or.inr ⟨recoveryAtDeadline, layersAtDeadline⟩
+    have frontierLayers :
+        ConsecutiveQuorumBlockLayers view thresholds
+          (view.recoveryFrontierRound (trace start)) count (trace deadline) := by
+      rw [← production.baseRoundIsRecoveryFrontier baseline start recoveryAtStart]
+      exact layersAtDeadline
+    exact Or.inr ⟨recoveryAtDeadline, frontierLayers⟩
 
 /-- Pointwise recovery proposals from quorum stake form one consecutive quorum
 block-layer window by the common deadline. -/
@@ -1389,7 +1671,8 @@ theorem recovery_quorum_reaches_layers_within
   · have windowAtDeadline :
         HasQuorumBlockLayerWindowAt view thresholds baseline count
           (trace deadline) :=
-      ⟨recoveryAtDeadline.1, production.baseRound start, layersAtDeadline⟩
+      ⟨recoveryAtDeadline.1, view.recoveryFrontierRound (trace start),
+        layersAtDeadline⟩
     exact ⟨deadline, startBeforeDeadline, by simp [deadline],
       Or.inr ⟨recoveryAtDeadline, windowAtDeadline⟩⟩
 
@@ -1427,6 +1710,72 @@ def FirstSelectedLeaderIsProgressing {State : Type}
         SelectedLeaderSlotView.validator = some validator ∧
       view.nonProgress state validator = false
 
+/-- Recovery parent selection is schedule-independent. It disables score-based
+ancestor exclusion for the immediate parent round. A recovery proposal groups the
+available blocks by validator. It includes the block when the local DAG has exactly
+one block for that validator. It includes no block for a validator when the local
+DAG already knows more than one. -/
+structure RecoveryImmediateParentRule {State : Type}
+    (view : CommitProgressRecoveryView State) where
+  parentAvailable : State → Nat → Nat → Nat → Prop
+  parentEquivocationKnown : State → Nat → Nat → Nat → Bool
+  parentIncluded : State → Nat → Nat → Nat → Prop
+  includesLocallyUniqueAvailableParent :
+    ∀ state round leader voter,
+      voter < view.authorityCount →
+      view.quorumBlockLayerAuthors (round + directVoteRoundOffset) state voter =
+        true →
+      parentAvailable state round leader voter →
+      parentEquivocationKnown state round leader voter = false →
+      parentIncluded state round leader voter
+
+/-- Pacing and post-GST delivery make one correct first-slot block available to
+each next-round recovery proposer before that proposer selects its parents. A
+correct leader does not equivocate. -/
+structure TimelyFirstSlotParentAvailability {State : Type}
+    (view : CommitProgressRecoveryView State)
+    (parents : RecoveryImmediateParentRule view) where
+  progressingFirstSlotIsAvailable :
+    ∀ state round leader voter,
+      (view.selectedLeaderSlots round state).head?.map
+          SelectedLeaderSlotView.validator = some leader →
+      view.nonProgress state leader = false →
+      voter < view.authorityCount →
+      view.quorumBlockLayerAuthors (round + directVoteRoundOffset) state voter =
+        true →
+      parents.parentAvailable state round leader voter
+  progressingFirstSlotHasNoKnownEquivocation :
+    ∀ state round leader voter,
+      (view.selectedLeaderSlots round state).head?.map
+          SelectedLeaderSlotView.validator = some leader →
+      view.nonProgress state leader = false →
+      voter < view.authorityCount →
+      view.quorumBlockLayerAuthors (round + directVoteRoundOffset) state voter =
+        true →
+      parents.parentEquivocationKnown state round leader voter = false
+
+/-- The direct decision rule counts an included immediate parent as one direct vote
+and changes the first selected leader slot to `Commit` after quorum stake votes. -/
+structure DirectFirstSlotDecisionRule {State : Type}
+    (view : CommitProgressRecoveryView State)
+    (thresholds : Thresholds view.authorityCount view.stake)
+    (parents : RecoveryImmediateParentRule view) where
+  directVoters : Nat → State → VoterSet
+  includedParentIsDirectVote :
+    ∀ state round leader voter,
+      voter < view.authorityCount →
+      parents.parentIncluded state round leader voter →
+      directVoters round state voter = true
+  directQuorumCommitsFirstSlot :
+    ∀ state round validator,
+      (view.selectedLeaderSlots round state).head?.map
+          SelectedLeaderSlotView.validator = some validator →
+      thresholds.quorum ≤
+        weight view.authorityCount view.stake (directVoters round state) →
+      ∃ tail,
+        view.selectedLeaderSlots round state =
+          { validator := validator, status := .commit } :: tail
+
 /-- Direct-vote observations and the deterministic selected-slot status update.
 
 The first field is the pacing and parent-selection rule: when the first selected
@@ -1454,6 +1803,31 @@ structure TimelyFirstSlotVoting {State : Type}
       ∃ tail,
         view.selectedLeaderSlots round state =
           { validator := validator, status := .commit } :: tail
+
+/-- The schedule-independent recovery parent rule, timely delivery, and the direct
+decision rule construct the first-slot voting condition used by the anchor proof. -/
+def timely_first_slot_voting_from_parent_rule
+    {State : Type}
+    (view : CommitProgressRecoveryView State)
+    (thresholds : Thresholds view.authorityCount view.stake)
+    (parents : RecoveryImmediateParentRule view)
+    (availability : TimelyFirstSlotParentAvailability view parents)
+    (direct : DirectFirstSlotDecisionRule view thresholds parents) :
+    TimelyFirstSlotVoting view thresholds where
+  directVoters := direct.directVoters
+  progressingFirstSlotIncludedByNextLayer := by
+    intro state round leader firstSlot leaderProgressing
+    intro voter voterInRange voterInLayer
+    have available := availability.progressingFirstSlotIsAvailable state round
+      leader voter firstSlot leaderProgressing voterInRange voterInLayer
+    have noKnownEquivocation :=
+      availability.progressingFirstSlotHasNoKnownEquivocation state round leader
+        voter firstSlot leaderProgressing voterInRange voterInLayer
+    have included := parents.includesLocallyUniqueAvailableParent state round
+      leader voter voterInRange voterInLayer available noKnownEquivocation
+    exact direct.includedParentIsDirectVote state round leader voter voterInRange
+      included
+  directQuorumCommitsFirstSlot := direct.directQuorumCommitsFirstSlot
 
 /-- A progressing first selected leader and one next-round quorum block layer make
 the round a usable anchor. -/
@@ -1780,6 +2154,7 @@ theorem recovery_candidate_reaches_usable_anchors_by_deadline
           (view.firstPendingLeaderRound (trace deadline) + mapping.baseIndex start)
           (requiredRecoveryLayerCount (depth + 1)) (trace deadline) := by
       rw [← baseMatch]
+      rw [production.baseRoundIsRecoveryFrontier baseline start recoveryAtStart]
       exact layersAtDeadline
     have sampledRun := progressingIfStalled atBaseline
     have progressingAtPendingBase :

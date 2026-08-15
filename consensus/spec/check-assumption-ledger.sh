@@ -8,9 +8,10 @@ spec_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ledger="$spec_dir/docs/ASSUMPTIONS.md"
 defined_ids_file="$(mktemp)"
 referenced_ids_file="$(mktemp)"
+refinement_ids_file="$(mktemp)"
 
 cleanup() {
-    rm -f -- "$defined_ids_file" "$referenced_ids_file"
+    rm -f -- "$defined_ids_file" "$referenced_ids_file" "$refinement_ids_file"
 }
 trap cleanup EXIT
 
@@ -108,4 +109,19 @@ if [ -n "$unreferenced_ids" ]; then
     exit 1
 fi
 
-echo "Assumption ledger check passed for $defined_count identifiers."
+sed -nE 's/^\| `(REF-[A-Z0-9-]+)` \|.*/\1/p' "$ledger" |
+    sort >"$refinement_ids_file"
+refinement_count="$(wc -l <"$refinement_ids_file" | tr -d '[:space:]')"
+if [ "$refinement_count" -eq 0 ]; then
+    echo "The Lean-to-Rust refinement review is empty." >&2
+    exit 1
+fi
+
+duplicate_refinement_ids="$(uniq -d "$refinement_ids_file")"
+if [ -n "$duplicate_refinement_ids" ]; then
+    echo "The Lean-to-Rust refinement review defines an identifier more than once:" >&2
+    echo "$duplicate_refinement_ids" >&2
+    exit 1
+fi
+
+echo "Assumption ledger check passed for $defined_count assumptions and $refinement_count Rust mappings."

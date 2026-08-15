@@ -286,7 +286,9 @@ is the stable interface for the recovery-stage composition. The theorem
 `recovery_stages_from_processes` now constructs this interface from local process
 rules, network delivery, bounded local processing, timely voting, the accepted
 leader-order trace, and Rust-state mapping rules. The recovery-window base is
-derived from the execution. Current v3 uses direct votes in the next round. Thus,
+the largest last signed round among the recovery quorum when its common recovery
+period starts. The protocol does not select this proof value. Current v3 uses
+direct votes in the next round. Thus,
 the layer count is derived from the required anchor count and the direct-vote
 offset.
 
@@ -314,6 +316,12 @@ a separate fault-independent source of quorum live stake.
 `actual_hybrid_fault_budgets_leave_quorum` derives this inequality from the actual
 v3 definition `Q = N - (f + c)` and the bound that non-progress stake is at most
 `f + c`.
+
+`recoveryFrontierRound` takes the finite maximum of the last signed rounds in the
+recovery quorum. Lean proves that this maximum is attained and that each recovery
+validator starts at or below it. If the required causal parent quorums are
+available, `recovery_authority_has_exact_next_path_to_frontier` gives each lower
+validator a finite path to that frontier with no skipped proposal round.
 
 Let `N` be actual validator set stake, `S` be leader schedule stake, and `P_r` be
 round leader selection stake in pending leader round `r`. The structural relation
@@ -360,6 +368,14 @@ proves the coverage derivation and the resource derivation separately. It also
 proves that a viable leader schedule does not by itself give round leader selection
 coverage.
 
+An ancestor exclusion cap gives only a local existence result. When the combined
+non-progress and local-exclusion stake is smaller than `S`, some schedule stake is
+both progressing and locally included. The cap does not protect one fixed first
+selected leader slot, and different proposers can use different exclusion sets.
+The anchor proof therefore disables score-based ancestor exclusion for the
+immediate parent round during recovery. It includes each locally unique available
+block and keeps equivocation handling.
+
 The consecutive quorum block layer window also requires each layer author to be in
 the recovery set and each witness layer to be above the modeled block-GC boundary.
 The Rust refinement must show that block sync obtains the recent blocks before Core
@@ -391,7 +407,9 @@ results. It uses these smaller contracts:
 - persistence before broadcast, post-GST delivery, and one local block-acceptance
   action;
 - pending-round and GC-retention mappings for the produced layers;
-- timely inclusion of a progressing first-slot block by the next quorum layer;
+- timely availability of a progressing first-slot block to the next quorum layer;
+- the schedule-independent recovery rule that disables score-based exclusion for
+  each locally unique immediate-round parent;
 - the deterministic direct decision rule;
 - an eventual favorable first-slot run from the accepted leader-order sampling
   model;
@@ -406,13 +424,15 @@ The following items remain Rust refinement or accepted-model boundaries. They ar
 not the old distributed stage results:
 
 - prove that the local commit timestamp and timer enable the modeled entry action;
-- prove that continued next-round proposals expose a common execution-derived
-  layer base, or that an existing higher valid block already supplies the required
-  parent layers;
+- map the common layer base to the maximum last signed round among the recovery
+  quorum at the start of its common recovery period;
+- prove that the valid causal history at that frontier and block sync make the
+  finite parent interval available, or that a commit occurs first;
 - prove immediate-parent quorum availability or start synchronization before a
   next-round proposal;
 - prove that the Rust proposal action persists and broadcasts the required block;
-- prove that recovery parent selection includes a timely first-slot block;
+- implement and prove the recovery rule that disables score-based exclusion for
+  each locally unique available immediate-round parent;
 - verify the two `PendingRoundArrayRules`: each pending leader round is inside the
   stored range, and the descending indirect scan visits every stored index;
 - map retained blocks and selected leader slots to the pending array used by
@@ -427,6 +447,10 @@ traces the call path and lists the tests that cover it. Lean does not verify Rus
 source, so the Rust-state mapping remains a mapping condition. One focused
 old-prefix recovery-window regression test is still missing. Future Rust changes
 must preserve this call path and these results, or the model and proof must change.
+
+The
+[periodic Lean-to-Rust refinement review](ASSUMPTIONS.md#periodic-lean-to-rust-refinement-review)
+is the canonical list of these mappings and their current status.
 
 `recovery_anchor_window_mapping_from_pending_round_rules` now calculates the
 candidate base index and proves that the anchor window is in range. The Rust

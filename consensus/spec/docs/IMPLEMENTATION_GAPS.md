@@ -73,16 +73,18 @@ The current Rust code does not have these parts:
 - recovery state and pacing that remain keyed by commit index across future round
   jumps;
 - a recovery legal-frontier rule for a highest own proposal round at or below GC;
-- a recovery parent-selection rule that includes the timely correct first-slot
-  block used by the liveness proof;
+- a recovery parent-selection rule that disables score-based ancestor exclusion for
+  the immediate parent round and includes the locally unique available block from
+  each validator;
 - a positive symbolic post-GST processing bound `epsilon`, with
   `epsilon < delta`, and a recovery wait that can grow beyond the applicable
   network and processing bound;
 - one exact local event that starts each recovery pacing interval, and a proof that
   bounds proposal skew from that event during a stable recovery period;
 - Rust mappings for the local recovery-entry action, immediate-parent quorum
-  readiness, a common execution-derived layer base, proposal persistence and
-  broadcast, block acceptance, timely parent inclusion, pending rounds, and
+  readiness, the maximum last signed round that forms the execution-derived layer
+  base, proposal persistence and broadcast, block acceptance, timely parent
+  inclusion, pending rounds, and
   retained evidence. For the pending array, verify that each pending leader round
   is in the stored range and that the indirect scan visits each stored index;
 - deterministic simulation tests for schedule changes, stake bounds, selective
@@ -102,6 +104,11 @@ for the trigger logic, proposal rules, derived recovery distances, leader schedu
 and round leader selection bounds, synchronization rules, test plan, and activation
 condition. `CertifiedCommit` remains an input to commit sync. Commit progress
 recovery does not require a separate certified commit prefix.
+
+The immediate-parent quorum check is not missing. `BlockVerifier` rejects a child
+without quorum stake from its immediate parent round. `BlockManager` does not accept
+a child above GC until its required parents are accepted. Keep these current
+properties and add the recovery progress proof around them.
 
 ## P0: put v3 activation in epoch protocol state
 
@@ -182,6 +189,14 @@ leader round. The upper bounds are `S = P_r <= N`. Report `P_r <= Q` only if the
 deployment enables this optional work limit. Require a positive leader schedule
 window and update interval. Add property tests for all boundary values.
 
+The ancestor exclusion stake cap is not a replacement for the recovery rule. It can
+prove that one proposer has some correct, available schedule stake that is locally
+included when the combined stake bound holds. It does not prove that the first
+selected leader is outside the local exclusion sets of quorum stake of next-round
+proposers. Disable score-based exclusion only for the immediate parent round during
+commit progress recovery. Keep equivocation handling and normal exclusion for older
+ancestors.
+
 ## P1: specify block-sync and commit-sync liveness
 
 Related assumptions: `ASM-LIVE-BLOCK-SYNC`, `ASM-LIVE-COMMIT-SYNC`,
@@ -199,6 +214,13 @@ The implementation has important recovery mechanisms:
 - Periodic block sync resumes when commit sync does not make commit progress.
 - `CommitSyncer` retries commit ranges, verifies the commit chain and certificate,
   buffers ranges across gaps, and sends consecutive ranges to Core.
+
+For normal recovery with durable storage, the validator at the execution-derived
+frontier can serve its recent block and causal parents. After local storage loss, a
+peer that retained the block must serve it. The proof must map the applicable source
+and retained range to the sync requests. This does not require a new
+transaction-retention assumption. If the syncer can request only a random peer, the
+retry proof must still show that it eventually selects a correct source.
 
 Use these contracts only when a lagging or restarted validator needs old consensus
 state:
