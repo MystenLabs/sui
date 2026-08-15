@@ -194,18 +194,6 @@ impl TestCluster {
         self.swarm.observer_nodes().next()
     }
 
-    /// Convenience method to start a new observer fullnode subscribed to the first
-    /// validator, which must have its observer server enabled.
-    pub async fn spawn_new_observer_node(&mut self) -> FullNodeHandle {
-        let mut config = self
-            .fullnode_config_builder()
-            .with_observer_subscribed_to_validator(0)
-            .build(&mut OsRng, self.swarm.config());
-        // An observer that halts at a checkpoint range boundary defeats its purpose.
-        config.run_with_range = None;
-        self.start_fullnode_from_config(config).await
-    }
-
     pub async fn start_fullnode_from_config(&mut self, config: NodeConfig) -> FullNodeHandle {
         let json_rpc_address = config.json_rpc_address;
         let node = self.swarm.spawn_new_node(config).await;
@@ -1348,6 +1336,12 @@ impl TestClusterBuilder {
     /// first validator. Unless a validator observer config is provided, the first validator
     /// gets its observer server enabled. The observer is available via
     /// `TestCluster::observer_node()`.
+    ///
+    /// The first validator must end up with its observer server enabled, which `build()`
+    /// validates: a callback passed to `with_validator_observer_config` must return
+    /// `Some(_)` for index 0, and a prebuilt network config passed to `set_network_config`
+    /// must already enable the observer server on the first validator (the callback is not
+    /// applied to prebuilt network configs).
     pub fn with_observer_fullnode(mut self) -> Self {
         self.observer_fullnode = true;
         self
@@ -1599,12 +1593,38 @@ impl TestClusterBuilder {
             }));
         }
 
-        if self.observer_fullnode && self.validator_observer_config.is_none() {
-            // The observer fullnode subscribes to the first validator, so its observer
-            // server must be enabled.
-            self.validator_observer_config = Some(Arc::new(|idx| {
-                (idx == 0).then(consensus_config::ObserverParameters::default)
-            }));
+        if self.observer_fullnode {
+            // The observer fullnode subscribes to the first validator, so its observer server
+            // must be enabled. Validate this up front to fail with an actionable error instead
+            // of a deep panic in `observer_peer_record` when the observer's config is built.
+            if let Some(network_config) = &self.network_config {
+                // A prebuilt network config bypasses the validator observer config callback,
+                // so it must already have the observer server enabled.
+                let observer_enabled = network_config
+                    .validator_configs()
+                    .first()
+                    .and_then(|c| c.consensus_config())
+                    .and_then(|c| c.parameters.as_ref())
+                    .and_then(|p| p.observer.server_port)
+                    .is_some();
+                assert!(
+                    observer_enabled,
+                    "with_observer_fullnode() requires the first validator's observer server \
+                     to be enabled, but the network config passed to set_network_config() does \
+                     not enable it. Enable the observer server on the first validator when \
+                     building the network config."
+                );
+            } else if let Some(cb) = &self.validator_observer_config {
+                assert!(
+                    cb(0).is_some(),
+                    "with_observer_fullnode() requires the validator observer config callback \
+                     to enable the observer server on the first validator (index 0)."
+                );
+            } else {
+                self.validator_observer_config = Some(Arc::new(|idx| {
+                    (idx == 0).then(consensus_config::ObserverParameters::default)
+                }));
+            }
         }
 
         let mut swarm = self.start_swarm().await.unwrap();
