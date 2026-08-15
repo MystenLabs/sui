@@ -659,7 +659,7 @@ fn range_end_response(
 fn resolve_cp_range(checkpoint_range: CheckpointRange, options: &QueryOptions) -> ResolvedRange {
     let cp_range = checkpoint_range.resolve(options);
     let range = cp_range.range.clone();
-    options.apply_cursor_bounds(cp_range.with_range(range, options.ordering))
+    options.resolve_scan(cp_range, range)
 }
 
 fn decode_checkpoint_row_key(key: &Bytes) -> Result<u64, RpcError> {
