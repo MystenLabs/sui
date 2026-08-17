@@ -240,9 +240,15 @@ impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
         }
     }
 
-    /// Acquires the lock for `k`. If acquisition is contended, releases the current
-    /// execution permit before blocking. Under msim, contended acquisition must run
-    /// on a blocking-pool thread so it can yield between attempts.
+    /// Acquires the lock for `k`.
+    ///
+    /// This is a blocking API. Attempting a contended acquisition from an async
+    /// runtime worker is a caller bug in both native and msim builds. Callers that
+    /// may contend must use a blocking context, such as `spawn_blocking`.
+    ///
+    /// On contention, any installed execution permit is released before waiting;
+    /// this is a no-op for callers outside execution. Under msim, the blocking
+    /// thread yields between attempts so the lock holder can make progress.
     pub fn acquire_lock(&self, k: K) -> L::Guard {
         let lock = self.get_lock(k);
         if let Some(guard) = lock.clone().try_lock_owned() {
