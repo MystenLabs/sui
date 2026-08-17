@@ -28,9 +28,9 @@ use tracing::info;
 use crate::RpcError;
 use crate::RpcService;
 use crate::ledger_history::filter::event_filter_to_query;
-use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::EventScanBounds;
 use crate::ledger_history::query_options::QueryOptions;
+use crate::ledger_history::query_options::ResolvedCheckpointRange;
 use crate::ledger_history::query_options::ResolvedEventRange;
 use crate::metrics::ListRequestMetrics;
 use crate::metrics::ListStreamMetrics;
@@ -284,10 +284,11 @@ fn next_event_chunk(
             end_checkpoint,
             filter_query,
         } => {
-            let checkpoint_range = CheckpointRange::from_request(
+            let checkpoint_range = ResolvedCheckpointRange::from_request(
                 start_checkpoint,
                 end_checkpoint,
                 checkpoint_hi_exclusive(&service)?,
+                &options,
             )?;
             let event_range =
                 resolve_event_range(&service, start_checkpoint, checkpoint_range, &options)?;
@@ -750,10 +751,9 @@ fn tx_seq_digest_rows_for_event_refs(
 fn resolve_event_range(
     service: &RpcService,
     start_checkpoint: Option<u64>,
-    checkpoint_range: CheckpointRange,
+    cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
 ) -> Result<ResolvedEventRange, RpcError> {
-    let cp_range = checkpoint_range.resolve(options);
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
     if cp_range.is_empty() {
         return Ok(ResolvedEventRange::empty_at(

@@ -26,9 +26,9 @@ use crate::RpcError;
 use crate::RpcService;
 use crate::grpc::v2::ledger_service::get_checkpoint::get_checkpoint;
 use crate::ledger_history::filter::transaction_filter_to_query;
-use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::RangeExhaustion;
+use crate::ledger_history::query_options::ResolvedCheckpointRange;
 use crate::ledger_history::query_options::ResolvedRange;
 use crate::metrics::ListRequestMetrics;
 use crate::metrics::ListStreamMetrics;
@@ -280,10 +280,11 @@ fn next_checkpoint_chunk(
             end_checkpoint,
             filter_query,
         } => {
-            let checkpoint_range = CheckpointRange::from_request(
+            let checkpoint_range = ResolvedCheckpointRange::from_request(
                 start_checkpoint,
                 end_checkpoint,
                 checkpoint_hi_exclusive(&service)?,
+                &options,
             )?;
             let mut cp_range = resolve_cp_range(checkpoint_range, &options);
             if cancel.is_cancelled() {
@@ -922,8 +923,7 @@ fn apply_serving_floor_to_filtered_window(
     }
     false
 }
-fn resolve_cp_range(checkpoint_range: CheckpointRange, options: &QueryOptions) -> ResolvedRange {
-    let cp_range = checkpoint_range.resolve(options);
+fn resolve_cp_range(cp_range: ResolvedCheckpointRange, options: &QueryOptions) -> ResolvedRange {
     let range = cp_range.range.clone();
     options.apply_cursor_bounds(cp_range.with_range(range, options.ordering))
 }
