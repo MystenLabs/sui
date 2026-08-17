@@ -537,23 +537,12 @@ where
                 .start_observer_server(observer_service.clone())
                 .await;
 
-            // Subscribe to peers specified in the configuration
-            // For now get the first peer from the list to connect to.
-            // TODO: support multiple peers - as in choose/detect which one to connect to.
-            for peer_record in context.parameters.observer.peers.iter().take(1) {
-                let peer_id = if let Some((index, _)) = context
-                    .committee
-                    .authorities()
-                    .find(|(_, authority)| authority.network_key == peer_record.public_key)
-                {
-                    PeerId::Validator(index)
-                } else {
-                    PeerId::Observer(Box::new(peer_record.public_key.clone()))
-                };
-
-                info!("Observer subscribing to peer: {:?}", peer_id);
-                observer_subscriber.subscribe(peer_id);
-            }
+            // Subscribe to the peers specified in the configuration: the subscriber streams
+            // from the first peer of the list and fails over to the next one (in list order)
+            // when the current peer stops making progress.
+            let peer_ids = observer_peer_ids(&context);
+            info!("Observer subscribing to peers (in priority order): {peer_ids:?}");
+            observer_subscriber.subscribe(peer_ids);
 
             (
                 SubscriberType::Observer(observer_subscriber),
@@ -694,12 +683,46 @@ where
             match &self.subscriber {
                 SubscriberType::Validator(s) => s.subscribe(peer),
                 SubscriberType::Observer(s) => {
-                    // For observer, create a PeerId for the validator
-                    s.subscribe(PeerId::Validator(peer));
+                    // Re-subscribe with the full configured peer list, rotated so the updated
+                    // peer is tried first. A peer outside the configured list cannot be
+                    // streamed from anyway (connections to unconfigured peers are rejected),
+                    // so leave the current subscription undisturbed.
+                    let mut peer_ids = observer_peer_ids(&self.context);
+                    if let Some(position) = peer_ids
+                        .iter()
+                        .position(|peer_id| *peer_id == PeerId::Validator(peer))
+                    {
+                        peer_ids.rotate_left(position);
+                        s.subscribe(peer_ids);
+                    } else {
+                        info!(
+                            "Peer {} is not a configured observer peer, skipping re-subscription",
+                            peer
+                        );
+                    }
                 }
             }
         }
     }
+}
+
+/// Maps the configured observer peers to `PeerId`s, in configuration order: committee members
+/// are identified by their authority index, other peers by their network public key.
+fn observer_peer_ids(context: &Context) -> Vec<PeerId> {
+    context
+        .parameters
+        .observer
+        .peers
+        .iter()
+        .map(|peer_record| {
+            context
+                .committee
+                .authorities()
+                .find(|(_, authority)| authority.network_key == peer_record.public_key)
+                .map(|(index, _)| PeerId::Validator(index))
+                .unwrap_or_else(|| PeerId::Observer(Box::new(peer_record.public_key.clone())))
+        })
+        .collect()
 }
 
 #[cfg(test)]
