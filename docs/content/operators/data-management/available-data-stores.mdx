@@ -86,6 +86,13 @@ Workload Identity or another supported Google credential source can replace the 
 
 **Credentials:** AWS Requester Pays. Use this endpoint for [Mainnet archival fallback](/operators/data-management/archives) in `fullnode.yaml`. When running on EC2, the node retrieves credentials from instance metadata (instance profile). Do not put access keys in `fullnode.yaml`.
 
+The Sui S3 client defaults `request_payer` to `false`. You must explicitly enable it in the archival fallback configuration:
+
+```yaml
+remote-store-options:
+  - ["aws_request_payer", "true"]
+```
+
 :::info
 
 This S3 endpoint is specifically for archival fallback configuration in `fullnode.yaml`. For indexer backfill and remote store population, use the [GCS buckets](#checkpoint-gcs) with `--remote-store-gcs`.
@@ -110,7 +117,7 @@ These endpoints are public-good services for testing only. Do not use them for p
 :::
 
 The HTTPS endpoints are acceptable for:
-- The `--remote-store-url` parameter during [consistent store restore](/operators/data-management/indexer-stack-setup#consistent-store-setup), which reads only one checkpoint.
+- The `--remote-store-url` parameter during [consistent store restore](/operators/data-management/indexer-stack-setup#consistent-store-setup), which reads `epochs.json` and the target end-of-epoch checkpoint.
 - [Testnet archival fallback](/operators/data-management/archives), where 30-day retention is sufficient.
 
 ## Snapshot stores
@@ -124,7 +131,7 @@ Snapshot stores contain point-in-time database state for bootstrapping [full nod
 | Mainnet | `https://formal-snapshot.mainnet.sui.io` |
 | Testnet | `https://formal-snapshot.testnet.sui.io` |
 
-**Retention:** Last 90 epochs.
+**Retention:** Varies by network. Mainnet currently retains approximately the last 60 epochs. Testnet retains approximately the last 90 epochs. Check the live manifest to confirm the current range before planning a restore.
 
 **Credentials:** None required.
 
@@ -137,7 +144,7 @@ Use these endpoints for [consistent store restore](/operators/data-management/in
 | Mainnet | `s3://mysten-mainnet-formal/` | `gs://mysten-mainnet-formal/` |
 | Testnet | `s3://mysten-testnet-formal/` | `gs://mysten-testnet-formal/` |
 
-**Retention:** Last 90 epochs.
+**Retention:** Same as the [HTTPS endpoints](#formal-https) (approximately 60 epochs on Mainnet, 90 on Testnet).
 
 **Credentials:** AWS or GCS Requester Pays. Provide credentials for the cloud provider you use. For the best download speeds with S3, enable [transfer acceleration](https://aws.amazon.com/s3/transfer-acceleration/).
 
