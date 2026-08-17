@@ -1,7 +1,7 @@
 ---
 title: Available Data Stores
 description: >-
-  Reference for all Mysten-managed checkpoint stores, snapshot buckets, and
+  Reference for all Mysten Labs-managed checkpoint stores, snapshot buckets, and
   archival endpoints available for Sui Mainnet and Testnet, including retention
   policies, credential requirements, and recommended use cases.
 keywords:
@@ -50,8 +50,23 @@ answer: >-
   policies, credential requirements, and recommended use cases.
 ---
 
-Mysten Labs manages several categories of data stores for Sui operators. Each store serves a specific purpose, has its own retention policy, and might require credentials for access. This page is a single reference for all available stores across Mainnet and Testnet.
+Mysten Labs manages several categories of data stores for Sui operators. Each store serves a specific purpose, has its own retention policy, and might require credentials for access.
+## Choosing a store
 
+| **Use case** | **Recommended store** | **Details** |
+| --- | --- | --- |
+| Indexer backfill from genesis | [GCS checkpoint buckets](#checkpoint-gcs) | Full retention, use `--remote-store-gcs` |
+| Indexer steady state | Your own full node through gRPC | Lowest latency, no egress cost |
+| Remote store population | [GCS checkpoint buckets](#checkpoint-gcs) as source | Backfill, then switch to full node gRPC |
+| Full node bootstrap | [Formal snapshot free bucket](#formal-free) or [formal buckets](#formal-buckets) | Fastest path to a running node |
+| Consistent store restore | [Formal snapshot HTTPS](#formal-https) + [HTTPS checkpoint endpoint](#checkpoint-https) | `--http` for snapshot, `--remote-store-url` for epoch mapping |
+| Mainnet archival fallback | [S3 checkpoint bucket](#checkpoint-s3) | Configure in `fullnode.yaml` with instance profile credentials |
+| Testnet archival fallback | [HTTPS checkpoint endpoint](#checkpoint-https) | 30-day retention is sufficient for fallback |
+| Archival service backfill | [GCS checkpoint buckets](#checkpoint-gcs) | Full retention, use `--remote-store-gcs` |
+
+## Network isolation
+
+Always keep all data sources on the same network. Do not mix Mainnet checkpoint stores with Testnet snapshot sources. When running nodes or indexers for multiple networks, use separate database paths, separate storage directories, and separate configuration files per network.
 ## Checkpoint stores
 
 Checkpoint stores contain protobuf-encoded checkpoint blobs (`.binpb.zst`). They are used by [indexers](/operators/data-management/indexer-stack-setup), [remote store operators](/operators/data-management/remote-store-setup), the [archival service](/operators/data-management/archival-stack-setup), and [full node archival fallback](/operators/data-management/archives).
@@ -60,7 +75,7 @@ Checkpoint stores contain protobuf-encoded checkpoint blobs (`.binpb.zst`). They
 
 These buckets contain the complete checkpoint history from genesis. Use them for production backfill and recovery.
 
-| Network | Bucket | CLI flag |
+| **Network** | **Bucket** | **CLI flag** |
 | --- | --- | --- |
 | Mainnet | `gs://mysten-mainnet-checkpoints-use4` | `--remote-store-gcs mysten-mainnet-checkpoints-use4` |
 | Testnet | `gs://mysten-testnet-checkpoints-use4` | `--remote-store-gcs mysten-testnet-checkpoints-use4` |
@@ -78,7 +93,7 @@ Workload Identity or another supported Google credential source can replace the 
 
 ### S3 bucket (full retention, Requester Pays) {#checkpoint-s3}
 
-| Network | Endpoint | CLI usage |
+| **Network** | **Endpoint** | **CLI usage** |
 | --- | --- | --- |
 | Mainnet | `https://s3.us-west-2.amazonaws.com/mysten-mainnet-checkpoints` | Use as `ingestion-url` in `fullnode.yaml` |
 
@@ -101,7 +116,7 @@ This S3 endpoint is specifically for archival fallback configuration in `fullnod
 
 ### HTTPS endpoints (30-day retention, free) {#checkpoint-https}
 
-| Network | URL |
+| **Network** | **URL** |
 | --- | --- |
 | Mainnet | `https://checkpoints.mainnet.sui.io` |
 | Testnet | `https://checkpoints.testnet.sui.io` |
@@ -122,11 +137,14 @@ The HTTPS endpoints are acceptable for:
 
 ## Snapshot stores
 
-Snapshot stores contain point-in-time database state for bootstrapping [full nodes](/operators/snapshots) and [consistent stores](/operators/data-management/indexer-stack-setup#consistent-store-setup). Sui supports two snapshot types: **RocksDB snapshots** (full database state including indexes) and **formal snapshots** (minimalistic, database-agnostic, cryptographically verifiable).
+Snapshot stores contain point-in-time database state for bootstrapping [full nodes](/operators/snapshots) and [consistent stores](/operators/data-management/indexer-stack-setup#consistent-store-setup). Sui supports two snapshot types: 
+
+1. RocksDB snapshots: Full database state including indexes
+2. Formal snapshots: Minimalistic, database-agnostic, cryptographically verifiable
 
 ### Formal snapshot HTTPS endpoints {#formal-https}
 
-| Network | URL |
+| **Network** | **URL** |
 | --- | --- |
 | Mainnet | `https://formal-snapshot.mainnet.sui.io` |
 | Testnet | `https://formal-snapshot.testnet.sui.io` |
@@ -139,7 +157,7 @@ Use these endpoints for [consistent store restore](/operators/data-management/in
 
 ### Formal snapshot buckets (Requester Pays) {#formal-buckets}
 
-| Network | S3 | GCS |
+| **Network** | **S3** | **GCS** |
 | --- | --- | --- |
 | Mainnet | `s3://mysten-mainnet-formal/` | `gs://mysten-mainnet-formal/` |
 | Testnet | `s3://mysten-testnet-formal/` | `gs://mysten-testnet-formal/` |
@@ -154,7 +172,7 @@ Mysten Labs hosts free formal snapshots on Cloudflare R2 (currently in North Ame
 
 ### RocksDB snapshot buckets (Requester Pays) {#rocksdb-buckets}
 
-| Network | S3 | GCS |
+| **Network** | **S3** | **GCS** |
 | --- | --- | --- |
 | Mainnet | `s3://mysten-mainnet-snapshots/` | `gs://mysten-mainnet-snapshots/` |
 | Testnet | Not available in S3 | `gs://mysten-testnet-snapshots/` |
@@ -169,19 +187,3 @@ Formal snapshots are generally preferred over RocksDB snapshots because they hav
 
 :::
 
-## Choosing a store
-
-| Use case | Recommended store | Details |
-| --- | --- | --- |
-| Indexer backfill from genesis | [GCS checkpoint buckets](#checkpoint-gcs) | Full retention, use `--remote-store-gcs` |
-| Indexer steady state | Your own full node through gRPC | Lowest latency, no egress cost |
-| Remote store population | [GCS checkpoint buckets](#checkpoint-gcs) as source | Backfill, then switch to full node gRPC |
-| Full node bootstrap | [Formal snapshot free bucket](#formal-free) or [formal buckets](#formal-buckets) | Fastest path to a running node |
-| Consistent store restore | [Formal snapshot HTTPS](#formal-https) + [HTTPS checkpoint endpoint](#checkpoint-https) | `--http` for snapshot, `--remote-store-url` for epoch mapping |
-| Mainnet archival fallback | [S3 checkpoint bucket](#checkpoint-s3) | Configure in `fullnode.yaml` with instance profile credentials |
-| Testnet archival fallback | [HTTPS checkpoint endpoint](#checkpoint-https) | 30-day retention is sufficient for fallback |
-| Archival service backfill | [GCS checkpoint buckets](#checkpoint-gcs) | Full retention, use `--remote-store-gcs` |
-
-## Network isolation
-
-Always keep all data sources on the same network. Do not mix Mainnet checkpoint stores with Testnet snapshot sources. When running nodes or indexers for multiple networks, use separate database paths, separate storage directories, and separate configuration files per network.
