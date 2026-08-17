@@ -2663,14 +2663,22 @@ mod tests {
             .collect()
     }
 
+    /// Start `mock` and connect a `BigTableClient` to it, using `"test"` as both the instance
+    /// id and client name with batch-write flow control disabled. Covers the common case for
+    /// tests that don't care about flow control or per-client metric labeling.
+    async fn test_client(
+        mock: &crate::bigtable::mock_server::MockBigtableServer,
+    ) -> BigTableClient {
+        let (addr, _handle) = mock.start().await.unwrap();
+        BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
+            .await
+            .unwrap()
+    }
+
     #[tokio::test]
     async fn get_transactions_stream_splits_digest_batches_at_max() {
         let mock = crate::bigtable::mock_server::MockBigtableServer::new();
-        let (addr, _handle) = mock.start().await.unwrap();
-        let mut client =
-            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
-                .await
-                .unwrap();
+        let mut client = test_client(&mock).await;
 
         let n = MAX_TX_DIGESTS_PER_REQUEST + 1;
         let digests: Vec<_> = (0..n as u64).map(tx_digest).collect();
@@ -2701,11 +2709,7 @@ mod tests {
     #[tokio::test]
     async fn get_transactions_stream_empty_digest_list_issues_no_read() {
         let mock = crate::bigtable::mock_server::MockBigtableServer::new();
-        let (addr, _handle) = mock.start().await.unwrap();
-        let mut client =
-            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
-                .await
-                .unwrap();
+        let mut client = test_client(&mock).await;
 
         let stream = client
             .get_transactions_stream(Vec::new(), None)
