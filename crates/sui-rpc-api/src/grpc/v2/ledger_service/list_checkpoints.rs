@@ -925,7 +925,9 @@ fn apply_serving_floor_to_filtered_window(
 }
 fn resolve_cp_range(cp_range: ResolvedCheckpointRange, options: &QueryOptions) -> ResolvedRange {
     let range = cp_range.range.clone();
-    options.apply_cursor_bounds(cp_range.with_range(range, options.ordering))
+    cp_range
+        .with_range(range, options.ordering)
+        .apply_cursor_bounds(options)
 }
 
 fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsResponse {

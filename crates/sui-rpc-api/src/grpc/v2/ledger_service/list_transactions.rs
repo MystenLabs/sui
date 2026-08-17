@@ -636,8 +636,9 @@ fn resolve_tx_range(
         return Ok(cp_range.with_range(tx_range, options.ordering));
     }
 
-    let resolved = cp_range.with_range(tx_range, options.ordering);
-    let mut resolved = options.apply_cursor_bounds(resolved);
+    let mut resolved = cp_range
+        .with_range(tx_range, options.ordering)
+        .apply_cursor_bounds(options);
     if !resolved.range.is_empty()
         && let Some(floor) =
             clamp_to_serving_floor(service, resolved.range.start, start_checkpoint, options)?
