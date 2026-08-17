@@ -633,17 +633,29 @@ impl IntraTxScanBounds {
 }
 
 impl ResolvedIntraTxRange {
-    pub fn empty_at(
-        end_checkpoint: u64,
-        end_position: IntraTxCoordinate,
-        exhaustion: RangeExhaustion,
+    pub fn resolve(
+        cp_range: ResolvedCheckpointRange,
+        tx_range: Range<u64>,
+        options: &QueryOptions,
     ) -> Self {
+        let entry_checkpoint = if cp_range.is_empty() {
+            // No checkpoint entered, pin entry to terminal boundary
+            cp_range.range.end
+        } else if options.is_ascending() {
+            cp_range.range.start
+        } else {
+            cp_range.range.end.saturating_sub(1)
+        };
+
         Self {
-            bounds: IntraTxScanBounds::empty_at(end_position),
-            end_checkpoint,
-            end_position,
-            exhaustion,
-            entry_checkpoint: end_checkpoint,
+            bounds: IntraTxScanBounds::tx_span(tx_range.start, tx_range.end),
+            entry_checkpoint,
+            end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
+            end_position: match options.ordering {
+                Ordering::Ascending => IntraTxCoordinate::start_of_tx(tx_range.end),
+                Ordering::Descending => IntraTxCoordinate::start_of_tx(tx_range.start),
+            },
+            exhaustion: cp_range.exhaustion,
         }
     }
 
@@ -1325,6 +1337,69 @@ mod tests {
                 .unwrap();
         assert_eq!(resolved.range, 10..10_000_000);
         assert_eq!(resolved.exhaustion, RangeExhaustion::CheckpointBound);
+    }
+
+    #[test]
+    fn resolve_empty_window_produces_canonical_record() {
+        for ascending in [true, false] {
+            let options = directional_options(ascending);
+            let cp_range =
+                ResolvedCheckpointRange::from_request(Some(30), None, 20, &options).unwrap();
+            assert!(cp_range.is_empty());
+            assert_eq!(
+                ResolvedIntraTxRange::resolve(cp_range, 100..100, &options),
+                ResolvedIntraTxRange {
+                    bounds: IntraTxScanBounds::empty_at(IntraTxCoordinate::start_of_tx(100)),
+                    entry_checkpoint: 20,
+                    end_checkpoint: 20,
+                    end_position: IntraTxCoordinate::start_of_tx(100),
+                    exhaustion: RangeExhaustion::LedgerTip,
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn resolve_orients_entry_and_terminal_by_ordering() {
+        let options = directional_options(true);
+        let cp_range =
+            ResolvedCheckpointRange::from_request(Some(3), Some(10), 20, &options).unwrap();
+        assert_eq!(cp_range.range, 3..10);
+        let resolved = ResolvedIntraTxRange::resolve(cp_range.clone(), 100..200, &options);
+        assert_eq!(resolved.bounds, IntraTxScanBounds::tx_span(100, 200));
+        assert_eq!(resolved.entry_checkpoint, 3);
+        assert_eq!(resolved.end_checkpoint, 10);
+        assert_eq!(resolved.end_position, IntraTxCoordinate::start_of_tx(200));
+
+        let options = directional_options(false);
+        let resolved = ResolvedIntraTxRange::resolve(cp_range, 100..200, &options);
+        assert_eq!(resolved.entry_checkpoint, 9);
+        assert_eq!(resolved.end_checkpoint, 3);
+        assert_eq!(resolved.end_position, IntraTxCoordinate::start_of_tx(100));
+    }
+
+    #[test]
+    fn cursor_bounds_pass_empty_resolution_through_unchanged() {
+        let position = Position::Events {
+            checkpoint: 4,
+            tx_seq: 50,
+            event_index: 2,
+        };
+        for ascending in [true, false] {
+            let mut request = ProtoQueryOptions::default();
+            if !ascending {
+                request.ordering = Some(ProtoOrdering::Descending as i32);
+            }
+            request.after = Some(CursorToken::item(position).encode());
+            let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
+            let cp_range =
+                ResolvedCheckpointRange::from_request(Some(30), None, 20, &options).unwrap();
+            let resolved = ResolvedIntraTxRange::resolve(cp_range, 100..100, &options);
+            assert_eq!(
+                options.apply_intra_tx_cursor_bounds(resolved.clone()),
+                resolved
+            );
+        }
     }
 
     #[test]
