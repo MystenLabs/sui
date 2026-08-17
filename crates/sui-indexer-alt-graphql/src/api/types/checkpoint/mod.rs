@@ -106,7 +106,7 @@ impl Checkpoint {
         async {
             let scope = Some(
                 self.scope
-                    .with_checkpoint_viewed_at(ctx, self.sequence_number)
+                    .with_indexed_view(ctx, self.sequence_number)
                     .context("Checkpoint in the future")?,
             );
 

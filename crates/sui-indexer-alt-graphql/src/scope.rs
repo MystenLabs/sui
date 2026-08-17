@@ -42,14 +42,21 @@ pub(crate) type ExecutionObjectMap =
     Arc<BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>>>;
 
 /// Where in-memory lookups (objects, transaction contents, etc.) in this scope draw their data
-/// from. Encodes the mutually exclusive modes a [`Scope`] can be in. Indexed mode hits the
-/// database/kv_loader (no in-memory payload). Executed mode is the mutation/simulate path, with a
-/// freshly executed transaction's outputs. Streamed mode is the subscription path, with an
-/// in-memory checkpoint payload.
+/// from, and the checkpoint (if any) they are viewed as of. Encodes the mutually exclusive modes a
+/// [`Scope`] can be in. Indexed mode hits the database/kv_loader as of a specific checkpoint (no
+/// in-memory payload). Backfill mode is the subscription catch-up path: indexed reads with no
+/// checkpoint bound. Executed mode is the mutation/simulate path, with a freshly executed
+/// transaction's outputs. Streamed mode is the subscription live path, with an in-memory checkpoint
+/// payload.
 #[derive(Clone)]
 pub(crate) enum DataSource {
-    /// Reads go through the indexed-checkpoint path (kv_loader / DB). No in-memory payload.
-    Indexed,
+    /// Reads go through the indexed-checkpoint path (kv_loader / DB), viewed as of `viewed_at`.
+    /// No in-memory payload.
+    Indexed { viewed_at: u64 },
+    /// Indexed reads with no checkpoint bound: a subscription's backfill catch-up delivers
+    /// already-finalized transactions and does not resolve as of one consistent checkpoint.
+    #[cfg(feature = "staging")]
+    Backfill,
     /// A freshly executed transaction's input/output objects.
     Executed {
         execution_objects: ExecutionObjectMap,
@@ -103,12 +110,6 @@ pub(crate) enum RootBound {
 /// necessary, allowing a nested scope to shadow values in its parent scope.
 #[derive(Clone)]
 pub(crate) struct Scope {
-    /// The checkpoint we are viewing this data at. Queries for the latest versions of an entity
-    /// are relative to this checkpoint.
-    ///
-    /// None indicates execution context where we're viewing fresh transaction effects not yet indexed.
-    checkpoint_viewed_at: Option<u64>,
-
     /// The transaction whose effects descendant resolvers default to (e.g.
     /// `IAddressable.asTransactionObject` without an explicit `transactionDigest`). Set when a
     /// resolver brings a single transaction into view: indexed paths that already hold the
@@ -144,17 +145,18 @@ impl Scope {
         let limits: &Limits = ctx.data()?;
 
         Ok(Self {
-            checkpoint_viewed_at: Some(watermark.high_watermark().checkpoint()),
             active_transaction: None,
             root_bound: None,
-            data_source: DataSource::Indexed,
+            data_source: DataSource::Indexed {
+                viewed_at: watermark.high_watermark().checkpoint(),
+            },
             package_store: package_store.clone(),
             resolver_limits: limits.package_resolver(),
         })
     }
 
-    /// Create a scope for streamed checkpoint data. Sets `checkpoint_viewed_at` to `None`
-    /// because streamed data is resolved from memory, not bounded by an indexed checkpoint.
+    /// Create a scope for streamed checkpoint data. Streamed data is resolved from memory, not
+    /// bounded by an indexed checkpoint, so `checkpoint_viewed_at` resolves to `None`.
     #[cfg(feature = "staging")]
     pub(crate) fn for_streamed_checkpoint(
         package_store: Arc<StreamingPackageStore>,
@@ -162,7 +164,6 @@ impl Scope {
         streamed_checkpoint: Arc<ProcessedCheckpoint>,
     ) -> Self {
         Self {
-            checkpoint_viewed_at: None,
             active_transaction: None,
             root_bound: None,
             data_source: DataSource::Streamed {
@@ -176,20 +177,19 @@ impl Scope {
     /// Create a scope for transactions backfilled through the indexed pathway during a
     /// subscription's catch-up phase. Unlike the live [`for_streamed_checkpoint`] path, backfilled
     /// transactions are already finalized and indexed, so their fields resolve lazily through the
-    /// index (`KvLoader`) rather than from an in-memory payload. `checkpoint_viewed_at` is `None`,
-    /// matching the live path: a subscription does not resolve as of a single consistent checkpoint,
-    /// so checkpoint-anchored fields (balances, latest object versions) stay null and transaction
-    /// contents hydrate by digest.
+    /// index (`KvLoader`) rather than from an in-memory payload. The [`DataSource::Backfill`] mode
+    /// carries no checkpoint bound (matching the live path): a subscription does not resolve as of a
+    /// single consistent checkpoint, so checkpoint-anchored fields (balances, latest object versions)
+    /// stay null and transaction contents hydrate by digest.
     #[cfg(feature = "staging")]
     pub(crate) fn for_backfilled_transactions(
         package_store: Arc<StreamingPackageStore>,
         resolver_limits: sui_package_resolver::Limits,
     ) -> Self {
         Self {
-            checkpoint_viewed_at: None,
             active_transaction: None,
             root_bound: None,
-            data_source: DataSource::Indexed,
+            data_source: DataSource::Backfill,
             package_store,
             resolver_limits,
         }
@@ -226,7 +226,6 @@ impl Scope {
 
     fn with_active_transaction(&self, active: ActiveTransaction) -> Self {
         Self {
-            checkpoint_viewed_at: self.checkpoint_viewed_at,
             active_transaction: Some(active),
             root_bound: self.root_bound,
             data_source: self.data_source.clone(),
@@ -252,18 +251,20 @@ impl Scope {
         }
 
         Self {
-            checkpoint_viewed_at: Some(0),
             active_transaction: None,
             root_bound: None,
-            data_source: DataSource::Indexed,
+            data_source: DataSource::Indexed { viewed_at: 0 },
             package_store: Arc::new(EmptyPackageStore),
             resolver_limits: Limits::default().package_resolver(),
         }
     }
 
-    /// Create a nested scope pinned to a checkpoint. Returns `None` if the checkpoint is in
-    /// the future, or if the current scope is in execution context (no checkpoint is set).
-    pub(crate) fn with_checkpoint_viewed_at(
+    /// Re-scope to an [`DataSource::Indexed`] view as of `checkpoint_viewed_at`, reading through the
+    /// index. Pinning to a checkpoint is a consistent indexed read, so the resulting scope is always
+    /// `Indexed` regardless of the current mode. Returns `None` if `checkpoint_viewed_at` is in the
+    /// future (ahead of the indexed watermark), which is also what bars re-rooting onto a
+    /// not-yet-indexed streamed checkpoint.
+    pub(crate) fn with_indexed_view(
         &self,
         ctx: &Context<'_>,
         checkpoint_viewed_at: u64,
@@ -271,10 +272,11 @@ impl Scope {
         let watermark: &Arc<Watermarks> = ctx.data().ok()?;
         let cp_hi_inclusive = watermark.high_watermark().checkpoint();
         (checkpoint_viewed_at <= cp_hi_inclusive).then(|| Self {
-            checkpoint_viewed_at: Some(checkpoint_viewed_at),
             active_transaction: self.active_transaction.clone(),
             root_bound: self.root_bound,
-            data_source: self.data_source.clone(),
+            data_source: DataSource::Indexed {
+                viewed_at: checkpoint_viewed_at,
+            },
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         })
@@ -283,7 +285,6 @@ impl Scope {
     /// Create a nested scope with a root version bound.
     pub(crate) fn with_root_version(&self, root_version: u64) -> Self {
         Self {
-            checkpoint_viewed_at: self.checkpoint_viewed_at,
             active_transaction: self.active_transaction.clone(),
             root_bound: Some(RootBound::Version(root_version)),
             data_source: self.data_source.clone(),
@@ -295,7 +296,6 @@ impl Scope {
     /// Create a nested scope with a root checkpoint bound.
     pub(crate) fn with_root_checkpoint(&self, root_checkpoint: u64) -> Self {
         Self {
-            checkpoint_viewed_at: self.checkpoint_viewed_at,
             active_transaction: self.active_transaction.clone(),
             root_bound: Some(RootBound::Checkpoint(root_checkpoint)),
             data_source: self.data_source.clone(),
@@ -307,7 +307,6 @@ impl Scope {
     /// Reset the root bound.
     pub(crate) fn without_root_bound(&self) -> Self {
         Self {
-            checkpoint_viewed_at: self.checkpoint_viewed_at,
             active_transaction: self.active_transaction.clone(),
             root_bound: None,
             data_source: self.data_source.clone(),
@@ -316,13 +315,16 @@ impl Scope {
         }
     }
 
-    /// Get the checkpoint being viewed, if any.
-    /// Returns `None` in execution context (freshly executed transaction).
+    /// Get the checkpoint being viewed, if any. `Some` only in the indexed-query context; `None`
+    /// for execution, streamed, and backfill contexts, which are not bounded by a single checkpoint.
     ///
-    /// Call sites must explicitly handle the execution context case and decide whether
-    /// their operation makes sense without checkpoint context.
+    /// Call sites must explicitly handle the `None` case and decide whether their operation makes
+    /// sense without checkpoint context.
     pub(crate) fn checkpoint_viewed_at(&self) -> Option<u64> {
-        self.checkpoint_viewed_at
+        match &self.data_source {
+            DataSource::Indexed { viewed_at } => Some(*viewed_at),
+            _ => None,
+        }
     }
 
     /// True in the execution context: a freshly executed or simulated transaction, whose data
@@ -347,15 +349,15 @@ impl Scope {
         if let Some(RootBound::Checkpoint(cp)) = self.root_bound {
             Some(cp)
         } else {
-            self.checkpoint_viewed_at
+            self.checkpoint_viewed_at()
         }
     }
 
     /// Get the exclusive checkpoint bound, if any.
     ///
-    /// Returns `None` in execution context (freshly executed transaction).
+    /// Returns `None` outside the indexed-query context.
     pub(crate) fn checkpoint_viewed_at_exclusive_bound(&self) -> Option<u64> {
-        self.checkpoint_viewed_at.map(|cp| cp + 1)
+        self.checkpoint_viewed_at().map(|cp| cp + 1)
     }
 
     /// The digest of the transaction this scope is anchored to, if any.
@@ -379,11 +381,13 @@ impl Scope {
     /// The execution objects map active for object lookups in this scope. Resolves through the
     /// scope's [`DataSource`]: in `Streamed` mode, returns the checkpoint-wide map (object
     /// visibility is end-of-checkpoint, matching the indexed Query path); in `Executed` mode,
-    /// returns the freshly extracted map; in `Indexed` mode, returns `None` so callers fall
-    /// through to the DB.
+    /// returns the freshly extracted map; in `Indexed` and `Backfill` modes, returns `None` so
+    /// callers fall through to the DB.
     fn execution_objects_in_view(&self) -> Option<&ExecutionObjectMap> {
         match &self.data_source {
-            DataSource::Indexed => None,
+            DataSource::Indexed { .. } => None,
+            #[cfg(feature = "staging")]
+            DataSource::Backfill => None,
             DataSource::Executed { execution_objects } => Some(execution_objects),
             #[cfg(feature = "staging")]
             DataSource::Streamed { checkpoint } => Some(&checkpoint.execution_objects),
@@ -423,7 +427,6 @@ impl Scope {
         let execution_objects = extract_objects_from_executed_transaction(executed_transaction)?;
 
         Ok(Self {
-            checkpoint_viewed_at: None,
             active_transaction: None,
             root_bound: self.root_bound,
             data_source: DataSource::Executed { execution_objects },
@@ -501,7 +504,7 @@ impl Debug for ActiveTransaction {
 impl Debug for Scope {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("Scope")
-            .field("checkpoint_viewed_at", &self.checkpoint_viewed_at)
+            .field("checkpoint_viewed_at", &self.checkpoint_viewed_at())
             .field("root_bound", &self.root_bound)
             .field("active_transaction", &self.active_transaction)
             .field("resolver_limits", &self.resolver_limits)

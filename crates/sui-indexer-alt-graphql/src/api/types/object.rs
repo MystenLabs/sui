@@ -1066,7 +1066,7 @@ impl Object {
 
         // Set the checkpoint being viewed to the one calculated from the cursors, so that
         // nested queries about the resulting objects also treat this checkpoint as latest.
-        let Some(scope) = scope.with_checkpoint_viewed_at(ctx, checkpoint) else {
+        let Some(scope) = scope.with_indexed_view(ctx, checkpoint) else {
             return Err(bad_user_input(Error::Future(checkpoint)));
         };
 
