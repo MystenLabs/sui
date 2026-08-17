@@ -755,8 +755,8 @@ fn resolve_event_range(
     options: &QueryOptions,
 ) -> Result<ResolvedIntraTxRange, RpcError> {
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
-    let mut resolved = ResolvedIntraTxRange::resolve(cp_range, tx_range, options);
-    resolved = options.apply_intra_tx_cursor_bounds(resolved);
+    let mut resolved =
+        ResolvedIntraTxRange::resolve(cp_range, tx_range, options).apply_cursor_bounds(options);
     if !resolved.is_empty() {
         let start_tx = match resolved.bounds.lo {
             Bound::Included(position) | Bound::Excluded(position) => position.tx_seq,

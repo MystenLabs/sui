@@ -816,8 +816,7 @@ async fn resolve_event_range(
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
-    Ok(options
-        .apply_intra_tx_cursor_bounds(ResolvedIntraTxRange::resolve(cp_range, tx_range, options)))
+    Ok(ResolvedIntraTxRange::resolve(cp_range, tx_range, options).apply_cursor_bounds(options))
 }
 
 #[cfg(test)]
