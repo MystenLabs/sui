@@ -152,38 +152,6 @@ pub trait ScanCoordinate: Copy + Ord {
     /// transaction-sequence edge): scalars are their own fenceposts; an event
     /// boundary is the first event slot of the transaction.
     fn from_boundary(boundary: u64) -> Self;
-
-    /// The lower bound an `after` cursor imposes. Symbolic by default
-    /// (`Excluded` resolves at the store edge); dense scalar lanes override
-    /// with the eager successor to preserve their pinned tie, emptiness,
-    /// and attribution semantics exactly.
-    fn resume_bound(kind: sui_rpc_cursor::CursorKind, coordinate: Self) -> Bound<Self> {
-        kind.resume_bound(coordinate)
-    }
-
-    /// The upper bound a `before` cursor imposes: exclusive at the
-    /// coordinate for both kinds, identically in every lane.
-    fn limit_bound(kind: sui_rpc_cursor::CursorKind, coordinate: Self) -> Bound<Self> {
-        kind.limit_bound(coordinate)
-    }
-
-    /// The coordinate and kind a cursor's terminal stamp carries. Symbolic
-    /// lanes echo the raw coordinate (an ascending `after` Item keeps its
-    /// kind so resume stays exclusive); dense scalar lanes report the eager
-    /// edge as a Boundary, per their pinned semantics.
-    fn stamp(
-        kind: sui_rpc_cursor::CursorKind,
-        coordinate: Self,
-        ascending: bool,
-        after: bool,
-    ) -> (Self, sui_rpc_cursor::CursorKind) {
-        let stamp_kind = if after && ascending {
-            kind
-        } else {
-            sui_rpc_cursor::CursorKind::Boundary
-        };
-        (coordinate, stamp_kind)
-    }
 }
 
 /// What the pure bounds clamp did, consumed by terminal attribution: which
@@ -357,25 +325,30 @@ impl QueryOptions {
         let ascending = matches!(self.ordering, Ordering::Ascending);
         let after = self.after.as_ref().map(|cursor| {
             let coordinate = P::from_cursor(cursor);
-            let (end_coordinate, kind) = P::stamp(cursor.kind, coordinate, ascending, true);
+            let kind = if ascending {
+                cursor.kind
+            } else {
+                sui_rpc_cursor::CursorKind::Boundary
+            };
             (
-                P::resume_bound(cursor.kind, coordinate),
+                cursor.kind.resume_bound(coordinate),
                 TerminalRecord {
                     end_checkpoint: cursor.position.checkpoint(),
-                    end_coordinate,
+                    end_coordinate: coordinate,
                     exhaustion: RangeExhaustion::CursorBound { kind },
                 },
             )
         });
         let before = self.before.as_ref().map(|cursor| {
             let coordinate = P::from_cursor(cursor);
-            let (end_coordinate, kind) = P::stamp(cursor.kind, coordinate, ascending, false);
             (
-                P::limit_bound(cursor.kind, coordinate),
+                cursor.kind.limit_bound(coordinate),
                 TerminalRecord {
                     end_checkpoint: cursor.position.checkpoint(),
-                    end_coordinate,
-                    exhaustion: RangeExhaustion::CursorBound { kind },
+                    end_coordinate: coordinate,
+                    exhaustion: RangeExhaustion::CursorBound {
+                        kind: sui_rpc_cursor::CursorKind::Boundary,
+                    },
                 },
             )
         });
@@ -634,28 +607,6 @@ impl ScanCoordinate for u64 {
 
     fn from_boundary(boundary: u64) -> Self {
         boundary
-    }
-    fn resume_bound(kind: sui_rpc_cursor::CursorKind, coordinate: Self) -> Bound<Self> {
-        match kind {
-            sui_rpc_cursor::CursorKind::Item => Bound::Included(coordinate.saturating_add(1)),
-            sui_rpc_cursor::CursorKind::Boundary => Bound::Included(coordinate),
-        }
-    }
-
-    fn stamp(
-        kind: sui_rpc_cursor::CursorKind,
-        coordinate: Self,
-        _ascending: bool,
-        after: bool,
-    ) -> (Self, sui_rpc_cursor::CursorKind) {
-        // `after` stamps report the eager resume edge; `before` stamps keep
-        // the raw coordinate (the exclusive limit itself). Both are
-        // Boundary — the scalar lanes' pinned stamp shape.
-        let edge = match (after, kind) {
-            (true, sui_rpc_cursor::CursorKind::Item) => coordinate.saturating_add(1),
-            _ => coordinate,
-        };
-        (edge, sui_rpc_cursor::CursorKind::Boundary)
     }
 }
 
@@ -1370,10 +1321,11 @@ mod tests {
             12..20
         );
 
-        // Eager scalar resume saturates at `u64::MAX`: the resume edge
-        // stays MAX, which already empties the window at resolution, and
-        // the collapse echoes the saturated edge as a Boundary — the
-        // scalar lanes' pinned stamp shape.
+        // Every after Item stays symbolic; at `u64::MAX` the exclusion
+        // already empties the window AT RESOLUTION (Excluded(MAX) admits
+        // nothing below any exclusive end), so the collapse machinery still
+        // fires and echoes the cursor back unchanged — Item kind, raw
+        // coordinate.
         let options = QueryOptions {
             after: Some(tx_item(1, u64::MAX)),
             ..options
@@ -1384,7 +1336,7 @@ mod tests {
                 1,
                 u64::MAX,
                 RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: sui_rpc_cursor::CursorKind::Item,
                 },
             )
         );
@@ -1403,28 +1355,29 @@ mod tests {
                 kind: sui_rpc_cursor::CursorKind::Boundary,
             }
         );
-        // Eager scalar stamps store the resume EDGE (the Item's successor)
-        // as a Boundary — the scalar lanes' pinned stamp shape.
-        assert_eq!(bounded.terminal.end_coordinate, 12);
+        // The terminal stamp stores the winning cursor's RAW coordinate (the
+        // Item at 11), not its resume successor; the stamp sets CursorBound
+        // and is never emitted as a terminal frame.
+        assert_eq!(bounded.terminal.end_coordinate, 11);
 
-        // Under eager resolution a dense collapse is visible AT RESOLUTION:
-        // after Item(11) resolves to Included(12) and before Item(12) to
-        // Excluded(12), an empty pair, so the collapse machinery fires here
-        // and the before cursor (raw coordinate, Boundary) takes the empty
-        // window's attribution. (Symbolic resume would defer the emptiness
-        // to the store edge and leave the seed terminal standing.)
+        // A dense window collapsed by cursors is a store-edge fact under
+        // symbolic resume: resolution's emptiness predicate cannot see that
+        // no integer lies strictly between 11 and 12, so the window is NOT
+        // resolution-empty, the terminal reports the last terminal-edge
+        // winner (the descending after's Boundary stamp at its raw
+        // coordinate), and `to_range` discovers the emptiness.
         let options = QueryOptions {
             before: Some(tx_item(1, 12)),
             ..options
         };
         let bounded = options.apply_cursor_bounds(resolved_range(10..20));
-        assert!(bounded.is_empty());
+        assert!(!bounded.is_empty());
         assert_eq!(bounded.bounds.to_range(), 12..12);
         assert_eq!(
             bounded.terminal,
             TerminalRecord {
                 end_checkpoint: 1,
-                end_coordinate: 12,
+                end_coordinate: 11,
                 exhaustion: RangeExhaustion::CursorBound {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
@@ -1432,14 +1385,13 @@ mod tests {
         );
     }
 
-    /// Eager scalar resume awards low-edge ties to the cursor: an after
-    /// Item at N resolves to `Included(N + 1)`, exactly the range's own
-    /// edge, and ties go to the cursor — so an Item coinciding with the
-    /// range edge claims terminal attribution, as do Boundary ties.
-    /// (Symbolic resume would flip the Item case: `Excluded(N)` keys
-    /// strictly looser than `Included(N + 1)`.)
+    /// Low-edge ties flip under symbolic resume: an after Item at N is
+    /// `Excluded(N)`, strictly looser as a lower bound than the range's
+    /// `Included(N + 1)`, so an Item coinciding with the range edge loses
+    /// terminal attribution (eager resolution used to award it the tie).
+    /// Boundary cursors resolve to `Included` and still win their ties.
     #[test]
-    fn after_item_at_range_edge_wins_the_tie() {
+    fn after_item_at_range_edge_loses_the_tie() {
         let item_tie = QueryOptions {
             limit_items: 2,
             ordering: Ordering::Descending,
@@ -1450,9 +1402,7 @@ mod tests {
         assert_eq!(bounded.bounds.to_range(), 10..20);
         assert_eq!(
             bounded.terminal.exhaustion,
-            RangeExhaustion::CursorBound {
-                kind: sui_rpc_cursor::CursorKind::Boundary,
-            }
+            RangeExhaustion::CheckpointBound
         );
 
         let boundary_tie = QueryOptions {
