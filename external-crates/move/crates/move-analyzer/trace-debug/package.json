@@ -5,7 +5,7 @@
     "publisher": "mysten",
     "icon": "images/move.png",
     "license": "Apache-2.0",
-    "version": "0.0.22",
+    "version": "0.0.23",
     "preview": true,
     "repository": {
         "url": "https://github.com/MystenLabs/sui.git",
@@ -177,12 +177,14 @@
         "@vscode/debugadapter": "^1.56.0",
         "@vscode/debugadapter-testsupport": "^1.56.0",
         "@vscode/debugprotocol": "1.66.0",
-        "zstddec": "^0.2.0",
-        "lodash.snakecase": "^4.1.1"
+        "lodash.snakecase": "^4.1.1",
+        "semver": "^7.6.2",
+        "zstddec": "^0.2.0"
     },
     "devDependencies": {
         "@types/lodash.snakecase": "^4.1.9",
         "@types/node": "22.x",
+        "@types/semver": "^7.8.0",
         "@types/vscode": "^1.92.0",
         "@typescript-eslint/eslint-plugin": "^7.14.1",
         "@typescript-eslint/parser": "^7.11.0",
