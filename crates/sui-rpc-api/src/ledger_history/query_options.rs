@@ -143,14 +143,6 @@ pub struct ResolvedEventRange {
     pub exhaustion: RangeExhaustion,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct CheckpointRange {
-    start: u64,
-    end: u64,
-    high_exhaustion: RangeExhaustion,
-    indexed_tip: u64,
-}
-
 impl EventPosition {
     /// Fencepost at the first event slot of `tx_seq`; valid as a boundary even
     /// if the transaction has no events.
@@ -687,11 +679,16 @@ impl ResolvedEventRange {
     }
 }
 
-impl CheckpointRange {
+impl ResolvedCheckpointRange {
+    /// Validate the requested checkpoint window, clamp it to the indexed tip,
+    /// tighten it by the request's cursors, and attribute the exhaustion
+    /// reason the scan will report once it drains it — request to resolved
+    /// window in one call.
     pub fn from_request(
         start_checkpoint: Option<u64>,
         end_checkpoint: Option<u64>,
         checkpoint_hi_exclusive: u64,
+        options: &QueryOptions,
     ) -> Result<Self, RpcError> {
         let start = start_checkpoint.unwrap_or(0);
         if let Some(end) = end_checkpoint
@@ -706,27 +703,15 @@ impl CheckpointRange {
         }
 
         let requested_end = end_checkpoint.unwrap_or(checkpoint_hi_exclusive);
-        let high_exhaustion = if end_checkpoint.is_none() || requested_end > checkpoint_hi_exclusive
-        {
-            RangeExhaustion::LedgerTip
-        } else {
-            RangeExhaustion::CheckpointBound
-        };
-        let end = requested_end.min(checkpoint_hi_exclusive);
-
-        Ok(Self {
-            start,
-            end,
-            high_exhaustion,
-            indexed_tip: checkpoint_hi_exclusive,
-        })
-    }
-
-    pub fn resolve(self, options: &QueryOptions) -> ResolvedCheckpointRange {
-        let mut start = self.start;
-        let mut end = self.end;
+        let mut high_exhaustion =
+            if end_checkpoint.is_none() || requested_end > checkpoint_hi_exclusive {
+                RangeExhaustion::LedgerTip
+            } else {
+                RangeExhaustion::CheckpointBound
+            };
+        let mut start = start;
+        let mut end = requested_end.min(checkpoint_hi_exclusive);
         let mut low_exhaustion = RangeExhaustion::CheckpointBound;
-        let mut high_exhaustion = self.high_exhaustion;
         let mut cursor_bound = false;
 
         if let Some(cursor) = &options.after
@@ -757,8 +742,11 @@ impl CheckpointRange {
             }
         }
 
-        if start >= self.indexed_tip {
-            return ResolvedCheckpointRange::empty_at(self.indexed_tip, RangeExhaustion::LedgerTip);
+        if start >= checkpoint_hi_exclusive {
+            return Ok(Self::empty_at(
+                checkpoint_hi_exclusive,
+                RangeExhaustion::LedgerTip,
+            ));
         }
 
         if start >= end {
@@ -776,20 +764,19 @@ impl CheckpointRange {
                 Ordering::Ascending => end,
                 Ordering::Descending => start,
             };
-            return ResolvedCheckpointRange::empty_at(checkpoint, exhaustion);
+            return Ok(Self::empty_at(checkpoint, exhaustion));
         }
 
         let exhaustion = match options.ordering {
             Ordering::Ascending => high_exhaustion,
             Ordering::Descending => low_exhaustion,
         };
-        ResolvedCheckpointRange {
+        Ok(Self {
             range: start..end,
             exhaustion,
-        }
+        })
     }
 }
-
 impl From<EventPosition> for (u64, u32) {
     fn from(position: EventPosition) -> Self {
         (position.tx_seq, position.event_index)
@@ -1206,9 +1193,11 @@ mod tests {
         request.ordering = Some(ProtoOrdering::Descending as i32);
 
         let options = query_options_from_proto(Some(&request)).unwrap();
-        let range = CheckpointRange::from_request(Some(1_000), Some(1_100), 2_000).unwrap();
+        let range =
+            ResolvedCheckpointRange::from_request(Some(1_000), Some(1_100), 2_000, &options)
+                .unwrap();
 
-        assert_eq!(range.resolve(&options).range, 1_000..1_100);
+        assert_eq!(range.range, 1_000..1_100);
     }
 
     #[test]
@@ -1301,23 +1290,21 @@ mod tests {
 
     #[test]
     fn resolves_checkpoint_range_with_terminal_reason() {
+        let options = query_options_from_proto(None).unwrap();
         assert_eq!(
-            CheckpointRange::from_request(None, None, 20)
+            ResolvedCheckpointRange::from_request(None, None, 20, &options)
                 .unwrap()
-                .resolve(&query_options_from_proto(None).unwrap())
                 .exhaustion,
             RangeExhaustion::LedgerTip
         );
-        assert!(CheckpointRange::from_request(Some(10), Some(9), 20).is_err());
+        assert!(ResolvedCheckpointRange::from_request(Some(10), Some(9), 20, &options).is_err());
 
-        let range = CheckpointRange::from_request(Some(10), None, 20).unwrap();
-        let resolved = range.resolve(&query_options_from_proto(None).unwrap());
+        let resolved = ResolvedCheckpointRange::from_request(Some(10), None, 20, &options).unwrap();
         assert_eq!(resolved.range, 10..20);
         assert_eq!(resolved.exhaustion, RangeExhaustion::LedgerTip);
 
-        let range = CheckpointRange::from_request(Some(30), None, 20).unwrap();
         assert_eq!(
-            range.resolve(&query_options_from_proto(None).unwrap()),
+            ResolvedCheckpointRange::from_request(Some(30), None, 20, &options).unwrap(),
             ResolvedCheckpointRange::empty_at(20, RangeExhaustion::LedgerTip)
         );
     }
@@ -1328,8 +1315,9 @@ mod tests {
     #[test]
     fn resolves_checkpoint_range_no_longer_clamped_by_width() {
         let options = query_options_from_proto(None).unwrap();
-        let range = CheckpointRange::from_request(Some(10), Some(10_000_000), 10_000_000).unwrap();
-        let resolved = range.resolve(&options);
+        let resolved =
+            ResolvedCheckpointRange::from_request(Some(10), Some(10_000_000), 10_000_000, &options)
+                .unwrap();
         assert_eq!(resolved.range, 10..10_000_000);
         assert_eq!(resolved.exhaustion, RangeExhaustion::CheckpointBound);
     }
