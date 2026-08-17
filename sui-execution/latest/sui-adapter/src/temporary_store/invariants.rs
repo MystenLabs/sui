@@ -35,7 +35,7 @@ use sui_types::gas::GasCostSummary;
 use sui_types::is_system_package;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::object::{Object, ObjectPermissions, Owner};
-use sui_types::transaction::{Command, GasData, TransactionKind};
+use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 
 use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::{GasCharger, PaymentLocation};
@@ -50,15 +50,8 @@ use crate::type_layout_resolver::TypeLayoutResolver;
 struct InvariantInputs {
     /// Per-`(address, type)` funds-accumulator reservation budget authorized by this transaction.
     /// Sources: PTB `FundsWithdrawalArg`s (sender/sponsor as owner), gas paid entirely from an
-    /// address balance, and gas-data coin-reservation digests. Consumed by
-    /// `check_address_balance_changes` and `check_ownership_invariants`.
+    /// address balance, and gas-data coin-reservation digests.
     input_reservations: BTreeMap<(SuiAddress, TypeTag), u64>,
-    /// For gasless transactions only (`Some` even when empty): the per-`(owner, coin type)`
-    /// withdrawal reservations declared by the PTB's `FundsWithdrawal` inputs. Unlike
-    /// `input_reservations` this is keyed by the coin type `T` (not `Balance<T>`) and carries no
-    /// gas sources. Consumed by the reservation-dust rule of
-    /// `TemporaryStore::check_gasless_execution_requirements`.
-    gasless_reservations: Option<BTreeMap<(SuiAddress, TypeTag), u64>>,
     /// For the advance-epoch transaction, `(epoch_fees minted, epoch_rebates burned)`; `None`
     /// for every other transaction. Needed by `check_sui_conserved_expensive`, which must account
     /// for the SUI the epoch change mints and burns.
@@ -107,19 +100,17 @@ impl InvariantChecker {
         transaction_kind: &TransactionKind,
         gas_data: &GasData,
         transaction_signer: SuiAddress,
-        is_gasless: bool,
     ) {
+        // `enable_gasless` is not checked: a gasless-shaped tx cannot execute while the flag is
+        // off (rejected at validation with GasPriceUnderRGP).
+        let is_gasless = is_gasless_transaction(gas_data, transaction_kind);
         self.inputs = InvariantInputs {
             input_reservations: compute_input_reservations(
                 transaction_kind,
                 gas_data,
                 transaction_signer,
+                is_gasless,
             ),
-            gasless_reservations: is_gasless.then(|| {
-                let sponsor = (gas_data.owner != transaction_signer).then_some(gas_data.owner);
-                compute_gasless_reservations(transaction_kind, transaction_signer, sponsor)
-                    .unwrap_or_default()
-            }),
             advance_epoch_gas_summary: transaction_kind.get_advance_epoch_tx_gas_summary(),
             is_genesis: matches!(transaction_kind, TransactionKind::Genesis(_)),
             declared_packages: declared_packages(transaction_kind),
@@ -132,9 +123,18 @@ impl InvariantChecker {
         &self.inputs.input_reservations
     }
 
-    /// The gasless withdrawal reservations; `Some` iff the transaction is gasless.
-    pub(crate) fn gasless_reservations(&self) -> Option<&BTreeMap<(SuiAddress, TypeTag), u64>> {
-        self.inputs.gasless_reservations.as_ref()
+    /// The withdrawal reservations of a gasless transaction:
+    /// `input_reservations` re-keyed by the coin type `T` (unwrapped from `Balance<T>`).
+    pub(crate) fn gasless_reservations(&self) -> BTreeMap<(SuiAddress, TypeTag), u64> {
+        use sui_types::balance::Balance;
+        self.inputs
+            .input_reservations
+            .iter()
+            .filter_map(|((owner, ty), amount)| {
+                Balance::maybe_get_balance_type_param(ty)
+                    .map(|coin_type| ((*owner, coin_type), *amount))
+            })
+            .collect()
     }
 
     /// Drop the PTB-emitted ranges. Called from `TemporaryStore::drop_writes` since the
@@ -524,6 +524,7 @@ fn compute_input_reservations(
     transaction_kind: &TransactionKind,
     gas_data: &GasData,
     transaction_signer: SuiAddress,
+    is_gasless: bool,
 ) -> BTreeMap<(SuiAddress, TypeTag), u64> {
     use sui_types::balance::Balance;
     use sui_types::gas_coin::GAS;
@@ -538,63 +539,31 @@ fn compute_input_reservations(
             WithdrawFrom::Sponsor => gas_data.owner,
         };
         let Reservation::MaxAmountU64(reservation) = arg.reservation;
-        *reservations
+        let entry = reservations
             .entry((owner, arg.type_arg.to_type_tag()))
-            .or_insert(0) += reservation;
+            .or_insert(0);
+        *entry = entry.saturating_add(reservation);
     }
 
-    if is_gas_paid_from_address_balance(gas_data, transaction_kind) {
-        *reservations
+    // Gasless transactions charge no gas, so gas sources grant no reservation (their budget is
+    // validated to be 0 anyway; skipping keeps the map free of a phantom zero entry).
+    if !is_gasless && is_gas_paid_from_address_balance(gas_data, transaction_kind) {
+        let entry = reservations
             .entry((gas_data.owner, sui_balance_type.clone()))
-            .or_insert(0) += gas_data.budget;
+            .or_insert(0);
+        *entry = entry.saturating_add(gas_data.budget);
     }
 
     for entry in &gas_data.payment {
         if let Ok(parsed) = ParsedDigest::try_from(entry.2) {
-            *reservations
+            let entry = reservations
                 .entry((gas_data.owner, sui_balance_type.clone()))
-                .or_insert(0) += parsed.reservation_amount();
+                .or_insert(0);
+            *entry = entry.saturating_add(parsed.reservation_amount());
         }
     }
 
     reservations
-}
-
-/// Compute the per-`(owner, coin type)` withdrawal reservations of a gasless transaction from its
-/// PTB `FundsWithdrawal` inputs. Keyed by the coin type `T` to match the gasless allowed-token
-/// table, unlike `compute_input_reservations` above (keyed `Balance<T>`).
-fn compute_gasless_reservations(
-    transaction_kind: &TransactionKind,
-    sender: SuiAddress,
-    sponsor: Option<SuiAddress>,
-) -> Option<BTreeMap<(SuiAddress, TypeTag), u64>> {
-    use sui_types::transaction::{CallArg, Reservation, WithdrawFrom};
-
-    let TransactionKind::ProgrammableTransaction(pt) = transaction_kind else {
-        debug_fatal!("Gasless transaction must be a ProgrammableTransaction");
-        return None;
-    };
-    let mut reservations = BTreeMap::<(SuiAddress, TypeTag), u64>::new();
-    for input in &pt.inputs {
-        let CallArg::FundsWithdrawal(fw) = input else {
-            continue;
-        };
-        let Some(coin_type) = fw.type_arg.get_balance_type_param() else {
-            debug_fatal!("expected Balance type for withdrawal");
-            continue;
-        };
-        let owner = match fw.withdraw_from {
-            WithdrawFrom::Sender => sender,
-            WithdrawFrom::Sponsor => {
-                debug_fatal!("WithdrawFrom::Sponsor is not expected in gasless transactions");
-                sponsor.unwrap_or(sender)
-            }
-        };
-        let Reservation::MaxAmountU64(amount) = fw.reservation;
-        let entry = reservations.entry((owner, coin_type)).or_insert(0);
-        *entry = entry.saturating_add(amount);
-    }
-    Some(reservations)
 }
 
 impl InvariantChecker {

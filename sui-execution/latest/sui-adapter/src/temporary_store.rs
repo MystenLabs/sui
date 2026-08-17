@@ -27,7 +27,7 @@ use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::Data;
 use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
-use sui_types::transaction::{GasData, TransactionKind, is_gasless_transaction};
+use sui_types::transaction::{GasData, TransactionKind};
 use sui_types::{
     SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
@@ -576,11 +576,10 @@ impl<'backing> TemporaryStore<'backing> {
         self.invariants.clear();
     }
 
-    /// Consume this (post-execution) store and return the "recorded no-op" store used by a BumpOnly bail:
-    /// keep the input-derived state it already computed, discard everything execution produced, then bump
-    /// the mutable inputs. Its effects then record ONLY those input version bumps and the input
-    /// dependencies — nothing the (now-discarded) execution touched.
-    pub(crate) fn into_recorded_noop(self) -> Self {
+    /// Consume this (post-execution) store and return the store used by a `BumpOnly` exit: keep
+    /// the input-derived state, discard everything execution produced, then bump the mutable
+    /// inputs. Its effects record only those version bumps and the input dependencies.
+    pub(crate) fn into_bump_only(self) -> Self {
         let Self {
             // Input-derived — reused verbatim.
             store,
@@ -602,7 +601,7 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_per_epoch_config_objects: _,
             invariants: _,
         } = self;
-        let mut noop = Self {
+        let mut bump_only = Self {
             store,
             tx_digest,
             input_objects,
@@ -621,9 +620,9 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
             invariants: InvariantChecker::new(),
         };
-        // The only "writes" a no-op has: bump the versions of the mutable inputs it locked.
-        noop.ensure_active_inputs_mutated();
-        noop
+        // The only writes a BumpOnly exit records: bump the versions of the mutable inputs it locked.
+        bump_only.ensure_active_inputs_mutated();
+        bump_only
     }
 
     pub fn read_object(&self, id: &ObjectID) -> Option<&Object> {
@@ -708,12 +707,12 @@ impl<'backing> TemporaryStore<'backing> {
             .fold(0, |sum, obj| sum + obj.object_size_for_gas_metering())
     }
 
-    /// Validates gasless post-execution invariants, using the withdrawal reservations cached by
-    /// [`Self::set_invariant_inputs`].
+    /// Validates gasless post-execution invariants, using the withdrawal reservations derived
+    /// from the input reservations cached by [`Self::set_invariant_inputs`].
     pub(crate) fn check_gasless_execution_requirements(&self) -> Result<(), String> {
-        self.check_gasless_execution_requirements_with_reservations(
-            self.invariants.gasless_reservations(),
-        )
+        self.check_gasless_execution_requirements_with_reservations(Some(
+            &self.invariants.gasless_reservations(),
+        ))
     }
 
     /// Validates gasless post-execution invariants:
@@ -878,9 +877,8 @@ impl<'backing> TemporaryStore<'backing> {
         self.protocol_config
     }
 
-    /// Cache the transaction-derived inputs the system-invariant checks need (consumed by both the
-    /// conservation checks and the ownership-invariant check). Must be called once, before
-    /// execution, after any gas-smash filtering of `gas_data`.
+    /// Cache the transaction-derived inputs the system-invariant checks need. Must be called once,
+    /// before execution, after any gas-smash filtering of `gas_data`.
     /// See [`invariants::InvariantChecker::set_transaction_inputs`].
     pub(crate) fn set_invariant_inputs(
         &mut self,
@@ -888,15 +886,8 @@ impl<'backing> TemporaryStore<'backing> {
         gas_data: &GasData,
         transaction_signer: SuiAddress,
     ) {
-        // Same gasless predicate as the execution engine's `payment_kind`.
-        let is_gasless = self.protocol_config.enable_gasless()
-            && is_gasless_transaction(gas_data, transaction_kind);
-        self.invariants.set_transaction_inputs(
-            transaction_kind,
-            gas_data,
-            transaction_signer,
-            is_gasless,
-        );
+        self.invariants
+            .set_transaction_inputs(transaction_kind, gas_data, transaction_signer);
     }
 
     /// Run the (read-only) SUI-conservation and balance-accumulator invariant checks.

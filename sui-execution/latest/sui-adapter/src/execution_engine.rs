@@ -123,39 +123,45 @@ pub(crate) mod checked {
     fn payment_kind(
         gas_data: &GasData,
         transaction_kind: &TransactionKind,
-        protocol_config: &ProtocolConfig,
-    ) -> PaymentKind {
-        if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
-            PaymentKind::unmetered()
-        } else if protocol_config.enable_gasless()
-            && is_gasless_transaction(gas_data, transaction_kind)
-        {
-            // The gasless withdrawal reservations are cached on the store by
-            // `set_invariant_inputs`, under the same gasless predicate as here.
-            PaymentKind::gasless()
-        } else if gas_data.payment.is_empty() {
-            PaymentKind::smash(vec![PaymentMethod::AddressBalance(
-                gas_data.owner,
-                gas_data.budget,
-            )])
-            .expect("unable to create a payment kind with a single address balance")
-        } else {
-            let payment_methods = gas_data
-                .payment
-                .iter()
-                .map(|entry| {
-                    if let Ok(parsed) = ParsedDigest::try_from(entry.2) {
-                        PaymentMethod::AddressBalance(gas_data.owner, parsed.reservation_amount())
-                    } else {
-                        PaymentMethod::Coin(*entry)
-                    }
-                })
-                .collect();
-            PaymentKind::smash(payment_methods).expect(
-                "unable to create a payment kind from payment methods. \
-                 Should not be possible with a non-empty vector",
-            )
-        }
+    ) -> Result<PaymentKind, ExecutionError> {
+        Ok(
+            if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
+                PaymentKind::unmetered()
+            } else if is_gasless_transaction(gas_data, transaction_kind) {
+                PaymentKind::gasless()
+            } else if gas_data.payment.is_empty() {
+                PaymentKind::smash(vec![PaymentMethod::AddressBalance(
+                    gas_data.owner,
+                    gas_data.budget,
+                )])
+                .ok_or_else(|| {
+                    ExecutionError::invariant_violation(
+                        "unable to create a payment kind with a single address balance",
+                    )
+                })?
+            } else {
+                let payment_methods = gas_data
+                    .payment
+                    .iter()
+                    .map(|entry| {
+                        if let Ok(parsed) = ParsedDigest::try_from(entry.2) {
+                            PaymentMethod::AddressBalance(
+                                gas_data.owner,
+                                parsed.reservation_amount(),
+                            )
+                        } else {
+                            PaymentMethod::Coin(*entry)
+                        }
+                    })
+                    .collect();
+                PaymentKind::smash(payment_methods).ok_or_else(|| {
+                    ExecutionError::invariant_violation(
+                        "unable to create a payment kind from the gas payment: \
+                     duplicate gas coin or reservation overflow",
+                    )
+                })?
+            },
+        )
     }
 
     // Legacy (gas_model < 15) payment classification (delete at execution version cut)
@@ -195,20 +201,21 @@ pub(crate) mod checked {
         }
     }
 
-    type ExecutionOutput<Mode> = (
-        InnerTemporaryStore,
-        SuiGasStatus,
-        TransactionEffects,
-        Vec<ExecutionTiming>,
-        Result<<Mode as ExecutionMode>::ExecutionResults, <Mode as ExecutionMode>::Error>,
-    );
+    /// Everything `execute_transaction_to_effects` hands back to the executor layer.
+    pub struct ExecutionOutput<Mode: ExecutionMode> {
+        pub inner_store: InnerTemporaryStore,
+        pub gas_status: SuiGasStatus,
+        pub effects: TransactionEffects,
+        pub timings: Vec<ExecutionTiming>,
+        pub execution_result: Result<Mode::ExecutionResults, Mode::Error>,
+    }
 
     /// Gas summary, execution result, and timings produced by `execute_transaction`.
-    type ExecutionOutcome<Mode> = (
-        GasCostSummary,
-        Result<<Mode as ExecutionMode>::ExecutionResults, <Mode as ExecutionMode>::Error>,
-        Vec<ExecutionTiming>,
-    );
+    struct ExecutionOutcome<Mode: ExecutionMode> {
+        cost_summary: GasCostSummary,
+        execution_result: Result<Mode::ExecutionResults, Mode::Error>,
+        timings: Vec<ExecutionTiming>,
+    }
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
@@ -297,9 +304,8 @@ pub(crate) mod checked {
                     reason,
                 } => {
                     report_bump_only::<Mode>(reason, &transaction_digest, &error);
-                    // Recorded no-op: consume the dropped store and rebuild from its inputs, keeping only
-                    // the input version bumps.
-                    temporary_store = temporary_store.into_recorded_noop();
+                    // Rebuild the store from its inputs, keeping only the input version bumps.
+                    temporary_store = temporary_store.into_bump_only();
                     Finalized {
                         gas: GasOutcome {
                             cost_summary: GasCostSummary::default(),
@@ -343,7 +349,13 @@ pub(crate) mod checked {
             if !Mode::TRACK_EXECUTION {
                 update_vm_telemetry_metrics(&metrics, move_vm);
             }
-            (inner, gas_status, effects, timings, execution_result)
+            ExecutionOutput {
+                inner_store: inner,
+                gas_status,
+                effects,
+                timings,
+                execution_result,
+            }
         } else {
             // TODO: remove all `legacy` code on the next execution version cut
             legacy::execute_transaction_inner::<Mode>(
@@ -370,8 +382,8 @@ pub(crate) mod checked {
     }
 
     /// Post-execution consistency: SUI conservation + the expensive ownership invariants. `Err` means
-    /// an invariant was violated unrecoverably — no panic, no recovery; the caller bails to the
-    /// recorded no-op reporting the error.
+    /// an invariant was violated unrecoverably — no panic, no recovery; the caller bails to
+    /// `BumpOnly` reporting the error.
     #[allow(clippy::too_many_arguments)]
     fn check_consistency<Mode: ExecutionMode>(
         temporary_store: &mut TemporaryStore<'_>,
@@ -537,13 +549,13 @@ pub(crate) mod checked {
         },
     }
 
-    /// Which stage bailed to the `BumpOnly` (recorded no-op) exit. `InsufficientFundsForWithdraw` is
+    /// Which stage bailed to the `BumpOnly` exit. `InsufficientFundsForWithdraw` is
     /// the one expected reason; every other variant is an execution bug and is reported to
     /// `execution_bump_only_exits`, whose `reason` label is `Self::label`.
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     enum BumpOnlyReason {
         InsufficientFundsForWithdraw,
-        /// Resetting writes after a failed execution could not charge even input-only storage.
+        GasSmash,
         WriteReset,
         Conservation,
         Ownership,
@@ -554,6 +566,7 @@ pub(crate) mod checked {
         fn label(self) -> &'static str {
             match self {
                 Self::InsufficientFundsForWithdraw => "insufficient_funds_for_withdraw",
+                Self::GasSmash => "gas_smash",
                 Self::WriteReset => "write_reset",
                 Self::Conservation => "conservation",
                 Self::Ownership => "ownership",
@@ -563,6 +576,19 @@ pub(crate) mod checked {
         fn is_expected(self) -> bool {
             matches!(self, Self::InsufficientFundsForWithdraw)
         }
+    }
+
+    struct GasOutcome {
+        cost_summary: GasCostSummary,
+        coin: Option<ObjectID>,
+        status: SuiGasStatus,
+    }
+
+    struct Finalized<Mode: ExecutionMode> {
+        gas: GasOutcome,
+        status: ExecutionStatus,
+        timings: Vec<ExecutionTiming>,
+        execution_result: Result<Mode::ExecutionResults, Mode::Error>,
     }
 
     /// Report an unexpected `BumpOnly` exit: a transaction whose writes were all dropped and which
@@ -587,25 +613,12 @@ pub(crate) mod checked {
                     .with_label_values(&[reason.label()])
                     .inc();
             },
-            "BumpOnly exit (recorded no-op): all writes dropped, no gas charged. \
+            "BumpOnly exit: all writes dropped, no gas charged. \
              reason={}, tx_digest={:?}, error={:?}",
             reason.label(),
             transaction_digest,
             error
         );
-    }
-
-    struct GasOutcome {
-        cost_summary: GasCostSummary,
-        coin: Option<ObjectID>,
-        status: SuiGasStatus,
-    }
-
-    struct Finalized<Mode: ExecutionMode> {
-        gas: GasOutcome,
-        status: ExecutionStatus,
-        timings: Vec<ExecutionTiming>,
-        execution_result: Result<Mode::ExecutionResults, Mode::Error>,
     }
 
     fn execute_transaction_to_outcome<Mode: ExecutionMode>(
@@ -666,14 +679,28 @@ pub(crate) mod checked {
         // Cache transaction-derived invariant inputs
         temporary_store.set_invariant_inputs(&transaction_kind, &gas_data, transaction_signer);
 
+        let payment_kind = match payment_kind(&gas_data, &transaction_kind) {
+            Ok(payment_kind) => payment_kind,
+            Err(error) => {
+                return Outcome::BumpOnly {
+                    gas_status,
+                    error: error.into(),
+                    reason: BumpOnlyReason::GasSmash,
+                };
+            }
+        };
         let mut gas_charger = GasCharger::new(
             transaction_digest,
-            payment_kind(&gas_data, &transaction_kind, protocol_config),
+            payment_kind,
             gas_status,
             temporary_store,
             protocol_config,
         );
-        let (gas_cost_summary, execution_result, timings) = match execute_transaction::<Mode>(
+        let ExecutionOutcome {
+            cost_summary: gas_cost_summary,
+            execution_result,
+            timings,
+        } = match execute_transaction::<Mode>(
             store,
             temporary_store,
             transaction_kind,
@@ -693,9 +720,7 @@ pub(crate) mod checked {
                     reason,
                 };
             }
-            Ok((gas_cost_summary, execution_result, timings)) => {
-                (gas_cost_summary, execution_result, timings)
-            }
+            Ok(outcome) => outcome,
         };
 
         // Post-execution consistency (conservation + ownership): on violation bail to `BumpOnly` with
@@ -770,7 +795,7 @@ pub(crate) mod checked {
             })
             .and_then(|v| {
                 gas_charger
-                    .charge_storage(temporary_store)
+                    .meter_storage(temporary_store)
                     .map_err(Into::into)
                     .map(|_| v)
             });
@@ -781,11 +806,15 @@ pub(crate) mod checked {
 
         if result.is_err() {
             gas_charger
-                .reset_writes(temporary_store)
+                .handle_error(temporary_store)
                 .map_err(|error| (error.into(), BumpOnlyReason::WriteReset))?;
         }
         let cost_summary = gas_charger.charge(temporary_store, &result);
-        Ok((cost_summary, result, timings))
+        Ok(ExecutionOutcome {
+            cost_summary,
+            execution_result: result,
+            timings,
+        })
     }
 
     /// Execute the PTB, then bucketize computation via `round_computation`. Timings are written to
@@ -1017,13 +1046,13 @@ pub(crate) mod checked {
                     *epoch_id,
                 );
 
-                return (
-                    inner,
-                    gas_meter.into_gas_status(),
+                return ExecutionOutput {
+                    inner_store: inner,
+                    gas_status: gas_meter.into_gas_status(),
                     effects,
-                    vec![],
-                    Err(execution_error),
-                );
+                    timings: vec![],
+                    execution_result: Err(execution_error),
+                };
             }
 
             let sponsor = {
@@ -1079,7 +1108,11 @@ pub(crate) mod checked {
             // conservation checks and the ownership-invariant check read them from there.
             temporary_store.set_invariant_inputs(&transaction_kind, &gas_data, transaction_signer);
 
-            let (gas_cost_summary, mut execution_result, timings) = execute_transaction::<Mode>(
+            let ExecutionOutcome {
+                cost_summary: gas_cost_summary,
+                mut execution_result,
+                timings,
+            } = execute_transaction::<Mode>(
                 store,
                 &mut temporary_store,
                 transaction_kind,
@@ -1151,13 +1184,13 @@ pub(crate) mod checked {
                 update_vm_telemetry_metrics(&metrics, move_vm);
             }
 
-            (
-                inner,
-                gas_charger.into_gas_status(),
+            ExecutionOutput {
+                inner_store: inner,
+                gas_status: gas_charger.into_gas_status(),
                 effects,
                 timings,
                 execution_result,
-            )
+            }
         }
 
         #[instrument(name = "tx_execute", level = "debug", skip_all)]
@@ -1289,7 +1322,11 @@ pub(crate) mod checked {
             temporary_store
                 .conserve_unmetered_storage_rebate(gas_charger.unmetered_storage_rebate());
 
-            (cost_summary, result, timings)
+            ExecutionOutcome {
+                cost_summary,
+                execution_result: result,
+                timings,
+            }
         }
 
         fn gasless_withdrawal_reservations(

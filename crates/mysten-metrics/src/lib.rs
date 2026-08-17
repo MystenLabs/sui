@@ -161,9 +161,9 @@ impl Metrics {
             ).unwrap(),
             execution_bump_only_exits: register_int_counter_vec_with_registry!(
                 "execution_bump_only_exits",
-                "Number of transactions that bailed to the BumpOnly (recorded no-op) execution exit, \
+                "Number of transactions that bailed to the BumpOnly execution exit, \
                  excluding the expected InsufficientFundsForWithdraw short-circuit. Labelled by the \
-                 stage that bailed. Any non-zero value is an execution bug.",
+                 stage that bailed. Any non-zero value is an execution invariant failure.",
                 &["reason"],
                 registry,
             ).unwrap(),
