@@ -24,9 +24,11 @@ pub enum Ordering {
     Descending,
 }
 
-/// Event-order coordinate. Boundary cursors may point at slots with no event.
+/// Intra-transaction coordinate: a transaction and an index within it
+/// (events today; any per-transaction-indexed lane). Boundary cursors may
+/// point at slots with no item.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub struct EventPosition {
+pub struct IntraTxCoordinate {
     pub tx_seq: u64,
     pub event_index: u32,
 }
@@ -58,7 +60,7 @@ pub struct QueryOptions {
 }
 
 /// A request's checkpoint bounds resolved into the checkpoint-sequence
-/// interval to scan. Unlike [`ResolvedRange`]/[`ResolvedEventRange`], the
+/// interval to scan. Unlike [`ResolvedRange`]/[`ResolvedIntraTxRange`], the
 /// scan domain here *is* checkpoint space, so the entry and terminal
 /// checkpoints derive from `range` directly and need no extra fields.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -115,9 +117,9 @@ pub struct ResolvedRange {
 
 /// Semantic scan bounds over explicit event coordinates.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct EventScanBounds {
-    pub lo: Bound<EventPosition>,
-    pub hi: Bound<EventPosition>,
+pub struct IntraTxScanBounds {
+    pub lo: Bound<IntraTxCoordinate>,
+    pub hi: Bound<IntraTxCoordinate>,
 }
 
 /// [`ResolvedRange`]'s analogue for event scans: the scan domain is
@@ -125,10 +127,10 @@ pub struct EventScanBounds {
 /// checkpoints annotate it for watermark rendering (see [`ResolvedRange`]
 /// for why they are not a `Range`).
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ResolvedEventRange {
+pub struct ResolvedIntraTxRange {
     /// Event-coordinate interval to scan, expressed as explicit lo/hi
     /// [`Bound`]s (cursor trims need exclusive bounds on either side).
-    pub bounds: EventScanBounds,
+    pub bounds: IntraTxScanBounds,
     /// Checkpoint containing the interval's first position in scan
     /// direction; same coverage-clamp role as
     /// [`ResolvedRange::entry_checkpoint`].
@@ -138,7 +140,7 @@ pub struct ResolvedEventRange {
     pub end_checkpoint: u64,
     /// The event coordinate the scan reports when the interval is exhausted
     /// (terminal-frame cursor position, paired with `end_checkpoint`).
-    pub end_position: EventPosition,
+    pub end_position: IntraTxCoordinate,
     /// Why the interval is exhausted once the scan drains it.
     pub exhaustion: RangeExhaustion,
 }
@@ -151,7 +153,7 @@ pub struct CheckpointRange {
     indexed_tip: u64,
 }
 
-impl EventPosition {
+impl IntraTxCoordinate {
     /// Fencepost at the first event slot of `tx_seq`; valid as a boundary even
     /// if the transaction has no events.
     pub fn start_of_tx(tx_seq: u64) -> Self {
@@ -378,7 +380,10 @@ impl QueryOptions {
         }
     }
 
-    pub fn apply_event_cursor_bounds(&self, resolved: ResolvedEventRange) -> ResolvedEventRange {
+    pub fn apply_intra_tx_cursor_bounds(
+        &self,
+        resolved: ResolvedIntraTxRange,
+    ) -> ResolvedIntraTxRange {
         if resolved.is_empty() {
             return resolved;
         }
@@ -391,7 +396,7 @@ impl QueryOptions {
         let mut cursor_terminal = None;
 
         if let Some(cursor) = &self.after {
-            let position = event_cursor_position(cursor);
+            let position = intra_tx_cursor_coordinate(cursor);
             if matches!(self.ordering, Ordering::Ascending) {
                 entry_checkpoint = entry_checkpoint.max(cursor.position.checkpoint());
             }
@@ -400,7 +405,7 @@ impl QueryOptions {
                 sui_rpc_cursor::CursorKind::Boundary => Bound::Included(position),
             };
             if lower_bound_gte(candidate, bounds.lo) {
-                let candidate_bounds = EventScanBounds {
+                let candidate_bounds = IntraTxScanBounds {
                     lo: candidate,
                     hi: bounds.hi,
                 };
@@ -424,13 +429,13 @@ impl QueryOptions {
         }
 
         if let Some(cursor) = &self.before {
-            let position = event_cursor_position(cursor);
+            let position = intra_tx_cursor_coordinate(cursor);
             if matches!(self.ordering, Ordering::Descending) {
                 entry_checkpoint = entry_checkpoint.min(cursor.position.checkpoint());
             }
             if hi_admits_upper_bound(bounds.hi, position) {
                 let candidate = Bound::Excluded(position);
-                let candidate_bounds = EventScanBounds {
+                let candidate_bounds = IntraTxScanBounds {
                     lo: bounds.lo,
                     hi: candidate,
                 };
@@ -469,15 +474,15 @@ impl QueryOptions {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 };
             }
-            ResolvedEventRange {
-                bounds: EventScanBounds::empty_at(end_position),
+            ResolvedIntraTxRange {
+                bounds: IntraTxScanBounds::empty_at(end_position),
                 end_checkpoint,
                 end_position,
                 exhaustion,
                 entry_checkpoint,
             }
         } else {
-            ResolvedEventRange {
+            ResolvedIntraTxRange {
                 bounds,
                 end_checkpoint,
                 end_position,
@@ -576,15 +581,15 @@ impl ResolvedRange {
     }
 }
 
-impl EventScanBounds {
+impl IntraTxScanBounds {
     pub fn tx_span(start_tx: u64, end_tx: u64) -> Self {
         Self {
-            lo: Bound::Included(EventPosition::start_of_tx(start_tx)),
-            hi: Bound::Excluded(EventPosition::start_of_tx(end_tx)),
+            lo: Bound::Included(IntraTxCoordinate::start_of_tx(start_tx)),
+            hi: Bound::Excluded(IntraTxCoordinate::start_of_tx(end_tx)),
         }
     }
 
-    pub fn empty_at(position: EventPosition) -> Self {
+    pub fn empty_at(position: IntraTxCoordinate) -> Self {
         Self {
             lo: Bound::Included(position),
             hi: Bound::Excluded(position),
@@ -601,7 +606,7 @@ impl EventScanBounds {
         }
     }
 
-    pub fn contains(&self, position: EventPosition) -> bool {
+    pub fn contains(&self, position: IntraTxCoordinate) -> bool {
         let above_lo = match self.lo {
             Bound::Included(lo) => position >= lo,
             Bound::Excluded(lo) => position > lo,
@@ -635,14 +640,14 @@ impl EventScanBounds {
     }
 }
 
-impl ResolvedEventRange {
+impl ResolvedIntraTxRange {
     pub fn empty_at(
         end_checkpoint: u64,
-        end_position: EventPosition,
+        end_position: IntraTxCoordinate,
         exhaustion: RangeExhaustion,
     ) -> Self {
         Self {
-            bounds: EventScanBounds::empty_at(end_position),
+            bounds: IntraTxScanBounds::empty_at(end_position),
             end_checkpoint,
             end_position,
             exhaustion,
@@ -666,15 +671,15 @@ impl ResolvedEventRange {
         floor_checkpoint: u64,
         options: &QueryOptions,
     ) {
-        let floored_lo = Bound::Included(EventPosition::start_of_tx(floor_tx));
-        let floored = EventScanBounds {
+        let floored_lo = Bound::Included(IntraTxCoordinate::start_of_tx(floor_tx));
+        let floored = IntraTxScanBounds {
             lo: floored_lo,
             hi: self.bounds.hi,
         };
         if floored.is_empty() {
             // Canonical empty form everywhere in this module: the interval
             // collapses onto its reported terminal bound.
-            self.bounds = EventScanBounds::empty_at(self.end_position);
+            self.bounds = IntraTxScanBounds::empty_at(self.end_position);
             return;
         }
         self.bounds.lo = floored_lo;
@@ -682,7 +687,7 @@ impl ResolvedEventRange {
             self.entry_checkpoint = self.entry_checkpoint.max(floor_checkpoint);
         } else {
             self.end_checkpoint = floor_checkpoint;
-            self.end_position = EventPosition::start_of_tx(floor_tx);
+            self.end_position = IntraTxCoordinate::start_of_tx(floor_tx);
         }
     }
 }
@@ -790,13 +795,13 @@ impl CheckpointRange {
     }
 }
 
-impl From<EventPosition> for (u64, u32) {
-    fn from(position: EventPosition) -> Self {
+impl From<IntraTxCoordinate> for (u64, u32) {
+    fn from(position: IntraTxCoordinate) -> Self {
         (position.tx_seq, position.event_index)
     }
 }
 
-impl From<(u64, u32)> for EventPosition {
+impl From<(u64, u32)> for IntraTxCoordinate {
     fn from((tx_seq, event_index): (u64, u32)) -> Self {
         Self {
             tx_seq,
@@ -809,17 +814,17 @@ fn u64_cursor_position(cursor: &CursorToken) -> u64 {
     match cursor.position {
         Position::Checkpoints { checkpoint } => checkpoint,
         Position::Transactions { tx_seq, .. } => tx_seq,
-        Position::Events { .. } => panic!("event queries must use apply_event_cursor_bounds"),
+        Position::Events { .. } => panic!("event queries must use apply_intra_tx_cursor_bounds"),
     }
 }
 
-fn event_cursor_position(cursor: &CursorToken) -> EventPosition {
+fn intra_tx_cursor_coordinate(cursor: &CursorToken) -> IntraTxCoordinate {
     match cursor.position {
         Position::Events {
             tx_seq,
             event_index,
             ..
-        } => EventPosition {
+        } => IntraTxCoordinate {
             tx_seq,
             event_index,
         },
@@ -827,7 +832,7 @@ fn event_cursor_position(cursor: &CursorToken) -> EventPosition {
     }
 }
 
-fn lower_bound_gte(candidate: Bound<EventPosition>, current: Bound<EventPosition>) -> bool {
+fn lower_bound_gte(candidate: Bound<IntraTxCoordinate>, current: Bound<IntraTxCoordinate>) -> bool {
     let Some(candidate) = lower_bound_key(candidate) else {
         return false;
     };
@@ -837,7 +842,7 @@ fn lower_bound_gte(candidate: Bound<EventPosition>, current: Bound<EventPosition
     }
 }
 
-fn lower_bound_key(bound: Bound<EventPosition>) -> Option<(EventPosition, u8)> {
+fn lower_bound_key(bound: Bound<IntraTxCoordinate>) -> Option<(IntraTxCoordinate, u8)> {
     match bound {
         Bound::Included(position) => Some((position, 0)),
         Bound::Excluded(position) => Some((position, 1)),
@@ -845,7 +850,7 @@ fn lower_bound_key(bound: Bound<EventPosition>) -> Option<(EventPosition, u8)> {
     }
 }
 
-fn hi_admits_upper_bound(current: Bound<EventPosition>, candidate: EventPosition) -> bool {
+fn hi_admits_upper_bound(current: Bound<IntraTxCoordinate>, candidate: IntraTxCoordinate) -> bool {
     match current {
         Bound::Included(position) | Bound::Excluded(position) => candidate <= position,
         Bound::Unbounded => true,
@@ -995,7 +1000,7 @@ mod tests {
         }
     }
 
-    /// [`ResolvedEventRange::apply_serving_floor`] mirrors the tx behavior in
+    /// [`ResolvedIntraTxRange::apply_serving_floor`] mirrors the tx behavior in
     /// event coordinates.
     #[test]
     fn event_serving_floor_reconciles_or_canonicalizes_empty() {
@@ -1004,47 +1009,47 @@ mod tests {
 
         // Ascending, floor inside: low bound moves, entry rises, terminal
         // untouched.
-        let mut resolved = ResolvedEventRange {
-            bounds: EventScanBounds::tx_span(0, 100),
+        let mut resolved = ResolvedIntraTxRange {
+            bounds: IntraTxScanBounds::tx_span(0, 100),
             end_checkpoint: 20,
-            end_position: EventPosition::start_of_tx(100),
+            end_position: IntraTxCoordinate::start_of_tx(100),
             exhaustion: RangeExhaustion::CheckpointBound,
             entry_checkpoint: 0,
         };
         resolved.apply_serving_floor(50, 10, &asc);
         assert_eq!(
             resolved.bounds.lo,
-            Bound::Included(EventPosition::start_of_tx(50))
+            Bound::Included(IntraTxCoordinate::start_of_tx(50))
         );
         assert_eq!(resolved.entry_checkpoint, 10);
         assert_eq!(resolved.end_checkpoint, 20);
-        assert_eq!(resolved.end_position, EventPosition::start_of_tx(100));
+        assert_eq!(resolved.end_position, IntraTxCoordinate::start_of_tx(100));
 
         // Descending, floor inside: terminal pins to the floor.
-        let mut resolved = ResolvedEventRange {
-            bounds: EventScanBounds::tx_span(0, 100),
+        let mut resolved = ResolvedIntraTxRange {
+            bounds: IntraTxScanBounds::tx_span(0, 100),
             end_checkpoint: 0,
-            end_position: EventPosition::start_of_tx(0),
+            end_position: IntraTxCoordinate::start_of_tx(0),
             exhaustion: RangeExhaustion::CheckpointBound,
             entry_checkpoint: 20,
         };
         resolved.apply_serving_floor(50, 10, &desc);
         assert_eq!(
             resolved.bounds.lo,
-            Bound::Included(EventPosition::start_of_tx(50))
+            Bound::Included(IntraTxCoordinate::start_of_tx(50))
         );
         assert_eq!(resolved.entry_checkpoint, 20);
         assert_eq!(resolved.end_checkpoint, 10);
-        assert_eq!(resolved.end_position, EventPosition::start_of_tx(50));
+        assert_eq!(resolved.end_position, IntraTxCoordinate::start_of_tx(50));
 
         // Floor that empties the bounds (covers the == boundary), both
         // directions: canonical empty at the reported terminal bound, no
         // metadata moves.
         for floor_tx in [40, 50] {
-            let mut resolved = ResolvedEventRange {
-                bounds: EventScanBounds::tx_span(0, 40),
+            let mut resolved = ResolvedIntraTxRange {
+                bounds: IntraTxScanBounds::tx_span(0, 40),
                 end_checkpoint: 8,
-                end_position: EventPosition::start_of_tx(40),
+                end_position: IntraTxCoordinate::start_of_tx(40),
                 exhaustion: RangeExhaustion::CheckpointBound,
                 entry_checkpoint: 0,
             };
@@ -1052,16 +1057,16 @@ mod tests {
             assert!(resolved.is_empty());
             assert_eq!(
                 resolved.bounds,
-                EventScanBounds::empty_at(EventPosition::start_of_tx(40))
+                IntraTxScanBounds::empty_at(IntraTxCoordinate::start_of_tx(40))
             );
             assert_eq!(resolved.entry_checkpoint, 0);
             assert_eq!(resolved.end_checkpoint, 8);
-            assert_eq!(resolved.end_position, EventPosition::start_of_tx(40));
+            assert_eq!(resolved.end_position, IntraTxCoordinate::start_of_tx(40));
 
-            let mut resolved = ResolvedEventRange {
-                bounds: EventScanBounds::tx_span(0, 40),
+            let mut resolved = ResolvedIntraTxRange {
+                bounds: IntraTxScanBounds::tx_span(0, 40),
                 end_checkpoint: 0,
-                end_position: EventPosition::start_of_tx(0),
+                end_position: IntraTxCoordinate::start_of_tx(0),
                 exhaustion: RangeExhaustion::CheckpointBound,
                 entry_checkpoint: 8,
             };
@@ -1069,22 +1074,22 @@ mod tests {
             assert!(resolved.is_empty());
             assert_eq!(
                 resolved.bounds,
-                EventScanBounds::empty_at(EventPosition::start_of_tx(0))
+                IntraTxScanBounds::empty_at(IntraTxCoordinate::start_of_tx(0))
             );
             assert_eq!(resolved.entry_checkpoint, 8);
             assert_eq!(resolved.end_checkpoint, 0);
-            assert_eq!(resolved.end_position, EventPosition::start_of_tx(0));
+            assert_eq!(resolved.end_position, IntraTxCoordinate::start_of_tx(0));
         }
     }
 
     #[test]
     fn tx_range_covers_partial_endpoint_transactions() {
-        let bounds = EventScanBounds {
-            lo: Bound::Included(EventPosition {
+        let bounds = IntraTxScanBounds {
+            lo: Bound::Included(IntraTxCoordinate {
                 tx_seq: 10,
                 event_index: 2,
             }),
-            hi: Bound::Excluded(EventPosition::start_of_tx(13)),
+            hi: Bound::Excluded(IntraTxCoordinate::start_of_tx(13)),
         };
 
         assert_eq!(bounds.tx_range(), Some(10..13));
@@ -1092,9 +1097,9 @@ mod tests {
 
     #[test]
     fn tx_range_keeps_tx_of_nonzero_exclusive_hi() {
-        let bounds = EventScanBounds {
+        let bounds = IntraTxScanBounds {
             lo: Bound::Unbounded,
-            hi: Bound::Excluded(EventPosition {
+            hi: Bound::Excluded(IntraTxCoordinate {
                 tx_seq: 13,
                 event_index: 1,
             }),
@@ -1105,7 +1110,7 @@ mod tests {
 
     #[test]
     fn tx_range_empty_bounds_yield_none() {
-        let bounds = EventScanBounds::tx_span(10, 10);
+        let bounds = IntraTxScanBounds::tx_span(10, 10);
         assert_eq!(bounds.tx_range(), None);
     }
 
@@ -1341,10 +1346,10 @@ mod tests {
             tx_seq: 3,
             event_index: 0,
         };
-        let resolved = ResolvedEventRange {
-            bounds: EventScanBounds::tx_span(0, 3),
+        let resolved = ResolvedIntraTxRange {
+            bounds: IntraTxScanBounds::tx_span(0, 3),
             end_checkpoint: 1,
-            end_position: EventPosition::start_of_tx(3),
+            end_position: IntraTxCoordinate::start_of_tx(3),
             exhaustion: RangeExhaustion::CheckpointBound,
             entry_checkpoint: 0,
         };
@@ -1352,12 +1357,12 @@ mod tests {
         let mut request = ProtoQueryOptions::default();
         request.after = Some(CursorToken::item(position).encode());
         let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
-        let item_bounded = options.apply_event_cursor_bounds(resolved.clone());
+        let item_bounded = options.apply_intra_tx_cursor_bounds(resolved.clone());
 
         assert!(item_bounded.is_empty());
         assert_eq!(
             item_bounded.end_position,
-            EventPosition {
+            IntraTxCoordinate {
                 tx_seq: 3,
                 event_index: 0,
             }
@@ -1371,12 +1376,12 @@ mod tests {
 
         request.after = Some(CursorToken::boundary(position).encode());
         let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
-        let boundary_bounded = options.apply_event_cursor_bounds(resolved);
+        let boundary_bounded = options.apply_intra_tx_cursor_bounds(resolved);
 
         assert!(boundary_bounded.is_empty());
         assert_eq!(
             boundary_bounded.end_position,
-            EventPosition {
+            IntraTxCoordinate {
                 tx_seq: 3,
                 event_index: 0,
             }

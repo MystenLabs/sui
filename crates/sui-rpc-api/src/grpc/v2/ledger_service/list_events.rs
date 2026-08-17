@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::ops::Bound;
 use std::time::Instant;
 
-use crate::ledger_history::query_options::EventPosition;
+use crate::ledger_history::query_options::IntraTxCoordinate;
 use crate::ledger_history::query_options::RangeExhaustion;
 use futures::StreamExt;
 use futures::stream::BoxStream;
@@ -29,9 +29,9 @@ use crate::RpcError;
 use crate::RpcService;
 use crate::ledger_history::filter::event_filter_to_query;
 use crate::ledger_history::query_options::CheckpointRange;
-use crate::ledger_history::query_options::EventScanBounds;
+use crate::ledger_history::query_options::IntraTxScanBounds;
 use crate::ledger_history::query_options::QueryOptions;
-use crate::ledger_history::query_options::ResolvedEventRange;
+use crate::ledger_history::query_options::ResolvedIntraTxRange;
 use crate::metrics::ListRequestMetrics;
 use crate::metrics::ListStreamMetrics;
 use crate::read_mask_defaults;
@@ -238,7 +238,7 @@ enum EventScanState {
         filter_query: Option<BitmapQuery>,
     },
     Unfiltered {
-        bounds: EventScanBounds,
+        bounds: IntraTxScanBounds,
         /// Checkpoint containing the effective interval's first event.
         entry_checkpoint: u64,
         // Remaining tx rows this scan may read before stopping with `ScanLimit`.
@@ -248,17 +248,17 @@ enum EventScanState {
         row_scan_budget: usize,
         exhaustion: RangeExhaustion,
         end_checkpoint: u64,
-        end_position: EventPosition,
+        end_position: IntraTxCoordinate,
     },
     Filtered {
         query: BitmapQuery,
-        bounds: Option<EventScanBounds>,
+        bounds: Option<IntraTxScanBounds>,
         /// Checkpoint containing the effective interval's first event.
         entry_checkpoint: u64,
         pending_bucket: Option<PendingBitmapBucket>,
         exhaustion: RangeExhaustion,
         end_checkpoint: u64,
-        end_position: EventPosition,
+        end_position: IntraTxCoordinate,
     },
 }
 
@@ -572,7 +572,7 @@ fn next_event_chunk(
 fn scan_event_watermark(
     service: &RpcService,
     options: &QueryOptions,
-    frontier: EventPosition,
+    frontier: IntraTxCoordinate,
     entry_checkpoint: u64,
     ascending: bool,
 ) -> Result<Watermark, RpcError> {
@@ -586,7 +586,7 @@ fn scan_event_watermark(
 
 fn event_frontier_watermark(
     options: &QueryOptions,
-    frontier: EventPosition,
+    frontier: IntraTxCoordinate,
     entry_checkpoint: u64,
     checkpoint: Option<u64>,
 ) -> Result<Watermark, RpcError> {
@@ -753,21 +753,21 @@ fn resolve_event_range(
     start_checkpoint: Option<u64>,
     checkpoint_range: CheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedEventRange, RpcError> {
+) -> Result<ResolvedIntraTxRange, RpcError> {
     let cp_range = checkpoint_range.resolve(options);
     if cp_range.is_empty() {
         let tx_boundary =
             checkpoint_to_tx_boundary(service, cp_range.terminal_checkpoint(options.ordering))?;
-        return Ok(ResolvedEventRange::empty_at(
+        return Ok(ResolvedIntraTxRange::empty_at(
             cp_range.terminal_checkpoint(options.ordering),
-            EventPosition::start_of_tx(tx_boundary),
+            IntraTxCoordinate::start_of_tx(tx_boundary),
             cp_range.exhaustion,
         ));
     }
 
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
-    let mut resolved = ResolvedEventRange {
-        bounds: EventScanBounds::tx_span(tx_range.start, tx_range.end),
+    let mut resolved = ResolvedIntraTxRange {
+        bounds: IntraTxScanBounds::tx_span(tx_range.start, tx_range.end),
         entry_checkpoint: if options.is_ascending() {
             cp_range.range.start
         } else {
@@ -776,15 +776,15 @@ fn resolve_event_range(
         end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
         end_position: match options.ordering {
             crate::ledger_history::query_options::Ordering::Ascending => {
-                EventPosition::start_of_tx(tx_range.end)
+                IntraTxCoordinate::start_of_tx(tx_range.end)
             }
             crate::ledger_history::query_options::Ordering::Descending => {
-                EventPosition::start_of_tx(tx_range.start)
+                IntraTxCoordinate::start_of_tx(tx_range.start)
             }
         },
         exhaustion: cp_range.exhaustion,
     };
-    resolved = options.apply_event_cursor_bounds(resolved);
+    resolved = options.apply_intra_tx_cursor_bounds(resolved);
     if !resolved.is_empty() {
         let start_tx = match resolved.bounds.lo {
             Bound::Included(position) | Bound::Excluded(position) => position.tx_seq,
@@ -859,7 +859,7 @@ mod tests {
         ) in [
             (
                 true,
-                EventPosition::from((0, 0)),
+                IntraTxCoordinate::from((0, 0)),
                 None,
                 0,
                 Position::Events {
@@ -871,7 +871,7 @@ mod tests {
             ),
             (
                 true,
-                EventPosition::from((41, 3)),
+                IntraTxCoordinate::from((41, 3)),
                 Some(7),
                 7,
                 Position::Events {
@@ -883,7 +883,7 @@ mod tests {
             ),
             (
                 true,
-                EventPosition::from((42, 1)),
+                IntraTxCoordinate::from((42, 1)),
                 Some(9),
                 7,
                 Position::Events {
@@ -895,7 +895,7 @@ mod tests {
             ),
             (
                 false,
-                EventPosition::from((u64::MAX, u32::MAX)),
+                IntraTxCoordinate::from((u64::MAX, u32::MAX)),
                 None,
                 u64::MAX,
                 Position::Events {
@@ -907,7 +907,7 @@ mod tests {
             ),
             (
                 false,
-                EventPosition::from((19, 4)),
+                IntraTxCoordinate::from((19, 4)),
                 Some(7),
                 7,
                 Position::Events {
@@ -919,7 +919,7 @@ mod tests {
             ),
             (
                 false,
-                EventPosition::from((18, 2)),
+                IntraTxCoordinate::from((18, 2)),
                 Some(5),
                 7,
                 Position::Events {
