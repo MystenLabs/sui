@@ -48,9 +48,6 @@ pub mod checked {
     #[derive(Debug)]
     enum PaymentMetadata {
         Unmetered,
-        /// Metered-but-free; carries no state. The gasless withdrawal reservations the
-        /// storage-charging validation needs are cached on the `TemporaryStore` (see
-        /// `set_invariant_inputs`).
         Gasless,
         /// Contains the list of payments (coins and address balances) and additional metadata
         Smash(SmashMetadata),
@@ -299,8 +296,7 @@ pub mod checked {
             self.gas_status.charge_publish_package(size)
         }
 
-        /// Charge `storage_read` for each input object (system packages excepted). Charges go into the
-        /// Move VM meter, which `summary()` reads live — so the running summary reflects them on return.
+        /// Charge `storage_read` for each input object (system packages excepted).
         pub fn charge_input_objects(
             &mut self,
             temporary_store: &TemporaryStore<'_>,
@@ -332,10 +328,9 @@ pub mod checked {
             self.gas_status.charge_storage_read(owner_cost)
         }
 
-        /// Restore the store + gas state to the post-input shape: drop execution writes, clear storage
-        /// cost/rebate, re-smash gas (`drop_writes` cleared it), and re-touch mutable inputs so their
-        /// versions still bump on the err path. Used by the legacy storage-OOG fallback and the v15+
-        /// err-path handler.
+        /// Restore the store + gas state to the post-input shape: drop execution writes, clear
+        /// storage cost/rebate, re-smash gas, and re-touch mutable inputs so their versions still
+        /// bump on the err path.
         pub fn reset(&mut self, temporary_store: &mut TemporaryStore<'_>) {
             temporary_store.drop_writes();
             self.gas_status.reset_storage_cost_and_rebate();
@@ -343,10 +338,6 @@ pub mod checked {
             temporary_store.ensure_active_inputs_mutated();
         }
 
-        /// Tail of `execute_ptb`: bucketize computation via `bucketize_computation`, which fixes the
-        /// effective gas price (lowered to the abort-tx cap on a Move abort) and signals OOG if priced
-        /// computation alone exceeds the budget. Runs on Ok or Err (to capture the abort flag); an
-        /// execution error keeps precedence over a rounding error. Skipped for unmetered.
         pub fn round_computation<T, E: ExecutionErrorTrait>(
             &mut self,
             result: Result<T, E>,
@@ -370,10 +361,10 @@ pub mod checked {
             }
         }
 
-        /// Collect per-object storage cost/rebate and verify it fits the remaining budget. For gasless,
-        /// validate execution requirements first (before `ensure_active_inputs_mutated` adds objects to
-        /// written_objects). Does not retry/reset (the caller does) and does not apply payment (`charge` does).
-        pub fn charge_storage(
+        /// Meter storage: collect per-object storage cost/rebate and verify it fits the remaining
+        /// budget. Payment is applied later, by `charge`. For gasless, the execution requirements
+        /// must be validated before `ensure_active_inputs_mutated` populates `written_objects`.
+        pub fn meter_storage(
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
         ) -> Result<(), ExecutionError> {
@@ -402,12 +393,24 @@ pub mod checked {
             }
         }
 
+        /// Single reset for execution errors.
+        /// Invoked on any legitimate error (Move Abort, OOG, etc.).
+        /// Errors here become BumpOnly
+        pub(crate) fn handle_error(
+            &mut self,
+            temporary_store: &mut TemporaryStore<'_>,
+        ) -> Result<(), ExecutionError> {
+            self.reset(temporary_store);
+            self.meter_storage(temporary_store).or_else(|_| {
+                // Even input-only storage doesn't fit: full budget for computation, rebates only.
+                self.reset(temporary_store);
+                self.set_computation_to_budget();
+                temporary_store.collect_rebate(self)
+            })
+        }
+
         /// Apply the final gas charge derived from the current `SuiGasStatus`, per payment kind
         /// (`Unmetered` / `Gasless` / `Smash`).
-        ///
-        /// Reads `metadata.gas_charge_location` at apply time (no pre-rewind snapshot): the SUIPR-753
-        /// fix — `reset_writes` runs before `charge`, undoing any override (e.g. `coin::send_funds`)
-        /// on the err path before we read here.
         pub fn charge<T, E: ExecutionErrorTrait>(
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
@@ -439,21 +442,6 @@ pub mod checked {
                     }
                 }
                 PaymentMetadata::Smash(metadata) => {
-                    let iffw_failure = execution_result.as_ref().err().is_some_and(|err| {
-                        matches!(
-                            err.kind(),
-                            sui_types::execution_status::ExecutionErrorKind::InsufficientFundsForWithdraw
-                        )
-                    });
-                    // IFFW against an address balance: nothing was withdrawn, so charge nothing.
-                    if iffw_failure
-                        && matches!(
-                            metadata.gas_charge_location,
-                            PaymentLocation::AddressBalance(_)
-                        )
-                    {
-                        return GasCostSummary::default();
-                    }
                     if let PaymentLocation::Coin(_) = metadata.gas_charge_location {
                         #[skip_checked_arithmetic]
                         trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
@@ -464,8 +452,8 @@ pub mod checked {
             }
         }
 
-        /// Deduct the charge: from the gas coin (coin payment) or via an accumulator event (address
-        /// balance).
+        /// Apply the net gas charge or refund: to the gas coin (coin payment) or via an
+        /// accumulator event (address balance).
         fn apply_payment(
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
@@ -722,22 +710,6 @@ pub mod checked {
                     }
                 }
             }
-
-            /// Single reset for execution errors.
-            /// Invoked on any legitimate error (Move Abort, OOG, etc.).
-            /// Errors here become BumpOnly
-            pub(crate) fn reset_writes(
-                &mut self,
-                temporary_store: &mut TemporaryStore<'_>,
-            ) -> Result<(), ExecutionError> {
-                self.reset(temporary_store);
-                self.charge_storage(temporary_store).or_else(|_| {
-                    // Even input-only storage doesn't fit: full budget for computation, rebates only.
-                    self.reset(temporary_store);
-                    self.set_computation_to_budget();
-                    temporary_store.collect_rebate(self)
-                })
-            }
         }
     }
 
@@ -889,11 +861,9 @@ pub mod checked {
             Self(PaymentKind_::Gasless)
         }
 
+        /// `None` on an invalid payment set: empty, a duplicate gas coin, or an overflowing
+        /// address-balance reservation sum.
         pub fn smash(payment_methods: Vec<PaymentMethod>) -> Option<Self> {
-            debug_assert!(
-                !payment_methods.is_empty(),
-                "GasCharger must have at least one payment method"
-            );
             if payment_methods.is_empty() {
                 return None;
             }
@@ -914,16 +884,10 @@ pub mod checked {
                             unreachable!("Payment method does not match location")
                         };
                         assert_eq!(*addr, other, "Payment method does not match location");
-                        *amount += additional;
+                        *amount = amount.checked_add(additional)?;
                     }
-                    (indexmap::map::Entry::Occupied(_), _) => {
-                        debug_assert!(
-                            false,
-                            "Duplicate coin payment method found, \
-                             which should have been prevented by input checks"
-                        );
-                        return None;
-                    }
+                    // Duplicate gas coin; input checks should have rejected it.
+                    (indexmap::map::Entry::Occupied(_), _) => return None,
                 }
             }
             Some(Self(PaymentKind_::Smash(unique_methods)))
