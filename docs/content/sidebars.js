@@ -791,6 +791,7 @@ suiStackSidebar: [
       link: { type: 'doc', id: 'operators/data-management/index', },
       items: [
         'operators/data-management/managing-data',
+        'operators/data-management/available-data-stores',
         'operators/data-management/indexer-stack-setup',
         'operators/data-management/remote-store-setup',
         'operators/data-management/archival-stack-setup',

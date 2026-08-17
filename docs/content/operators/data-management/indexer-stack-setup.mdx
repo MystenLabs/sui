@@ -47,7 +47,7 @@ The `https://fullnode.mainnet.sui.io:443`, `https://fullnode.testnet.sui.io:443`
 
 ## Requester Pays checkpoint buckets {#requester-pays}
 
-The full-retention Mainnet and Testnet Google Cloud Storage (GCS) checkpoint buckets are Requester Pays enabled. Before running a production backfill or recovery, configure Google credentials that can charge an enabled billing project:
+The full-retention Mainnet and Testnet Google Cloud Storage (GCS) checkpoint buckets are Requester Pays enabled. For the full list of available checkpoint stores, snapshot endpoints, and their retention policies, see [Available Data Stores](/operators/data-management/available-data-stores). Before running a production backfill or recovery, configure Google credentials that can charge an enabled billing project:
 
 ```sh
 $ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/gcp-credentials.json
