@@ -179,7 +179,6 @@ members = [
     "crates/sui-rpc-resolver",
     "crates/sui-rpc-store",
     "crates/sui-sdk",
-    "crates/sui-security-watchdog",
     "crates/sui-simulator",
     "crates/sui-single-node-benchmark",
     "crates/sui-snapshot",
