@@ -11,15 +11,16 @@ experimental = ["setup-scripts"]
 [scripts.setup.big-worker-stack]
 command = 'scripts/nextest/big-worker-stack.sh'
 
-# Apply the 8 MiB worker stack only to the binary that overflows. Listed under
+# Apply the 8 MiB worker stack to the whole package: multiple binaries overflow
+# (transactional_tests, jsonrpc_address_balance_coin_tests, ...). Listed under
 # both `default` (local runs) and `ci` (CI uses `--profile ci`); a named setup
 # script runs once per test run regardless of how many rules reference it.
 [[profile.default.scripts]]
-filter = 'package(sui-indexer-alt-e2e-tests) and binary(transactional_tests)'
+filter = 'package(sui-indexer-alt-e2e-tests)'
 setup = 'big-worker-stack'
 
 [[profile.ci.scripts]]
-filter = 'package(sui-indexer-alt-e2e-tests) and binary(transactional_tests)'
+filter = 'package(sui-indexer-alt-e2e-tests)'
 setup = 'big-worker-stack'
 
 [profile.ci]

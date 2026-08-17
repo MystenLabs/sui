@@ -1636,16 +1636,24 @@ impl TestClusterBuilder {
             FullNodeHandle::new(fullnode.get_node_handle().unwrap(), json_rpc_address).await;
 
         if self.observer_fullnode {
-            let mut config = swarm
-                .get_fullnode_config_builder()
-                .with_observer_subscribed_to_validator(0)
-                .build(&mut OsRng, swarm.config());
-            // An observer that halts at a checkpoint range boundary defeats its purpose.
-            config.run_with_range = None;
-            // Deliberately drop the returned node handle: holding it would keep the
-            // instance alive across a crash and prevent the simulator from restarting
-            // the node. Access the observer via `TestCluster::observer_node()`.
-            swarm.spawn_new_node(config).await;
+            // Boxed so the frame (NodeConfig by value, held across the await) lives on
+            // the heap instead of inflating build()'s state machine for every caller,
+            // most of which never enable the observer. Unoptimized async frames are
+            // large enough that this tips borderline test binaries over the 2 MiB
+            // tokio worker stack.
+            Box::pin(async {
+                let mut config = swarm
+                    .get_fullnode_config_builder()
+                    .with_observer_subscribed_to_validator(0)
+                    .build(&mut OsRng, swarm.config());
+                // An observer that halts at a checkpoint range boundary defeats its purpose.
+                config.run_with_range = None;
+                // Deliberately drop the returned node handle: holding it would keep the
+                // instance alive across a crash and prevent the simulator from restarting
+                // the node. Access the observer via `TestCluster::observer_node()`.
+                swarm.spawn_new_node(config).await;
+            })
+            .await;
         }
 
         let mut wallet_conf: SuiClientConfig =
