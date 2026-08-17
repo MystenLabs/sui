@@ -43,8 +43,8 @@ use async_stream::stream;
 use backoff::ExponentialBackoff;
 use backoff::backoff::Backoff;
 use futures::Stream;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
+use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
+use sui_indexer_alt_reader::ledger_grpc_reader::StreamPage;
 use sui_rpc::proto::sui::rpc::v2;
 use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
@@ -97,7 +97,7 @@ struct Scanned {
 /// live. The handoff is pinned mid-scan, once the scan frontier comes within `handoff_threshold` of
 /// the tip, so even a deep backfill catches up within one connection instead of lagging the receiver.
 pub(super) fn transactions_stream(
-    reader: AlphaLedgerGrpcReader,
+    reader: LedgerGrpcReader,
     broadcast: Arc<SubscriptionBroadcast>,
     package_store: Arc<StreamingPackageStore>,
     resolver_limits: sui_package_resolver::Limits,
@@ -171,7 +171,7 @@ pub(super) fn transactions_stream(
 /// Scan matches from `resume` toward the tip, yielding each match and a per-page coverage marker.
 /// Open-ended: the caller stops it once the handoff is covered.
 fn backfill_transactions(
-    reader: AlphaLedgerGrpcReader,
+    reader: LedgerGrpcReader,
     package_store: Arc<StreamingPackageStore>,
     resolver_limits: sui_package_resolver::Limits,
     mut watermarks_rx: watch::Receiver<Arc<Watermarks>>,
@@ -338,7 +338,7 @@ fn scan_backoff() -> ExponentialBackoff {
 /// Scan the next page of matches, waiting at the indexer tip if nothing is ready yet. Returns the
 /// matches, a trailing coverage marker, and the cursor to resume from.
 async fn scan_page(
-    reader: &AlphaLedgerGrpcReader,
+    reader: &LedgerGrpcReader,
     scope: &Scope,
     limits: &PageLimits,
     cp_bounds: RangeInclusive<u64>,
@@ -399,7 +399,7 @@ async fn scan_page(
 /// Scan one page over `cp_bounds`, retrying transient failures under a bounded budget. Returns the
 /// page with its result so the caller can convert it.
 async fn scan_with_retry(
-    reader: &AlphaLedgerGrpcReader,
+    reader: &LedgerGrpcReader,
     limits: &PageLimits,
     cp_bounds: RangeInclusive<u64>,
     after: Option<&CTransaction>,

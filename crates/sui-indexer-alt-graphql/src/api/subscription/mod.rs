@@ -8,7 +8,6 @@ use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
 use futures::StreamExt;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use tokio::sync::OnceCell;
 use tokio::sync::watch;
@@ -139,7 +138,7 @@ impl Subscription {
         let limits: &Limits = ctx.data()?;
         let config: &SubscriptionConfig = ctx.data()?;
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
-        let reader: &AlphaLedgerGrpcReader = ctx.data()?;
+        let reader: &LedgerGrpcReader = ctx.data()?;
         let watermarks_rx: &watch::Receiver<Arc<Watermarks>> = ctx.data()?;
 
         let package_store = package_store.clone();
