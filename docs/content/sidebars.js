@@ -264,6 +264,7 @@ export default {
         'getting-started/onboarding/next-steps',
       ],
     },
+    'getting-started/examples/consumer-app-zklogin',
     {
       type: 'category',
       label: 'Example Apps',
@@ -293,7 +294,6 @@ export default {
             'getting-started/examples/lootbox-ctf',
             'getting-started/examples/merchant-ctf',
             'getting-started/examples/staking-ctf',
-            'getting-started/examples/consumer-app-zklogin',
             'getting-started/examples/defi-trading-zklogin',
           ],
         },
@@ -708,6 +708,11 @@ suiStackSidebar: [
           label: 'Enoki Docs',
           href: 'https://docs.enoki.mystenlabs.com/',
         },
+        {
+          type: 'link',
+          label: 'Consumer App Cookbook',
+          href: '/getting-started/examples/consumer-app-zklogin',
+        },
         'sui-stack/enoki/solitaire',
         'sui-stack/enoki/ticketing-poc',
       ],
@@ -756,6 +761,11 @@ suiStackSidebar: [
         'sui-stack/zklogin-integration/developer-account',
         'sui-stack/zklogin-integration/zklogin-demo',
         'sui-stack/zklogin-integration/zklogin',
+        {
+          type: 'link',
+          label: 'Consumer App Cookbook',
+          href: '/getting-started/examples/consumer-app-zklogin',
+        },
       ],
     },
     {
