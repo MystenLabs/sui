@@ -1338,23 +1338,80 @@ mod tests {
         assert_eq!(resolved.exhaustion, RangeExhaustion::CheckpointBound);
     }
 
+    /// When no `end_checkpoint` is configured, and the checkpoint range is emptied by the
+    /// `checkpoint_hi_exclusive`, the exhaustion reason is `LedgerTip`.
     #[test]
-    fn resolve_empty_window_produces_canonical_record() {
+    fn resolve_empty_intra_tx_at_ledger_tip() {
         for ascending in [true, false] {
-            let options = directional_options(ascending);
+            let mut request = ProtoQueryOptions::default();
+            if !ascending {
+                request.ordering = Some(ProtoOrdering::Descending as i32);
+            }
+            let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
             let cp_range =
                 ResolvedCheckpointRange::from_request(Some(30), None, 20, &options).unwrap();
             assert!(cp_range.is_empty());
             assert_eq!(
                 ResolvedIntraTxRange::resolve(cp_range, 100..100, &options),
                 ResolvedIntraTxRange {
+                    // Bounds are based on the requested checkpoint range and
+                    // checkpoint_hi_exclusive or end_checkpoint
                     bounds: IntraTxScanBounds::empty_at(IntraTxCoordinate::start_of_tx(100)),
+                    // Entry and end checkpoint take on the terminal checkpoint
                     entry_checkpoint: 20,
                     end_checkpoint: 20,
                     end_position: IntraTxCoordinate::start_of_tx(100),
                     exhaustion: RangeExhaustion::LedgerTip,
                 }
             );
+        }
+    }
+
+    /// When the resolved checkpoint range is below checkpoint_hi_exclusive and empties, the
+    /// exhaustion reason is CheckpointBound, not LedgerTip.
+    #[test]
+    fn resolve_empty_intra_tx_at_checkpoint_bound() {
+        for ascending in [true, false] {
+            let mut request = ProtoQueryOptions::default();
+            if !ascending {
+                request.ordering = Some(ProtoOrdering::Descending as i32);
+            }
+            let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
+            let cp_range =
+                ResolvedCheckpointRange::from_request(Some(10), Some(10), 20, &options).unwrap();
+            assert!(cp_range.is_empty());
+            assert_eq!(
+                ResolvedIntraTxRange::resolve(cp_range, 100..100, &options),
+                ResolvedIntraTxRange {
+                    bounds: IntraTxScanBounds::empty_at(IntraTxCoordinate::start_of_tx(100)),
+                    entry_checkpoint: 10,
+                    end_checkpoint: 10,
+                    end_position: IntraTxCoordinate::start_of_tx(100),
+                    exhaustion: RangeExhaustion::CheckpointBound,
+                }
+            );
+        }
+    }
+
+    /// If the range is already empty after checkpoint bounding, cursors have no additional effect.
+    #[test]
+    fn cursor_bounds_pass_empty_resolution_through_unchanged() {
+        let position = Position::Events {
+            checkpoint: 4,
+            tx_seq: 50,
+            event_index: 2,
+        };
+        for ascending in [true, false] {
+            let mut request = ProtoQueryOptions::default();
+            if !ascending {
+                request.ordering = Some(ProtoOrdering::Descending as i32);
+            }
+            request.after = Some(CursorToken::item(position).encode());
+            let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
+            let cp_range =
+                ResolvedCheckpointRange::from_request(Some(30), None, 20, &options).unwrap();
+            let resolved = ResolvedIntraTxRange::resolve(cp_range, 100..100, &options);
+            assert_eq!(resolved.clone().apply_cursor_bounds(&options), resolved);
         }
     }
 
@@ -1375,27 +1432,6 @@ mod tests {
         assert_eq!(resolved.entry_checkpoint, 9);
         assert_eq!(resolved.end_checkpoint, 3);
         assert_eq!(resolved.end_position, IntraTxCoordinate::start_of_tx(100));
-    }
-
-    #[test]
-    fn cursor_bounds_pass_empty_resolution_through_unchanged() {
-        let position = Position::Events {
-            checkpoint: 4,
-            tx_seq: 50,
-            event_index: 2,
-        };
-        for ascending in [true, false] {
-            let mut request = ProtoQueryOptions::default();
-            if !ascending {
-                request.ordering = Some(ProtoOrdering::Descending as i32);
-            }
-            request.after = Some(CursorToken::item(position).encode());
-            let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
-            let cp_range =
-                ResolvedCheckpointRange::from_request(Some(30), None, 20, &options).unwrap();
-            let resolved = ResolvedIntraTxRange::resolve(cp_range, 100..100, &options);
-            assert_eq!(resolved.clone().apply_cursor_bounds(&options), resolved);
-        }
     }
 
     #[test]
@@ -1451,6 +1487,50 @@ mod tests {
                 kind: sui_rpc_cursor::CursorKind::Boundary,
             }
         );
+    }
+
+    /// `before` cursor that empties the interval sets end_position, and exhaustion to CursorBound.
+    #[test]
+    fn event_before_cursor_empties_descending_interval() {
+        // Start descending over tx_span(100, 200) with entry at checkpoint 9 terminating at checkpoint 3
+        let resolved = ResolvedIntraTxRange {
+            // always in ascending order
+            bounds: IntraTxScanBounds::tx_span(100, 200),
+            // checkpoints reflect ordering
+            entry_checkpoint: 9,
+            end_checkpoint: 3,
+            end_position: IntraTxCoordinate::start_of_tx(100),
+            exhaustion: RangeExhaustion::CheckpointBound,
+        };
+
+        // This cursor will empty the interval as it will pull entry_checkpoint to 2
+        let cursor = Position::Events {
+            checkpoint: 2,
+            tx_seq: 90,
+            event_index: 0,
+        };
+
+        for token in [CursorToken::item(cursor), CursorToken::boundary(cursor)] {
+            let mut request = ProtoQueryOptions::default();
+            request.ordering = Some(ProtoOrdering::Descending as i32);
+            request.before = Some(token.encode());
+            let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
+
+            let new_coordinate = IntraTxCoordinate::start_of_tx(90);
+            assert_eq!(
+                resolved.clone().apply_cursor_bounds(&options),
+                ResolvedIntraTxRange {
+                    bounds: IntraTxScanBounds::empty_at(new_coordinate),
+                    entry_checkpoint: 2,
+                    end_checkpoint: 2,
+                    // takes on the cursor position that emptied the range
+                    end_position: new_coordinate,
+                    exhaustion: RangeExhaustion::CursorBound {
+                        kind: sui_rpc_cursor::CursorKind::Boundary,
+                    },
+                }
+            );
+        }
     }
 
     #[test]
