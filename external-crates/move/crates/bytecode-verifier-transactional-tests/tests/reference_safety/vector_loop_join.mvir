@@ -1,0 +1,90 @@
+// a reference live on the back edge but not the entry edge vanishes from the loop-head
+// invariant
+
+//# run
+mvir 0xa1::loop_head_push_with_backedge_elem_ref {
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &mut u64;
+    let i: u64;
+label b0:
+    v = vector<u64; 1>(0);
+    vr = &mut v;
+    i = 0;
+    jump b1;
+label b1:
+    vec_push_back<u64>(copy(vr), 1);
+    jump_if (copy(i) >= 1) b3;
+    jump b2;
+label b2:
+    e = vec_mut_borrow<u64>(copy(vr), 0);
+    i = move(i) + 1;
+    jump b1;
+label b3:
+    assert(vec_len<u64>(freeze(move(vr))) == 3, 42);
+    return;
+}
+
+}
+
+//# run
+mvir 0xa2::loop_head_push_then_use_backedge_elem_ref {
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &mut u64;
+    let i: u64;
+label b0:
+    v = vector<u64; 1>(0);
+    vr = &mut v;
+    i = 0;
+    jump b1;
+label b1:
+    vec_push_back<u64>(copy(vr), 1);
+    jump_if (copy(i) >= 1) b3;
+    jump b2;
+label b2:
+    e = vec_mut_borrow<u64>(copy(vr), 0);
+    i = move(i) + 1;
+    jump b1;
+label b3:
+    *move(e) = 9;
+    _ = move(vr);
+    return;
+}
+
+}
+
+//# run
+mvir 0xa3::loop_head_elem_ref_live_on_both_edges {
+
+entry fun t() {
+    let v: vector<u64>;
+    let w: u64;
+    let vr: &mut vector<u64>;
+    let e: &mut u64;
+    let i: u64;
+label b0:
+    v = vector<u64; 1>(0);
+    w = 0;
+    vr = &mut v;
+    e = &mut w;
+    i = 0;
+    jump b1;
+label b1:
+    vec_push_back<u64>(copy(vr), 1);
+    *copy(e) = 7;
+    e = vec_mut_borrow<u64>(copy(vr), 0);
+    i = move(i) + 1;
+    jump_if (copy(i) >= 2) b3;
+    jump b1;
+label b3:
+    _ = move(e);
+    _ = move(vr);
+    return;
+}
+
+}

@@ -157,12 +157,14 @@ impl Graph {
             }
         }
 
-        let (loop_nodes, succ_nodes) = self.refine_loop_nodes(loop_nodes, succ_nodes);
+        let (loop_nodes, succ_nodes) =
+            self.refine_loop_nodes(&dom_descendants, loop_nodes, succ_nodes);
         (loop_nodes, succ_nodes)
     }
 
     fn refine_loop_nodes(
         &self,
+        dom_descendants: &HashSet<NodeIndex>,
         mut loop_nodes: HashSet<NodeIndex>,
         mut succ_nodes: HashSet<NodeIndex>,
     ) -> (HashSet<NodeIndex>, HashSet<NodeIndex>) {
@@ -175,18 +177,18 @@ impl Graph {
             let mut sorted_succs: Vec<NodeIndex> = succ_nodes.iter().copied().collect();
             sorted_succs.sort_by_key(|n| n.index());
             for node in sorted_succs {
-                if self
-                    .cfg
-                    .neighbors_directed(node, petgraph::Direction::Incoming)
-                    .all(|node| loop_nodes.contains(&node))
+                // NMG Algorithm 2 line 8: only absorb a successor into the loop body if the
+                // loop head dominates it. A non-dominated successor (e.g. a break target
+                // owned by an outer scope) stays in `succ_nodes`; V-B's per-exit formulas
+                // and `rewrite_owned_jumps_as_breaks` handle its exit edge like any other.
+                if dom_descendants.contains(&node)
+                    && self
+                        .cfg
+                        .neighbors_directed(node, petgraph::Direction::Incoming)
+                        .all(|node| loop_nodes.contains(&node))
                 {
                     loop_nodes.insert(node);
                     succ_nodes.remove(&node);
-                    // Note: NMG also filters by `dom_nodes.contains(nodes)` here, but we do not:
-                    // a legitimate loop break target (a label owned by an outer scope) is not
-                    // dominated by the loop header but may be the loop's true successor;
-                    // dropping it would leave `succ_nodes` empty, meaning `insert_breaks`
-                    // cannot rewrite the break `Jump` and the goto leaks out as residue.
                     let nodes = self
                         .cfg
                         .neighbors_directed(node, petgraph::Direction::Outgoing)
@@ -194,8 +196,14 @@ impl Graph {
                     new_nodes.extend(nodes);
                 }
             }
-            succ_nodes.extend(new_nodes.iter().cloned());
+            // Re-filter against `loop_nodes`: a node discovered as frontier early in the
+            // sweep may have been absorbed later in the same sweep; extending with it
+            // unfiltered would put it in both sets, and the stale entry both inflates
+            // `succ_nodes` (driving over-absorption on later sweeps) and leaks an
+            // absorbed node into the marker's successor list.
+            succ_nodes.extend(new_nodes.iter().filter(|n| !loop_nodes.contains(n)));
         }
+        debug_assert!(loop_nodes.is_disjoint(&succ_nodes));
         (loop_nodes, succ_nodes)
     }
 }

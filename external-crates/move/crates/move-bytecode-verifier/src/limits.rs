@@ -4,7 +4,10 @@
 use move_binary_format::{
     IndexKind,
     errors::{Location, PartialVMError, PartialVMResult, VMResult, verification_error},
-    file_format::{Bytecode, CompiledModule, SignatureToken, StructFieldInformation, TableIndex},
+    file_format::{
+        Bytecode, CompiledModule, SignatureIndex, SignatureToken, StructFieldInformation,
+        TableIndex,
+    },
     partial_vm_error_with_debug_message,
 };
 use move_core_types::{runtime_value::MoveValue, vm_status::StatusCode};
@@ -221,9 +224,44 @@ impl<'a> LimitsVerifier<'a> {
 
         let mut module_total: usize = 0;
         let mut size_table = BTreeMap::new();
+        let mut function_totals = vec![0; self.module.function_handles().len()];
+
+        if config.include_function_signatures_in_instantiation_limits {
+            for (idx, function_handle) in self.module.function_handles().iter().enumerate() {
+                let mut fn_total = 0;
+                let weight = self
+                    .signature_type_size(function_handle.return_, &mut size_table)
+                    .saturating_add(
+                        self.signature_type_size(function_handle.parameters, &mut size_table),
+                    );
+                Self::charge_type_nodes(
+                    max_fun,
+                    max_mod,
+                    &mut fn_total,
+                    &mut module_total,
+                    weight,
+                )?;
+                function_totals[idx] = fn_total;
+            }
+        }
+
         for func_def in self.module.function_defs() {
             let Some(code) = &func_def.code else { continue };
-            let mut fn_total: usize = 0;
+            let mut fn_total = function_totals
+                .get(func_def.function.0 as usize)
+                .copied()
+                .unwrap_or_default();
+
+            if config.include_function_signatures_in_instantiation_limits {
+                let weight = self.signature_type_size(code.locals, &mut size_table);
+                Self::charge_type_nodes(
+                    max_fun,
+                    max_mod,
+                    &mut fn_total,
+                    &mut module_total,
+                    weight,
+                )?;
+            }
             for instr in &code.code {
                 let sig_idx = match instr {
                     Bytecode::CallGeneric(idx) => {
@@ -326,42 +364,68 @@ impl<'a> LimitsVerifier<'a> {
                     | Bytecode::ImmBorrowGlobalDeprecated(_) => continue,
                 };
 
-                let weight = *size_table.entry(sig_idx).or_insert_with(|| {
-                    self.module
-                        .signature_at(sig_idx)
-                        .0
-                        .iter()
-                        .fold(0usize, |acc, ty| acc.saturating_add(weighted_type_size(ty)))
-                });
-                fn_total = fn_total.saturating_add(weight);
-                module_total = module_total.saturating_add(weight);
-
-                if let Some(max) = max_fun
-                    && fn_total > max
-                {
-                    return Err(partial_vm_error_with_debug_message!(
-                        TOO_MANY_TYPE_NODES,
-                        format!(
-                            "function exceeds generic-instantiation budget: {} > {}",
-                            fn_total, max
-                        )
-                    ));
-                }
-
-                if let Some(max) = max_mod
-                    && module_total > max
-                {
-                    return Err(partial_vm_error_with_debug_message!(
-                        TOO_MANY_TYPE_NODES,
-                        format!(
-                            "module exceeds generic-instantiation budget: {} > {}",
-                            module_total, max
-                        )
-                    ));
-                }
+                let weight = self.signature_type_size(sig_idx, &mut size_table);
+                Self::charge_type_nodes(
+                    max_fun,
+                    max_mod,
+                    &mut fn_total,
+                    &mut module_total,
+                    weight,
+                )?;
             }
         }
         Ok(())
+    }
+
+    fn charge_type_nodes(
+        max_fun: Option<usize>,
+        max_mod: Option<usize>,
+        fn_total: &mut usize,
+        module_total: &mut usize,
+        weight: usize,
+    ) -> PartialVMResult<()> {
+        *fn_total = fn_total.saturating_add(weight);
+        *module_total = module_total.saturating_add(weight);
+
+        if let Some(max) = max_fun
+            && *fn_total > max
+        {
+            return Err(partial_vm_error_with_debug_message!(
+                TOO_MANY_TYPE_NODES,
+                format!(
+                    "function exceeds generic-instantiation budget: {} > {}",
+                    *fn_total, max
+                )
+            ));
+        }
+
+        if let Some(max) = max_mod
+            && *module_total > max
+        {
+            return Err(partial_vm_error_with_debug_message!(
+                TOO_MANY_TYPE_NODES,
+                format!(
+                    "module exceeds generic-instantiation budget: {} > {}",
+                    *module_total, max
+                )
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn signature_type_size(
+        &self,
+        sig_idx: SignatureIndex,
+        size_table: &mut BTreeMap<SignatureIndex, usize>,
+    ) -> usize {
+        *size_table.entry(sig_idx).or_insert_with(|| {
+            self.module
+                .signature_at(sig_idx)
+                .0
+                .iter()
+                .fold(0usize, |acc, ty| acc.saturating_add(weighted_type_size(ty)))
+        })
     }
 
     /// Verifies the lengths of all identifers are valid

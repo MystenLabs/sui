@@ -30,10 +30,14 @@ pub enum Input {
     ),
     Code(Label, Code, Option<Label>),
     /// Already-structured abstract node (NMG §IV-C collapse). The structured form lives
-    /// in `structured_blocks[label]`; CFG-wise this node has `succs` as its out-edges.
-    /// Installed by `structure_loop` after a loop body is wrapped, so outer scopes treat
-    /// the loop as a single opaque block.
-    Reduced(Label, Vec<Label>),
+    /// in `structured_blocks[label]`; CFG-wise this node has `succs` as its out-edges,
+    /// each carrying the Boolean formula under which body-flow reached that exit target
+    /// (from the loop-body projection's `reaching_conditions`). Outer scopes read those
+    /// formulas via `region::edge_condition` so the surrounding acyclic structurer builds
+    /// the post-loop `if`/`else` cascade from the propagated reach conditions.
+    ///
+    /// Installed by `structure_loop` after a loop body is wrapped.
+    Reduced(Label, Vec<(Label, crate::structuring::predicates::Formula)>),
 }
 
 /// Provenance for a surviving `Jump`. Each variant names the structurer path that
@@ -87,16 +91,6 @@ pub enum Structured {
     ),
     /// Goto. `GotoSource` records which structurer path created it for instrumentation.
     Jump(GotoSource, Label),
-    /// Synthetic declaration of a dispatch local emitted by `structure_loop` for multi-succ
-    /// loops: `let <name>: u32;`. Translated to `Exp::Declare`.
-    Let(String),
-    /// Synthetic assignment of an integer tag to a dispatch local: `<name> = <value>;`.
-    /// Emitted at each exit site inside a multi-succ loop body to mark which arm to
-    /// dispatch. Translated to `Exp::Assign(name, Constant(value))`.
-    AssignTag(String, crate::ast::DispatchTag),
-    /// Synthetic integer-literal match emitted after a multi-succ loop:
-    /// `match (<name>) { 0 => ..., 1 => ..., }`. Translated to `Exp::MatchLit`.
-    SelectorMatch(String, Vec<(crate::ast::DispatchTag, Structured)>),
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -113,7 +107,7 @@ impl Input {
                 .collect::<Vec<_>>(),
             Input::Code(lbl, _, Some(to)) => vec![(*lbl, *to)],
             Input::Code(_, _, None) => vec![],
-            Input::Reduced(lbl, succs) => succs.iter().map(|s| (*lbl, *s)).collect(),
+            Input::Reduced(lbl, succs) => succs.iter().map(|(s, _)| (*lbl, *s)).collect(),
         }
     }
 
@@ -137,14 +131,31 @@ impl Structured {
         Structured::Jump(GotoSource::ReachingExit, target)
     }
 
-    /// Empty input -> `Seq([])`; single-item input -> that item bare; otherwise -> `Seq`.
-    /// Avoids the `Seq([x])` shape that downstream refinements would just unwrap anyway.
-    pub fn seq_or_singleton(mut items: Vec<Structured>) -> Structured {
-        match items.len() {
-            0 => Structured::Seq(vec![]),
-            1 => items.pop().unwrap(),
-            _ => Structured::Seq(items),
+    /// Every `Jump(_, target)` reachable in `self`, as sorted-deduped target labels.
+    /// A non-empty result means the structurer left raw control-flow residue that survived
+    /// every refinement pass - the output will emit `unstructured { goto 'label_N }` for
+    /// each one. Used by the test harness + pretty-printer to surface residue.
+    pub fn collect_jump_targets(&self) -> Vec<u64> {
+        fn walk(s: &Structured, out: &mut Vec<u64>) {
+            match s {
+                Structured::Jump(_, target) => out.push(target.index() as u64),
+                Structured::Seq(items) => items.iter().for_each(|i| walk(i, out)),
+                Structured::CondIf(_, conseq, alt) => {
+                    walk(conseq, out);
+                    if let Some(a) = alt.as_ref().as_ref() {
+                        walk(a, out);
+                    }
+                }
+                Structured::Loop(_, body) => walk(body, out),
+                Structured::Switch(_, _, arms) => arms.iter().for_each(|(_, b)| walk(b, out)),
+                Structured::Block(_) | Structured::Break(_) | Structured::Continue(_) => {}
+            }
         }
+        let mut out = Vec::new();
+        walk(self, &mut out);
+        out.sort_unstable();
+        out.dedup();
+        out
     }
 
     /// `Seq[a, b]` flattened: if either side is already a `Seq`, its items splice in
@@ -368,27 +379,6 @@ impl std::fmt::Display for Structured {
                 Structured::Jump(src, node_index) => {
                     indent(f, level)?;
                     writeln!(f, "jump<{}> {:?};", src.as_tag(), node_index)
-                }
-                Structured::Let(name) => {
-                    indent(f, level)?;
-                    writeln!(f, "let {name}: u32;")
-                }
-                Structured::AssignTag(name, value) => {
-                    indent(f, level)?;
-                    writeln!(f, "{name} = {value};")
-                }
-                Structured::SelectorMatch(name, arms) => {
-                    indent(f, level)?;
-                    writeln!(f, "match ({name}) {{")?;
-                    for (lit, body) in arms {
-                        indent(f, level + 1)?;
-                        writeln!(f, "{lit} => {{")?;
-                        fmt_structured(body, f, level + 2)?;
-                        indent(f, level + 1)?;
-                        writeln!(f, "}},")?;
-                    }
-                    indent(f, level)?;
-                    writeln!(f, "}}")
                 }
             }
         }

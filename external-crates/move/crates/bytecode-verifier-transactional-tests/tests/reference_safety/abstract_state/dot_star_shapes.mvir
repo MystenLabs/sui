@@ -1,0 +1,99 @@
+// graph shape after calls with several args / returns
+
+//# publish
+mvir 0x2::zzds_shapes {
+
+public struct S has copy, drop, store { f: u64, g: u64 }
+public struct O has copy, drop, store { a: Self::S, b: Self::S }
+
+fun two_mut(p: &mut Self::O, q: &mut Self::S): &mut Self::S * &mut u64 {
+label b0:
+    return &mut move(p).O::a, &mut move(q).S::f;
+}
+
+fun mut_and_imm(p: &mut Self::O): &mut Self::S * &Self::S {
+    let x: &mut Self::S;
+    let y: &Self::S;
+label b0:
+    x = &mut copy(p).O::a;
+    y = &move(p).O::b;
+    return move(x), move(y);
+}
+
+fun two_imm(p: &Self::O): &Self::S * &Self::S {
+    let x: &Self::S;
+    let y: &Self::S;
+label b0:
+    x = &copy(p).O::a;
+    y = &move(p).O::b;
+    return move(x), move(y);
+}
+
+// two mut args, two mut returns
+fun c_two_mut(o: &mut Self::O, s: &mut Self::S) {
+    let m1: &mut Self::S;
+    let m2: &mut u64;
+label b0:
+    m1, m2 = Self::two_mut(copy(o), copy(s));
+    jump b1;
+label b1:
+    _ = move(m1);
+    _ = move(m2);
+    _ = move(o);
+    _ = move(s);
+    return;
+}
+
+// one mut arg, one mut + one imm return
+fun c_mut_imm(o: &mut Self::O) {
+    let n: &mut Self::S;
+    let i: &Self::S;
+label b0:
+    n, i = Self::mut_and_imm(copy(o));
+    jump b1;
+label b1:
+    _ = move(n);
+    _ = move(i);
+    _ = move(o);
+    return;
+}
+
+// one imm arg, two imm returns
+fun c_two_imm(o: &Self::O) {
+    let i1: &Self::S;
+    let i2: &Self::S;
+label b0:
+    i1, i2 = Self::two_imm(copy(o));
+    jump b1;
+label b1:
+    _ = move(i1);
+    _ = move(i2);
+    _ = move(o);
+    return;
+}
+
+// extend a mut return by a field
+fun c_extend_return(o: &mut Self::O) {
+    let n: &mut Self::S;
+    let i: &Self::S;
+    let nf: &mut u64;
+label b0:
+    n, i = Self::mut_and_imm(copy(o));
+    nf = &mut move(n).S::f;
+    jump b1;
+label b1:
+    _ = move(nf);
+    _ = move(i);
+    _ = move(o);
+    return;
+}
+
+}
+
+//# view-abstract-state 0x2::zzds_shapes::c_two_mut
+
+//# view-abstract-state 0x2::zzds_shapes::c_mut_imm
+
+//# view-abstract-state 0x2::zzds_shapes::c_two_imm
+
+//# view-abstract-state 0x2::zzds_shapes::c_extend_return

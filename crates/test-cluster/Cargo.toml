@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 bcs.workspace = true
+consensus-config.workspace = true
 fastcrypto-zkp.workspace = true
 futures.workspace = true
 tracing.workspace = true

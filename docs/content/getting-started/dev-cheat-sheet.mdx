@@ -62,6 +62,7 @@ Best practices for writing Move smart contracts on Sui.
   - Use dynamic field-backed collections (`Table`, `Bag`, `ObjectBag`, `ObjectTable`, `LinkedTable`) for any collection that allows third-party addition, larger collections, and collections of unknown size.
   - Move objects have a maximum size of 250KB. Any attempt to create a larger object causes an aborted transaction. Ensure that your objects do not have an ever-growing `vector`-backed collection.
 - If your function `f` needs a payment in, for example, SUI from the caller, use `fun f(payment: Coin<SUI>)` not `fun f(payment: &mut Coin<SUI>, amount: u64)`. This is safer for callers; they know exactly how much they are paying, and do not need to trust `f` to extract the right amount.
+- Use the [capability pattern](/getting-started/examples/capability-pattern) for access control instead of address checks. Define capability objects like `AdminCap` or `MintCap` with the `key` ability, require them as function parameters for privileged operations, transfer them to delegate access, and destroy them to revoke access. This is more composable than `tx_context::sender()` checks because other modules can hold and pass capabilities on a user's behalf.
 
 ### Composability
 
@@ -83,6 +84,7 @@ Best practices for writing Move smart contracts on Sui.
 - Use the [`std::unit_test`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/move-stdlib/sources/unit_test.move) module for `assert_eq!` and `assert_ref_eq!` macros and the `destroy` function for cleaning up objects in tests.
 - Use the [`std::debug`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/move-stdlib/sources/debug.move) module for debug printing through `print`.
 - Use `sui move test --coverage` to compute code coverage information for your tests, and `sui move coverage source --module <name>` to see uncovered lines highlighted in red. Push coverage all the way to 100% if feasible.
+- Use `sui move lint` to run the Move linter on your package and catch common issues and anti-patterns before publishing.
 
 ## Apps
 

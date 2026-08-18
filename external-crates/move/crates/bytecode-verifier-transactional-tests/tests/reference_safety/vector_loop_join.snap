@@ -1,0 +1,24 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 1, lines 32-59:
+//# run
+Error: Unable to publish module '00000000000000000000000000000000000000000000000000000000000000a2::loop_head_push_then_use_backedge_elem_ref'. Got VMError: {
+    major_status: MOVELOC_UNAVAILABLE_ERROR,
+    sub_status: None,
+    location: 0xa2::loop_head_push_then_use_backedge_elem_ref,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 26)],
+}
+
+task 2, lines 61-90:
+//# run
+Error: Unable to publish module '00000000000000000000000000000000000000000000000000000000000000a3::loop_head_elem_ref_live_on_both_edges'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0xa3::loop_head_elem_ref_live_on_both_edges,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 14)],
+}

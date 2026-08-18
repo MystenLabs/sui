@@ -1,0 +1,34 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 4-26:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000041::d0_control_no_call'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x41::d0_control_no_call,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 12)],
+}
+
+task 1, lines 27-54:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::d1_call_off_imm_alias'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x42::d1_call_off_imm_alias,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 12)],
+}
+
+task 2, lines 55-82:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000043::d2_call_identity_off_imm_alias'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x43::d2_call_identity_off_imm_alias,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 12)],
+}

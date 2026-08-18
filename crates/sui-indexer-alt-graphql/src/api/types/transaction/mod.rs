@@ -9,10 +9,6 @@ use anyhow::Context as _;
 use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::connection::Connection;
-use async_graphql::connection::CursorType;
-use async_graphql::connection::Edge;
-use async_graphql::connection::EmptyFields;
-use async_graphql::connection::PageInfo;
 use async_graphql::dataloader::DataLoader;
 use diesel::QueryableByName;
 use diesel::sql_types::BigInt;
@@ -62,6 +58,7 @@ use crate::error::RpcError;
 use crate::error::upcast;
 use crate::extensions::query_limits;
 use crate::pagination::Page;
+use crate::pagination::StreamConnection;
 use crate::scope::Scope;
 use crate::task::streaming::ProcessedTransaction;
 use crate::task::watermark::Watermarks;
@@ -91,12 +88,6 @@ pub struct TransactionToken {
 
 /// Compatibility dispatch over the on-wire cursor format.
 pub type CTransaction = OpaqueCursor<TransactionToken>;
-
-/// Custom `Connection` for transactions to support partially-filled pages.
-pub(crate) struct TransactionConnection {
-    pub edges: Vec<Edge<String, Transaction, EmptyFields>>,
-    pub page_info: PageInfo,
-}
 
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
@@ -137,24 +128,6 @@ impl Transaction {
     #[graphql(flatten)]
     async fn contents(&self, ctx: &Context<'_>) -> Result<TransactionContents, RpcError> {
         self.contents.fetch(ctx, self.digest).await
-    }
-}
-
-#[Object]
-impl TransactionConnection {
-    /// Information to aid in pagination.
-    async fn page_info(&self) -> &PageInfo {
-        &self.page_info
-    }
-
-    /// A list of edges.
-    async fn edges(&self) -> &[Edge<String, Transaction, EmptyFields>] {
-        &self.edges
-    }
-
-    /// A list of nodes.
-    async fn nodes(&self) -> Vec<&Transaction> {
-        self.edges.iter().map(|e| &e.node).collect()
     }
 }
 
@@ -306,7 +279,7 @@ impl Transaction {
         transactions: &[ProcessedTransaction],
         page: &Page<CTransaction>,
         filter: TransactionFilter,
-    ) -> Result<TransactionConnection, RpcError> {
+    ) -> Result<StreamConnection<Transaction>, RpcError> {
         let after = page.after().map(|c| c.tx_sequence_number());
         let before = page.before().map(|c| c.tx_sequence_number());
 
@@ -361,7 +334,7 @@ impl Transaction {
         scope: Scope,
         page: Page<CTransaction>,
         filter: TransactionFilter,
-    ) -> Result<TransactionConnection, RpcError> {
+    ) -> Result<StreamConnection<Transaction>, RpcError> {
         if let Some(reader) = ctx.data_opt::<AlphaLedgerGrpcReader>() {
             query_limits::rich::debit(ctx)?;
             return Self::paginate_grpc(reader, scope, page, filter).await;
@@ -376,7 +349,7 @@ impl Transaction {
         let reader_lo = available_range_key.reader_lo(watermarks)?;
 
         let Some(query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
-            return Ok(TransactionConnection::empty());
+            return Ok(StreamConnection::empty());
         };
 
         let TransactionFilter {
@@ -423,7 +396,7 @@ impl Transaction {
         scope: Scope,
         page: Page<CTransaction>,
         filter: TransactionFilter,
-    ) -> Result<TransactionConnection, RpcError> {
+    ) -> Result<StreamConnection<Transaction>, RpcError> {
         if page.limit() == 0 {
             return Ok(Connection::new(false, false).into());
         }
@@ -534,6 +507,11 @@ impl TransactionContents {
             });
         }
 
+        // Execution context is not backed by the index yet.
+        if self.scope.is_executed() {
+            return Ok(self.clone());
+        }
+
         let kv_loader: &KvLoader = ctx.data()?;
         let Some(transaction) = kv_loader
             .load_one_transaction(digest)
@@ -558,20 +536,6 @@ impl TransactionContents {
             scope: self.scope.clone(),
             contents: Some(Arc::new(transaction)),
         })
-    }
-}
-
-impl TransactionConnection {
-    fn empty() -> Self {
-        Self {
-            edges: vec![],
-            page_info: PageInfo {
-                has_previous_page: false,
-                has_next_page: false,
-                start_cursor: None,
-                end_cursor: None,
-            },
-        }
     }
 }
 
@@ -629,6 +593,14 @@ impl TryFrom<CursorToken> for TransactionToken {
     }
 }
 
+impl TryFrom<CursorToken> for CTransaction {
+    type Error = anyhow::Error;
+
+    fn try_from(token: CursorToken) -> anyhow::Result<Self> {
+        Ok(OpaqueCursor::new(TransactionToken::try_from(token)?))
+    }
+}
+
 impl Eq for TransactionToken {}
 impl PartialEq for TransactionToken {
     fn eq(&self, other: &Self) -> bool {
@@ -647,82 +619,31 @@ impl From<TransactionEffects> for Transaction {
     }
 }
 
-impl From<Connection<String, Transaction>> for TransactionConnection {
-    /// Convert a stock async-graphql `Connection` (as produced by the PG path's
-    /// `Page::paginate_results`) into the custom shape. Cursors are derived from edges, matching
-    /// stock semantics.
-    fn from(conn: Connection<String, Transaction>) -> Self {
-        let start_cursor = conn.edges.first().map(|e| e.cursor.clone());
-        let end_cursor = conn.edges.last().map(|e| e.cursor.clone());
-        Self {
-            edges: conn.edges,
-            page_info: PageInfo {
-                has_previous_page: conn.has_previous_page,
-                has_next_page: conn.has_next_page,
-                start_cursor,
-                end_cursor,
-            },
-        }
-    }
+/// Hydrate a `Transaction` node from a `ListTransactions` stream item. The item carries the
+/// transaction's checkpointed contents, so fields resolve without a KV lookup.
+fn transaction_from_stream_item(
+    scope: Scope,
+    payload: &v2::ExecutedTransaction,
+) -> Result<Transaction, RpcError> {
+    let contents = CheckpointedTransaction::try_from(payload)
+        .context("Failed to convert ListTransactions item")?;
+    Transaction::with_contents(
+        scope,
+        Arc::new(NativeTransactionContents::LedgerGrpc(contents)),
+    )
 }
 
-/// Build a `TransactionConnection` from draining a bitmap-scan page.
+/// Build a `StreamConnection<Transaction>` from draining a bitmap-scan page.
 ///
 /// Edges are returned in ascending order.
 pub(crate) fn build_grpc_connection(
     scope: Scope,
     page: &Page<CTransaction>,
     result: StreamPage<v2::ExecutedTransaction>,
-) -> Result<TransactionConnection, RpcError> {
-    let more = result.has_more();
-    let start = result.first_cursor().cloned();
-    let end = result.last_cursor().cloned();
-    let mut items = result.items;
-
-    let (has_previous_page, has_next_page, start, end) = if page.is_from_front() {
-        (page.after().is_some(), more, start, end)
-    } else {
-        items.reverse();
-        (more, page.before().is_some(), end, start)
-    };
-
-    let mut edges = Vec::with_capacity(items.len());
-    for item in items {
-        let contents = CheckpointedTransaction::try_from(&item.payload)
-            .context("Failed to convert ListTransactions item")?;
-
-        edges.push(Edge::new(
-            encode_grpc_cursor(&item.cursor)?,
-            Transaction::with_contents(
-                scope.clone(),
-                Arc::new(NativeTransactionContents::LedgerGrpc(contents)),
-            )?,
-        ));
-    }
-
-    let start_cursor = start.map(|b| encode_grpc_cursor(&b)).transpose()?;
-    let end_cursor = end.map(|b| encode_grpc_cursor(&b)).transpose()?;
-
-    Ok(TransactionConnection {
-        edges,
-        page_info: PageInfo {
-            has_previous_page,
-            has_next_page,
-            start_cursor,
-            end_cursor,
-        },
+) -> Result<StreamConnection<Transaction>, RpcError> {
+    page.paginate_stream_results(result, |payload| {
+        transaction_from_stream_item(scope.clone(), payload)
     })
-}
-
-/// Re-encode a server-minted cursor (raw encoded `CursorToken` bytes from the gRPC stream) as a
-/// GraphQL cursor string.
-fn encode_grpc_cursor(bytes: &[u8]) -> Result<String, RpcError> {
-    let token = CursorToken::decode(bytes).context("Failed to decode ListTransactions cursor")?;
-    let token = token
-        .try_into()
-        .context("Unexpected position in ListTransactions cursor")?;
-    let cursor: CTransaction = OpaqueCursor::new(token);
-    Ok(cursor.encode_cursor())
 }
 
 pub(crate) async fn tx_digests(
@@ -1117,7 +1038,7 @@ mod tests {
         CursorToken::from(&*decoded)
     }
 
-    fn edge_positions(conn: &TransactionConnection) -> Vec<u64> {
+    fn edge_positions(conn: &StreamConnection<Transaction>) -> Vec<u64> {
         conn.edges
             .iter()
             .map(|e| match edge_token(&e.cursor).position {

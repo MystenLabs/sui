@@ -21,7 +21,6 @@ fail.workspace = true
 hex.workspace = true
 indexmap.workspace = true
 lasso.workspace = true
-lru.workspace = true
 parking_lot.workspace = true
 quick_cache.workspace = true
 serde.workspace = true

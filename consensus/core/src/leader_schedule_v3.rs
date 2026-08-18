@@ -473,7 +473,19 @@ impl LeaderScheduleV3 {
     }
 
     /// Snapshot of the running per-authority scores.
+    ///
+    /// An all-zero snapshot does not provide a relative propagation signal. Return
+    /// the default empty scores in that case so ancestor selection keeps every
+    /// authority included until scoring produces a meaningful result.
     pub(crate) fn current_reputation_scores(&self) -> ReputationScores {
+        if self
+            .total_scores_per_authority
+            .iter()
+            .all(|score| *score == 0)
+        {
+            return ReputationScores::default();
+        }
+
         let interval_size = self
             .context
             .protocol_config
@@ -702,10 +714,34 @@ mod tests {
         let context = setup(4);
         let schedule = LeaderScheduleV3::new(context, vec![0; 4]);
         assert_eq!(schedule.total_scores_per_authority(), &[0u64; 4]);
+        assert_eq!(
+            schedule.current_reputation_scores(),
+            ReputationScores::default()
+        );
         assert_eq!(schedule.scores_entries_len(), 0);
         assert_eq!(schedule.pending_commits_len(), 0);
         assert_eq!(schedule.average_num_leaders(), 0.0);
         assert_eq!(schedule.total_leader_stakes(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_v3_zero_scores_stay_unavailable_during_warmup() {
+        let context = setup(4);
+        let mut schedule = LeaderScheduleV3::new(context, vec![0; 4]);
+        let commits = make_uniform_chain_commits(4);
+
+        for commit in commits.iter().take(3) {
+            schedule.add_commit(commit.clone());
+            assert_eq!(
+                schedule.current_reputation_scores(),
+                ReputationScores::default()
+            );
+        }
+
+        schedule.add_commit(commits[3].clone());
+        let scores = schedule.current_reputation_scores();
+        assert_eq!(scores.scores_per_authority.len(), 4);
+        assert!(scores.highest_score() > 0);
     }
 
     #[tokio::test]

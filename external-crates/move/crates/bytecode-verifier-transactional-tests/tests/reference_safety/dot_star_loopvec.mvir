@@ -1,0 +1,134 @@
+// loops mixing dot-star extensions with vector mutation
+
+// element released inside the loop, vector mutated after
+//# run
+mvir 0x61::f1_elem_dead_at_backedge {
+
+entry fun t() {
+    let v: vector<u64>;
+    let r: &mut vector<u64>;
+    let e: &mut u64;
+    let n: u64;
+label b0:
+    v = vector<u64; 3>(1, 2, 3);
+    r = &mut v;
+    n = 3;
+    jump lh;
+label lh:
+    jump_if (copy(n) == 0) le;
+label lbody:
+    n = move(n) - 1;
+    e = vec_mut_borrow<u64>(copy(r), 0);
+    *move(e) = 5;
+    jump lh;
+label le:
+    vec_push_back<u64>(copy(r), 7);
+    assert(*vec_imm_borrow<u64>(freeze(move(r)), 0) == 5, 42);
+    return;
+}
+
+}
+
+// element live across the loop, then push: rejected
+//# publish
+mvir 0x62::f2_elem_live_across_loop {
+
+fun t(v: &mut vector<u64>, n: u64) {
+    let e: &mut u64;
+label b0:
+    e = vec_mut_borrow<u64>(copy(v), 0);
+    jump lh;
+label lh:
+    jump_if (copy(n) == 0) le;
+label lbody:
+    n = move(n) - 1;
+    *copy(e) = 1;
+    jump lh;
+label le:
+    vec_push_back<u64>(copy(v), 7);
+    _ = move(e);
+    _ = move(v);
+    return;
+}
+
+}
+
+// after the loop borrow a sibling field and write both
+//# run
+mvir 0x63::f3_sibling_after_loop {
+
+public struct S has copy, drop, store { f: u64 }
+public struct O has copy, drop, store { a: Self::S, b: Self::S }
+
+fun id(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+entry fun t() {
+    let o: Self::O;
+    let r: &mut Self::S;
+    let w: &mut Self::S;
+    let oi: &Self::O;
+    let si: &Self::S;
+    let fi: &u64;
+    let n: u64;
+label b0:
+    o = O { a: S { f: 0 }, b: S { f: 0 } };
+    r = &mut (&mut o).O::b;
+    n = 2;
+    jump lh;
+label lh:
+    jump_if (copy(n) == 0) le;
+label lbody:
+    n = move(n) - 1;
+    r = Self::id(move(r));
+    jump lh;
+label le:
+    w = &mut (&mut o).O::a;
+    *move(w) = S { f: 9 };
+    *move(r) = S { f: 8 };
+    oi = &o;
+    si = &move(oi).O::a;
+    fi = &move(si).S::f;
+    assert(*move(fi) == 9, 1);
+    oi = &o;
+    si = &move(oi).O::b;
+    fi = &move(si).S::f;
+    assert(*move(fi) == 8, 2);
+    return;
+}
+
+}
+
+// after the loop write through the parent: rejected
+//# publish
+mvir 0x64::f4_parent_after_loop {
+
+public struct S has copy, drop, store { f: u64 }
+public struct O has copy, drop, store { a: Self::S, b: Self::S }
+
+fun id(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+fun t(o: &mut Self::O, n: u64) {
+    let r: &mut Self::S;
+label b0:
+    r = &mut copy(o).O::b;
+    jump lh;
+label lh:
+    jump_if (copy(n) == 0) le;
+label lbody:
+    n = move(n) - 1;
+    r = Self::id(move(r));
+    jump lh;
+label le:
+    *copy(o) = O { a: S { f: 1 }, b: S { f: 1 } };
+    _ = move(r);
+    _ = move(o);
+    return;
+}
+
+}

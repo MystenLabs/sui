@@ -83,6 +83,16 @@ const server = http.createServer((req, res) => {
   const parsedUrl = url.parse(req.url);
   let pathname = parsedUrl.pathname;
 
+  // Redirect trailing-slash URLs to their canonical (non-trailing-slash) paths.
+  // Prevents analytics dilution and SEO issues from duplicate URLs.
+  if (pathname.length > 1 && pathname.endsWith('/')) {
+    const canonical = pathname.slice(0, -1);
+    const location = parsedUrl.search ? canonical + parsedUrl.search : canonical;
+    res.writeHead(301, { Location: location });
+    res.end();
+    return;
+  }
+
   // Content negotiation: serve markdown when Accept: text/markdown
   if (acceptsMarkdown(req)) {
     const mdFile = resolveMarkdownFile(pathname);

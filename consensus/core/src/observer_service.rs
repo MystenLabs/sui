@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::Committee;
 use consensus_types::block::{BlockRef, Round};
-use futures::{StreamExt as _, stream};
+use futures::{StreamExt as _, future::Either, stream};
 use parking_lot::RwLock;
 use sui_macros::fail_point_async;
 use tap::TapFallible;
@@ -271,16 +271,23 @@ impl ObserverNetworkService for ObserverService {
             );
 
         const MAX_BLOCKS_PER_POLL: usize = 20;
-        let live_block_stream = quorum_gated_accepted_block_stream(
-            self.context.clone(),
-            BroadcastStream::<VerifiedBlock>::new(
-                PeerId::Observer(Box::new(peer)),
-                broadcast_rx,
-                MAX_BLOCKS_PER_POLL,
-                self.subscription_counter.clone(),
-            ),
+        let broadcast_stream = BroadcastStream::<VerifiedBlock>::new(
+            PeerId::Observer(Box::new(peer)),
+            broadcast_rx,
             MAX_BLOCKS_PER_POLL,
-        )
+            self.subscription_counter.clone(),
+        );
+        // When quorum-gated release is disabled, serve blocks straight off the broadcast as
+        // soon as they are accepted, without the buffering task in between.
+        let live_block_stream = if self.context.parameters.observer.quorum_release {
+            Either::Left(quorum_gated_accepted_block_stream(
+                self.context.clone(),
+                broadcast_stream,
+                MAX_BLOCKS_PER_POLL,
+            ))
+        } else {
+            Either::Right(broadcast_stream)
+        }
         .map(|blocks| ObserverStreamItem {
             blocks: blocks
                 .into_iter()
@@ -944,6 +951,65 @@ mod tests {
                 .map(|block| block.reference())
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[tokio::test]
+    async fn test_observer_stream_serves_accepted_blocks_when_quorum_gating_disabled() {
+        telemetry_subscribers::init_for_testing();
+        let (mut context, keys) = Context::new_for_test(4);
+        // With gating disabled, a single sub-quorum block must be served well before this
+        // release timeout could ever fire.
+        context.parameters.leader_timeout = Duration::from_secs(300);
+        context.parameters.observer.quorum_release = false;
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        let (tx_accepted_block, rx_accepted_block) = broadcast::channel::<VerifiedBlock>(100);
+
+        let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
+        let block_verifier = Arc::new(NoopBlockVerifier);
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let block_sync_service = Arc::new(BlockSyncService::new(
+            context.clone(),
+            dag_state.clone(),
+            store.clone(),
+        ));
+        let observer_service = ObserverService::new(
+            context.clone(),
+            core_dispatcher,
+            dag_state,
+            rx_accepted_block,
+            block_verifier,
+            commit_vote_monitor,
+            transaction_vote_tracker,
+            create_mock_synchronizer(),
+            block_sync_service,
+            None,
+        );
+
+        let highest_round_per_authority = vec![0 as Round; context.committee.size()];
+        let peer = keys[0].0.public().clone();
+        let mut stream = observer_service
+            .handle_stream_blocks(peer, highest_round_per_authority)
+            .await
+            .unwrap();
+
+        // A single block from one authority is far from a round quorum.
+        let block = VerifiedBlock::new_for_test(TestBlock::new(1, 0).build());
+        tx_accepted_block.send(block.clone()).unwrap();
+
+        let item = tokio::time::timeout(Duration::from_secs(5), stream.next())
+            .await
+            .expect("block should be served without waiting for a round quorum")
+            .unwrap();
+        assert_eq!(item.blocks.len(), 1);
+        let signed: SignedBlock = bcs::from_bytes(&item.blocks[0]).unwrap();
+        let received = VerifiedBlock::new_verified(signed, item.blocks[0].clone());
+        assert_eq!(received.reference(), block.reference());
     }
 
     #[tokio::test]

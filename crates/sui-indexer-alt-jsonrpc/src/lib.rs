@@ -249,9 +249,8 @@ pub struct NodeArgs {
 /// Access to most reads is controlled by the `database_url` -- if it is `None`, reads will not
 /// work.
 ///
-/// KV queries can optionally be served by a Bigtable instance, if `bigtable_instance` is provided.
-/// Otherwise these requests are served by the database. If a `bigtable_instance` is provided, the
-/// `GOOGLE_APPLICATION_CREDENTIALS` environment variable must point to the credentials JSON file.
+/// KV queries can optionally be served by a Ledger gRPC service, if `kv_args.ledger_grpc_url` is
+/// provided. Otherwise these requests are served by the database.
 ///
 /// Access to writes (executing and dry-running transactions) is controlled by
 /// `node_args.fullnode_grpc_url`, which can be omitted to disable writes from this RPC.

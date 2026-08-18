@@ -1,3 +1,4 @@
+#[allow(always_errors)]
 module 0x1::errors {
     #[test]
     #[expected_failure]

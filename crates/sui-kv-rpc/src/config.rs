@@ -400,6 +400,14 @@ pub struct KvRpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tls_key: Option<String>,
 
+    /// Address a second, unencrypted gRPC listener binds to. Serves the same
+    /// LedgerService as `address`, without TLS — for trusted internal callers
+    /// (e.g. other in-cluster services) that should not need to negotiate
+    /// TLS. A full socket address, so it can be bound to a narrower, private
+    /// network interface than `address`. Unset disables this listener.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plaintext_address: Option<String>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bigtable_initial_pool_size: Option<usize>,
 
@@ -478,6 +486,10 @@ impl KvRpcConfig {
         self.address.as_deref().unwrap_or(DEFAULT_ADDRESS)
     }
 
+    pub fn plaintext_address(&self) -> Option<&str> {
+        self.plaintext_address.as_deref()
+    }
+
     pub fn metrics_host(&self) -> &str {
         self.metrics_host.as_deref().unwrap_or(DEFAULT_METRICS_HOST)
     }
@@ -539,6 +551,12 @@ impl KvRpcConfig {
     /// shared read-pipeline knobs (concurrency and per-stage chunk/fan-out) and
     /// delegates to [`LedgerHistoryConfig::validate`] for the list-API knobs.
     pub fn validate(&self) -> anyhow::Result<()> {
+        if let Some(plaintext) = self.plaintext_address() {
+            anyhow::ensure!(
+                plaintext != self.address(),
+                "plaintext_address must differ from address",
+            );
+        }
         anyhow::ensure!(
             self.request_bigtable_concurrency() > 0,
             "request_bigtable_concurrency must be greater than zero",
@@ -693,6 +711,38 @@ stages:
                 .contains("ledger_history.list_events.render_ahead"),
             "{err}"
         );
+    }
+
+    #[test]
+    fn plaintext_address_disabled_by_default() {
+        let cfg = KvRpcConfig::default();
+        assert_eq!(cfg.plaintext_address(), None);
+        cfg.validate().unwrap();
+    }
+
+    #[test]
+    fn plaintext_address_parses_from_toml() {
+        let config_toml = r#"
+instance-id = "my-instance"
+address = "[::]:8000"
+plaintext-address = "127.0.0.1:8001"
+"#;
+        let cfg: KvRpcConfig = toml::from_str(config_toml).unwrap();
+        assert_eq!(cfg.plaintext_address(), Some("127.0.0.1:8001"));
+        cfg.validate().unwrap();
+    }
+
+    #[test]
+    fn validate_rejects_plaintext_address_equal_to_address() {
+        let cfg = KvRpcConfig {
+            address: Some("[::]:8000".to_string()),
+            plaintext_address: Some("[::]:8000".to_string()),
+            ..Default::default()
+        };
+        let err = cfg
+            .validate()
+            .expect_err("plaintext_address == address must fail");
+        assert!(err.to_string().contains("plaintext_address"), "{err}");
     }
 
     #[test]

@@ -471,9 +471,8 @@ impl RocksDbConfig {
 /// [`RocksDbConfig`].
 ///
 /// Built once by [`Db::open`](crate::Db::open) and handed to
-/// [`Schema::cfs`](crate::Schema::cfs). Owns the single shared block
-/// cache so every CF that opts into a block cache shares one instance
-/// rather than allocating its own.
+/// [`Schema::open`](crate::Schema::open). Owns the single shared block
+/// cache so every CF that opts into a block cache shares one instance.
 pub struct CfOptionsResolver {
     config: RocksDbConfig,
     block_cache: Option<rocksdb::Cache>,
@@ -540,8 +539,8 @@ impl CfOptionsResolver {
     }
 
     /// Names of the column families with an explicit per-CF override.
-    /// Used by [`Db::open`](crate::Db::open) to reject overrides that
-    /// name a column family the schema does not declare.
+    /// Used by [`Db::open_cfs`](crate::Db::open_cfs) to reject
+    /// overrides that name a column family the schema does not declare.
     pub(crate) fn configured_cf_names(&self) -> impl Iterator<Item = &str> {
         self.config.column_family.keys().map(String::as_str)
     }

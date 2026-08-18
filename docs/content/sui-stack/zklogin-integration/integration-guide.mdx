@@ -294,6 +294,16 @@ const zkLoginUserAddress = jwtToAddress(jwt, userSalt, false);
 
 The same `sub` + `iss` + `aud` + `user_salt` always produces the same address. See [Address definition](/sui-stack/zklogin-integration/zklogin#address-definition) for the full derivation formula.
 
+### Pass the derived address to a fiat on-ramp provider
+
+After deriving the zkLogin address, you can use it as the destination address for fiat on-ramp providers. The on-ramp provider sends purchased tokens (SUI, USDC, or other supported assets) directly to the user's zkLogin address. Pass the derived address to the provider's widget or API as the `walletAddress` or equivalent parameter:
+
+1. Derive the address with `jwtToAddress` as shown above.
+2. Pass `zkLoginUserAddress` to the on-ramp provider's configuration (for example, Banxa, Stripe, or Meld). Each provider accepts a destination address parameter in their widget SDK or API. See [Fiat On-Ramps](/onchain-finance/asset-custody/fiat-on-ramps) for provider-specific documentation links.
+3. The provider delivers the purchased tokens to the zkLogin address. The user can then sign transactions with their ephemeral key pair and zero-knowledge proof.
+
+The zkLogin address is deterministic. The same OAuth identity and salt always produce the same address, so the user can receive tokens from an on-ramp provider across multiple sessions without re-deriving.
+
 ## Step 6: Get the zero-knowledge proof
 
 The zero-knowledge proof attests that the ephemeral key pair is valid and bound to the user's OAuth identity, without revealing the JWT onchain.
@@ -312,7 +322,20 @@ You need a new zero-knowledge proof whenever the ephemeral key pair expires or i
 
 ### Option A: use the Mysten Labs proving service
 
-For Mainnet access, refer to the [Enoki docs](https://docs.enoki.mystenlabs.com/) and contact Mysten Labs. For development, use the public prover endpoint.
+The Mysten Labs hosted proving service generates zero-knowledge proofs on your behalf. Access depends on the environment:
+
+- **Devnet and Testnet:** The public prover endpoint is available without registration. Use it for development and testing.
+- **Mainnet:** Mainnet access requires allowlisting through the [Enoki platform](https://docs.enoki.mystenlabs.com/). Register your app's client ID in the Enoki Portal and contact Mysten Labs to enable Mainnet proving.
+
+#### Hosted prover allowlisting
+
+Before your app can use the Mysten Labs prover on Mainnet, complete the following:
+
+1. Register your app in the [Enoki Portal](https://portal.enoki.mystenlabs.com) and obtain an API key.
+2. Add your OAuth client ID to the Enoki Portal configuration. The prover only accepts JWTs from allowlisted client IDs.
+3. Contact Mysten Labs through the [Enoki docs](https://docs.enoki.mystenlabs.com/) to request Mainnet prover access for your registered app.
+
+The hosted prover auto-scales for traffic surges. If you expect a spike in prover requests, reach out on [Discord](https://discord.gg/sui).
 
 You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`:
 
@@ -386,6 +409,8 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 ```
 
 ### Option B: Self-hosted proving service
+
+Self-host the proving service when you need full control over proof generation, want to avoid the hosted prover allowlisting process, or have compliance requirements that prevent sending JWTs to a third-party service. The self-hosted prover uses the same request and response format as the Mysten Labs service, so you can switch between hosted and self-hosted without changing your client code.
 
 1. Install [Git Large File Storage](https://git-lfs.com/) before downloading the zkey.
 

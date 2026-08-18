@@ -185,6 +185,15 @@ impl TestCluster {
         .await
     }
 
+    /// The observer fullnode of the cluster, when built with `with_observer_fullnode()`.
+    /// The cluster deliberately does not hold a node handle for the observer: a handle
+    /// keeps the running instance (and its open stores) alive, which prevents the
+    /// simulator from restarting the node after a crash. Acquire a fresh handle via
+    /// `Node::get_node_handle()` at the point of use and drop it promptly.
+    pub fn observer_node(&self) -> Option<&sui_swarm::memory::Node> {
+        self.swarm.observer_nodes().next()
+    }
+
     pub async fn start_fullnode_from_config(&mut self, config: NodeConfig) -> FullNodeHandle {
         let json_rpc_address = config.json_rpc_address;
         let node = self.swarm.spawn_new_node(config).await;
@@ -1234,6 +1243,8 @@ pub struct TestClusterBuilder {
 
     validator_observer_config: Option<ValidatorObserverConfigCallback>,
 
+    observer_fullnode: bool,
+
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
 
     peer_deny_sync_config_callback:
@@ -1283,6 +1294,7 @@ impl TestClusterBuilder {
             rpc_config: None,
             execution_time_observer_config: None,
             validator_observer_config: None,
+            observer_fullnode: false,
             state_sync_config: None,
             peer_deny_sync_config_callback: None,
             #[cfg(msim)]
@@ -1317,6 +1329,21 @@ impl TestClusterBuilder {
 
     pub fn with_validator_observer_config(mut self, c: ValidatorObserverConfigCallback) -> Self {
         self.validator_observer_config = Some(c);
+        self
+    }
+
+    /// Adds a fullnode to the cluster that syncs as a consensus observer, subscribed to the
+    /// first validator. Unless a validator observer config is provided, the first validator
+    /// gets its observer server enabled. The observer is available via
+    /// `TestCluster::observer_node()`.
+    ///
+    /// The first validator must end up with its observer server enabled, which `build()`
+    /// validates: a callback passed to `with_validator_observer_config` must return
+    /// `Some(_)` for index 0, and a prebuilt network config passed to `set_network_config`
+    /// must already enable the observer server on the first validator (the callback is not
+    /// applied to prebuilt network configs).
+    pub fn with_observer_fullnode(mut self) -> Self {
+        self.observer_fullnode = true;
         self
     }
 
@@ -1566,13 +1593,68 @@ impl TestClusterBuilder {
             }));
         }
 
-        let swarm = self.start_swarm().await.unwrap();
-        let working_dir = swarm.dir();
+        if self.observer_fullnode {
+            // The observer fullnode subscribes to the first validator, so its observer server
+            // must be enabled. Validate this up front to fail with an actionable error instead
+            // of a deep panic in `observer_peer_record` when the observer's config is built.
+            if let Some(network_config) = &self.network_config {
+                // A prebuilt network config bypasses the validator observer config callback,
+                // so it must already have the observer server enabled.
+                let observer_enabled = network_config
+                    .validator_configs()
+                    .first()
+                    .and_then(|c| c.consensus_config())
+                    .and_then(|c| c.parameters.as_ref())
+                    .and_then(|p| p.observer.server_port)
+                    .is_some();
+                assert!(
+                    observer_enabled,
+                    "with_observer_fullnode() requires the first validator's observer server \
+                     to be enabled, but the network config passed to set_network_config() does \
+                     not enable it. Enable the observer server on the first validator when \
+                     building the network config."
+                );
+            } else if let Some(cb) = &self.validator_observer_config {
+                assert!(
+                    cb(0).is_some(),
+                    "with_observer_fullnode() requires the validator observer config callback \
+                     to enable the observer server on the first validator (index 0)."
+                );
+            } else {
+                self.validator_observer_config = Some(Arc::new(|idx| {
+                    (idx == 0).then(consensus_config::ObserverParameters::default)
+                }));
+            }
+        }
+
+        let mut swarm = self.start_swarm().await.unwrap();
+        let working_dir = swarm.dir().to_path_buf();
 
         let fullnode = swarm.fullnodes().next().unwrap();
         let json_rpc_address = fullnode.config().json_rpc_address;
         let fullnode_handle =
             FullNodeHandle::new(fullnode.get_node_handle().unwrap(), json_rpc_address).await;
+
+        if self.observer_fullnode {
+            // Boxed so the frame (NodeConfig by value, held across the await) lives on
+            // the heap instead of inflating build()'s state machine for every caller,
+            // most of which never enable the observer. Unoptimized async frames are
+            // large enough that this tips borderline test binaries over the 2 MiB
+            // tokio worker stack.
+            Box::pin(async {
+                let mut config = swarm
+                    .get_fullnode_config_builder()
+                    .with_observer_subscribed_to_validator(0)
+                    .build(&mut OsRng, swarm.config());
+                // An observer that halts at a checkpoint range boundary defeats its purpose.
+                config.run_with_range = None;
+                // Deliberately drop the returned node handle: holding it would keep the
+                // instance alive across a crash and prevent the simulator from restarting
+                // the node. Access the observer via `TestCluster::observer_node()`.
+                swarm.spawn_new_node(config).await;
+            })
+            .await;
+        }
 
         let mut wallet_conf: SuiClientConfig =
             PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG)).unwrap();

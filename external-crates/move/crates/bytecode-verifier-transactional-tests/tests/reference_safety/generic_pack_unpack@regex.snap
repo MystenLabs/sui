@@ -1,0 +1,14 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, lines 22-42:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::gunpack_after_field_borrow_invalid'. Got VMError: {
+    major_status: MOVELOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::gunpack_after_field_borrow_invalid,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 7)],
+}

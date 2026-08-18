@@ -14,6 +14,7 @@ use crate::{
         ast::{self as H, Value_, Var, Visibility},
         translate::{single_type as hlir_single_type, translate_var, type_},
     },
+    ice, ice_assert,
     naming::{
         ast::{self as N, BuiltinTypeName_, DatatypeTypeParameter, TParam},
         fake_natives,
@@ -51,21 +52,23 @@ fn extract_decls(
     DatatypeDeclarations,
     HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
 ) {
+    let context = &mut Context::new(compilation_env, None, None);
     // pre-compiled modules contain ProgramInfo computed at typing which does contains
-    // dependency order so unwrap below is safe
+    // dependency order so it should always be present
     let pre_compiled_dependency_orders = || {
         pre_compiled_lib.iter().flat_map(|module_info| {
             module_info
                 .iter()
                 .filter(|(mident, _)| !prog.modules.contains_key(mident))
                 .map(|(mident, minfo)| {
-                    (
-                        *mident,
-                        minfo
-                            .info
-                            .dependency_order
-                            .expect("ICE typing module info with no dependency order"),
-                    )
+                    let dependency_order = minfo.info.dependency_order.unwrap_or_else(|| {
+                        context.reporter.add_diag(ice!((
+                            mident.loc,
+                            "typing module info with no dependency order"
+                        )));
+                        0 // placeholder while bailing after ICE
+                    });
+                    (*mident, dependency_order)
                 })
         })
     };
@@ -106,7 +109,6 @@ fn extract_decls(
         })
         .collect();
     let mut ddecls: DatatypeDeclarations = sdecls.into_iter().chain(edecls).collect();
-    let context = &mut Context::new(compilation_env, None, None);
     let mut fdecls: HashMap<(ModuleIdent, FunctionName), FunctionDeclaration> = prog
         .modules
         .key_cloned_iter()
@@ -121,14 +123,10 @@ fn extract_decls(
                 //             .attributes
                 //             .contains_key_(&fake_natives::FAKE_NATIVE_ATTR)
                 // })
-                .map(move |(f, fdef)| {
-                    let key = (m, f);
-                    let seen_datatypes = seen_datatypes(&fdef.signature);
-                    let gsig = fdef.signature.clone();
-                    (key, (seen_datatypes, gsig))
-                })
+                .map(move |(f, fdef)| ((m, f), fdef.signature.clone()))
         })
-        .map(|(key, (seen_datatypes, sig))| {
+        .map(|(key, sig)| {
+            let seen_datatypes = seen_datatypes(context, &sig);
             (
                 key,
                 FunctionDeclaration {
@@ -143,7 +141,7 @@ fn extract_decls(
     if let Some(pre_compiled_lib) = pre_compiled_lib {
         for (mident, minfo) in pre_compiled_lib.iter() {
             let (pre_compiled_datatype_decls, pre_compiled_fun_decls) =
-                pre_compiled_decls(compilation_env, mident, &minfo.info);
+                pre_compiled_decls(context, mident, &minfo.info);
             ddecls.extend(pre_compiled_datatype_decls);
             fdecls.extend(pre_compiled_fun_decls);
         }
@@ -153,14 +151,18 @@ fn extract_decls(
 }
 
 fn pre_compiled_decls(
-    compilation_env: &CompilationEnv,
+    context: &mut Context,
     mident: &ModuleIdent,
     minfo: &ModuleInfo,
 ) -> (
     DatatypeDeclarations,
     HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
 ) {
-    fn hlir_function_signature(sig: N::FunctionSignature) -> H::FunctionSignature {
+    fn hlir_function_signature(
+        context: &Context,
+        loc: Loc,
+        sig: N::FunctionSignature,
+    ) -> H::FunctionSignature {
         let type_parameters = sig.type_parameters;
         let empty_flags = Flags::empty();
         let empty_known_filter_names = BTreeMap::new();
@@ -186,9 +188,12 @@ fn pre_compiled_decls(
                 (mut_, translate_var(v), ty)
             })
             .collect();
-        if !empty_reporter.is_empty() {
-            panic!("ICE There should be no errors when translating pre-compiled type");
-        }
+        ice_assert!(
+            context.reporter,
+            empty_reporter.is_empty(),
+            loc,
+            "there should be no errors when translating pre-compiled type"
+        );
         let return_type = type_(&empty_reporter, &sig.return_type);
         H::FunctionSignature {
             type_parameters,
@@ -221,29 +226,25 @@ fn pre_compiled_decls(
 
     let ddecls: DatatypeDeclarations = sdecls.into_iter().chain(edecls).collect();
 
-    let context = &mut Context::new(compilation_env, None, None);
     let fdecls = minfo
         .functions
         .key_cloned_iter()
-        .filter_map(move |(f, fdef)| {
+        .filter_map(|(f, fdef)| {
             if fdef.macro_.is_none() {
                 let key = (*mident, f);
-                let hlir_sig = hlir_function_signature(fdef.signature.clone());
-                let seen_datatypes = seen_datatypes(&hlir_sig);
-                let gsig = hlir_sig;
-                Some((key, (seen_datatypes, gsig)))
+                let hlir_sig = hlir_function_signature(context, f.loc(), fdef.signature.clone());
+                let seen_datatypes = seen_datatypes(context, &hlir_sig);
+                let signature = function_signature(context, hlir_sig);
+                Some((
+                    key,
+                    FunctionDeclaration {
+                        seen_datatypes,
+                        signature,
+                    },
+                ))
             } else {
                 None
             }
-        })
-        .map(|(key, (seen_datatypes, sig))| {
-            (
-                key,
-                FunctionDeclaration {
-                    seen_datatypes,
-                    signature: function_signature(context, sig),
-                },
-            )
         })
         .collect();
 
@@ -260,7 +261,6 @@ pub fn program(
     prog: G::Program,
 ) -> Vec<AnnotatedCompiledUnit> {
     let mut units = Vec::new();
-    let reporter = compilation_env.diagnostic_reporter_at_top_level();
     let (orderings, ddecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
     let G::Program {
         modules: gmodules,
@@ -273,15 +273,7 @@ pub fn program(
         .collect::<Vec<_>>();
     source_modules.sort_by_key(|(_, mdef)| mdef.dependency_order);
     for (m, mdef) in source_modules {
-        if let Some(unit) = module(
-            compilation_env,
-            &reporter,
-            m,
-            mdef,
-            &orderings,
-            &ddecls,
-            &fdecls,
-        ) {
+        if let Some(unit) = module(compilation_env, m, mdef, &orderings, &ddecls, &fdecls) {
             units.push(unit);
         }
     }
@@ -290,7 +282,6 @@ pub fn program(
 
 fn module(
     compilation_env: &CompilationEnv,
-    reporter: &DiagnosticReporter,
     ident: ModuleIdent,
     mdef: G::ModuleDefinition,
     dependency_orderings: &HashMap<ModuleIdent, usize>,
@@ -313,16 +304,12 @@ fn module(
         functions: gfunctions,
     } = mdef;
 
-    for d in module_filter.finalize() {
-        reporter.add_diag(d);
-    }
-
     let mut context = Context::new(compilation_env, package_name, Some(&ident));
-    let structs = struct_defs(&mut context, reporter, &ident, gstructs);
-    let enums = enum_defs(&mut context, reporter, &ident, genums);
-    let constants = constants(&mut context, reporter, &ident, gconstants);
-    let (collected_function_infos, functions) =
-        functions(&mut context, reporter, &ident, gfunctions);
+    context.finalize_warning_filter(module_filter);
+    let structs = struct_defs(&mut context, &ident, gstructs);
+    let enums = enum_defs(&mut context, &ident, genums);
+    let constants = constants(&mut context, &ident, gconstants);
+    let (collected_function_infos, functions) = functions(&mut context, &ident, gfunctions);
 
     let friends = gfriends
         .into_iter()
@@ -337,6 +324,9 @@ fn module(
         | Address::NamedUnassigned(name) => Some(*name),
     };
     let addr_bytes = context.resolve_address(ident.value.address);
+    // `materialize` consumes the context; keep the ICE-only reporter for the remaining
+    // bytecode-generation steps
+    let reporter = context.reporter.clone();
     let (imports, explicit_dependency_declarations) = context.materialize(
         dependency_orderings,
         datatype_declarations,
@@ -366,6 +356,11 @@ fn module(
         constants,
         functions,
     };
+    // If any errors were reported during translation (e.g. ICEs that were previously panics), the
+    // IR is likely malformed -- do not generate bytecode from it
+    if compilation_env.has_errors() {
+        return None;
+    }
     let deps: Vec<&F::CompiledModule> = vec![];
     let (mut module, source_map) =
         match move_ir_to_bytecode::compiler::compile_module(ir_module, deps) {
@@ -378,7 +373,15 @@ fn module(
                 return None;
             }
         };
-    canonicalize_handles::in_module(&mut module, &address_names(dependency_orderings.keys()));
+    canonicalize_handles::in_module(
+        &reporter,
+        ident_loc,
+        &mut module,
+        &address_names(dependency_orderings.keys()),
+    );
+    if compilation_env.has_errors() {
+        return None;
+    }
     let function_infos = module_function_infos(&module, &source_map, &collected_function_infos);
     let module = NamedCompiledModule {
         package_name: mdef.package_name,
@@ -479,7 +482,6 @@ fn var_info(
 
 fn struct_defs(
     context: &mut Context,
-    reporter: &DiagnosticReporter,
     m: &ModuleIdent,
     structs: UniqueMap<DatatypeName, H::StructDefinition>,
 ) -> Vec<IR::StructDefinition> {
@@ -487,13 +489,12 @@ fn struct_defs(
     structs.sort_by_key(|(_, s)| s.index);
     structs
         .into_iter()
-        .map(|(s, sdef)| struct_def(context, reporter, m, s, sdef))
+        .map(|(s, sdef)| struct_def(context, m, s, sdef))
         .collect()
 }
 
 fn struct_def(
     context: &mut Context,
-    reporter: &DiagnosticReporter,
     m: &ModuleIdent,
     s: DatatypeName,
     sdef: H::StructDefinition,
@@ -506,10 +507,7 @@ fn struct_def(
         type_parameters: tys,
         fields,
     } = sdef;
-    warning_filter
-        .finalize()
-        .into_iter()
-        .for_each(|d| reporter.add_diag(d));
+    context.finalize_warning_filter(warning_filter);
     let loc = s.loc();
     let name = context.struct_definition_name(m, s);
     let abilities = abilities(&abs);
@@ -559,7 +557,6 @@ fn struct_fields(
 
 fn enum_defs(
     context: &mut Context,
-    reporter: &DiagnosticReporter,
     m: &ModuleIdent,
     enums: UniqueMap<DatatypeName, H::EnumDefinition>,
 ) -> Vec<IR::EnumDefinition> {
@@ -567,13 +564,12 @@ fn enum_defs(
     enums.sort_by_key(|(_, e)| e.index);
     enums
         .into_iter()
-        .map(|(e, edef)| enum_def(context, reporter, m, e, edef))
+        .map(|(e, edef)| enum_def(context, m, e, edef))
         .collect()
 }
 
 fn enum_def(
     context: &mut Context,
-    reporter: &DiagnosticReporter,
     m: &ModuleIdent,
     e: DatatypeName,
     edef: H::EnumDefinition,
@@ -586,10 +582,7 @@ fn enum_def(
         type_parameters: tys,
         variants,
     } = edef;
-    warning_filter
-        .finalize()
-        .into_iter()
-        .for_each(|d| reporter.add_diag(d));
+    context.finalize_warning_filter(warning_filter);
     let loc = e.loc();
     let name = context.enum_definition_name(m, e);
     let abilities = abilities(&abs);
@@ -636,7 +629,6 @@ fn enum_variants(
 
 fn constants(
     context: &mut Context,
-    reporter: &DiagnosticReporter,
     m: &ModuleIdent,
     constants: UniqueMap<ConstantName, G::Constant>,
 ) -> Vec<IR::Constant> {
@@ -644,13 +636,12 @@ fn constants(
     constants.sort_by_key(|(_, c)| c.index);
     constants
         .into_iter()
-        .map(|(n, c)| constant(context, reporter, m, n, c))
+        .map(|(n, c)| constant(context, m, n, c))
         .collect()
 }
 
 fn constant(
     context: &mut Context,
-    reporter: &DiagnosticReporter,
     m: &ModuleIdent,
     n: ConstantName,
     c: G::Constant,
@@ -663,10 +654,7 @@ fn constant(
         signature,
         value,
     } = c;
-    warning_filter
-        .finalize()
-        .into_iter()
-        .for_each(|d| reporter.add_diag(d));
+    context.finalize_warning_filter(warning_filter);
     let is_error_constant = attributes.contains_key_(&AttributeKind_::Error);
     let name = context.constant_definition_name(m, n);
     let signature = base_type(context, signature);
@@ -685,7 +673,6 @@ fn constant(
 
 fn functions(
     context: &mut Context,
-    reporter: &DiagnosticReporter,
     m: &ModuleIdent,
     functions: UniqueMap<FunctionName, G::Function>,
 ) -> (CollectedInfos, Vec<(IR::FunctionName, IR::Function)>) {
@@ -695,7 +682,7 @@ fn functions(
     let functions_vec = functions
         .into_iter()
         .map(|(f, fdef)| {
-            let (res, info) = function(context, reporter, m, f, fdef);
+            let (res, info) = function(context, m, f, fdef);
             collected_function_infos.add(f, info).unwrap();
             res
         })
@@ -705,7 +692,6 @@ fn functions(
 
 fn function(
     context: &mut Context,
-    reporter: &DiagnosticReporter,
     m: &ModuleIdent,
     f: FunctionName,
     fdef: G::Function,
@@ -723,10 +709,7 @@ fn function(
         signature,
         body,
     } = fdef;
-    warning_filter
-        .finalize()
-        .into_iter()
-        .for_each(|d| reporter.add_diag(d));
+    context.finalize_warning_filter(warning_filter);
     let v = visibility(context, v);
     let parameters = signature.parameters.clone();
     let signature = function_signature(context, signature);
@@ -785,50 +768,63 @@ fn function_signature(context: &mut Context, sig: H::FunctionSignature) -> IR::F
     }
 }
 
-fn seen_datatypes(sig: &H::FunctionSignature) -> BTreeSet<(ModuleIdent, DatatypeName)> {
+fn seen_datatypes(
+    context: &Context,
+    sig: &H::FunctionSignature,
+) -> BTreeSet<(ModuleIdent, DatatypeName)> {
     let mut seen = BTreeSet::new();
-    seen_datatypes_type(&mut seen, &sig.return_type);
+    seen_datatypes_type(context, &mut seen, &sig.return_type);
     sig.parameters
         .iter()
-        .for_each(|(_, _, st)| seen_datatypes_single_type(&mut seen, st));
+        .for_each(|(_, _, st)| seen_datatypes_single_type(context, &mut seen, st));
     seen
 }
 
-fn seen_datatypes_type(seen: &mut BTreeSet<(ModuleIdent, DatatypeName)>, sp!(_, t_): &H::Type) {
+fn seen_datatypes_type(
+    context: &Context,
+    seen: &mut BTreeSet<(ModuleIdent, DatatypeName)>,
+    sp!(_, t_): &H::Type,
+) {
     use H::Type_ as T;
     match t_ {
         T::Unit => (),
-        T::Single(st) => seen_datatypes_single_type(seen, st),
+        T::Single(st) => seen_datatypes_single_type(context, seen, st),
         T::Multiple(ss) => ss
             .iter()
-            .for_each(|st| seen_datatypes_single_type(seen, st)),
+            .for_each(|st| seen_datatypes_single_type(context, seen, st)),
     }
 }
 
 fn seen_datatypes_single_type(
+    context: &Context,
     seen: &mut BTreeSet<(ModuleIdent, DatatypeName)>,
     sp!(_, st_): &H::SingleType,
 ) {
     use H::SingleType_ as S;
     match st_ {
-        S::Base(bt) | S::Ref(_, bt) => seen_datatypes_base_type(seen, bt),
+        S::Base(bt) | S::Ref(_, bt) => seen_datatypes_base_type(context, seen, bt),
     }
 }
 
 fn seen_datatypes_base_type(
+    context: &Context,
     seen: &mut BTreeSet<(ModuleIdent, DatatypeName)>,
-    sp!(_, bt_): &H::BaseType,
+    sp!(loc, bt_): &H::BaseType,
 ) {
     use H::{BaseType_ as B, TypeName_ as TN};
     match bt_ {
         B::Unreachable | B::UnresolvedError => {
-            panic!("ICE should not have reached compilation if there are errors")
+            context.reporter.add_diag(ice!((
+                *loc,
+                "should not have reached compilation if there are errors"
+            )));
         }
         B::Apply(_, sp!(_, tn_), tys) => {
             if let TN::ModuleType(m, s) = tn_ {
                 seen.insert((*m, *s));
             }
-            tys.iter().for_each(|st| seen_datatypes_base_type(seen, st))
+            tys.iter()
+                .for_each(|st| seen_datatypes_base_type(context, seen, st))
         }
         B::Param(TParam { .. }) => (),
     }
@@ -843,9 +839,15 @@ fn function_body(
     start: H::Label,
     blocks_map: G::BasicBlocks,
 ) -> (Vec<(IR::Var, IR::Type)>, IR::BytecodeBlocks) {
-    parameters
-        .iter()
-        .for_each(|(_, var, _)| assert!(locals_map.remove(var).is_some()));
+    parameters.iter().for_each(|(_, var, _)| {
+        ice_assert!(
+            context.reporter,
+            locals_map.remove(var).is_some(),
+            var.0.loc,
+            "parameter '{}' not found in locals map",
+            var.0.value
+        )
+    });
     let mut locals = locals_map
         .into_iter()
         .filter(|(_, (_, ty))| {
@@ -863,8 +865,18 @@ fn function_body(
     let mut bytecode_blocks = Vec::new();
     for (idx, (lbl, basic_block)) in blocks.into_iter().enumerate() {
         // first idx should be the start label
-        assert!(idx != 0 || lbl == start);
-        assert!(idx == bytecode_blocks.len());
+        ice_assert!(
+            context.reporter,
+            idx != 0 || lbl == start,
+            f.loc(),
+            "first block is not the start label"
+        );
+        ice_assert!(
+            context.reporter,
+            idx == bytecode_blocks.len(),
+            f.loc(),
+            "bytecode block index mismatch"
+        );
 
         let mut code = IR::BytecodeBlock::new();
         for cmd in basic_block {
@@ -878,7 +890,12 @@ fn function_body(
         .filter(|(_lbl, info)| matches!(info, G::BlockInfo::LoopHead(_)))
         .map(|(lbl, _)| label(lbl))
         .collect();
-    optimize::code(f, &loop_heads, &mut locals, &mut bytecode_blocks);
+    // If any errors were reported, the blocks may be malformed (e.g., an empty block where an ICE
+    // replaced a command), and the optimizations assume well-formed blocks. Skip them; bytecode
+    // generation will be skipped as well.
+    if !context.env.has_errors() {
+        optimize::code(f, &loop_heads, &mut locals, &mut bytecode_blocks);
+    }
 
     (locals, bytecode_blocks)
 }
@@ -907,11 +924,16 @@ fn field(f: Field) -> IR::Field {
 
 fn struct_definition_name(
     context: &mut Context,
-    sp!(_, t_): H::Type,
+    sp!(loc, t_): H::Type,
 ) -> (IR::DatatypeName, Vec<IR::Type>) {
     match t_ {
         H::Type_::Single(st) => struct_definition_name_single(context, st),
-        _ => panic!("ICE expected single type"),
+        _ => {
+            context
+                .reporter
+                .add_diag(ice!((loc, "expected single type")));
+            (IR::DatatypeName(Symbol::from("invalid")), vec![])
+        }
     }
 }
 
@@ -928,7 +950,7 @@ fn struct_definition_name_single(
 
 fn struct_definition_name_base(
     context: &mut Context,
-    sp!(_, bt_): H::BaseType,
+    sp!(loc, bt_): H::BaseType,
 ) -> (IR::DatatypeName, Vec<IR::Type>) {
     use H::{BaseType_ as B, TypeName_ as TN};
     match bt_ {
@@ -936,7 +958,12 @@ fn struct_definition_name_base(
             context.struct_definition_name(&m, s),
             base_types(context, tys),
         ),
-        _ => panic!("ICE expected module struct type"),
+        _ => {
+            context
+                .reporter
+                .add_diag(ice!((loc, "expected module struct type")));
+            (IR::DatatypeName(Symbol::from("invalid")), vec![])
+        }
     }
 }
 
@@ -985,7 +1012,11 @@ fn base_type(context: &mut Context, sp!(bt_loc, bt_): H::BaseType) -> IR::Type {
     use IR::Type_ as IRT;
     let type_ = match bt_ {
         B::Unreachable | B::UnresolvedError => {
-            panic!("ICE should not have reached compilation if there are errors")
+            context.reporter.add_diag(ice!((
+                bt_loc,
+                "should not have reached compilation if there are errors"
+            )));
+            IRT::Bool // placeholder while bailing after ICE
         }
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Address))), _) => IRT::Address,
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Signer))), _) => IRT::Signer,
@@ -998,11 +1029,16 @@ fn base_type(context: &mut Context, sp!(bt_loc, bt_): H::BaseType) -> IR::Type {
 
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Bool))), _) => IRT::Bool,
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Vector))), mut args) => {
-            assert!(
+            ice_assert!(
+                context.reporter,
                 args.len() == 1,
-                "ICE vector must have exactly 1 type argument"
+                bt_loc,
+                "vector must have exactly 1 type argument"
             );
-            IRT::Vector(Box::new(base_type(context, args.pop().unwrap())))
+            match args.pop() {
+                Some(arg) => IRT::Vector(Box::new(base_type(context, arg))),
+                None => IRT::Bool, // placeholder while bailing after ICE
+            }
         }
         B::Apply(_, sp!(_, TN::ModuleType(m, s)), tys) => {
             let n = context.qualified_datatype_name(&m, s);
@@ -1096,7 +1132,9 @@ fn command(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, cmd_): 
                 .collect::<Vec<_>>();
             code.push(sp(loc, B::VariantSwitch(name, arms)));
         }
-        C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
+        C::Break(_) | C::Continue(_) => context
+            .reporter
+            .add_diag(ice!((loc, "break/continue not translated to jumps"))),
     }
 }
 
@@ -1193,8 +1231,13 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
     use Value_ as V;
     let sp!(loc, e_) = e.exp;
     match e_ {
-        E::Unreachable => panic!("ICE should not compile dead code"),
-        E::UnresolvedError => panic!("ICE should not have reached compilation if there are errors"),
+        E::Unreachable => context
+            .reporter
+            .add_diag(ice!((loc, "should not compile dead code"))),
+        E::UnresolvedError => context.reporter.add_diag(ice!((
+            loc,
+            "should not have reached compilation if there are errors"
+        ))),
         E::Unit { .. } => (),
         E::Value(sp!(_, v_)) => {
             let ld_value = match v_ {
@@ -1212,9 +1255,16 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                     }
                 }
                 v_ @ V::Address(_) | v_ @ V::Vector(_, _) => {
-                    let [ty]: [IR::Type; 1] = types(context, e.ty)
-                        .try_into()
-                        .expect("ICE value type should have one element");
+                    let tys: Result<[IR::Type; 1], _> = types(context, e.ty).try_into();
+                    let ty = match tys {
+                        Ok([ty]) => ty,
+                        Err(_) => {
+                            context
+                                .reporter
+                                .add_diag(ice!((loc, "value type should have one element")));
+                            sp(loc, IR::Type_::Bool) // placeholder while bailing after ICE
+                        }
+                    };
                     B::LdConst(ty, move_value_from_value_(v_))
                 }
             };
@@ -1367,7 +1417,10 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                 BT::U128 => B::CastU128,
                 BT::U256 => B::CastU256,
                 BT::Address | BT::Signer | BT::Vector | BT::Bool => {
-                    panic!("ICE type checking failed. unexpected cast")
+                    context
+                        .reporter
+                        .add_diag(ice!((loc, "type checking failed. unexpected cast")));
+                    return;
                 }
             };
             code.push(sp(loc, instr));

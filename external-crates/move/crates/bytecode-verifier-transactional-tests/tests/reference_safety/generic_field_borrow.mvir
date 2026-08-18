@@ -1,0 +1,54 @@
+// MutBorrowFieldGeneric / ImmBorrowFieldGeneric / PackGeneric
+
+//# publish
+mvir 0x1::gfield_ok {
+    public struct S<T> has drop { f: T, g: T }
+
+    fun disjoint(s: &mut Self::S<u64>) {
+        let a: &mut u64;
+        let b: &mut u64;
+    label b0:
+        a = &mut copy(s).S<u64>::f;
+        b = &mut move(s).S<u64>::g;
+        *move(a) = 1;
+        *move(b) = 2;
+        return;
+    }
+
+    fun imm(s: &Self::S<u64>): u64 {
+        let a: &u64;
+    label b0:
+        a = &move(s).S<u64>::f;
+        return *move(a);
+    }
+}
+
+//# publish
+mvir 0x2::gfield_parent_write_invalid {
+    public struct S<T> has drop { f: T, g: T }
+
+    fun bad(s: &mut Self::S<u64>) {
+        let a: &mut u64;
+    label b0:
+        a = &mut copy(s).S<u64>::f;
+        *move(s) = S<u64> { f: 0, g: 0 };
+        *move(a) = 1;
+        return;
+    }
+}
+
+//# publish
+mvir 0x3::gfield_same_field_twice {
+    public struct S<T> has drop { f: T, g: T }
+
+    fun two(s: &mut Self::S<u64>) {
+        let a: &mut u64;
+        let b: &mut u64;
+    label b0:
+        a = &mut copy(s).S<u64>::f;
+        b = &mut move(s).S<u64>::f;
+        *move(a) = 1;
+        *move(b) = 2;
+        return;
+    }
+}

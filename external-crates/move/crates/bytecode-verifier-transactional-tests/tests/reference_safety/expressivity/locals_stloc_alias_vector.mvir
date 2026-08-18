@@ -1,0 +1,19 @@
+// StLoc over a vector local that has a live &mut alias
+
+//# run
+mvir 0x42::m {
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+label b0:
+    v = vector<u64; 3>(10, 11, 12);
+    vr = &mut v;
+    v = vector<u64; 0>();
+    assert(vec_len<u64>(freeze(copy(vr))) == 0, 42);
+    vec_push_back<u64>(move(vr), 7);
+    assert(vec_len<u64>(&v) == 1, 43);
+    return;
+}
+
+}

@@ -9,11 +9,13 @@
 //!
 //! The merge operator is identical in structure to the
 //! transaction-bitmap one (union + optimize). The per-bucket
-//! compaction filter translates the `tx_seq` pruning floor from
-//! [`pruning_watermark::tx_seq_floor`](super::pruning_watermark::tx_seq_floor)
-//! into packed-event-seq space (`tx_seq << EVENT_BITS`) and drops
-//! buckets that fit entirely below it.
+//! compaction filter translates the database schema's `tx_seq`
+//! pruning floor into packed-event-seq space
+//! (`tx_seq << EVENT_BITS`) and drops buckets that fit entirely
+//! below it.
 
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use bytes::Buf;
@@ -31,7 +33,6 @@ use sui_consistent_store::reader::Reader;
 use sui_inverted_index::event_seq::{EVENT_BITS, encode_event_seq};
 
 use crate::proto::BitmapBlob;
-use crate::schema::pruning_watermark::tx_seq_floor;
 
 pub const NAME: &str = "event_bitmap";
 
@@ -80,12 +81,14 @@ impl Decode for Key {
 /// CF options: install the bitmap-union merge operator and a
 /// per-bucket compaction filter that drops buckets whose entire
 /// packed-event-seq range sits below the pruning floor.
-pub fn options(resolver: &sui_consistent_store::CfOptionsResolver) -> rocksdb::Options {
+pub fn options(
+    resolver: &sui_consistent_store::CfOptionsResolver,
+    tx_seq_pruning_floor: Arc<AtomicU64>,
+) -> rocksdb::Options {
     let mut opts = resolver.options(NAME);
     opts.set_merge_operator_associative("event_bitmap_merge", merge);
-    let floor = tx_seq_floor().clone();
     opts.set_compaction_filter("event_bitmap_pruning", move |_level, key, _value| {
-        let tx_seq_pruned = floor.load(Ordering::Relaxed);
+        let tx_seq_pruned = tx_seq_pruning_floor.load(Ordering::Relaxed);
         if should_remove_bucket(key, tx_seq_pruned) {
             rocksdb::CompactionDecision::Remove
         } else {

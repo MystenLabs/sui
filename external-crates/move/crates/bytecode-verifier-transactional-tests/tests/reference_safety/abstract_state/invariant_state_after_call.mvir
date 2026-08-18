@@ -1,0 +1,48 @@
+// what a call result looks like in the graph
+
+//# publish
+
+mvir 0x2::call_shapes {
+
+public struct S has copy, drop { f: u64 }
+
+fun id_mut(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+fun two_imm(s: &Self::S): &u64 * &u64 {
+label b0:
+    return &copy(s).S::f, &move(s).S::f;
+}
+
+fun one_result(s: &mut Self::S) {
+    let a: &mut Self::S;
+    let r: &mut Self::S;
+label b0:
+    a = move(s);
+    r = Self::id_mut(copy(a));
+    jump after;
+label after:
+    _ = move(r);
+    _ = move(a);
+    return;
+}
+
+fun imm_pair(s: &Self::S) {
+    let p: &u64;
+    let q: &u64;
+label b0:
+    p, q = Self::two_imm(move(s));
+    jump after;
+label after:
+    _ = *move(p);
+    _ = *move(q);
+    return;
+}
+
+}
+
+//# view-abstract-state 0x2::call_shapes::one_result
+
+//# view-abstract-state 0x2::call_shapes::imm_pair

@@ -1,0 +1,101 @@
+// the join deletes a reference live on only one edge; the borrowed local is then moved and
+// re-borrowed
+
+//# run
+mvir 0x2::join_drops_ref_then_move_source {
+
+entry fun t() {
+    let x: u64;
+    let y: u64;
+    let r: &mut u64;
+    let cond: bool;
+label b0:
+    x = 7;
+    cond = true;
+    jump_if (move(cond)) b2;
+label b1:
+    r = &mut x;
+    jump b3;
+label b2:
+    jump b3;
+label b3:
+    // on the b1 path the VM local r still holds &mut x
+    y = move(x);
+    assert(move(y) == 7, 42);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::join_drops_ref_then_read_it {
+
+// same shape, but try to use the forgotten reference
+fun t(cond: bool): u64 {
+    let x: u64;
+    let r: &mut u64;
+label b0:
+    x = 7;
+    jump_if (move(cond)) b2;
+label b1:
+    r = &mut x;
+    jump b3;
+label b2:
+    jump b3;
+label b3:
+    return *move(r);
+}
+
+}
+
+//# run
+mvir 0x4::join_drops_ref_then_write_source {
+
+entry fun t() {
+    let x: u64;
+    let r: &mut u64;
+    let cond: bool;
+label b0:
+    x = 7;
+    cond = false;
+    jump_if (move(cond)) b2;
+label b1:
+    r = &mut x;
+    jump b3;
+label b2:
+    jump b3;
+label b3:
+    // StLoc over the forgotten borrow
+    x = 9;
+    assert(move(x) == 9, 42);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x5::join_drops_extension_then_write_parent {
+
+public struct S has copy, drop { f: u64 }
+
+// the forgotten reference is an extension of one that survives the join
+fun t(cond: bool) {
+    let s: Self::S;
+    let p: &mut Self::S;
+    let g: &mut u64;
+label b0:
+    s = S { f: 0 };
+    p = &mut s;
+    jump_if (move(cond)) b2;
+label b1:
+    g = &mut copy(p).S::f;
+    jump b3;
+label b2:
+    jump b3;
+label b3:
+    *copy(p) = S { f: 1 };
+    _ = move(p);
+    return;
+}
+
+}

@@ -302,9 +302,7 @@ struct SubscriptionThrottleRate(u32);
 /// command-line).
 ///
 /// Access to most reads is controlled by the `database_url` -- if it is `None`, those reads will
-/// not work. KV queries can optionally be served by a Bigtable instance or Ledger gRPC service
-/// via `kv_args`. If a Bigtable instance is configured, the `GOOGLE_APPLICATION_CREDENTIALS`
-/// environment variable must point to the credentials JSON file.
+/// not work. KV point-lookups require a Ledger gRPC service, configured via `kv_args`.
 ///
 /// `version` is the version string reported in response headers by the service as part of every
 /// request.
@@ -339,10 +337,6 @@ pub async fn start_rpc(
     let consistent_reader =
         ConsistentReader::new(Some("graphql_consistent"), consistent_reader_args, registry).await?;
 
-    let bigtable_reader = kv_args
-        .bigtable_reader("indexer-alt-graphql".to_owned(), registry)
-        .await?;
-
     let ledger_grpc_reader = kv_args
         .ledger_grpc_reader(
             Some("graphql_ledger_grpc"),
@@ -361,10 +355,10 @@ pub async fn start_rpc(
 
     let pg_loader = Arc::new(pg_reader.as_data_loader());
 
-    let kv_loader = KvLoader::from_kv_sources(
-        bigtable_reader.clone(),
-        ledger_grpc_reader.clone(),
-        pg_loader.clone(),
+    let kv_loader = KvLoader::new(
+        ledger_grpc_reader
+            .clone()
+            .context("--ledger-grpc-url must be configured")?,
     );
 
     let package_store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
@@ -385,7 +379,6 @@ pub async fn start_rpc(
         config.watermark,
         pg_pipelines,
         pg_reader.clone(),
-        bigtable_reader,
         ledger_grpc_reader.clone(),
         consistent_reader.clone(),
         metrics.clone(),

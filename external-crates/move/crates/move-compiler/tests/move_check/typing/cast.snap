@@ -5,4 +5,18 @@ info:
   edition: legacy
   lint: false
 ---
+warning[WC08002]: operation always errors
+   ┌─ tests/move_check/typing/cast.move:19:22
+   │
+19 │         let _: u8 = (340282366920938463463374607431768211455u128 as u8);
+   │                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The 'u128' value '340282366920938463463374607431768211455' is outside the range of 'u8'. This operation always errors at runtime
+   │
+   = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
+warning[WC08002]: operation always errors
+   ┌─ tests/move_check/typing/cast.move:20:23
+   │
+20 │         let _: u64 = (340282366920938463463374607431768211455u128 as u64);
+   │                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The 'u128' value '340282366920938463463374607431768211455' is outside the range of 'u64'. This operation always errors at runtime
+   │
+   = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

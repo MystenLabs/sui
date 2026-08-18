@@ -51,7 +51,9 @@ answer: >-
   Tokens have a `spend` method.
 ---
 
-Because `Token` types do not have the `store` ability, it is impossible to store them in another object. Hence, `Coin`-like approaches to spending are not possible. An application that takes `Token` as a payment won't be able to add it to its balance. To address this issue, `Token` has a `spend` method, which allows spending it in one application and then delivering it as a `spent_balance` to the [`TokenPolicy`](/onchain-finance/closed-loop-token/token-policy) or burning right away with a `TreasuryCap`.
+[Closed-Loop Tokens](/onchain-finance/closed-loop-token) differ from standard `Coin` types in a key way: `Token` types do not have the `store` ability. This means you cannot store a `Token` inside another object or add it to a balance field the way you can with a `Coin`. An application that accepts a `Token` as payment cannot keep it.
+
+To handle this, `Token` provides a `spend` method. When you call `spend`, the token is consumed and its balance moves into an [`ActionRequest`](/onchain-finance/closed-loop-token/action-request). You then deliver the `ActionRequest` to the [`TokenPolicy`](/onchain-finance/closed-loop-token/token-policy) (which accumulates the spent balance) or burn it directly with a `TreasuryCap`.
 
 ## Spend action
 

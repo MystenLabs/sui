@@ -143,6 +143,7 @@ feature_flags:
   better_loader_errors: true
   generate_df_type_layouts: true
   framework_tx_context_mut_restrictions: true
+  include_function_signatures_in_instantiation_limits: true
   enable_display_registry: true
   private_generics_verifier_v2: true
   deprecate_global_storage_ops: true
@@ -227,6 +228,7 @@ max_value_stack_size: 1024
 max_type_nodes: 256
 max_generic_instantiation_type_nodes_per_function: 10000
 max_generic_instantiation_type_nodes_per_module: 500000
+max_accumulator_type_nodes: 16
 max_push_size: 10000
 max_struct_definitions: 200
 max_function_definitions: 1000
@@ -280,8 +282,6 @@ address_to_u256_cost_base: 52
 address_from_u256_cost_base: 52
 config_read_setting_impl_cost_base: 100
 config_read_setting_impl_cost_per_byte: 40
-package_original_package_id_impl_cost_base: 52
-package_original_package_id_impl_cost_per_byte: 15
 dynamic_field_hash_type_and_key_cost_base: 52
 dynamic_field_hash_type_and_key_type_cost_per_byte: 2
 dynamic_field_hash_type_and_key_value_cost_per_byte: 2

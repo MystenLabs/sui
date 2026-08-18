@@ -1,0 +1,98 @@
+// a &mut return with only immutable sources is free-floating in the caller
+
+//# publish
+mvir 0x2::launder_via_abort {
+
+fun boom(): &mut u64 {
+label b0:
+    abort 0;
+}
+
+// (&u64) -> &mut u64 verifies
+public fun launder(x: &u64): &mut u64 {
+label b0:
+    _ = move(x);
+    return Self::boom();
+}
+
+}
+
+//# publish
+mvir 0x3::use_laundered {
+
+fun boom(): &mut u64 {
+label b0:
+    abort 0;
+}
+
+fun launder(x: &u64): &mut u64 {
+label b0:
+    _ = move(x);
+    return Self::boom();
+}
+
+// the laundered result is disjoint even from its own immutable source
+fun t() {
+    let a: u64;
+    let i: &u64;
+    let m: &mut u64;
+label b0:
+    a = 0;
+    i = &a;
+    m = Self::launder(copy(i));
+    *copy(m) = 1;
+    _ = *move(i);
+    _ = move(m);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x4::launder_recursive {
+
+// self recursion: a &mut return with no &mut source
+fun launder(x: &u64): &mut u64 {
+label b0:
+    return Self::launder(move(x));
+}
+
+}
+
+//# publish
+mvir 0x5::launder_no_args {
+
+fun boom(): &mut u64 {
+label b0:
+    abort 0;
+}
+
+// empty source set; the local root is untouched
+fun t() {
+    let m: &mut u64;
+label b0:
+    m = Self::boom();
+    *copy(m) = 1;
+    _ = move(m);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x6::launder_escapes_local_check {
+
+fun boom(): &mut u64 {
+label b0:
+    abort 0;
+}
+
+// no edge to ROOT, so the Ret local-borrow check passes
+public fun t(): &mut u64 {
+    let m: &mut u64;
+label b0:
+    m = Self::boom();
+    return move(m);
+}
+
+}

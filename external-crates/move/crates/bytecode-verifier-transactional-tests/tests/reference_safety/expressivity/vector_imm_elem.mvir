@@ -1,0 +1,38 @@
+// an immutable ref to the whole vector does not block a write through a mutable element ref;
+// an immutable ELEMENT ref does
+
+//# run
+mvir 0x67::write_mut_elem_with_imm_vector_live {
+
+entry fun t() {
+    let v: vector<u64>;
+    let e_mut: &mut u64;
+    let f: &vector<u64>;
+label b0:
+    v = vector<u64; 2>(0, 1);
+    e_mut = vec_mut_borrow<u64>(&mut v, 0);
+    f = &v;
+    *move(e_mut) = 5;
+    assert(vec_len<u64>(move(f)) == 2, 42);
+    return;
+}
+
+}
+
+//# run
+mvir 0x69::write_mut_elem_after_imm_elem_dead {
+
+entry fun t() {
+    let v: vector<u64>;
+    let e_mut: &mut u64;
+    let e_imm: &u64;
+label b0:
+    v = vector<u64; 2>(0, 1);
+    e_mut = vec_mut_borrow<u64>(&mut v, 0);
+    e_imm = vec_imm_borrow<u64>(&v, 1);
+    assert(*move(e_imm) == 1, 41);
+    *move(e_mut) = 5;
+    return;
+}
+
+}

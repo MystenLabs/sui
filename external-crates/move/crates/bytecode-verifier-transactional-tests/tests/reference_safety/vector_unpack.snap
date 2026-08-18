@@ -1,0 +1,34 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 3-17:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000031::unpack_with_elem_ref'. Got VMError: {
+    major_status: MOVELOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x31::unpack_with_elem_ref,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 7)],
+}
+
+task 1, lines 19-39:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000032::unpack_struct_field_vector'. Got VMError: {
+    major_status: MOVELOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x32::unpack_struct_field_vector,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 11)],
+}
+
+task 2, lines 41-60:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000033::unpack_inner_popped_from_outer'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x33::unpack_inner_popped_from_outer,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 11)],
+}

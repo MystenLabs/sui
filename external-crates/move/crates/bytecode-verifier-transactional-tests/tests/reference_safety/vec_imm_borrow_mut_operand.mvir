@@ -1,0 +1,42 @@
+// VecImmBorrow with a &mut vector operand
+
+//# run
+mvir 0x1::imm_borrow_from_mut_vec_ok {
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &u64;
+label b0:
+    v = vector<u64; 2>(7, 8);
+    vr = &mut v;
+    e = vec_imm_borrow<u64>(copy(vr), 0);
+    assert(*move(e) == 7, 42);
+    _ = move(vr);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x2::imm_borrow_from_mut_vec_with_live_elem {
+
+fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e1: &mut u64;
+    let e2: &u64;
+label b0:
+    v = vector<u64; 2>(7, 8);
+    vr = &mut v;
+    e1 = vec_mut_borrow<u64>(copy(vr), 0);
+    // the regex verifier freezes the operand first, so this is allowed
+    e2 = vec_imm_borrow<u64>(copy(vr), 1);
+    // e2 is a dot-star extension of the vector, so the write is not
+    *move(e1) = 1;
+    _ = *move(e2);
+    _ = move(vr);
+    return;
+}
+
+}

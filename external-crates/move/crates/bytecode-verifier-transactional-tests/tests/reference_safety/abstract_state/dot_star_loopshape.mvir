@@ -1,0 +1,73 @@
+// fixed points of loops that replace a reference with a call result
+
+//# publish
+mvir 0x51::zzds_loopshape {
+
+public struct S has copy, drop, store { f: u64, g: u64 }
+public struct O has copy, drop, store { a: Self::S, b: Self::S }
+
+fun id(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+// r = id(r) with the original still live
+fun l1(s: &mut Self::S, n: u64) {
+    let r: &mut Self::S;
+label b0:
+    r = copy(s);
+    jump lh;
+label lh:
+    jump_if (copy(n) == 0) le;
+label lbody:
+    n = move(n) - 1;
+    r = Self::id(move(r));
+    jump lh;
+label le:
+    _ = move(r);
+    _ = move(s);
+    return;
+}
+
+// r starts as a field borrow
+fun l2(o: &mut Self::O, n: u64) {
+    let r: &mut Self::S;
+label b0:
+    r = &mut copy(o).O::b;
+    jump lh;
+label lh:
+    jump_if (copy(n) == 0) le;
+label lbody:
+    n = move(n) - 1;
+    r = Self::id(move(r));
+    jump lh;
+label le:
+    _ = move(r);
+    _ = move(o);
+    return;
+}
+
+// element borrow, dead at the back edge
+fun l3(v: &mut vector<u64>, n: u64) {
+    let e: &mut u64;
+label b0:
+    jump lh;
+label lh:
+    jump_if (copy(n) == 0) le;
+label lbody:
+    n = move(n) - 1;
+    e = vec_mut_borrow<u64>(copy(v), 0);
+    *move(e) = 1;
+    jump lh;
+label le:
+    _ = move(v);
+    return;
+}
+
+}
+
+//# view-abstract-state 0x51::zzds_loopshape::l1
+
+//# view-abstract-state 0x51::zzds_loopshape::l2
+
+//# view-abstract-state 0x51::zzds_loopshape::l3

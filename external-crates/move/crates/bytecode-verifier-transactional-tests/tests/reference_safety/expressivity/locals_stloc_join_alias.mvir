@@ -1,0 +1,26 @@
+// after a join r may alias local#x or local#y; neither strictly extends local#x
+
+//# run
+mvir 0x42::m {
+    entry fun t() {
+        let x: u64;
+        let y: u64;
+        let r: &mut u64;
+        let v: u64;
+    label b0:
+        x = 1;
+        y = 2;
+        jump_if (true) b2;
+    label b1:
+        r = &mut x;
+        jump b3;
+    label b2:
+        r = &mut y;
+    label b3:
+        x = 30;
+        y = 40;
+        v = *move(r);
+        assert(move(v) == 40, 300);
+        return;
+    }
+}

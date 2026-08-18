@@ -1,0 +1,24 @@
+// the retargeted alias is handed to a callee after the StLoc
+
+//# run
+mvir 0x42::m {
+    public struct S has drop { f: u64 }
+
+    fun get(s: &Self::S): u64 {
+    label b0:
+        return *(&move(s).S::f);
+    }
+
+    entry fun t() {
+        let x: Self::S;
+        let r: &mut Self::S;
+        let v: u64;
+    label b0:
+        x = S { f: 1 };
+        r = &mut x;
+        x = S { f: 55 };
+        v = Self::get(freeze(move(r)));
+        assert(move(v) == 55, 800);
+        return;
+    }
+}

@@ -33,6 +33,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import toml from '@iarna/toml';
+import { verifyAddedSource } from './verify_source';
 
 /**
  * Name of a package's manifest file.
@@ -324,7 +325,8 @@ async function prepareSourceDir(sourceDir: string, pkgDirName: string): Promise<
  * directory, and the package's build output is copied into that directory's
  * `source` subdirectory. If no match is found (or the package is not built with
  * debugging artifacts), a warning is shown and debugging remains at the disassembly
- * level for the package.
+ * level for the package. After a successful copy, the added artifacts are verified
+ * against the on-chain package (see `verifyAddedSource` in `./verify_source`).
  *
  * This is meant to be used from the trace viewer before a debug session is started,
  * so that the artifacts are picked up when the session is launched (no restart is
@@ -391,4 +393,7 @@ export async function addSourceToTrace(traceFilePath: string): Promise<void> {
         `Added source for '${path.basename(pkgRoot)}' (${pkgDirName}). `
         + `Start debugging to use the source-level view.`
     );
+    // advisory check that the added artifacts actually match the on-chain
+    // package used by the trace (reports its outcome via a notification)
+    await verifyAddedSource(pkgRoot, pkgDirName, traceDir);
 }

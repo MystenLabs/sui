@@ -1,0 +1,85 @@
+// after the argument ref is released, a fresh &mut x must inherit a dot-star edge to the result
+
+//# publish
+
+mvir 0x2::reborrow {
+
+public struct S has copy, drop { f: u64 }
+
+fun id_mut(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+fun t() {
+    let x: Self::S;
+    let r: &mut Self::S;
+    let b: &mut Self::S;
+label b0:
+    x = S { f: 0 };
+    r = Self::id_mut(&mut x);
+    b = &mut x;
+    jump after;
+label after:
+    _ = move(r);
+    _ = move(b);
+    return;
+}
+
+}
+
+//# view-abstract-state 0x2::reborrow::t
+
+//# publish
+mvir 0x3::reborrow_then_write {
+
+public struct S has copy, drop { f: u64 }
+
+fun id_mut(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+fun t() {
+    let x: Self::S;
+    let r: &mut Self::S;
+    let b: &mut Self::S;
+label b0:
+    x = S { f: 0 };
+    r = Self::id_mut(&mut x);
+    b = &mut x;
+    // r may be inside b
+    *copy(b) = S { f: 1 };
+    _ = move(r);
+    _ = move(b);
+    return;
+}
+
+}
+
+//# run
+mvir 0x4::reborrow_then_write_result {
+
+public struct S has copy, drop { f: u64 }
+
+fun id_mut(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+// b is an ancestor of r, so writing through r is fine
+entry fun t() {
+    let x: Self::S;
+    let r: &mut Self::S;
+    let b: &mut Self::S;
+label b0:
+    x = S { f: 0 };
+    r = Self::id_mut(&mut x);
+    b = &mut x;
+    *copy(r) = S { f: 9 };
+    assert(*(&move(b).S::f) == 9, 42);
+    _ = move(r);
+    return;
+}
+
+}

@@ -607,12 +607,13 @@ impl Swarm {
     }
 
     /// Return an iterator over shared references of all nodes that are set up as validators.
-    /// This means that they have a consensus config. This however doesn't mean this validator is
-    /// currently active (i.e. it's not necessarily in the validator set at the moment).
+    /// This however doesn't mean this validator is currently active (i.e. it's not necessarily
+    /// in the validator set at the moment). Note that observer fullnodes also carry a consensus
+    /// config, so the intended node role is what distinguishes a validator.
     pub fn validator_nodes(&self) -> impl Iterator<Item = &Node> {
         self.nodes
             .values()
-            .filter(|node| node.config().consensus_config.is_some())
+            .filter(|node| node.config().intended_node_role().is_validator())
     }
 
     pub fn validator_node_handles(&self) -> Vec<SuiNodeHandle> {
@@ -636,6 +637,16 @@ impl Swarm {
         self.nodes
             .values()
             .filter(|node| node.config().intended_node_role().is_fullnode())
+    }
+
+    /// Return an iterator over shared references of all fullnodes that sync as
+    /// consensus observers.
+    pub fn observer_nodes(&self) -> impl Iterator<Item = &Node> {
+        use sui_types::node_role::{FullNodeSyncMode, NodeRole};
+        self.nodes.values().filter(|node| {
+            node.config().intended_node_role()
+                == NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
+        })
     }
 
     pub async fn spawn_new_node(&mut self, config: NodeConfig) -> SuiNodeHandle {

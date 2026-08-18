@@ -1,0 +1,51 @@
+// fields of different variants get different labels; two unpacks of one variant are aliases
+
+//# publish
+mvir 0xb01::variant_field_labels {
+
+public enum X has drop { One { a: u64, c: u64 }, Two { b: u64 } }
+
+fun t(e: &mut Self::X) {
+    let a: &mut u64;
+    let c: &mut u64;
+    let a2: &mut u64;
+    let c2: &mut u64;
+label b0:
+    &mut X::One { a: a, c: c } = copy(e);
+    &mut X::One { a: a2, c: c2 } = copy(e);
+    *move(a) = 1;
+    *move(a2) = 2;
+    *move(c) = 3;
+    *move(c2) = 4;
+    _ = move(e);
+    return;
+}
+
+}
+
+//# view-abstract-state 0xb01::variant_field_labels::t
+
+//# publish
+mvir 0xb02::variant_field_join {
+
+public enum X has drop { One { a: u64 }, Two { b: u64 } }
+
+// after the join p carries both variants labels
+fun t(e: &mut Self::X, cond: bool) {
+    let p: &mut u64;
+label l0:
+    jump_if_false (move(cond)) l2;
+label l1:
+    &mut X::One { a: p } = copy(e);
+    jump l3;
+label l2:
+    &mut X::Two { b: p } = copy(e);
+label l3:
+    *move(p) = 0;
+    _ = move(e);
+    return;
+}
+
+}
+
+//# view-abstract-state 0xb02::variant_field_join::t

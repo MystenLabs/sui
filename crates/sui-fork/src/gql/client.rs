@@ -10,13 +10,13 @@ use reqwest::header::USER_AGENT;
 
 use sui_protocol_config::Chain;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEvents;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
-use sui_types::supported_protocol_versions::ProtocolConfig;
 
 use crate::CheckpointRead;
 use crate::Node;
@@ -28,29 +28,67 @@ use crate::gql::AddressOwnedObject;
 use crate::gql::ObjectSeedMetadata;
 use crate::gql::queries;
 
+/// Worker threads for [`gql_runtime`]. GraphQL calls are I/O-bound and issued one at a time from a
+/// blocking caller, so this only has to cover hyper's connection dispatch tasks running
+/// concurrently with the request being awaited.
+const GQL_RUNTIME_WORKER_THREADS: usize = 2;
+
+/// The runtime every GraphQL request runs on, for the life of the process.
+///
+/// The storage traits this crate implements are synchronous, so each GraphQL call has to block
+/// somewhere. Building a runtime per call, the obvious way to do that, silently corrupts connection
+/// reuse, because hyper spawns a per-connection dispatch task onto whichever runtime is current
+/// when the connection opens, so dropping that runtime kills the task while the connection itself
+/// stays in the shared [`reqwest::Client`]'s idle pool. The next call to draw that connection fails
+/// with `dispatch task is gone: runtime dropped the dispatch task`, which surfaces during execution
+/// as a `STORAGE_ERROR` and an invariant violation. It is intermittent by construction, because it
+/// depends on the pool handing back a connection whose runtime has died.
+///
+/// A single process-lifetime runtime keeps those dispatch tasks alive as long as the connections
+/// they serve. It is parked on its own thread and deliberately never dropped, because dropping a
+/// runtime from inside an async context panics, which is what would happen if the last handle were
+/// released on a worker thread.
+fn gql_runtime() -> &'static tokio::runtime::Handle {
+    static HANDLE: std::sync::OnceLock<tokio::runtime::Handle> = std::sync::OnceLock::new();
+    HANDLE.get_or_init(|| {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(GQL_RUNTIME_WORKER_THREADS)
+            .thread_name("sui-fork-gql")
+            .enable_all()
+            .build()
+            .expect("failed to build the GraphQL runtime");
+        let handle = runtime.handle().clone();
+        std::thread::Builder::new()
+            .name("sui-fork-gql-runtime".to_owned())
+            .spawn(move || {
+                let _runtime = runtime;
+                // `park` may wake spuriously; nothing ever unparks this thread.
+                loop {
+                    std::thread::park();
+                }
+            })
+            .expect("failed to spawn the GraphQL runtime thread");
+        handle
+    })
+}
+
 macro_rules! block_on {
     ($expr:expr) => {{
         #[allow(clippy::disallowed_methods, clippy::result_large_err)]
         {
+            let handle = gql_runtime();
+            // `Handle::block_on` panics inside an async context, so a caller that is
+            // already on a runtime waits on a scoped thread instead. Either way the
+            // future itself runs on the shared runtime, which is the point.
             if tokio::runtime::Handle::try_current().is_ok() {
                 std::thread::scope(|scope| {
                     scope
-                        .spawn(|| {
-                            let rt = tokio::runtime::Builder::new_current_thread()
-                                .enable_all()
-                                .build()
-                                .expect("failed to build Tokio runtime");
-                            rt.block_on($expr)
-                        })
+                        .spawn(|| handle.block_on($expr))
                         .join()
-                        .expect("failed to join scoped thread running nested runtime")
+                        .expect("GraphQL runtime bridge thread panicked")
                 })
             } else {
-                let rt = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .expect("failed to build Tokio runtime");
-                rt.block_on($expr)
+                handle.block_on($expr)
             }
         }
     }};
@@ -131,14 +169,34 @@ impl TransactionRead for GraphQLClient {
 }
 
 impl GraphQLClient {
-    /// Fetch metadata for objects owned by an address at a checkpoint, paginating through
-    /// the checkpoint-scoped ownership connection.
+    /// Fetch metadata for objects owned by an address at a checkpoint, paginating through the
+    /// checkpoint-scoped ownership connection.
     pub(crate) async fn get_address_owned_objects_at_checkpoint(
         &self,
         address: SuiAddress,
         checkpoint: CheckpointSequenceNumber,
     ) -> Result<Vec<AddressOwnedObject>, Error> {
         queries::address_owned_objects_query::query(address, checkpoint, self).await
+    }
+
+    /// Coin types for which `address` holds an accumulator balance at a checkpoint. See
+    /// [`queries::address_balances_query`] for why the seed needs to ask.
+    pub(crate) async fn get_address_balance_coin_types_at_checkpoint(
+        &self,
+        address: SuiAddress,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Vec<String>, Error> {
+        queries::address_balances_query::query(address, checkpoint, self).await
+    }
+
+    /// Resolve object references at a checkpoint without an owner check, for ids the fork derived
+    /// rather than the user named.
+    pub(crate) async fn get_object_refs_at_checkpoint(
+        &self,
+        object_ids: &[ObjectID],
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Vec<Option<ObjectRef>>, Error> {
+        queries::object_seed_query::query_refs(object_ids, checkpoint, self).await
     }
 
     /// Fetch lightweight metadata for explicit object seeds at a checkpoint.
@@ -166,8 +224,8 @@ impl GraphQLClient {
         queries::checkpoint_query::query(sequence_number, self).await
     }
 
-    /// Fetch all events for a transaction, paginating through the GraphQL
-    /// events connection. Returns `None` if the transaction doesn't exist.
+    /// Fetch all events for a transaction, paginating through the GraphQL events connection.
+    /// Returns `None` if the transaction doesn't exist.
     pub(crate) fn get_transaction_events(
         &self,
         tx_digest: &str,
@@ -175,8 +233,8 @@ impl GraphQLClient {
         block_on!(queries::events_query::query(tx_digest, self))
     }
 
-    /// Query `serviceConfig.availableRange` for both "Checkpoint" and
-    /// "Transaction" types and return the max of their `first.sequenceNumber`.
+    /// Query `serviceConfig.availableRange` for both "Checkpoint" and "Transaction" types and
+    /// return the max of their `first.sequenceNumber`.
     pub(crate) fn get_lowest_available_checkpoint(
         &self,
     ) -> Result<CheckpointSequenceNumber, Error> {
@@ -186,8 +244,7 @@ impl GraphQLClient {
         Ok(checkpoint_low.max(transaction_low))
     }
 
-    /// Query `serviceConfig.availableRange` for "Object" type and return
-    /// `first.sequenceNumber`.
+    /// Query `serviceConfig.availableRange` for "Object" type and return `first.sequenceNumber`.
     pub(crate) fn get_lowest_available_checkpoint_objects(
         &self,
     ) -> Result<CheckpointSequenceNumber, Error> {
@@ -214,6 +271,7 @@ impl CheckpointRead for GraphQLClient {
 mod tests {
     use cynic::QueryBuilder;
     use fastcrypto::encoding::Base64 as FastCryptoBase64;
+    use itertools::Itertools as _;
     use serde_json::json;
     use sui_types::{base_types::ObjectID, test_checkpoint_data_builder::TestCheckpointBuilder};
     use wiremock::matchers::{body_partial_json, header, method, path};
@@ -286,7 +344,7 @@ mod tests {
             "data": {
                 "checkpoint": {
                     "query": {
-                        "object": object.map(|object| {
+                        "multiGetObjects": [object.map(|object| {
                             json!({
                                 "address": object.id().to_string(),
                                 "version": object.version().value(),
@@ -295,7 +353,7 @@ mod tests {
                                 )
                                 .encoded(),
                             })
-                        })
+                        })]
                     }
                 }
             }
@@ -394,8 +452,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_objects() {
+        // Exercises the multiGetObjects batch path, which serves the
+        // "standard" key kinds. `VersionAtCheckpoint` keys are routed to a
+        // separate checkpoint-scoped query and are covered elsewhere.
         let server = MockServer::start().await;
-        let versioned_object = Object::immutable_with_id_for_testing(ObjectID::random());
         let root_version_object = Object::immutable_with_id_for_testing(ObjectID::random());
         let missing_object_id = ObjectID::random();
 
@@ -405,10 +465,6 @@ mod tests {
             .and(body_partial_json(json!({
                 "variables": {
                     "keys": [
-                        {
-                            "address": versioned_object.id().to_string(),
-                            "version": versioned_object.version().value(),
-                        },
                         {
                             "address": root_version_object.id().to_string(),
                             "rootVersion": 17,
@@ -421,11 +477,8 @@ mod tests {
                 }
             })))
             .respond_with(
-                ResponseTemplate::new(200).set_body_json(object_response_body(&[
-                    Some(&versioned_object),
-                    Some(&root_version_object),
-                    None,
-                ])),
+                ResponseTemplate::new(200)
+                    .set_body_json(object_response_body(&[Some(&root_version_object), None])),
             )
             .mount(&server)
             .await;
@@ -433,10 +486,6 @@ mod tests {
         let store = mock_store(&server);
         let objects = store
             .get_objects(&[
-                ObjectKey {
-                    object_id: versioned_object.id(),
-                    version_query: VersionQuery::Version(versioned_object.version().value()),
-                },
                 ObjectKey {
                     object_id: root_version_object.id(),
                     version_query: VersionQuery::RootVersion(17),
@@ -451,7 +500,6 @@ mod tests {
         assert_eq!(
             objects,
             vec![
-                Some((versioned_object.clone(), versioned_object.version().value())),
                 Some((
                     root_version_object.clone(),
                     root_version_object.version().value(),
@@ -486,8 +534,10 @@ mod tests {
             .and(body_partial_json(json!({
                 "variables": {
                     "sequenceNumber": 31,
-                    "address": object.id().to_string(),
-                    "version": object.version().value(),
+                    "keys": [{
+                        "address": object.id().to_string(),
+                        "version": object.version().value(),
+                    }],
                 }
             })))
             .respond_with(
@@ -524,9 +574,80 @@ mod tests {
             .get("query")
             .and_then(serde_json::Value::as_str)
             .expect("query string should be present");
-        assert!(query.contains("checkpoint"));
-        assert!(query.contains("object(address: $address, version: $version)"));
-        assert!(!query.contains("multiGetObjects"));
+        // The pin lives on the query scope, not on the keys: a key carrying both
+        // a version and an `atCheckpoint` is rejected as over-bounded, which is
+        // what forced these reads to go one-at-a-time before.
+        assert!(query.contains("checkpoint(sequenceNumber: $sequenceNumber)"));
+        assert!(query.contains("multiGetObjects(keys: $keys)"));
+        assert!(!query.contains("atCheckpoint"));
+    }
+
+    /// Seeding hydrates every manifest entry through this path, so a regression to one request per
+    /// object is the difference between two round trips and seventy. Nothing about the returned
+    /// values would reveal it — only the request count does.
+    #[tokio::test]
+    async fn test_exact_versions_at_one_checkpoint_batch_into_a_single_request() {
+        let server = MockServer::start().await;
+        let objects: Vec<_> = (0..3)
+            .map(|_| Object::immutable_with_id_for_testing(ObjectID::random()))
+            .collect();
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(body_partial_json(
+                json!({ "variables": { "sequenceNumber": 31 } }),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": {
+                    "checkpoint": {
+                        "query": {
+                            "multiGetObjects": objects
+                                .iter()
+                                .map(|object| json!({
+                                    "address": object.id().to_string(),
+                                    "version": object.version().value(),
+                                    "objectBcs": FastCryptoBase64::from_bytes(
+                                        &bcs::to_bytes(object).expect("object should serialize"),
+                                    )
+                                    .encoded(),
+                                }))
+                                .collect::<Vec<_>>(),
+                        }
+                    }
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let store = mock_store(&server);
+        let keys: Vec<_> = objects
+            .iter()
+            .map(|object| ObjectKey {
+                object_id: object.id(),
+                version_query: VersionQuery::VersionAtCheckpoint {
+                    version: object.version().value(),
+                    checkpoint: 31,
+                },
+            })
+            .collect();
+
+        let fetched = store
+            .get_objects(&keys)
+            .expect("batched versioned query should succeed");
+        assert_eq!(fetched.len(), 3);
+        for (object, result) in objects.iter().zip_eq(fetched) {
+            assert_eq!(result, Some((object.clone(), object.version().value())));
+        }
+
+        let requests = server
+            .received_requests()
+            .await
+            .expect("wiremock should record requests");
+        assert_eq!(
+            requests.len(),
+            1,
+            "three exact versions at one checkpoint must cost one request, not three",
+        );
     }
 
     #[tokio::test]
@@ -539,8 +660,10 @@ mod tests {
             .and(body_partial_json(json!({
                 "variables": {
                     "sequenceNumber": 31,
-                    "address": object_id.to_string(),
-                    "version": 7,
+                    "keys": [{
+                        "address": object_id.to_string(),
+                        "version": 7,
+                    }],
                 }
             })))
             .respond_with(

@@ -1,0 +1,34 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 0, lines 4-21:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::vec_imm_borrow_with_mut_extension'. Got VMError: {
+    major_status: VEC_BORROW_ELEMENT_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::vec_imm_borrow_with_mut_extension,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}
+
+task 1, lines 23-40:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::vec_imm_borrow_with_mut_extension_frozen'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x4::vec_imm_borrow_with_mut_extension_frozen,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 5)],
+}
+
+task 2, lines 42-64:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::vec_imm_borrow_with_mut_extension_frozen_run'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x6::vec_imm_borrow_with_mut_extension_frozen_run,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 11)],
+}
