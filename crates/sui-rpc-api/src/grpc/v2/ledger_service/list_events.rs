@@ -755,15 +755,22 @@ fn resolve_event_range(
     options: &QueryOptions,
 ) -> Result<ResolvedScan<IntraTxCoordinate>, RpcError> {
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
-    let mut resolved = ResolvedScan::<IntraTxCoordinate>::resolve(cp_range, tx_range, options)
-        .apply_cursor_bounds(options);
+    let mut resolved = ResolvedScan::<IntraTxCoordinate>::resolve(
+        cp_range,
+        IntraTxCoordinate::tx_window(tx_range),
+        options,
+    );
     if !resolved.is_empty() {
         let start_tx = match resolved.bounds.lo {
             Bound::Included(position) | Bound::Excluded(position) => position.tx_seq,
             Bound::Unbounded => 0,
         };
         if let Some(floor) = clamp_to_serving_floor(service, start_tx, start_checkpoint, options)? {
-            resolved.apply_serving_floor(floor.tx_seq, floor.checkpoint, options);
+            resolved.apply_serving_floor(
+                IntraTxCoordinate::start_of_tx(floor.tx_seq),
+                floor.checkpoint,
+                options,
+            );
         }
     }
     Ok(resolved)

@@ -816,10 +816,11 @@ async fn resolve_event_range(
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
-    Ok(
-        ResolvedScan::<IntraTxCoordinate>::resolve(cp_range, tx_range, options)
-            .apply_cursor_bounds(options),
-    )
+    Ok(ResolvedScan::<IntraTxCoordinate>::resolve(
+        cp_range,
+        IntraTxCoordinate::tx_window(tx_range),
+        options,
+    ))
 }
 
 #[cfg(test)]
@@ -1065,7 +1066,9 @@ mod tests {
         let row = tx_row(10, 0);
         let refs = expand_event_refs(
             row,
-            IntraTxScanBounds::tx_span(10, 11),
+            IntraTxScanBounds::from_range(
+                IntraTxCoordinate::start_of_tx(10)..IntraTxCoordinate::start_of_tx(11),
+            ),
             &options(Ordering::Ascending),
         );
         assert!(refs.is_empty());
