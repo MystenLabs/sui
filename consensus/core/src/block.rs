@@ -52,6 +52,12 @@ pub(crate) struct BlockTransactionVotes {
     pub(crate) rejects: Vec<TransactionIndex>,
 }
 
+/// Maximum number of transaction vote targets in a V3 block. The proposer and the block verifier
+/// must use the same limit, which bounds the cost of block verification and vote tracking.
+pub(crate) fn max_transaction_vote_targets(context: &Context) -> usize {
+    context.protocol_config.gc_depth().max(1) as usize * context.committee.size()
+}
+
 /// A block includes references to previous round blocks and transactions that the authority
 /// considers valid.
 /// Well behaved authorities produce at most one block per round, but malicious authorities can
@@ -815,10 +821,21 @@ mod tests {
     use fastcrypto::error::FastCryptoError;
 
     use crate::{
-        block::{BlockAPI, SignedBlock, TestBlock, genesis_blocks},
+        block::{BlockAPI, SignedBlock, TestBlock, genesis_blocks, max_transaction_vote_targets},
         context::Context,
         error::ConsensusError,
     };
+
+    #[tokio::test]
+    async fn test_max_transaction_vote_targets() {
+        let (mut context, _) = Context::new_for_test(4);
+        context.protocol_config.set_gc_depth_for_testing(5);
+        assert_eq!(max_transaction_vote_targets(&context), 20);
+
+        // A GC depth of zero must not make the limit zero, which would remove all vote targets.
+        context.protocol_config.set_gc_depth_for_testing(0);
+        assert_eq!(max_transaction_vote_targets(&context), 4);
+    }
 
     #[tokio::test]
     async fn test_sign_and_verify() {

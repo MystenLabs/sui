@@ -7,7 +7,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
     VerifiedBlock,
-    block::{BlockAPI, GENESIS_ROUND, SignedBlock, genesis_blocks},
+    block::{BlockAPI, GENESIS_ROUND, SignedBlock, genesis_blocks, max_transaction_vote_targets},
     context::Context,
     error::{ConsensusError, ConsensusResult},
     transaction::TransactionVerifier,
@@ -163,10 +163,17 @@ impl SignedBlockVerifier {
 
     fn check_transaction_votes(&self, block: &SignedBlock) -> ConsensusResult<()> {
         let transaction_votes = block.transaction_votes();
-        let previous_round = block
-            .round()
-            .checked_sub(1)
-            .expect("Genesis blocks are rejected before transaction vote validation");
+        // This check runs first, so the allocation and the scans below stay bounded.
+        let vote_target_limit = max_transaction_vote_targets(&self.context);
+        if transaction_votes.len() > vote_target_limit {
+            return Err(ConsensusError::InvalidTransactionVotes(format!(
+                "block at round {} from {} has {} vote targets but the limit is {}",
+                block.round(),
+                block.author(),
+                transaction_votes.len(),
+                vote_target_limit,
+            )));
+        }
         let cutoff_round = block.transaction_votes_cutoff_round();
         let transaction_limit = self
             .context
@@ -180,7 +187,7 @@ impl SignedBlockVerifier {
 
         let mut vote_targets = BTreeSet::new();
         for votes in transaction_votes {
-            if votes.block_ref.round > previous_round {
+            if votes.block_ref.round >= block.round() {
                 return Err(ConsensusError::InvalidTransactionVotes(format!(
                     "vote target {} must have a round less than block round {} from {}",
                     votes.block_ref,
@@ -206,8 +213,6 @@ impl SignedBlockVerifier {
                     votes.block_ref,
                 )));
             }
-            // This bounds the scans below. Because the indices must increase, an oversized
-            // vector also fails the last index check, but only after a full scan of the vector.
             if votes.rejects.len() > transaction_limit as usize {
                 return Err(ConsensusError::InvalidTransactionVotes(format!(
                     "vote target {} has {} reject indices but the limit is {}",
@@ -869,6 +874,58 @@ mod test {
         assert!(matches!(
             verify(3),
             Err(ConsensusError::TooManyTransactions { count: 3, limit: 2 })
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_v3_transaction_vote_target_limit() {
+        let (mut context, keypairs) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        context.protocol_config.set_gc_depth_for_testing(2);
+        let vote_target_limit = max_transaction_vote_targets(&context);
+        assert_eq!(vote_target_limit, 8);
+        let context = Arc::new(context);
+        const AUTHOR: u32 = 2;
+        let verifier = SignedBlockVerifier::new(context, Arc::new(TxnSizeVerifier {}));
+        let test_block = TestBlock::new(10, AUTHOR).set_ancestors_raw(vec![
+            BlockRef::new(9, AuthorityIndex::new_for_test(2), BlockDigest::MIN),
+            BlockRef::new(9, AuthorityIndex::new_for_test(0), BlockDigest::MIN),
+            BlockRef::new(9, AuthorityIndex::new_for_test(1), BlockDigest::MIN),
+        ]);
+        // Rounds 8 and 9 hold one target per authority, which is exactly the limit.
+        let mut transaction_votes = (8..=9)
+            .flat_map(|round| {
+                (0..4).map(move |author| BlockTransactionVotes {
+                    block_ref: BlockRef::new(
+                        round,
+                        AuthorityIndex::new_for_test(author),
+                        BlockDigest::MIN,
+                    ),
+                    rejects: vec![0],
+                })
+            })
+            .collect::<Vec<_>>();
+        let verify = |transaction_votes: Vec<BlockTransactionVotes>| {
+            let block = test_block
+                .clone()
+                .set_transaction_votes(transaction_votes)
+                .build_v3(7);
+            let signed_block = SignedBlock::new(block, &keypairs[AUTHOR as usize].1).unwrap();
+            verifier.verify_block(&signed_block)
+        };
+
+        assert_eq!(transaction_votes.len(), vote_target_limit);
+        verify(transaction_votes.clone()).unwrap();
+
+        // An equivocating block in round 9 adds the target above the limit.
+        transaction_votes.push(BlockTransactionVotes {
+            block_ref: BlockRef::new(9, AuthorityIndex::new_for_test(0), BlockDigest::MAX),
+            rejects: vec![0],
+        });
+        assert!(matches!(
+            verify(transaction_votes),
+            Err(ConsensusError::InvalidTransactionVotes(message))
+                if message.contains("has 9 vote targets but the limit is 8")
         ));
     }
 

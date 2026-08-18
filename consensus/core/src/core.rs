@@ -1385,7 +1385,7 @@ mod test {
     use super::*;
     use crate::{
         CommitConsumerArgs, CommitIndex,
-        block::{TestBlock, genesis_blocks},
+        block::{TestBlock, genesis_blocks, max_transaction_vote_targets},
         block_verifier::NoopBlockVerifier,
         commit::CommitAPI,
         leader_schedule::LeaderSwapTable,
@@ -1777,6 +1777,76 @@ mod test {
         let proposed = fixture.core.last_proposed_block();
         assert!(proposed.round() > first_proposal.block.round());
         assert_eq!(proposed.transaction_votes_cutoff_round(), gc_round);
+    }
+
+    // Adds 3 rounds of peer blocks. The local authority rejects transaction 0 in each block.
+    // Then proposes a block.
+    // Returns the fixture, the proposed block and the peer blocks.
+    async fn propose_after_peer_blocks_with_reject_votes(
+        context: Context,
+    ) -> (CoreTestFixture, VerifiedBlock, Vec<VerifiedBlock>) {
+        let mut fixture = CoreTestFixture::new(
+            context,
+            vec![1, 1, 1, 1],
+            AuthorityIndex::new_for_test(0),
+            false,
+        )
+        .await;
+        let mut builder = DagBuilder::new(fixture.core.context.clone());
+        builder
+            .layers(1..=3)
+            .authorities(vec![fixture.core.context.own_index])
+            .skip_block()
+            .build();
+        let blocks = builder.blocks.values().cloned().collect::<Vec<_>>();
+        fixture
+            .transaction_vote_tracker
+            .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![0])).collect());
+        assert!(fixture.core.add_blocks(blocks.clone()).unwrap().is_empty());
+
+        fixture.core.try_propose(true).unwrap();
+        let proposed = fixture.core.last_proposed_block();
+        (fixture, proposed, blocks)
+    }
+
+    #[tokio::test]
+    async fn test_core_v2_proposal_keeps_all_transaction_vote_targets() {
+        telemetry_subscribers::init_for_testing();
+        let (mut context, _) = Context::new_for_test(4);
+        context.protocol_config.set_gc_depth_for_testing(1);
+        let vote_target_limit = max_transaction_vote_targets(&context);
+
+        let (_fixture, proposed, blocks) =
+            propose_after_peer_blocks_with_reject_votes(context).await;
+
+        // V2 blocks have no signed cutoff round, so the V3 limit must not remove their targets.
+        assert!(blocks.len() > vote_target_limit);
+        assert_eq!(proposed.transaction_votes().len(), blocks.len());
+    }
+
+    #[tokio::test]
+    async fn test_core_v3_proposal_limits_transaction_vote_targets() {
+        telemetry_subscribers::init_for_testing();
+        let (mut context, _) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        context.protocol_config.set_gc_depth_for_testing(1);
+        let vote_target_limit = max_transaction_vote_targets(&context);
+
+        let (fixture, proposed, blocks) =
+            propose_after_peer_blocks_with_reject_votes(context).await;
+
+        assert!(blocks.len() > vote_target_limit);
+        assert!(!proposed.transaction_votes().is_empty());
+        assert!(proposed.transaction_votes().len() <= vote_target_limit);
+        // The signed cutoff moves above the GC round and covers every removed target. Only the
+        // targets above the cutoff stay in the block.
+        let cutoff_round = proposed.transaction_votes_cutoff_round();
+        assert!(cutoff_round > fixture.dag_state.read().gc_round());
+        let expected_targets = blocks
+            .iter()
+            .filter(|block| block.round() > cutoff_round)
+            .count();
+        assert_eq!(proposed.transaction_votes().len(), expected_targets);
     }
 
     #[tokio::test]
