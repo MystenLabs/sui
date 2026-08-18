@@ -992,6 +992,50 @@ async fn test_list_transactions_unfiltered_and_sender_filter() {
     );
 }
 
+/// Preservation pin for the symbolic-resume flip: a crossed-adjacent
+/// window (after = item n, before = item n + 1) serves nothing and ends
+/// with a CursorBound frame from the ascending stop side (the before
+/// cursor). The flip changes the frame's producer — resolution-time
+/// collapse today, the admission-time terminal stamp drained through a
+/// zero-row scan after — and this expectation must hold across both.
+#[sim_test]
+async fn test_list_transactions_crossed_adjacent_terminal_is_stable() {
+    let cluster = new_cluster().await;
+    let sender = cluster.get_address_0();
+    let tx = transfer_self(&cluster, sender).await;
+    let (start, end) = checkpoint_range(&[&tx]);
+
+    let mut client = new_ledger_client(&cluster).await;
+
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.options = Some(query_options(100));
+    let baseline = list_transactions_result(&mut client, req).await;
+    assert!(baseline.end);
+    assert!(
+        baseline.transactions.len() >= 2,
+        "need at least two transactions for adjacency windows"
+    );
+    let first_cursor = first_transaction_cursor(&baseline, "first item cursor");
+    let second_cursor = baseline.transactions[1]
+        .watermark
+        .as_ref()
+        .and_then(|w| w.cursor.clone())
+        .expect("second item cursor");
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.options = Some(query_options_between(3, first_cursor, second_cursor));
+    let resp = list_transactions_result(&mut client, req).await;
+    assert!(resp.transactions.is_empty());
+    assert!(resp.end);
+    assert_eq!(resp.end_reason, Some(QueryEndReason::CursorBound));
+    assert!(resp.end_cursor.is_some());
+}
+
 #[sim_test]
 async fn test_list_transactions_rich_mask_matches_get_transaction() {
     let cluster = new_cluster().await;
