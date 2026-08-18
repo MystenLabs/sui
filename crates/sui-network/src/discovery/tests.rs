@@ -2106,20 +2106,35 @@ async fn test_discovery_address_overrides_chain_for_chain_peer() -> Result<()> {
     Ok(())
 }
 
+/// Reads a gauge from the registry: the series matching `label` when given,
+/// otherwise the family's first series.
+fn find_gauge(
+    registry: &prometheus::Registry,
+    name: &str,
+    label: Option<(&str, &str)>,
+) -> Option<i64> {
+    let families = registry.gather();
+    let family = families.iter().find(|f| f.name() == name)?;
+    family.get_metric().iter().find_map(|m| {
+        label
+            .is_none_or(|(k, v)| {
+                m.get_label()
+                    .iter()
+                    .any(|l| l.name() == k && l.value() == v)
+            })
+            .then(|| m.gauge.value() as i64)
+    })
+}
+
 /// Reads the value of the single-series `discovery_active_p2p_address_source` gauge
 /// for a given `peer_id`, or `None` if that series is absent. The value is the
 /// active source's `metric_code` (0 = no address installed).
 fn active_p2p_source_code(registry: &prometheus::Registry, peer_id: &str) -> Option<i64> {
-    let families = registry.gather();
-    let family = families
-        .iter()
-        .find(|f| f.name() == "discovery_active_p2p_address_source")?;
-    family.get_metric().iter().find_map(|m| {
-        m.get_label()
-            .iter()
-            .any(|l| l.name() == "peer_id" && l.value() == peer_id)
-            .then(|| m.gauge.value() as i64)
-    })
+    find_gauge(
+        registry,
+        "discovery_active_p2p_address_source",
+        Some(("peer_id", peer_id)),
+    )
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -2511,5 +2526,374 @@ async fn allowlisted_peer_eligible_for_dialing_via_gossip() -> Result<()> {
         "allowlisted peer with gossipped addresses should be eligible for dialing"
     );
 
+    Ok(())
+}
+
+/// Runs one gossip batch through `update_known_peers_versioned` with the
+/// event loop's own state, configured peers, chain peers, and endpoint manager.
+fn merge_gossip(event_loop: &DiscoveryEventLoop, peers: Vec<SignedVersionedNodeInfo>) {
+    update_known_peers_versioned(
+        event_loop.state.clone(),
+        peers,
+        event_loop.configured_peers.clone(),
+        &event_loop.chain_peers,
+        &event_loop.endpoint_manager,
+    );
+}
+
+fn signed_v2_p2p_info(
+    keypair: &NetworkKeyPair,
+    timestamp_ms: u64,
+    address: Multiaddr,
+) -> (PeerId, SignedVersionedNodeInfo) {
+    use fastcrypto::traits::KeyPair as _;
+
+    let peer_id = PeerId(*keypair.public().0.as_bytes());
+    let mut addresses = BTreeMap::new();
+    addresses.insert(EndpointId::P2p(peer_id), vec![address]);
+    let info = VersionedNodeInfo::V2(NodeInfoV2 {
+        addresses,
+        timestamp_ms,
+        access_type: AccessType::Public,
+    })
+    .sign(keypair);
+    (peer_id, info)
+}
+
+#[tokio::test]
+async fn versioned_gossip_forwards_only_accepted_address_changes() -> Result<()> {
+    use fastcrypto::traits::KeyPair as _;
+
+    let (builder, server, _endpoint_manager) = Builder::new().config(P2pConfig::default()).build();
+    let (network, keypair) = build_network_and_key(|router| router.add_rpc_service(server));
+    let (mut event_loop, _handle) = builder.build(network.clone(), keypair);
+
+    let remote_keypair = NetworkKeyPair::generate(&mut rand::thread_rng());
+    let timestamp = now_unix();
+    let address_a: Multiaddr = "/ip4/10.0.0.1/udp/9000".parse().unwrap();
+    let address_b: Multiaddr = "/ip4/10.0.0.2/udp/9000".parse().unwrap();
+    let (peer_id, first) = signed_v2_p2p_info(&remote_keypair, timestamp, address_a.clone());
+    event_loop.chain_peers.write().unwrap().insert(peer_id);
+
+    merge_gossip(&event_loop, vec![first.clone()]);
+    merge_gossip(&event_loop, vec![first]);
+    assert_eq!(event_loop.mailbox.len(), 1);
+
+    let (_, newer_same) = signed_v2_p2p_info(&remote_keypair, timestamp + 2, address_a.clone());
+    merge_gossip(&event_loop, vec![newer_same]);
+    assert_eq!(event_loop.mailbox.len(), 1);
+    assert_eq!(
+        event_loop
+            .state
+            .read()
+            .unwrap()
+            .known_peers_v2
+            .get(&peer_id)
+            .unwrap()
+            .timestamp_ms(),
+        timestamp + 2
+    );
+
+    let (_, older_different) = signed_v2_p2p_info(&remote_keypair, timestamp + 1, address_b);
+    merge_gossip(&event_loop, vec![older_different]);
+    assert_eq!(event_loop.mailbox.len(), 1);
+    assert_eq!(
+        event_loop
+            .state
+            .read()
+            .unwrap()
+            .known_peers_v2
+            .get(&peer_id)
+            .unwrap()
+            .p2p_addresses(),
+        std::slice::from_ref(&address_a)
+    );
+
+    while let Ok(message) = event_loop.mailbox.try_recv() {
+        event_loop.handle_message(message);
+    }
+    assert_eq!(
+        network.known_peers().get(&peer_id).unwrap().address,
+        vec![address_a.to_anemo_address().unwrap()]
+    );
+
+    let transitioning_keypair = NetworkKeyPair::generate(&mut rand::thread_rng());
+    let transition_address: Multiaddr = "/ip4/10.0.0.3/udp/9000".parse().unwrap();
+    let (transitioning_peer, untrusted) = signed_v2_p2p_info(
+        &transitioning_keypair,
+        timestamp,
+        transition_address.clone(),
+    );
+    merge_gossip(&event_loop, vec![untrusted.clone()]);
+    event_loop
+        .chain_peers
+        .write()
+        .unwrap()
+        .insert(transitioning_peer);
+    merge_gossip(&event_loop, vec![untrusted]);
+    assert_eq!(event_loop.mailbox.len(), 0);
+
+    let (_, trusted_fresher) =
+        signed_v2_p2p_info(&transitioning_keypair, timestamp + 1, transition_address);
+    merge_gossip(&event_loop, vec![trusted_fresher]);
+    assert_eq!(event_loop.mailbox.len(), 1);
+    Ok(())
+}
+
+#[tokio::test]
+async fn versioned_merge_forwards_consensus_endpoint() -> Result<()> {
+    use fastcrypto::traits::KeyPair as _;
+
+    let (
+        UnstartedDiscovery {
+            state, chain_peers, ..
+        },
+        _server,
+        endpoint_manager,
+    ) = Builder::new().config(P2pConfig::default()).build_internal();
+    let remote_keypair = NetworkKeyPair::generate(&mut rand::thread_rng());
+    let peer_id = PeerId(*remote_keypair.public().0.as_bytes());
+    chain_peers.write().unwrap().insert(peer_id);
+
+    let updater = Arc::new(RecordingUpdater(std::sync::Mutex::new(Vec::new())));
+    endpoint_manager.set_consensus_address_updater(updater.clone());
+
+    let network_pubkey = NetworkPublicKey::from_bytes(&peer_id.0).unwrap();
+    let consensus_addr: Multiaddr = "/ip4/10.0.0.1/udp/10001".parse().unwrap();
+    let mut addresses = BTreeMap::new();
+    addresses.insert(EndpointId::P2p(peer_id), vec![]);
+    addresses.insert(
+        EndpointId::Consensus(network_pubkey.clone()),
+        vec![consensus_addr.clone()],
+    );
+    let peer_info = VersionedNodeInfo::V2(NodeInfoV2 {
+        addresses,
+        timestamp_ms: now_unix(),
+        access_type: AccessType::Public,
+    })
+    .sign(&remote_keypair);
+
+    update_known_peers_versioned(
+        state,
+        vec![peer_info],
+        Arc::new(HashMap::new()),
+        &chain_peers,
+        &endpoint_manager,
+    );
+
+    let recorded = updater.0.lock().unwrap();
+    assert_eq!(recorded.len(), 1);
+    assert_eq!(recorded[0].0, network_pubkey);
+    assert_eq!(recorded[0].1, AddressSource::Discovery);
+    assert_eq!(recorded[0].2, vec![consensus_addr]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn repeated_identical_gossip_is_bounded_to_one_mailbox_batch() -> Result<()> {
+    use fastcrypto::traits::KeyPair as _;
+
+    const PEERS: usize = 8;
+    const ROUNDS: usize = 20;
+
+    let (builder, server, _endpoint_manager) = Builder::new().config(P2pConfig::default()).build();
+    let (network, keypair) = build_network_and_key(|router| router.add_rpc_service(server));
+    let (event_loop, _handle) = builder.build(network, keypair);
+    let timestamp = now_unix();
+    let mut batch = Vec::new();
+    for index in 0..PEERS {
+        let remote_keypair = NetworkKeyPair::generate(&mut rand::thread_rng());
+        let address = format!("/ip4/10.0.0.1/udp/{}", 11_000 + index)
+            .parse()
+            .unwrap();
+        let (peer_id, info) = signed_v2_p2p_info(&remote_keypair, timestamp, address);
+        event_loop.chain_peers.write().unwrap().insert(peer_id);
+        batch.push(info);
+    }
+
+    for _ in 0..ROUNDS {
+        merge_gossip(&event_loop, batch.clone());
+    }
+    assert_eq!(event_loop.mailbox.len(), PEERS);
+    Ok(())
+}
+
+#[tokio::test]
+async fn stored_peer_saves_are_tick_debounced_and_fingerprinted() -> Result<()> {
+    use fastcrypto::traits::KeyPair as _;
+
+    let directory = tempfile::tempdir().unwrap();
+    let store_path = directory.path().join("peer_cache.yaml");
+    let config = P2pConfig {
+        discovery: Some(DiscoveryConfig {
+            peer_addr_store_path: Some(store_path.clone()),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let (builder, server, _endpoint_manager) = Builder::new().config(config).build();
+    let (network, keypair) = build_network_and_key(|router| router.add_rpc_service(server));
+    let (mut event_loop, _handle) = builder.build(network, keypair);
+    let remote_keypair = NetworkKeyPair::generate(&mut rand::thread_rng());
+    let timestamp = now_unix();
+    let address: Multiaddr = "/ip4/10.0.0.1/udp/12000".parse().unwrap();
+    let (peer_id, info) = signed_v2_p2p_info(&remote_keypair, timestamp, address.clone());
+    event_loop.chain_peers.write().unwrap().insert(peer_id);
+
+    event_loop.handle_message(DiscoveryMessage::ReceivedNodeInfo {
+        peer_info: Box::new(info),
+    });
+    assert!(!store_path.exists());
+
+    event_loop.handle_tick(std::time::Instant::now(), timestamp);
+    event_loop.save_peers_task.take().unwrap().await.unwrap();
+    assert_eq!(load_stored_peers(&store_path).len(), 1);
+    event_loop.maybe_save_stored_peers();
+    assert!(event_loop.save_peers_task.is_none());
+
+    let (_, newer) = signed_v2_p2p_info(&remote_keypair, timestamp + 1, address);
+    event_loop.handle_message(DiscoveryMessage::ReceivedNodeInfo {
+        peer_info: Box::new(newer),
+    });
+    assert!(event_loop.save_peers_task.is_none());
+    event_loop.maybe_save_stored_peers();
+    assert!(event_loop.save_peers_task.is_some());
+    event_loop.save_peers_task.take().unwrap().await.unwrap();
+
+    // The fingerprint must not depend on HashMap iteration order: re-inserting
+    // the same entry may reslot it, but the snapshot sorts before hashing.
+    let first_fingerprint = event_loop.stored_peers_snapshot().0;
+    {
+        let known_peers_v2 = &mut event_loop.state.write().unwrap().known_peers_v2;
+        let peer = known_peers_v2.remove(&peer_id).unwrap();
+        known_peers_v2.insert(peer_id, peer);
+    }
+    assert_eq!(event_loop.stored_peers_snapshot().0, first_fingerprint);
+    Ok(())
+}
+
+#[tokio::test]
+async fn stored_peer_save_defers_while_a_save_is_in_flight() -> Result<()> {
+    let directory = tempfile::tempdir().unwrap();
+    let config = P2pConfig {
+        discovery: Some(DiscoveryConfig {
+            peer_addr_store_path: Some(directory.path().join("peer_cache.yaml")),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let (builder, server, _endpoint_manager) = Builder::new().config(config).build();
+    let (network, keypair) = build_network_and_key(|router| router.add_rpc_service(server));
+    let (mut event_loop, _handle) = builder.build(network, keypair);
+    let (release_tx, release_rx) = oneshot::channel();
+    event_loop.last_saved_peers_fingerprint = Some(7);
+    event_loop.save_peers_task = Some(tokio::spawn(async move {
+        let _ = release_rx.await;
+    }));
+
+    event_loop.maybe_save_stored_peers();
+    assert_eq!(event_loop.last_saved_peers_fingerprint, Some(7));
+    release_tx.send(()).unwrap();
+    event_loop.save_peers_task.take().unwrap().await.unwrap();
+    Ok(())
+}
+
+#[tokio::test]
+async fn stored_peer_fingerprint_covers_trust_transitions_and_culls() -> Result<()> {
+    use fastcrypto::traits::KeyPair as _;
+
+    let (builder, server, _endpoint_manager) = Builder::new().config(P2pConfig::default()).build();
+    let (network, keypair) = build_network_and_key(|router| router.add_rpc_service(server));
+    let (mut event_loop, _handle) = builder.build(network, keypair);
+    let remote_keypair = NetworkKeyPair::generate(&mut rand::thread_rng());
+    let timestamp = now_unix();
+    let address: Multiaddr = "/ip4/10.0.0.1/udp/12500".parse().unwrap();
+    let (peer_id, info) = signed_v2_p2p_info(&remote_keypair, timestamp, address);
+
+    merge_gossip(&event_loop, vec![info]);
+    let (untrusted_fingerprint, untrusted_snapshot) = event_loop.stored_peers_snapshot();
+    assert!(untrusted_snapshot.is_empty());
+
+    event_loop.chain_peers.write().unwrap().insert(peer_id);
+    let (trusted_fingerprint, trusted_snapshot) = event_loop.stored_peers_snapshot();
+    assert_eq!(trusted_snapshot.len(), 1);
+    assert_ne!(trusted_fingerprint, untrusted_fingerprint);
+
+    event_loop.handle_tick(
+        std::time::Instant::now(),
+        timestamp + ONE_DAY_MILLISECONDS + 1,
+    );
+    let (culled_fingerprint, culled_snapshot) = event_loop.stored_peers_snapshot();
+    assert!(culled_snapshot.is_empty());
+    assert_eq!(culled_fingerprint, untrusted_fingerprint);
+    Ok(())
+}
+
+#[tokio::test]
+async fn stored_peer_save_handles_no_path_and_consumes_finished_tasks() -> Result<()> {
+    let (builder, server, _endpoint_manager) = Builder::new().config(P2pConfig::default()).build();
+    let (network, keypair) = build_network_and_key(|router| router.add_rpc_service(server));
+    let (mut event_loop, _handle) = builder.build(network, keypair);
+    event_loop.save_peers_task = Some(tokio::spawn(async {}));
+    tokio::task::yield_now().await;
+    event_loop.maybe_save_stored_peers();
+    assert!(event_loop.save_peers_task.is_none());
+    Ok(())
+}
+
+fn gauge_value(registry: &prometheus::Registry, name: &str) -> Option<i64> {
+    find_gauge(registry, name, None)
+}
+
+#[tokio::test]
+async fn mailbox_metrics_track_capacity_depth_and_sampled_high_water() -> Result<()> {
+    let registry = prometheus::Registry::new();
+    let config = P2pConfig {
+        discovery: Some(DiscoveryConfig {
+            mailbox_capacity: Some(8),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let (builder, server, endpoint_manager) = Builder::new()
+        .config(config)
+        .with_metrics(&registry)
+        .build();
+    let (network, keypair) = build_network_and_key(|router| router.add_rpc_service(server));
+    let (mut event_loop, _handle) = builder.build(network, keypair);
+    let address: Multiaddr = "/ip4/127.0.0.1/udp/13000".parse().unwrap();
+
+    for peer_id in [PeerId([1; 32]), PeerId([2; 32])] {
+        endpoint_manager
+            .update_endpoint(
+                EndpointId::P2p(peer_id),
+                AddressSource::Admin,
+                vec![address.clone()],
+            )
+            .unwrap();
+    }
+    event_loop.handle_tick(std::time::Instant::now(), now_unix());
+    assert_eq!(
+        gauge_value(&registry, "discovery_mailbox_capacity"),
+        Some(8)
+    );
+    assert_eq!(gauge_value(&registry, "discovery_mailbox_depth"), Some(2));
+    assert_eq!(
+        gauge_value(&registry, "discovery_mailbox_high_water"),
+        Some(2)
+    );
+
+    // Mirror the event loop's drain arm: recv, handle, then one sample.
+    let message = event_loop.mailbox.try_recv().unwrap();
+    event_loop.handle_message(message);
+    event_loop
+        .metrics
+        .observe_mailbox_depth(event_loop.mailbox.len() as u64);
+    event_loop.handle_tick(std::time::Instant::now(), now_unix());
+    assert_eq!(gauge_value(&registry, "discovery_mailbox_depth"), Some(1));
+    assert_eq!(
+        gauge_value(&registry, "discovery_mailbox_high_water"),
+        Some(1)
+    );
     Ok(())
 }
