@@ -140,7 +140,7 @@ The owner redeems a position with `predict::redeem`.
 
 ### Permissionless redemption
 
-`predict::redeem_permissionless` lets a third party close out a settled position for its owner. 3 properties define it:
+`predict::redeem_permissionless` lets a third party close out a settled position for its owner. These 3 properties define it:
 
 - **Any address can call it.** The function routes through the package-internal `deposit_permissionless`, which skips the owner check that `predict_manager::deposit` and `withdraw` enforce ([PredictManager: deposit and withdraw](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager#deposit-and-withdraw)). The caller needs no capability, no relationship to the owner, and no signature from them.
 - **It becomes available at settlement, not at expiry.** The position must be settled. An oracle reaches settled only when the first post-expiry price update freezes the settlement price, and it sits in pending settlement until then ([Oracle lifecycle](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle#lifecycle)). Calling earlier fails.
@@ -165,7 +165,7 @@ Positions are rows in the manager's `positions` table keyed by `MarketKey`, not 
 
 Use the same simulation helper described in [Check the limiter before you withdraw](#check-the-limiter-before-you-withdraw), which returns the raw bytes for every command in one call. `PredictManager` is a shared object, so unlike the vault accessors this read is reachable from a simulated transaction.
 
-2 properties of `position()` shape the loop. It returns `0` for a key that was never opened and for one already redeemed, so treat zero as nothing to do rather than as an error. And it requires the exact key up front, which is why the event index in step 1 is not optional.
+`position()` has 2 properties that shape the loop. It returns `0` for a key that was never opened and for one already redeemed, so treat zero as nothing to do rather than as an error. And it requires the exact key up front, which is why the event index in step 1 is not optional.
 
 If you would rather not maintain that index, two alternatives enumerate positions directly: list the dynamic fields of the `positions` table using the table's `id`, where each field key is a BCS-serialized `MarketKey`, or read the [indexed portfolio endpoints](/onchain-finance/deepbook/deepbook-predict/contract-information#manager-and-portfolio-data) from the Predict server. The server path is simpler, at the cost of depending on the indexer being current.
 
@@ -218,7 +218,7 @@ The `json` representation of object contents is not guaranteed stable across API
 
 `total_mtm` is the mark-to-market liability of every open position, and vault value subtracts it. While oracles remain unsettled, that number moves with trader positions and oracle prices, so your share value moves with it even though you placed no trade. The vault is the counterparty to every trade, so liquidity providers hold the other side of trader profit and loss.
 
-2 consequences are worth planning around:
+Plan around 2 consequences:
 
 - **Mark-to-market is an estimate until settlement.** `total_mtm` reflects current oracle state. It resolves to a realized outcome only when each oracle settles, so a share price you read mid-life is provisional. Do not treat it as a guaranteed outcome.
 - **Worst-case liability locks capital, and settlement releases it.** `total_max_payout` reserves what the vault owes if every oracle settles at its worst strike. Because binary payouts jump at settlement, that reserve can far exceed current mark, and it caps withdrawals through [`available`](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#max-payout). Settlement compaction replaces the worst-case estimate with exact settled liability, which is what frees the reserved capital.

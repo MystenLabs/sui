@@ -150,7 +150,7 @@ Treat these as starting points and calibrate them. Measure the rate you actually
 
 The service sets no caching headers. No handler adds `Cache-Control`, `ETag`, or `Last-Modified`. It also carries no application-level rate limiting, so it returns no `429` and no `Retry-After` of its own.
 
-Three consequences follow:
+That produces 3 consequences:
 
 - **Conditional requests buy you nothing.** Sending `If-None-Match` or `If-Modified-Since` never produces a `304`, because the service issues no validators to send back. Do not build a polling loop that depends on cheap revalidation.
 - **Your interval is the only throttle.** Nothing server-side slows you down or tells you to back off, so pace requests yourself against the rates in the preceding table.
@@ -231,7 +231,7 @@ For a worked implementation of the same structure against checkpoints, see the [
 
 The filter is disjunctive normal form: terms are ORed and the literals within a term are ANDed. One term per fully qualified event type matches either type and scopes the match to this deployment's package. To watch a single event type, pass one term. To narrow further, add literals to the same term, for example an `emitModule` predicate alongside the type.
 
-2 details matter in production and are easy to miss:
+These 2 details matter in production and are easy to miss:
 
 - **Skip the opening frame's empty event, but keep its cursor.** A filtered subscription opens with a progress-only frame that carries a watermark and no event.
 - **Reset the backoff counter on a delivered event, not on connection.** A stream that connects and immediately drops is still failing, and resetting on connect turns exponential backoff into a tight reconnect loop.
