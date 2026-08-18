@@ -1184,6 +1184,12 @@ pub fn url_layout() -> A::MoveStructLayout {
     }
 }
 
+/// Mirror of `std::type_name::TypeName`.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct MoveTypeName {
+    pub name: String,
+}
+
 pub fn type_name_layout() -> A::MoveStructLayout {
     A::MoveStructLayout {
         type_: StructTag {
