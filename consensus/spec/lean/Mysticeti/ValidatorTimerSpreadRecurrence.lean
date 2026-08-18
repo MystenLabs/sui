@@ -3,8 +3,9 @@ Copyright (c) Mysten Labs, Inc.
 SPDX-License-Identifier: Apache-2.0
 -/
 
-import Mysticeti.ValidatorCausalCatchupRate
+import Mysticeti.ValidatorAdjacentRecoveryPropagation
 import Mysticeti.ValidatorFlexPendingRefresh
+import Mysticeti.ValidatorOperationalFrontierCollectiveSuccessor
 
 namespace Mysticeti
 

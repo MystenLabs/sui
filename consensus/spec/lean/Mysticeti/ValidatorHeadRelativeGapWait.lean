@@ -4,6 +4,7 @@ SPDX-License-Identifier: Apache-2.0
 -/
 
 import Mysticeti.ValidatorGapWaitSchedule
+import Mysticeti.ValidatorRecoveryTimerDerivation
 
 namespace Mysticeti
 
@@ -331,105 +332,6 @@ theorem wait_adjacent_eventually_dominates_two_linear_costs
   simpa [fixed, atReference, wait,
     ValidatorQuadraticGapWaitParameters.wait,
     ValidatorQuadraticGapWaitParameters.gap] using result
-
-/-- The concrete head-relative quadratic wait supplies the same-head causal
-catch-up rate rule. -/
-theorem dominates_causal_catchup
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
-    {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
-      protocolPacket network program}
-    {syncRules : ValidatorBlockSyncExecutionRules timed}
-    (rate : ValidatorCausalCapsuleCatchupRateRules syncRules)
-    (parameters : ValidatorHeadRelativeQuadraticWaitParameters)
-    (slopeCondition :
-      rate.envelope.newWorkPerRound *
-          validatorBlockSyncAcceptanceBound timed syncRules <
-        2 * parameters.quadraticCoefficient) :
-    ValidatorCausalCatchupRateDominatesWait rate
-      parameters.schedule.commonSchedule := by
-  constructor
-  intro commitHead fixedPipelineCost
-  let costPerWorkUnit :=
-    validatorBlockSyncAcceptanceBound timed syncRules
-  let catchupSlope := rate.envelope.newWorkPerRound * costPerWorkUnit
-  let catchupStart :=
-    rate.envelope.catchupCost costPerWorkUnit rate.envelope.startRound
-  let costBase := fixedPipelineCost + catchupStart +
-    commitHead.round * catchupSlope
-  have concreteSlope : catchupSlope + 0 <
-      2 * parameters.quadraticCoefficient := by
-    simpa [catchupSlope, costPerWorkUnit] using slopeCondition
-  rcases parameters.wait_adjacent_eventually_dominates_two_linear_costs
-      commitHead costBase catchupSlope 0 0 concreteSlope with
-    ⟨waitStart, headBeforeWaitStart, margin⟩
-  let firstRound := max waitStart rate.envelope.startRound
-  refine ⟨firstRound, Nat.le_max_right _ _, ?_⟩
-  intro round firstBeforeRound
-  have waitStartBeforeRound : waitStart ≤ round :=
-    Nat.le_trans (Nat.le_max_left _ _) firstBeforeRound
-  have envelopeBeforeRound : rate.envelope.startRound ≤ round :=
-    Nat.le_trans (Nat.le_max_right _ _) firstBeforeRound
-  have headBeforeRound : commitHead.round ≤ round :=
-    Nat.le_trans headBeforeWaitStart waitStartBeforeRound
-  have catchupBound :=
-    rate.envelope.catchup_cost_linear_bound costPerWorkUnit
-      envelopeBeforeRound
-  have subBound : round - rate.envelope.startRound ≤ round :=
-    Nat.sub_le _ _
-  have scaledSubBound :
-      (round - rate.envelope.startRound) * catchupSlope ≤
-        round * catchupSlope :=
-    Nat.mul_le_mul_right catchupSlope subBound
-  have roundSplit :
-      round * catchupSlope =
-        commitHead.round * catchupSlope +
-          (round - commitHead.round) * catchupSlope := by
-    calc
-      round * catchupSlope =
-          (commitHead.round + (round - commitHead.round)) *
-            catchupSlope := by
-        rw [Nat.add_sub_of_le headBeforeRound]
-      _ = commitHead.round * catchupSlope +
-          (round - commitHead.round) * catchupSlope := by
-        rw [Nat.add_mul]
-  have totalCostBound :
-      fixedPipelineCost +
-          rate.envelope.catchupCost costPerWorkUnit round ≤
-        costBase + catchupSlope * (round - commitHead.round) := by
-    calc
-      fixedPipelineCost +
-          rate.envelope.catchupCost costPerWorkUnit round ≤
-          fixedPipelineCost +
-            (catchupStart +
-              (round - rate.envelope.startRound) * catchupSlope) :=
-        Nat.add_le_add_left (by
-          simpa [catchupStart, catchupSlope] using catchupBound) _
-      _ ≤ fixedPipelineCost + (catchupStart + round * catchupSlope) :=
-        Nat.add_le_add_left
-          (Nat.add_le_add_left scaledSubBound catchupStart) _
-      _ = costBase + catchupSlope * (round - commitHead.round) := by
-        rw [roundSplit]
-        simp [costBase, Nat.mul_comm, Nat.add_assoc]
-  have adjacent := margin round waitStartBeforeRound
-  change parameters.wait commitHead round +
-      (fixedPipelineCost +
-        rate.envelope.catchupCost costPerWorkUnit round) ≤
-    parameters.wait commitHead (round + 1)
-  calc
-    parameters.wait commitHead round +
-        (fixedPipelineCost +
-          rate.envelope.catchupCost costPerWorkUnit round) ≤
-        parameters.wait commitHead round +
-          (costBase + catchupSlope * (round - commitHead.round)) :=
-      Nat.add_le_add_left totalCostBound _
-    _ ≤ parameters.wait commitHead (round + 1) := by
-      simpa [Nat.add_assoc] using adjacent
 
 end ValidatorHeadRelativeQuadraticWaitParameters
 

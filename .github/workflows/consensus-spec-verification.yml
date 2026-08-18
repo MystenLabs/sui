@@ -1,4 +1,4 @@
-name: Consensus design verification
+name: Consensus spec verification
 
 on:
   pull_request:

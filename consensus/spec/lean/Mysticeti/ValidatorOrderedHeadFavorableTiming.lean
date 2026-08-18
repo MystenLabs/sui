@@ -4,6 +4,7 @@ SPDX-License-Identifier: Apache-2.0
 -/
 
 import Mysticeti.CommonCommitInduction
+import Mysticeti.ExactCommitPrefixSafety
 import Mysticeti.ValidatorFlexPendingRefresh
 import Mysticeti.ValidatorHeadRelativeGapWait
 
