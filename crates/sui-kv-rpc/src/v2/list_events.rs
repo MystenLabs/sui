@@ -33,7 +33,7 @@ use sui_rpc_api::ledger_history::query_options::IntraTxScanBounds;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
-use sui_rpc_api::ledger_history::query_options::ResolvedIntraTxRange;
+use sui_rpc_api::ledger_history::query_options::ResolvedScan;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
@@ -812,11 +812,14 @@ async fn resolve_event_range(
     client: &BigTableClient,
     cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedIntraTxRange, RpcError> {
+) -> Result<ResolvedScan<IntraTxCoordinate>, RpcError> {
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
-    Ok(ResolvedIntraTxRange::resolve(cp_range, tx_range, options).apply_cursor_bounds(options))
+    Ok(
+        ResolvedScan::<IntraTxCoordinate>::resolve(cp_range, tx_range, options)
+            .apply_cursor_bounds(options),
+    )
 }
 
 #[cfg(test)]

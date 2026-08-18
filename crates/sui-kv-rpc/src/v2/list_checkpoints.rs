@@ -30,7 +30,7 @@ use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
-use sui_rpc_api::ledger_history::query_options::ResolvedRange;
+use sui_rpc_api::ledger_history::query_options::ResolvedScan;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
@@ -136,11 +136,11 @@ pub(crate) async fn list_checkpoints(
     let exhaustion = cp_range.exhaustion;
     let range_end_position = cp_range.end_position;
     let entry_checkpoint = if direction.is_ascending() {
-        cp_range.range.start
+        cp_range.range().start
     } else {
-        cp_range.range.end.saturating_sub(1)
+        cp_range.range().end.saturating_sub(1)
     };
-    let cp_range = cp_range.range;
+    let cp_range = cp_range.range();
 
     if cp_range.is_empty() {
         info!(
@@ -657,7 +657,10 @@ fn range_end_response(
 /// are additionally bounded at runtime by the per-request bitmap bucket
 /// budget; that limit surfaces as SCAN_LIMIT, not as an up-front cp-range
 /// clamp.
-fn resolve_cp_range(cp_range: ResolvedCheckpointRange, options: &QueryOptions) -> ResolvedRange {
+fn resolve_cp_range(
+    cp_range: ResolvedCheckpointRange,
+    options: &QueryOptions,
+) -> ResolvedScan<u64> {
     let range = cp_range.range.clone();
     cp_range
         .with_range(range, options.ordering)

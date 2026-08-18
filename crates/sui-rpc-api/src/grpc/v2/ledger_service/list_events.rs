@@ -31,7 +31,7 @@ use crate::ledger_history::filter::event_filter_to_query;
 use crate::ledger_history::query_options::IntraTxScanBounds;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::ResolvedCheckpointRange;
-use crate::ledger_history::query_options::ResolvedIntraTxRange;
+use crate::ledger_history::query_options::ResolvedScan;
 use crate::metrics::ListRequestMetrics;
 use crate::metrics::ListStreamMetrics;
 use crate::read_mask_defaults;
@@ -753,10 +753,10 @@ fn resolve_event_range(
     start_checkpoint: Option<u64>,
     cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedIntraTxRange, RpcError> {
+) -> Result<ResolvedScan<IntraTxCoordinate>, RpcError> {
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
-    let mut resolved =
-        ResolvedIntraTxRange::resolve(cp_range, tx_range, options).apply_cursor_bounds(options);
+    let mut resolved = ResolvedScan::<IntraTxCoordinate>::resolve(cp_range, tx_range, options)
+        .apply_cursor_bounds(options);
     if !resolved.is_empty() {
         let start_tx = match resolved.bounds.lo {
             Bound::Included(position) | Bound::Excluded(position) => position.tx_seq,
