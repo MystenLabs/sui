@@ -4,7 +4,7 @@
 use anyhow::Context as _;
 use async_graphql::Context;
 use async_graphql::InputObject;
-use async_graphql::SimpleObject;
+use async_graphql::Object;
 use async_graphql::connection::Connection;
 use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
@@ -18,7 +18,9 @@ use crate::api::scalars::big_int::BigInt;
 use crate::api::scalars::cursor;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::scalars::type_filter::TypeInput;
+use crate::api::types::coin_metadata::CoinMetadata;
 use crate::api::types::move_type::MoveType;
+use crate::api::types::object;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
 use crate::error::feature_unavailable;
@@ -26,21 +28,10 @@ use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::scope::Scope;
 
-/// The balance of a particular coin type held by an address.
-///
-/// Balances can be held in coin objects, in the address's balance accumulator, or both.
-#[derive(SimpleObject)]
 pub(crate) struct Balance {
-    /// Coin type for the balance, such as `0x2::sui::SUI`.
     pub(crate) coin_type: Option<MoveType>,
-
-    /// The sum of `coinBalance` and `addressBalance`.
     pub(crate) total_balance: Option<BigInt>,
-
-    /// The balance held in coin objects owned by the address.
     pub(crate) coin_balance: Option<BigInt>,
-
-    /// The balance held in the address's balance accumulator.
     pub(crate) address_balance: Option<BigInt>,
 }
 
@@ -72,6 +63,48 @@ pub(crate) enum Error {
 }
 
 pub(crate) type Cursor = cursor::BcsCursor<(u64, Vec<u8>)>;
+
+/// The balance of a particular coin type held by an address.
+///
+/// Balances can be held in coin objects, in the address's balance accumulator, or both.
+#[Object]
+impl Balance {
+    /// Coin type for the balance, such as `0x2::sui::SUI`.
+    async fn coin_type(&self) -> Option<&MoveType> {
+        self.coin_type.as_ref()
+    }
+
+    /// The sum of `coinBalance` and `addressBalance`.
+    async fn total_balance(&self) -> Option<&BigInt> {
+        self.total_balance.as_ref()
+    }
+
+    /// The balance held in coin objects owned by the address.
+    async fn coin_balance(&self) -> Option<&BigInt> {
+        self.coin_balance.as_ref()
+    }
+
+    /// The balance held in the address's balance accumulator.
+    async fn address_balance(&self) -> Option<&BigInt> {
+        self.address_balance.as_ref()
+    }
+
+    /// Fetch the CoinMetadata for this balance's coin type.
+    ///
+    /// Returns `null` if no CoinMetadata object exists for the coin type.
+    async fn coin_metadata(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Option<Result<CoinMetadata, RpcError<object::Error>>> {
+        let coin_type = self.coin_type.as_ref()?;
+        let scope = coin_type.scope.without_root_bound();
+        let coin_type = coin_type.to_type_tag()?;
+
+        CoinMetadata::by_coin_type(ctx, scope, coin_type)
+            .await
+            .transpose()
+    }
+}
 
 impl Balance {
     fn try_from_proto(proto: ProtoBalance, scope: Scope) -> Result<Self, RpcError<Error>> {
