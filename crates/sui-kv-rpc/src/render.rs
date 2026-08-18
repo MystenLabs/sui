@@ -135,6 +135,11 @@ pub(crate) fn render_full_checkpoint(
             format!("checkpoint {cp_seq} contents column missing"),
         )
     })?;
+    let include_balance_changes = read_mask
+        .subtree(Checkpoint::TRANSACTIONS_FIELD.name)
+        .is_some_and(|mask| mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name));
+    let mut transaction_balance_changes =
+        include_balance_changes.then(|| Vec::with_capacity(txs.len()));
 
     let executed_transactions = txs
         .into_iter()
@@ -151,6 +156,9 @@ pub(crate) fn render_full_checkpoint(
                     format!("transaction {} effects column missing", tx.digest),
                 )
             })?;
+            if let Some(transaction_balance_changes) = transaction_balance_changes.as_mut() {
+                transaction_balance_changes.push(tx.balance_changes);
+            }
             Ok::<_, RpcError>(FullExecutedTransaction {
                 transaction,
                 signatures: tx.signatures.unwrap_or_default(),
@@ -179,6 +187,15 @@ pub(crate) fn render_full_checkpoint(
 
     let mut message = Checkpoint::default();
     message.merge(&full_checkpoint, read_mask);
+    if let Some(transaction_balance_changes) = transaction_balance_changes {
+        for (transaction, balance_changes) in message
+            .transactions
+            .iter_mut()
+            .zip_debug_eq(transaction_balance_changes)
+        {
+            transaction.balance_changes = balance_changes.into_iter().map(Into::into).collect();
+        }
+    }
     Ok(message)
 }
 
