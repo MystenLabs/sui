@@ -130,7 +130,7 @@ $ curl https://predict-server.testnet.mystenlabs.com/predicts/0xc8736204d12f0a72
 
 ### Polling the server 
 
-The server exposes HTTP GET endpoints only. It provides no WebSocket channel and no server-sent events for oracle state changes, so every read from this API is a poll. When you need push-based updates rather than polling, subscribe to the onchain events instead, as [Live Sui events](#live-sui-events) describes. A common split is to drive live state from the event stream and use the server for historical pagination and render-ready aggregates.
+The server only exposes HTTP GET endpoints. It does not provide a WebSocket channel or server-sent events for oracle state changes, so every read from this API is a poll. When you need push-based updates rather than polling, subscribe to the [onchain events instead](#live-sui-events). A common split is to drive live state from the event stream and use the server for historical pagination and render-ready aggregates.
 
 #### Match the interval to the data
 
