@@ -26,7 +26,7 @@ use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
-use sui_rpc_api::ledger_history::query_options::ResolvedRange;
+use sui_rpc_api::ledger_history::query_options::ResolvedScan;
 use sui_rpc_api::ledger_history::query_options::validate_checkpoint_bounds;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
@@ -120,7 +120,7 @@ pub(crate) async fn list_transactions(
     let range_end_checkpoint = tx_range.end_checkpoint;
     let range_end_position = tx_range.end_position;
     let entry_checkpoint = tx_range.entry_checkpoint;
-    let tx_range = tx_range.range;
+    let tx_range = tx_range.range();
 
     if tx_range.is_empty() {
         info!(
@@ -624,7 +624,7 @@ async fn resolve_tx_range(
     client: &BigTableClient,
     cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedRange, RpcError> {
+) -> Result<ResolvedScan<u64>, RpcError> {
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
