@@ -51,10 +51,9 @@ private theorem no_correct_advance_keeps_exact_head
     omega
   exact (durable.2.2.1 sameIndex).symm.trans headAtStart
 
-/-- The head-independent recovery schedule eventually covers one complete
-adjacent-round propagation edge, even when the sender and receiver have
-different local commit heads. -/
-theorem mixed_head_recovery_wait_eventually_covers_adjacent_flow
+/-- For one fixed commit head, the recovery wait eventually covers one
+complete adjacent-round propagation edge. -/
+theorem same_head_recovery_wait_eventually_covers_adjacent_flow
     {BlockId CommitId PacketId : Type}
     {config : ValidatorEpochConfig CommitId}
     {faults : FixedFaultInterval config}
@@ -65,15 +64,15 @@ theorem mixed_head_recovery_wait_eventually_covers_adjacent_flow
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId))
-    (senderHead receiverHead : ValidatorCommitHead CommitId)
+    (commitHead : ValidatorCommitHead CommitId)
     (startDifference : Nat) :
     ∃ firstRound, ∀ round,
       firstRound ≤ round →
-        waits.wait senderHead round +
+        waits.wait commitHead round +
             (startDifference + 3 * (timed.localActionBound + 1) +
               network.delta + 3 * (timed.localActionBound + 1)) ≤
-          waits.wait receiverHead (round + 1) := by
-  exact waits.eventually_covers_cross_head_visibility senderHead receiverHead
+          waits.wait commitHead (round + 1) := by
+  exact waits.eventually_covers_same_head_visibility commitHead
     (startDifference + 3 * (timed.localActionBound + 1) + network.delta +
       3 * (timed.localActionBound + 1))
 

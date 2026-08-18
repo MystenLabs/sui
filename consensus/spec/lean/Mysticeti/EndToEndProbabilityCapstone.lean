@@ -367,61 +367,6 @@ theorem stable_execution_receiver_suffix_has_future_causal_head_path
   refine ⟨firstFutureRound, stableBeforeBoundary, ?_⟩
   simpa only [family.indirectDepthMatches sampled] using path
 
-/-- The deterministic composition theorem needed by the probability transfer.
-
-The execution inputs now prove `NetworkDagProgressLiveness` through the
-operational-frontier pacemaker, exact-or-newer subscription tip replay,
-current-GC parent processing, and finite correct-stake aggregation. Network
-round progress is no longer part of this placeholder.
-
-The remaining commit step needs one quantitative chronology result. Current
-timer rules bound each start only from its own parent-ready time. They do not
-derive a bounded increase for the correct timer-start spread across consecutive
-rounds, or prove that the commonly accepted round-`r` leader is present before
-each round-`r+1` refreshed parent snapshot. Without that derived fact, the
-growing-wait theorem cannot produce the exact quorum of leader-to-child edges.
-The start-quorum record also does not identify one correct-authored accepted
-representative with that author's exact fresh production. Recursive block sync
-has a bound for one concrete capsule length, but no per-round capsule-growth
-bound from which to derive the required spread recurrence.
-
-Both results must remain internal theorem consequences. This placeholder must
-not be replaced with a favorable trace, a future common layer, a timer-spread
-premise, a later commit, an anchor, or a completed synchronization action. -/
-def DeterministicCausalHeadCompositionGap
-    {BlockId CommitId PacketId Encoding : Type}
-    [DecidableEq BlockId]
-    {authorityCount : Nat}
-    {family : UniformRankingEndToEndExecutionFamily
-      BlockId CommitId PacketId Encoding authorityCount}
-  (source : UniformRankingExecutionSourceMap family) : Prop :=
-  ∀ sampled,
-    AllValidatorCausalHeadFavorableWindows source sampled →
-      (family.execution sampled).goal
-
-/-- Internal transfer from a proved deterministic causal-head implication to
-the end-to-end liveness event with probability one.
-
-This is not the final public theorem because the deterministic implication is a
-premise here. The final theorem can use this lemma only after deterministic
-composition proves that implication from the execution inputs. -/
-theorem probability_one_transfer_of_causal_head_liveness
-    {BlockId CommitId PacketId Encoding : Type}
-    [DecidableEq BlockId]
-    {authorityCount : Nat}
-    (law : IndependentUniformRoundRankingLaw authorityCount)
-    (family : UniformRankingEndToEndExecutionFamily
-      BlockId CommitId PacketId Encoding authorityCount)
-    (source : UniformRankingExecutionSourceMap family)
-    (deterministic : DeterministicCausalHeadCompositionGap source) :
-    law.probabilityOne
-      (fun sampled => (family.execution sampled).goal) := by
-  apply law.probabilityOneMono
-    (all_validator_causal_head_favorable_windows_probability_one law family
-      source)
-  intro sampled favorable
-  exact deterministic sampled favorable
-
 end UniformRankingEndToEndExecutionFamily
 
 end Mysticeti

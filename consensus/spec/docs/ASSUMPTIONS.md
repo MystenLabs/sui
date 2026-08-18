@@ -25,11 +25,16 @@ A quorum entering recovery, a sequence of block layers, a usable anchor, or a ne
 commit is not a basic assumption. The protocol proof must derive each such result.
 The proof must show that each fixed product rule matches the model.
 
-The network-round theorem now meets this boundary: it derives each future quorum
-layer from local current-state and execution rules. The later DAG-to-commit
-composition does not yet meet the full boundary. The
-[liveness proof plan](../design/liveness_proof_plan.md) lists the remaining
-derived results.
+The network-round theorem meets this boundary. It derives each future quorum
+layer from local current-state and execution rules. The adopted commit route
+uses ordinary DAG propagation, fixed-reference quadratic waits, V2 no-skip
+round catch-up, pinned block sync, commit-orthogonal retention, local
+FlexCommitter execution, and exact-prefix induction. The theorem
+`current_sources_give_end_to_end_liveness_probability_one` completes this route
+in Lean under the listed proposed source rules. The strict proof derives timer
+spread from actual prior broadcasts, pinned sync, and one action-local
+exact-next timer-promptness rule. Its fields are static, local, current, or
+past. A separate exact-replay proof experiment is not an adopted liveness route.
 
 ## Shared proof model
 
@@ -79,11 +84,14 @@ coverage rule can replace this input.
 ### Derived proof goals
 
 The protocol proofs must derive synchronization progress, one common commit
-chain, recovery quorum stake, commonly accepted quorum block layers at
-unbounded rounds, usable anchors, and unbounded local commit progress at every
-correct, available validator. They do not require every correct validator to
-produce its own block at unbounded rounds. The ledger keeps entries for these
-goals, but they are not final-theorem inputs.
+chain, recovery quorum stake, total-quorum block layers at unbounded rounds,
+usable direct ranges, and unbounded local commit progress at every correct,
+available validator. The public network-DAG goal does not require
+per-validator production. The adopted commit proof derives unbounded later own
+blocks through the V2 current source package. It then uses the proposed
+no-skip rule to recover only the finite intermediate window that the favorable
+path needs. The ledger keeps these results as proof goals, not final-theorem
+inputs.
 
 ## Status values
 
@@ -104,11 +112,11 @@ goals, but they are not final-theorem inputs.
 |---|---:|
 | Discharged in Lean | 1 |
 | Enforced in Rust | 2 |
-| Partially verified | 8 |
+| Partially verified | 9 |
 | Environmental assumption | 4 |
 | Open proof obligation | 4 |
 | Abstraction gap | 1 |
-| Accepted modeling assumption | 2 |
+| Accepted modeling assumption | 3 |
 | Known mismatch | 7 |
 
 A known mismatch blocks the affected product claim. Other open statuses identify
@@ -143,14 +151,17 @@ Focused leader-schedule, exact-prefix, restart, and finalizer review:
 |---|---|
 | `REF-RECOVERY-ENTRY` | Use the normal `threshold_clock_round()` candidate only as the round-gap probe. Enter when this gap reaches `P_enter` or the time since any commit install reaches `T`. Stay active while the gap reaches `P_exit` or the time reaches `T`, where `P_exit < P_enter`. Exit only when both signals clear. Keep the exact-next recovery target separate. |
 | `REF-NEXT-ROUND-TARGET` | Exact-next recovery proposes only one round after the highest known own proposal. A separate, unproved cleanup safe-resume step can use one witnessed jump when old parent history is unusable. |
-| `REF-RECOVERY-PACING` | For one stalled commit prefix, use one common wait for each absolute target round. Start a frontier timer only after quorum parents are ready. One timer generation owns one proposal action in its bounded deadline window. Do not reuse an earlier expired or stale timer. Round changes do not reset it, and successive wait margins eventually stay above each finite bound. |
+| `REF-RECOVERY-PACING` | Use one fixed reference round `R_c` and the quadratic wait `W(R) = b + l * (R - R_c) + q * (R - R_c)^2`. The wait value does not depend on the local commit head. Derive timer spread from actual prior broadcasts and sync. Use one action-local exact-next timer-promptness rule. Start a frontier timer only after quorum parents are ready. One timer generation owns one proposal action in its bounded deadline window. Do not reuse an earlier expired or stale timer. The coefficient `q` must dominate the derived fixed-reference timer-spread and causal-visibility costs. |
 | `REF-RECOVERY-PARENTS` | Wait for immediate-parent quorum and request missing parents. At parent selection, include the current locally accepted and retained representative for every in-range author for which one exists. Count an equivocating author once, ignore its other branches, do not consult the predicted leader schedule, and do not use score exclusion there. |
 | `REF-RECOVERY-PROPOSAL-ORIGIN` | While block-progress recovery is active above GC, cancel or replace stale normal ready work before persistence. An actual persisted ready proposal in this state must come from the current recovery timer and its refreshed parent selection. |
+| `REF-RECOVERY-TIMER-ORIGIN` | Map each actual timer-paced proposal to its exact earlier timer start for the same validator, commit head, and target round. Make that timer key unique. From a current parent-ready state, select a bounded exact timer start or show that the local commit head already advanced. These are current or past facts. They do not state that a future timer or proposal exists. |
 | `REF-RECOVERY-FRONTIER` | Connect every recovered own round to a durable signed block and the required parent history. The common maximum round remains a proof value. |
 | `REF-RECOVERY-GC-FRONTIER` | Keep each recovery target above the old-block cleanup boundary or define a safe resume rule. |
 | `REF-RECOVERY-LAYER-MAPPING` | Retain and identify all rounds in the complete recovery anchor window. |
+| `REF-CAUSAL-CAPSULE-PROJECTION` | For each actual correct proposal persistence action, identify the durable pinned recovery capsule with the exact static capsule used by the backlog projection. Keep unique references, in-range authors, and the target-round upper bound. This equality is a past persistence refinement. It does not state future delivery or acceptance. |
 | `REF-LOCAL-PROPOSAL-PROGRESS` | Map the current one-shot maximum timeout and its watcher retries. A forced attempt can stop for the old round only if that round is already signed or the threshold clock moved higher. A missing recovered own-round value or excessive propagation delay is temporary. The related watcher makes another forced attempt when that blocker clears. Installing a commit must not interrupt an active Core callback. |
 | `REF-CURRENT-TIP-REPLAY` | Map the current receiver-driven subscription path. A broken, ended, or idle stream terminates. The correct receiver retries. A successful subscription sends the requested cached own block, if it is available, or the sender's latest own block. The proof uses the exact requested tip or treats a newer tip as higher frontier progress. |
+| `REF-POST-GST-CAUSAL-SERVICE` | Map the V2 current no-idle source package. Its selected support, recursive need, queue-source, and no-idle rules derive unbounded later own-block production at each correct, available host. Map pinned ordinary block sync and commit-orthogonal above-GC retention separately. The no-skip round-catch-up rule derives only the finite intermediate window that fixed-reference pacing needs. None of these source rules supplies a future block, window, Flex result, or commit. |
 
 #### Other features
 
@@ -158,18 +169,21 @@ Focused leader-schedule, exact-prefix, restart, and finalizer review:
 |---|---|
 | `REF-EPOCH-CONFIG` | Put all proof-relevant values in authenticated epoch state and reject incompatible values. |
 | `REF-INTEGER-BOUNDS` | Set explicit numeric limits and use checked calculations for all modeled values. |
+| `REF-FINITE-BLOCK-ID-SPACE` | Map `BlockId` injectively into one fixed finite space. For current Rust, use the fixed byte-array space of `BlockDigest`. Together with the finite authority set and unique capsule references, this gives the static per-round reference cap. |
 | `REF-V3-ACTIVATION` | Activate v3 from shared epoch state. |
 | `REF-V3-TRANSACTION-PATH` | Implement the modeled v3 proposal, transaction-vote, cutoff, and finalization path. |
 | `REF-AMNESIA-SIGNER-GUARD` | Prevent conflicting signatures after complete local consensus-state loss. |
 | `REF-CORE-HANDLER-COMPLETION` | Map each nonempty ordinary `add_blocks` batch to `ValidatorCoreHandlerInputObservation` through `handlerInputOccurs` and `qualifyingInputHasFiniteHandler`. Map direct packet-driven input acceptance through `ValidatorPacketDrivenBlockAcceptanceAt` and `packetDrivenAcceptanceHasInputOrigin`. Do not classify later GC-unsuspension as a new input; use its enclosing handler episode. Cover the finite input batch and GC-unsuspended block work, observe the terminal no-more-commits result, and invoke `try_propose(false)` before return. Map the already-actual attempt through `ValidatorCoreProposalAttemptContinuationRules` to a same-batch proposal action, protected normal work, or current durable retry work. These mappings must not assert proposal success or future DAG progress. |
 | `REF-PARENT-SYNC` | For an ordinary block, keep fetching each missing causal-history block above the requester's local cleanup round. Handle empty peer sets, recursive direct-parent discovery, and fair retries. References at or below local cleanup are committed roots and require no recovery. |
-| `REF-COMMIT-SYNC-PROGRESS` | Optional commit synchronization can accelerate catch-up. The final liveness proof must not depend on commit-sync progress or commit votes in blocks. |
+| `REF-FLEX-ACCEPTED-BODY-OWNERSHIP` | At one actual Flex action-before state, map each authenticated accepted body from a correct author to that author's exact durable `ownBlockAt` entry. Derive the restored time-zero origin or an exact earlier proposal-persistence action from this current fact. Do not state future production. |
+| `REF-FLEX-POST-REFRESH-INPUT` | Map each actual `runCommitter` action to the literal scan input that Rust reads after it refreshes pending rounds. The same action must return the result computed from that input. Result equality is derived from the two views of the same action; it is not a separate future-result premise. |
+| `REF-COMMIT-SYNC-PROGRESS` | Optional commit synchronization can accelerate catch-up. It can stop after commit-index catch-up while the local ordinary DAG still lags. Therefore, the final liveness proof must not depend on commit-sync progress or commit votes in blocks. |
 | `REF-COMMON-COMMIT-CHAIN` | Establish one index-and-digest commit chain across local production, synchronization, and restart. |
 | `REF-GC-EVIDENCE` | Keep complete decision evidence across local production, synchronization, replay, restart, and transaction finalization. |
 | `REF-LEADER-BOUNDS` | Enforce `f + c < S` and `A <= P_r` from actual epoch stake. |
 | `REF-LEADER-ORDER-COMPATIBILITY` | Use a protocol-stable or version-gated schedule and round-order algorithm, with compatibility vectors. |
 | `REF-FINALIZER-TAIL` | Define the result for pending finalizer state when an epoch ends before a later trigger. |
-| `REF-ROUND-CATCHUP` | Add safe intermediate proposals if liveness for old leader blocks is required. |
+| `REF-ROUND-CATCHUP` | If fixed-reference liveness needs skipped rounds, make each active correct proposal persistence use exactly `highestSignedRound + 1`. The final path binds each recovered intermediate persistence to its earlier commit-progress-recovery timer generation, exact `proposeNext` action, and refreshed parent snapshot for the same block. These are current or past facts. They do not state that a future intermediate block exists. |
 
 ### Verified current Rust behavior
 
@@ -197,9 +211,10 @@ Focused leader-schedule, exact-prefix, restart, and finalizer review:
 
 ### Accepted model and environment
 
-Independent uniform leader ordering is an accepted probability model. The product
-uses a common deterministic round-based order for one fixed compatible build. The
-model does not prove independent samples for that exact sequence.
+Independent uniform leader ordering is an accepted probability model. It is not
+a claim about current Rust. The product uses a common deterministic round-based
+order for one fixed compatible build. The model does not prove independent
+samples for that exact sequence.
 
 Post-stabilization delivery, local response time, and fair task execution are
 environment conditions. Retention, serving, peer retry, and request processing
@@ -367,25 +382,105 @@ finalizer work is not evidence for this result.
 - **Rust evidence:** The product can retry and measure delays but cannot enforce the network bound.
 - **Discharge:** Keep this condition in the deployment model.
 
+## ASM-LIVE-FINITE-REFERENCE-SPACE
+
+- **Claim:** `BlockId` has one fixed finite injective encoding. A persisted
+  causal capsule has unique block references, each author is in the finite
+  authority set, and each history round is at or below the target block round.
+  Therefore, one capsule has at most
+  `authorityCount * blockIdCount` references at one round. The pinned capsule
+  created by proposal persistence is exactly the capsule used by this bound.
+- **Type:** Data and source refinement.
+- **Status:** Partially verified.
+- **Effect if false:** Commit liveness.
+- **Lean use:** `ValidatorFiniteBlockIdEncoding` derives the static per-round
+  cap. The receiver's GC round then gives a linear bound on unresolved history.
+  The adopted proof combines pointwise visibility bounds with one
+  fixed-reference quadratic wait. The wait does not change when a local commit
+  head changes.
+- **Rust evidence:** `BlockDigest` is a fixed byte array, and the committee has
+  a finite authority count. The exact persisted-capsule pin projection and all
+  capsule source fields still need a complete Rust-to-Lean map.
+- **Evidence record:** [EV-FINITE-REFERENCE-SPACE-TIMING](ASSUMPTION_EVIDENCE.md#ev-finite-reference-space-timing).
+- **Discharge:** Map the exact finite digest encoding, capsule uniqueness,
+  author range, target-round upper bound, and persisted pin-projection equality.
+  Check all modeled arithmetic against product integer limits.
+
 ## ASM-LIVE-ROUND-CATCHUP
 
-- **Claim:** When old-leader liveness is required, a round jump creates every still-required intermediate proposal before a later proposal.
+- **Claim:** When fixed-reference liveness needs skipped rounds, an active
+  correct validator persists only round `highestSignedRound + 1`. Each actual
+  fresh intermediate persistence used by the final path has an earlier
+  commit-progress-recovery timer generation, exact `proposeNext` action, and
+  refreshed parent snapshot for the same block. Thus, one actual later own
+  block can prove each required intermediate persistence. The source rules
+  classify current or past actions. They do not supply a future block or
+  window. A generic normal-proposal origin is not a final input.
 - **Type:** Rust refinement.
 - **Status:** Known mismatch.
-- **Effect if false:** Liveness for old leader blocks.
-- **Lean use:** The stronger liveness proof uses safe intermediate proposals.
-- **Rust evidence:** A local round can jump without these proposals.
-- **Discharge:** Implement the stronger rule only if this property is required.
+- **Effect if false:** The completed conditional theorem does not apply to the
+  product. Lean cannot reconstruct its finite exact timer-paced window from
+  later unbounded own-block production.
+- **Lean use:** `ValidatorV2RoundCatchupSourceMap` gives the two past-only
+  source rules. `actual_high_own_block_gives_fresh_timer_paced_intermediate`
+  uses the first signer-floor crossing to recover one exact target.
+  `block_production_liveness_gives_backfilled_timer_paced_window` applies this
+  result to every required author and offset. It returns only actual
+  timer-paced productions.
+- **Rust evidence:** `try_new_block` reads `threshold_clock_round()` and checks
+  only that this round is higher than the last own proposal. The local round
+  can skip intermediate own rounds. The timeout callback then calls
+  `try_propose`, which reads the current threshold again. The current timeout
+  task does not keep one unique fixed timer generation for each skipped round.
+- **Evidence record:** [EV-ROUND-CATCHUP](ASSUMPTION_EVIDENCE.md#ev-round-catchup).
+- **Discharge:** Add a safe no-skip proposal queue, or an equivalent
+  intermediate-round worker. Persist each target in order. Keep the exact
+  timer key and refreshed parent snapshot until that target runs. Add tests for
+  threshold-clock jumps, timer resets, commit interference, and restart.
 
 ## ASM-LIVE-COMMIT-PROGRESS-RECOVERY
 
-- **Claim:** An active v3 validator enters recovery when its normal threshold-clock proposal gap reaches `P_enter` or the time since any commit install reaches `T`. It stays active while the gap reaches `P_exit` or the time reaches `T`, where `P_exit < P_enter`, and exits only when both signals clear. This probe is separate from the exact-next target. The validator requests missing parents and proposes only after it accepts an immediate-parent quorum. Parent selection includes every current accepted and retained representative, one per author, without schedule prediction or score exclusion. Exact-next recovery uses the round after its highest durable own round. Cleanup safe resume durably records the canonical target `max(P + 1, G + 2)` and its parent need before proposal selection. It does not require an accepted future block at the target. While recovery is active above GC, stale normal ready work cannot persist; persistence must use the current recovery proposal and timer origin. Each recovery proposal action uses the timer generation for the same head and target, and runs between that generation's deadline and one local-action bound after it.
+- **Claim:** An active v3 validator enters recovery when its normal
+  threshold-clock proposal gap reaches `P_enter` or the time since any commit
+  install reaches `T`. It stays active while the gap reaches `P_exit` or the
+  time reaches `T`, where `P_exit < P_enter`. It exits only when both signals
+  clear. This probe is separate from the exact-next target. The validator
+  requests missing parents and proposes only after it accepts an
+  immediate-parent quorum. Parent selection includes every current accepted and
+  retained representative, one per author, without schedule prediction or
+  score exclusion. Exact-next recovery uses the round after its highest durable
+  own round. Cleanup safe resume durably records the canonical target
+  `max(P + 1, G + 2)` and its parent need before proposal selection. It does not
+  require an accepted future block at the target. While recovery is active
+  above GC, stale normal ready work cannot persist. Persistence must use the
+  current recovery proposal and the unique timer for the same validator and
+  target round. The adopted commit proof uses one fixed reference round `R_c`
+  and the wait
+  `W(R) = b + l * (R - R_c) + q * (R - R_c)^2`. The final source boundary
+  derives timer spread from actual prior broadcasts and sync plus one
+  action-local exact-next timer-promptness rule.
 - **Type:** Protocol and Rust refinement.
 - **Status:** Known mismatch.
 - **Effect if false:** Liveness.
-- **Lean use:** The target theorem derives common layers, anchors, and commit-index progress from these local rules. The current theorem still has higher-level process inputs.
-- **Rust evidence:** The current product has no commit progress recovery mode. `force=true` does not supply the full recovery parent-selection rule.
-- **Discharge:** Implement the recovery design and complete every recovery `REF-*` mapping.
+- **Lean use:** `ValidatorFixedReferenceStrictCurrentSourceMaps` supplies the
+  fixed wait, one action-local exact-next timer-promptness rule, authenticated
+  correct-body ownership, past recovery-timer origins, and the checked
+  quadratic coefficient. The proof derives timer spread from actual prior
+  broadcasts and pinned sync. V2 round catch-up supplies the finite exact
+  production family. Commit-orthogonal retention makes each selected leader
+  usable before the next proposal snapshot. Local Flex execution and
+  exact-prefix induction then derive commit progress and pointwise catch-up. The theorem
+  `current_sources_give_end_to_end_liveness_probability_one` completes this
+  conditional chain.
+- **Rust evidence:** The current product has no commit progress recovery mode.
+  It uses fixed proposal waits, not this fixed-reference quadratic wait.
+  `force=true` does not supply the full recovery parent-selection rule or the
+  action-local exact-next timer-promptness rule.
+- **Evidence record:** [EV-FINITE-REFERENCE-SPACE-TIMING](ASSUMPTION_EVIDENCE.md#ev-finite-reference-space-timing).
+- **Discharge:** Implement the recovery design and complete every recovery
+  `REF-*` mapping. Implement the fixed-reference wait, exact-next promptness,
+  V2 round catch-up, and the remaining current-source mappings. Exact
+  replay is not a required product refinement or liveness route.
 
 ## ASM-LIVE-LOCAL-PROPOSAL
 
@@ -393,7 +488,11 @@ finalizer work is not evidence for this result.
 - **Type:** Single-validator Rust refinement.
 - **Status:** Open proof obligation.
 - **Effect if false:** Block-production and commit liveness.
-- **Lean use:** The pure network-DAG proof applies this local rule after it derives the required parent and timer guards. The final public goal does not require every correct validator to produce its own blocks.
+- **Lean use:** The pure network-DAG proof applies this local rule after it
+  derives the required parent and timer guards. That public DAG goal does not
+  require per-validator production. The adopted commit proof also uses
+  `ValidatorV2BlockProductionCurrentSourceMaps.blockProductionLiveness` to
+  derive unbounded later own blocks before it applies finite no-skip catch-up.
 - **Rust evidence:** The maximum timeout makes one forced attempt. A change to the recovered own round makes another forced attempt. A propagation-delay change makes another forced attempt when that blocker clears. A forced attempt bypasses leader presence and minimum-delay checks. It can still stop because the round is stale, the block already exists, the recovered own-round guard blocks a duplicate signature, or one of the two temporary blockers is active.
 - **Evidence record:** [EV-NETWORK-ROUND-PROGRESS](ASSUMPTION_EVIDENCE.md#ev-network-round-progress).
 - **Discharge:** Map each forced-return branch and the two watcher retries to `ValidatorNormalFrontierPacemakerRules`. Add tests for the stale, already-signed, recovered-round, and temporary-blocker cases.
@@ -425,10 +524,49 @@ finalizer work is not evidence for this result.
 - **Type:** Accepted probabilistic protocol model.
 - **Status:** Accepted modeling assumption.
 - **Effect if false:** Liveness.
-- **Lean use:** Lean proves the exact finite geometric failure bound from the distribution. A probability-measure layer must still derive the measure-one favorable-run result.
+- **Lean use:** Lean derives the probability-one causal-head favorable-window
+  event from the abstract independent-uniform law. The conditional commit
+  capstone then uses that event. The final entry theorem is
+  `current_sources_give_end_to_end_liveness_probability_one`.
 - **Rust evidence:** The product uses a deterministic round-based shuffle, not independent random samples.
+- **Boundary:** This ideal probability law is not current Rust behavior. Do not
+  claim that the round-seeded Rust shuffle gives independent samples.
 - **Evidence record:** [EV-FIRST-SLOT-PROBABILITY](ASSUMPTION_EVIDENCE.md#ev-first-slot-probability).
 - **Discharge:** Keep the probability model explicit or replace it with a proved deterministic coverage rule.
+
+## ASM-LIVE-POST-GST-CAUSAL-SERVICE
+
+- **Claim:** After GST, there is one fixed service interval and two finite bounds
+  `C_add < C_service` for each correct, available validator. New rounds add at
+  most `C_add` required above-GC references to its causal-work queue in one
+  interval. If at least `C_service` items are pending, fetch, verification, and
+  acceptance remove at least `C_service` items in that interval. If fewer items
+  are pending, all pending items finish or become obsolete because GC moved.
+  Thus, each fixed known above-GC causal history eventually becomes accepted
+  while rounds can continue. The validator can skip authoring rounds, but it
+  eventually stores and sends own blocks at later unbounded rounds. It does not
+  have to author every intermediate round.
+- **Type:** Accepted single-validator performance model.
+- **Status:** Accepted modeling assumption.
+- **Effect if false:** The completed conditional commit theorem does not apply
+  to the product.
+- **Lean use:** `BlockProductionLiveness` requires unbounded own-block
+  production by each correct, available validator, not contiguous own rounds.
+  `ValidatorV2BlockProductionCurrentSourceMaps.blockProductionLiveness` derives
+  this result from selected support, recursive need, queue-source, and no-idle
+  rules. The GC replacement and exact phase-continuity parts of these rules are
+  proposed scheduler and refinement behavior. They are not derived from
+  current Rust. V2 round catch-up then recovers the finite exact intermediate
+  family. Fixed-reference pacing, pinned sync, retention, local Flex, and
+  exact-prefix induction complete the Lean route.
+- **Rust evidence:** Fetch, verification, parent-first acceptance, GC filtering,
+  and batched block processing exist. Current evidence does not prove the
+  strict sustained-rate comparison or unbounded per-validator authorship under
+  continuous round advancement.
+- **Evidence record:** [EV-POST-GST-CAUSAL-SERVICE](ASSUMPTION_EVIDENCE.md#ev-post-gst-causal-service).
+- **Discharge:** Define measurable queue work and round-created work. Prove or
+  enforce the strict service margin. Map the V2 selected support, recursive
+  need, queue source, no-idle rule, and skipped-round proposal continuity.
 
 ## ASM-LIVE-BLOCK-SYNC
 
@@ -436,19 +574,27 @@ finalizer work is not evidence for this result.
 - **Type:** Accepted single-validator synchronization model.
 - **Status:** Accepted modeling assumption.
 - **Effect if false:** Liveness.
-- **Lean use:** Recursive direct-parent needs plus partial synchrony derive the finite above-cleanup causal closure of one received block. Parent-ready buffering then accepts it from parents to children.
+- **Lean use:** Recursive direct-parent needs plus partial synchrony derive the
+  finite above-cleanup causal closure of one received block. Parent-ready
+  buffering then accepts it from parents to children. The finite reference-space
+  theorem and the receiver's current GC cutoff give the pointwise visibility
+  bound. The adopted final proof uses pinned sync and
+  commit-orthogonal retention with fixed-reference pacing. It does not use
+  commit synchronization as positive progress.
 - **Rust evidence:** Several fetch mechanisms exist. The proof currently accepts their best-effort above-cleanup behavior. A complete source check is deferred.
 - **Evidence record:** [EV-NETWORK-ROUND-PROGRESS](ASSUMPTION_EVIDENCE.md#ev-network-round-progress).
 - **Discharge:** Later check peer choice, retries, buffering, restart recovery, cleanup handling, and exact-reference reads against Rust. Do not add a below-cleanup recovery path.
 
 ## ASM-LIVE-COMMIT-SYNC
 
-- **Claim:** This identifier is not a liveness dependency. The final proof uses ordinary DAG blocks, recursive causal-history fetch, and local FlexCommitter execution. It does not require commit-sync progress or commit votes in blocks.
+- **Claim:** This identifier is not a liveness dependency. The final proof uses ordinary DAG blocks, recursive causal-history fetch, and local FlexCommitter execution. Commit sync can stop after commit-index catch-up while the local ordinary DAG still lags. Therefore, the proof does not require commit-sync progress or commit votes in blocks.
 - **Type:** Retired liveness obligation and optional acceleration path.
 - **Status:** Partially verified.
 - **Effect if false:** No effect on the final liveness theorem. If the optional path executes, its verification and provenance still affect safety.
 - **Lean use:** Exact sync-install provenance restricts optional synchronized actions in the safety proof only.
-- **Rust evidence:** Range checks and retries exist. They are not used to establish the liveness result.
+- **Rust evidence:** Range checks and retries exist. Commit sync is driven by
+  commit lag, not by complete ordinary-DAG catch-up. It can stop when that lag
+  clears. It is not used to establish the liveness result.
 - **Discharge:** Keep sync verification mapped for safety. Do not add sync availability, certification, vote carriage, or service progress to liveness inputs.
 
 ## ASM-LIVE-PEER-FAIRNESS

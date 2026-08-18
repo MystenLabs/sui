@@ -8,10 +8,12 @@ SPDX-License-Identifier: Apache-2.0
 ## Result
 
 The formal model has no unfinished proof placeholders or declared axioms in its
-current lemmas. It proves safety, evidence retention, local liveness lemmas, and
-stage composition. It does not yet prove the final network-progress and
-commit-catch-up result from only fundamental network conditions and
-single-validator rules. See the plain-language
+current lemmas. It proves safety, evidence retention, unbounded network DAG
+progress, network commit progress, and pointwise exact-reference catch-up. The
+theorem `current_sources_give_end_to_end_liveness_probability_one` completes
+the adopted ordinary-DAG route in Lean under proposed local source rules and
+the independent-uniform ranking law. Exact replay remains a separate
+non-adopted proof experiment. See the plain-language
 [safety and liveness properties](SAFETY_AND_LIVENESS.md).
 
 The model is not an end-to-end proof of the product. A result applies to the
@@ -106,10 +108,31 @@ arrive within `delta`. Required local work completes within a finite bound
 
 ### Consensus progress
 
-The current consensus progress result composes assumed protocol stages. Its input
-already supplies a favorable leader window, proposal and certificate delivery,
-decision, and commit progress. It is not yet a block-production theorem from
-partial synchrony.
+`EndToEndLivenessInputs.network_dag_progress` proves unbounded network DAG
+progress from the local proposal, subscription replay, ordinary block-sync,
+current-GC, and handler rules. It does not take a future quorum layer or a commit
+advance as an input.
+
+The adopted commit proof uses one fixed reference round for all local waits.
+V2 current no-idle sources derive a later own block for each correct, available
+host. The V2 no-skip source recovers the finite exact round family that one
+favorable path needs. It does not supply a future window. The strict proof
+derives timer spread from actual prior broadcasts, pinned sync, and one
+action-local exact-next timer-promptness rule. Its source record contains only
+static, local, current, or past facts.
+
+Pinned ordinary block sync and commit-orthogonal retention make each selected
+leader usable at the receiver before the next proposal snapshot. The resulting
+direct range feeds one actual local FlexCommitter run. Exact-prefix induction
+turns receiver-local progress into network commit progress and pointwise
+catch-up. A local commit-head change does not split this proof into separate
+no-ahead and already-ahead routes.
+
+Lean also has a separate exact-replay proof experiment for the ahead case. It
+saves the exact material from a past successful Flex run, sends a reference
+manifest, fetches the bodies parent-first, and replays Flex on only that
+material. It is proposed behavior, not current Rust subscription replay, and
+not an adopted liveness design.
 
 The target strong result starts after both network stabilization and catch-up
 activation. It uses safe intermediate proposals after round jumps, a live-leader
@@ -126,30 +149,47 @@ latency.
 
 ### Commit progress recovery
 
-The model proves stake, timing, next-round, direct-vote, pending-round,
-anchor-scan, and stage-composition lemmas. However, its current top recovery
-theorem still takes abstract contracts that state recovery quorum stake,
-visibility of each recovery block, timely next-round inclusion, an eventual favorable
-leader trace, and later local commit recording. An optional lower helper also
-takes parent-quorum availability. These inputs contain important distributed
-progress results.
+The model proves the stake, next-round, direct-vote, pending-round, anchor-scan,
+and local Flex-install lemmas. It also proves the same-head timing and causal
+catch-up route. `BlockId` has a fixed finite encoding. Unique in-range
+references give one static per-round cap. The receiver GC round changes this cap
+into a linear unresolved-history bound.
 
-The final theorem must derive these distributed results from fundamental inputs
-and local validator rules. The
-[liveness proof plan](../design/liveness_proof_plan.md) defines the boundary and
-proof order.
+For one fixed reference round `R_c`, the proposed wait is:
 
-The final network result has no commit alternative. At every requested round,
+```text
+W(R) = b + l * (R - R_c) + q * (R - R_c)^2
+```
+
+The coefficient conditions make each adjacent wait margin dominate the
+pointwise causal-visibility and timer-spread cost. The wait value does not use
+the local commit head. The proof first selects a favorable base above every
+numeric lower bound. It then derives the finite exact V2 production family,
+pinned sync, accepted retention, and adjacent parent edges. This order avoids a
+circular favorable-window choice.
+
+The exact persisted capsule projection, proposal origin, timer-spread source,
+and accepted retention rules are current or past refinements. They do not state
+future progress. The separate exact-replay experiment does not contribute to
+the final theorem.
+
+The network-DAG result has no commit alternative. At every requested round,
 it requires a later positive total-stake quorum layer held by one correct,
 available validator. The holder has one exact accepted, retained, and
 catalogued valid body for each selected author, above its local GC boundary.
-The result does not require each correct validator to produce its own block or
-to hold the layer. The commit proof keeps stronger correct-authored receiver
-windows inside the construction. It requires unbounded exact commit references
+This public network-DAG result does not require each correct validator to
+produce its own block or to hold the layer. The commit proof separately derives
+unbounded later own-block production at each correct, available validator. Its
+proposed no-skip source reconstructs only the finite contiguous window that the
+selected favorable path needs. The commit proof keeps stronger
+correct-authored receiver windows inside the construction. It requires
+unbounded exact commit references
 and pointwise installation of each such reference at every correct, available
 validator. Ordinary DAG blocks and recursive above-GC causal-history fetch
 supply the positive local view. Commit synchronization and commit votes are not
-liveness dependencies.
+liveness dependencies. Commit sync can stop after commit-index catch-up while
+the local ordinary DAG still lags. It cannot prove DAG availability or replace
+the normal block-sync route.
 
 The pointwise catch-up finish can be different for each validator and commit
 reference. The proof does not claim one fixed numerical lag bound. It also does
@@ -184,10 +224,10 @@ The optional `P_r <= Q` limit controls work. Per-slot safety and quorum coverage
 do not require it. A larger selection can still affect the ordered anchor scan.
 
 The leader-order model treats each round's complete order as a common independent
-uniform permutation. The formal trace assumes the almost-sure favorable run from
-this probability model. It does not prove the probability result. The product uses
-a deterministic round-based shuffle, and the proof does not establish the same
-coverage for that exact sequence.
+uniform permutation. This is an ideal probability law. It is not current Rust
+behavior. The product uses a deterministic round-based shuffle, and the proof
+does not establish independent samples or the same coverage for that exact
+sequence.
 
 ## Conditions and proof goals
 
@@ -206,14 +246,16 @@ The results depend on these groups of conditions:
 - **Network and runtime:** `ASM-LIVE-PARTIAL-SYNCHRONY`,
   `ASM-LIVE-PEER-FAIRNESS`, `ASM-LIVE-TASK-FAIRNESS`,
   `ASM-LIVE-LOCAL-RESPONSE`, and `ASM-LIVE-PIPELINE-BOUNDS`.
-- **Consensus progress:** `ASM-LIVE-ROUND-CATCHUP`,
+- **Consensus progress:** `ASM-LIVE-FINITE-REFERENCE-SPACE`,
+  `ASM-LIVE-ROUND-CATCHUP`,
   `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`, `ASM-LIVE-LOCAL-PROPOSAL`,
   `ASM-LIVE-LEADER`, `ASM-LIVE-FIRST-SLOT-SAMPLING`,
-  and `ASM-LIVE-BLOCK-SYNC`.
+  `ASM-LIVE-POST-GST-CAUSAL-SERVICE`, and `ASM-LIVE-BLOCK-SYNC`.
 - **Transaction progress:** `ASM-LIVE-FINALIZER-TRIGGER` and
   `ASM-LIVE-DURABILITY`.
 
-Commit progress recovery does not use `ASM-LIVE-ROUND-CATCHUP`.
+The public network-DAG theorem does not use `ASM-LIVE-ROUND-CATCHUP`. The final
+fixed-reference commit theorem does use it for its finite internal window.
 
 ## Current product status
 
@@ -223,11 +265,20 @@ ordering from fixed compatible inputs, decision scans, local evidence ownership,
 and commit recording. This evidence is not a machine-checked proof that the source
 follows the model.
 
-The current product does not implement commit progress recovery. Normal startup
-does not enable the analyzed v3 path from shared epoch state. The product also does
+The current product does not implement commit progress recovery, the
+fixed-reference quadratic wait, or the V2 no-skip proposal sequence. Exact
+successful-Flex material replay is a non-adopted proof experiment and is not a
+current product requirement. Normal startup does
+not enable the analyzed v3 path from shared epoch state. The product also does
 not implement the modeled signed v3 transaction voting and finalization path.
 Therefore, the related recovery and transaction results do not yet describe
 product behavior.
+
+The current review also does not prove the V2 current no-idle sources, pinned
+sync sources, commit-orthogonal retention, exact-next timer promptness,
+authenticated correct-body ownership, past recovery-timer origin mapping, or
+the strict post-GST causal-service margin under the fastest permitted round
+creation. These rules are conditional inputs to the completed Lean theorem.
 
 Other open work includes common epoch parameters, complete commit-chain agreement,
 synchronization progress, committed-prefix evidence, integer bounds, stable leader

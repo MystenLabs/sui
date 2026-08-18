@@ -137,6 +137,13 @@ then prove DAG growth.
 `ValidatorFlexRemoteCommitTraffic.lean` remain useful local audit results for
 commit evidence. They are not the source of network DAG liveness.
 
+The second stage now uses the literal post-refresh Flex input through the
+fixed-reference ordinary-DAG capstone. V2 current no-idle production and
+no-skip catch-up derive the finite exact favorable window. Pinned sync and
+commit-orthogonal retention derive the receiver-local direct range. The local
+Flex result then feeds exact-prefix induction. The final conditional theorem is
+`current_sources_give_end_to_end_liveness_probability_one`.
+
 This stage does not use `applySyncedCommit`, future commit synchronization, or
 a future successful FlexCommitter run. An actual synchronized install remains
 subject to safety and state-rebase rules, but it is not a positive liveness
@@ -161,32 +168,32 @@ exact earlier proposal-persistence action.
 
 ## Current refinement limits
 
-The source map has an exact deterministic internal prepared input. The existing
-runtime observation does not return this internal input. It only returns the
-scan result. Therefore,
-`actualRunResultReconstructsFromInternalInput` is an extensional result
-refinement, not a claim that the runtime observation exposes literal input
-equality.
+The pending-refresh source map adds a compatible actual-run observation. This
+observation carries the literal `ReferenceFlexTryCommitInput` that Rust reads
+after the pending-round refresh. Its old runtime view returns the result that
+this input computes. The existing runtime result-uniqueness rule then derives
+`actualRunResultReconstructsFromInternalInput`; that equality is not a source
+map field.
 
 The Rust status cache records `Direct` or `Indirect`, but it does not record the
 exact indirect anchor. Exact retained indirect-anchor provenance needs either
 an added Rust anchor field or a checked same-host reconstruction.
 
-The remaining DAG composition must connect the proposal-attempt invocation to
-the existing proposal guards and protected proposal work. It must then
-aggregate ordinary proposal bodies into aligned same-round quorum layers. The
-handler interface does not prove that an attempt succeeds. Its attempt input is
-the handler-exit state.
+The completed Lean DAG composition connects the proposal-attempt invocation to
+the existing proposal guards and protected proposal work. It then aggregates
+ordinary proposal bodies into same-round total-quorum layers. The handler
+interface does not prove that an attempt succeeds. Its attempt input is the
+handler-exit state.
 `ValidatorFiniteCoreHandlerEpisode.proposal_attempt_input_and_suffix` exposes
 that state and the remaining finite event suffix to the next trace state. The
 one-host `ValidatorCoreProposalAttemptContinuationRules` classifies the
 already-actual attempt as an exact proposal action in that suffix, exact
 protected normal work, or current durable proposal, parent-need, or timer work.
 `qualifying_core_handler_input_has_current_proposal_continuation` exposes this
-split only for an actual qualifying handler input. The remaining composition
-must run the current protected branch through the existing execution rules. It
-must derive success without a commit-result branch. The Rust source mapping and
-the distributed composition remain gaps, not future-action inputs.
+split only for an actual qualifying handler input. The Lean composition runs
+the protected branch through existing execution rules and does not use a commit
+result as DAG progress. The Rust source mapping remains a gap. The distributed
+Lean composition is complete.
 
 The literal prepared-input identity, retained indirect-decision provenance,
 the Rust mapping for `ValidatorCoreHandlerRefinementRules`, and the internal

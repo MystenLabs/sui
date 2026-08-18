@@ -99,9 +99,11 @@ proposal attempt succeeds. Local commit processing must preserve or legally
 rebase protected proposal work. A persisted block also creates a durable send
 obligation. The proof does not assume that a later synchronized batch arrives.
 
-The core theorem does not require every correct validator to keep producing its
-own blocks at unbounded rounds. Correct quorum block production is sufficient.
-Per-validator own-block production is an optional fairness property.
+The public network-DAG theorem needs only one correct-held total-quorum layer at
+each requested height. The final commit theorem separately derives unbounded
+later own blocks for every correct, available validator. Its proposed V2
+no-skip rule reconstructs the finite exact window that the selected favorable
+path needs.
 
 The normal commit path and immediate-parent quorum check already exist. Recovery
 must preserve them. It does not need a separate certified commit prefix.
@@ -243,20 +245,67 @@ Narrow it to a completed recovery proposal, or derive it directly from that
 proposal's refreshed retained-representative list. Current normal and forced
 Rust parent selection does not satisfy the universal field.
 
-### P1: derive per-validator commits from the common DAG
+### P1: implement exact round catch-up for fixed-reference windows
+
+Related assumptions: `ASM-LIVE-ROUND-CATCHUP`,
+`ASM-LIVE-LOCAL-PROPOSAL`, and `ASM-LIVE-TASK-FAIRNESS`.
+
+The public network-DAG theorem does not need one own block from each correct
+validator in every round. The fixed-reference favorable-window proof is
+stronger. It reconstructs a finite consecutive family from each validator's
+later unbounded own-block production.
+
+Current Rust cannot support this reconstruction. `try_new_block` reads the
+current threshold-clock round and checks only that it is higher than the last
+own proposal. It can skip intermediate own rounds. A timeout callback can also
+observe a newer threshold than its input round. It does not keep one fixed
+timer key and proposal snapshot for each skipped target.
+
+`ValidatorV2RoundCatchupSourceMap` isolates the proposed repair. An active
+correct proposal persistence must use exactly `highestSignedRound + 1`. Each
+exact-next persistence that the final V2 proof uses must identify its past
+commit-progress-recovery timer origin. This origin includes the exact
+`proposeNext` action, refreshed parent snapshot, fixed gate, deadline, and
+persistence for the same block. Existing obligation workers derive the later
+broadcast. These source rules do not return a future block or window. A generic
+normal-proposal origin is not part of the final dependency closure.
+
+Implement an ordered intermediate-proposal queue, or equivalent safe work.
+Keep each exact target and timer key until it persists. Preserve the work
+across commit processing and restart. Add tests that make the threshold clock
+jump across several rounds and verify each intermediate persistence in order.
+Also test timer replacement and commit interference. This work is not required
+for the public total-quorum DAG theorem. It is required before the derived
+fixed-reference timer-paced window applies to the product.
+
+### P1: map the completed fixed-reference commit capstone to Rust
 
 Related assumptions: `ASM-LIVE-LEADER`, `ASM-LIVE-FIRST-SLOT-SAMPLING`,
-`ASM-LIVE-LOCAL-RESPONSE`, and `ASM-SAFE-COMMIT-CHAIN`.
+`ASM-LIVE-LOCAL-RESPONSE`, `ASM-LIVE-BLOCK-SYNC`,
+`ASM-LIVE-POST-GST-CAUSAL-SERVICE`, and `ASM-SAFE-COMMIT-CHAIN`.
 
-For each fixed correct, available validator, combine the infinite commonly
-accepted DAG with recurring fresh favorable leader windows. Derive the exact
-adjacent vote and anchor evidence, the actual prepared Flex scan, the returned
-local commit, and its durable `recordCommit` action. Repeat after every
-requested index. Exact-prefix safety must then give exact-reference catch-up.
+The Lean theorem
+`current_sources_give_end_to_end_liveness_probability_one` completes the
+ordinary-DAG commit route. It uses one fixed-reference quadratic wait, V2
+no-skip round catch-up, V2 current no-idle block production, pinned sync,
+commit-orthogonal retention, local FlexCommitter execution, and exact-prefix
+induction. A commit-head advance is not a positive liveness result and does not
+start a separate already-ahead proof branch.
 
-This proof does not require a post-install source-specific carrier or future
-commit synchronization. The validator's later run can differ from the source
-validator's earlier run.
+Complete the Rust-to-Lean maps for the fixed-reference wait, actual timer
+origins, V2 selected support, recursive needs, queue source, no-idle behavior,
+pinned sync, retention across commit and GC, action-scoped first-leader parent
+selection, literal post-refresh Flex input, and exact-prefix install
+provenance. Implement or justify the action-local exact-next timer-promptness
+rule, authenticated correct-body ownership, and the checked quadratic
+coefficient. Lean derives the remaining timer spread from actual prior
+broadcasts and pinned sync.
+
+The proof derives each later block, finite intermediate family, delivery,
+accepted direct range, local Flex run, and exact install. None is a future
+input. A separate exact-replay proof experiment uses saved successful-Flex
+material and a replay manifest. Current Rust does not implement it. It is not
+an adopted liveness route or a required product change.
 
 ### P1: include the exact first Flex leader in proposal parents
 
@@ -353,7 +402,9 @@ missing Rust store fallback.
 
 Commit synchronization and commit votes in blocks are not liveness mechanisms.
 Optional commit synchronization can stay as an acceleration path. Its exact
-verification and install provenance remain safety obligations.
+verification and install provenance remain safety obligations. Commit sync can
+stop after commit-index catch-up while the local ordinary DAG still lags. It
+cannot replace normal block synchronization in the liveness proof.
 
 This condition applies to old consensus state. Transaction payloads can be
 submitted again.

@@ -637,6 +637,118 @@ theorem completed_block_broadcast_eventually_accepted_or_gc_root_via_parent_sync
       Nat.le_trans deliveryBeforeParentsReady parentsBeforeAccepted,
         Or.inl (by simpa [broadcast.packetReceiver] using accepted)⟩
 
+/-- Parent-first synchronization gives a concrete bound for one completed
+block broadcast.
+
+The bound charges one block-sync cost for each retained history item and one
+local acceptance cost for the target block. If GC reaches the target first,
+the result is the current GC-root branch. -/
+theorem completed_block_broadcast_accepted_or_gc_root_within_parent_sync_bound
+    {BlockId CommitId PacketId : Type}
+    {config : ValidatorEpochConfig CommitId}
+    {faults : FixedFaultInterval config}
+    {protocolPacket :
+      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+    {network : AddressedPartialSynchrony config faults protocolPacket}
+    {program : ValidatorExecutionProgram BlockId CommitId}
+    (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
+      protocolPacket network program)
+    (acceptanceRules : ValidatorParentReadyAcceptanceRules timed)
+    (syncRules : ValidatorBlockSyncExecutionRules timed)
+    {block : ValidatorBlock BlockId}
+    {sender receiver holder : Nat} {blocks : List (ValidatorBlock BlockId)}
+    {packetId : PacketId}
+    {packet : AddressedPacket (ValidatorMessage BlockId CommitId)}
+    (senderInRange : sender < config.authorityCount)
+    (senderCorrectAvailable : faults.correctAvailable sender = true)
+    (receiverInRange : receiver < config.authorityCount)
+    (receiverCorrectAvailable : faults.correctAvailable receiver = true)
+    (broadcast : ValidatorCompletedBlockBroadcast timed block sender receiver
+      packetId packet)
+    (validParents : block.HasQuorumImmediateParents config)
+    (sentAfterGst : network.gst ≤ packet.sentAt)
+    (active : ∀ time, packet.deliveredAt + 1 ≤ time →
+      (timed.execution.trace time).epochActive = true)
+    (source : ValidatorBlockParentSyncSource syncRules block receiver holder
+      blocks (packet.deliveredAt + 1)) :
+    ∃ acceptedAt,
+      packet.deliveredAt + 1 ≤ acceptedAt ∧
+      acceptedAt ≤ packet.deliveredAt + 1 +
+          blocks.length * validatorBlockSyncAcceptanceBound timed syncRules +
+            timed.localActionBound + 1 ∧
+      (((timed.execution.trace acceptedAt).validatorState receiver).accepted
+          block.reference = true ∨
+        block.reference.round ≤
+          ((timed.execution.trace acceptedAt).validatorState receiver).gcRound) := by
+  have deliveryBounds := network.postGstDelivery packet
+    broadcast.packetIsProtocol
+    (by simpa [broadcast.packetSender] using senderInRange)
+    (by simpa [broadcast.packetReceiver] using receiverInRange)
+    (by simpa [broadcast.packetSender] using senderCorrectAvailable)
+    (by simpa [broadcast.packetReceiver] using receiverCorrectAvailable)
+    sentAfterGst
+  have delivered := timed.execution.protocolPacketsAreDelivered packetId packet
+    broadcast.packetInTrace broadcast.packetIsProtocol
+    (by simpa [broadcast.packetSender] using senderInRange)
+    (by simpa [broadcast.packetReceiver] using receiverInRange)
+    (by simpa [broadcast.packetSender] using senderCorrectAvailable)
+    (by simpa [broadcast.packetReceiver] using receiverCorrectAvailable)
+    sentAfterGst
+  have packetAtDelivery := timed.execution.packetHistoryMonotone packet.sentAt
+    packet.deliveredAt deliveryBounds.1 packetId packet broadcast.packetInTrace
+  have syncStartsAfterGst : network.gst ≤ packet.deliveredAt + 1 :=
+    Nat.le_trans sentAfterGst
+      (Nat.le_trans deliveryBounds.1 (Nat.le_add_right _ _))
+  have parentFirstReady : ParentFirstValidatorBlockHistory
+      (ValidatorReferenceAcceptedOrGcRootAt timed.execution
+        (packet.deliveredAt + 1) receiver) blocks := by
+    exact parent_first_validator_block_history_mono (by
+      intro reference accepted
+      exact Or.inl accepted) source.parentFirst
+  rcases retained_parent_first_history_ready_within_length_bound syncRules
+      source.history receiverInRange receiverCorrectAvailable
+      syncStartsAfterGst active source.protectedWhileIncomplete
+      parentFirstReady with
+    ⟨parentsReadyAt, deliveryBeforeParentsReady, parentsReadyBound,
+      historyReady⟩
+  have parentsReady : ∀ parent, parent ∈ block.parents →
+      ((timed.execution.trace parentsReadyAt).validatorState
+          packet.receiver).accepted parent = true ∨
+        parent.round ≤
+          ((timed.execution.trace parentsReadyAt).validatorState
+            packet.receiver).gcRound := by
+    intro parent parentMember
+    rw [broadcast.packetReceiver]
+    rcases source.coversDirectParents parent parentMember with
+      acceptedAtStart | ⟨parentBlock, blockMember, blockReference⟩
+    · exact Or.inl (timed.execution.accepted_block_persists receiverInRange
+        deliveryBeforeParentsReady acceptedAtStart)
+    · simpa [ValidatorReferenceAcceptedOrGcRootAt, blockReference] using
+        historyReady parentBlock blockMember
+  by_cases blockAtRoot : block.reference.round ≤
+      ((timed.execution.trace parentsReadyAt).validatorState receiver).gcRound
+  · refine ⟨parentsReadyAt, deliveryBeforeParentsReady, ?_, Or.inr blockAtRoot⟩
+    exact Nat.le_trans parentsReadyBound (by
+      exact Nat.le_add_right _ (timed.localActionBound + 1))
+  · have blockAboveGc :
+        ((timed.execution.trace parentsReadyAt).validatorState
+          packet.receiver).gcRound < block.reference.round := by
+      rw [broadcast.packetReceiver]
+      omega
+    rcases delivered_block_with_current_gc_ready_parents_is_accepted timed
+        acceptanceRules packetAtDelivery broadcast.packetPayload delivered
+        (by simpa [broadcast.packetReceiver] using receiverInRange)
+        (by simpa [broadcast.packetReceiver] using receiverCorrectAvailable)
+        (by simpa [broadcast.blockAuthor] using senderInRange)
+        (Or.inr validParents) deliveryBeforeParentsReady blockAboveGc
+        parentsReady with
+      ⟨acceptedAt, parentsBeforeAccepted, acceptedWithinBound, accepted⟩
+    refine ⟨acceptedAt,
+      Nat.le_trans deliveryBeforeParentsReady parentsBeforeAccepted, ?_,
+        Or.inl (by simpa [broadcast.packetReceiver] using accepted)⟩
+    exact Nat.le_trans acceptedWithinBound
+      (Nat.add_le_add_right parentsReadyBound (timed.localActionBound + 1))
+
 /-- One public layer is an attained accepted quorum at its correct holder. -/
 theorem correct_held_total_quorum_layer_gives_accepted_quorum
     {BlockId CommitId PacketId : Type}

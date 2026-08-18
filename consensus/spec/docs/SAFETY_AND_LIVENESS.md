@@ -122,21 +122,34 @@ exact reference.
 The completion time can be different for each validator and each reference.
 The theorem does not give one fixed numerical lag bound for all future commits.
 
-The positive proof path uses ordinary DAG blocks. Each lagging validator gets
-later common DAG layers, uses a fresh favorable window, runs its local
-FlexCommitter, and installs a later exact reference. Exact-prefix safety then
-shows that its durable prefix contains the earlier exact reference. The later
-run does not have to reproduce the source validator's view or output.
+The adopted positive proof path uses ordinary DAG blocks. A fixed-reference
+quadratic wait aligns the local proposal windows. V2 current no-idle sources
+derive later own blocks. A proposed no-skip source reconstructs the finite
+intermediate round family that one favorable path needs. Pinned ordinary block
+sync and commit-orthogonal retention make the selected leaders usable at each
+queried receiver. Local FlexCommitter execution and exact-prefix induction then
+derive the same exact reference at every correct, available validator.
+
+Lean has a separate proved experiment that saves exact material from a past
+successful Flex run, sends a reference manifest, fetches the exact bodies
+parent-first, and runs a material-scoped replay action. It does not take a
+future replay result as an input. This experiment is proposed behavior, not
+current Rust subscription replay, and not an adopted liveness route.
 
 An actual synchronized install can close an already occurring race, but future
 commit-sync service, commit certificates, and commit votes are not liveness
-premises.
+premises. Commit sync can stop after commit-index catch-up while the ordinary
+DAG still lags. Normal DAG propagation and block sync must complete the
+liveness route.
 
 ## Properties that are not core liveness requirements
 
 The end-to-end theorem does not require these stronger properties:
 
-- Every correct validator produces its own blocks at unbounded rounds.
+- Every correct validator produces an own block in every round as a public
+  liveness result. The final conditional proof derives unbounded later
+  authorship. Its proposed no-skip source reconstructs only one finite internal
+  window.
 - Every correct validator gets its own transactions into commits.
 - Every honest proposal commits.
 - All correct validators stay within one fixed round or commit-index distance.
@@ -215,12 +228,17 @@ retry work. The open Rust mapping must justify this classification. The
 collective frontier proof derives future DAG progress from the current work.
 Commit output is not a DAG-progress result.
 
-The remaining second-stage proof must combine that infinite common DAG with
-recurring favorable leader windows and actual prepared Flex scans to derive
-unbounded local commit progress at every correct, available validator.
-Exact-prefix safety must then derive exact-reference catch-up. A future layer,
-favorable window, successful run, commit-sync result, or commit-vote result must
-not be added as a theorem input.
+The second stage is complete in Lean under the proposed source rules. The final
+theorem is `current_sources_give_end_to_end_liveness_probability_one`. It uses
+fixed-reference pacing, V2 no-skip round catch-up, V2 current no-idle block
+production, pinned sync, commit-orthogonal retention, local Flex execution, and
+exact-prefix induction. It does not use a future layer, carrier block, anchor,
+successful run, commit-sync result, or commit-vote result as an input.
+
+The strict proof derives timer spread from actual prior broadcasts and pinned
+sync. Its only promptness input is one action-local rule for an already-actual
+exact-next timer. The other strict source fields are static, local, current, or
+past.
 
 One safety-refinement obligation remains open. Lean now keeps the first direct
 or indirect origin, the exact historical indirect evidence, and the ordered

@@ -42,3 +42,4 @@ import Mysticeti.ValidatorRoundFrontierBridge
 import Mysticeti.ValidatorOperationalFrontierSuccessor
 import Mysticeti.ValidatorOperationalFrontierPacemaker
 import Mysticeti.ValidatorLocalDagSuccessorLiveness
+import Mysticeti.ValidatorFixedReferenceCurrentPacing

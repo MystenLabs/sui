@@ -1491,6 +1491,175 @@ theorem retained_parent_first_history_eventually_ready
             timed.execution requesterInRange blockFinishBeforeFinish blockReady
         · exact remainingReady item inRemaining
 
+/-- Every block in one retained parent-first history becomes ready within one
+fixed block-sync cost per history item.
+
+Ready means that the requester accepted the block, or that the block is at or
+below the GC round that is current when its fetch result is processed. A commit
+does not have to preserve or rebase the old fetch job. -/
+theorem retained_parent_first_history_ready_within_length_bound
+    {BlockId CommitId PacketId : Type}
+    {config : ValidatorEpochConfig CommitId}
+    {faults : FixedFaultInterval config}
+    {protocolPacket :
+      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+    {network : AddressedPartialSynchrony config faults protocolPacket}
+    {program : ValidatorExecutionProgram BlockId CommitId}
+    {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
+      protocolPacket network program}
+    (rules : ValidatorBlockSyncExecutionRules timed)
+    {holder requester : Nat} {blocks : List (ValidatorBlock BlockId)}
+    {start : Time}
+    (source :
+      RetainedValidatorBlockHistory timed.execution holder blocks start)
+    (requesterInRange : requester < config.authorityCount)
+    (requesterCorrectAvailable : faults.correctAvailable requester = true)
+    (afterGst : network.gst ≤ start)
+    (active : ∀ time, start ≤ time →
+      (timed.execution.trace time).epochActive = true)
+    (protectedWhileIncomplete : ∀ time,
+      start ≤ time →
+      (¬∀ item, item ∈ blocks →
+        ((timed.execution.trace time).validatorState requester).accepted
+          item.reference = true) →
+      ∀ item, item ∈ blocks →
+        rules.sourceProtected holder item.reference time)
+    (parentFirst : ParentFirstValidatorBlockHistory
+      (ValidatorReferenceAcceptedOrGcRootAt timed.execution start requester)
+      blocks) :
+    ∃ finish,
+      start ≤ finish ∧
+      finish ≤
+        start + blocks.length * validatorBlockSyncAcceptanceBound timed rules ∧
+      ∀ block, block ∈ blocks →
+        ValidatorReferenceAcceptedOrGcRootAt timed.execution finish requester
+          block.reference := by
+  induction blocks generalizing start with
+  | nil =>
+      exact ⟨start, Nat.le_refl start, by simp, by simp⟩
+  | cons block remaining ih =>
+      have blockMember : block ∈ block :: remaining := by simp
+      have blockSource := source.item blockMember
+      rcases retained_validator_block_accepted_or_obsolete_within_bound rules
+          blockSource requesterInRange requesterCorrectAvailable afterGst active
+          (by
+            intro time timeAfterStart blockNotAccepted _notObsolete
+            exact protectedWhileIncomplete time timeAfterStart (by
+              intro complete
+              have accepted := complete block blockMember
+              rw [blockNotAccepted] at accepted
+              simp at accepted) block blockMember)
+          (by simpa [ValidatorReferenceAcceptedOrGcRootAt] using parentFirst.1) with
+        ⟨blockFinish, startBeforeBlockFinish, blockFinishBound,
+          blockAcceptedOrObsolete⟩
+      have blockReady : ValidatorReferenceAcceptedOrGcRootAt timed.execution
+          blockFinish requester block.reference := by
+        rcases blockAcceptedOrObsolete with accepted | obsolete
+        · exact Or.inl accepted
+        · exact Or.inr (rules.goalObsoleteIsAtOrBelowGc requester
+            block.reference blockFinish requesterInRange
+              requesterCorrectAvailable obsolete)
+      by_cases remainingAlreadyReady : ∀ item, item ∈ remaining →
+          ValidatorReferenceAcceptedOrGcRootAt timed.execution blockFinish
+            requester item.reference
+      · refine ⟨blockFinish, startBeforeBlockFinish, ?_, ?_⟩
+        · calc
+            blockFinish ≤
+                start + validatorBlockSyncAcceptanceBound timed rules :=
+              blockFinishBound
+            _ ≤ start + (block :: remaining).length *
+                validatorBlockSyncAcceptanceBound timed rules := by
+              simp [List.length_cons, Nat.succ_mul]
+        · intro item member
+          simp only [List.mem_cons] at member
+          rcases member with sameBlock | inRemaining
+          · subst item
+            exact blockReady
+          · exact remainingAlreadyReady item inRemaining
+      · have fullSourceAtBlockFinish :=
+          retained_validator_block_history_persists rules source
+            startBeforeBlockFinish (by
+              intro item member time timeAfterStart timeBeforeBlockFinish
+              exact protectedWhileIncomplete time timeAfterStart (by
+                intro allAcceptedAtTime
+                apply remainingAlreadyReady
+                intro remainingItem remainingMember
+                exact Or.inl
+                  (timed.execution.accepted_block_persists requesterInRange
+                    timeBeforeBlockFinish
+                    (allAcceptedAtTime remainingItem
+                      (by simp [remainingMember]))))
+                item member)
+        have remainingSource : RetainedValidatorBlockHistory timed.execution
+            holder remaining blockFinish := by
+          refine
+            { holderInRange := fullSourceAtBlockFinish.holderInRange
+              holderCorrectAvailable :=
+                fullSourceAtBlockFinish.holderCorrectAvailable
+              retained := ?_
+              accepted := ?_
+              catalog := ?_
+              authorInRange := ?_
+              validParents := ?_ }
+          · intro item member
+            exact fullSourceAtBlockFinish.retained item (by simp [member])
+          · intro item member
+            exact fullSourceAtBlockFinish.accepted item (by simp [member])
+          · intro item member
+            exact fullSourceAtBlockFinish.catalog item (by simp [member])
+          · intro item member
+            exact fullSourceAtBlockFinish.authorInRange item (by simp [member])
+          · intro item member
+            exact fullSourceAtBlockFinish.validParents item (by simp [member])
+        have readyAtBlockFinish : ParentFirstValidatorBlockHistory
+            (ValidatorReferenceAcceptedOrGcRootAt timed.execution blockFinish
+              requester) remaining := by
+          exact parent_first_validator_block_history_mono (by
+            intro reference ready
+            rcases ready with readyAtStart | sameBlock
+            · exact validator_reference_accepted_or_gc_root_persists
+                timed.execution requesterInRange startBeforeBlockFinish
+                  readyAtStart
+            · rw [sameBlock]
+              exact blockReady) parentFirst.2
+        rcases ih remainingSource
+            (Nat.le_trans afterGst startBeforeBlockFinish) (by
+              intro time blockFinishBeforeTime
+              exact active time
+                (Nat.le_trans startBeforeBlockFinish blockFinishBeforeTime))
+            (by
+              intro time blockFinishBeforeTime remainingIncomplete item member
+              exact protectedWhileIncomplete time
+                (Nat.le_trans startBeforeBlockFinish blockFinishBeforeTime) (by
+                  intro allAccepted
+                  apply remainingIncomplete
+                  intro remainingItem remainingMember
+                  exact allAccepted remainingItem (by simp [remainingMember]))
+                item (by simp [member]))
+            readyAtBlockFinish with
+          ⟨finish, blockFinishBeforeFinish, finishBound, remainingReady⟩
+        refine ⟨finish, Nat.le_trans startBeforeBlockFinish
+          blockFinishBeforeFinish, ?_, ?_⟩
+        · calc
+            finish ≤ blockFinish + remaining.length *
+                validatorBlockSyncAcceptanceBound timed rules := finishBound
+            _ ≤
+                (start + validatorBlockSyncAcceptanceBound timed rules) +
+                  remaining.length *
+                    validatorBlockSyncAcceptanceBound timed rules :=
+              Nat.add_le_add_right blockFinishBound _
+            _ = start + (block :: remaining).length *
+                validatorBlockSyncAcceptanceBound timed rules := by
+              simp only [List.length_cons, Nat.succ_mul]
+              ac_rfl
+        · intro item member
+          simp only [List.mem_cons] at member
+          rcases member with sameBlock | inRemaining
+          · subst item
+            exact validator_reference_accepted_or_gc_root_persists
+              timed.execution requesterInRange blockFinishBeforeFinish blockReady
+          · exact remainingReady item inRemaining
+
 /-- Every block in one finite retained parent-first history is eventually
 accepted by one correct, available requester. -/
 theorem retained_parent_first_history_eventually_accepted

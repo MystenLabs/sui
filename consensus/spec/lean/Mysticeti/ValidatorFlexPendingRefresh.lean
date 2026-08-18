@@ -1063,6 +1063,37 @@ structure ValidatorFlexRunDagSupport
       actionBefore actionAfter →
     actionBefore.blockCatalog reference.id = some (body reference)
 
+/-- The literal post-refresh input read by one actual local Flex run.
+
+The base observation fixes the main-trace action, its action-before local
+state, and its host. The additional field is the input that Rust passes to the
+scan after it refreshes the pending rounds. -/
+structure LocalFlexCommitterPostRefreshRunObservation
+    (BlockId CommitId : Type)
+    (base : LocalFlexCommitterRunObservation BlockId CommitId) where
+  internalInput : ReferenceFlexTryCommitInput BlockId CommitId
+
+namespace LocalFlexCommitterPostRefreshRunObservation
+
+/-- Forget the internal input and expose the result that the literal input
+computes through the existing runtime observation interface. -/
+def toRunObservation
+    {BlockId CommitId History Encoding : Type}
+    {functions : CommitReferenceFunctions CommitId
+      (LeaderBlockRef BlockId) Encoding}
+    {context : ValidatorFlexContextAt BlockId CommitId History}
+    {base : LocalFlexCommitterRunObservation BlockId CommitId}
+    (observation : LocalFlexCommitterPostRefreshRunObservation BlockId CommitId
+      base) :
+    LocalFlexCommitterRunObservation BlockId CommitId :=
+  { time := base.time
+    validator := base.validator
+    input := base.input
+    result := tryReferenceFlexCommitWithContext functions
+      (context base.validator base.input) observation.internalInput }
+
+end LocalFlexCommitterPostRefreshRunObservation
+
 /-- One-host source mapping for Rust pending refresh and exact scan effects.
 
 All forward fields are conditional on an actual main-trace `runCommitter`
@@ -1089,9 +1120,20 @@ structure ValidatorFlexPendingRefreshSourceMap
   cacheAt : Nat → ValidatorLocalState BlockId CommitId →
     ValidatorFlexPendingCache BlockId CommitId ScheduleKey
   highestAcceptedRound : Nat → ValidatorLocalState BlockId CommitId → Nat
-  /-- The Rust-local input read after the internal refresh. -/
-  internalScanInput : LocalFlexCommitterRunObservation BlockId CommitId →
-    ReferenceFlexTryCommitInput BlockId CommitId
+  /-- The actual run observation carries the literal input read after the
+  internal refresh. -/
+  actualRunObservation : ∀
+      (observation : LocalFlexCommitterRunObservation BlockId CommitId),
+    observation.OccursIn timed →
+    LocalFlexCommitterPostRefreshRunObservation BlockId CommitId observation
+  /-- The literal post-refresh observation is the result returned by this same
+  main-trace action. -/
+  actualRunObservationIsReturned : ∀
+      (observation : LocalFlexCommitterRunObservation BlockId CommitId),
+    (occurs : observation.OccursIn timed) →
+    runtime.returned
+      ((actualRunObservation observation occurs).toRunObservation
+        (functions := functions) (context := context))
   /-- The exact cache projects to the status-only field in the main model. -/
   cacheProjectsMainState : ∀ validator state,
     (cacheAt validator state).rounds.map referenceRoundPendingProjection =
@@ -1173,22 +1215,10 @@ structure ValidatorFlexPendingRefreshSourceMap
   /-- The internal input is exactly the deterministic refreshed input. -/
   actualRunInternalInputIsPrepared : ∀
       (observation : LocalFlexCommitterRunObservation BlockId CommitId),
-    observation.OccursIn timed →
-    internalScanInput observation =
+    (occurs : observation.OccursIn timed) →
+    (actualRunObservation observation occurs).internalInput =
       validatorFlexPreparedInputAt source schedule cacheAt
         highestAcceptedRound observation
-  /-- The existing runtime result is reconstructed from the exact internal
-  input. This is an abstract result refinement. The present main runtime
-  observation does not expose Rust's internal post-refresh input directly. -/
-  actualRunResultReconstructsFromInternalInput : ∀
-      (observation : LocalFlexCommitterRunObservation BlockId CommitId),
-    observation.OccursIn timed →
-    tryReferenceFlexCommitWithContext functions
-        (context observation.validator observation.input)
-        (source.snapshot observation.validator observation.input) =
-      tryReferenceFlexCommitWithContext functions
-        (context observation.validator observation.input)
-        (internalScanInput observation)
   /-- The same atomic run stores the exact post-scan pending cache. -/
   actualRunStoresPostScanCache : ∀
       (observation : LocalFlexCommitterRunObservation BlockId CommitId)
@@ -1303,6 +1333,25 @@ variable {source : LocalFlexCommitterSourceMap config functions context program}
 variable {runtime : LocalFlexCommitterRuntime timed source}
 variable {initial : ValidatorFlexInitialDagSupport timed}
 variable {schedule : ValidatorFlexPendingSchedule CommitId ScheduleKey}
+
+/-- The old runtime result and the literal post-refresh result are equal
+because they are two views of the same returned local action. -/
+theorem actualRunResultReconstructsFromInternalInput
+    (mapping : ValidatorFlexPendingRefreshSourceMap source runtime initial
+      schedule)
+    (observation : LocalFlexCommitterRunObservation BlockId CommitId)
+    (occurs : observation.OccursIn timed) :
+    tryReferenceFlexCommitWithContext functions
+        (context observation.validator observation.input)
+        (source.snapshot observation.validator observation.input) =
+      tryReferenceFlexCommitWithContext functions
+        (context observation.validator observation.input)
+        (mapping.actualRunObservation observation occurs).internalInput := by
+  have returned := mapping.actualRunObservationIsReturned observation occurs
+  have exactResult := runtime.everyReturnedResultIsExact
+    ((mapping.actualRunObservation observation occurs).toRunObservation
+      (functions := functions) (context := context)) returned
+  exact exactResult.symm
 
 /-- The finite rank of one actual prepared input. -/
 def preparedRank

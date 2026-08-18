@@ -9,49 +9,36 @@ namespace Mysticeti
 
 /-! Local timer rules for commit progress recovery.
 
-The wait duration is a function of the absolute proposal round. The stalled
-commit prefix still keys timer identity and reset behavior, but it does not
-change the duration. Thus, validators with different installed prefixes use the
-same wait for the same round. A local recovery-attempt counter is not part of
-the key.
+The wait duration can depend on the commit head and the proposal round. Thus,
+it can use the gap between the proposal round and the committed leader round.
+The commit head also keys timer identity and reset behavior. A local
+recovery-attempt counter is not part of the key.
 
 This file proves only a pointwise timing result. It does not assume that a leader
 block is included, that a vote exists, or that vote stake reaches a quorum.
 -/
 
-/-- A common recovery wait for each absolute target round. Successive wait
+/-- One recovery-wait policy. For each fixed commit head, successive wait
 margins eventually remain above each finite bound. -/
 structure CommonRoundWaitSchedule (CommitPrefix : Type) where
   wait : CommitPrefix → Nat → Time
   permanentSuccessiveMargin : ∀ commitHead bound, ∃ firstRound, ∀ round,
     firstRound ≤ round →
       wait commitHead round + bound ≤ wait commitHead (round + 1)
-  /-- The commit head keys timer identity and reset behavior, but the wait
-  duration depends only on the absolute proposal round. -/
-  headIndependent : ∀ left right round,
-    wait left round = wait right round
 
 namespace CommonRoundWaitSchedule
 
-/-- The next-round wait for one local commit head eventually covers the
-same-round wait for another head and any fixed delivery cost.
-
-This is the pacing fact used after some validators have installed the next
-commit and other validators still have the prior commit. -/
-theorem eventually_covers_cross_head_visibility
+/-- For one fixed commit head, the next-round wait eventually covers the
+same-round wait and any fixed delivery cost. -/
+theorem eventually_covers_same_head_visibility
     {CommitPrefix : Type}
     (schedule : CommonRoundWaitSchedule CommitPrefix)
-    (senderHead receiverHead : CommitPrefix) (cost : Nat) :
+    (commitHead : CommitPrefix) (cost : Nat) :
     ∃ firstRound, ∀ round,
       firstRound ≤ round →
-        schedule.wait senderHead round + cost ≤
-          schedule.wait receiverHead (round + 1) := by
-  rcases schedule.permanentSuccessiveMargin receiverHead cost with
-    ⟨firstRound, margin⟩
-  refine ⟨firstRound, ?_⟩
-  intro round firstBeforeRound
-  rw [schedule.headIndependent senderHead receiverHead round]
-  exact margin round firstBeforeRound
+        schedule.wait commitHead round + cost ≤
+          schedule.wait commitHead (round + 1) := by
+  exact schedule.permanentSuccessiveMargin commitHead cost
 
 /-- The permanent margin rule covers the complete timing cost of one leader
 proposal, one message delivery, and one local acceptance action. No comparison
