@@ -361,22 +361,17 @@ impl ResolvedRange {
         }
 
         if let Some(cursor) = &options.before {
-            let position = u64_cursor_position(cursor);
-            if matches!(options.ordering, Ordering::Descending) {
-                entry_checkpoint = entry_checkpoint.min(cursor.position.checkpoint());
+            let (next_end, next_entry, next_cursor_terminal, terminal) =
+                Self::apply_before_cursor(start, end, entry_checkpoint, cursor, options.ordering);
+            end = next_end;
+            entry_checkpoint = next_entry;
+            if next_cursor_terminal.is_some() {
+                cursor_terminal = next_cursor_terminal;
             }
-            if position <= end {
-                end = position;
-                if matches!(options.ordering, Ordering::Ascending) || position <= start {
-                    cursor_terminal = Some((cursor.position.checkpoint(), position));
-                }
-                if matches!(options.ordering, Ordering::Ascending) {
-                    end_checkpoint = cursor.position.checkpoint();
-                    end_position = position;
-                    exhaustion = RangeExhaustion::CursorBound {
-                        kind: sui_rpc_cursor::CursorKind::Boundary,
-                    };
-                }
+            if let Some((checkpoint, position, cursor_exhaustion)) = terminal {
+                end_checkpoint = checkpoint;
+                end_position = position;
+                exhaustion = cursor_exhaustion;
             }
         }
 
@@ -466,6 +461,43 @@ impl ResolvedRange {
             }
         }
         ControlFlow::Continue((start, entry_checkpoint, cursor_terminal, terminal))
+    }
+
+    fn apply_before_cursor(
+        start: u64,
+        mut end: u64,
+        mut entry_checkpoint: u64,
+        cursor: &CursorToken,
+        ordering: Ordering,
+    ) -> (
+        u64,
+        u64,
+        Option<(u64, u64)>,
+        Option<(u64, u64, RangeExhaustion)>,
+    ) {
+        let mut cursor_terminal = None;
+        let mut terminal = None;
+
+        let position = u64_cursor_position(cursor);
+        if matches!(ordering, Ordering::Descending) {
+            entry_checkpoint = entry_checkpoint.min(cursor.position.checkpoint());
+        }
+        if position <= end {
+            end = position;
+            if matches!(ordering, Ordering::Ascending) || position <= start {
+                cursor_terminal = Some((cursor.position.checkpoint(), position));
+            }
+            if matches!(ordering, Ordering::Ascending) {
+                terminal = Some((
+                    cursor.position.checkpoint(),
+                    position,
+                    RangeExhaustion::CursorBound {
+                        kind: sui_rpc_cursor::CursorKind::Boundary,
+                    },
+                ));
+            }
+        }
+        (end, entry_checkpoint, cursor_terminal, terminal)
     }
 
     /// Reconcile the interval and its watermark metadata after the backend
@@ -2018,6 +2050,161 @@ mod tests {
         assert_eq!(
             resolved_range(10..20).apply_cursor_bounds(&options),
             expected
+        );
+    }
+
+    #[test]
+    fn tx_before_cursor_tightens_descending_upper_bound() {
+        let seed = ResolvedRange {
+            entry_checkpoint: 8,
+            ..resolved_range(10..20)
+        };
+        // The before-arm is kind-agnostic: Item and Boundary cursors produce
+        // identical records.
+        let expected = ResolvedRange {
+            range: 10..15,
+            entry_checkpoint: 6,
+            ..seed.clone()
+        };
+        let options = before_options(Ordering::Descending, tx_item(6, 15));
+        assert_eq!(seed.clone().apply_cursor_bounds(&options), expected);
+        let options = before_options(Ordering::Descending, tx_boundary(6, 15));
+        assert_eq!(seed.apply_cursor_bounds(&options), expected);
+    }
+
+    #[test]
+    fn tx_before_cursor_beyond_upper_bound_only_folds_entry() {
+        let seed = ResolvedRange {
+            entry_checkpoint: 5,
+            ..resolved_range(10..20)
+        };
+        let expected = ResolvedRange {
+            entry_checkpoint: 1,
+            ..seed.clone()
+        };
+        let options = before_options(Ordering::Descending, tx_boundary(1, 25));
+        assert_eq!(seed.clone().apply_cursor_bounds(&options), expected);
+        let options = before_options(Ordering::Descending, tx_item(1, 25));
+        assert_eq!(seed.clone().apply_cursor_bounds(&options), expected);
+
+        let options = before_options(Ordering::Ascending, tx_boundary(1, 25));
+        assert_eq!(seed.clone().apply_cursor_bounds(&options), seed);
+        let options = before_options(Ordering::Ascending, tx_item(1, 25));
+        assert_eq!(seed.clone().apply_cursor_bounds(&options), seed);
+    }
+
+    #[test]
+    fn tx_before_cursor_pins_ascending_terminal() {
+        let expected = ResolvedRange {
+            range: 10..15,
+            entry_checkpoint: 0,
+            end_checkpoint: 6,
+            end_position: 15,
+            exhaustion: RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Boundary,
+            },
+        };
+        let options = before_options(Ordering::Ascending, tx_boundary(6, 15));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+        let options = before_options(Ordering::Ascending, tx_item(6, 15));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+    }
+
+    #[test]
+    fn tx_before_cursor_empties_ascending_interval() {
+        // The before-arm is kind-agnostic: Item and Boundary cursors produce
+        // identical records.
+        let expected = ResolvedRange {
+            range: 5..5,
+            entry_checkpoint: 0,
+            end_checkpoint: 1,
+            end_position: 5,
+            exhaustion: RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Boundary,
+            },
+        };
+        let options = before_options(Ordering::Ascending, tx_item(1, 5));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+        let options = before_options(Ordering::Ascending, tx_boundary(1, 5));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+    }
+
+    #[test]
+    fn tx_before_cursor_empties_descending_interval() {
+        let seed = ResolvedRange {
+            entry_checkpoint: 5,
+            ..resolved_range(10..20)
+        };
+        // The before-arm is kind-agnostic: Item and Boundary cursors produce
+        // identical records.
+        let expected = ResolvedRange {
+            range: 5..5,
+            entry_checkpoint: 1,
+            end_checkpoint: 1,
+            end_position: 5,
+            exhaustion: RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Boundary,
+            },
+        };
+        let options = before_options(Ordering::Descending, tx_item(1, 5));
+        assert_eq!(seed.clone().apply_cursor_bounds(&options), expected);
+        let options = before_options(Ordering::Descending, tx_boundary(1, 5));
+        assert_eq!(seed.apply_cursor_bounds(&options), expected);
+    }
+
+    #[test]
+    fn tx_before_cursor_preserves_after_attribution() {
+        // Rejected before-cursor must not clobber the after-cursor's recorded
+        // terminal.
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Ascending,
+            after: Some(tx_boundary(5, 25)),
+            before: Some(tx_boundary(8, 30)),
+        };
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            ResolvedRange {
+                range: 25..25,
+                entry_checkpoint: 5,
+                end_checkpoint: 5,
+                end_position: 25,
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            }
+        );
+
+        // When the before-cursor records too, it wins the attribution.
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Ascending,
+            after: Some(tx_boundary(5, 25)),
+            before: Some(tx_item(3, 15)),
+        };
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            ResolvedRange {
+                range: 15..15,
+                entry_checkpoint: 5,
+                end_checkpoint: 3,
+                end_position: 15,
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            }
         );
     }
 
