@@ -139,6 +139,14 @@ impl ValidatorProposer {
             .with_label_values(&["ValidatorProposer::smart_ancestors_to_propose"])
             .start_timer();
 
+        // Only v3 keeps a leader ancestor which has the EXCLUDE state. This limit keeps v2
+        // ancestor selection the same as before v3.
+        let leader_slots: &[Slot] = if self.context.protocol_config.enable_v3() {
+            leader_slots
+        } else {
+            &[]
+        };
+
         // Now take the ancestors before the clock_round (excluded) for each authority.
         let all_ancestors = self
             .dag_state

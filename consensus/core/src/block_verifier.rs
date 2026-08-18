@@ -7,7 +7,9 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
     VerifiedBlock,
-    block::{BlockAPI, GENESIS_ROUND, SignedBlock, genesis_blocks, max_transaction_vote_targets},
+    block::{
+        Block, BlockAPI, GENESIS_ROUND, SignedBlock, genesis_blocks, max_transaction_vote_targets,
+    },
     context::Context,
     error::{ConsensusError, ConsensusResult},
     transaction::TransactionVerifier,
@@ -66,8 +68,8 @@ impl SignedBlockVerifier {
 
     fn verify_block(&self, block: &SignedBlock) -> ConsensusResult<()> {
         let committee = &self.context.committee;
-        // The block must belong to the current epoch and have valid authority index,
-        // before having its signature verified.
+        // The block must belong to the current epoch, have the block version of the epoch and
+        // have a valid authority index, before its signature is verified.
         if block.epoch() != committee.epoch() {
             return Err(ConsensusError::WrongEpoch {
                 expected: committee.epoch(),
@@ -77,8 +79,26 @@ impl SignedBlockVerifier {
         if block.round() == 0 {
             return Err(ConsensusError::UnexpectedGenesisBlock);
         }
+        // All authorities of an epoch must run with the same protocol config. So a block of
+        // another version is invalid, even if it is otherwise well formed. The match keeps this
+        // check complete when a new block version is added.
+        let enable_v3 = self.context.protocol_config.enable_v3();
+        let version_matches = match **block {
+            Block::V1(_) | Block::V2(_) => !enable_v3,
+            Block::V3(_) => enable_v3,
+        };
+        if !version_matches {
+            return Err(ConsensusError::UnexpectedBlockVersion {
+                version: if enable_v3 {
+                    format!("block {} is not V3 but v3 is enabled", block.slot())
+                } else {
+                    format!("block {} is V3 but v3 is disabled", block.slot())
+                },
+            });
+        }
         if !committee.is_valid_index(block.author()) {
             return Err(ConsensusError::InvalidAuthorityIndex {
+                loc: format!("verifying block {}", block.slot()),
                 index: block.author(),
                 max: committee.size() - 1,
             });
@@ -106,6 +126,7 @@ impl SignedBlockVerifier {
         for (i, ancestor) in block.ancestors().iter().enumerate() {
             if !committee.is_valid_index(ancestor.author) {
                 return Err(ConsensusError::InvalidAuthorityIndex {
+                    loc: format!("ancestor {}", ancestor),
                     index: ancestor.author,
                     max: committee.size() - 1,
                 });
@@ -146,7 +167,7 @@ impl SignedBlockVerifier {
             });
         }
 
-        if self.context.protocol_config.enable_v3() {
+        if enable_v3 {
             let cutoff = block.transaction_votes_cutoff_round();
             if cutoff >= block.round() {
                 return Err(ConsensusError::InvalidTransactionVotesCutoff {
@@ -163,7 +184,10 @@ impl SignedBlockVerifier {
 
     fn check_transaction_votes(&self, block: &SignedBlock) -> ConsensusResult<()> {
         let transaction_votes = block.transaction_votes();
-        // This check runs first, so the allocation and the scans below stay bounded.
+        if transaction_votes.is_empty() {
+            return Ok(());
+        }
+        // This check runs before the allocation and the scans below, to keep them bounded.
         let vote_target_limit = max_transaction_vote_targets(&self.context);
         if transaction_votes.len() > vote_target_limit {
             return Err(ConsensusError::InvalidTransactionVotes(format!(
@@ -187,6 +211,12 @@ impl SignedBlockVerifier {
 
         let mut vote_targets = BTreeSet::new();
         for votes in transaction_votes {
+            if !vote_targets.insert(votes.block_ref) {
+                return Err(ConsensusError::InvalidTransactionVotes(format!(
+                    "vote target {} appears more than once",
+                    votes.block_ref,
+                )));
+            }
             if votes.block_ref.round >= block.round() {
                 return Err(ConsensusError::InvalidTransactionVotes(format!(
                     "vote target {} must have a round less than block round {} from {}",
@@ -201,11 +231,16 @@ impl SignedBlockVerifier {
                     votes.block_ref, cutoff_round,
                 )));
             }
-            if !vote_targets.insert(votes.block_ref) {
-                return Err(ConsensusError::InvalidTransactionVotes(format!(
-                    "vote target {} appears more than once",
-                    votes.block_ref,
-                )));
+            if !self
+                .context
+                .committee
+                .is_valid_index(votes.block_ref.author)
+            {
+                return Err(ConsensusError::InvalidAuthorityIndex {
+                    loc: format!("transaction vote block {}", votes.block_ref),
+                    index: votes.block_ref.author,
+                    max: self.context.committee.size() - 1,
+                });
             }
             if votes.rejects.is_empty() {
                 return Err(ConsensusError::InvalidTransactionVotes(format!(
@@ -435,7 +470,11 @@ mod test {
             let signed_block = SignedBlock::new(block, author_protocol_keypair).unwrap();
             assert!(matches!(
                 verifier.verify_block(&signed_block),
-                Err(ConsensusError::InvalidAuthorityIndex { index: _, max: _ })
+                Err(ConsensusError::InvalidAuthorityIndex {
+                    loc: _,
+                    index: _,
+                    max: _
+                })
             ));
         }
 
@@ -658,20 +697,34 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_v3_validates_all_block_versions() {
-        let (mut context, keypairs) = Context::new_for_test(4);
-        context.protocol_config.set_enable_v3_for_testing(true);
+    async fn test_block_version_matches_protocol_config() {
+        let (context, keypairs) = Context::new_for_test(4);
         let epoch = context.committee.epoch();
-        let context = Arc::new(context);
         const AUTHOR: u32 = 2;
-        let verifier = SignedBlockVerifier::new(context, Arc::new(TxnSizeVerifier {}));
+        let author_key = &keypairs[AUTHOR as usize].1;
+        let mut v3_context = context.clone();
+        v3_context.protocol_config.set_enable_v3_for_testing(true);
+        // Genesis blocks differ between block versions, so a round 1 block of the wrong version
+        // also has unknown genesis ancestors.
+        let genesis_ancestors = |context: &Context| {
+            let mut refs = genesis_blocks(context)
+                .iter()
+                .map(|block| block.reference())
+                .collect::<Vec<_>>();
+            refs.swap(0, AUTHOR as usize);
+            refs
+        };
+        let v2_genesis = genesis_ancestors(&context);
+        let v3_genesis = genesis_ancestors(&v3_context);
+        let verifier = SignedBlockVerifier::new(Arc::new(context), Arc::new(TxnSizeVerifier {}));
+        let v3_verifier =
+            SignedBlockVerifier::new(Arc::new(v3_context), Arc::new(TxnSizeVerifier {}));
         let ancestors = vec![
             BlockRef::new(9, AuthorityIndex::new_for_test(2), BlockDigest::MIN),
             BlockRef::new(9, AuthorityIndex::new_for_test(0), BlockDigest::MIN),
             BlockRef::new(9, AuthorityIndex::new_for_test(1), BlockDigest::MIN),
         ];
         let test_block = TestBlock::new(10, AUTHOR).set_ancestors_raw(ancestors.clone());
-
         let v1 = SignedBlock::new(
             Block::V1(BlockV1::new(
                 epoch,
@@ -683,25 +736,65 @@ mod test {
                 vec![],
                 vec![],
             )),
-            &keypairs[AUTHOR as usize].1,
+            author_key,
         )
         .unwrap();
-        verifier.verify_block(&v1).unwrap();
+        let v2 = SignedBlock::new(test_block.clone().build(), author_key).unwrap();
+        let v3 = SignedBlock::new(test_block.clone().build_v3(0), author_key).unwrap();
         assert_eq!(v1.transaction_votes_cutoff_round(), GENESIS_ROUND);
-
-        let v2 =
-            SignedBlock::new(test_block.clone().build(), &keypairs[AUTHOR as usize].1).unwrap();
-        verifier.verify_block(&v2).unwrap();
         assert_eq!(v2.transaction_votes_cutoff_round(), GENESIS_ROUND);
 
-        let v3 =
-            SignedBlock::new(test_block.clone().build_v3(0), &keypairs[AUTHOR as usize].1).unwrap();
-        verifier.verify_block(&v3).unwrap();
-
-        let invalid_cutoff =
-            SignedBlock::new(test_block.build_v3(10), &keypairs[AUTHOR as usize].1).unwrap();
+        // Without v3, only the earlier block versions are valid.
+        verifier.verify_block(&v1).unwrap();
+        verifier.verify_block(&v2).unwrap();
         assert!(matches!(
-            verifier.verify_block(&invalid_cutoff),
+            verifier.verify_block(&v3),
+            Err(ConsensusError::UnexpectedBlockVersion { version })
+                if version.contains("is V3 but v3 is disabled")
+        ));
+
+        // With v3, only V3 blocks are valid.
+        v3_verifier.verify_block(&v3).unwrap();
+        for block in [&v1, &v2] {
+            assert!(matches!(
+                v3_verifier.verify_block(block),
+                Err(ConsensusError::UnexpectedBlockVersion { version })
+                    if version.contains("is not V3 but v3 is enabled")
+            ));
+        }
+
+        // The version check must run before the genesis ancestor check, which would otherwise
+        // report the unknown genesis ancestors of a round 1 block of the wrong version.
+        let round_1_v3 = SignedBlock::new(
+            TestBlock::new(1, AUTHOR)
+                .set_ancestors_raw(v3_genesis)
+                .build_v3(0),
+            author_key,
+        )
+        .unwrap();
+        v3_verifier.verify_block(&round_1_v3).unwrap();
+        assert!(matches!(
+            verifier.verify_block(&round_1_v3),
+            Err(ConsensusError::UnexpectedBlockVersion { version })
+                if version.contains("is V3 but v3 is disabled")
+        ));
+        let round_1_v2 = SignedBlock::new(
+            TestBlock::new(1, AUTHOR)
+                .set_ancestors_raw(v2_genesis)
+                .build(),
+            author_key,
+        )
+        .unwrap();
+        verifier.verify_block(&round_1_v2).unwrap();
+        assert!(matches!(
+            v3_verifier.verify_block(&round_1_v2),
+            Err(ConsensusError::UnexpectedBlockVersion { version })
+                if version.contains("is not V3 but v3 is enabled")
+        ));
+
+        let invalid_cutoff = SignedBlock::new(test_block.build_v3(10), author_key).unwrap();
+        assert!(matches!(
+            v3_verifier.verify_block(&invalid_cutoff),
             Err(ConsensusError::InvalidTransactionVotesCutoff {
                 cutoff: 10,
                 block: 10,

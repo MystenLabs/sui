@@ -487,6 +487,7 @@ impl SignedBlock {
         ensure!(
             committee.is_valid_index(block.author()),
             ConsensusError::InvalidAuthorityIndex {
+                loc: format!("verifying signature {}", block.slot()),
                 index: block.author(),
                 max: committee.size() - 1
             }
