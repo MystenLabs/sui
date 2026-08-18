@@ -992,6 +992,50 @@ async fn test_list_transactions_unfiltered_and_sender_filter() {
     );
 }
 
+/// (after = item n, before = item n + 1) serves nothing and ends with a CursorBound frame from the
+/// ascending stop side (before cursor.)
+#[sim_test]
+async fn test_list_transactions_after_before_adjacent_empty_results() {
+    let cluster = new_cluster().await;
+    let sender = cluster.get_address_0();
+    let tx = transfer_self(&cluster, sender).await;
+    let (start, end) = checkpoint_range(&[&tx]);
+
+    let mut client = new_ledger_client(&cluster).await;
+
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.options = Some(query_options(100));
+    let baseline = list_transactions_result(&mut client, req).await;
+    assert!(baseline.end);
+    assert!(
+        baseline.transactions.len() >= 2,
+        "need at least two transactions for adjacency windows"
+    );
+
+    let after = first_transaction_cursor(&baseline, "first item cursor");
+    let before = baseline.transactions[1]
+        .watermark
+        .as_ref()
+        .and_then(|w| w.cursor.clone())
+        .expect("second item cursor");
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.options = Some(query_options_between(3, after.clone(), before));
+    let resp = list_transactions_result(&mut client, req).await;
+    assert!(resp.transactions.is_empty());
+    assert!(resp.end);
+    assert_eq!(resp.end_reason, Some(QueryEndReason::CursorBound));
+    // The frame is the before side's stamp (a Boundary token at its coordinate,
+    // pinned exactly at unit level); opaquely: present, and not the after side.
+    assert!(resp.end_cursor.is_some());
+    assert_ne!(resp.end_cursor, Some(after));
+}
+
 #[sim_test]
 async fn test_list_transactions_rich_mask_matches_get_transaction() {
     let cluster = new_cluster().await;
