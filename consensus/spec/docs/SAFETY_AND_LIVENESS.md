@@ -142,6 +142,28 @@ premises. Commit sync can stop after commit-index catch-up while the ordinary
 DAG still lags. Normal DAG propagation and block sync must complete the
 liveness route.
 
+Commit sync is covered by this conditional split:
+
+1. If a verified synchronized install increases receiver `B`'s commit index,
+   `B` has completed the current pointwise progress step. Exact sync-install
+   provenance and exact-prefix safety constrain the installed reference.
+2. If `B`'s commit index never increases on the selected suffix, no local or
+   synchronized commit install can repeatedly cancel work on that suffix. The
+   ordinary recovery theorem supplies progress.
+
+This split needs no future commit-sync result. Product refinement still assumes
+that commit-sync traffic and work cannot starve ordinary block sync,
+subscription retry, proposal callbacks, or recovery timers. Rust supplies
+subscription-resume and periodic-sync-failover control paths. Their eventual
+service uses the existing partial-synchrony, peer-fairness, task-fairness,
+block-sync, and queue-service assumptions.
+
+GC has the same split. A newer GC round comes from a local commit advance, so it
+already completes the current progress step. BlockManager also removes missing
+dependencies at or below GC and releases their children. For the next progress
+step, the exact no-skip recovery target still needs the existing no-idle and
+safe-resume refinement. GC cleanup alone does not prove that scheduler rule.
+
 ## Properties that are not core liveness requirements
 
 The end-to-end theorem does not require these stronger properties:

@@ -409,6 +409,35 @@ cannot replace normal block synchronization in the liveness proof.
 This condition applies to old consensus state. Transaction payloads can be
 submitted again.
 
+### P1: isolate optional commit sync from ordinary recovery
+
+Related assumption: `ASM-LIVE-COMMIT-SYNC`.
+
+Current Rust has the required control transitions:
+
+- A suspended block subscription checks the local commit index once per second.
+  It resumes inside the one-batch catch-up band, and connection attempts retry
+  with bounded exponential backoff.
+- If commit lag suppresses periodic block sync and the local commit index does
+  not change for ten seconds, periodic sync starts its failover mode. It stays
+  active until the local index moves by one configured commit-sync batch.
+- Certified-commit processing accepts the exact commit blocks before install,
+  then attempts a proposal and signals a newer threshold-clock round.
+- GC removes missing dependencies at or below the new GC round and releases
+  children that depended on them.
+
+These transitions do not reserve CPU, network, or queue capacity. Keep the
+accepted rule that commit-sync traffic and work cannot starve ordinary block
+fetch, subscription retry, proposal callbacks, or recovery timers. Also keep
+the existing peer-fairness, task-fairness, block-sync, and queue-service rules.
+
+No separate commit-install cancellation assumption is needed for one commit
+progress step. If the receiver's commit index increases, the step is complete.
+If it does not increase, no commit installation can repeatedly reset that
+receiver on the analyzed suffix. For later steps, GC cleanup still needs the
+existing recovery no-idle and safe-resume mapping. BlockManager cleanup alone
+does not create the proof's exact no-skip recovery target.
+
 ### P1: import commit blocks before GC advances
 
 Related assumptions: `ASM-SAFE-GC` and

@@ -85,7 +85,23 @@ gate. Ordinary block delivery and recursive causal-history fetch can let the
 validator reproduce the missing commit locally. Optional commit synchronization
 can accelerate this work, but recovery proposals do not wait for it. Commit
 sync can stop after commit-index catch-up while the local ordinary DAG still
-lags.
+lags. The product mapping assumes that commit-sync traffic and processing do
+not starve ordinary block fetch, subscription retry, proposal callbacks, or
+recovery timers.
+
+A verified synchronized install is still part of the proof. If it increases
+the local commit index, the current receiver progress step is complete. If the
+local commit index does not increase on the selected suffix, synchronized
+installation cannot repeatedly reset recovery on that suffix. Subscription
+resume and periodic ordinary-sync failover are current Rust control paths. The
+existing network, peer, task, block-sync, and queue-service assumptions give
+them eventual service; commit-sync success is not assumed.
+
+GC also follows this receiver-local split. A newer GC round requires a local
+commit advance, which completes the current step. Rust then clears missing
+dependencies at or below GC and releases their children. Starting the exact
+next no-skip recovery phase after this cleanup remains part of the existing
+no-idle and safe-resume refinement.
 
 ## Next-round proposal policy
 

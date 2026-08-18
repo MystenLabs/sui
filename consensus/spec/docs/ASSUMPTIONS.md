@@ -49,6 +49,9 @@ past. A separate exact-replay proof experiment is not an adopted liveness route.
 - Correct local clocks continue to advance. Timers do not expire early, and each
   finite timer expires. Accepted commit timestamps have a bounded future offset.
 - Continuously enabled tasks at correct validators eventually run.
+- Commit-sync requests, responses, verification, and installation do not starve
+  ordinary block fetch, subscription retry, Core proposal callbacks, or recovery
+  timers. Commit-sync success itself is not assumed.
 
 ### Source-to-model and local product conditions
 
@@ -112,11 +115,11 @@ inputs.
 |---|---:|
 | Discharged in Lean | 1 |
 | Enforced in Rust | 2 |
-| Partially verified | 9 |
+| Partially verified | 8 |
 | Environmental assumption | 4 |
 | Open proof obligation | 4 |
 | Abstraction gap | 1 |
-| Accepted modeling assumption | 3 |
+| Accepted modeling assumption | 4 |
 | Known mismatch | 7 |
 
 A known mismatch blocks the affected product claim. Other open statuses identify
@@ -142,6 +145,10 @@ Last complete source review: 2026-08-15, at `d630b4452a8`.
 Focused leader-schedule, exact-prefix, restart, and finalizer review:
 2026-08-17, at `2fecfec37462785ccd6684195aac9131e54ad251`. See the
 [assumption evidence ledger](ASSUMPTION_EVIDENCE.md).
+
+Focused commit-sync safety, subscription-resume, periodic-sync-failover, and GC
+review: 2026-08-18, at `2e05fcf9cbeba4d42b0cc4145312ae053dba14dc`.
+See [EV-COMMIT-SYNC-COVERAGE](ASSUMPTION_EVIDENCE.md#ev-commit-sync-coverage).
 
 ### Missing Rust behavior and open source refinements
 
@@ -177,7 +184,7 @@ Focused leader-schedule, exact-prefix, restart, and finalizer review:
 | `REF-PARENT-SYNC` | For an ordinary block, keep fetching each missing causal-history block above the requester's local cleanup round. Handle empty peer sets, recursive direct-parent discovery, and fair retries. References at or below local cleanup are committed roots and require no recovery. |
 | `REF-FLEX-ACCEPTED-BODY-OWNERSHIP` | At one actual Flex action-before state, map each authenticated accepted body from a correct author to that author's exact durable `ownBlockAt` entry. Derive the restored time-zero origin or an exact earlier proposal-persistence action from this current fact. Do not state future production. |
 | `REF-FLEX-POST-REFRESH-INPUT` | Map each actual `runCommitter` action to the literal scan input that Rust reads after it refreshes pending rounds. The same action must return the result computed from that input. Result equality is derived from the two views of the same action; it is not a separate future-result premise. |
-| `REF-COMMIT-SYNC-PROGRESS` | Optional commit synchronization can accelerate catch-up. It can stop after commit-index catch-up while the local ordinary DAG still lags. Therefore, the final liveness proof must not depend on commit-sync progress or commit votes in blocks. |
+| `REF-COMMIT-SYNC-PROGRESS` | Optional commit synchronization can accelerate catch-up. Subscription suspension must be released after local catch-up, and periodic ordinary sync must resume when commit-index progress stalls. Commit-sync work must not starve ordinary sync or proposal work. Commit sync can still stop after commit-index catch-up while the local ordinary DAG lags. Therefore, the final liveness proof must not depend on commit-sync success or commit votes in blocks. |
 | `REF-COMMON-COMMIT-CHAIN` | Establish one index-and-digest commit chain across local production, synchronization, and restart. |
 | `REF-GC-EVIDENCE` | Keep complete decision evidence across local production, synchronization, replay, restart, and transaction finalization. |
 | `REF-LEADER-BOUNDS` | Enforce `f + c < S` and `A <= P_r` from actual epoch stake. |
@@ -197,7 +204,7 @@ Focused leader-schedule, exact-prefix, restart, and finalizer review:
 | `REF-DURABLE-PROPOSAL` | A local proposal is durable before broadcast. |
 | `REF-PARENT-QUORUM` | An ordinary accepted non-genesis block has immediate parents from distinct validators with quorum stake. |
 | `REF-BLOCK-PARENT-ACCEPTANCE` | The ordinary live path accepts required above-boundary parents before their child. Certified commits use a separate checked path. |
-| `REF-BLOCK-SYNC-MECHANISMS` | Direct, periodic, history, and stall-recovery block-fetch paths exist. Their existence does not prove progress. |
+| `REF-BLOCK-SYNC-MECHANISMS` | Direct, periodic, history, and stall-recovery block-fetch paths exist. When commit lag suppresses periodic sync, a commit-index stall starts the periodic failover path. Their existence and this transition do not by themselves prove peer service or scheduling progress. |
 | `REF-COMMIT-SYNC-CHECKS` | Synchronized ranges are checked for indexes, digest links, block references, gaps, order, and quorum support on the range tip. Each commit does not have a separate certificate. |
 | `REF-LEADER-SCHEDULE` | The same prefix and same fixed build and random-generator configuration produce the same ordered schedule and interval. |
 | `REF-ROUND-LEADER-SELECTION` | Each stored pending v3 round contains the full schedule in one deterministic round order. Thus, `P_r = S`. |
@@ -587,15 +594,42 @@ finalizer work is not evidence for this result.
 
 ## ASM-LIVE-COMMIT-SYNC
 
-- **Claim:** This identifier is not a liveness dependency. The final proof uses ordinary DAG blocks, recursive causal-history fetch, and local FlexCommitter execution. Commit sync can stop after commit-index catch-up while the local ordinary DAG still lags. Therefore, the proof does not require commit-sync progress or commit votes in blocks.
-- **Type:** Retired liveness obligation and optional acceleration path.
-- **Status:** Partially verified.
-- **Effect if false:** No effect on the final liveness theorem. If the optional path executes, its verification and provenance still affect safety.
-- **Lean use:** Exact sync-install provenance restricts optional synchronized actions in the safety proof only.
-- **Rust evidence:** Range checks and retries exist. Commit sync is driven by
-  commit lag, not by complete ordinary-DAG catch-up. It can stop when that lag
-  clears. It is not used to establish the liveness result.
-- **Discharge:** Keep sync verification mapped for safety. Do not add sync availability, certification, vote carriage, or service progress to liveness inputs.
+- **Claim:** Commit sync is an optional acceleration path. Its traffic and local
+  work do not starve ordinary block fetch, subscription retry, proposal work, or
+  recovery timers. The final proof does not require commit-sync success. If an
+  actual verified synchronized install advances the receiver's commit index,
+  that install satisfies the receiver-progress branch. Otherwise, ordinary DAG
+  synchronization, recovery proposals, local FlexCommitter execution, and the
+  existing queue-service rules continue.
+- **Type:** Accepted single-validator scheduling and resource-isolation model.
+- **Status:** Accepted modeling assumption.
+- **Effect if false:** Commit sync could prevent the ordinary path used by the
+  liveness proof from running. Invalid synchronized installation would instead
+  violate safety.
+- **Lean use:** No commit-sync availability or result is a liveness input.
+  `ValidatorReceiverCommitAdvance` is source-independent: a synchronized local
+  advance closes the current receiver step, while its negation excludes every
+  local commit-index advance on the analyzed suffix. Exact sync-install
+  provenance restricts actual synchronized actions in the safety proof.
+- **Rust evidence:** Subscription suspension uses a catch-up hysteresis band and
+  checks local progress once per second. Subscription connection attempts retry
+  with bounded exponential backoff. When commit lag suppresses periodic block
+  sync, ten seconds without local commit-index movement enables periodic
+  failover until one commit-sync batch of local progress occurs. Core verifies
+  certified ranges, installs only a consecutive extension, accepts the exact
+  commit blocks before GC moves, attempts a proposal, and signals a newer round.
+  GC removes obsolete missing dependencies and unsuspends their children.
+- **Limit:** Rust does not enforce a resource reservation that proves the
+  accepted non-starvation claim. The failover and suspension loops also need the
+  existing partial-synchrony, peer-fairness, task-fairness, block-sync, and
+  queue-service assumptions to derive eventual progress. GC cleanup does not by
+  itself prove the exact no-skip recovery target is re-armed; that is covered by
+  the existing recovery no-idle and safe-resume refinements.
+- **Evidence record:** [EV-COMMIT-SYNC-COVERAGE](ASSUMPTION_EVIDENCE.md#ev-commit-sync-coverage).
+- **Discharge:** Keep verified sync installation mapped for safety. Keep the
+  non-starvation rule explicit until scheduling and resource isolation enforce
+  it. Do not add future sync availability, certification, vote carriage, or a
+  synchronized commit result to liveness inputs.
 
 ## ASM-LIVE-PEER-FAIRNESS
 

@@ -511,8 +511,11 @@ commit synchronization as progress inputs. Vote and certificate facts are
 authenticated safety evidence for actual DAG blocks. Optional commit
 synchronization can remain as an acceleration path. It can stop after
 commit-index catch-up while the local ordinary DAG still lags, so it cannot
-replace normal block synchronization. Its provenance is a safety obligation
-only.
+replace normal block synchronization. Its provenance is a safety obligation.
+The product refinement also assumes that its traffic and local work cannot
+starve ordinary synchronization, proposal callbacks, or recovery timers. No
+future synchronized result is an input: an actual local index advance closes
+the receiver step, and the no-advance branch uses only the ordinary path.
 
 Lean also proves an exact-replay alternative. It saves exact material from a
 past successful Flex run, sends a reference manifest, fetches the named bodies

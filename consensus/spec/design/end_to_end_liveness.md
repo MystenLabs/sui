@@ -85,7 +85,16 @@ The positive path does not use `applySyncedCommit` or future commit-sync
 service. An actual synchronized install can close a safety or prefix race, but
 it cannot supply either stage's liveness premise. Commit sync can stop after
 commit-index catch-up while the local ordinary DAG still lags. Normal DAG
-propagation and block sync must provide the required availability.
+propagation and block sync must provide the required availability. The product
+mapping assumes that commit-sync traffic and local work do not starve those
+ordinary tasks.
+
+For each receiver, the proof treats any local commit-index increase as progress,
+without checking its source. Thus, a verified synchronized install completes
+the current receiver step. In the other branch, the commit index never
+increases on the analyzed suffix, so synchronized installation cannot keep
+resetting recovery there. This is why no commit-sync success or failure result
+is an end-to-end input.
 
 ## Public theorem inputs
 
@@ -329,7 +338,11 @@ simple local behavior to the same `ValidatorExecution`:
   a verified exact chain. This mapping is safety-only. The liveness proof does
   not use synchronization service, certificate production, or commit votes.
   Commit sync can stop after commit-index catch-up while the ordinary DAG still
-  lags.
+  lags. The product mapping separately assumes that commit-sync work cannot
+  starve ordinary synchronization and proposal work. Subscription resume and
+  periodic-sync failover are current Rust control paths; their eventual service
+  uses the ordinary network, peer, task, block-sync, and queue-service
+  assumptions.
 
 These are one-validator rules or source-to-model checks. They do not state a
 quorum, block layer, anchor, certificate, or later commit.

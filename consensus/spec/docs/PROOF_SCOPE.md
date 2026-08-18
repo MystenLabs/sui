@@ -245,7 +245,9 @@ The results depend on these groups of conditions:
   `ASM-REFINE-INTEGERS`.
 - **Network and runtime:** `ASM-LIVE-PARTIAL-SYNCHRONY`,
   `ASM-LIVE-PEER-FAIRNESS`, `ASM-LIVE-TASK-FAIRNESS`,
-  `ASM-LIVE-LOCAL-RESPONSE`, and `ASM-LIVE-PIPELINE-BOUNDS`.
+  `ASM-LIVE-LOCAL-RESPONSE`, `ASM-LIVE-PIPELINE-BOUNDS`, and
+  `ASM-LIVE-COMMIT-SYNC`. The commit-sync condition is resource isolation for
+  the ordinary path. It is not a commit-sync success assumption.
 - **Consensus progress:** `ASM-LIVE-FINITE-REFERENCE-SPACE`,
   `ASM-LIVE-ROUND-CATCHUP`,
   `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`, `ASM-LIVE-LOCAL-PROPOSAL`,

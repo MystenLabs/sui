@@ -19,16 +19,16 @@ one exact commit chain, transaction decisions, and durable output.
 ## Review snapshot
 
 - **Review date:** 2026-08-18.
-- **Product source revision:** `693cc4592c19a2471580ec2b176e3f4841f7a7bd`.
-- **Proof source:** the `tmw/mysticeti-v3-lean-main` working tree at that product
-  revision. Some proof files are not committed. Use declaration names as the
-  stable reference and replace this note with a proof revision before merge.
+- **Product and proof base revision:**
+  `2e05fcf9cbeba4d42b0cc4145312ae053dba14dc` on
+  `tmw/mysticeti-v3-lean-main`. This evidence update does not change proof or
+  product logic.
 - **Scope:** network round progress, fixed-reference pacing, V2 round catch-up,
   V2 current no-idle block production, pinned sync, commit-orthogonal
-  retention, local Flex execution, exact-prefix induction, the non-adopted
-  exact-replay proof experiment, leader schedule and probability evidence,
-  cached decision origin, commit storage and restart, and transaction finalizer
-  durability.
+  retention, local Flex execution, exact-prefix induction, commit-sync safety
+  and ordinary-sync failover, the non-adopted exact-replay proof experiment,
+  leader schedule and probability evidence, cached decision origin, commit
+  storage and restart, and transaction finalizer durability.
 
 ## Entry format
 
@@ -558,6 +558,89 @@ Audit date and source revision
   window length, or indirect commit depth.
 - **Audit date and source revision:** 2026-08-17 at
   `2fecfec37462785ccd6684195aac9131e54ad251`.
+
+## EV-COMMIT-SYNC-COVERAGE
+
+- **Related assumptions and review IDs:** `ASM-LIVE-COMMIT-SYNC`,
+  `ASM-LIVE-BLOCK-SYNC`, `ASM-LIVE-POST-GST-CAUSAL-SERVICE`,
+  `REF-COMMIT-SYNC-CHECKS`, `REF-COMMIT-SYNC-PROGRESS`,
+  `REF-BLOCK-SYNC-MECHANISMS`, `REF-LOCAL-PROPOSAL-PROGRESS`, and
+  `REF-RECOVERY-GC-FRONTIER`.
+- **Exact claim:** Commit sync is safe when an actual synchronized install has
+  the checked exact-chain provenance. Commit-sync success is not a liveness
+  premise. If a synchronized install increases one receiver's local commit
+  index, it satisfies that receiver's progress branch. If the index does not
+  increase, ordinary synchronization and recovery remain the liveness path.
+  Commit-sync work must not starve those ordinary tasks.
+- **Classification and status:** Exact synchronized-install safety and the
+  source-independent receiver split are proved in Lean. The Rust subscription
+  resume and periodic-sync failover transitions are verified and covered by
+  focused tests. Eventual progress through those transitions still uses the
+  accepted non-starvation rule and the existing partial-synchrony,
+  peer-fairness, task-fairness, block-sync, and queue-service assumptions.
+- **Rust evidence:**
+  - `CommitSyncer::fetch_once` fetches the certified range, verifies it, fetches
+    every exact block reference in each commit, and checks each returned
+    reference in
+    [commit_syncer.rs](../../core/src/commit_syncer.rs#L540-L720).
+  - `verify_commits` checks the requested start, consecutive indices, digest
+    links, full block verification, distinct-author vote aggregation, and quorum
+    support for the range tip in
+    [commit_syncer.rs](../../core/src/commit_syncer.rs#L820-L905).
+  - Core filters synchronized commits to the next local index, checks the
+    previous digest, accepts the exact commit blocks before each install, then
+    runs `try_propose(false)` and `try_signal_new_round` in
+    [core.rs](../../core/src/core.rs#L429-L466),
+    [core.rs](../../core/src/core.rs#L548-L590), and
+    [core.rs](../../core/src/core.rs#L796-L868).
+  - Subscription connection attempts retry with bounded exponential backoff.
+    Commit-lag suspension checks once per second and resumes inside a one-batch
+    lag band in
+    [observer_subscriber.rs](../../core/src/observer_subscriber.rs#L230-L304)
+    and
+    [observer_subscriber.rs](../../core/src/observer_subscriber.rs#L405-L468).
+  - Periodic ordinary sync resumes after ten seconds without a local
+    commit-index change and stays in failover until one batch of local progress
+    occurs in
+    [synchronizer.rs](../../core/src/synchronizer.rs#L936-L949) and
+    [synchronizer.rs](../../core/src/synchronizer.rs#L1065-L1140).
+  - After commit installation changes GC, BlockManager removes obsolete missing
+    dependencies and accepts children that no longer need those dependencies in
+    [block_manager.rs](../../core/src/block_manager.rs#L457-L529).
+- **Lean evidence:**
+  - `VerifiedSyncInstalledExactOrigin` and
+    `ExactCommitInstallProvenance.verifiedSyncInstallOrigin` constrain each
+    actual verified-sync install in
+    [ExactCommitPrefixSafety.lean](../lean/Mysticeti/ExactCommitPrefixSafety.lean#L1639-L1743).
+  - `favorable_event_and_current_sources_give_derived_receiver_progress`
+    splits on source-independent `ValidatorReceiverCommitAdvance`. A local
+    synchronized advance closes the left branch. The negative branch contains
+    no local commit-index advance and derives the ordinary fixed-reference path
+    in
+    [ValidatorFixedReferenceCurrentPacing.lean](../lean/Mysticeti/ValidatorFixedReferenceCurrentPacing.lean#L1125-L1165).
+- **Focused tests:**
+  - `test_suspend_subscription_on_commit_lag_and_resume` passes.
+  - `synchronizer_periodic_sync_resumes_when_commit_sync_stalled` passes.
+  - All three `unsuspend_blocks_for_latest_gc_round` cases pass.
+  - `commit_syncer_observer_node_basic`,
+    `commit_syncer_observer_with_multiple_peers`, and
+    `commit_syncer_start_and_pause_scheduling` pass.
+  - `add_certified_commits_v3` and `add_certified_commits_v3_gced_blocks` pass.
+- **What this evidence does not prove:** The suspension loop has no fixed
+  maximum duration without local catch-up. The failover control path does not
+  prove that a correct peer serves each request or that tasks receive enough
+  CPU, network, and queue capacity. GC cleanup resolves obsolete data
+  dependencies, but it does not by itself re-arm the proof's exact no-skip
+  recovery phase. The accepted non-starvation rule and the existing recovery
+  no-idle and safe-resume refinements cover these limits. Commit sync also does
+  not replace recursive ordinary-DAG synchronization.
+- **Revalidation triggers:** Changes to commit-range verification, certified
+  install order, commit-source provenance, subscription suspension thresholds,
+  subscription retry, periodic-sync gating or failover, GC unsuspension, Core
+  proposal triggering after commit installation, or the receiver-progress
+  split.
+- **Audit date and source revision:** 2026-08-18 at
+  `2e05fcf9cbeba4d42b0cc4145312ae053dba14dc`.
 
 ## EV-EXACT-COMMIT-PREFIX
 

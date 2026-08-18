@@ -1147,6 +1147,9 @@ theorem favorable_event_and_strict_v2_backfill_give_derived_receiver_progress
     DerivedReceiverFixedReferenceProgress (family.execution sampled).inputs := by
   intro start receiver prior afterGst active _priorInstalled receiverInRange
     receiverCorrect headAtStart
+  -- This split is source-independent. A verified synchronized install is
+  -- progress in the left branch. In the right branch, no local commit install
+  -- can repeatedly reset this receiver on the analyzed suffix.
   by_cases receiverAdvanced : ValidatorReceiverCommitAdvance
       (family.execution sampled).inputs.timedExecution start receiver
   · exact Or.inl receiverAdvanced

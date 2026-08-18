@@ -642,7 +642,13 @@ abbrev SomeCorrectAvailableCommitAdvance
     (start : Time) : Prop :=
   SomeCorrectAvailableCommitAdvanceFrom faults timed.execution.trace start
 
-/-- One fixed correct validator installs a commit with a larger local index. -/
+/-- One fixed correct validator installs a commit with a larger local index.
+
+This predicate does not select the install source. It includes a local
+FlexCommitter install and a verified synchronized install. The receiver-local
+liveness split can therefore use an actual synchronized advance as progress
+without assuming that commit sync will succeed.
+-/
 def ValidatorReceiverCommitAdvance
     {BlockId CommitId PacketId : Type}
     {config : ValidatorEpochConfig CommitId}
