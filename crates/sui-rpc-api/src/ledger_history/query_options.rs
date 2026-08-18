@@ -82,41 +82,18 @@ pub struct ScanBounds<P> {
 
 pub type IntraTxScanBounds = ScanBounds<IntraTxCoordinate>;
 
-/// A request's checkpoint bounds resolved into the scan-position interval to
-/// scan, annotated with the checkpoint-space facts watermark rendering needs.
-///
-/// Two coordinate spaces meet here: `bounds` lives in the lane's scan-key
-/// space, while wire watermarks speak checkpoints — coverage claims are
-/// checkpoint numbers and cursors are full `(checkpoint, position)`
-/// positions. Mapping a position back to its checkpoint takes a store
-/// lookup, so resolution captures the two endpoint checkpoints up front.
-///
-/// The endpoint checkpoints are deliberately *not* a `Range`: they are
-/// direction-relative (`entry_checkpoint` is numerically the high checkpoint
-/// of a descending scan), they serve unrelated consumers (coverage clamping
-/// vs. terminal-frame rendering), and only the terminal side carries a
-/// companion position.
+/// A request's checkpoint bounds resolved into the scan-position interval to scan, along with the
+/// checkpoint-space facts for watermark rendering.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResolvedScan<P> {
     /// Scan-position interval to scan, expressed as explicit lo/hi
     /// [`Bound`]s.
     pub bounds: ScanBounds<P>,
-    /// Checkpoint containing the interval's first position in scan
-    /// direction. Checkpoint-only because its sole consumer — the
-    /// covered-bound fold — claims coverage at checkpoint granularity: a
-    /// claim before it proves nothing and is suppressed, keeping the wire
-    /// `checkpoint` unset until the scan's first checkpoint is fully
-    /// covered.
+    /// Checkpoint containing the interval's first position in scan direction.
     pub entry_checkpoint: u64,
-    /// Checkpoint containing `end_position`. Together they form the
-    /// terminal-frame cursor position and the natural-completion coverage
-    /// claim when the scan exhausts the interval.
+    /// Checkpoint containing the `end_position`.
     pub end_checkpoint: u64,
-    /// The scan-position bound the scan *reports* when the interval is
-    /// exhausted (the terminal frame's cursor coordinate, paired with
-    /// `end_checkpoint`). Tracks the scan-direction edge of the interval as
-    /// cursor bounds tighten it, but stays pinned to the reported bound if
-    /// the backend further clamps the interval to available history.
+    /// Scan-direction terminal edge of the interval.
     pub end_position: P,
     /// Why the interval is exhausted once the scan drains it.
     pub exhaustion: RangeExhaustion,
@@ -273,24 +250,6 @@ impl ResolvedCheckpointRange {
         match ordering {
             Ordering::Ascending => self.range.end,
             Ordering::Descending => self.range.start,
-        }
-    }
-
-    pub fn with_range(self, range: Range<u64>, ordering: Ordering) -> ResolvedScan<u64> {
-        let end_position = match ordering {
-            Ordering::Ascending => range.end,
-            Ordering::Descending => range.start,
-        };
-        let entry_checkpoint = match ordering {
-            Ordering::Ascending => self.range.start,
-            Ordering::Descending => self.range.end.saturating_sub(1),
-        };
-        ResolvedScan {
-            bounds: ScanBounds::tx_span(range.start, range.end),
-            end_checkpoint: self.terminal_checkpoint(ordering),
-            end_position,
-            exhaustion: self.exhaustion,
-            entry_checkpoint,
         }
     }
 }

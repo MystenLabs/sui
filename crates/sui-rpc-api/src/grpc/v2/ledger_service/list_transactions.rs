@@ -632,13 +632,8 @@ fn resolve_tx_range(
     options: &QueryOptions,
 ) -> Result<ResolvedScan<u64>, RpcError> {
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
-    if cp_range.is_empty() {
-        return Ok(cp_range.with_range(tx_range, options.ordering));
-    }
-
-    let mut resolved = cp_range
-        .with_range(tx_range, options.ordering)
-        .apply_cursor_bounds(options);
+    let mut resolved =
+        ResolvedScan::<u64>::resolve(cp_range, tx_range, options).apply_cursor_bounds(options);
     if !resolved.is_empty()
         && let Some(floor) =
             clamp_to_serving_floor(service, resolved.range().start, start_checkpoint, options)?

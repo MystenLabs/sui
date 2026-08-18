@@ -928,9 +928,7 @@ fn resolve_cp_range(
     options: &QueryOptions,
 ) -> ResolvedScan<u64> {
     let range = cp_range.range.clone();
-    cp_range
-        .with_range(range, options.ordering)
-        .apply_cursor_bounds(options)
+    ResolvedScan::<u64>::resolve(cp_range, range, options).apply_cursor_bounds(options)
 }
 
 fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsResponse {
