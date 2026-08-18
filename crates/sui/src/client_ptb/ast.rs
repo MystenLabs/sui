@@ -39,6 +39,7 @@ pub const GAS_COIN: &str = "gas-coin";
 pub const JSON: &str = "json";
 pub const TX_DIGEST: &str = "tx-digest";
 pub const DRY_RUN: &str = "dry-run";
+pub const TRACE: &str = "trace";
 pub const DEV_INSPECT: &str = "dev-inspect";
 pub const SERIALIZE_UNSIGNED: &str = "serialize-unsigned-transaction";
 pub const SERIALIZE_SIGNED: &str = "serialize-signed-transaction";
@@ -81,6 +82,7 @@ pub const COMMANDS: &[&str] = &[
     GAS_COIN,
     JSON,
     DRY_RUN,
+    TRACE,
     DEV_INSPECT,
     SERIALIZE_UNSIGNED,
     SERIALIZE_SIGNED,
@@ -121,6 +123,8 @@ pub struct ProgramMetadata {
     pub json_set: bool,
     pub tx_digest_set: bool,
     pub dry_run_set: bool,
+    /// Whether best-effort local tracing was requested for the fullnode dry-run.
+    pub trace_set: bool,
     pub dev_inspect_set: bool,
     pub gas_budget: Option<Spanned<u64>>,
     pub gas_price: Option<Spanned<u64>>,

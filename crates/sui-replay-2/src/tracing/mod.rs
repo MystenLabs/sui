@@ -18,7 +18,7 @@ use move_trace_format::format::MoveTraceBuilder;
 use std::fs;
 use sui_types::object::Data;
 
-const BCODE_DIR: &str = "bytecode";
+pub(crate) const BCODE_DIR: &str = "bytecode";
 const SOURCE_DIR: &str = "source";
 
 /// Saves the trace and additional metadata needed to analyze the trace
