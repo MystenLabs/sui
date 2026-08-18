@@ -67,6 +67,7 @@ thread_local! {
 /// for this shard.
 pub(super) struct Merge {
     pub(super) checkpoint: u64,
+    pub(super) use_batch_write_flow_control: bool,
     /// This shard's slice of the commit's values. Pre-partitioned in
     /// `Handler::batch`, so the shard can iterate directly — no per-value
     /// shard check, no cross-shard indirection. `Arc` keeps the outer
@@ -225,7 +226,12 @@ impl AccumulatedRow {
     }
 
     /// Serialize the current bitmap into a fresh row write.
-    fn make_row_write(&mut self, row_key: Bytes, generation_cp: u64) -> writer::Row {
+    fn make_row_write(
+        &mut self,
+        row_key: Bytes,
+        generation_cp: u64,
+        use_batch_write_flow_control: bool,
+    ) -> writer::Row {
         self.bitmap.optimize();
         let needed = self.bitmap.serialized_size();
         let serialized = SER_BUF.with(|cell| {
@@ -242,6 +248,7 @@ impl AccumulatedRow {
             serialized,
             max_ts_ms: self.max_ts_ms,
             generation_cp,
+            use_batch_write_flow_control,
         }
     }
 }
@@ -272,7 +279,11 @@ impl Shard {
         merge: Merge,
         min_bucket_to_accumulate: BucketId,
     ) -> impl Iterator<Item = writer::Row> + 'a {
-        let Merge { checkpoint, values } = merge;
+        let Merge {
+            checkpoint,
+            use_batch_write_flow_control,
+            values,
+        } = merge;
         let mut changed_rows = FxHashSet::default();
         for v in values.iter() {
             if v.bucket_id < min_bucket_to_accumulate {
@@ -303,7 +314,7 @@ impl Shard {
                     .get_mut(&bucket_id)
                     .and_then(|rows| rows.get_mut(&key))?;
 
-                Some(row.make_row_write(key, checkpoint))
+                Some(row.make_row_write(key, checkpoint, use_batch_write_flow_control))
             })
     }
 
@@ -367,6 +378,7 @@ mod tests {
         let mut rows = shard.merge_in_bitmaps(
             Merge {
                 checkpoint,
+                use_batch_write_flow_control: true,
                 values: Arc::new(values),
             },
             0,
@@ -387,6 +399,7 @@ mod tests {
             .merge_in_bitmaps(
                 Merge {
                     checkpoint,
+                    use_batch_write_flow_control: true,
                     values: Arc::new(values),
                 },
                 min_bucket_to_accumulate,
@@ -423,6 +436,34 @@ mod tests {
         assert_eq!(first.len(), 1);
         assert!(second.is_empty());
         assert_eq!(row_count(&shard), 1);
+    }
+
+    #[tokio::test]
+    async fn crossing_batch_preserves_flow_control_classification() {
+        let mut shard = shard();
+        let values = vec![
+            value(b"mixed-row", 0, &[1], 10),
+            value(b"mixed-row", 0, &[2], 11),
+            value(b"live-row", 0, &[3], 11),
+        ];
+
+        let writes: Vec<_> = shard
+            .merge_in_bitmaps(
+                Merge {
+                    checkpoint: 11,
+                    use_batch_write_flow_control: true,
+                    values: Arc::new(values),
+                },
+                0,
+            )
+            .collect();
+
+        assert_eq!(writes.len(), 2);
+        assert!(
+            writes
+                .iter()
+                .all(|row| { row.use_batch_write_flow_control && row.generation_cp == 11 })
+        );
     }
 
     #[tokio::test]

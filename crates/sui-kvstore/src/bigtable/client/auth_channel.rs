@@ -62,6 +62,18 @@ impl<S> AuthChannel<S> {
     }
 }
 
+impl<S: Clone> AuthChannel<S> {
+    pub(crate) fn with_features_header(&self, features_header: HeaderValue) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            policy: self.policy.clone(),
+            token_provider: self.token_provider.clone(),
+            features_header,
+            token: self.token.clone(),
+        }
+    }
+}
+
 impl<S> Service<Request<Body>> for AuthChannel<S>
 where
     S: Service<Request<Body>, Response = Response<Body>> + Clone + Send + 'static,

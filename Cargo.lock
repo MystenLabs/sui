@@ -16010,6 +16010,7 @@ dependencies = [
  "move-core-types",
  "mysten-common",
  "num_cpus",
+ "parking_lot 0.12.3",
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",

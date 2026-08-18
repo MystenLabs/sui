@@ -142,6 +142,7 @@ impl ChannelPrimer for BigtablePrimer {
 pub struct BigTableClient {
     table_prefix: String,
     client: BigtableInternalClient<AuthChannel<ChannelPool>>,
+    flow_control_disabled_client: BigtableInternalClient<AuthChannel<ChannelPool>>,
     client_name: String,
     metrics: Option<Arc<KvMetrics>>,
     flow_controller: Option<Arc<BatchWriteFlowController>>,
@@ -170,12 +171,17 @@ impl BigTableClient {
             None,
             bigtable_features_header(batch_write_flow_control),
         );
+        let flow_control_disabled_auth_channel =
+            auth_channel.with_features_header(bigtable_features_header(false));
         let client_name = client_name.to_string();
         let flow_controller = batch_write_flow_control
             .then(|| BatchWriteFlowController::new(client_name.clone(), None));
         Ok(Self {
             table_prefix: format!("projects/emulator/instances/{}/tables/", instance_id),
             client: BigtableInternalClient::new(auth_channel),
+            flow_control_disabled_client: BigtableInternalClient::new(
+                flow_control_disabled_auth_channel,
+            ),
             client_name,
             metrics: None,
             flow_controller,
@@ -263,19 +269,35 @@ impl BigTableClient {
             Some(token_provider),
             bigtable_features_header(batch_write_flow_control),
         );
-        let client = BigtableInternalClient::new(auth_channel).max_decoding_message_size(
-            max_decoding_message_size.unwrap_or(DEFAULT_MAX_DECODING_MESSAGE_SIZE),
-        );
+        let flow_control_disabled_auth_channel =
+            auth_channel.with_features_header(bigtable_features_header(false));
+        let max_decoding_message_size =
+            max_decoding_message_size.unwrap_or(DEFAULT_MAX_DECODING_MESSAGE_SIZE);
+        let client = BigtableInternalClient::new(auth_channel)
+            .max_decoding_message_size(max_decoding_message_size);
+        let flow_control_disabled_client =
+            BigtableInternalClient::new(flow_control_disabled_auth_channel)
+                .max_decoding_message_size(max_decoding_message_size);
         let flow_controller = batch_write_flow_control
             .then(|| BatchWriteFlowController::new(client_name.clone(), metrics.clone()));
         Ok(Self {
             table_prefix,
             client,
+            flow_control_disabled_client,
             client_name,
             metrics,
             flow_controller,
             app_profile_id,
         })
+    }
+
+    /// Clone this client with batch-write flow-control feature advertisement and local admission
+    /// disabled.
+    pub(crate) fn without_batch_write_flow_control(&self) -> Self {
+        let mut client = self.clone();
+        client.client = client.flow_control_disabled_client.clone();
+        client.flow_controller = None;
+        client
     }
 
     /// Fetch transactions with an optional column filter for partial reads.
@@ -2305,6 +2327,25 @@ mod tests {
         })
         .await
         .expect("successful writes took too long to isolate flow-control feedback")
+    }
+
+    #[tokio::test]
+    async fn clone_without_batch_write_flow_control_disables_controller() {
+        let mock = MockBigtableServer::new();
+        let (addr, _handle) = mock.start().await.unwrap();
+        let controlled = BigTableClient::new_for_host(
+            addr.to_string(),
+            "test".to_string(),
+            "flow-control",
+            true,
+        )
+        .await
+        .unwrap();
+
+        let flow_control_disabled = controlled.without_batch_write_flow_control();
+
+        assert!(controlled.flow_controller.is_some());
+        assert!(flow_control_disabled.flow_controller.is_none());
     }
 
     #[tokio::test]

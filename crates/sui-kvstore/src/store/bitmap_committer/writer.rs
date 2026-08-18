@@ -18,10 +18,10 @@ use tokio::sync::mpsc;
 use tracing::info;
 use tracing::warn;
 
-use crate::bigtable::client::BigTableClient;
 use crate::bigtable::client::PartialWriteError;
 use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
 use crate::rate_limiter::CompositeRateLimiter;
+use crate::store::BigTableBatchWriter;
 use crate::tables;
 
 use super::BitmapIndexMetrics;
@@ -40,6 +40,8 @@ pub(super) struct Row {
     /// reports durable rows by this value, so generation accounting is a simple
     /// counter.
     pub(super) generation_cp: u64,
+    /// Whether this row write was produced by a startup backfill batch.
+    pub(super) use_batch_write_flow_control: bool,
 }
 
 /// Bounded unit sent from shards to the writer. Shards serialize rows
@@ -53,7 +55,7 @@ pub(super) struct Writer {
     pub(super) pipeline: &'static str,
     pub(super) table: &'static str,
     pub(super) column: &'static str,
-    pub(super) client: BigTableClient,
+    pub(super) batch_writer: BigTableBatchWriter,
     pub(super) rate_limiter: Arc<CompositeRateLimiter>,
     pub(super) write_rx: mpsc::Receiver<Batch>,
     pub(super) generation_tx: mpsc::Sender<generation::Event>,
@@ -77,7 +79,7 @@ struct WriteContext {
     pipeline: &'static str,
     table: &'static str,
     column: &'static str,
-    client: BigTableClient,
+    batch_writer: BigTableBatchWriter,
     rate_limiter: Arc<CompositeRateLimiter>,
     generation_tx: mpsc::Sender<generation::Event>,
     rows_written: Arc<AtomicU64>,
@@ -90,7 +92,7 @@ impl Writer {
             pipeline,
             table,
             column,
-            client,
+            batch_writer,
             rate_limiter,
             write_rx,
             generation_tx,
@@ -108,7 +110,7 @@ impl Writer {
             pipeline,
             table,
             column,
-            client,
+            batch_writer,
             rate_limiter,
             generation_tx,
             rows_written,
@@ -190,12 +192,18 @@ impl WriteContext {
     }
 
     async fn attempt_write_chunk(&self, chunk: Chunk) -> Attempt {
+        let use_batch_write_flow_control = chunk
+            .rows
+            .iter()
+            .any(|row| row.use_batch_write_flow_control);
         self.rate_limiter.acquire(chunk.rows.len()).await;
         let entries = make_entries(&chunk.rows, self.column);
 
         let write_start = Instant::now();
-        let mut client = self.client.clone();
-        let result = client.write_entries(self.table, entries).await;
+        let result = self
+            .batch_writer
+            .write_entries(self.table, entries, use_batch_write_flow_control)
+            .await;
         self.metrics
             .write_chunk_latency
             .observe(write_start.elapsed().as_secs_f64());
@@ -296,6 +304,7 @@ mod tests {
             serialized: Bytes::from_static(b"bitmap"),
             max_ts_ms: generation_cp * 1_000,
             generation_cp,
+            use_batch_write_flow_control: true,
         }
     }
 
@@ -351,6 +360,7 @@ mod tests {
             serialized: Bytes::from_static(b"bitmap"),
             max_ts_ms: 123,
             generation_cp: 1,
+            use_batch_write_flow_control: true,
         }];
 
         let entries = make_entries(&rows, "bitmap");

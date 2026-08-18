@@ -3,9 +3,9 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use bytes::Bytes;
+use parking_lot::RwLock;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::pipeline::concurrent::BatchStatus;
 use sui_indexer_alt_framework::pipeline::concurrent::Handler;
@@ -42,6 +42,19 @@ pub struct BigTableHandler<P> {
     processor: P,
     max_rows: usize,
     rate_limiter: Arc<CompositeRateLimiter>,
+    latest_checkpoint_at_startup: u64,
+}
+
+/// A BigTable entry paired with the checkpoint that produced it.
+pub struct CheckpointedEntry {
+    checkpoint: u64,
+    entry: Entry,
+}
+
+impl CheckpointedEntry {
+    fn new(entry: Entry, checkpoint: u64) -> Self {
+        Self { checkpoint, entry }
+    }
 }
 
 /// Batch of BigTable entries.
@@ -55,6 +68,7 @@ pub struct BigTableBatch {
 struct BigTableBatchInner {
     entries: BTreeMap<Bytes, Entry>,
     total_mutations: usize,
+    use_batch_write_flow_control: bool,
 }
 
 impl<P> BigTableHandler<P>
@@ -65,11 +79,13 @@ where
         processor: P,
         config: &ConcurrentLayer,
         rate_limiter: Arc<CompositeRateLimiter>,
+        latest_checkpoint_at_startup: u64,
     ) -> Self {
         Self {
             processor,
             max_rows: config.max_rows_or_default(),
             rate_limiter,
+            latest_checkpoint_at_startup,
         }
     }
 }
@@ -80,10 +96,17 @@ where
     P: BigTableProcessor + Send + Sync,
 {
     const NAME: &'static str = P::NAME;
-    type Value = Entry;
+    type Value = CheckpointedEntry;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
-        self.processor.process(checkpoint).await
+        let checkpoint_number = checkpoint.summary.sequence_number;
+        Ok(self
+            .processor
+            .process(checkpoint)
+            .await?
+            .into_iter()
+            .map(|entry| CheckpointedEntry::new(entry, checkpoint_number))
+            .collect())
     }
 }
 
@@ -103,11 +126,13 @@ where
         batch: &mut Self::Batch,
         values: &mut std::vec::IntoIter<Self::Value>,
     ) -> BatchStatus {
-        let mut inner = batch.inner.write().unwrap();
+        let mut inner = batch.inner.write();
 
-        for entry in values {
-            inner.total_mutations += entry.mutations.len();
-            inner.entries.insert(entry.row_key.clone(), entry);
+        for next in values {
+            inner.use_batch_write_flow_control |=
+                next.checkpoint <= self.latest_checkpoint_at_startup;
+            inner.total_mutations += next.entry.mutations.len();
+            inner.entries.insert(next.entry.row_key.clone(), next.entry);
 
             if inner.entries.len() >= self.max_rows
                 || inner.total_mutations >= MAX_MUTATIONS_PER_BATCH
@@ -124,26 +149,28 @@ where
         batch: &Self::Batch,
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> anyhow::Result<usize> {
-        let entries_to_write: Vec<Entry> = {
-            let inner = batch.inner.read().unwrap();
+        let (entries_to_write, use_batch_write_flow_control) = {
+            let inner = batch.inner.read();
             if inner.entries.is_empty() {
                 return Ok(0);
             }
-            inner.entries.values().cloned().collect()
+            (
+                inner.entries.values().cloned().collect::<Vec<_>>(),
+                inner.use_batch_write_flow_control,
+            )
         };
         let count = entries_to_write.len();
 
         self.rate_limiter.acquire(count).await;
 
         match conn
-            .client()
-            .write_entries(P::TABLE, entries_to_write)
+            .write_entries(P::TABLE, entries_to_write, use_batch_write_flow_control)
             .await
         {
             Ok(()) => Ok(count),
             Err(e) => {
                 if let Some(partial) = e.downcast_ref::<PartialWriteError>() {
-                    let mut inner = batch.inner.write().unwrap();
+                    let mut inner = batch.inner.write();
                     let failed: std::collections::BTreeSet<&Bytes> =
                         partial.failed_keys.iter().map(|f| &f.key).collect();
                     inner.entries.retain(|key, _| failed.contains(key));
@@ -183,6 +210,44 @@ mod tests {
 
     fn make_entry(key: &[u8]) -> Entry {
         tables::make_entry(key.to_vec(), [("col", Bytes::from_static(b"value"))], None)
+    }
+
+    fn checkpointed_entry(key: &[u8], checkpoint: u64) -> CheckpointedEntry {
+        CheckpointedEntry::new(make_entry(key), checkpoint)
+    }
+
+    #[test]
+    fn batch_requires_flow_control_if_any_entry_is_backfill() {
+        let handler = BigTableHandler::new(
+            TestProcessor,
+            &ConcurrentLayer::default(),
+            Arc::new(CompositeRateLimiter::noop()),
+            10,
+        );
+        let mut live_entries = vec![checkpointed_entry(b"live", 11)].into_iter();
+        let mut live_batch = BigTableBatch::default();
+        assert!(matches!(
+            handler.batch(&mut live_batch, &mut live_entries),
+            BatchStatus::Pending
+        ));
+        assert!(!live_batch.inner.read().use_batch_write_flow_control);
+
+        let mut entries = vec![
+            checkpointed_entry(b"other-live", 11),
+            checkpointed_entry(b"backfill", 10),
+        ]
+        .into_iter();
+
+        let mut batch = BigTableBatch::default();
+        assert!(matches!(
+            handler.batch(&mut batch, &mut entries),
+            BatchStatus::Pending
+        ));
+        assert_eq!(entries.len(), 0);
+
+        let inner = batch.inner.read();
+        assert!(inner.use_batch_write_flow_control);
+        assert_eq!(inner.entries.len(), 2);
     }
 
     #[tokio::test]
@@ -226,10 +291,11 @@ mod tests {
             TestProcessor,
             &ConcurrentLayer::default(),
             Arc::new(CompositeRateLimiter::noop()),
+            u64::MAX,
         );
         let mut batch = BigTableBatch::default();
-        let entries: Vec<Entry> = (0..10)
-            .map(|i| make_entry(format!("row{i}").as_bytes()))
+        let entries: Vec<CheckpointedEntry> = (0..10)
+            .map(|i| checkpointed_entry(format!("row{i}").as_bytes(), 0))
             .collect();
         handler.batch(&mut batch, &mut entries.into_iter());
 
@@ -237,7 +303,7 @@ mod tests {
         let result = handler.commit(&batch, &mut conn).await;
         assert!(result.is_err());
         {
-            let inner = batch.inner.read().unwrap();
+            let inner = batch.inner.read();
             assert_eq!(inner.entries.len(), 5);
             for key in [b"row1", b"row3", b"row5", b"row7", b"row9"] {
                 assert!(inner.entries.contains_key(key.as_slice()));
@@ -248,7 +314,7 @@ mod tests {
         let result = handler.commit(&batch, &mut conn).await;
         assert!(result.is_err());
         {
-            let inner = batch.inner.read().unwrap();
+            let inner = batch.inner.read();
             assert_eq!(inner.entries.len(), 3);
             for key in [b"row1", b"row5", b"row9"] {
                 assert!(inner.entries.contains_key(key.as_slice()));
@@ -259,7 +325,7 @@ mod tests {
         let result = handler.commit(&batch, &mut conn).await;
         assert_eq!(result.unwrap(), 3);
         {
-            let inner = batch.inner.read().unwrap();
+            let inner = batch.inner.read();
             assert_eq!(inner.entries.len(), 3);
         }
     }

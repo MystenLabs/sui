@@ -326,8 +326,9 @@ impl GenerationLoopState {
 mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
-    use std::sync::Mutex;
     use std::time::Instant;
+
+    use parking_lot::Mutex;
 
     use sui_indexer_alt_framework_store_traits::InitWatermark;
 

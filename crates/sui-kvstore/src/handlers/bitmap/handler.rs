@@ -27,22 +27,32 @@ use sui_types::full_checkpoint_content::Checkpoint;
 
 pub struct BitmapIndexHandler<P> {
     processor: P,
+    latest_checkpoint_at_startup: u64,
 }
 
 /// Per-shard `Arc<Vec<BitmapIndexValue>>` slots, one per shard (indexed by
-/// `shard_id`). Default pre-allocates `NUM_SHARDS` empty slots so
-/// `Handler::batch` can push into any shard without a length check.
-pub struct BitmapBatch(Vec<Arc<Vec<BitmapIndexValue>>>);
+/// `shard_id`), plus the batch's BigTable flow-control classification.
+pub struct BitmapBatch {
+    shards: Vec<Arc<Vec<BitmapIndexValue>>>,
+    use_batch_write_flow_control: bool,
+}
 
 impl Default for BitmapBatch {
     fn default() -> Self {
-        Self((0..NUM_SHARDS).map(|_| Arc::new(Vec::new())).collect())
+        Self {
+            shards: (0..NUM_SHARDS).map(|_| Arc::new(Vec::new())).collect(),
+            use_batch_write_flow_control: false,
+        }
     }
 }
 
 impl BitmapBatch {
     pub(crate) fn clone_shards(&self) -> Vec<Arc<Vec<BitmapIndexValue>>> {
-        self.0.clone()
+        self.shards.clone()
+    }
+
+    pub(crate) fn requires_batch_write_flow_control(&self) -> bool {
+        self.use_batch_write_flow_control
     }
 }
 
@@ -50,8 +60,11 @@ impl<P> BitmapIndexHandler<P>
 where
     P: BitmapIndexProcessor,
 {
-    pub(crate) fn new(processor: P) -> Self {
-        Self { processor }
+    pub(crate) fn new(processor: P, latest_checkpoint_at_startup: u64) -> Self {
+        Self {
+            processor,
+            latest_checkpoint_at_startup,
+        }
     }
 }
 
@@ -115,7 +128,8 @@ where
 
     fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
         for v in values {
-            Arc::get_mut(&mut batch.0[v.shard_id as usize])
+            batch.use_batch_write_flow_control |= v.max_cp <= self.latest_checkpoint_at_startup;
+            Arc::get_mut(&mut batch.shards[v.shard_id as usize])
                 .expect("batch held exclusively during batch()")
                 .push(v);
         }
