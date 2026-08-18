@@ -45,37 +45,43 @@ fn event_cursor(item: &Value) -> String {
         .to_string()
 }
 
-/// The `{ "pkg": ... }` variables shared by the `type`-filtered subscription queries.
-fn pkg_var(package_id: &ObjectID) -> Option<Value> {
-    Some(json!({ "pkg": package_id.to_string() }))
+/// The `{ "filter": <filter> }` variables wrapping an `EventFilter` input for a subscription query.
+fn filter_var(filter: Value) -> Option<Value> {
+    Some(json!({ "filter": filter }))
 }
 
-/// The rich event-subscription query under a given `filter` predicate: live by default, or resuming
-/// from a checkpoint (backfill) when `after_checkpoint` is set. The node is deliberately broad so the
-/// live/backfill parity test catches any field that resolves differently between the two paths.
-fn event_query(filter: &str, after_checkpoint: Option<u64>) -> String {
-    let resume = after_checkpoint
-        .map(|c| format!("afterCheckpoint: {c},"))
-        .unwrap_or_default();
-    format!(
-        r#"subscription($pkg: SuiAddress!) {{
-            events(filter: {{ {resume} {filter} }}) {{
-                cursor
-                node {{
-                    eventBcs
-                    sequenceNumber
-                    sender {{ address }}
-                    contents {{ type {{ repr }} json }}
-                    transaction {{
-                        digest
-                        sender {{ address }}
-                        kind {{ __typename }}
-                        gasInput {{ gasBudget gasPrice }}
-                    }}
-                }}
-            }}
-        }}"#
-    )
+/// The `$filter` variables for a `type`-filtered event subscription, folding `afterCheckpoint` into
+/// the filter when resuming from a checkpoint (backfill).
+fn type_filter_var(package_id: &ObjectID, after_checkpoint: Option<u64>) -> Option<Value> {
+    let mut filter = json!({ "type": package_id.to_string() });
+    if let Some(c) = after_checkpoint {
+        filter["afterCheckpoint"] = json!(c);
+    }
+    filter_var(filter)
+}
+
+/// The rich event-subscription query. The filter (and any `afterCheckpoint` resume point) is passed
+/// through the `$filter` variable. The node is deliberately broad so the live/backfill parity test
+/// catches any field that resolves differently between the two paths.
+fn event_query() -> String {
+    r#"subscription($filter: EventFilter!) {
+        events(filter: $filter) {
+            cursor
+            node {
+                eventBcs
+                sequenceNumber
+                sender { address }
+                contents { type { repr } json }
+                transaction {
+                    digest
+                    sender { address }
+                    kind { __typename }
+                    gasInput { gasBudget gasPrice }
+                }
+            }
+        }
+    }"#
+    .to_string()
 }
 
 /// Take the next `n` event payloads in arrival order.
@@ -117,8 +123,8 @@ async fn test_event_subscription() {
 
     let mut stream = cluster
         .subscribe_with_variables(
-            r#"subscription($pkg: SuiAddress!) {
-                events(filter: { type: $pkg }) {
+            r#"subscription($filter: EventFilter!) {
+                events(filter: $filter) {
                     node {
                         sender { address }
                         transaction { digest }
@@ -131,7 +137,7 @@ async fn test_event_subscription() {
                     }
                 }
             }"#,
-            Some(json!({ "pkg": package_id.to_string() })),
+            filter_var(json!({ "type": package_id.to_string() })),
         )
         .await;
 
@@ -151,15 +157,15 @@ async fn test_event_subscription_sender_filter() {
 
     let mut stream = cluster
         .subscribe_with_variables(
-            r#"subscription($sender: SuiAddress!) {
-                events(filter: { sender: $sender }) {
+            r#"subscription($filter: EventFilter!) {
+                events(filter: $filter) {
                     node {
                         sender { address }
                         contents { type { repr } }
                     }
                 }
             }"#,
-            Some(json!({ "sender": sender.to_string() })),
+            filter_var(json!({ "sender": sender.to_string() })),
         )
         .await;
 
@@ -181,8 +187,8 @@ async fn test_event_subscription_transaction_fields() {
 
     let mut stream = cluster
         .subscribe_with_variables(
-            r#"subscription($pkg: SuiAddress!) {
-                events(filter: { type: $pkg }) {
+            r#"subscription($filter: EventFilter!) {
+                events(filter: $filter) {
                     node {
                         transaction {
                             digest
@@ -194,7 +200,7 @@ async fn test_event_subscription_transaction_fields() {
                     }
                 }
             }"#,
-            Some(json!({ "pkg": package_id.to_string() })),
+            filter_var(json!({ "type": package_id.to_string() })),
         )
         .await;
 
@@ -221,8 +227,8 @@ async fn test_event_subscription_as_transaction_object_change() {
 
     let mut stream = cluster
         .subscribe_with_variables(
-            r#"subscription($pkg: SuiAddress!) {
-                events(filter: { type: $pkg }) {
+            r#"subscription($filter: EventFilter!) {
+                events(filter: $filter) {
                     node {
                         contents {
                             extract(path: "address_event_id") {
@@ -244,7 +250,7 @@ async fn test_event_subscription_as_transaction_object_change() {
                     }
                 }
             }"#,
-            Some(json!({ "pkg": package_id.to_string() })),
+            filter_var(json!({ "type": package_id.to_string() })),
         )
         .await;
 
@@ -272,8 +278,8 @@ async fn test_event_subscription_as_transaction_object_consensus_read() {
 
     let mut stream = cluster
         .subscribe_with_variables(
-            r#"subscription($pkg: SuiAddress!) {
-                events(filter: { type: $pkg }) {
+            r#"subscription($filter: EventFilter!) {
+                events(filter: $filter) {
                     node {
                         contents {
                             extract(path: "address_event_id") {
@@ -292,7 +298,7 @@ async fn test_event_subscription_as_transaction_object_consensus_read() {
                     }
                 }
             }"#,
-            Some(json!({ "pkg": package_id.to_string() })),
+            filter_var(json!({ "type": package_id.to_string() })),
         )
         .await;
 
@@ -318,8 +324,8 @@ async fn test_event_subscription_object_changes() {
 
     let mut stream = cluster
         .subscribe_with_variables(
-            r#"subscription($pkg: SuiAddress!) {
-                events(filter: { type: $pkg }) {
+            r#"subscription($filter: EventFilter!) {
+                events(filter: $filter) {
                     node {
                         transaction {
                             effects {
@@ -341,7 +347,7 @@ async fn test_event_subscription_object_changes() {
                     }
                 }
             }"#,
-            Some(json!({ "pkg": package_id.to_string() })),
+            filter_var(json!({ "type": package_id.to_string() })),
         )
         .await;
 
@@ -360,14 +366,14 @@ async fn test_event_subscription_module_filter() {
 
     let mut stream = cluster
         .subscribe_with_variables(
-            r#"subscription($mod: String!) {
-                events(filter: { module: $mod }) {
+            r#"subscription($filter: EventFilter!) {
+                events(filter: $filter) {
                     node {
                         contents { type { repr } }
                     }
                 }
             }"#,
-            Some(json!({ "mod": format!("{}::emit_test_event", package_id) })),
+            filter_var(json!({ "module": format!("{}::emit_test_event", package_id) })),
         )
         .await;
 
@@ -393,15 +399,15 @@ async fn test_event_subscription_recovers_from_upstream_disconnect() {
 
     let mut stream = cluster
         .subscribe_with_variables(
-            r#"subscription($pkg: SuiAddress!) {
-                events(filter: { type: $pkg }) {
+            r#"subscription($filter: EventFilter!) {
+                events(filter: $filter) {
                     node {
                         eventBcs
                         contents { json }
                     }
                 }
             }"#,
-            Some(json!({ "pkg": package_id.to_string() })),
+            filter_var(json!({ "type": package_id.to_string() })),
         )
         .await;
 
@@ -451,7 +457,7 @@ async fn test_event_subscription_ordering() {
     let package_id = emit_event_harness::publish(&mut cluster.validator).await;
 
     let mut stream = cluster
-        .subscribe_with_variables(&event_query("type: $pkg", None), pkg_var(&package_id))
+        .subscribe_with_variables(&event_query(), type_filter_var(&package_id, None))
         .await;
 
     for v in [100u64, 200, 300] {
@@ -474,16 +480,16 @@ async fn test_event_subscription_resume_backfill_then_live() {
 
     // Capture the tip BEFORE the emit so it lands strictly past the resume point.
     let resume_from = cluster.validator_checkpoint_tip();
-    emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 1000).await;
+    let digest =
+        emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 1000).await;
 
-    // Advance the validator so a fresh subscription's live receiver pins past the event: it can only
-    // be delivered through the backfill scan.
-    tokio::time::sleep(BACKFILL_SETTLE).await;
+    // Make the event backfill-only for the resume below.
+    cluster.wait_until_backfillable(resume_from, &digest).await;
 
     let mut stream = cluster
         .subscribe_with_variables(
-            &event_query("type: $pkg", Some(resume_from)),
-            pkg_var(&package_id),
+            &event_query(),
+            type_filter_var(&package_id, Some(resume_from)),
         )
         .await;
 
@@ -504,13 +510,14 @@ async fn test_event_subscription_empty_backfill_hands_off_to_live() {
     let resume_from = cluster.validator_checkpoint_tip();
     let mut stream = cluster
         .subscribe_with_variables(
-            &event_query("type: $pkg", Some(resume_from)),
-            pkg_var(&package_id),
+            &event_query(),
+            type_filter_var(&package_id, Some(resume_from)),
         )
         .await;
 
     // Let the validator advance through empty checkpoints so the backfill scans a match-less range,
-    // pins the handoff via a coverage marker, and transitions to live before any match exists.
+    // pins the handoff via a coverage marker, and transitions to live before any match exists. Kept
+    // as a timed wait: there is no pre-subscription match to probe on.
     tokio::time::sleep(BACKFILL_SETTLE).await;
 
     // The only match is emitted after the handoff, so it can only be delivered by the live path. If
@@ -528,17 +535,19 @@ async fn test_event_subscription_exactly_once_across_handoff() {
     let resume_from = cluster.validator_checkpoint_tip();
     let mut stream = cluster
         .subscribe_with_variables(
-            &event_query("type: $pkg", Some(resume_from)),
-            pkg_var(&package_id),
+            &event_query(),
+            type_filter_var(&package_id, Some(resume_from)),
         )
         .await;
 
     // Straddle the handoff: the first batch lands while the backfill is scanning, the second after
     // it has pinned and moved to live. Exactly-once must hold across the seam wherever it pins.
+    let mut digest = String::new();
     for v in [100u64, 200] {
-        emit_event_harness::emit_with_value(&mut cluster.validator, package_id, v).await;
+        digest = emit_event_harness::emit_with_value(&mut cluster.validator, package_id, v).await;
     }
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    // Let the first batch reach the broadcast before emitting the second, so they straddle the seam.
+    cluster.wait_until_backfillable(resume_from, &digest).await;
     for v in [300u64, 400] {
         emit_event_harness::emit_with_value(&mut cluster.validator, package_id, v).await;
     }
@@ -566,18 +575,19 @@ async fn test_event_subscription_resume_with_after_cursor() {
     let package_id = emit_event_harness::publish(&mut cluster.validator).await;
 
     let resume_from = cluster.validator_checkpoint_tip();
+    let mut digest = String::new();
     for v in [1000u64, 2000] {
-        emit_event_harness::emit_with_value(&mut cluster.validator, package_id, v).await;
+        digest = emit_event_harness::emit_with_value(&mut cluster.validator, package_id, v).await;
     }
 
-    // Both events must be delivered by the backfill scan, not the live path.
-    tokio::time::sleep(BACKFILL_SETTLE).await;
+    // Make both events backfill-only for the subscriptions below.
+    cluster.wait_until_backfillable(resume_from, &digest).await;
 
     // Subscription 1: backfill from `afterCheckpoint`. Capture the first edge's cursor and value.
     let mut stream = cluster
         .subscribe_with_variables(
-            &event_query("type: $pkg", Some(resume_from)),
-            pkg_var(&package_id),
+            &event_query(),
+            type_filter_var(&package_id, Some(resume_from)),
         )
         .await;
     let first = stream.next().await.expect("no backfilled edge");
@@ -595,16 +605,14 @@ async fn test_event_subscription_resume_with_after_cursor() {
 
     // Subscription 2: resume via `after`. The next matching event must be the other one, proving the
     // event at the cursor was skipped rather than re-delivered.
-    let query = format!(
-        r#"subscription($pkg: SuiAddress!) {{
-            events(after: "{after}", filter: {{ type: $pkg }}) {{
-                node {{ contents {{ json }} }}
-            }}
-        }}"#,
-    );
-    let mut stream = cluster
-        .subscribe_with_variables(&query, pkg_var(&package_id))
-        .await;
+    let query = r#"subscription($after: String!, $filter: EventFilter!) {
+        events(after: $after, filter: $filter) {
+            node { contents { json } }
+        }
+    }"#;
+    let mut vars = type_filter_var(&package_id, None).unwrap();
+    vars["after"] = json!(after);
+    let mut stream = cluster.subscribe_with_variables(query, Some(vars)).await;
 
     let expected_other = if first_value == "1000" {
         "2000"
@@ -627,14 +635,15 @@ async fn test_event_subscription_live_backfill_parity() {
 
     // 1. Start live.
     let mut live = cluster
-        .subscribe_with_variables(&event_query("type: $pkg", None), pkg_var(&package_id))
+        .subscribe_with_variables(&event_query(), type_filter_var(&package_id, None))
         .await;
 
     // 2. Emit a sequence of distinct events.
     let resume_from = cluster.validator_checkpoint_tip();
     let expected: Vec<String> = ["10", "20", "30"].iter().map(|s| s.to_string()).collect();
+    let mut digest = String::new();
     for v in [10u64, 20, 30] {
-        emit_event_harness::emit_with_value(&mut cluster.validator, package_id, v).await;
+        digest = emit_event_harness::emit_with_value(&mut cluster.validator, package_id, v).await;
     }
 
     // 3. Collect the live nodes, then drop the live subscription.
@@ -642,11 +651,11 @@ async fn test_event_subscription_live_backfill_parity() {
     drop(live);
 
     // 4. Resume from before the emits so the same events arrive via backfill.
-    tokio::time::sleep(BACKFILL_SETTLE).await;
+    cluster.wait_until_backfillable(resume_from, &digest).await;
     let mut backfill = cluster
         .subscribe_with_variables(
-            &event_query("type: $pkg", Some(resume_from)),
-            pkg_var(&package_id),
+            &event_query(),
+            type_filter_var(&package_id, Some(resume_from)),
         )
         .await;
     let backfill_nodes = collect_event_nodes(&mut backfill, &expected).await;
@@ -666,12 +675,12 @@ async fn test_event_subscription_invalid_cursor_errors() {
 
     let mut stream = cluster
         .subscribe_with_variables(
-            r#"subscription($pkg: SuiAddress!) {
-                events(after: "not-a-valid-cursor", filter: { type: $pkg }) {
+            r#"subscription($filter: EventFilter!) {
+                events(after: "not-a-valid-cursor", filter: $filter) {
                     node { eventBcs }
                 }
             }"#,
-            pkg_var(&package_id),
+            type_filter_var(&package_id, None),
         )
         .await;
 
@@ -694,21 +703,21 @@ async fn test_event_subscription_resume_intersects_after_and_checkpoint() {
 
     let resume_from = cluster.validator_checkpoint_tip();
     emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 100).await;
-    emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 200).await;
+    let d200 = emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 200).await;
     // Seal the second event's checkpoint before capturing `bound`, so `afterCheckpoint: bound`
     // excludes it.
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    cluster.wait_until_backfillable(resume_from, &d200).await;
     let bound = cluster.validator_checkpoint_tip();
-    emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 300).await;
+    let d300 = emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 300).await;
 
-    // Advance so all three are delivered by the backfill scan, where the resume bounds apply.
-    tokio::time::sleep(BACKFILL_SETTLE).await;
+    // Make all three backfill-only, so the resume bounds apply.
+    cluster.wait_until_backfillable(resume_from, &d300).await;
 
     // Backfill the three events once to mint real cursors at the first two.
     let mut stream = cluster
         .subscribe_with_variables(
-            &event_query("type: $pkg", Some(resume_from)),
-            pkg_var(&package_id),
+            &event_query(),
+            type_filter_var(&package_id, Some(resume_from)),
         )
         .await;
     let first = stream.next().await.expect("no first event");
@@ -721,16 +730,14 @@ async fn test_event_subscription_resume_intersects_after_and_checkpoint() {
 
     // afterCheckpoint wins: `after` at the first event would include the second, but the later bound
     // past it skips it.
-    let query = format!(
-        r#"subscription($pkg: SuiAddress!) {{
-            events(after: "{cursor_1}", filter: {{ afterCheckpoint: {bound}, type: $pkg }}) {{
-                node {{ contents {{ json }} }}
-            }}
-        }}"#,
-    );
-    let mut stream = cluster
-        .subscribe_with_variables(&query, pkg_var(&package_id))
-        .await;
+    let query = r#"subscription($after: String!, $filter: EventFilter!) {
+        events(after: $after, filter: $filter) {
+            node { contents { json } }
+        }
+    }"#;
+    let mut vars = type_filter_var(&package_id, Some(bound)).unwrap();
+    vars["after"] = json!(cursor_1);
+    let mut stream = cluster.subscribe_with_variables(query, Some(vars)).await;
     let delivered = stream.next().await.expect("no delivered edge");
     assert_eq!(
         event_value(&delivered),
@@ -741,16 +748,14 @@ async fn test_event_subscription_resume_intersects_after_and_checkpoint() {
 
     // after wins: `afterCheckpoint` before the first event would include both, but the later cursor
     // at the second skips them.
-    let query = format!(
-        r#"subscription($pkg: SuiAddress!) {{
-            events(after: "{cursor_2}", filter: {{ afterCheckpoint: {resume_from}, type: $pkg }}) {{
-                node {{ contents {{ json }} }}
-            }}
-        }}"#,
-    );
-    let mut stream = cluster
-        .subscribe_with_variables(&query, pkg_var(&package_id))
-        .await;
+    let query = r#"subscription($after: String!, $filter: EventFilter!) {
+        events(after: $after, filter: $filter) {
+            node { contents { json } }
+        }
+    }"#;
+    let mut vars = type_filter_var(&package_id, Some(resume_from)).unwrap();
+    vars["after"] = json!(cursor_2);
+    let mut stream = cluster.subscribe_with_variables(query, Some(vars)).await;
     let delivered = stream.next().await.expect("no delivered edge");
     assert_eq!(
         event_value(&delivered),
@@ -768,12 +773,12 @@ async fn test_event_subscription_checkpoint_filter_errors() {
 
     let mut stream = cluster
         .subscribe_with_variables(
-            r#"subscription($pkg: SuiAddress!) {
-                events(filter: { type: $pkg, atCheckpoint: 1 }) {
+            r#"subscription($filter: EventFilter!) {
+                events(filter: $filter) {
                     node { eventBcs }
                 }
             }"#,
-            pkg_var(&package_id),
+            filter_var(json!({ "type": package_id.to_string(), "atCheckpoint": 1 })),
         )
         .await;
 

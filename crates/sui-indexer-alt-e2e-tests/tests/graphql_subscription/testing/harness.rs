@@ -291,6 +291,21 @@ impl SubscriptionTestCluster {
         self.post_subscription(query, variables).await
     }
 
+    /// Wait until the checkpoint containing `tx_digest` has been delivered, so a later subscription
+    /// resuming from `after_checkpoint` pins its live receiver past that checkpoint and delivers
+    /// `tx_digest` (and everything before it) through the backfill scan rather than live. The probe
+    /// resumes from `after_checkpoint` (captured before the tx was submitted), so its scan delivers
+    /// the target checkpoint deterministically whether or not the live broadcast already advanced
+    /// past it. Times out (via `wait_for_matching_item`) if the checkpoint never arrives.
+    pub async fn wait_until_backfillable(&self, after_checkpoint: u64, tx_digest: &str) {
+        let query = format!(
+            "subscription {{ checkpoints(afterCheckpoint: {after_checkpoint}) \
+             {{ node {{ transactions {{ nodes {{ digest }} }} }} }} }}"
+        );
+        let mut probe = self.subscribe(&query).await;
+        wait_for_matching_item(&mut probe, &[tx_digest.to_string()], checkpoint_tx_digests).await;
+    }
+
     async fn post_subscription(
         &self,
         query: &str,
