@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::{Bound, Range};
+use std::ops::{Bound, ControlFlow, Range};
 
 use bytes::Bytes;
 use sui_inverted_index::ScanDirection;
@@ -339,42 +339,24 @@ impl ResolvedRange {
         let mut cursor_terminal = None;
 
         if let Some(cursor) = &options.after {
-            let position = u64_cursor_position(cursor);
-            if matches!(options.ordering, Ordering::Ascending) {
-                entry_checkpoint = entry_checkpoint.max(cursor.position.checkpoint());
-            }
-            let Some(after) = (match cursor.kind {
-                sui_rpc_cursor::CursorKind::Item => position.checked_add(1),
-                sui_rpc_cursor::CursorKind::Boundary => Some(position),
-            }) else {
-                // `u64::MAX` is the unoccupiable exclusive sentinel of these
-                // packed ranges (a real item at MAX could not be represented by
-                // the required exclusive end). A Boundary cursor at MAX is
-                // therefore equivalent to the overflowing Item successor and
-                // cannot re-deliver an item.
-                return ResolvedRange {
+            let (next_start, next_entry, next_cursor_terminal, terminal) =
+                match Self::apply_after_cursor(
+                    start,
+                    end,
                     entry_checkpoint,
-                    ..ResolvedRange::empty_at(
-                        cursor.position.checkpoint(),
-                        position,
-                        RangeExhaustion::CursorBound {
-                            kind: sui_rpc_cursor::CursorKind::Boundary,
-                        },
-                    )
+                    cursor,
+                    options.ordering,
+                ) {
+                    ControlFlow::Break(collapsed) => return collapsed,
+                    ControlFlow::Continue(effects) => effects,
                 };
-            };
-            if after >= start {
-                start = after;
-                if matches!(options.ordering, Ordering::Descending) || after >= end {
-                    cursor_terminal = Some((cursor.position.checkpoint(), after));
-                }
-                if matches!(options.ordering, Ordering::Descending) {
-                    end_checkpoint = cursor.position.checkpoint();
-                    end_position = after;
-                    exhaustion = RangeExhaustion::CursorBound {
-                        kind: sui_rpc_cursor::CursorKind::Boundary,
-                    };
-                }
+            start = next_start;
+            entry_checkpoint = next_entry;
+            cursor_terminal = next_cursor_terminal;
+            if let Some((checkpoint, position, cursor_exhaustion)) = terminal {
+                end_checkpoint = checkpoint;
+                end_position = position;
+                exhaustion = cursor_exhaustion;
             }
         }
 
@@ -424,6 +406,66 @@ impl ResolvedRange {
                 entry_checkpoint,
             }
         }
+    }
+
+    fn apply_after_cursor(
+        mut start: u64,
+        end: u64,
+        mut entry_checkpoint: u64,
+        cursor: &CursorToken,
+        ordering: Ordering,
+    ) -> ControlFlow<
+        ResolvedRange,
+        (
+            u64,
+            u64,
+            Option<(u64, u64)>,
+            Option<(u64, u64, RangeExhaustion)>,
+        ),
+    > {
+        let mut cursor_terminal = None;
+        let mut terminal = None;
+
+        let position = u64_cursor_position(cursor);
+        if matches!(ordering, Ordering::Ascending) {
+            entry_checkpoint = entry_checkpoint.max(cursor.position.checkpoint());
+        }
+        let Some(after) = (match cursor.kind {
+            sui_rpc_cursor::CursorKind::Item => position.checked_add(1),
+            sui_rpc_cursor::CursorKind::Boundary => Some(position),
+        }) else {
+            // `u64::MAX` is the unoccupiable exclusive sentinel of these
+            // packed ranges (a real item at MAX could not be represented by
+            // the required exclusive end). A Boundary cursor at MAX is
+            // therefore equivalent to the overflowing Item successor and
+            // cannot re-deliver an item.
+            return ControlFlow::Break(ResolvedRange {
+                entry_checkpoint,
+                ..ResolvedRange::empty_at(
+                    cursor.position.checkpoint(),
+                    position,
+                    RangeExhaustion::CursorBound {
+                        kind: sui_rpc_cursor::CursorKind::Boundary,
+                    },
+                )
+            });
+        };
+        if after >= start {
+            start = after;
+            if matches!(ordering, Ordering::Descending) || after >= end {
+                cursor_terminal = Some((cursor.position.checkpoint(), after));
+            }
+            if matches!(ordering, Ordering::Descending) {
+                terminal = Some((
+                    cursor.position.checkpoint(),
+                    after,
+                    RangeExhaustion::CursorBound {
+                        kind: sui_rpc_cursor::CursorKind::Boundary,
+                    },
+                ));
+            }
+        }
+        ControlFlow::Continue((start, entry_checkpoint, cursor_terminal, terminal))
     }
 
     /// Reconcile the interval and its watermark metadata after the backend
@@ -1886,6 +1928,96 @@ mod tests {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
             }
+        );
+    }
+
+    #[test]
+    fn tx_after_cursor_tightens_ascending_lower_bound() {
+        // Item at n resumes at n + 1; Boundary at n resumes at n.
+        let options = after_options(Ordering::Ascending, tx_item(3, 12));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            ResolvedRange {
+                range: 13..20,
+                entry_checkpoint: 3,
+                ..resolved_range(10..20)
+            }
+        );
+
+        let options = after_options(Ordering::Ascending, tx_boundary(3, 12));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            ResolvedRange {
+                range: 12..20,
+                entry_checkpoint: 3,
+                ..resolved_range(10..20)
+            }
+        );
+    }
+
+    #[test]
+    fn tx_after_cursor_below_lower_bound_only_folds_entry() {
+        let expected = ResolvedRange {
+            entry_checkpoint: 4,
+            ..resolved_range(10..20)
+        };
+        let options = after_options(Ordering::Ascending, tx_boundary(4, 5));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+        let options = after_options(Ordering::Ascending, tx_item(4, 5));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+    }
+
+    #[test]
+    fn tx_after_cursor_pins_descending_terminal() {
+        // Item at 12 and Boundary at 13 are the same exclusive edge.
+        let expected = ResolvedRange {
+            range: 13..20,
+            entry_checkpoint: 0,
+            end_checkpoint: 3,
+            end_position: 13,
+            exhaustion: RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Boundary,
+            },
+        };
+        let options = after_options(Ordering::Descending, tx_item(3, 12));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+        let options = after_options(Ordering::Descending, tx_boundary(3, 13));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+    }
+
+    #[test]
+    fn tx_after_cursor_empties_descending_interval() {
+        // Item at 24 and Boundary at 25 are the same exclusive edge.
+        let expected = ResolvedRange {
+            range: 25..25,
+            entry_checkpoint: 0,
+            end_checkpoint: 9,
+            end_position: 25,
+            exhaustion: RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Boundary,
+            },
+        };
+        let options = after_options(Ordering::Descending, tx_boundary(9, 25));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+        let options = after_options(Ordering::Descending, tx_item(9, 24));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
         );
     }
 
