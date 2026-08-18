@@ -1034,6 +1034,26 @@ mod tests {
         assert_eq!(bounds.tx_range(), None);
     }
 
+    /// Nothing constructs an Excluded lo in the dense lane yet (resume_lo
+    /// canonicalizes Item cursors to their inclusive successor), but the
+    /// symbolic-resume flip will; pin the store-edge collapse first.
+    #[test]
+    fn to_range_collapses_excluded_lo_at_successor() {
+        let bounds = ScanBounds {
+            lo: Bound::Excluded(14u64),
+            hi: Bound::Excluded(20u64),
+        };
+        assert_eq!(bounds.to_range(), 15..20);
+
+        // The saturated successor at the unoccupiable sentinel admits
+        // nothing, through the ordinary emptiness of MAX..MAX.
+        let bounds = ScanBounds {
+            lo: Bound::Excluded(u64::MAX),
+            hi: Bound::Unbounded,
+        };
+        assert!(bounds.to_range().is_empty());
+    }
+
     #[test]
     fn parses_cursors_and_ordering() {
         let after = tx_item(2, 20).encode();
