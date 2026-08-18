@@ -626,12 +626,7 @@ async fn resolve_tx_range(
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
-    if cp_range.is_empty() {
-        return Ok(cp_range.with_range(tx_range, options.ordering));
-    }
-    Ok(cp_range
-        .with_range(tx_range, options.ordering)
-        .apply_cursor_bounds(options))
+    Ok(ResolvedScan::<u64>::resolve(cp_range, tx_range, options).apply_cursor_bounds(options))
 }
 
 fn transaction_item_response(

@@ -278,24 +278,6 @@ impl ResolvedCheckpointRange {
             Ordering::Descending => self.range.start,
         }
     }
-
-    pub fn with_range(self, range: Range<u64>, ordering: Ordering) -> ResolvedScan<u64> {
-        let end_position = match ordering {
-            Ordering::Ascending => range.end,
-            Ordering::Descending => range.start,
-        };
-        let entry_checkpoint = match ordering {
-            Ordering::Ascending => self.range.start,
-            Ordering::Descending => self.range.end.saturating_sub(1),
-        };
-        ResolvedScan {
-            bounds: ScanBounds::tx_span(range.start, range.end),
-            end_checkpoint: self.terminal_checkpoint(ordering),
-            end_position,
-            exhaustion: self.exhaustion,
-            entry_checkpoint,
-        }
-    }
 }
 
 impl ResolvedScan<u64> {
