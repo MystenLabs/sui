@@ -1,0 +1,599 @@
+<!--
+Copyright (c) Mysten Labs, Inc.
+SPDX-License-Identifier: Apache-2.0
+-->
+
+# Liveness proof boundary and plan
+
+## Status
+
+This document defines the required boundary for the Mysticeti v3 liveness proof.
+The network-DAG stage now meets this boundary in Lean. The later DAG-to-commit
+stage does not yet meet it.
+
+The target model is standard **partial synchrony**. Message delay is unrestricted
+before an unknown stabilization time. After stabilization, messages between
+correct validators have a finite delay bound.
+
+See [Flex committer execution](flex_committer_execution.md) for the local
+pending-state refresh, conditional fixed-frontier rank, Rust terminal
+fixed-point control flow, and later proposal attempt.
+`ValidatorCoreHandlerRefinementRules` states the complete finite Core-handler
+boundary. Its Rust source mapping is still open. The interface must not become
+a future liveness premise.
+
+The proof has two positive stages:
+
+1. **Unbounded network DAG progress:** from every post-stabilization start and
+   requested round, one correct validator later holds an exact positive
+   total-stake quorum layer at that round or a later round. Every selected block
+   is accepted, retained, catalogued, above local GC, and has a quorum of
+   immediate parents. A commit can restart one construction, but it is not a
+   substitute for DAG growth.
+2. **Per-validator commit progress:** for each fixed correct, available
+   validator and requested commit index, stronger correct-only recovery windows
+   retained inside the first-stage construction and recurring favorable leader
+   windows give a later local FlexCommitter install at that index or a later
+   index.
+
+Unbounded network commit progress follows from the second stage. Pointwise
+commit catch-up follows from per-validator later local commits and exact-prefix
+safety. The source validator's run and the lagging validator's later run can be
+different.
+
+These results do not require every correct validator to produce its own block or
+to include its own transactions. They do not give one fixed numerical catch-up
+bound. A common recovery window is an internal result for commit progress.
+Commit progress also uses the leader decision rule.
+
+In this document, **parent history** means a block and all parent blocks needed
+to verify it.
+
+## The theorem boundary
+
+The main theorems can take basic environment conditions and simple behavior of
+one validator as inputs. They must derive all behavior of a quorum or of the
+complete protocol.
+
+### Basic environment inputs
+
+The following inputs are permitted:
+
+- One fixed validator set and fixed fault sets during the stable proof interval.
+- A Byzantine stake bound and an unavailable-stake bound.
+- A fixed set of correct, available validators during the stable proof interval.
+  Its quorum stake must be derived from the fault bounds.
+- Bounded message delivery between correct validators after stabilization.
+- Bounded work for protected local consensus actions.
+- Fair execution of an action that stays enabled.
+- Advancing correct clocks.
+- A stated leader-order distribution, if the protocol uses a probability model.
+
+A rotating unavailable set is not sufficient. It can disable a different local
+action at each time while unavailable stake remains below the bound at each time.
+
+### Permitted single-validator contracts
+
+A single-validator contract can be somewhat abstract when it is intuitive, easy
+to inspect, or a clear implementation target. Examples are:
+
+- A correct validator signs at most one block in one round.
+- It stores a proposal and the required parent history before it sends the
+  proposal.
+- It accepts a block only after it verifies the block and its required causal
+  history. Lean must derive any finite causal capsule from this accepted
+  closure. The capsule is not an independent liveness premise.
+- It retains and serves active recovery data.
+- It retries a missing-data request until the data arrives, the epoch ends, or
+  its own durable commit prefix makes the request unnecessary.
+- A proposal target stays enabled until the validator stores the proposal. A
+  commit installation does not cancel all proposal work.
+- A recovery proposal targets only the round after the validator's highest
+  durable signed round.
+- A later observed round does not replace that target or reset its deadline.
+- The validator proposes when its local DAG has quorum immediate parents and its
+  recovery deadline is ready.
+- A recovery proposal does not wait forever for every selected leader slot.
+- The validator applies a local commit result when the commit scan returns it.
+- While the epoch is active, installing commits cannot cancel all enabled
+  network proposal work. An enabled protected proposal is durable before send.
+- Exact-next recovery proposes in `P + 1`. Cleanup safe resume is a separate,
+  unproved exception.
+- A local commit is installed only by the local commit-recording action.
+- One qualifying external `add_blocks` handler finishes all commit work enabled
+  by its finite nonempty accepted-block batch and finite GC-unsuspended blocks.
+  The commit loop observes terminal `none`. Core then invokes the normal
+  proposal attempt before the handler returns. This contract does not say that
+  the attempt succeeds. Certified-commit processing is not a positive DAG
+  handler input.
+- If optional commit synchronization installs a commit, its exact reference and
+  chain were verified. This is a safety rule, not a liveness mechanism.
+
+These rules can use a quorum as a local guard. The proof must show that each
+correct validator eventually obtains that local quorum.
+
+### Source-to-model inputs
+
+Source-to-model inputs are separate from environment inputs. They state that a
+product value or action has the meaning used in Lean. Required mappings include:
+
+- the authenticated epoch configuration, validator set, and thresholds;
+- the local commit index, commit reference, protocol timestamp, and local
+  installation time;
+- the durable highest signed round and its block reference;
+- accepted blocks, immediate parents, and the cleanup boundary;
+- the leader schedule, ordered selected leader slots, and pending-round state;
+- the commit candidate returned by the scan and the local action that records it.
+- durable local block creation and addressed send actions;
+- exact commit references and their chain relation;
+- local commit recording;
+- `ValidatorPacketDrivenBlockAcceptanceAt`,
+  `packetDrivenAcceptanceHasInputOrigin`,
+  `ValidatorCoreHandlerInputObservation`, and
+  `ValidatorCoreHandlerRefinementRules`, from one delivered and accepted
+  ordinary block through its qualifying nonempty `add_blocks` batch, every
+  local scan, `post_commit`, and GC-unsuspension step, to terminal `none` and
+  the following proposal-attempt invocation before return. The source map must
+  distinguish direct input acceptance from GC-unsuspension inside an enclosing
+  handler;
+- `ValidatorCoreProposalAttemptContinuationRules` and
+  `qualifying_core_handler_input_has_current_proposal_continuation`, from the
+  already-actual normal attempt to a same-batch proposal action, exact protected
+  normal work, or current durable proposal, parent-need, or timer work;
+- ordinary block bodies, their direct parents, and exact-reference fetches above
+  the requester's local cleanup round;
+- synchronized commit installation checks, for safety only.
+
+These mappings can be checked against source and tests. They must not assert a
+distributed progress result.
+
+### Results that must not be theorem inputs
+
+The final theorem must derive all these results:
+
+- Correct validators with quorum stake enter recovery.
+- Parent quorums become available.
+- Validators produce blocks in common rounds.
+- Consecutive quorum block layers exist.
+- A correct first selected leader is included by next-round quorum stake.
+- A favorable leader window occurs.
+- Usable anchors exist.
+- The commit scan returns a new commit.
+- A local commit index increases.
+- Required ordinary block synchronization completes.
+- Correct-held exact total-quorum layers at arbitrarily high rounds.
+- The private correct-authored consecutive windows needed by the commit proof.
+- Recurring fresh favorable leader windows on that DAG.
+- Unbounded local commit installation at each correct, available validator.
+- Exact-prefix agreement and pointwise inclusion of every earlier exact
+  reference.
+
+An internal stage-composition lemma can use one of these results. A final
+liveness theorem must prove the result from the basic inputs, single-validator
+contracts, and source-to-model mappings.
+
+## Current formal gap
+
+The current consensus liveness theorem composes stages that already state leader,
+proposal, certificate, decision, and commit progress. It is a stage-composition
+lemma, not yet a proof of block production from partial synchrony.
+
+The current commit-recovery theorem has the same problem in a narrower form. It
+derives aggregate quorum layers and anchors, but it receives abstract contracts
+that already state:
+
+- Correct recovery stake is already a quorum.
+- Each recovery block becomes visible in each required round.
+- Next-round blocks include a progressing first-slot leader.
+- The sampled trace eventually contains a favorable leader window.
+- A modeled commit result eventually changes the modeled local commit index.
+
+An optional helper also receives immediate-parent quorum availability at proposal
+time. The top stage-composition theorem receives block visibility instead.
+
+These contracts are useful internal interfaces. They are too strong for the final
+theorem boundary.
+
+`ValidatorProcess.lean` now represents each validator's commit state, highest
+signed round, accepted blocks, and selected-slot results. It also defines
+addressed messages and the three final goal predicates. It does not yet prove
+that all traces follow the required local transitions, or prove the final
+conjunction.
+
+## Network DAG progress proof
+
+Let `C` be the fixed set of correct, available validators after stabilization.
+The fault bounds must prove that `C` has quorum stake. The epoch must remain
+active for the requested finite round window.
+
+Before recovery entry, use only the validator's durable commit time, current
+commit head, local clock, and ordinary DAG state. If the commit head stays
+unchanged, its local recovery deadline expires and its recovery action stays
+enabled. This sequence must derive the recovery set. The theorem must not take a
+recovery quorum or commit-synchronization result as an input.
+
+The result is unconditional network block progress. A strict correct-host
+commit-index increase can end one fixed-head attempt, but it cannot discharge
+the theorem. The proof must restart from the later local state and still derive
+a positive correct-held total-quorum layer. The proof keeps any stronger
+correct-only common recovery window as an internal witness for the later commit
+stage.
+
+Before a proposal, Core can process local commit results from its current
+accepted DAG. This work is a finite internal interruption. The fixed-frontier
+rank bounds one already observed class of scan chains.
+`ValidatorCoreHandlerRefinementRules` supplies a
+`ValidatorFiniteCoreHandlerEpisode` that also covers cleanup-driven
+unsuspension from the finite Core-owned store, terminal `none`, and the
+following proposal-attempt invocation before return. It does not state that the
+attempt succeeds. If commits continue across handlers, each handler must still
+invoke the proposal attempt, and protected proposal work must remain fairly
+scheduled. The network DAG proof does not inspect the commit result to obtain
+block traffic. It derives proposal success through the separate ordinary
+proposal rules after each finite interruption.
+
+`ValidatorFiniteCoreHandlerEpisode.proposal_attempt_input_and_suffix` exposes
+the exact attempt input at handler exit and the finite suffix to the next trace
+state. `ValidatorCoreProposalAttemptContinuationRules` classifies an exact
+proposal action in that suffix or exact protected or durable work in the next
+state. This classification is a past and current state result. It is not a
+future proposal-success input.
+
+A received remote block or commit batch can trigger this local work. The proof
+does not assume that such a batch will arrive, be processed, or install a
+commit.
+
+Use one durable proposal obligation in both normal operation and recovery. When
+accepted-batch processing exposes a legal proposal round above the signer floor,
+it latches the lowest such round before the proposer runs. A later round or a
+commit installation cannot cancel this obligation. Proposal persistence creates
+a durable send obligation, and only completion or an atomic replacement with
+another legal target clears it. In commit-progress recovery, the normal target is
+still exact-next. A larger target is only the witnessed cleanup safe-resume case.
+
+The completed stage uses the current operational quorum frontier instead of a
+stable commit-head interval. The local pacemaker produces or replays an exact
+successor block. Ordinary delivery and current-GC parent processing carry that
+successor to all correct, available validators. Each such validator then
+produces or replays its own exact successor. Finite correct-stake aggregation
+gives the next total-quorum layer. The public property does not require every
+correct validator to produce at every round.
+
+Before a local or synchronized commit installation advances cleanup, it accepts
+and catalogues every exact commit-body block. After the cleanup change, it keeps
+the accumulated closed frontier above the new boundary. This gives legal normal
+parents for later proposal work. This is a local preservation rule, not a
+positive synchronized-commit step.
+
+Use the operational quorum frontier instead of a proof-selected alignment
+round. Each correct host exposes its highest attained local quorum and a finite
+source for that quorum. Take the finite maximum `H` across correct hosts.
+
+The proof uses this sequence:
+
+1. Select one correct holder of `H` and its exact accepted, retained,
+   catalogued source.
+2. If `H` is positive and meets the requested bound, project that source to the
+   public correct-held total-quorum layer.
+3. Otherwise, use the holder's exact threshold-clock target `H + 1` and ready
+   parent list.
+4. The local frontier pacemaker produces the exact successor, replays an
+   already-signed exact successor, or exposes a higher frontier.
+5. If the attempt creates a child, use the child's own exact immediate-parent
+   quorum. Persist and broadcast the child through the normal proposal path.
+6. Deliver one successor carrier to every correct, available validator. Each
+   validator reaches frontier `H` and produces or replays its own `H + 1`
+   block.
+7. Deliver those exact blocks to one correct holder. Finite correct-stake
+   aggregation gives a total quorum at `H + 1` or a later frontier.
+8. Recompute the finite maximum and repeat.
+
+The child quorum in step 5 uses the exact immediate-parent projection. The
+source used in step 6 must retain the child's full dependency projection. A
+round-jump block can include an older own-author ancestor in addition to its
+immediate quorum parents. The sync proof must not erase that extra dependency.
+
+`operational_frontier_pacemaker_gives_strict_progress` proves the strict step.
+`operational_frontier_strict_progress_gives_network_dag_progress` repeats it by
+well-founded induction. A fetch response uses the GC round that is current when
+the response is processed. A dependency at or below that GC round is complete;
+an above-GC dependency follows ordinary fetch and acceptance. No in-flight
+fetch is rebased by a commit. The proof assumes no future block, timer callback,
+stable head, or common layer.
+
+The Lean composition is complete. Current Rust has the required high-level
+mechanisms. The open work is an exact source mapping for the one-shot forced
+timeout, the two temporary-blocker watcher retries, and the receiver-driven
+exact-or-newer subscription replay.
+
+### Catch-up parent witnesses
+
+Historical catch-up must preserve the complete parent set named by an accepted
+and retained child block. That set has at most one block per author and quorum
+stake.
+
+If an author equivocates, include one valid branch and ignore the other branches.
+During historical catch-up, use the branch named by the child block. For a new
+recovery proposal, a validator can use one locally selected valid branch. Different
+validators do not need to select the same Byzantine branch. Safety already treats
+that author as Byzantine, and parent stake counts the author only once.
+
+The validator-indexed Lean state represents block references and local branch
+choices. The proof that these fields follow the product parent selector remains a
+source-to-model obligation.
+
+Do not remove all blocks from the author only because an equivocation becomes
+known. Removal can reduce a valid parent set below quorum and stop recovery. In
+recovery, include the current accepted and retained representative for every
+in-range immediate-parent author for which one exists. Count one branch per
+author. Do not consult the predicted leader schedule or use score-based
+exclusion for this round.
+
+### Old-block cleanup
+
+Exact-next catch-up uses only parent bodies above the requester's local cleanup
+round. A reference at or below that round is an opaque committed root. The proof
+does not fetch, pin, serve, or accept its body again.
+
+Let `P` be the durable signer floor and `G` the local cleanup round. If the parent
+round for `P + 1` is not genesis and is not above `G`, exact-next work is not
+legal. The validator starts one fresh normal parent accumulator at:
+
+```text
+max(P + 1, G + 2)
+```
+
+This normal safe-resume proposal uses one locally accepted, retained parent per
+selected author, all strictly above `G`. Its durable target and parent pool
+survive commit churn. After this block is durable, recovery returns to exact-next
+proposals.
+
+For any received block above `G`, recursive synchronization creates needs only
+for direct parents above the current local cleanup round. Each fetched body can
+create more such needs. When cleanup reaches one pending reference, that reference
+becomes a committed root and its request ends. A cleanup increase must come from
+a local commit installation, which also rebases stale proposal work.
+
+This rule does not select or announce a common recovery round. It also does not
+make different local targets equal. Each actual safe-resume broadcast instead
+contributes to the operational frontier. The proof recomputes the finite maximum
+and continues from its correct source.
+
+A sticky stale target is not sufficient. A valid target must stay above local
+cleanup, or a commit-driven rebase must replace it with the fresh normal target.
+Safe resume also needs a non-rollback signer record. Network data alone cannot
+prove that the validator did not sign before restart.
+
+## Commit-progress proof
+
+Fix one correct, available validator and one requested commit index. The
+first-stage proof retains private commonly accepted correct-authored windows
+before it erases them to the public correct-held total-quorum result. The
+leader-order theorem supplies recurring fresh favorable windows. The commit
+proof selects a sufficiently late finite DAG prefix and derives one actual
+local FlexCommitter install at or above the requested index. It then repeats
+this argument for each validator. The erased public DAG predicate alone does
+not supply this stronger receiver evidence.
+
+Local commit catch-up work can interrupt the construction for a finite time.
+It cannot become a separate liveness result. Future synchronized-commit
+receipt or installation is not part of this stage.
+
+### Recovery pacing
+
+Let `P` be the highest durable own round and `T = P + 1`. First test whether the
+local DAG contains quorum parents in `T - 1`. If it does not, keep one durable
+parent-acquisition goal for `T` and request the missing parents. Do not require
+an accepted block at `T` to create this goal.
+
+The local threshold-clock round is the highest proposal round enabled by a known
+quorum in its immediate parent round. When parents for `T` are present:
+
+- If `T` is below that round, make the exact-next catch-up proposal without a
+  selected-leader wait.
+- If `T` equals that round, use the growing recovery wait before the proposal.
+
+Knowledge of a later quorum does not replace the direct `T - 1` parent check.
+
+Use one wait schedule `W` keyed by the common stalled commit prefix and the
+absolute target round. Start the target timer only when its quorum parents are
+ready. A later received block must not reset it. The successive wait margin must
+eventually and permanently exceed every fixed bound:
+
+```text
+for every B, there is r0 such that
+for every r >= r0, W(r + 1) >= W(r) + B
+```
+
+Suppose the proof shows that a correct first-slot validator flushes and sends its
+round-`r` block by time `a + K`. If each round-`r + 1` proposer takes its parent
+snapshot no earlier than `a + W`, require `W >= K + delta + epsilon`. Then each
+correct proposer accepts the block before its parent snapshot. The proof must
+derive `K` from synchronization and local actions. Local recovery attempt counters
+are not sufficient because validators can enter recovery at different times.
+
+For a fresh aligned family, derive the missing start-time bound by induction.
+The prior common layer makes every new proposal parent-ready without recursive
+history fetch. Proposal persistence and send, addressed delivery, parent-ready
+acceptance, and bounded timer-arm work give one fixed `K_start` with:
+
+```text
+startSpread(r + 1) <= startSpread(r) + K_start
+```
+
+The growing wait then dominates this spread and places the correct leader in
+the next parent snapshot. Do not add `startSpread` as a public premise. Do not
+use a capsule-length bound for this one-round step.
+
+### Immediate parents
+
+At the parent-selection snapshot, include the current locally accepted and
+retained immediate-parent representative for each in-range author for which one
+exists. If the author has multiple blocks, select one and ignore the other blocks
+for this proposal. Count the author's stake once. Do not consult the predicted
+leader schedule or use score-based ancestor exclusion for this round. Do not wait
+for every author after the selected parents have quorum stake.
+
+This local rule lets the proof derive that a timely correct first-slot block is in
+the next-round blocks from quorum stake. That fact must not be a theorem input.
+
+### Leader order
+
+There are two useful strategies:
+
+1. Keep the current order and use an explicit independent uniform sampling model.
+   Lean must prove that a favorable run occurs with probability one. It must not
+   take the successful trace as an input. The current deterministic round-seeded
+   shuffle does not itself prove this distribution.
+2. Use a deterministic coverage rule. Keep the same selected validator set. Put
+   one schedule member first in the ordered selected leader slot list for `d + 1`
+   consecutive rounds, then move the first position to the next member. Here, `d`
+   is the indirect commit depth. Because the schedule contains a correct,
+   available member, one complete favorable run occurs in a finite number of
+   rounds. This argument applies to current v3, where `P_r = S`. A smaller round
+   selection needs a separate coverage proof.
+
+The second strategy gives the simpler proof. It changes only the common selected
+leader slot order. It does not change the selected validator set, its stake, or
+the thresholds.
+
+The worst-case commit proof needs `d + 1` usable anchor rounds. If direct votes
+come one round later, the last anchor needs one additional block layer. These
+values come from the commit rule. They are not fixed recovery constants.
+
+### Commit agreement from pointwise local progress
+
+One validator that records one commit is only an intermediate result. The
+network DAG stage already gives each correct, available validator the ordinary
+DAG data needed for fresh later windows. The commit stage proceeds as follows:
+
+1. Choose an arbitrary correct, available validator and a sufficiently late
+   common finite DAG prefix.
+2. Use one fresh favorable leader window in that prefix to derive exact leader,
+   vote-child, and anchor evidence at this validator.
+3. Use the code-faithful pending refresh, finite scan, and local task rules to
+   derive one actual successful FlexCommitter run and local `recordCommit`.
+4. Repeat after every requested index. The finish time stays inside the
+   validator quantifier.
+5. Exact durable-prefix safety proves that every later local commit contains
+   each earlier exact reference. The later local run does not have to reproduce
+   another validator's view or output.
+
+An ordinary carrier can remain an internal causal-DAG lemma, but the proof does
+not start from a source install and ask for a future source-specific carrier.
+An actual synchronized install can close an already occurring safety race. The
+proof does not assume that such an install will occur.
+
+This liveness path does not use commit votes in blocks, replay manifests, or
+commit synchronization as progress inputs. Vote and certificate facts are
+authenticated safety evidence for actual DAG blocks. Optional commit
+synchronization can remain as an acceleration path. Its provenance is a safety
+obligation only.
+
+## Recommended single-node changes
+
+The following changes give the clearest proof path:
+
+1. Add a hysteretic recovery-mode latch. Use the normal threshold-clock round
+   only as its gap probe. Enter when the gap reaches `P_enter` or the time since
+   any commit install reaches `T`. Stay active while the gap reaches `P_exit` or
+   the time reaches `T`, where `P_exit < P_enter`. Exit only when both signals
+   clear. Keep the exact recovery proposal target separate.
+2. Keep one exact proposal target and deadline until completion.
+3. Start each target timer when quorum parents make that target ready.
+4. Do not let a higher observed round cancel the target or restart the wait.
+5. Keep missing recovery parents as a priority synchronization goal.
+6. Retry peers in a fair order and wait when no peer is connected.
+7. Re-advertise the highest durable own recovery block and serve its parent
+   history.
+8. Fetch and pin only exact references above the requester's local cleanup
+   round. Treat lower references as committed roots. Rebuild requester needs
+   and body pins after restart.
+9. Replace the normal selected-leader wait with the growing recovery wait. Give
+   rate-limited recovery an override for the propagation-delay proposal stop.
+   Keep parent quorum, signatures, and durable-before-send checks.
+10. Include the current accepted and retained immediate-parent representative
+    for each in-range author for which one exists. Ignore the author's other
+    branches. Do not use schedule prediction or score exclusion for this list.
+11. Limit work per author and round. Reserve processing for required parents,
+    recovery deadlines, proposals, and commit scans.
+12. Use a deterministic leader-order coverage rule, or specify and prove the
+    probability model for the shared order.
+13. During cleanup safe resume, persist the exact local target and parent need
+    before proposal selection. Do not let a higher accepted batch replace this
+    work without a legal commit-driven rebase.
+14. Derive each finite causal capsule from the history already required by
+    parent-first acceptance. Keep that retained history serveable for the active
+    epoch. Do not require proactive full-history flooding.
+15. Model the threshold-round signal and one-shot leader-timeout task. Keep its
+    exact target until callback or a later signal, and classify a callback that
+    returns without a proposal.
+16. Bind selected-leader inclusion to recovery-origin parent snapshots. The
+    current broad Lean field applies to every proposal snapshot and is not a
+    valid source map for the current normal proposer.
+
+These are local changes except for the common leader-order rule and any new
+safe-resume rule. They do not change the quorum decision rules.
+
+## Proof order
+
+Implement the proof in this order:
+
+1. Model validator-indexed state and addressed messages.
+2. Derive quorum correct, available stake from the fault bounds.
+3. Map `ValidatorPacketDrivenBlockAcceptanceAt`,
+   `packetDrivenAcceptanceHasInputOrigin`, `ValidatorCoreHandlerInputObservation`,
+   `handlerInputOccurs`, and `qualifyingInputHasFiniteHandler` to the guarded
+   ordinary `add_blocks` handler. Cover pending refresh, every local
+   `recordCommit`, cleanup-driven unsuspension from finite input, terminal
+   `none`, and invocation of the normal proposal attempt before return. Do not
+   infer proposal success from this interface. Model certified-commit processing
+   separately. Do not map GC-unsuspension to a new handler input.
+4. Map `ValidatorCoreProposalAttemptContinuationRules` to the already-actual
+   attempt result. Continue a same-batch proposal through persistence and send,
+   or run the exact protected or durable current work. Do not add a future
+   proposal result.
+5. Prove recovery entry from local time or round gap and local eligibility
+   checks. A commit can rebase work, but cannot discharge block progress.
+6. Prove source retention, exact proposal persistence, and addressed ordinary
+   broadcast.
+7. Prove recursive direct-parent needs, exact-reference service, delivery,
+   buffering, and parent-first acceptance.
+8. Prove exact-next and cleanup-safe proposal recovery for one host.
+9. Treat every local commit branch as a finite interruption. Resume protected
+   ordinary proposal work without using the commit result as DAG evidence.
+10. Aggregate the one-host results into one positive sourceable operational
+    frontier, and project its exact bodies to a correct-held total-quorum layer
+    after every post-GST start and requested round.
+11. This completes `NetworkDagProgressLiveness` without a commit alternative.
+    Retain the stronger correct-only recovery windows privately for the next
+    stage.
+12. Derive bounded proposal-time difference at a common frontier and timely
+    first-slot inclusion from pacing and full retained-parent selection.
+13. Prove recurring favorable first-slot windows from the chosen leader-order
+    rule. Do not assume a favorable execution.
+14. Fix one correct, available validator and choose a sufficiently late finite
+    common DAG prefix that contains one fresh favorable window.
+15. Derive the exact adjacent vote and anchor evidence at that validator.
+16. Reuse the deterministic pending refresh, anchor scan, and exact result
+    proofs to obtain one actual successful local FlexCommitter run.
+17. Map the result to one actual local `recordCommit` and durable exact install.
+18. Repeat after every requested index, then quantify over correct, available
+    validators. Keep each finish time inside its validator quantifier.
+19. Use exact-prefix safety to derive exact-reference catch-up and common
+    commit agreement from those later local commits.
+20. Keep synchronized-install provenance as a safety-only race case. Do not use
+    future commit synchronization in steps 3 through 19.
+
+The final review rule is simple:
+
+> No final theorem input can state a collective progress result. This includes a
+> recovery quorum, parent availability, a common block layer, quorum inclusion,
+> a favorable leader window, a usable anchor, completed synchronization, or a
+> later commit. It also includes eventual remote commit receipt, processing,
+> installation, or an exact-install race.
+
+The final-theorem input list must contain only the basic inputs,
+single-validator contracts, probability law, and source-to-model mappings. The
+ledger can also track derived proof goals, but it must label them as derived. The
+gap report must separate missing product behavior from missing formal proofs.

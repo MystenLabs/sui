@@ -7,9 +7,12 @@ SPDX-License-Identifier: Apache-2.0
 
 ## Result
 
-The formal model has no unfinished proof placeholders or declared axioms. It
-proves safety, evidence retention, and conditional progress properties for
-Mysticeti v3.
+The formal model has no unfinished proof placeholders or declared axioms in its
+current lemmas. It proves safety, evidence retention, local liveness lemmas, and
+stage composition. It does not yet prove the final network-progress and
+commit-catch-up result from only fundamental network conditions and
+single-validator rules. See the plain-language
+[safety and liveness properties](SAFETY_AND_LIVENESS.md).
 
 The model is not an end-to-end proof of the product. A result applies to the
 product only when all related environment conditions and product-mapping
@@ -97,40 +100,60 @@ calculation. Safety depends on ordered processing and the same first trigger.
 
 The progress model uses partial synchrony. Before the network stabilization time,
 messages can have any delay. After that time, messages between correct validators
-arrive within `delta`. Required local work completes within `epsilon`, where
-`0 < epsilon < delta`, and enabled protocol tasks eventually run.
+arrive within `delta`. Required local work completes within a finite bound
+`epsilon`, and enabled protocol tasks eventually run. The proof does not require
+`epsilon < delta`.
 
 ### Consensus progress
 
-The consensus progress result starts after both network stabilization and catch-up
-activation. It requires safe intermediate proposals after round jumps, a
-live-leader rule, bounded protocol stages, and continued task execution. This
-strong result covers old leader blocks.
+The current consensus progress result composes assumed protocol stages. Its input
+already supplies a favorable leader window, proposal and certificate delivery,
+decision, and commit progress. It is not yet a block-production theorem from
+partial synchrony.
+
+The target strong result starts after both network stabilization and catch-up
+activation. It uses safe intermediate proposals after round jumps, a live-leader
+rule, and continued task execution. This result is intended to cover old leader
+blocks.
 
 The model includes a local counterexample in which a direct jump omits one required
 proposal. It does not claim that the complete published attack applies unchanged
 to v3.
 
-For one favorable leader window, the modeled stages finish within `10 * delta`.
-This is a model bound, not a measured product latency.
+For one favorable leader window, the current stage-composition model gives a
+`10 * delta` bound. This is a sum of supplied stage bounds, not a derived product
+latency.
 
 ### Commit progress recovery
 
-The model proves that the recovery policy can increase the commit index. The
-proof derives these stages from local and network rules:
+The model proves stake, timing, next-round, direct-vote, pending-round,
+anchor-scan, and stage-composition lemmas. However, its current top recovery
+theorem still takes abstract contracts that state recovery quorum stake,
+visibility of each recovery block, timely next-round inclusion, an eventual favorable
+leader trace, and later local commit recording. An optional lower helper also
+takes parent-quorum availability. These inputs contain important distributed
+progress results.
 
-1. Correct available validators with quorum stake stay in recovery while no
-   commit occurs.
-2. Next-round proposals and synchronization create consecutive quorum block
-   layers.
-3. Growing pacing, immediate-parent inclusion, and a favorable leader order create
-   a usable anchor window.
-4. The modeled commit scan resolves the older prefix and returns a higher commit
-   candidate.
+The final theorem must derive these distributed results from fundamental inputs
+and local validator rules. The
+[liveness proof plan](../design/liveness_proof_plan.md) defines the boundary and
+proof order.
 
-The proof does not assume these four modeled results. It derives them from the
-lower-level conditions in the assumption ledger. Product commit-index advancement
-also needs the verified mapping that records the returned candidate.
+The final network result has no commit alternative. At every requested round,
+it requires a later positive total-stake quorum layer held by one correct,
+available validator. The holder has one exact accepted, retained, and
+catalogued valid body for each selected author, above its local GC boundary.
+The result does not require each correct validator to produce its own block or
+to hold the layer. The commit proof keeps stronger correct-authored receiver
+windows inside the construction. It requires unbounded exact commit references
+and pointwise installation of each such reference at every correct, available
+validator. Ordinary DAG blocks and recursive above-GC causal-history fetch
+supply the positive local view. Commit synchronization and commit votes are not
+liveness dependencies.
+
+The pointwise catch-up finish can be different for each validator and commit
+reference. The proof does not claim one fixed numerical lag bound. It also does
+not require a correct validator's own blocks or transactions to enter a commit.
 
 Commit progress recovery does not prove that every old correct leader block or
 every transaction commits. See the
@@ -138,9 +161,9 @@ every transaction commits. See the
 
 ### Transaction progress
 
-A pending transaction eventually receives a durable decision when consensus keeps
-producing one continuous commit stream, a later eligible trigger occurs, and the
-finalizer and storage stages continue to run. The epoch-tail case remains open.
+The current transaction theorem composes supplied commit-stream, trigger,
+decision, storage, and consumer stages. It does not yet derive transaction
+progress from fundamental inputs. The epoch-tail case also remains open.
 
 Transaction payload retention is not required. A validator or user can submit a
 transaction again.
@@ -166,7 +189,10 @@ this probability model. It does not prove the probability result. The product us
 a deterministic round-based shuffle, and the proof does not establish the same
 coverage for that exact sequence.
 
-## Main boundaries
+## Conditions and proof goals
+
+Entries whose type is **Derived** are proof goals. They are not inputs to the
+final liveness theorems.
 
 The results depend on these groups of conditions:
 
@@ -181,15 +207,13 @@ The results depend on these groups of conditions:
   `ASM-LIVE-PEER-FAIRNESS`, `ASM-LIVE-TASK-FAIRNESS`,
   `ASM-LIVE-LOCAL-RESPONSE`, and `ASM-LIVE-PIPELINE-BOUNDS`.
 - **Consensus progress:** `ASM-LIVE-ROUND-CATCHUP`,
-  `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`, `ASM-LIVE-LEADER`,
-  `ASM-LIVE-FIRST-SLOT-SAMPLING`, `ASM-LIVE-BLOCK-SYNC`, and
-  `ASM-LIVE-COMMIT-SYNC`.
+  `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`, `ASM-LIVE-LOCAL-PROPOSAL`,
+  `ASM-LIVE-LEADER`, `ASM-LIVE-FIRST-SLOT-SAMPLING`,
+  and `ASM-LIVE-BLOCK-SYNC`.
 - **Transaction progress:** `ASM-LIVE-FINALIZER-TRIGGER` and
-  `ASM-LIVE-DURABILITY`, with `ASM-LIVE-COMMIT-SYNC` when commits are missing.
+  `ASM-LIVE-DURABILITY`.
 
-Commit progress recovery does not use `ASM-LIVE-ROUND-CATCHUP`. Useful-peer
-fairness applies only when a lagging or restarted validator needs old consensus
-state.
+Commit progress recovery does not use `ASM-LIVE-ROUND-CATCHUP`.
 
 ## Current product status
 

@@ -52,17 +52,15 @@ structure LocalConsensusAction where
   deriving DecidableEq, Repr
 
 /-- Bounded post-GST local processing for actions that stay enabled. `epsilon` is
-positive and smaller than the post-GST network-delay bound. The proof uses both
-bounds and does not treat local processing as instantaneous.
+a finite local-work bound. It can be zero in the ideal model. A theorem that needs
+local work to be faster than message delivery must take that extra inequality.
 
 This is the environmental assumption `ASM-LIVE-LOCAL-RESPONSE`. -/
 structure BoundedLocalProcessing
     {protocolPacket : Packet → Prop}
-    (network : PartialSynchrony protocolPacket)
-    (protocolAction : LocalConsensusAction → Prop) where
+  (network : PartialSynchrony protocolPacket)
+  (protocolAction : LocalConsensusAction → Prop) where
   epsilon : Nat
-  epsilonPositive : 0 < epsilon
-  epsilonLessThanNetworkDelay : epsilon < network.delta
   postGstCompletion : ∀ action,
     protocolAction action →
     network.gst ≤ action.enabledAt →
@@ -120,17 +118,18 @@ theorem protocol_packet_becomes_locally_visible_before_two_delays
     (packet : Packet) (validPacket : protocolPacket packet)
     (action : LocalConsensusAction) (validAction : protocolAction action)
     (actionStartsAtDelivery : action.enabledAt = packet.deliveredAt)
+    (localFaster : processing.epsilon < network.delta)
     (afterGst : network.gst ≤ packet.sentAt) :
     action.completedAt <
       packet.sentAt + network.delta + network.delta := by
   have visible := protocol_packet_becomes_locally_visible processing packet
     validPacket action validAction actionStartsAtDelivery afterGst
-  have localFaster :
+  have combinedBound :
       packet.sentAt + network.delta + processing.epsilon <
         packet.sentAt + network.delta + network.delta :=
-    Nat.add_lt_add_left processing.epsilonLessThanNetworkDelay
+    Nat.add_lt_add_left localFaster
       (packet.sentAt + network.delta)
-  exact Nat.lt_of_le_of_lt visible localFaster
+  exact Nat.lt_of_le_of_lt visible combinedBound
 
 end BoundedLocalProcessing
 

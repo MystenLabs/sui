@@ -10,11 +10,10 @@ namespace Mysticeti
 
 /-! Commit-progress recovery definitions and stage composition for Mysticeti v3.
 
-The local FlexCommitter scan is executable and proved. The final theorem derives
-three distributed recovery stages from per-validator process rules, partial
-synchrony, bounded local processing, and a trace-level leader-order sampling
-property. It keeps the exact Rust-state mapping as a refinement boundary. It does
-not prove liveness for old leader blocks or transaction inclusion. See
+The local FlexCommitter scan is executable and proved. The current top theorem
+composes abstract distributed recovery contracts. It does not yet derive them
+from validator-addressed messages and single-validator actions. It does not prove
+liveness for old leader blocks or transaction inclusion. See
 `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`, `ASM-LIVE-LEADER`,
 `ASM-LIVE-FIRST-SLOT-SAMPLING`, and `ASM-LIVE-LOCAL-RESPONSE`.
 -/
@@ -584,17 +583,17 @@ theorem max_selected_round_is_attained
     exact ⟨authority, authorityInRange, authoritySelected, by omega⟩
   · exact attained
 
-/-- The proof-selected recovery frontier is the largest last signed round among
-the validators that are in commit progress recovery. The protocol does not send or
-agree on this value. -/
+/-- The recovery frontier is the largest last signed round among the validators
+that are in commit progress recovery. This value exists only in the proof. The
+protocol does not send or agree on it. -/
 def recoveryFrontierRound {State : Type}
     (view : CommitProgressRecoveryView State) (state : State) : Nat :=
   maxSelectedRound view.authorityCount
     (view.correctRecoveryAuthorities state)
     (fun authority => view.highestKnownOwnProposalRound authority state)
 
-/-- Every validator in commit progress recovery starts at or below the
-proof-selected recovery frontier. -/
+/-- Every validator in commit progress recovery starts at or below the recovery
+frontier chosen in the proof. -/
 theorem recovery_authority_round_le_frontier
     {State : Type} (view : CommitProgressRecoveryView State)
     {state : State} {authority : Nat}
@@ -609,7 +608,7 @@ theorem recovery_authority_round_le_frontier
     authorityInRange authorityInRecovery
 
 /-- A recovery quorum contains one validator whose last signed round attains the
-proof-selected recovery frontier. -/
+recovery frontier chosen in the proof. -/
 theorem recovery_frontier_is_attained
     {State : Type} (view : CommitProgressRecoveryView State)
     (thresholds : Thresholds view.authorityCount view.stake)
@@ -955,8 +954,7 @@ theorem parent_quorums_give_exact_next_catch_up
         simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using remainingPath
 
 /-- A validator in recovery has an exact-next path from its last signed round to
-the execution-derived recovery frontier when the finite causal parent interval is
-available. -/
+the recovery frontier when the required finite parent interval is available. -/
 theorem recovery_authority_has_exact_next_path_to_frontier
     {State : Type} (view : CommitProgressRecoveryView State)
     {state : State} {authority : Nat}
@@ -990,7 +988,7 @@ theorem recovery_authority_has_exact_next_path_to_frontier
     omega
   simpa [endpoint] using path
 
-/-! ### Recovery entry from local actions -/
+/-! ### Abstract recovery-entry contract -/
 
 /-- Commit indexes do not decrease along one execution trace. -/
 def CommitIndexMonotone {State : Type}
@@ -999,13 +997,11 @@ def CommitIndexMonotone {State : Type}
     earlier ≤ later →
     view.commitIndex (trace earlier) ≤ view.commitIndex (trace later)
 
-/-- Local process rules for entry into commit progress recovery.
+/-- An abstract contract for entry into commit progress recovery.
 
-Each live validator has one local recovery-entry action. Bounded local processing
-sets a common deadline for these actions. The remaining fields are local state
-invariants: commit indexes do not decrease, recovery persists while the commit
-index is unchanged, recovery contains only progressing validators, and recovery
-uses the next-round proposal policy. -/
+The entry actions are local, but `liveStakeIsQuorum` is an aggregate result. The
+final theorem must derive that result from the fixed fault and availability
+sets. -/
 structure RecoveryEntryProcess
     {State : Type} {protocolPacket : Packet → Prop}
     (trace : Trace State)
@@ -1225,13 +1221,13 @@ theorem recovery_wait_eventually_covers_block_visibility
 
 /-! ### Quorum block layers from per-validator proposals -/
 
-/-- One recovery block flows from a local proposal action through authenticated
-delivery and a local acceptance action.
+/-- An abstract block-flow helper for one recovery block.
 
 `proposalReadyAt` is when the next-round proposal has an immediate-parent quorum
 and its recovery pacing wait has expired. `deadlineCoversFlow` is arithmetic: the
 window allows one proposal action, one network delay, and one acceptance action.
-The state-transition fields state the effects of persistence and acceptance. -/
+The helper has no sender or receiver state, and it accepts local parent-quorum
+availability as an input. It is not a final theorem boundary. -/
 structure RecoveryBlockFlow
     {State : Type} {protocolPacket : Packet → Prop}
     (trace : Trace State)
@@ -1437,14 +1433,11 @@ theorem recovery_block_flow_visible_at_deadline
         (baseRound start + offset) accept.completedAt deadline
         acceptBeforeDeadline atBaseline acceptedAtAction)
 
-/-- Local proposal and delivery rules for a finite recovery block-layer window.
+/-- Abstract block-visibility contract for a finite recovery window.
 
-The central rule is pointwise: one validator that is in recovery at `start`
-produces and delivers its block for each required round by the common window
-deadline, unless a commit advances first. A Rust refinement must derive this rule
-from the next-round target, an immediate-parent quorum, block synchronization,
-bounded local processing, persistence before broadcast, and post-GST delivery.
-Lean derives the quorum stake and the consecutive block-layer window. -/
+Its central field already states a future visibility result for each validator.
+It is an internal composition interface. A final theorem must derive the field
+from local proposal, synchronization, storage, and delivery rules. -/
 structure RecoveryLayerProductionProcess
     {State : Type} {protocolPacket : Packet → Prop}
     (trace : Trace State)
@@ -1553,8 +1546,8 @@ def recovery_layer_production_from_block_flow
   layerRoundIsPendingAtDeadline := layerRoundIsPendingAtDeadline
   layerIsRetainedAtDeadline := layerIsRetainedAtDeadline
 
-/-- Pointwise recovery proposals from quorum stake form consecutive quorum block
-layers at the proof-selected recovery frontier by the common deadline. -/
+/-- Per-validator recovery proposals from quorum stake form consecutive quorum
+block layers at the recovery frontier chosen in the proof by the common deadline. -/
 theorem recovery_quorum_has_chosen_layers_by_deadline
     {State : Type} {protocolPacket : Packet → Prop}
     {trace : Trace State}
@@ -1676,8 +1669,8 @@ theorem recovery_quorum_reaches_layers_within
     exact ⟨deadline, startBeforeDeadline, by simp [deadline],
       Or.inr ⟨recoveryAtDeadline, windowAtDeadline⟩⟩
 
-/-- The bounded pointwise-production theorem gives the second unbounded recovery
-stage used by commit-progress composition. -/
+/-- The bounded per-validator production theorem gives the second recovery stage
+used by commit-progress composition. -/
 theorem recovery_quorum_to_layers
     {State : Type} {protocolPacket : Packet → Prop}
     {trace : Trace State}
@@ -1700,8 +1693,9 @@ theorem recovery_quorum_to_layers
 
 /-! ### Usable anchors from timely first-slot voting -/
 
-/-- The validator in the first selected leader slot is outside the set that can
-fail to make progress. -/
+/-- The validator in the first selected leader slot is outside this abstract
+model's non-progress set. This old stage model does not connect that set to the
+Byzantine and unavailable sets. -/
 def FirstSelectedLeaderIsProgressing {State : Type}
     (view : CommitProgressRecoveryView State)
     (round : Nat) : State → Prop :=
@@ -1710,32 +1704,25 @@ def FirstSelectedLeaderIsProgressing {State : Type}
         SelectedLeaderSlotView.validator = some validator ∧
       view.nonProgress state validator = false
 
-/-- Recovery parent selection is schedule-independent. It disables score-based
-ancestor exclusion for the immediate parent round. A recovery proposal groups the
-available blocks by validator. It includes the block when the local DAG has exactly
-one block for that validator. It includes no block for a validator when the local
-DAG already knows more than one. -/
+/-- An author-level abstraction of recovery parent inclusion.
+
+It is schedule-independent and represents at most one counted parent per author.
+It does not model block references or the choice between equivocation branches.
+That choice remains a source-to-model obligation. -/
 structure RecoveryImmediateParentRule {State : Type}
     (view : CommitProgressRecoveryView State) where
   parentAvailable : State → Nat → Nat → Nat → Prop
-  parentEquivocationKnown : State → Nat → Nat → Nat → Bool
   parentIncluded : State → Nat → Nat → Nat → Prop
-  includesLocallyUniqueAvailableParent :
+  includesAvailableParent :
     ∀ state round leader voter,
       voter < view.authorityCount →
       view.quorumBlockLayerAuthors (round + directVoteRoundOffset) state voter =
         true →
       parentAvailable state round leader voter →
-      parentEquivocationKnown state round leader voter = false →
       parentIncluded state round leader voter
-  omitsKnownEquivocatingParent :
-    ∀ state round leader voter,
-      parentEquivocationKnown state round leader voter = true →
-      ¬parentIncluded state round leader voter
 
-/-- Pacing and post-GST delivery make one correct first-slot block available to
-each next-round recovery proposer before that proposer selects its parents. A
-correct leader does not equivocate. -/
+/-- Abstract first-slot availability contract. Its field assumes the result that
+the final validator-indexed proof must derive from pacing and delivery. -/
 structure TimelyFirstSlotParentAvailability {State : Type}
     (view : CommitProgressRecoveryView State)
     (parents : RecoveryImmediateParentRule view) where
@@ -1748,15 +1735,6 @@ structure TimelyFirstSlotParentAvailability {State : Type}
       view.quorumBlockLayerAuthors (round + directVoteRoundOffset) state voter =
         true →
       parents.parentAvailable state round leader voter
-  progressingFirstSlotHasNoKnownEquivocation :
-    ∀ state round leader voter,
-      (view.selectedLeaderSlots round state).head?.map
-          SelectedLeaderSlotView.validator = some leader →
-      view.nonProgress state leader = false →
-      voter < view.authorityCount →
-      view.quorumBlockLayerAuthors (round + directVoteRoundOffset) state voter =
-        true →
-      parents.parentEquivocationKnown state round leader voter = false
 
 /-- The direct decision rule counts an included immediate parent as one direct vote
 and changes the first selected leader slot to `Commit` after quorum stake votes. -/
@@ -1780,12 +1758,10 @@ structure DirectFirstSlotDecisionRule {State : Type}
         view.selectedLeaderSlots round state =
           { validator := validator, status := .commit } :: tail
 
-/-- Direct-vote observations and the deterministic selected-slot status update.
+/-- Abstract direct-vote observations and the selected-slot status update.
 
-The first field is the pacing and parent-selection rule: when the first selected
-leader is progressing, every recovery block in the next round includes that
-leader's timely block. The second field maps a direct quorum to the Rust status
-used by the FlexCommitter scan. -/
+The first field already states aggregate next-round inclusion. The final theorem
+must derive it from pacing, delivery, and local parent selection. -/
 structure TimelyFirstSlotVoting {State : Type}
     (view : CommitProgressRecoveryView State)
     (thresholds : Thresholds view.authorityCount view.stake) where
@@ -1824,11 +1800,8 @@ def timely_first_slot_voting_from_parent_rule
     intro voter voterInRange voterInLayer
     have available := availability.progressingFirstSlotIsAvailable state round
       leader voter firstSlot leaderProgressing voterInRange voterInLayer
-    have noKnownEquivocation :=
-      availability.progressingFirstSlotHasNoKnownEquivocation state round leader
-        voter firstSlot leaderProgressing voterInRange voterInLayer
-    have included := parents.includesLocallyUniqueAvailableParent state round
-      leader voter voterInRange voterInLayer available noKnownEquivocation
+    have included := parents.includesAvailableParent state round leader voter
+      voterInRange voterInLayer available
     exact direct.includedParentIsDirectVote state round leader voter voterInRange
       included
   directQuorumCommitsFirstSlot := direct.directQuorumCommitsFirstSlot
@@ -1909,14 +1882,14 @@ theorem progressing_first_slot_run_gives_covered_anchor_window
   intro offset offsetInRun
   exact anchors offset offsetInRun
 
-/-- The almost-sure trace property supplied by independent uniform first-slot
-sampling.
+/-- A favorable first-slot trace contract.
 
 After a recovery layer window exists, it eventually selects a later candidate
 window whose first selected leader slots are progressing, unless the commit index
 has already changed. It selects only the leader order. It does not assume votes,
-anchors, or a commit result. A probability model must prove that almost every
-sampled trace has this property. -/
+anchors, or a commit result. However, it already supplies the successful future
+leader run. A final probabilistic theorem must take a probability law and prove
+that almost every sampled trace has this property. -/
 structure FirstSlotSamplingTrace
     {State : Type} {protocolPacket : Packet → Prop}
     (trace : Trace State)
@@ -2249,9 +2222,9 @@ theorem recovery_layers_to_usable_anchors
 recovery.
 
 The first three fields form a stable interface for stage composition.
-`recovery_stages_from_processes` derives them from the local process, network,
-sampling, and Rust-state mapping rules above. The last field states that Rust
-records the commit that the executable Lean model finds. -/
+`recovery_stages_from_abstract_process_contracts` constructs them from the
+abstract contracts above. The last field states that the product records the
+commit that the executable Lean model finds. -/
 structure CommitProgressRecoveryStages
     {State : Type} {protocolPacket : Packet → Prop}
     (trace : Trace State)
@@ -2310,10 +2283,11 @@ structure CommitProgressRecoveryStages
         (ModeledFlexCommitterAdvancesAt view baseline indirectCommitDepth)
         (CommitAdvancedFrom view baseline)
 
-/-- Construct the recovery-stage interface from local process rules, partial
-synchrony, bounded local processing, the sampled first-slot trace, and the
-pending-array mapping. The three distributed stage results are proved here. -/
-theorem recovery_stages_from_processes
+/-- Construct the recovery-stage interface from abstract process contracts.
+
+The inputs still contain distributed results. This theorem only converts those
+contracts into the stable stage-composition interface. -/
+theorem recovery_stages_from_abstract_process_contracts
     {State : Type} {protocolPacket : Packet → Prop}
     {trace : Trace State}
     {network : PartialSynchrony protocolPacket}
@@ -2348,7 +2322,7 @@ theorem recovery_stages_from_processes
 
 /-- Construct the recovery stages from the two direct pending-array rules instead
 of a complete candidate-window mapping. -/
-theorem recovery_stages_from_processes_and_pending_round_rules
+theorem recovery_stages_from_abstract_process_contracts_and_pending_round_rules
     {State : Type} {protocolPacket : Packet → Prop}
     {trace : Trace State}
     {network : PartialSynchrony protocolPacket}
@@ -2372,15 +2346,15 @@ theorem recovery_stages_from_processes_and_pending_round_rules
     CommitProgressRecoveryStages trace network view thresholds := by
   let mapping := recovery_anchor_window_mapping_from_pending_round_rules
     (production := production) indirectCommitDepth pendingRules
-  exact recovery_stages_from_processes entry production voting sampling mapping
-    rustRecordsResult
+  exact recovery_stages_from_abstract_process_contracts entry production voting
+    sampling mapping rustRecordsResult
 
 /-- The recovery stages and Rust mapping condition compose to commit-index
 progress.
 
 This theorem is the stable stage-composition lemma.
-`commit_progress_recovery_from_processes` derives its distributed stages from the
-process and network rules in this file. -/
+`commit_progress_recovery_from_abstract_process_contracts` derives its distributed
+stages from the abstract process contracts in this file. -/
 theorem commit_progress_recovery_stages_compose
     {State : Type} {protocolPacket : Packet → Prop}
     {trace : Trace State}
@@ -2425,13 +2399,15 @@ theorem commit_progress_recovery_stages_compose
               (Nat.le_trans layersToAnchors anchorsToCommit)),
           advanced⟩
 
-/-- End-to-end commit-progress recovery in the Lean process model.
+/-- Commit-progress composition from abstract process contracts.
 
-The only non-deterministic input is `FirstSlotSamplingTrace`, which is the
-almost-sure trace property of the accepted independent uniform leader-order model.
-The local structures state code-level action effects and state mappings. The final
-`rustRecordsResult` argument remains a Rust-to-Lean refinement condition. -/
-theorem commit_progress_recovery_from_processes
+This is not the final theorem boundary. `RecoveryEntryProcess.liveStakeIsQuorum`,
+`RecoveryLayerProductionProcess`, `TimelyFirstSlotVoting`, and
+`FirstSlotSamplingTrace` contain distributed results that the final proof must
+derive from fundamental network conditions and single-validator rules. The
+`rustRecordsResult` argument is a temporal progress result, not only a static
+source-to-model condition. -/
+theorem commit_progress_recovery_from_abstract_process_contracts
     {State : Type} {protocolPacket : Packet → Prop}
     {trace : Trace State}
     {network : PartialSynchrony protocolPacket}
@@ -2457,13 +2433,13 @@ theorem commit_progress_recovery_from_processes
     LeadsToAfter network.gst trace
       (CommitStalledAt view baseline)
       (CommitAdvancedFrom view baseline) := by
-  let stages := recovery_stages_from_processes entry production voting sampling
-    mapping rustRecordsResult
+  let stages := recovery_stages_from_abstract_process_contracts entry production
+    voting sampling mapping rustRecordsResult
   exact commit_progress_recovery_stages_compose stages
 
-/-- End-to-end commit progress from local processes and the two direct
+/-- Commit-progress composition from abstract process contracts and the two direct
 pending-array rules. -/
-theorem commit_progress_recovery_from_processes_and_pending_round_rules
+theorem commit_progress_recovery_from_abstract_process_contracts_and_pending_round_rules
     {State : Type} {protocolPacket : Packet → Prop}
     {trace : Trace State}
     {network : PartialSynchrony protocolPacket}
@@ -2488,8 +2464,9 @@ theorem commit_progress_recovery_from_processes_and_pending_round_rules
     LeadsToAfter network.gst trace
       (CommitStalledAt view baseline)
       (CommitAdvancedFrom view baseline) := by
-  let stages := recovery_stages_from_processes_and_pending_round_rules entry
-    production voting sampling pendingRules rustRecordsResult
+  let stages :=
+    recovery_stages_from_abstract_process_contracts_and_pending_round_rules entry
+      production voting sampling pendingRules rustRecordsResult
   exact commit_progress_recovery_stages_compose stages
 
 end Mysticeti

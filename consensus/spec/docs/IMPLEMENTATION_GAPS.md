@@ -9,34 +9,107 @@ This report lists work that must finish before the related formal results apply 
 the product. P0 items block v3 activation. P1 items block complete safety or
 progress claims. P2 items reduce conformance and boundary risks.
 
-The [assumption ledger](ASSUMPTIONS.md) gives the status of each condition.
+The [assumption ledger](ASSUMPTIONS.md) gives the status of each condition. The
+[assumption evidence ledger](ASSUMPTION_EVIDENCE.md) records the reviewed Rust
+and Lean evidence, its limits, and the files that require a focused recheck.
 
 ## Commit progress recovery
 
 ### P0: implement commit progress recovery
 
 Related assumptions: `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`,
-`ASM-LIVE-LOCAL-RESPONSE`, `ASM-LIVE-LEADER`, and
+`ASM-LIVE-LOCAL-PROPOSAL`, `ASM-LIVE-LOCAL-RESPONSE`, `ASM-LIVE-LEADER`, and
 `ASM-LIVE-FIRST-SLOT-SAMPLING`.
 
 The product can move to a future round without filling its own proposal sequence.
 Partial synchrony alone does not ensure that commits resume.
 
-Implement the [recovery design](../design/commit_progress_recovery.md). The product
-must enter recovery after a commit stall, propose only one round after its highest
-known signed round, preserve growing pacing across round jumps, and require a
-valid immediate-parent quorum. It must request missing parents and disable
-score-based exclusion only for the immediate parent round. It must keep
-equivocation checks, durable-before-send behavior, legal old-block cleanup
-boundaries, and safe exit rules.
+Implement the [recovery design](../design/commit_progress_recovery.md). Use the
+normal `threshold_clock_round()` candidate as the round-gap probe. Do not use the
+exact-next recovery target as this probe. Enter recovery when the gap reaches
+`P_enter` or the time since any commit install reaches `T`. Stay active while the
+gap reaches `P_exit` or the time reaches `T`, where `P_exit < P_enter`. Exit only
+when both signals clear. A small commit must not clear recovery while the exit
+gap remains. No production threshold values are selected in this specification.
+
+The product must propose only one round after its highest known signed round,
+preserve growing pacing across round jumps, and require a valid immediate-parent
+quorum. It must request missing parents. In recovery, parent selection must
+include the current locally accepted and retained representative for each
+in-range author for which one exists. It must count an equivocating author once,
+ignore its other branches, and bypass score-based exclusion for this immediate
+parent round. This selection must not depend on the local predicted leader
+schedule. The current `force=true` path does not implement this rule.
+
+When block-progress recovery is active and the signer floor is above GC, cancel
+or replace any stale normal ready proposal before it persists. Only a ready
+proposal created from the current commit-progress recovery timer and its
+refreshed parent list can persist. The executable proposal-obligation transition
+does not yet enforce this same-host origin rule.
+
+Bind each recovery `proposeNext` action to the protected job for one stored
+timer generation. Keep its head, target, and deadline until the action runs.
+Run the action once between the deadline and one local-action bound after the
+deadline. If the head changed at the deadline, reject or re-arm that generation.
+A stale retry or duplicate action must not bypass this check. The current
+proposer does not keep this timer-generation-to-action provenance.
+
+Cleanup safe resume is a separate round-jump exception. Local processing must
+durably record the canonical target `max(P + 1, G + 2)` and its parent need
+before the proposer runs. It must not wait for an accepted future block at that
+target. A higher block cannot replace this work without a legal commit-driven
+rebase. The target, its exact parent bodies, and its above-cleanup causal data
+stay protected until the proposal is durable and sent. After that step,
+recovery returns to exact-next proposals. A local or synchronized commit must
+preserve an equivalent usable seed before it advances cleanup.
+
+The canonical local target is not a network round-convergence rule. Local GC
+rounds can differ. A lower host also need not have a quorum in every round
+between its local target and the highest target. Therefore, local safe resume
+followed by exact-next proposals does not by itself give one same-round correct
+quorum.
+
+Add a witness-bound alignment transition. It must consume one actual accepted
+and retained block, lock its exact reference and quorum immediate parents, and
+permit a lower signer to make one own block in that witness round. It must use
+one selected branch per author. The lock and parent bodies must survive a local
+or synchronized commit installation until the proposal is durable, or the host
+must select a newer actual witness before it signs. This is the isolated
+`ValidatorSafeResume` and `.alignProposal` shape. It is not wired to the main
+trace. Current Rust can incidentally set its threshold clock to the round of a
+first accepted higher block. However, more accepted stake can move it past that
+round before proposal, and there is no durable witness lock across commit and
+cleanup work. The source rule must not return a future witness or a future
+common layer.
+
+Current Rust also does not implement the modeled recovery timing. Its
+leader-timeout task resets fixed minimum and maximum timers when the local
+threshold clock advances. The maximum timeout uses `force = true`, which skips
+the selected-leader presence check. Parent selection still requires a quorum,
+but score exclusion can omit the selected leader after the quorum exists. The
+recovery implementation needs a sticky exact-target timer with the growing
+absolute-round wait and the full retained immediate-parent selection described
+above.
+
+Each qualifying external `add_blocks` handler must finish all commit work
+enabled by its finite nonempty accepted-block batch and finite GC-unsuspended
+blocks. Its local `try_commit_v3` loop must observe terminal `None`, then Core
+must invoke `try_propose(false)` before return. This rule does not say that the
+proposal attempt succeeds. Local commit processing must preserve or legally
+rebase protected proposal work. A persisted block also creates a durable send
+obligation. The proof does not assume that a later synchronized batch arrives.
+
+The core theorem does not require every correct validator to keep producing its
+own blocks at unbounded rounds. Correct quorum block production is sufficient.
+Per-validator own-block production is an optional fairness property.
 
 The normal commit path and immediate-parent quorum check already exist. Recovery
 must preserve them. It does not need a separate certified commit prefix.
 
 The older [round-jump proposal](https://www.cs.yale.edu/flint/certikos/publications/sp26.pdf)
 uses a stronger intermediate-proposal rule. That paper studies an older protocol.
-This design proves only commit-index progress and does not claim the paper's full
-trace unchanged.
+The witness-bound step above uses only its same-round alignment shape. This
+design does not import or claim the paper's full trace.
 
 ## Other activation blockers
 
@@ -68,6 +141,153 @@ V3 activation must also activate its transaction voting rule.
 
 ## Other safety and progress work
 
+### P1: refine finite commit-processing interruption
+
+Related assumptions: `ASM-LIVE-CORE-HANDLER`, `ASM-LIVE-LOCAL-PROPOSAL`,
+`ASM-LIVE-LOCAL-RESPONSE`, and `ASM-LIVE-TASK-FAIRNESS`.
+
+Rust processes one external input in one synchronous Core handler. When
+`Core::add_blocks` accepts at least one block, `try_commit_v3` repeats local
+commit scans and `post_commit` until one scan returns `None`. Core then calls
+`try_propose(false)`. The Lean fixed-frontier rank bounds only an already
+observed scan chain whose accepted frontier does not change. It does not cover
+blocks that `post_commit` unsuspends from the finite Core-owned store.
+
+`ValidatorCoreHandlerRefinementRules` states the approved complete finite
+handler boundary. Complete its source refinement against the guarded ordinary
+`add_blocks` path. Map exact past delivery and acceptance to
+`ValidatorPacketDrivenBlockAcceptanceAt`. Use
+`packetDrivenAcceptanceHasInputOrigin` to identify the nonempty
+`ValidatorCoreHandlerInputObservation`. Bind `handlerInputOccurs` and
+`qualifyingInputHasFiniteHandler` to its exact handler episode. Do not treat
+every nested accept or record as a new handler input. Bound the finite store at
+handler entry. Map every scan and `post_commit`, cleanup-driven unsuspension,
+terminal `None`, and the `try_propose(false)` invocation before return. Add
+focused control-flow tests. The interface contains no proposal success,
+produced block, future commit, future synchronized batch, or future DAG
+progress. It makes remote or local commit processing a finite internal
+interruption instead of a liveness result. Certified-commit processing is
+outside this positive DAG record and needs a separate per-head model.
+
+`packetDrivenAcceptanceHasInputOrigin` is a proposed local refinement. The
+source mapping must distinguish a block accepted directly by the external
+`add_blocks` call from a previously delivered block that a later GC update
+unsuspends. The direct acceptance starts the qualifying input episode. The
+GC-unsuspended acceptance stays inside its enclosing handler continuation and
+must not start another episode.
+
+Map the already-actual attempt through
+`ValidatorCoreProposalAttemptContinuationRules`. The source rule can identify
+an exact normal proposal action already in the handler suffix, exact protected
+normal work at the next state, or current durable proposal, parent-need, or
+timer work. `qualifying_core_handler_input_has_current_proposal_continuation`
+excludes ghost episodes by requiring `handlerInputOccurs`. This local rule does
+not assert a future proposal result. It remains useful implementation evidence,
+but the completed network-round proof uses the smaller operational-frontier
+pacemaker boundary described below.
+
+### P1: pure post-GST quorum DAG growth
+
+Related assumptions: `ASM-LIVE-LOCAL-PROPOSAL`, `ASM-LIVE-BLOCK-SYNC`,
+`ASM-LIVE-PEER-FAIRNESS`, and `ASM-LIVE-TASK-FAIRNESS`.
+
+Lean now composes operational-frontier proposal work, subscription tip replay,
+addressed broadcast, block sync, parent-first acceptance, and finite
+correct-stake aggregation into positive total-quorum layers held by one
+correct, available validator at arbitrarily high rounds. The proof is
+`EndToEndLivenessInputs.network_dag_progress`. Its strict successor step is
+`operational_frontier_pacemaker_gives_strict_progress`, and finite iteration is
+`operational_frontier_strict_progress_gives_network_dag_progress`.
+
+A local or synchronized commit is not a positive branch. It can change the
+current GC round and the current leader schedule. The next proof step reads the
+new current operational frontier. A block-fetch operation does not need a
+commit rebase. It finishes with a body or an error. When the receiver processes
+a body, it uses the current GC round: a dependency above GC is accepted or
+fetched, and a dependency at or below GC is a completed committed root.
+
+The final network-round theorem does not receive a future carrier, future
+commit, future synchronization result, or future quorum layer. It receives
+only local state, source, scheduler, and transition rules. The forced
+max-timeout progress rule does not use the normal leader wait. Therefore, a
+leader-schedule update can change an early normal attempt without invalidating
+the eventual frontier step.
+
+The distributed Lean join is complete. The current Rust mechanisms are enough
+at a high level, but their exact source mappings are open. The operational-
+frontier proof gives exact ready parents and threshold-clock target `H + 1`.
+`ValidatorNormalFrontierPacemakerRules` models the one-shot forced timeout and
+the current watcher retries. The forced path can stop permanently for the old
+round only when the block already exists or the local clock moved higher. A
+missing recovered own-round value and excessive propagation delay are temporary
+blockers. Their watchers make another forced attempt when they clear.
+
+If the owner already signed `H + 1`,
+`ValidatorCurrentTipSubscriptionExecution` models the current receiver-driven
+subscription loop. A broken, ended, or idle stream terminates, and the receiver
+retries. A successful subscription sends the requested cached own block or the
+sender's latest own block. The proof accepts the exact tip or treats a newer tip
+as higher frontier progress. No proactive all-peer replay mechanism is required.
+
+After the construction retains a common correct-authored layer, derive a fixed
+per-round increase bound for correct timer-start spread. Use ordinary proposal
+send, post-GST delivery, parent-ready acceptance, and bounded timer-arm
+completion. The growing-wait lemma can then prove that a correct selected
+leader is accepted before every next-round recovery parent snapshot. Do not add
+a timer-spread premise, a future block, or a capsule-growth bound to the public
+input.
+
+`ValidatorAnchorLocalRules.includesAcceptedCorrectImmediateParent` is currently
+wider than this product rule. It applies to every `ValidatorProposalSnapshot`.
+Narrow it to a completed recovery proposal, or derive it directly from that
+proposal's refreshed retained-representative list. Current normal and forced
+Rust parent selection does not satisfy the universal field.
+
+### P1: derive per-validator commits from the common DAG
+
+Related assumptions: `ASM-LIVE-LEADER`, `ASM-LIVE-FIRST-SLOT-SAMPLING`,
+`ASM-LIVE-LOCAL-RESPONSE`, and `ASM-SAFE-COMMIT-CHAIN`.
+
+For each fixed correct, available validator, combine the infinite commonly
+accepted DAG with recurring fresh favorable leader windows. Derive the exact
+adjacent vote and anchor evidence, the actual prepared Flex scan, the returned
+local commit, and its durable `recordCommit` action. Repeat after every
+requested index. Exact-prefix safety must then give exact-reference catch-up.
+
+This proof does not require a post-install source-specific carrier or future
+commit synchronization. The validator's later run can differ from the source
+validator's earlier run.
+
+### P1: include the exact first Flex leader in proposal parents
+
+Related assumptions: `ASM-LIVE-LEADER`, `ASM-LIVE-LOCAL-PROPOSAL`, and
+`ASM-LIVE-FIRST-SLOT-SAMPLING`.
+
+For an actual non-forced round `R + 1` proposal, bind parent selection to the
+proposal action's exact pre-state and effective schedule. If the exact first
+round-`R` Flex leader for that schedule has an accepted and retained
+representative before parent selection, include that exact reference as an
+immediate parent. Do not use a general schedule-set intersection. The overlap
+must contain the receiver's exact first Flex leader, and quorum stake must
+create actual children that reference it.
+
+The current proposal waiter waits for all allowed leaders, but score-based
+ancestor selection can still omit one after another parent quorum is ready.
+Prevent this exclusion for the exact accepted and retained allowed leader. The
+generic `force = true` path bypasses the waiter and does not satisfy this rule.
+Commit-progress recovery can instead use its stronger retained-representative
+parent rule.
+
+Compare proposal and Flex schedules through an effective schedule key. After a
+commit install, read the refreshed key. If `allowed_leaders` is unchanged, keep
+compatible membership facts and remove only the obsolete committed prefix. If
+the list changed, reset schedule-dependent facts and start a new comparison.
+Do not remove all old facts only because the commit index advanced.
+
+Evidence:
+[EV-SCHEDULE-HEAD-LOCAL](ASSUMPTION_EVIDENCE.md#ev-schedule-head-local) and
+[EV-FIRST-FLEX-LEADER-PARENT](ASSUMPTION_EVIDENCE.md#ev-first-flex-leader-parent).
+
 ### P1: protect signer state after complete data loss
 
 Related assumption: `ASM-SAFE-NON-EQUIVOCATION`.
@@ -87,24 +307,76 @@ per-slot safety or quorum-coverage condition.
 
 Bind the leader-order algorithm to a protocol version. The current deterministic
 shuffle is not stable across all build configurations and has no proved coverage
-for the accepted probability model.
+for the accepted probability model. Lean proves the finite geometric failure
+bound for an independent uniform model. A true measure-one theorem still needs a
+probability-measure and limit foundation. The proved deterministic repeated-first
+rule is a separate product alternative; current Rust does not implement it.
 
-### P1: prove block and commit synchronization progress
+### P1: prove ordinary causal block synchronization progress
 
-Related assumptions: `ASM-LIVE-BLOCK-SYNC`, `ASM-LIVE-COMMIT-SYNC`,
-`ASM-LIVE-PEER-FAIRNESS`, and `ASM-LIVE-TASK-FAIRNESS`.
+Related assumptions: `ASM-LIVE-BLOCK-SYNC`, `ASM-LIVE-PEER-FAIRNESS`, and
+`ASM-LIVE-TASK-FAIRNESS`.
 
-Synchronization mechanisms exist, but their existence does not prove eventual
-progress. Define conditions for retained old data, peer discovery, fair retries,
-enabled local work, partial batches, empty peer sets, and temporary backpressure.
-Then prove that each required item arrives or becomes unnecessary after verified
-commit synchronization.
+The proof accepts this abstract behavior for now: after a correct validator gets
+one ordinary block body, its synchronizer keeps fetching every missing causal
+ancestor above that validator's local cleanup round. Each fetched body reveals
+its direct parents and continues the walk. The requester retries fair peers,
+waits when no peer is connected, buffers children, and accepts blocks from
+parents to children. References at or below local cleanup are committed roots.
+They need no body recovery.
 
-Where an empty peer set is valid, wait and retry instead of stopping the fetch
-path.
+Acceptance is parent-first. Thus, an accepted block already has its required
+local causal history accepted. Lean must derive its finite above-GC capsule from
+that accepted closure. Capsule availability is not a separate liveness
+assumption. Retention and exact source service remain separate obligations.
+
+The modeled `ValidatorBlock.parents` list is only the immediate-parent
+projection used for quorum validity. A Rust block that jumps rounds can also
+name an older own-author ancestor. A receiver-sync theorem must keep that full
+dependency projection, as `SafeResumeBlock` does. An immediate-parent quorum
+alone does not describe every body that the receiver must fetch.
+
+This one-body rule does not by itself prove unbounded block production. The
+completed operational-frontier composition above combines it with proposal,
+replay, delivery, and finite correct-stake aggregation.
+
+A later Rust review must check this abstraction against peer discovery, retries,
+partial batches, empty peer sets, backpressure, restart, exact-reference reads,
+and cleanup changes. Do not add a below-cleanup exception to discharge it.
+
+The live service already handles a recent-cache miss through
+`DagState::get_blocks`, which falls back to persisted `store.read_blocks`.
+Proposal publication also flushes the child and its ancestors before broadcast.
+The remaining gap is a Lean refinement that maps these persisted exact-body
+reads to the existing causal-capsule and source-protection facts. It is not a
+missing Rust store fallback.
+
+Commit synchronization and commit votes in blocks are not liveness mechanisms.
+Optional commit synchronization can stay as an acceleration path. Its exact
+verification and install provenance remain safety obligations.
 
 This condition applies to old consensus state. Transaction payloads can be
 submitted again.
+
+### P1: import commit blocks before GC advances
+
+Related assumptions: `ASM-SAFE-GC` and
+`ASM-LIVE-COMMIT-PROGRESS-RECOVERY`.
+
+Before a local or synchronized commit install changes the local GC round, the
+host must accept and catalogue every exact block in that commit in `DagState`.
+After GC changes, it must retain the accepted, closed DAG frontier above the new
+GC round. Blocks at or below the new GC round can become committed roots.
+
+The current v3 certified-commit path calls `accept_committed_blocks` before it
+handles and records each commit. Complete the refinement check for atomic
+storage, restart, and retention of the accumulated above-GC installed-prefix
+frontier. One `CommitV1.blocks` list contains only newly committed blocks, so it
+is not the complete retained frontier.
+
+This rule does not require a future synchronized commit. It constrains a commit
+install that already occurred and gives the host legal parents for later normal
+proposal work.
 
 ### P1: define finalizer shutdown behavior
 
@@ -117,13 +389,44 @@ and replay pending state, or define another safe epoch-tail result.
 
 ### P1: close the common commit-chain proof
 
-Related assumptions: `ASM-SAFE-COMMIT-CHAIN`, `ASM-SAFE-FIRST-TRIGGER`, and
-`ASM-LIVE-COMMIT-SYNC`.
+Related assumptions: `ASM-SAFE-COMMIT-CHAIN` and `ASM-SAFE-FIRST-TRIGGER`.
 
-Show that local production, synchronization, recovery, restart, and old-block
-cleanup give all correct validators one continuous index-and-digest chain and the
-same first eligible trigger. Existing local checks support this claim, but the
-cross-validator proof is open. No concrete fork is known.
+Lean already proves exact same-prior commit output, unique exact successors,
+finite exact paths from genesis, and equal installed references at the same
+index. These theorems depend on local source maps for authenticated cached
+decisions, canonical commit construction, durable prefix completeness, and
+local or verified synchronized install provenance.
+
+Complete those Rust-to-Lean maps across local production, synchronization,
+normal restart, and old-block cleanup. Then derive the common chain as the
+existing theorem result. Do not add one shared chain as an E2E input. Connect
+that exact installed chain separately to the transaction finalizer stream and
+the least eligible trigger.
+
+Evidence:
+[EV-EXACT-COMMIT-PREFIX](ASSUMPTION_EVIDENCE.md#ev-exact-commit-prefix) and
+[EV-DURABLE-COMMIT-PREFIX](ASSUMPTION_EVIDENCE.md#ev-durable-commit-prefix).
+
+### P1: preserve cached decision origin
+
+Related assumption: `ASM-SAFE-EVIDENCE-REFINEMENT`.
+
+Rust keeps `LeaderSlot.decision` as direct or indirect. The Lean source map now
+uses that first origin. A direct result needs exact direct-quorum evidence. An
+indirect result needs the exact deciding anchor, its ordered scan origin, its
+historical result, and the valid anchor history.
+
+`Decision::Indirect` does not currently keep the anchor reference. Store that
+reference and enough immutable history identity, or add a same-host reverse map
+that reconstructs the exact first decision event. The Lean model proves the
+sticky rule and first-anchor prefix stability. Complete the Rust refinement for
+retained pending state, leader-schedule reset, and restart reconstruction. Do
+not classify a preserved indirect commit or skip as a fresh direct-quorum
+result. Do not replace this local provenance with a cross-validator agreement
+assumption.
+
+Evidence:
+[EV-CACHED-INDIRECT-ORIGIN](ASSUMPTION_EVIDENCE.md#ev-cached-indirect-origin).
 
 ### P1: protect committed-prefix evidence
 
@@ -137,6 +440,9 @@ committed prefix on local, synchronization, recovery, replay, and restart paths.
 Local ownership protects evidence after it enters that prefix. The open gap is
 end-to-end inclusion, not deletion from the live block cache alone. Enforce the
 required cleanup depth and signed transaction cutoff.
+
+Evidence:
+[EV-FINALIZER-TRIGGER-OUTPUT](ASSUMPTION_EVIDENCE.md#ev-finalizer-trigger-output).
 
 ## Conformance and boundaries
 

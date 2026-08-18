@@ -16,9 +16,10 @@ obligations are
 `ASM-LIVE-PARTIAL-SYNCHRONY`, `ASM-LIVE-ROUND-CATCHUP`,
 `ASM-LIVE-BLOCK-SYNC`, and `ASM-LIVE-COMMIT-SYNC`.
 
-The safe intermediate-proposal rule gives liveness for old leader blocks.
-`CommitProgressRecovery.lean` gives a separate, conditional theorem for the weaker
-commit-index progress property.
+These theorems do not yet derive block production from fundamental network and
+single-validator rules. The safe intermediate-proposal rule is intended to give
+liveness for old leader blocks. `CommitProgressRecovery.lean` contains separate
+composition results for the weaker commit-index progress property.
 -/
 
 abbrev Trace (State : Type) := Time → State
@@ -134,8 +135,8 @@ structure ConsensusLivenessStageObligations
   /-- `ASM-LIVE-ROUND-CATCHUP`. -/
   safeRoundChanges :
     SafeRoundChanges roundState trace (stableStart network catchupActivation)
-  /-- The round leader selection eventually selects a correct, non-crashed
-  validator. `ASM-LIVE-LEADER`. -/
+  /-- Abstract good-window stage. Static leader viability and a probability or
+  deterministic coverage rule must derive this result. -/
   fairRoundLeaderSelection :
     SafeRoundChanges roundState trace (stableStart network catchupActivation) →
     LeadsToAfter (stableStart network catchupActivation) trace
@@ -183,8 +184,8 @@ structure ConsensusLivenessStageObligations
     WithinAfter (stableStart network catchupActivation) network.delta trace
       phases.leaderDecided phases.commitProduced
 
-/-- After a good leader window starts, the network part completes within `10 * delta`. -/
-theorem good_window_commits_within
+/-- Compose the supplied timed stages after a good leader window starts. -/
+theorem good_window_stage_composition_within
     {State : Type} {protocolPacket : Packet → Prop}
     {trace : Trace State}
     {network : PartialSynchrony protocolPacket}
@@ -211,8 +212,11 @@ theorem good_window_commits_within
   rw [← boundEquality]
   exact allSteps
 
-/-- Strong leader liveness after both GST and catch-up activation. -/
-theorem consensus_liveness
+/-- Compose the supplied consensus stages after GST and catch-up activation.
+
+This is not the final block-production theorem boundary. The caller still supplies
+distributed proposal, certificate, decision, and commit stages. -/
+theorem consensus_liveness_stage_composition
     {State : Type} {protocolPacket : Packet → Prop}
     {trace : Trace State}
     {network : PartialSynchrony protocolPacket}
@@ -225,7 +229,8 @@ theorem consensus_liveness
       phases.roundOpen phases.commitProduced := by
   have leaderOpportunity :=
     assumptions.fairRoundLeaderSelection assumptions.safeRoundChanges
-  have boundedCommit := (good_window_commits_within assumptions).toLeadsTo
+  have boundedCommit :=
+    (good_window_stage_composition_within assumptions).toLeadsTo
   exact leaderOpportunity.trans boundedCommit
 
 /-- Liveness checkpoints for one transaction that is pending in the v3 finalizer. -/
@@ -262,8 +267,8 @@ structure FinalizerLivenessStageObligations
     WithinAfter (stableStart network catchupActivation) network.delta trace
       phases.decided phases.durableOutput
 
-/-- Every pending transaction eventually gets a durable accept-or-reject output. -/
-theorem finalizer_liveness
+/-- Compose the supplied finalizer stages into a durable-output result. -/
+theorem finalizer_liveness_stage_composition
     {State : Type} {protocolPacket : Packet → Prop}
     {trace : Trace State}
     {network : PartialSynchrony protocolPacket}
@@ -280,9 +285,9 @@ theorem finalizer_liveness
   have output := assumptions.decisionToDurableOutput.toLeadsTo
   exact (trigger.trans decide).trans output
 
-/-- End-to-end liveness for a target transaction represented by the phase predicates.
-The input-to-finalizer mapping is `ASM-LIVE-DURABILITY`. -/
-theorem transaction_liveness
+/-- Compose the supplied consensus and finalizer stages for one target transaction.
+This is not an end-to-end theorem from fundamental inputs. -/
+theorem transaction_liveness_stage_composition
     {State : Type} {protocolPacket : Packet → Prop}
     {trace : Trace State}
     {network : PartialSynchrony protocolPacket}
@@ -300,9 +305,9 @@ theorem transaction_liveness
         consensusPhases.commitProduced finalizerPhases.pending) :
     LeadsToAfter (stableStart network catchupActivation) trace
       consensusPhases.roundOpen finalizerPhases.durableOutput := by
-  have committed := consensus_liveness consensus
+  have committed := consensus_liveness_stage_composition consensus
   have pending := commitEntersFinalizer.toLeadsTo
-  have output := finalizer_liveness finalizer
+  have output := finalizer_liveness_stage_composition finalizer
   exact (committed.trans pending).trans output
 
 end Mysticeti
