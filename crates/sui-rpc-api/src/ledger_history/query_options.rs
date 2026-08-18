@@ -2116,6 +2116,34 @@ mod tests {
         );
     }
 
+    /// Resume-equivalence witness for the raw cursor echo: an after-Item at n
+    /// admits exactly what the successor-form echo it replaced (Boundary at
+    /// n + 1) admits, so feeding either token back scans the same interval.
+    /// The terminals differ by design (each echoes its own raw coordinate);
+    /// the descending pair is pinned by
+    /// [`tx_after_cursor_pins_descending_terminal`].
+    #[test]
+    fn raw_after_item_echo_resumes_like_successor_boundary() {
+        let item = after_options(Ordering::Ascending, tx_item(3, 24));
+        let successor = after_options(Ordering::Ascending, tx_boundary(3, 25));
+
+        // Non-empty remainder: identical scan bounds either way.
+        assert_eq!(
+            resolved_range(10..30).apply_cursor_bounds(&item).bounds,
+            resolved_range(10..30)
+                .apply_cursor_bounds(&successor)
+                .bounds,
+        );
+
+        // Drained window: both resumptions admit nothing.
+        assert!(resolved_range(10..20).apply_cursor_bounds(&item).is_empty());
+        assert!(
+            resolved_range(10..20)
+                .apply_cursor_bounds(&successor)
+                .is_empty()
+        );
+    }
+
     #[test]
     fn item_cursor_can_be_used_as_after_or_before() {
         let token = CursorToken::item(Position::Transactions {
