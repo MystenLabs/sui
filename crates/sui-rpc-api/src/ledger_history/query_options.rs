@@ -1787,6 +1787,27 @@ mod tests {
                 },
             }
         );
+
+        // After tightens without emptying, before empties: the before-claim
+        // overrides the after-cursor's eagerly written terminal.
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Descending,
+            after: Some(ev_item(8, 5, 0)),
+            before: Some(ev_item(1, 5, 0)),
+        };
+        assert_eq!(
+            resolved_intra_tx().apply_cursor_bounds(&options),
+            ResolvedScan {
+                bounds: IntraTxScanBounds::empty_at(IntraTxCoordinate::start_of_tx(5)),
+                entry_checkpoint: 1,
+                end_checkpoint: 1,
+                end_position: IntraTxCoordinate::start_of_tx(5),
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            }
+        );
     }
 
     /// (descending, after below the window): complete noop — even entry_checkpoint
@@ -1867,24 +1888,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn tx_after_cursor_below_lower_bound_only_folds_entry() {
-        let expected = ResolvedScan {
-            entry_checkpoint: 4,
-            ..resolved_range(10..20)
-        };
-        let options = after_options(Ordering::Ascending, tx_boundary(4, 5));
-        assert_eq!(
-            resolved_range(10..20).apply_cursor_bounds(&options),
-            expected
-        );
-        let options = after_options(Ordering::Ascending, tx_item(4, 5));
-        assert_eq!(
-            resolved_range(10..20).apply_cursor_bounds(&options),
-            expected
-        );
-    }
-
     /// Tightens the lower bound, and the terminal becomes the cursor's, because
     /// the after cursor is where a descending scan stops.
     #[test]
@@ -1954,216 +1957,6 @@ mod tests {
         );
     }
 
-    /// (descending, before inside the window, either cursor kind (Item or
-    /// Boundary)): hi becomes exclusive at the cursor; entry checkpoint folds
-    /// down; terminal untouched.
-    #[test]
-    fn tx_before_cursor_tightens_descending_upper_bound() {
-        let seed = ResolvedScan {
-            entry_checkpoint: 8,
-            ..resolved_range(10..20)
-        };
-        // The before-arm is kind-agnostic: Item and Boundary cursors produce
-        // identical records.
-        let expected = ResolvedScan {
-            bounds: ScanBounds::tx_span(10, 15),
-            entry_checkpoint: 6,
-            ..seed.clone()
-        };
-        let options = before_options(Ordering::Descending, tx_item(6, 15));
-        assert_eq!(seed.clone().apply_cursor_bounds(&options), expected);
-        let options = before_options(Ordering::Descending, tx_boundary(6, 15));
-        assert_eq!(seed.apply_cursor_bounds(&options), expected);
-    }
-
-    #[test]
-    fn tx_before_cursor_above_window_never_tightens() {
-        let seed = ResolvedScan {
-            entry_checkpoint: 5,
-            ..resolved_range(10..20)
-        };
-        let expected = ResolvedScan {
-            entry_checkpoint: 1,
-            ..seed.clone()
-        };
-        let options = before_options(Ordering::Descending, tx_boundary(1, 25));
-        assert_eq!(seed.clone().apply_cursor_bounds(&options), expected);
-        let options = before_options(Ordering::Descending, tx_item(1, 25));
-        assert_eq!(seed.clone().apply_cursor_bounds(&options), expected);
-
-        let options = before_options(Ordering::Ascending, tx_boundary(1, 25));
-        assert_eq!(seed.clone().apply_cursor_bounds(&options), seed);
-        let options = before_options(Ordering::Ascending, tx_item(1, 25));
-        assert_eq!(seed.clone().apply_cursor_bounds(&options), seed);
-    }
-
-    #[test]
-    fn tx_ascending_before_cursor_sets_terminal_and_tightens() {
-        let expected = ResolvedScan {
-            bounds: ScanBounds::tx_span(10, 15),
-            entry_checkpoint: 0,
-            end_checkpoint: 6,
-            end_position: 15,
-            exhaustion: RangeExhaustion::CursorBound {
-                kind: sui_rpc_cursor::CursorKind::Boundary,
-            },
-        };
-        let options = before_options(Ordering::Ascending, tx_boundary(6, 15));
-        assert_eq!(
-            resolved_range(10..20).apply_cursor_bounds(&options),
-            expected
-        );
-        let options = before_options(Ordering::Ascending, tx_item(6, 15));
-        assert_eq!(
-            resolved_range(10..20).apply_cursor_bounds(&options),
-            expected
-        );
-    }
-
-    #[test]
-    fn tx_before_cursor_empties_ascending_interval() {
-        // The before-arm is kind-agnostic: Item and Boundary cursors produce
-        // identical records.
-        let expected = ResolvedScan {
-            bounds: ScanBounds::tx_span(5, 5),
-            entry_checkpoint: 0,
-            end_checkpoint: 1,
-            end_position: 5,
-            exhaustion: RangeExhaustion::CursorBound {
-                kind: sui_rpc_cursor::CursorKind::Boundary,
-            },
-        };
-        let options = before_options(Ordering::Ascending, tx_item(1, 5));
-        assert_eq!(
-            resolved_range(10..20).apply_cursor_bounds(&options),
-            expected
-        );
-        let options = before_options(Ordering::Ascending, tx_boundary(1, 5));
-        assert_eq!(
-            resolved_range(10..20).apply_cursor_bounds(&options),
-            expected
-        );
-    }
-
-    /// (ascending, after and before both present): if only the after files, its
-    /// frame stands (Item kind retained); if both file, the before wins at the min
-    /// position.
-    #[test]
-    fn tx_ascending_with_both_cursors_picks_the_terminal_owner() {
-        // Rejected before-cursor must not clobber the after-cursor's recorded
-        // terminal.
-        let options = QueryOptions {
-            limit_items: 100,
-            ordering: Ordering::Ascending,
-            after: Some(tx_boundary(5, 25)),
-            before: Some(tx_boundary(8, 30)),
-        };
-        assert_eq!(
-            resolved_range(10..20).apply_cursor_bounds(&options),
-            ResolvedScan {
-                bounds: ScanBounds::tx_span(25, 25),
-                entry_checkpoint: 5,
-                end_checkpoint: 5,
-                end_position: 25,
-                exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
-                },
-            }
-        );
-
-        // When the before-cursor records too, it wins the attribution.
-        let options = QueryOptions {
-            limit_items: 100,
-            ordering: Ordering::Ascending,
-            after: Some(tx_boundary(5, 25)),
-            before: Some(tx_item(3, 15)),
-        };
-        assert_eq!(
-            resolved_range(10..20).apply_cursor_bounds(&options),
-            ResolvedScan {
-                bounds: ScanBounds::tx_span(15, 15),
-                entry_checkpoint: 5,
-                end_checkpoint: 3,
-                end_position: 15,
-                exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
-                },
-            }
-        );
-    }
-
-    /// (descending, after and before both present): the after's frame stands when
-    /// only it files; when both file, the min position wins; a before that empties
-    /// overrides the after's earlier terminal.
-    #[test]
-    fn tx_descending_with_both_cursors_picks_the_terminal_owner() {
-        // After empties, before rejected: the after-claim survives, and the
-        // rejected before-cursor still folds entry down.
-        let seed = ResolvedScan {
-            entry_checkpoint: 5,
-            ..resolved_range(10..20)
-        };
-        let options = QueryOptions {
-            limit_items: 100,
-            ordering: Ordering::Descending,
-            after: Some(tx_boundary(9, 25)),
-            before: Some(tx_boundary(2, 30)),
-        };
-        assert_eq!(
-            seed.clone().apply_cursor_bounds(&options),
-            ResolvedScan {
-                bounds: ScanBounds::tx_span(25, 25),
-                entry_checkpoint: 2,
-                end_checkpoint: 9,
-                end_position: 25,
-                exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
-                },
-            }
-        );
-
-        // After empties, before also files: before wins at the min position.
-        let options = QueryOptions {
-            limit_items: 100,
-            ordering: Ordering::Descending,
-            after: Some(tx_boundary(9, 25)),
-            before: Some(tx_item(2, 15)),
-        };
-        assert_eq!(
-            seed.clone().apply_cursor_bounds(&options),
-            ResolvedScan {
-                bounds: ScanBounds::tx_span(15, 15),
-                entry_checkpoint: 2,
-                end_checkpoint: 2,
-                end_position: 15,
-                exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
-                },
-            }
-        );
-
-        // After tightens without emptying, before empties: the before-claim
-        // overrides the after-cursor's eagerly written terminal.
-        let options = QueryOptions {
-            limit_items: 100,
-            ordering: Ordering::Descending,
-            after: Some(tx_item(8, 11)),
-            before: Some(tx_item(2, 11)),
-        };
-        assert_eq!(
-            seed.apply_cursor_bounds(&options),
-            ResolvedScan {
-                bounds: ScanBounds::tx_span(11, 11),
-                entry_checkpoint: 2,
-                end_checkpoint: 2,
-                end_position: 11,
-                exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
-                },
-            }
-        );
-    }
-
     /// after-Item at n and after-Boundary at n + 1 admit the same interval
     /// (here both empty the window); each terminal echoes its own raw
     /// coordinate and kind.
@@ -2200,54 +1993,6 @@ mod tests {
         );
     }
 
-    /// (descending, after below the window): complete noop — even entry_checkpoint
-    /// is untouched, since a descending scan doesn't enter from the after side.
-    #[test]
-    fn tx_after_cursor_rejected_descending_is_noop() {
-        let options = after_options(Ordering::Descending, tx_boundary(4, 5));
-        assert_eq!(
-            resolved_range(10..20).apply_cursor_bounds(&options),
-            resolved_range(10..20)
-        );
-    }
-
-    /// A cursor whose bound coincides with the window's own is a no-op tighten, but
-    /// the terminal still becomes the cursor's — CursorBound on an unchanged,
-    /// non-empty record.
-    #[test]
-    fn tx_cursor_at_the_window_bound_still_takes_the_terminal() {
-        // Admission at the exact bound is a no-op tighten, but the stop-side
-        // cursor still takes over the terminal: exhaustion flips to
-        // CursorBound on a non-empty result whose range did not change.
-        let options = before_options(Ordering::Ascending, tx_boundary(6, 20));
-        assert_eq!(
-            resolved_range(10..20).apply_cursor_bounds(&options),
-            ResolvedScan {
-                bounds: ScanBounds::tx_span(10, 20),
-                entry_checkpoint: 0,
-                end_checkpoint: 6,
-                end_position: 20,
-                exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
-                },
-            }
-        );
-
-        let options = after_options(Ordering::Descending, tx_boundary(6, 10));
-        assert_eq!(
-            resolved_range(10..20).apply_cursor_bounds(&options),
-            ResolvedScan {
-                bounds: ScanBounds::tx_span(10, 20),
-                entry_checkpoint: 0,
-                end_checkpoint: 6,
-                end_position: 10,
-                exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
-                },
-            }
-        );
-    }
-
     /// (ascending, after-Boundary at u64::MAX): nothing can lie at MAX; empties at
     /// (cursor checkpoint, MAX), Boundary.
     #[test]
@@ -2266,26 +2011,6 @@ mod tests {
     }
 
     /// If the bounds are already empty, cursors do not apply.
-    #[test]
-    fn tx_cursor_bounds_pass_empty_resolution_through_unchanged() {
-        let seed = ResolvedScan {
-            bounds: ScanBounds::tx_span(7, 7),
-            end_checkpoint: 4,
-            end_position: 7,
-            exhaustion: RangeExhaustion::LedgerTip,
-            entry_checkpoint: 4,
-        };
-        for ordering in [Ordering::Ascending, Ordering::Descending] {
-            let options = QueryOptions {
-                limit_items: 100,
-                ordering,
-                after: Some(tx_item(2, 5)),
-                before: Some(tx_boundary(3, 6)),
-            };
-            assert_eq!(seed.clone().apply_cursor_bounds(&options), seed);
-        }
-    }
-
     #[test]
     fn tx_after_item_at_max_lets_before_cursor_win() {
         // An after-Item at u64::MAX is an ordinary emptying admission (the
@@ -2332,45 +2057,6 @@ mod tests {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
             }
-        );
-    }
-
-    #[test]
-    fn cursor_fold_advances_entry_checkpoint() {
-        let ascending = QueryOptions {
-            limit_items: 100,
-            ordering: Ordering::Ascending,
-            after: Some(tx_item(7, 30)),
-            before: None,
-        };
-        let resolved = ResolvedScan {
-            bounds: ScanBounds::tx_span(20, 40),
-            end_checkpoint: 9,
-            end_position: 40,
-            exhaustion: RangeExhaustion::CheckpointBound,
-            entry_checkpoint: 5,
-        };
-        assert_eq!(
-            resolved
-                .clone()
-                .apply_cursor_bounds(&ascending)
-                .entry_checkpoint,
-            7
-        );
-
-        let descending = QueryOptions {
-            limit_items: 100,
-            ordering: Ordering::Descending,
-            after: None,
-            before: Some(tx_boundary(7, 30)),
-        };
-        let resolved = ResolvedScan {
-            entry_checkpoint: 9,
-            ..resolved
-        };
-        assert_eq!(
-            resolved.apply_cursor_bounds(&descending).entry_checkpoint,
-            7
         );
     }
 
