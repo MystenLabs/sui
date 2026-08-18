@@ -152,9 +152,9 @@ The service sets no caching headers. No handler adds `Cache-Control`, `ETag`, or
 
 That produces 3 consequences:
 
-- **Conditional requests buy you nothing.** Sending `If-None-Match` or `If-Modified-Since` never produces a `304`, because the service issues no validators to send back. Do not build a polling loop that depends on cheap revalidation.
-- **Your interval is the only throttle.** Nothing server-side slows you down or tells you to back off, so pace requests yourself against the rates in the preceding table.
-- **Detect change from the payload, not the headers.** Compare the `timestamp` in the oracle payload across polls to decide whether anything moved.
+- Sending `If-None-Match` or `If-Modified-Since` never produces a `304`, because the service issues no validators to send back. Do not build a polling loop that depends on cheap revalidation.
+- Nothing server-side slows you down or tells you to back off, so pace requests yourself against the rates in the preceding table.
+- Compare the `timestamp` in the oracle payload across polls to decide whether anything moved.
 
 Treat all of this as true of the service itself. A content delivery network, load balancer, or gateway in front of a deployment can add caching or rate limiting independently, so read whatever headers do arrive and honor a `Retry-After` if fronting infrastructure sends one.
 
