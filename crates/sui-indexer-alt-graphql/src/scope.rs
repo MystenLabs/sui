@@ -25,12 +25,13 @@ use sui_types::object::Object as NativeObject;
 
 use crate::config::Limits;
 use crate::error::RpcError;
+use crate::task::streaming::StreamedTransactionStore;
 use crate::task::watermark::Watermarks;
 
 #[cfg(feature = "staging")]
 mod staging {
     pub(super) use crate::task::streaming::ProcessedCheckpoint;
-    pub(super) use crate::task::streaming::StreamingPackageStore;
+    pub(super) use crate::task::streaming::StreamedOverlays;
 }
 
 #[cfg(feature = "staging")]
@@ -60,6 +61,8 @@ pub(crate) enum DataSource {
     #[cfg(feature = "staging")]
     Streamed {
         checkpoint: Arc<ProcessedCheckpoint>,
+        /// The in-memory caches this streamed checkpoint reads ahead of the durable index.
+        overlays: Arc<StreamedOverlays>,
     },
 }
 
@@ -157,7 +160,7 @@ impl Scope {
     /// because streamed data is resolved from memory, not bounded by an indexed checkpoint.
     #[cfg(feature = "staging")]
     pub(crate) fn for_streamed_checkpoint(
-        package_store: Arc<StreamingPackageStore>,
+        overlays: Arc<StreamedOverlays>,
         resolver_limits: sui_package_resolver::Limits,
         streamed_checkpoint: Arc<ProcessedCheckpoint>,
     ) -> Self {
@@ -165,10 +168,11 @@ impl Scope {
             checkpoint_viewed_at: None,
             active_transaction: None,
             root_bound: None,
+            package_store: overlays.package_store.clone(),
             data_source: DataSource::Streamed {
                 checkpoint: streamed_checkpoint,
+                overlays,
             },
-            package_store,
             resolver_limits,
         }
     }
@@ -182,7 +186,7 @@ impl Scope {
     /// contents hydrate by digest.
     #[cfg(feature = "staging")]
     pub(crate) fn for_backfilled_transactions(
-        package_store: Arc<StreamingPackageStore>,
+        overlays: Arc<StreamedOverlays>,
         resolver_limits: sui_package_resolver::Limits,
     ) -> Self {
         Self {
@@ -190,7 +194,7 @@ impl Scope {
             active_transaction: None,
             root_bound: None,
             data_source: DataSource::Indexed,
-            package_store,
+            package_store: overlays.package_store.clone(),
             resolver_limits,
         }
     }
@@ -386,8 +390,19 @@ impl Scope {
             DataSource::Indexed => None,
             DataSource::Executed { execution_objects } => Some(execution_objects),
             #[cfg(feature = "staging")]
-            DataSource::Streamed { checkpoint } => Some(&checkpoint.execution_objects),
+            DataSource::Streamed { checkpoint, .. } => Some(&checkpoint.execution_objects),
         }
+    }
+
+    /// The streamed transaction store backing this scope, present only in the live streamed mode.
+    /// A just-streamed transaction runs ahead of the durable index, so this serves its contents by
+    /// digest until the index catches up.
+    pub(crate) fn streamed_transaction_store(&self) -> Option<&Arc<StreamedTransactionStore>> {
+        #[cfg(feature = "staging")]
+        if let DataSource::Streamed { overlays, .. } = &self.data_source {
+            return Some(&overlays.transaction_store);
+        }
+        None
     }
 
     /// Get an object from the execution context cache, if available.

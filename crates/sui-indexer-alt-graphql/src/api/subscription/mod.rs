@@ -27,7 +27,7 @@ use crate::config::SubscriptionConfig;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
 use crate::scope::Scope;
-use crate::task::streaming::StreamingPackageStore;
+use crate::task::streaming::StreamedOverlays;
 use crate::task::streaming::SubscriptionBroadcast;
 use crate::task::watermark::Watermarks;
 
@@ -65,7 +65,7 @@ impl Subscription {
         impl futures::Stream<Item = Result<Edge<String, Checkpoint, EmptyFields>, RpcError>>,
         RpcError<Error>,
     > {
-        let package_store: &Arc<StreamingPackageStore> = ctx.data()?;
+        let overlays: &Arc<StreamedOverlays> = ctx.data()?;
         let limits: &Limits = ctx.data()?;
         let config: &SubscriptionConfig = ctx.data()?;
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
@@ -80,7 +80,7 @@ impl Subscription {
         };
         reject_if_start_too_far_ahead(start_from, broadcast, config)?;
 
-        let package_store = package_store.clone();
+        let overlays = overlays.clone();
         let resolver_limits = limits.package_resolver();
 
         let stream = broadcast
@@ -91,7 +91,7 @@ impl Subscription {
             item.map(|processed| {
                 let sequence_number = processed.summary.sequence_number;
                 let scope = Scope::for_streamed_checkpoint(
-                    package_store.clone(),
+                    overlays.clone(),
                     resolver_limits.clone(),
                     processed.clone(),
                 );
@@ -124,14 +124,14 @@ impl Subscription {
         impl futures::Stream<Item = Result<Edge<String, Transaction, EmptyFields>, RpcError>>,
         RpcError<Error>,
     > {
-        let package_store: &Arc<StreamingPackageStore> = ctx.data()?;
+        let overlays: &Arc<StreamedOverlays> = ctx.data()?;
         let limits: &Limits = ctx.data()?;
         let config: &SubscriptionConfig = ctx.data()?;
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
         let reader: &AlphaLedgerGrpcReader = ctx.data()?;
         let watermarks_rx: &watch::Receiver<Arc<Watermarks>> = ctx.data()?;
 
-        let package_store = package_store.clone();
+        let overlays = overlays.clone();
         let resolver_limits = limits.package_resolver();
         let filter = filter.unwrap_or_default();
 
@@ -152,7 +152,7 @@ impl Subscription {
         Ok(subscribe::<Transaction>(
             reader.clone(),
             broadcast.clone(),
-            package_store,
+            overlays,
             resolver_limits,
             watermarks_rx.clone(),
             filter,
@@ -178,14 +178,14 @@ impl Subscription {
         impl futures::Stream<Item = Result<Edge<String, Event, EmptyFields>, RpcError>>,
         RpcError<Error>,
     > {
-        let package_store: &Arc<StreamingPackageStore> = ctx.data()?;
+        let overlays: &Arc<StreamedOverlays> = ctx.data()?;
         let limits: &Limits = ctx.data()?;
         let config: &SubscriptionConfig = ctx.data()?;
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
         let reader: &AlphaLedgerGrpcReader = ctx.data()?;
         let watermarks_rx: &watch::Receiver<Arc<Watermarks>> = ctx.data()?;
 
-        let package_store = package_store.clone();
+        let overlays = overlays.clone();
         let resolver_limits = limits.package_resolver();
         let filter = filter.unwrap_or_default();
 
@@ -206,7 +206,7 @@ impl Subscription {
         Ok(subscribe::<Event>(
             reader.clone(),
             broadcast.clone(),
-            package_store,
+            overlays,
             resolver_limits,
             watermarks_rx.clone(),
             filter,

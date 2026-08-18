@@ -27,7 +27,7 @@ use crate::error::RpcError;
 use crate::pagination::Page;
 use crate::scope::Scope;
 use crate::task::streaming::ProcessedCheckpoint;
-use crate::task::streaming::StreamingPackageStore;
+use crate::task::streaming::StreamedOverlays;
 
 use super::scan_then_live::Subscribable;
 
@@ -52,13 +52,13 @@ impl Subscribable for Event {
 
     fn matching_edges(
         checkpoint: &Arc<ProcessedCheckpoint>,
-        package_store: &Arc<StreamingPackageStore>,
+        overlays: &Arc<StreamedOverlays>,
         resolver_limits: &sui_package_resolver::Limits,
         filter: &EventFilter,
     ) -> Result<Vec<Edge<String, Self, EmptyFields>>, RpcError> {
         let timestamp_ms = Some(checkpoint.summary.timestamp_ms);
         let scope = Scope::for_streamed_checkpoint(
-            package_store.clone(),
+            overlays.clone(),
             resolver_limits.clone(),
             checkpoint.clone(),
         );

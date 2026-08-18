@@ -40,7 +40,7 @@ use crate::pagination::PageLimits;
 use crate::scope::Scope;
 use crate::task::streaming::CheckpointBroadcaster;
 use crate::task::streaming::ProcessedCheckpoint;
-use crate::task::streaming::StreamingPackageStore;
+use crate::task::streaming::StreamedOverlays;
 use crate::task::streaming::SubscriptionBroadcast;
 use crate::task::streaming::broadcast_error;
 use crate::task::streaming::reconnect_error;
@@ -85,7 +85,7 @@ pub(super) trait Subscribable {
     /// The filter-matching edges in one live checkpoint, in delivery order.
     fn matching_edges(
         checkpoint: &Arc<ProcessedCheckpoint>,
-        package_store: &Arc<StreamingPackageStore>,
+        overlays: &Arc<StreamedOverlays>,
         resolver_limits: &sui_package_resolver::Limits,
         filter: &Self::Filter,
     ) -> Result<Vec<Edge<String, Self::Item, EmptyFields>>, RpcError>;
@@ -118,7 +118,7 @@ impl<S: Subscribable> Scanned<S> {
 pub(super) fn subscribe<S: Subscribable>(
     reader: AlphaLedgerGrpcReader,
     broadcast: Arc<SubscriptionBroadcast>,
-    package_store: Arc<StreamingPackageStore>,
+    overlays: Arc<StreamedOverlays>,
     resolver_limits: sui_package_resolver::Limits,
     watermarks_rx: watch::Receiver<Arc<Watermarks>>,
     filter: S::Filter,
@@ -147,7 +147,7 @@ pub(super) fn subscribe<S: Subscribable>(
             let checkpoint_lo = after_checkpoint.map_or(0, |cp| cp.saturating_add(1));
             let scan = backfill::<S>(
                 reader,
-                package_store.clone(),
+                overlays.clone(),
                 resolver_limits.clone(),
                 watermarks_rx,
                 filter.clone(),
@@ -194,7 +194,7 @@ pub(super) fn subscribe<S: Subscribable>(
 
         // Phase 2: follow live from `handoff + 1` (a fresh receiver if there was no backfill).
         let receiver = pending_receiver.unwrap_or_else(|| broadcast.broadcaster().resubscribe());
-        for await edge in live::<S>(receiver, last_checkpoint, package_store, resolver_limits, filter) {
+        for await edge in live::<S>(receiver, last_checkpoint, overlays, resolver_limits, filter) {
             yield edge;
         }
     }
@@ -204,7 +204,7 @@ pub(super) fn subscribe<S: Subscribable>(
 /// marker. Open-ended: the caller stops it once the handoff is covered.
 fn backfill<S: Subscribable>(
     reader: AlphaLedgerGrpcReader,
-    package_store: Arc<StreamingPackageStore>,
+    overlays: Arc<StreamedOverlays>,
     resolver_limits: sui_package_resolver::Limits,
     mut watermarks_rx: watch::Receiver<Arc<Watermarks>>,
     filter: S::Filter,
@@ -216,7 +216,7 @@ fn backfill<S: Subscribable>(
         // Finalized, indexed data: fields resolve lazily through the index. `checkpoint_viewed_at`
         // is None (uniform with live), so the scan range is supplied explicitly rather than derived
         // from the scope.
-        let scope = Scope::for_backfilled_transactions(package_store, resolver_limits);
+        let scope = Scope::for_backfilled_transactions(overlays, resolver_limits);
         let limits = PageLimits {
             default: scan_page_size as u32,
             max: scan_page_size as u32,
@@ -268,7 +268,7 @@ fn covered_checkpoint(token: &CursorToken) -> u64 {
 fn live<S: Subscribable>(
     mut receiver: CheckpointBroadcaster,
     mut last_checkpoint: Option<u64>,
-    package_store: Arc<StreamingPackageStore>,
+    overlays: Arc<StreamedOverlays>,
     resolver_limits: sui_package_resolver::Limits,
     filter: S::Filter,
 ) -> impl Stream<Item = Result<Edge<String, S::Item, EmptyFields>, RpcError>> {
@@ -295,7 +295,7 @@ fn live<S: Subscribable>(
                     }
                     // Deliver each matching item as its own payload, ordered within the checkpoint.
                     // Empty checkpoints yield nothing.
-                    let edges = S::matching_edges(&checkpoint, &package_store, &resolver_limits, &filter)?;
+                    let edges = S::matching_edges(&checkpoint, &overlays, &resolver_limits, &filter)?;
                     for edge in edges {
                         yield Ok(edge);
                     }

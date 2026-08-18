@@ -55,8 +55,8 @@ use sui_indexer_alt_reader::system_package_task::SystemPackageTask;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use task::chain_identifier;
 use task::streaming::CheckpointStreamTask;
-use task::streaming::EvictableCache;
 use task::streaming::StreamedCacheEvictionTask;
+use task::streaming::StreamedOverlays;
 use task::streaming::StreamedTransactionStore;
 use task::streaming::StreamingPackageStore;
 #[cfg(feature = "staging")]
@@ -421,22 +421,17 @@ pub async fn start_rpc(
                 ledger_grpc.clone(),
                 watermark_task.watermarks_rx(),
             );
+            let overlays = Arc::new(StreamedOverlays::new(
+                streaming_packages,
+                streaming_transactions,
+            ));
             // One task flushes every streamed cache once its backing index catches up.
-            let caches: Vec<Arc<dyn EvictableCache>> =
-                vec![streaming_packages.clone(), streaming_transactions.clone()];
             let eviction_task = StreamedCacheEvictionTask::new(
-                caches,
+                overlays.evictable_caches(),
                 watermark_task.watermarks(),
                 Duration::from_millis(config.subscription.package_eviction_interval_ms),
             );
-            Some((
-                stream_task,
-                broadcaster,
-                eviction_task,
-                streaming_packages,
-                streaming_transactions,
-                readiness,
-            ))
+            Some((stream_task, broadcaster, eviction_task, overlays, readiness))
         }
         None => None,
     };
@@ -496,42 +491,34 @@ pub async fn start_rpc(
     // Spawn the streaming tasks and wait for subscriptions to be ready before
     // binding the listener, so the schema is only advertised once `kv_packages`
     // has caught up to the first streamed checkpoint.
-    let streaming_handles = if let Some((
-        stream_task,
-        _broadcaster,
-        eviction_task,
-        streaming_packages,
-        streaming_transactions,
-        readiness,
-    )) = streaming_setup
-    {
-        rpc = rpc
-            .data(streaming_packages)
-            .data(streaming_transactions)
-            .data(config.subscription);
-        let s_stream = stream_task.run();
-        let s_eviction = eviction_task.run();
-        readiness.wait_for_ready().await?;
-        // The broadcast handle is only consumed by the (staging-gated) subscription resolvers.
-        #[cfg(feature = "staging")]
+    let streaming_handles =
+        if let Some((stream_task, _broadcaster, eviction_task, overlays, readiness)) =
+            streaming_setup
         {
-            // `first_live_checkpoint` is the first checkpoint the live upstream stream
-            // broadcast, recorded as readiness fires.
-            let first_live_checkpoint = readiness
-                .first_live_checkpoint()
-                .expect("first_live_checkpoint is set before wait_for_ready returns Ok");
-            let subscription_broadcast = Arc::new(SubscriptionBroadcast::new(
-                _broadcaster,
-                first_live_checkpoint,
-            ));
-            rpc = rpc
-                .data(subscription_broadcast)
-                .data(subscription_watermarks_rx);
-        }
-        Some((s_stream, s_eviction))
-    } else {
-        None
-    };
+            rpc = rpc.data(overlays).data(config.subscription);
+            let s_stream = stream_task.run();
+            let s_eviction = eviction_task.run();
+            readiness.wait_for_ready().await?;
+            // The broadcast handle is only consumed by the (staging-gated) subscription resolvers.
+            #[cfg(feature = "staging")]
+            {
+                // `first_live_checkpoint` is the first checkpoint the live upstream stream
+                // broadcast, recorded as readiness fires.
+                let first_live_checkpoint = readiness
+                    .first_live_checkpoint()
+                    .expect("first_live_checkpoint is set before wait_for_ready returns Ok");
+                let subscription_broadcast = Arc::new(SubscriptionBroadcast::new(
+                    _broadcaster,
+                    first_live_checkpoint,
+                ));
+                rpc = rpc
+                    .data(subscription_broadcast)
+                    .data(subscription_watermarks_rx);
+            }
+            Some((s_stream, s_eviction))
+        } else {
+            None
+        };
 
     let s_rpc = rpc.run().await?;
 
