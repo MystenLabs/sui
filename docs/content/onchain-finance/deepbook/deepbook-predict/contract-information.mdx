@@ -162,10 +162,10 @@ A content delivery network, load balancer, or gateway in front of a deployment c
 
 Apply the same backoff discipline as the [event stream](#retry-and-backoff), adapted to request and response semantics:
 
-- **Back off exponentially with jitter.** Cap the delay, for example at 30 seconds, and add random jitter so a fleet of instances does not resynchronize into bursts after a shared outage.
-- **Distinguish the failure.** Retry `503` and other 5xx responses with backoff. Do not retry a `400` or `404`, because the request itself is wrong and repeating it changes nothing. A `429` does not come from the service, so treat one as a signal from fronting infrastructure and honor its `Retry-After`.
-- **Degrade rather than hammer.** After sustained failure, open a circuit breaker and serve the last known state labeled with its own `timestamp` so users see stale data marked as stale. Resume at the base interval only after sustained success, not after a single response.
-- **Never let a poll loop drive a write.** Confirm settlement from oracle state before you submit a redemption, and do not resubmit a rejected transaction on the polling schedule. See [Trigger redemption from `OracleSettled`](#trigger-redemption-from-oraclesettled).
+- Cap the delay, for example at 30 seconds, and add random jitter so a fleet of instances does not resynchronize into bursts after a shared outage.
+- Retry `503` and other 5xx responses with backoff. Do not retry a `400` or `404`, because the request itself is wrong and repeating it changes nothing. A `429` does not come from the service, so treat one as a signal from fronting infrastructure and honor its `Retry-After`.
+- After sustained failure, open a circuit breaker and serve the last known state labeled with its own `timestamp` so users see stale data marked as stale. Resume at the base interval only after sustained success, not after a single response.
+- Confirm settlement from oracle state before you submit a redemption, and do not resubmit a rejected transaction on the polling schedule. See [Trigger redemption from `OracleSettled`](#trigger-redemption-from-oraclesettled).
 
 ## Manage configuration across networks
 
