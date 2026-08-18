@@ -126,6 +126,9 @@ Balance.coinBalance
 Balance.addressBalance
   => {}
 
+Balance.coinMetadata
+  => {"consistent", "obj_versions"}
+
 BalanceChange.owner
   => {}
 
