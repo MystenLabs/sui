@@ -193,8 +193,7 @@ impl<'backing> TemporaryStore<'backing> {
                         object_id,
                         versions.get(object_id).unwrap(),
                     );
-                // Record the read at `required_version` (which is what the transaction depends
-                // on and reads) so it can be emitted into effects as a read-only consensus object and
+                // Record the read version so it can be emitted into effects as a read-only consensus object and
                 // reproduced on replay.
                 self.loaded_system_objects
                     .borrow_mut()
