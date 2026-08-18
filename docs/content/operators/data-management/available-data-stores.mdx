@@ -1,7 +1,7 @@
 ---
 title: Available Data Stores
 description: >-
-  Reference for all Mysten Labs-managed checkpoint stores, snapshot buckets, and
+  Reference for all Sui Foundation-managed checkpoint stores, snapshot buckets, and
   archival endpoints available for Sui Mainnet and Testnet, including retention
   policies, credential requirements, and recommended use cases.
 keywords:
@@ -50,24 +50,24 @@ answer: >-
   policies, credential requirements, and recommended use cases.
 ---
 
-Mysten Labs manages several categories of data stores for Sui operators. Each store serves a specific purpose, has its own retention policy, and might require credentials for access.
+Sui Foundation manages several categories of data stores for Sui operators and builders. Each store serves a specific purpose, has its own retention policy, and might require credentials for access.
 ## Choosing a store
 
 | **Use case** | **Recommended store** | **Details** |
 | --- | --- | --- |
 | Indexer backfill from genesis | [GCS checkpoint buckets](#checkpoint-gcs) | Full retention, use `--remote-store-gcs` |
-| Indexer steady state | Your own full node through gRPC | Lowest latency, no egress cost |
-| Remote store population | [GCS checkpoint buckets](#checkpoint-gcs) as source | Backfill, then switch to full node gRPC |
+| Indexer steady state | Full node through gRPC (self-hosted or third-party)  | Lowest latency, no egress cost |
+| Checkpoint remote store population | [GCS checkpoint buckets](#checkpoint-gcs) as source | Backfill, then switch to full node gRPC |
 | Full node bootstrap | [Formal snapshot free bucket](#formal-free) or [formal buckets](#formal-buckets) | Fastest path to a running node |
 | Consistent store restore | [Formal snapshot HTTPS](#formal-https) + [HTTPS checkpoint endpoint](#checkpoint-https) | `--http` for snapshot, `--remote-store-url` for epoch mapping |
-| Mainnet archival fallback | [S3 checkpoint bucket](#checkpoint-s3) | Configure in `fullnode.yaml` with instance profile credentials |
-| Testnet archival fallback | [HTTPS checkpoint endpoint](#checkpoint-https) | 30-day retention is sufficient for fallback |
-| Archival service backfill | [GCS checkpoint buckets](#checkpoint-gcs) | Full retention, use `--remote-store-gcs` |
+| Mainnet full node archival fallback | [S3 checkpoint bucket](#checkpoint-s3) | Configure in `fullnode.yaml` with instance profile credentials |
+| Testnet full node archival fallback | [HTTPS checkpoint endpoint](#checkpoint-https) | 30-day retention is sufficient for fallback |
+| Bigtable-based archival service backfill | [GCS checkpoint buckets](#checkpoint-gcs) | Full retention, use `--remote-store-gcs` |
 
 ## Network isolation
 
 Always keep all data sources on the same network. Do not mix Mainnet checkpoint stores with Testnet snapshot sources. When running nodes or indexers for multiple networks, use separate database paths, separate storage directories, and separate configuration files per network.
-## Checkpoint stores
+## Checkpoint remote stores
 
 Checkpoint stores contain protobuf-encoded checkpoint blobs (`.binpb.zst`). They are used by [indexers](/operators/data-management/indexer-stack-setup), [remote store operators](/operators/data-management/remote-store-setup), the [archival service](/operators/data-management/archival-stack-setup), and [full node archival fallback](/operators/data-management/archives).
 
