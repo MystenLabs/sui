@@ -169,7 +169,7 @@ Apply the same backoff discipline as the [event stream](#retry-and-backoff), ada
 
 ## Manage configuration across networks
 
-Never inline the values on this page at a call site. Each one is deployment-specific, and all of them change at Mainnet launch. Keep them in one network-keyed record, resolve it once at startup, and pass the result down:
+Never inline the values at a call site. Each one is deployment-specific, and all of them change when deployed on Mainnet. Keep them in one network-keyed record, resolve it once at startup, and pass the result down:
 
 <ImportContent source="examples/deepbook-predict/src/config.ts" mode="code" tag="config" />
 
