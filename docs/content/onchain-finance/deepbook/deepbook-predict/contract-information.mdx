@@ -156,7 +156,7 @@ That produces 3 consequences:
 - Nothing server-side slows you down or tells you to back off, so pace requests yourself against the rates in the preceding table.
 - Compare the `timestamp` in the oracle payload across polls to decide whether anything moved.
 
-Treat all of this as true of the service itself. A content delivery network, load balancer, or gateway in front of a deployment can add caching or rate limiting independently, so read whatever headers do arrive and honor a `Retry-After` if fronting infrastructure sends one.
+A content delivery network, load balancer, or gateway in front of a deployment can add caching or rate limiting independently, so read whatever headers do arrive and honor a `Retry-After` if fronting infrastructure sends one.
 
 #### Back off on failure
 
