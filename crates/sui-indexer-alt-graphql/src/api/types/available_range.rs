@@ -241,6 +241,8 @@ collect_pipelines! {
     Address.[derivedObject, multiGetDerivedObjects] => IAddressable.*;
     Address.[dynamicField, dynamicFields, dynamicObjectField, multiGetDynamicFields, multiGetDynamicObjectFields] => IMoveObject.*;
 
+    Balance.[coinMetadata] => Query.coinMetadata();
+
     Checkpoint.[transactions] => Query.transactions(.., "atCheckpoint");
 
     CoinMetadata.[address, addressAt, asTransactionObject] => IAddressable.*;
