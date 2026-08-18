@@ -308,9 +308,10 @@ impl<P: Copy + Ord> ScanBounds<P> {
 }
 
 impl ScanBounds<u64> {
-    /// Collapse to the half-open store range. The lo bound is Included by
-    /// construction ([`ScanCursor::resume_lo`] canonicalizes the dense
-    /// lane), so the collapse is exact.
+    /// Collapse to the half-open store range. Exact for the dense lane: an
+    /// Excluded lo resumes at its successor, saturating at `u64::MAX` where
+    /// the range empties — MAX is the unoccupiable exclusive sentinel, so
+    /// the saturated bound admits nothing.
     pub fn to_range(&self) -> Range<u64> {
         let start = match self.lo {
             Bound::Included(position) => position,
@@ -1030,6 +1031,26 @@ mod tests {
             IntraTxCoordinate::start_of_tx(10)..IntraTxCoordinate::start_of_tx(10),
         );
         assert_eq!(bounds.tx_range(), None);
+    }
+
+    /// Nothing constructs an Excluded lo in the dense lane yet (resume_lo
+    /// canonicalizes Item cursors to their inclusive successor), but the
+    /// symbolic-resume flip will; pin the store-edge collapse first.
+    #[test]
+    fn to_range_collapses_excluded_lo_at_successor() {
+        let bounds = ScanBounds {
+            lo: Bound::Excluded(14u64),
+            hi: Bound::Excluded(20u64),
+        };
+        assert_eq!(bounds.to_range(), 15..20);
+
+        // The saturated successor at the unoccupiable sentinel admits
+        // nothing, through the ordinary emptiness of MAX..MAX.
+        let bounds = ScanBounds {
+            lo: Bound::Excluded(u64::MAX),
+            hi: Bound::Unbounded,
+        };
+        assert!(bounds.to_range().is_empty());
     }
 
     #[test]
