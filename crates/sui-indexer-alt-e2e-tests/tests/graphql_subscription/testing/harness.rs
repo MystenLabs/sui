@@ -291,6 +291,20 @@ impl SubscriptionTestCluster {
         self.post_subscription(query, variables).await
     }
 
+    /// Wait until graphql's live broadcast has delivered the checkpoint containing `tx_digest`. After
+    /// this, a subscription that resumes from an earlier point pins its live receiver past that
+    /// checkpoint, so `tx_digest` and everything before it are delivered by the backfill scan (never
+    /// live). Deterministic replacement for a fixed settle sleep; times out (via
+    /// `wait_for_matching_item`) if the checkpoint never arrives.
+    pub async fn wait_until_backfillable(&self, tx_digest: &str) {
+        let mut probe = self
+            .subscribe(
+                "subscription { checkpoints { node { transactions { nodes { digest } } } } }",
+            )
+            .await;
+        wait_for_matching_item(&mut probe, &[tx_digest.to_string()], checkpoint_tx_digests).await;
+    }
+
     async fn post_subscription(
         &self,
         query: &str,

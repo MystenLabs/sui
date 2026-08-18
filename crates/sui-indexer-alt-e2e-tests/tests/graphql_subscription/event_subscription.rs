@@ -474,11 +474,11 @@ async fn test_event_subscription_resume_backfill_then_live() {
 
     // Capture the tip BEFORE the emit so it lands strictly past the resume point.
     let resume_from = cluster.validator_checkpoint_tip();
-    emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 1000).await;
+    let digest =
+        emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 1000).await;
 
-    // Advance the validator so a fresh subscription's live receiver pins past the event: it can only
-    // be delivered through the backfill scan.
-    tokio::time::sleep(BACKFILL_SETTLE).await;
+    // Make the event backfill-only for the resume below.
+    cluster.wait_until_backfillable(&digest).await;
 
     let mut stream = cluster
         .subscribe_with_variables(
@@ -510,7 +510,8 @@ async fn test_event_subscription_empty_backfill_hands_off_to_live() {
         .await;
 
     // Let the validator advance through empty checkpoints so the backfill scans a match-less range,
-    // pins the handoff via a coverage marker, and transitions to live before any match exists.
+    // pins the handoff via a coverage marker, and transitions to live before any match exists. Kept
+    // as a timed wait: there is no pre-subscription match to probe on.
     tokio::time::sleep(BACKFILL_SETTLE).await;
 
     // The only match is emitted after the handoff, so it can only be delivered by the live path. If
@@ -535,10 +536,12 @@ async fn test_event_subscription_exactly_once_across_handoff() {
 
     // Straddle the handoff: the first batch lands while the backfill is scanning, the second after
     // it has pinned and moved to live. Exactly-once must hold across the seam wherever it pins.
+    let mut digest = String::new();
     for v in [100u64, 200] {
-        emit_event_harness::emit_with_value(&mut cluster.validator, package_id, v).await;
+        digest = emit_event_harness::emit_with_value(&mut cluster.validator, package_id, v).await;
     }
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    // Let the first batch reach the broadcast before emitting the second, so they straddle the seam.
+    cluster.wait_until_backfillable(&digest).await;
     for v in [300u64, 400] {
         emit_event_harness::emit_with_value(&mut cluster.validator, package_id, v).await;
     }
@@ -566,12 +569,13 @@ async fn test_event_subscription_resume_with_after_cursor() {
     let package_id = emit_event_harness::publish(&mut cluster.validator).await;
 
     let resume_from = cluster.validator_checkpoint_tip();
+    let mut digest = String::new();
     for v in [1000u64, 2000] {
-        emit_event_harness::emit_with_value(&mut cluster.validator, package_id, v).await;
+        digest = emit_event_harness::emit_with_value(&mut cluster.validator, package_id, v).await;
     }
 
-    // Both events must be delivered by the backfill scan, not the live path.
-    tokio::time::sleep(BACKFILL_SETTLE).await;
+    // Make both events backfill-only for the subscriptions below.
+    cluster.wait_until_backfillable(&digest).await;
 
     // Subscription 1: backfill from `afterCheckpoint`. Capture the first edge's cursor and value.
     let mut stream = cluster
@@ -633,8 +637,9 @@ async fn test_event_subscription_live_backfill_parity() {
     // 2. Emit a sequence of distinct events.
     let resume_from = cluster.validator_checkpoint_tip();
     let expected: Vec<String> = ["10", "20", "30"].iter().map(|s| s.to_string()).collect();
+    let mut digest = String::new();
     for v in [10u64, 20, 30] {
-        emit_event_harness::emit_with_value(&mut cluster.validator, package_id, v).await;
+        digest = emit_event_harness::emit_with_value(&mut cluster.validator, package_id, v).await;
     }
 
     // 3. Collect the live nodes, then drop the live subscription.
@@ -642,7 +647,7 @@ async fn test_event_subscription_live_backfill_parity() {
     drop(live);
 
     // 4. Resume from before the emits so the same events arrive via backfill.
-    tokio::time::sleep(BACKFILL_SETTLE).await;
+    cluster.wait_until_backfillable(&digest).await;
     let mut backfill = cluster
         .subscribe_with_variables(
             &event_query("type: $pkg", Some(resume_from)),
@@ -694,15 +699,15 @@ async fn test_event_subscription_resume_intersects_after_and_checkpoint() {
 
     let resume_from = cluster.validator_checkpoint_tip();
     emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 100).await;
-    emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 200).await;
+    let d200 = emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 200).await;
     // Seal the second event's checkpoint before capturing `bound`, so `afterCheckpoint: bound`
     // excludes it.
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    cluster.wait_until_backfillable(&d200).await;
     let bound = cluster.validator_checkpoint_tip();
-    emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 300).await;
+    let d300 = emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 300).await;
 
-    // Advance so all three are delivered by the backfill scan, where the resume bounds apply.
-    tokio::time::sleep(BACKFILL_SETTLE).await;
+    // Make all three backfill-only, so the resume bounds apply.
+    cluster.wait_until_backfillable(&d300).await;
 
     // Backfill the three events once to mint real cursors at the first two.
     let mut stream = cluster

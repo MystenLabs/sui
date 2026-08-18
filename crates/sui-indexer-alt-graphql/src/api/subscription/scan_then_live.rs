@@ -2,37 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Scan-then-live subscription driver: stream the items matching a filter, in checkpoint order,
-//! resuming from a cursor or checkpoint. Two phases meet with no gap and no duplicate:
+//! resuming from a cursor or checkpoint, in two phases:
 //!
-//! 1. Backfill ([`backfill`]): scan the index forward from the resume point, chasing the indexer
-//!    tip. Pages are digest-only, so each item's fields hydrate lazily and a page's reads coalesce
-//!    through the `KvLoader`.
-//! 2. Live ([`live`]): follow the shared checkpoint broadcast, matching in memory.
+//! 1. Backfill ([`backfill`]): scan indexed data forward from the resume point to catch up, using
+//!    the same pagination path.
+//! 2. Live ([`live`]): read matching items from the checkpoint broadcast.
 //!
-//! # The seam
-//!
-//! Once the scan reaches within `handoff_threshold` of the live tip, the subscription subscribes to
-//! the broadcast and pins the `handoff` to the tip. Subscribing *before* pinning is what closes the
-//! seam: the live feed's first checkpoint is then `handoff + 1`, never past it (any overlap is
-//! dropped), so nothing is missed or delivered twice. Pinning mid-scan rather than up front lets even
-//! a deep backfill catch up within one connection, the receiver only ever buffers the last
-//! `handoff_threshold` checkpoints, so it never lags into a disconnect.
-//!
-//! # Coverage and freshness
-//!
-//! The scan reports a coverage marker at each page's end even when the page matched nothing, so a
-//! sparse filter still advances the handoff through empty stretches. Each page is held until both
-//! indexing pipelines have reached that end; otherwise an item near the tip could hydrate against a
-//! not-yet-indexed store and resolve to null permanently, since the stream never revisits.
-//!
-//! # Cursors and anomalies
-//!
-//! Both phases mint the same opaque cursor, so a client resumes from any delivered one. A gap between
-//! the phases, or a subscriber that falls behind the broadcast buffer, disconnects with
-//! `reconnect_error`, and the client reconnects and resumes from its last cursor.
-//!
-//! What varies per feed (which fields match, how cursors wrap, which scan RPC to call) is supplied
-//! by the [`Subscribable`] implementation for that feed; everything here is shared.
+//! Once the scan comes within `handoff_threshold` of the tip, the driver subscribes to the broadcast,
+//! so reading is handed off to the live phase at `handoff + 1` with no gap or duplicate. A coverage
+//! marker at each page's end lets the handoff advance even through stretches that match nothing.
 
 use std::future::Future;
 use std::ops::RangeInclusive;
@@ -55,6 +33,7 @@ use tokio::sync::broadcast;
 use tokio::sync::watch;
 use tracing::warn;
 
+use crate::config::SubscriptionConfig;
 use crate::error::RpcError;
 use crate::pagination::Page;
 use crate::pagination::PageLimits;
@@ -112,11 +91,25 @@ pub(super) trait Subscribable {
     ) -> Result<Vec<Edge<String, Self::Item, EmptyFields>>, RpcError>;
 }
 
-/// One backfill item: a matching `edge`, or a coverage marker (`edge: None`) whose `checkpoint` is
-/// the fully-scanned frontier.
-struct Scanned<S: Subscribable> {
-    checkpoint: u64,
-    edge: Option<Edge<String, S::Item, EmptyFields>>,
+/// One backfill scan output: either a matching edge, or a coverage marker whose `checkpoint` is the
+/// fully-scanned frontier (advances the handoff even on a match-less page).
+enum Scanned<S: Subscribable> {
+    Match {
+        checkpoint: u64,
+        edge: Edge<String, S::Item, EmptyFields>,
+    },
+    Covered {
+        checkpoint: u64,
+    },
+}
+
+impl<S: Subscribable> Scanned<S> {
+    /// The checkpoint this output sits at (the match's, or the covered frontier).
+    fn checkpoint(&self) -> u64 {
+        match self {
+            Scanned::Match { checkpoint, .. } | Scanned::Covered { checkpoint } => *checkpoint,
+        }
+    }
 }
 
 /// Subscribe to items matching `filter`: backfill from `resume` toward the tip, then follow live.
@@ -131,9 +124,18 @@ pub(super) fn subscribe<S: Subscribable>(
     filter: S::Filter,
     after: Option<S::Cursor>,
     after_checkpoint: Option<u64>,
-    scan_page_size: usize,
-    handoff_threshold: u64,
+    config: SubscriptionConfig,
 ) -> impl Stream<Item = Result<Edge<String, S::Item, EmptyFields>, RpcError>> {
+    // Size the backfill scan page to the resolve concurrency. Scans are sequential (each needs the
+    // previous page's cursor), so feeding one window of `n` concurrent resolutions takes ceil(n /
+    // page) scans: a page much smaller than the concurrency makes scanning the bottleneck, a much
+    // larger one just holds a bigger page in memory. Matching them is roughly one scan per window.
+    let scan_page_size = config.max_concurrent_resolutions;
+
+    // Pin the handoff once the scan comes within half the live buffer of the tip, leaving room for
+    // checkpoints that arrive during the handoff so the receiver does not lag.
+    let handoff_threshold = config.broadcast_buffer as u64 / 2;
+
     stream! {
         let mut pending_receiver = None;
         let mut handoff: Option<u64> = None;
@@ -154,7 +156,7 @@ pub(super) fn subscribe<S: Subscribable>(
                 scan_page_size,
             );
             for await scanned in scan {
-                let Scanned { checkpoint, edge } = match scanned {
+                let scanned = match scanned {
                     Ok(scanned) => scanned,
                     Err(e) => {
                         yield Err(e);
@@ -164,23 +166,23 @@ pub(super) fn subscribe<S: Subscribable>(
 
                 // Resubscribe-first and pin once the scan frontier is within threshold of the tip.
                 if pending_receiver.is_none()
-                    && broadcast.network_tip().saturating_sub(checkpoint) <= handoff_threshold
+                    && broadcast.network_tip().saturating_sub(scanned.checkpoint()) <= handoff_threshold
                 {
                     pending_receiver = Some(broadcast.broadcaster().resubscribe());
                     handoff = Some(broadcast.network_tip());
                 }
 
-                match edge {
+                match scanned {
                     // A match: deliver it, unless it is past the handoff (then it is live's).
-                    Some(edge) => {
+                    Scanned::Match { checkpoint, edge } => {
                         if handoff.is_some_and(|h| checkpoint > h) {
                             break;
                         }
                         yield Ok(edge);
                     }
-                    // A coverage marker (`checkpoint` is the fully-scanned frontier): stop once it
-                    // has covered the handoff.
-                    None => {
+                    // A coverage marker (its `checkpoint` is the fully-scanned frontier): stop once
+                    // it has covered the handoff.
+                    Scanned::Covered { checkpoint } => {
                         if handoff.is_some_and(|h| checkpoint >= h) {
                             break;
                         }
@@ -211,17 +213,18 @@ fn backfill<S: Subscribable>(
     scan_page_size: usize,
 ) -> impl Stream<Item = Result<Scanned<S>, RpcError>> {
     stream! {
-        // Finalized, indexed data: fields resolve lazily through the index. cvat is None (uniform
-        // with live), so the scan range is supplied explicitly rather than derived from the scope.
+        // Finalized, indexed data: fields resolve lazily through the index. `checkpoint_viewed_at`
+        // is None (uniform with live), so the scan range is supplied explicitly rather than derived
+        // from the scope.
         let scope = Scope::for_backfilled_transactions(package_store, resolver_limits);
         let limits = PageLimits {
             default: scan_page_size as u32,
             max: scan_page_size as u32,
         };
 
-        // The scan applies both resume channels together: `after` (the precise `options.after`
-        // position) and the checkpoint window `[checkpoint_lo, ..]`, so the effective start is
-        // whichever is later. Open above: the caller stops the scan once the handoff is covered.
+        // Resume from whichever is later: the `after` cursor or `[checkpoint_lo, ..]`. The upper
+        // bound is `u64::MAX` because backfill is open-ended, chasing the moving tip; `subscribe`
+        // stops it once the handoff is covered.
         let cp_bounds = checkpoint_lo..=u64::MAX;
 
         loop {
@@ -360,15 +363,14 @@ async fn scan_page<S: Subscribable>(
             let cursor = S::Cursor::try_from(token)
                 .context("Unexpected position in scan item cursor")?
                 .encode_cursor();
-            items.push(Scanned {
+            items.push(Scanned::Match {
                 checkpoint,
-                edge: Some(Edge::new(cursor, S::build_node(scope, &item.payload)?)),
+                edge: Edge::new(cursor, S::build_node(scope, &item.payload)?),
             });
         }
         // Coverage marker at the fully-scanned end: advances the handoff even on a match-less page.
-        items.push(Scanned {
+        items.push(Scanned::Covered {
             checkpoint: covered_checkpoint(&end_cursor),
-            edge: None,
         });
 
         let next_after =
