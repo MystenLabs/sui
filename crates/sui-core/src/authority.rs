@@ -158,7 +158,7 @@ use sui_types::messages_grpc::{
     TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
 };
 use sui_types::metrics::{BytecodeVerifierMetrics, ExecutionMetrics};
-use sui_types::object::{MoveObject, OBJECT_START_VERSION, Owner, PastObjectRead};
+use sui_types::object::{Owner, PastObjectRead};
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{
     BackingPackageStore, BackingStore, ObjectKey, ObjectOrTombstone, ObjectStore, WriteKind,
@@ -416,8 +416,6 @@ const GAS_LATENCY_RATIO_BUCKETS: &[f64] = &[
     10.0, 50.0, 100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0, 800.0, 900.0, 1000.0, 2000.0,
     3000.0, 4000.0, 5000.0, 6000.0, 7000.0, 8000.0, 9000.0, 10000.0, 50000.0, 100000.0, 1000000.0,
 ];
-
-pub const DEV_INSPECT_GAS_COIN_VALUE: u64 = 1_000_000_000_000_000_000;
 
 // Transaction author should have observed the input objects as finalized output,
 // so usually the wait does not need to be long.
@@ -1112,6 +1110,7 @@ impl AuthorityState {
         input_object_kinds: &[InputObjectKind],
         receiving_objects_refs: &[ObjectRef],
         protocol_config: &ProtocolConfig,
+        allow_missing_address_balance_gas: bool,
     ) -> SuiResult<BTreeMap<AccumulatorObjId, (u64, TypeTag, SuiAddress)>> {
         // Note: the deny checks may do redundant package loads but:
         // - they only load packages when there is an active package deny map
@@ -1134,9 +1133,38 @@ impl AuthorityState {
             self.coin_reservation_resolver.as_ref(),
         )?;
 
+        let withdrawals_to_check = if allow_missing_address_balance_gas
+            && tx_data.is_gas_paid_from_address_balance()
+            && tx_data.gas_budget() > 0
+        {
+            let gas_balance_id = AccumulatorValue::get_field_id(
+                tx_data.gas_owner(),
+                &Balance::type_tag(sui_types::gas_coin::GAS::type_tag()),
+            )?;
+            let gas_balance = self
+                .execution_cache_trait_pointers
+                .account_funds_read
+                .get_latest_account_amount(&gas_balance_id);
+
+            if gas_balance == 0 {
+                // A simulation has no durable balance settlement. When no address balance exists,
+                // omit only its implicit gas reservation so callers can simulate transactions
+                // funded by coin objects without fabricating a gas coin. Explicit address-balance
+                // withdrawals remain checked.
+                tx_data.process_funds_withdrawals_for_estimation(
+                    self.chain_identifier,
+                    self.coin_reservation_resolver.as_ref(),
+                )?
+            } else {
+                declared_withdrawals.clone()
+            }
+        } else {
+            declared_withdrawals.clone()
+        };
+
         self.execution_cache_trait_pointers
             .account_funds_read
-            .check_amounts_available(&declared_withdrawals)?;
+            .check_amounts_available(&withdrawals_to_check)?;
 
         if protocol_config.gasless_verify_remaining_balance() && tx_data.is_gasless_transaction() {
             let min_amounts =
@@ -1166,6 +1194,7 @@ impl AuthorityState {
             &input_object_kinds,
             &receiving_objects_refs,
             epoch_store.protocol_config(),
+            false,
         )?;
 
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
@@ -2336,20 +2365,16 @@ impl AuthorityState {
         Option<ObjectID>,
     )> {
         // Route through `simulate_transaction` -- `dry-exec` matches
-        // `simulate_transaction(_, TransactionChecks::Enabled, _)`. The deny-config
+        // `simulate_transaction(_, TransactionChecks::Enabled)`. The deny-config
         // check runs inside `simulate_transaction` via `pre_object_load_checks`, so we
         // don't need to invoke it directly here.
-        let sim = self.simulate_transaction(
-            transaction.clone(),
-            TransactionChecks::Enabled,
-            /* allow_mock_gas_coin */ true,
-        )?;
+        let sim = self.simulate_transaction(transaction.clone(), TransactionChecks::Enabled)?;
 
         self.build_dry_run_response(epoch_store, transaction, sim)
     }
 
     /// Adapt a `SimulateTransactionResult` into the
-    /// `(DryRunTransactionBlockResponse, written_objects_with_kind, effects, mock_gas_id)`
+    /// `(DryRunTransactionBlockResponse, written_objects_with_kind, effects, ignored_gas_id)`
     /// tuple that the JSON-RPC dry-run layer consumes. Shared between
     /// `dry_exec_transaction_impl` and `dry_exec_transaction_for_benchmark`'s
     /// callers; pulls together:
@@ -2376,7 +2401,6 @@ impl AuthorityState {
             events,
             objects,
             execution_result,
-            mock_gas_id,
             suggested_gas_price,
             ..
         } = sim;
@@ -2449,14 +2473,15 @@ impl AuthorityState {
             execution_error_source,
         };
 
-        Ok((response, written_with_kind, effects, mock_gas_id))
+        // Keep the legacy tuple slot for the JSON-RPC adapter. It is no longer needed because
+        // simulation does not introduce a gas object that must be filtered from its output.
+        Ok((response, written_with_kind, effects, None))
     }
 
     pub fn simulate_transaction(
         &self,
         mut transaction: TransactionData,
         checks: TransactionChecks,
-        allow_mock_gas_coin: bool,
     ) -> SuiResult<SimulateTransactionResult> {
         if transaction.kind().is_system_tx() {
             return Err(SuiErrorKind::UnsupportedFeatureError {
@@ -2497,37 +2522,27 @@ impl AuthorityState {
             .into());
         }
 
-        // Compute input/receiving object kinds before mock gas injection so the mock
-        // gas reference is not included in input_object_kinds (it is added to
-        // input_objects directly after object loading).
+        // An empty payment on a PTB represents an address-balance gas payment. Simulation is
+        // allowed to complete this incomplete request before validation without inventing a gas
+        // coin.
+        if protocol_config.enable_accumulators()
+            && protocol_config.enable_address_balance_gas_payments()
+            && transaction.is_gas_paid_from_address_balance()
+            && matches!(transaction.expiration(), TransactionExpiration::None)
+        {
+            let current_epoch = epoch_store.epoch();
+            *transaction.expiration_mut() = TransactionExpiration::ValidDuring {
+                min_epoch: Some(current_epoch),
+                max_epoch: Some(current_epoch.saturating_add(1)),
+                min_timestamp: None,
+                max_timestamp: None,
+                chain: self.chain_identifier,
+                nonce: rand::random(),
+            };
+        }
+
         let input_object_kinds = transaction.input_objects()?;
         let receiving_object_refs = transaction.receiving_objects();
-
-        // Inject mock gas coin before validity_check so that on protocol versions
-        // where address-balance gas payments are not yet enabled, the non-empty
-        // payment check in validity_check passes for simulate/dev-inspect requests
-        // submitted without explicit gas.
-        // Also required before pre_object_load_checks so that funds-withdrawal
-        // processing sees non-empty payment and doesn't create an address-balance
-        // withdrawal for gas.
-        // Skip mock gas for gasless transactions — they don't use gas coins.
-        let is_gasless = protocol_config.enable_gasless() && transaction.is_gasless_transaction();
-        let mock_gas_object = if allow_mock_gas_coin && transaction.gas().is_empty() && !is_gasless
-        {
-            let obj = Object::new_move(
-                MoveObject::new_gas_coin(
-                    OBJECT_START_VERSION,
-                    ObjectID::MAX,
-                    DEV_INSPECT_GAS_COIN_VALUE,
-                ),
-                Owner::AddressOwner(transaction.gas_data().owner),
-                TransactionDigest::genesis_marker(),
-            );
-            transaction.gas_data_mut().payment = vec![obj.compute_object_reference()];
-            Some(obj)
-        } else {
-            None
-        };
 
         // Full validity check including gas budget and price.
         transaction.validity_check(&epoch_store.tx_validity_check_context())?;
@@ -2538,23 +2553,17 @@ impl AuthorityState {
             &input_object_kinds,
             &receiving_object_refs,
             epoch_store.protocol_config(),
+            true,
         )?;
         let address_funds: BTreeSet<_> = declared_withdrawals.keys().cloned().collect();
 
-        let (mut input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
+        let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
             // We don't want to cache this transaction since it's a simulation.
             None,
             &input_object_kinds,
             &receiving_object_refs,
             epoch_store.epoch(),
         )?;
-
-        // Add mock gas to input objects after loading (it doesn't exist in the store).
-        let mock_gas_id = mock_gas_object.map(|obj| {
-            let id = obj.id();
-            input_objects.push(ObjectReadResult::new_from_gas_object(&obj));
-            id
-        });
 
         let protocol_config = epoch_store.protocol_config();
 
@@ -2721,7 +2730,6 @@ impl AuthorityState {
             events: effects.events_digest().map(|_| inner_temp_store.events),
             effects,
             execution_result,
-            mock_gas_id,
             unchanged_loaded_runtime_objects,
             suggested_gas_price: self
                 .congestion_tracker
@@ -2766,8 +2774,7 @@ impl AuthorityState {
             expiration: TransactionExpiration::None,
         });
 
-        // Capture raw bytes before simulate (which may mutate gas_data for mock
-        // gas injection).
+        // Capture raw bytes before simulation normalizes an empty address-balance payment.
         let raw_txn_data = if show_raw_txn_data_and_effects {
             bcs::to_bytes(&transaction).map_err(|_| {
                 SuiErrorKind::TransactionSerializationError {
@@ -2788,8 +2795,7 @@ impl AuthorityState {
         } else {
             TransactionChecks::Enabled
         };
-        let sim =
-            self.simulate_transaction(transaction, checks, /* allow_mock_gas_coin */ true)?;
+        let sim = self.simulate_transaction(transaction, checks)?;
 
         let raw_effects = if show_raw_txn_data_and_effects {
             bcs::to_bytes(&sim.effects).map_err(|_| {

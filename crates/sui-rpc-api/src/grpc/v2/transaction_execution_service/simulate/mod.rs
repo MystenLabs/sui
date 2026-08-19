@@ -36,8 +36,6 @@ use sui_types::transaction_executor::TransactionChecks;
 
 mod resolve;
 
-const GAS_COIN_SIZE_BYTES: u64 = 40;
-
 pub fn simulate_transaction(
     service: &RpcService,
     request: SimulateTransactionRequest,
@@ -111,14 +109,27 @@ pub fn simulate_transaction(
     };
 
     let perform_gas_selection = request.do_gas_selection() && checks.enabled();
+    let skip_gas_selection_for_bcs_gasless = perform_gas_selection
+        && request.transaction().bcs_opt().is_some()
+        && transaction.is_gasless_transaction();
+
+    // Without automatic selection (or for a BCS gasless request, which deliberately skips it),
+    // the empty payment remains in place. Normalize it here as well as in the authority so that
+    // the transaction returned to the caller is the one simulated. With selection, `select_gas`
+    // adds this only when it chooses address balance.
+    if (!perform_gas_selection || skip_gas_selection_for_bcs_gasless)
+        && protocol_config.enable_accumulators()
+        && protocol_config.enable_address_balance_gas_payments()
+        && transaction.is_gas_paid_from_address_balance()
+        && matches!(transaction.expiration(), TransactionExpiration::None)
+    {
+        set_valid_during_transaction_expiration(service, &mut transaction)?;
+    }
+
     let simulation_result = 'simulate: {
         // BCS transactions that are already in gasless shape (price=0, no payment) are simulated
         // as-is — the caller pre-built the transaction, so gas selection is not needed and the
         // priced flow must be skipped (it would fail with GasPriceUnderRGP for price=0).
-        let skip_gas_selection_for_bcs_gasless = perform_gas_selection
-            && request.transaction().bcs_opt().is_some()
-            && transaction.is_gasless_transaction();
-
         if perform_gas_selection && !skip_gas_selection_for_bcs_gasless {
             // If the caller didn't set a non-zero price and the tx passes the cheap structural +
             // object-input gasless checks, try a gasless simulate first. Post-execution gasless
@@ -134,7 +145,7 @@ pub fn simulate_transaction(
                 set_valid_during_transaction_expiration(service, &mut gasless_tx)?;
 
                 let simulation_result = executor
-                    .simulate_transaction(gasless_tx.clone(), checks, false)
+                    .simulate_transaction(gasless_tx.clone(), checks)
                     .map_err(simulation_error_to_rpc_error)?;
 
                 if !is_gasless_post_execution_failure(simulation_result.effects.status()) {
@@ -154,31 +165,27 @@ pub fn simulate_transaction(
             // If the request did not specify a budget, then simulate the transaction to get a budget estimate and
             // overwrite the resolved budget with the more accurate estimate.
             // When the request didn't specify a budget, the budget computed below covers
-            // computation + storage + safe-overhead, with the synthetic gas coin's storage
-            // cost subtracted (it doesn't exist at execution time). The cost of loading
-            // any additional payment objects is added either in `estimate_gas_budget_from_gas_cost`
-            // (when payment was specified) or incrementally inside `select_gas` (when gas
-            // selection picks the coins).
+            // computation + storage + safe-overhead. The estimation transaction uses only a
+            // genuine payment source: supplied gas coins, address balance, or selected gas coins.
             let budget_was_estimated = request.transaction().gas_payment().budget.is_none()
                 && request.transaction().bcs_opt().is_none();
             if budget_was_estimated {
-                let mut estimation_transaction = transaction.clone();
-                estimation_transaction.gas_data_mut().payment = Vec::new();
-                estimation_transaction.gas_data_mut().budget = protocol_config.max_tx_gas();
-
-                let simulation_result = executor
-                    .simulate_transaction(
-                        estimation_transaction,
-                        TransactionChecks::Enabled,
-                        true, /* allow mock gas coin */
-                    )
-                    .map_err(simulation_error_to_rpc_error)?;
+                let simulation_result = if transaction.gas_data().payment.is_empty() {
+                    estimate_with_real_gas_payment(
+                        service,
+                        executor.as_ref(),
+                        &transaction,
+                        &protocol_config,
+                    )?
+                } else {
+                    executor
+                        .simulate_transaction(transaction.clone(), TransactionChecks::Enabled)
+                        .map_err(simulation_error_to_rpc_error)?
+                };
 
                 let estimate = estimate_gas_budget_from_gas_cost(
                     simulation_result.effects.gas_cost_summary(),
                     reference_gas_price,
-                    request.transaction().gas_payment().objects.len(),
-                    mock_gas_storage_cost(&simulation_result),
                     &protocol_config,
                 );
 
@@ -200,20 +207,12 @@ pub fn simulate_transaction(
             }
 
             if transaction.gas_data().payment.is_empty() {
-                select_gas(
-                    service,
-                    &mut transaction,
-                    // Only adjust the budget for actually-selected coins when we just
-                    // computed the budget from estimation. A caller-supplied budget is
-                    // taken as-is.
-                    budget_was_estimated.then_some(reference_gas_price),
-                    &protocol_config,
-                )?;
+                select_gas(service, &mut transaction, true, &protocol_config)?;
             }
         }
 
         executor
-            .simulate_transaction(transaction.clone(), checks, !perform_gas_selection)
+            .simulate_transaction(transaction.clone(), checks)
             .map_err(simulation_error_to_rpc_error)?
     };
 
@@ -222,18 +221,9 @@ pub fn simulate_transaction(
         events,
         objects,
         execution_result,
-        mock_gas_id,
         unchanged_loaded_runtime_objects,
         suggested_gas_price,
     } = simulation_result;
-
-    if perform_gas_selection && mock_gas_id.is_some() {
-        // If we don't allow for using a mock coin, but we still did, return a server error
-        return Err(RpcError::new(
-            tonic::Code::Internal,
-            "unexpected mock gas coin used",
-        ));
-    }
 
     let transaction = if let Some(submask) = read_mask.subtree("transaction") {
         let mut message = ExecutedTransaction::default();
@@ -363,36 +353,18 @@ fn to_command_output(
 
 /// Estimate the gas budget for a transaction based on simulation results.
 ///
-/// The estimation includes:
-/// 1. Base cost from gas_cost_summary (computation + storage costs), with the synthetic gas
-///    coin's storage cost subtracted (it doesn't exist at execution time).
-/// 2. Cost of loading additional gas payment objects beyond the synthetic gas coin already
-///    in the simulation. When the request didn't specify gas payment objects, this is 0 —
-///    `select_gas` will pick the actual coins (or address balance) and adjust the budget
-///    incrementally for each one.
-/// 3. Rounding up to the protocol gas rounding step (typically 1000 MIST).
-/// 4. Adding safe overhead buffer (1000 * reference_gas_price).
-/// 5. Clamping to max_tx_gas protocol limit.
+/// The estimation includes the actual simulation cost (computation and storage), rounded up to
+/// the protocol gas step with a safe overhead buffer, then clamped to the protocol maximum.
 fn estimate_gas_budget_from_gas_cost(
     gas_cost_summary: &sui_types::gas::GasCostSummary,
     reference_gas_price: u64,
-    num_payment_objects_on_request: usize,
-    mock_gas_storage_cost: u64,
     protocol_config: &ProtocolConfig,
 ) -> u64 {
     const GAS_SAFE_OVERHEAD: u64 = 1000;
 
-    // The simulation always loads a synthetic gas coin so that it can produce a gas cost
-    // summary even when the caller hasn't specified a gas payment. That coin's storage
-    // write is phantom — it is not written at execution time (real address-balance gas
-    // emits an accumulator event, real coin gas writes the user-provided coin instead) —
-    // so subtract its contribution from `storage_cost` before deriving the estimate.
-    let storage_cost = gas_cost_summary
-        .storage_cost
-        .saturating_sub(mock_gas_storage_cost);
     let gas_used = gas_cost_summary
         .computation_cost
-        .saturating_add(storage_cost);
+        .saturating_add(gas_cost_summary.storage_cost);
     let net_gas_usage = (gas_used as i64).saturating_sub(gas_cost_summary.storage_rebate as i64);
     let base_estimate_mist = gas_cost_summary.computation_cost.max(if net_gas_usage < 0 {
         0
@@ -400,72 +372,81 @@ fn estimate_gas_budget_from_gas_cost(
         net_gas_usage as u64
     });
 
-    // Loading cost for additional gas coins beyond the synthetic gas coin already counted
-    // by the simulation. When the request did not specify any payment objects, the loading
-    // cost is added incrementally inside `select_gas` once the actual coins are known.
-    let extra_payment_objects = (num_payment_objects_on_request as u64).saturating_sub(1);
-    let gas_loading_cost_mist =
-        compute_gas_loading_cost_mist(extra_payment_objects, reference_gas_price, protocol_config);
-
     let safe_overhead_mist = GAS_SAFE_OVERHEAD.saturating_mul(reference_gas_price);
 
     base_estimate_mist
-        .saturating_add(gas_loading_cost_mist)
         .saturating_add(safe_overhead_mist)
         .min(protocol_config.max_tx_gas())
 }
 
-/// Cost in MIST of loading `extra_coins` gas-payment objects beyond the synthetic gas coin
-/// already accounted for by the estimation simulation. Mirrors the protocol's per-byte
-/// read cost, rounded up to the protocol gas rounding step in gas units before being
-/// converted to MIST.
-fn compute_gas_loading_cost_mist(
-    extra_coins: u64,
-    reference_gas_price: u64,
+/// Simulate an unresolved, empty-payment transaction using real available funds. Address balance
+/// is attempted first; if its full available balance cannot cover execution, retry using owned gas
+/// coins. Both probes use real funds and never use a synthetic payment object.
+fn estimate_with_real_gas_payment(
+    service: &RpcService,
+    executor: &dyn sui_types::transaction_executor::TransactionExecutor,
+    transaction: &sui_types::transaction::TransactionData,
     protocol_config: &ProtocolConfig,
-) -> u64 {
-    let units = extra_coins
-        .saturating_mul(GAS_COIN_SIZE_BYTES)
-        .saturating_mul(protocol_config.obj_access_cost_read_per_byte());
-    let rounded = if let Some(step) = protocol_config.gas_rounding_step_as_option() {
-        round_up_to_nearest(units, step)
-    } else {
-        units
-    };
-    rounded.saturating_mul(reference_gas_price)
-}
+) -> Result<SimulateTransactionResult> {
+    let can_use_address_balance = protocol_config.enable_accumulators()
+        && protocol_config.enable_address_balance_gas_payments()
+        && !transaction
+            .kind()
+            .iter_commands()
+            .any(sui_types::transaction::Command::is_gas_coin_used);
 
-/// Round up a value to the nearest multiple of `step` using saturating arithmetic.
-fn round_up_to_nearest(value: u64, step: u64) -> u64 {
-    let remainder = value % step;
-    if remainder == 0 {
-        value
-    } else {
-        value.saturating_add(step - remainder)
+    if can_use_address_balance
+        && let Some(address_balance) = available_address_balance(service, transaction)
+        && address_balance > 0
+    {
+        let mut address_balance_transaction = transaction.clone();
+        address_balance_transaction.gas_data_mut().budget =
+            address_balance.min(protocol_config.max_tx_gas());
+        if matches!(
+            address_balance_transaction.expiration(),
+            TransactionExpiration::None
+        ) {
+            set_valid_during_transaction_expiration(service, &mut address_balance_transaction)?;
+        }
+
+        match executor.simulate_transaction(address_balance_transaction, TransactionChecks::Enabled)
+        {
+            Ok(result) if !is_insufficient_gas(&result) => return Ok(result),
+            Ok(_) => {}
+            Err(error) if is_gas_budget_too_low(&error) => {}
+            Err(error) => return Err(simulation_error_to_rpc_error(error)),
+        }
     }
+
+    let mut coin_transaction = transaction.clone();
+    // Select all eligible real gas coins first, then simulate using the amount they can actually
+    // cover. A temporary budget of one only drives selection; it is never sent to the executor.
+    coin_transaction.gas_data_mut().budget = 1;
+    let available = select_gas(service, &mut coin_transaction, false, protocol_config)?;
+    coin_transaction.gas_data_mut().budget = available.min(protocol_config.max_tx_gas());
+
+    executor
+        .simulate_transaction(coin_transaction, TransactionChecks::Enabled)
+        .map_err(simulation_error_to_rpc_error)
 }
 
-/// Storage cost (in MIST) of the synthetic gas coin that the simulator wrote during the
-/// estimation pass. The new `storage_rebate` on the written object equals the storage cost
-/// (see `track_storage_mutation` / `collect_storage_and_rebate`) so we can read it directly
-/// from the simulation's object set instead of re-deriving it from protocol parameters.
-/// Returns 0 when the simulation didn't use a mock gas coin.
-fn mock_gas_storage_cost(
-    simulation_result: &sui_types::transaction_executor::SimulateTransactionResult,
-) -> u64 {
-    let Some(mock_gas_id) = simulation_result.mock_gas_id else {
-        return 0;
-    };
-    // Both the input version (rebate 0, since the mock coin is fresh) and the written version
-    // (rebate set to the storage cost) end up in `objects`. The written version always carries
-    // the larger value, so taking the max is correct and avoids depending on iteration order.
-    simulation_result
-        .objects
-        .iter()
-        .filter(|o| o.id() == mock_gas_id)
-        .map(|o| o.storage_rebate)
-        .max()
-        .unwrap_or(0)
+fn is_insufficient_gas(simulation_result: &SimulateTransactionResult) -> bool {
+    matches!(
+        simulation_result.effects.status(),
+        ExecutionStatus::Failure(ExecutionFailure {
+            error: sui_types::execution_status::ExecutionErrorKind::InsufficientGas,
+            ..
+        })
+    )
+}
+
+fn is_gas_budget_too_low(error: &SuiError) -> bool {
+    matches!(
+        error.as_inner(),
+        SuiErrorKind::UserInputError {
+            error: sui_types::error::UserInputError::GasBudgetTooLow { .. },
+        }
+    )
 }
 
 /// Populate a `ValidDuring` expiration covering the current epoch and the next one.
@@ -493,17 +474,47 @@ fn set_valid_during_transaction_expiration(
     Ok(())
 }
 
+fn available_address_balance(
+    service: &RpcService,
+    transaction: &sui_types::transaction::TransactionData,
+) -> Option<u64> {
+    use sui_types::accumulator_root::AccumulatorValue;
+    use sui_types::balance::Balance;
+    use sui_types::coin_reservation::CoinReservationResolver;
+    use sui_types::gas_coin::GAS;
+
+    let owner = transaction.gas_data().owner;
+    service
+        .reader
+        .lookup_address_balance(owner, GAS::type_())
+        .map(|balance| {
+            // Exclude explicit SUI reservations, but not the implicit gas reservation: this
+            // helper is used to determine the budget that the gas payment itself may consume.
+            let coin_resolver = CoinReservationResolver::new(service.reader.inner().clone());
+            let reserved_sui = transaction
+                .process_funds_withdrawals_for_estimation(service.chain_id, &coin_resolver)
+                .ok()
+                .and_then(|withdrawals| {
+                    let sui_type = Balance::type_tag(GAS::type_tag());
+                    let sui_account_id = AccumulatorValue::get_field_id(owner, &sui_type).ok()?;
+                    withdrawals
+                        .get(&sui_account_id)
+                        .map(|(amount, _, _)| *amount)
+                })
+                .unwrap_or(0);
+            balance.saturating_sub(reserved_sui)
+        })
+}
+
 fn select_gas(
     service: &RpcService,
     transaction: &mut sui_types::transaction::TransactionData,
-    incremental_loading_rgp: Option<u64>,
+    prefer_address_balance: bool,
     protocol_config: &ProtocolConfig,
-) -> Result<()> {
+) -> Result<u64> {
     use sui_types::accumulator_root::AccumulatorValue;
     use sui_types::balance::Balance;
     use sui_types::base_types::SequenceNumber;
-    use sui_types::coin_reservation::CoinReservationResolver;
-    use sui_types::coin_reservation::ParsedDigest;
     use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
     use sui_types::gas_coin::GAS;
     use sui_types::gas_coin::GasCoin;
@@ -519,34 +530,15 @@ fn select_gas(
         .kind()
         .iter_commands()
         .any(Command::is_gas_coin_used);
-    let address_balance = reader
-        .lookup_address_balance(owner, GAS::type_())
-        .map(|balance| {
-            // Sum up the explicit SUI reservations (excluding the implicit gas payment) for the
-            // `owner` so that we can deduct that from the available address balance. We use the
-            // estimation variant to avoid double-counting: the gas budget is what we're trying to
-            // satisfy, not a pre-existing reservation.
-            let coin_resolver = CoinReservationResolver::new(reader.inner().clone());
-
-            let reserved_sui = transaction
-                .process_funds_withdrawals_for_estimation(service.chain_id, &coin_resolver)
-                .ok()
-                .and_then(|withdrawals| {
-                    let sui_type = Balance::type_tag(GAS::type_tag());
-                    let sui_account_id = AccumulatorValue::get_field_id(owner, &sui_type).ok()?;
-                    withdrawals
-                        .get(&sui_account_id)
-                        .map(|(amount, _, _)| *amount)
-                })
-                .unwrap_or(0);
-
-            balance.saturating_sub(reserved_sui)
-        });
+    let address_balance = available_address_balance(service, transaction);
 
     // If the gas coin isn't used and there is sufficient address balance budget to satisfy the
     // required budget then we will use the `owner`s address balance to pay for gas. Otherwise we
     // fallback to doing coin selection
-    let selected_gas_value = if !gas_coin_used
+    let selected_gas_value = if prefer_address_balance
+        && protocol_config.enable_accumulators()
+        && protocol_config.enable_address_balance_gas_payments()
+        && !gas_coin_used
         && let Some(address_balance) = address_balance
         && address_balance >= budget
     {
@@ -638,37 +630,15 @@ fn select_gas(
         selected_gas_value
     };
 
-    // When the caller asked us to top up the budget for the loading cost of the just-picked
-    // payment objects, do so before the balance check. The simulation already counted the
-    // synthetic gas coin's load, so charge for the rest. Coin reservations don't load real
-    // gas-coin objects and are excluded.
-    let final_budget = if let Some(rgp) = incremental_loading_rgp {
-        let real_coins = transaction
-            .gas_data()
-            .payment
-            .iter()
-            .filter(|obj_ref| !ParsedDigest::is_coin_reservation_digest(&obj_ref.2))
-            .count() as u64;
-        let extra_loading_mist =
-            compute_gas_loading_cost_mist(real_coins.saturating_sub(1), rgp, protocol_config);
-        let new_budget = budget
-            .saturating_add(extra_loading_mist)
-            .min(protocol_config.max_tx_gas());
-        transaction.gas_data_mut().budget = new_budget;
-        new_budget
-    } else {
-        budget
-    };
-
-    if selected_gas_value >= final_budget {
-        Ok(())
+    if selected_gas_value >= budget {
+        Ok(selected_gas_value)
     } else {
         Err(RpcError::new(
             tonic::Code::InvalidArgument,
             format!(
                 "Unable to perform gas selection due to insufficient SUI \
                 balance (in address balance or coins) for account {owner} \
-                to satisfy required budget {final_budget}."
+                to satisfy required budget {budget}."
             ),
         ))
     }

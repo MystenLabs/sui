@@ -27,12 +27,14 @@ use sui_indexer_alt_jsonrpc::config::RpcConfig;
 use sui_indexer_alt_jsonrpc::start_rpc;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::kv_loader::KvArgs;
+use sui_json_rpc_types::SuiObjectRef;
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::TempDb;
 use sui_pg_db::temp::get_available_port;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::TypeTag;
+use sui_types::base_types::SuiAddress;
 use sui_types::crypto::ToFromBytes as _;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::signature::GenericSignature;
@@ -43,6 +45,8 @@ use sui_types::transaction::TransactionKind;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use url::Url;
+
+const DEV_INSPECT_GAS_BUDGET: u64 = 10_000_000;
 
 struct WriteTestCluster {
     onchain_cluster: TestCluster,
@@ -235,6 +239,17 @@ impl WriteTestCluster {
 /// `sui_devInspectTransactionBlock`.
 fn encode_transaction_kind(kind: &TransactionKind) -> String {
     Base64::encode(bcs::to_bytes(kind).expect("Failed to serialize TransactionKind"))
+}
+
+async fn dev_inspect_gas_object(cluster: &WriteTestCluster, sender: SuiAddress) -> Value {
+    let gas_object = cluster
+        .onchain_cluster
+        .wallet
+        .get_one_gas_object_owned_by_address(sender)
+        .await
+        .unwrap()
+        .unwrap();
+    serde_json::to_value(SuiObjectRef::from(gas_object)).unwrap()
 }
 
 /// Extract a byte vector from a JSON array of numbers.
@@ -748,6 +763,7 @@ async fn test_execute_and_dry_run_gas_costs_agree() {
 async fn test_dev_inspect_returns_values() {
     let cluster = WriteTestCluster::new().await.unwrap();
     let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
+    let gas_object = dev_inspect_gas_object(&cluster, sender).await;
 
     let response = cluster
         .execute_jsonrpc(
@@ -755,6 +771,10 @@ async fn test_dev_inspect_returns_values() {
             json!({
                 "sender_address": sender.to_string(),
                 "tx_bytes": encode_transaction_kind(&option_none_transaction_kind()),
+                "additional_args": {
+                    "gasBudget": DEV_INSPECT_GAS_BUDGET,
+                    "gasObjects": [gas_object],
+                },
             }),
         )
         .await
@@ -797,14 +817,15 @@ async fn test_dev_inspect_synthesized_transaction_defaults() {
     let cluster = WriteTestCluster::new().await.unwrap();
     let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
     let reference_gas_price = cluster.onchain_cluster.get_reference_gas_price().await;
-
     let response = cluster
         .execute_jsonrpc(
             "sui_devInspectTransactionBlock",
             json!({
                 "sender_address": sender.to_string(),
                 "tx_bytes": encode_transaction_kind(&option_none_transaction_kind()),
-                "additional_args": { "showRawTxnDataAndEffects": true },
+                "additional_args": {
+                    "showRawTxnDataAndEffects": true,
+                },
             }),
         )
         .await
@@ -814,8 +835,8 @@ async fn test_dev_inspect_synthesized_transaction_defaults() {
     assert_eq!(result["effects"]["status"]["status"], "success");
 
     // The raw transaction data reflects the synthesized `TransactionData`: gas price defaults to
-    // the reference gas price, the sender sponsors the gas, and the gas payment is left empty (a
-    // mock gas coin is injected fullnode-side).
+    // the reference gas price, the sender sponsors the gas, and the empty payment selects
+    // address-balance gas during simulation.
     let tx_data: TransactionData = bcs::from_bytes(&json_bytes(&result["rawTxnData"])).unwrap();
     assert_eq!(tx_data.sender(), sender);
 
@@ -832,6 +853,7 @@ async fn test_dev_inspect_synthesized_transaction_defaults() {
 async fn test_dev_inspect_with_checks_enabled() {
     let cluster = WriteTestCluster::new().await.unwrap();
     let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
+    let gas_object = dev_inspect_gas_object(&cluster, sender).await;
 
     let response = cluster
         .execute_jsonrpc(
@@ -839,7 +861,11 @@ async fn test_dev_inspect_with_checks_enabled() {
             json!({
                 "sender_address": sender.to_string(),
                 "tx_bytes": encode_transaction_kind(&option_none_transaction_kind()),
-                "additional_args": { "skipChecks": false },
+                "additional_args": {
+                    "gasBudget": DEV_INSPECT_GAS_BUDGET,
+                    "gasObjects": [gas_object],
+                    "skipChecks": false,
+                },
             }),
         )
         .await
@@ -860,6 +886,7 @@ async fn test_dev_inspect_with_checks_enabled() {
 async fn test_dev_inspect_execution_failure() {
     let cluster = WriteTestCluster::new().await.unwrap();
     let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
+    let gas_object = dev_inspect_gas_object(&cluster, sender).await;
 
     let response = cluster
         .execute_jsonrpc(
@@ -867,6 +894,10 @@ async fn test_dev_inspect_execution_failure() {
             json!({
                 "sender_address": sender.to_string(),
                 "tx_bytes": encode_transaction_kind(&divide_by_zero_transaction_kind()),
+                "additional_args": {
+                    "gasBudget": DEV_INSPECT_GAS_BUDGET,
+                    "gasObjects": [gas_object],
+                },
             }),
         )
         .await
@@ -883,13 +914,18 @@ async fn test_dev_inspect_matches_fullnode_jsonrpc() {
     telemetry_subscribers::init_for_testing();
     let cluster = WriteTestCluster::new().await.unwrap();
     let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
+    let gas_object = dev_inspect_gas_object(&cluster, sender).await;
 
     // Successful execution: the responses must match in full, including the raw transaction
     // bytes (proving the synthesized TransactionData is identical) and effects.
     let params = json!({
         "sender_address": sender.to_string(),
         "tx_bytes": encode_transaction_kind(&option_none_transaction_kind()),
-        "additional_args": { "showRawTxnDataAndEffects": true },
+        "additional_args": {
+            "gasBudget": DEV_INSPECT_GAS_BUDGET,
+            "gasObjects": [gas_object.clone()],
+            "showRawTxnDataAndEffects": true,
+        },
     });
 
     let indexer = cluster
@@ -920,6 +956,10 @@ async fn test_dev_inspect_matches_fullnode_jsonrpc() {
     let params = json!({
         "sender_address": sender.to_string(),
         "tx_bytes": encode_transaction_kind(&divide_by_zero_transaction_kind()),
+        "additional_args": {
+            "gasBudget": DEV_INSPECT_GAS_BUDGET,
+            "gasObjects": [gas_object],
+        },
     });
 
     let indexer = cluster

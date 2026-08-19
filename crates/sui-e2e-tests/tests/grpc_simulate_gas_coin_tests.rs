@@ -975,14 +975,13 @@ async fn test_resolve_handles_coin_reservation_in_ptb_input() {
 }
 
 // =============================================================================
-// Regression: when gas selection picks address balance, the estimated budget
-// must not include the storage cost of the synthetic gas coin used internally
-// by the simulator. Real execution charges gas via an accumulator event with
-// no gas-coin write, so any phantom storage cost in the budget is over-billing.
+// Regression: when gas selection picks address balance, budget estimation must use that real
+// payment path. Real execution charges gas via an accumulator event with no gas-coin write, so a
+// coin-write storage cost in the estimate would over-bill.
 // =============================================================================
 
 #[sim_test]
-async fn test_estimated_budget_excludes_mock_gas_coin_storage_for_address_balance() {
+async fn test_estimated_budget_uses_address_balance_costs() {
     use shared_crypto::intent::Intent;
     use sui_keys::keystore::AccountKeystore;
     use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
@@ -1113,17 +1112,15 @@ async fn test_estimated_budget_excludes_mock_gas_coin_storage_for_address_balanc
     );
 
     // The estimator adds a `1000 * reference_gas_price` safe-overhead buffer (defined in
-    // `estimate_gas_budget_from_gas_cost`). Without this fix, the synthetic gas coin's
-    // storage write — `object_size * obj_data_cost_refundable * storage_gas_price` MIST,
-    // typically ~1M MIST under default protocol params for a Coin<SUI> object — also
-    // lands in the budget. Bound the overshoot at `1500 * RGP` so the safe-overhead
-    // alone fits comfortably while a leaked storage cost trips this assertion.
+    // `estimate_gas_budget_from_gas_cost`). Bound the overshoot at `1500 * RGP` so the
+    // safe-overhead alone fits comfortably while a stray gas-coin storage cost trips this
+    // assertion.
     let max_expected_overshoot = 1_500u64.saturating_mul(test_env.rgp);
     assert!(
         (overshoot as u64) < max_expected_overshoot,
         "Estimated budget overshot actual net gas usage by {overshoot} MIST \
          (simulated={simulated_budget}, actual={actual_net_gas}); \
          max expected overshoot is {max_expected_overshoot} MIST. \
-         The mock gas coin's storage cost is leaking into the estimate."
+         A gas-coin storage cost is leaking into the address-balance estimate."
     );
 }
