@@ -54,23 +54,19 @@ const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(30);
 /// How long an established stream may go without delivering a block before it is dropped
 /// and re-established. Longer than `SUBSCRIPTION_TIMEOUT`: a quiet stream can be a
 /// transient network issue rather than a peer failure, so give it extra grace before
-/// tearing it down.
+/// tearing it down. Doubles as the failure budget for rotating to the next configured
+/// peer: when the current peer has delivered nothing for this long — across reconnection
+/// attempts, excluding time suspended on commit lag — the subscription rotates, so a
+/// silent stall rotates as soon as it is detected, while fast-failing connection attempts
+/// get the immediate retries and first backoff delays on the current peer first.
 const STREAM_STALL_TIMEOUT: Duration = SUBSCRIPTION_TIMEOUT.saturating_mul(2);
-
-/// How long the current peer may go without delivering a block — across reconnection
-/// attempts, excluding time suspended on commit lag — before the subscription rotates to
-/// the next configured peer. Deliberately equal to `STREAM_STALL_TIMEOUT`, so a silent
-/// stall exhausts the budget exactly when the stall is detected and rotates immediately,
-/// while fast-failing connection attempts get the immediate retries and first backoff
-/// delays on the current peer before the budget expires.
-const PEER_FAILURE_BUDGET: Duration = STREAM_STALL_TIMEOUT;
 
 /// ObserverSubscriber manages block stream subscriptions to peers (validators or other observers),
 /// taking care of retrying when subscription streams break. Blocks returned from peers are sent
 /// to the observer service for processing. The `ObserverSubscriber` streams from one peer at a
 /// time: it subscribes to the first peer of the provided list and fails over to the next one
 /// (in list order, wrapping around) when the current peer stops making progress for
-/// `PEER_FAILURE_BUDGET`. Failover is sticky — the subscription stays on the peer it rotated to
+/// `STREAM_STALL_TIMEOUT`. Failover is sticky — the subscription stays on the peer it rotated to
 /// until that peer fails in turn, and never switches back just because an earlier peer recovered.
 ///
 /// While the local commit index lags the quorum commit index too much, streamed blocks
@@ -283,7 +279,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             // Rotate to the next configured peer when the current one has delivered nothing
             // for the whole failure budget despite the retries below. Sticky: rotation only
             // moves forward on failure, never back to an earlier peer that recovered.
-            if peers.len() > 1 && last_progress.elapsed() >= PEER_FAILURE_BUDGET {
+            if peers.len() > 1 && last_progress.elapsed() >= STREAM_STALL_TIMEOUT {
                 let previous_peer = &peers[peer_index];
                 peer_index = (peer_index + 1) % peers.len();
                 info!(
