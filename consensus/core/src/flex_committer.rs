@@ -332,7 +332,9 @@ impl FlexCommitter {
             }
             committed_leaders
         };
-        assert!(!committed_leaders.is_empty(), "No committed leaders found");
+        if committed_leaders.is_empty() {
+            panic!("No committed leaders found");
+        }
         self.report_decided_prefix_metrics(commit_leader_round);
 
         let mut dag_state = self.dag_state.write();
