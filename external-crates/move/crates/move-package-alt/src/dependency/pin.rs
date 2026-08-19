@@ -213,6 +213,11 @@ impl Pinned {
         matches!(self, Pinned::Root(_))
     }
 
+    /// Is this an on-chain dependency?
+    pub(crate) fn is_on_chain(&self) -> bool {
+        matches!(self, Pinned::OnChain { .. })
+    }
+
     /// Return the absolute path to the directory that this package would be fetched into, without
     /// actually fetching it. `chain_id` is used to determine the cache location for on-chain
     /// dependencies.
