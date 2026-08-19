@@ -240,6 +240,11 @@ impl SubscriptionTestCluster {
         )
     }
 
+    /// All metric families the GraphQL service has recorded, for benchmark sampling.
+    pub fn gather_metrics(&self) -> Vec<prometheus::proto::MetricFamily> {
+        self.registry.gather()
+    }
+
     /// Total ledger-gRPC calls whose method name contains `method_contains` (e.g.
     /// "BatchGetTransactions"), read from the `requests_received` counter. Lets a test assert how the
     /// `KvLoader` coalesces content reads under concurrent resolution.

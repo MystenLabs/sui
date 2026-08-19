@@ -5,6 +5,7 @@
 
 mod testing;
 
+mod benchmark;
 mod checkpoint_subscription;
 mod event_subscription;
 mod throttle_subscription;
