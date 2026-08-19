@@ -214,9 +214,18 @@ impl CommitFinalizerV3 {
         transaction_indices: &BTreeSet<TransactionIndex>,
         voting_blocks: &[PreparedVotingBlock],
     ) -> TransactionDecisions {
+        let reject_stake_by_transaction: BTreeMap<_, _> = self
+            .transaction_vote_tracker
+            .get_reject_votes(&block_ref)
+            .unwrap_or_else(|| {
+                panic!(
+                    "No vote info found for {block_ref}. It is incorrectly GC'ed or failed to be recovered after crash."
+                )
+            })
+            .into_iter()
+            .collect();
         let mut base_accept_votes = StakeAggregator::<QuorumThreshold>::new();
-        let mut base_reject_votes = StakeAggregator::<QuorumThreshold>::new();
-        let mut explicitly_rejected_transactions = BTreeSet::new();
+        let mut transactions_with_explicit_rejects = BTreeSet::new();
         for voting_block in voting_blocks {
             assert_eq!(
                 voting_block.reference.round,
@@ -229,48 +238,44 @@ impl CommitFinalizerV3 {
                 base_accept_votes
                     .add_unique(voting_block.reference.author, &self.context.committee);
                 if let Some(explicit_rejects) = voting_block.explicit_rejects.get(&block_ref) {
-                    explicitly_rejected_transactions
+                    transactions_with_explicit_rejects
                         .extend(explicit_rejects.intersection(transaction_indices).copied());
                 }
-            } else {
-                base_reject_votes
-                    .add_unique(voting_block.reference.author, &self.context.committee);
             }
         }
 
         let mut decisions = TransactionDecisions::default();
         for transaction_index in transaction_indices {
-            let transaction_tallies = explicitly_rejected_transactions
+            let transaction_accept_votes = transactions_with_explicit_rejects
                 .contains(transaction_index)
                 .then(|| {
+                    // Rescan the blocks instead of subtracting reject voters from the base.
+                    // An equivocating authority can reject in one block and accept in another.
                     let mut accept_votes = StakeAggregator::<QuorumThreshold>::new();
-                    let mut reject_votes = StakeAggregator::<QuorumThreshold>::new();
                     for voting_block in voting_blocks {
-                        // An equivocating authority can count once on each side. It cannot
-                        // count twice on one side.
-                        let votes =
-                            if voting_block.accepts_transaction(block_ref, *transaction_index) {
-                                &mut accept_votes
-                            } else {
-                                &mut reject_votes
-                            };
-                        votes.add_unique(voting_block.reference.author, &self.context.committee);
+                        if voting_block.accepts_transaction(block_ref, *transaction_index) {
+                            accept_votes
+                                .add_unique(voting_block.reference.author, &self.context.committee);
+                        }
                     }
-                    (accept_votes, reject_votes)
+                    accept_votes
                 });
-            let (accept_votes, reject_votes) = match &transaction_tallies {
-                Some((accept_votes, reject_votes)) => (accept_votes, reject_votes),
-                None => (&base_accept_votes, &base_reject_votes),
-            };
+            let accept_votes = transaction_accept_votes
+                .as_ref()
+                .unwrap_or(&base_accept_votes);
             let accepted = accept_votes.reached_threshold(&self.context.committee);
-            let rejected = reject_votes.reached_threshold(&self.context.committee);
+            let reject_stake = reject_stake_by_transaction
+                .get(transaction_index)
+                .copied()
+                .unwrap_or_default();
+            let rejected = reject_stake >= self.context.committee.quorum_threshold();
             assert!(
                 !(accepted && rejected),
-                "Transaction {} in block {} cannot have both accept and reject quorums. Accept voters: {:?}, reject voters: {:?}",
+                "Transaction {} in block {} cannot have both accept and reject quorums. Accept voters: {:?}, reject stake: {}",
                 transaction_index,
                 block_ref,
                 accept_votes.authorities(),
-                reject_votes.authorities(),
+                reject_stake,
             );
             if accepted {
                 decisions.accepted.push(*transaction_index);
@@ -572,6 +577,7 @@ mod tests {
         context: Arc<Context>,
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<MemStore>,
+        transaction_vote_tracker: TransactionVoteTracker,
         finalizer: CommitFinalizerV3,
     }
 
@@ -601,7 +607,7 @@ mod tests {
             let finalizer = CommitFinalizerV3::new(
                 context.clone(),
                 dag_state.clone(),
-                transaction_vote_tracker,
+                transaction_vote_tracker.clone(),
                 commit_sender,
             );
 
@@ -609,6 +615,7 @@ mod tests {
                 context,
                 dag_state,
                 store,
+                transaction_vote_tracker,
                 finalizer,
             }
         }
@@ -635,7 +642,7 @@ mod tests {
                     )
                 })
                 .collect();
-            self.dag_state.write().accept_blocks(blocks.clone());
+            self.add_blocks(&blocks);
             blocks
         }
 
@@ -685,6 +692,13 @@ mod tests {
 
         fn add_blocks(&self, blocks: &[VerifiedBlock]) {
             self.dag_state.write().accept_blocks(blocks.to_vec());
+            self.transaction_vote_tracker.add_voted_blocks(
+                blocks
+                    .iter()
+                    .cloned()
+                    .map(|block| (block, vec![]))
+                    .collect(),
+            );
         }
     }
 
@@ -719,6 +733,12 @@ mod tests {
             })
             .collect();
         fixture.add_blocks(&voters);
+        assert_eq!(
+            fixture
+                .transaction_vote_tracker
+                .get_reject_votes(&target.reference()),
+            Some(vec![(1, 5)])
+        );
 
         let finalized =
             fixture
@@ -736,7 +756,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_rejects_transactions_at_the_voter_cutoff() {
+    fn direct_keeps_transactions_pending_at_the_voter_cutoff() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(2);
         let voters: Vec<_> = (0..5)
@@ -759,16 +779,17 @@ mod tests {
                 .finalizer
                 .process_commit(make_commit(1, &target, vec![target.clone()]));
 
+        assert!(finalized.is_empty());
         assert_eq!(
-            finalized[0]
-                .rejected_transactions_by_block
+            fixture.finalizer.pending_commits[0]
+                .pending_transactions
                 .get(&target.reference()),
-            Some(&vec![0, 1])
+            Some(&BTreeSet::from([0, 1]))
         );
     }
 
     #[test]
-    fn direct_rejects_transactions_in_an_omitted_block() {
+    fn direct_keeps_transactions_pending_when_next_round_blocks_do_not_link() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let voters: Vec<_> = (1..6)
@@ -791,11 +812,12 @@ mod tests {
                 .finalizer
                 .process_commit(make_commit(1, &target, vec![target.clone()]));
 
+        assert!(finalized.is_empty());
         assert_eq!(
-            finalized[0]
-                .rejected_transactions_by_block
+            fixture.finalizer.pending_commits[0]
+                .pending_transactions
                 .get(&target.reference()),
-            Some(&vec![0])
+            Some(&BTreeSet::from([0]))
         );
     }
 
@@ -836,7 +858,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_counts_an_equivocating_voter_once_on_each_side() {
+    fn direct_accepts_when_explicit_reject_votes_are_below_quorum() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let mut voters: Vec<_> = (0..5)
@@ -856,8 +878,8 @@ mod tests {
             4,
             &round_one_refs,
             target.reference(),
-            false,
-            vec![],
+            true,
+            vec![0],
             0,
             Some(4),
         ));
@@ -865,12 +887,18 @@ mod tests {
             5,
             &round_one_refs,
             target.reference(),
-            false,
-            vec![],
+            true,
+            vec![0],
             0,
             None,
         ));
         fixture.add_blocks(&voters);
+        assert_eq!(
+            fixture
+                .transaction_vote_tracker
+                .get_reject_votes(&target.reference()),
+            Some(vec![(0, 2)])
+        );
 
         let finalized =
             fixture
@@ -908,13 +936,19 @@ mod tests {
                 author,
                 &round_one_refs,
                 target.reference(),
-                false,
-                vec![],
+                true,
+                vec![0],
                 0,
                 Some(author as u8),
             )
         }));
         fixture.add_blocks(&voters);
+        assert_eq!(
+            fixture
+                .transaction_vote_tracker
+                .get_reject_votes(&target.reference()),
+            Some(vec![(0, 5)])
+        );
 
         fixture
             .finalizer
@@ -940,16 +974,11 @@ mod tests {
             .collect();
         fixture.add_blocks(&voters);
 
-        let transaction_vote_tracker = TransactionVoteTracker::new(
-            fixture.context.clone(),
-            Arc::new(NoopBlockVerifier),
-            fixture.dag_state.clone(),
-        );
         let (commit_sender, mut commit_receiver) = unbounded_channel("finalizer_v3_output_test");
         let mut handle = CommitFinalizerHandle::start(
             fixture.context.clone(),
             fixture.dag_state.clone(),
-            transaction_vote_tracker,
+            fixture.transaction_vote_tracker.clone(),
             commit_sender,
         );
         let commit = make_commit(1, &target, vec![target.clone()]);
