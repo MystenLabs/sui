@@ -110,6 +110,7 @@ theorem compatible_refl {Digest : Type}
     (status : ReferenceSlotStatus Digest) : status.Compatible status := by
   cases status <;> simp [Compatible]
 
+/-- Status compatibility is symmetric between two validator views. -/
 theorem compatible_symm {Digest : Type}
     {left right : ReferenceSlotStatus Digest}
     (compatible : left.Compatible right) : right.Compatible left := by
@@ -1117,6 +1118,7 @@ theorem split_histories_are_selected :
   constructor <;>
     simp [splitIndirectRule, leftAnchorRef, rightAnchorRef]
 
+/-- The two selected anchors in this example carry incomparable causal histories. -/
 theorem split_selected_histories_are_incomparable :
     ¬(splitIndirectRule.historyOf leftAnchorRef).Comparable
       (splitIndirectRule.historyOf rightAnchorRef) := by
@@ -1126,6 +1128,7 @@ theorem split_selected_histories_are_incomparable :
   · exact left_history_not_included_in_right included
   · exact right_history_not_included_in_left included
 
+/-- The two complete scans select the two anchors with incomparable histories. -/
 theorem complete_scans_select_incomparable_anchors :
     scanReferenceAnchorAtOrAbove 3 leftDirectRounds.tail =
         .found leftAnchorRef ∧
@@ -1133,6 +1136,8 @@ theorem complete_scans_select_incomparable_anchors :
         .found rightAnchorRef := by
   constructor <;> rfl
 
+/-- The incompatible higher direct inputs make the complete scans commit different
+lower references. The following theorem identifies the required higher conflict. -/
 theorem complete_scans_produce_different_lower_commits :
     finishReferenceFlexRounds splitIndirectRule leftDirectRounds =
         leftFinishedRounds ∧

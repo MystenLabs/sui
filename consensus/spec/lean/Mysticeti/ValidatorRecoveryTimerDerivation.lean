@@ -58,6 +58,7 @@ def recovery
     deadline := some (start.deadline waits)
     alignmentWitness := none }
 
+/-- The stored timer key fixes its absolute deadline from the start and wait. -/
 @[simp]
 theorem deadline_eq
     {BlockId CommitId : Type}

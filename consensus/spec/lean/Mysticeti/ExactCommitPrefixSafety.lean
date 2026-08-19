@@ -211,14 +211,6 @@ private theorem exact_list_agreement_of_key_maps_equal
           exact .cons sameKeys.1
             (inductionHypothesis sameKeys.2)
 
-@[simp]
-private theorem apply_reference_direct_decision_preserves_slot
-    {Digest : Type} (rule : ReferenceDirectRule Digest)
-    (slot : ReferenceSelectedSlotView Digest) :
-    (applyReferenceDirectDecision rule slot).slot = slot.slot := by
-  rcases slot with ⟨selected, status⟩
-  cases status <;> rfl
-
 /-- The direct pass cannot replace a final status. This is the pure form of the
 `try_direct_commit` filter and the first-write rule in
 `RoundState::update_slot_decision`. -/
@@ -253,7 +245,11 @@ private theorem run_reference_direct_round_preserves_slot_keys
     (runReferenceDirectRound rule round).selectedSlots.map
         ReferenceSelectedSlotView.slot =
       round.selectedSlots.map ReferenceSelectedSlotView.slot := by
-  simp [runReferenceDirectRound]
+  simp only [runReferenceDirectRound, List.map_map]
+  apply List.map_congr_left
+  intro slot _member
+  rcases slot with ⟨selected, status⟩
+  cases status <;> rfl
 
 private theorem selected_slots_committed_anchors_valid_of_membership
     {Digest : Type} {anchorOK : LeaderBlockRef Digest → Prop}
@@ -274,23 +270,6 @@ private theorem selected_slots_committed_anchors_valid_of_membership
         | skip => trivial
       · intro tailSlot member block committed
         exact valid tailSlot (by simp [member]) block committed
-
-private theorem rounds_committed_anchors_valid_of_membership
-    {Digest : Type} {anchorOK : LeaderBlockRef Digest → Prop}
-    {rounds : List (ReferenceFlexRoundView Digest)}
-    (valid : ∀ round, round ∈ rounds → ∀ slot,
-      slot ∈ round.selectedSlots → ∀ block,
-        slot.status = .commit block → anchorOK block) :
-    ReferenceFlexRoundsCommittedAnchorsValid anchorOK rounds := by
-  induction rounds with
-  | nil => trivial
-  | cons round tail inductionHypothesis =>
-      refine ⟨selected_slots_committed_anchors_valid_of_membership ?_,
-        inductionHypothesis ?_⟩
-      · intro slot member block committed
-        exact valid round (by simp) slot member block committed
-      · intro tailRound member slot slotMember block committed
-        exact valid tailRound (by simp [member]) slot slotMember block committed
 
 private theorem indexed_round_shape_prefix
     {Digest : Type}

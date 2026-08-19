@@ -487,6 +487,8 @@ theorem maximum_round_has_owner
   obtain ⟨owner, ownerMember, ownerRound⟩ := maximumInMap
   exact ⟨owner, ownerMember, ownerRound⟩
 
+/-- The maximum recovery-source round is positive because each source round is
+positive and the finite source set has an owner of the maximum. -/
 theorem maximum_round_positive
     (sources : FixedCausalRecoverySources BlockId CommitId config) :
     0 < sources.maximumRound := by

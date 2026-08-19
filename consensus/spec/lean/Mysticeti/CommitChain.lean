@@ -31,16 +31,6 @@ abbrev CommitStream := Nat → Commit
 def Continuous (stream : CommitStream) : Prop :=
   ∀ position, (stream (position + 1)).index = (stream position).index + 1
 
-theorem continuous_index (stream : CommitStream) (continuous : Continuous stream)
-    (position : Nat) :
-    (stream position).index = (stream 0).index + position := by
-  induction position with
-  | zero => simp
-  | succ position ih =>
-      have step := continuous position
-      change (stream (position + 1)).index = (stream 0).index + (position + 1)
-      omega
-
 /-- A commit is deep enough to trigger indirect finalization for the first pending
 commit leader round. -/
 def DepthTwoEligible (pendingLeaderRound : Nat) (commit : Commit) : Prop :=
@@ -132,6 +122,8 @@ def flippingCertificate : Nat → Bool
   | 0 => false
   | _ + 1 => true
 
+/-- An arbitrary later prefix can change an indirect rejection to an acceptance.
+This counterexample shows why the finalizer must use the first eligible trigger. -/
 theorem arbitrary_prefix_decision_can_flip :
     indirectAt flippingCertificate 0 = .reject ∧
       indirectAt flippingCertificate 1 = .accept := by

@@ -120,6 +120,7 @@ def drainRate
     (budget : ValidatorCausalQueueTransferBudget timed validator start) : Nat :=
   budget.intervalBudget - budget.productionBound
 
+/-- The strict service margin makes the backlog drain rate positive. -/
 theorem drainRatePositive
     (budget : ValidatorCausalQueueTransferBudget timed validator start) :
     0 < budget.drainRate := by

@@ -134,6 +134,7 @@ def record {BlockId : Type}
       unfold LegalTarget at legal
       omega
 
+/-- Recording a legal block moves the durable signer floor to that block round. -/
 @[simp]
 theorem record_floor {BlockId : Type}
     (signer : DurableSignerState BlockId)
@@ -212,6 +213,7 @@ def observeAccepted {BlockId : Type}
   { state with
     accepted := fun reference => reference = block ∨ state.accepted reference }
 
+/-- Accepting another block does not replace the locked safe-resume child. -/
 @[simp]
 theorem observeAccepted_preserves_lock {BlockId : Type}
     (state : ValidatorSafeResumeState BlockId)
@@ -219,6 +221,7 @@ theorem observeAccepted_preserves_lock {BlockId : Type}
     (state.observeAccepted block).lockedChild = state.lockedChild := by
   rfl
 
+/-- Accepting another block does not change the current proposal mode. -/
 @[simp]
 theorem observeAccepted_preserves_mode {BlockId : Type}
     (state : ValidatorSafeResumeState BlockId)
@@ -441,6 +444,7 @@ theorem completeSafeResume_preserves_well_formed
     · exact state.signer.record_other_round proposal.reference legal sameRound
         |>.trans oldRecorded
 
+/-- Completing safe resume restores exact-next proposal mode. -/
 @[simp]
 theorem completeSafeResume_returns_to_exact_next
     {BlockId : Type}
@@ -450,6 +454,7 @@ theorem completeSafeResume_returns_to_exact_next
     (state.completeSafeResume proposal legal).mode = .exactNext := by
   rfl
 
+/-- Completing safe resume clears the consumed child lock. -/
 @[simp]
 theorem completeSafeResume_clears_lock
     {BlockId : Type}

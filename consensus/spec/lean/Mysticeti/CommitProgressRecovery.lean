@@ -212,6 +212,8 @@ Thus, an exclusion stake cap does not by itself give the direct votes for that
 selected leader slot. -/
 def firstSlotExclusionExample : VoterSet := fun authority => authority == 0
 
+/-- A stake cap on local exclusions does not protect one fixed first-slot
+validator. Other validators can remain available while that slot stays excluded. -/
 theorem exclusion_cap_does_not_protect_a_fixed_first_slot :
     weight 2 (fun _ => 1) firstSlotExclusionExample < 2 ∧
       firstSlotExclusionExample 0 = true ∧
@@ -399,12 +401,6 @@ theorem alternating_round_order_is_schedule_permutation (round : Nat) :
 /-- The first selected leader slot in the counterexample. -/
 def alternatingFirstSelectedLeader (round : Nat) : ShuffleExampleValidator :=
   if round % 2 = 0 then .correct else .byzantine
-
-theorem alternating_round_order_has_expected_first (round : Nat) :
-    (alternatingRoundLeaderOrder round).head? =
-      some (alternatingFirstSelectedLeader round) := by
-  by_cases evenRound : round % 2 = 0 <;>
-    simp [alternatingRoundLeaderOrder, alternatingFirstSelectedLeader, evenRound]
 
 /-- A correct validator is first after every start round. -/
 theorem alternating_order_has_eventual_correct_first (start : Nat) :
@@ -640,14 +636,6 @@ theorem recovery_frontier_is_attained
     ⟨authority, authorityInRange, authorityRecovering, authorityAtFrontier⟩
   exact ⟨authority, authorityInRange, authorityRecovering, authorityAtFrontier⟩
 
-def leaderScheduleStake {State : Type}
-    (view : CommitProgressRecoveryView State) (state : State) : Nat :=
-  weight view.authorityCount view.stake (view.leaderSchedule state)
-
-def roundLeaderSelectionStake {State : Type}
-    (view : CommitProgressRecoveryView State) (round : Nat) (state : State) : Nat :=
-  weight view.authorityCount view.stake (view.roundLeaderSelection round state)
-
 def correctRecoveryStake {State : Type}
     (view : CommitProgressRecoveryView State) (state : State) : Nat :=
   weight view.authorityCount view.stake (view.correctRecoveryAuthorities state)
@@ -655,11 +643,6 @@ def correctRecoveryStake {State : Type}
 def quorumBlockLayerStake {State : Type}
     (view : CommitProgressRecoveryView State) (round : Nat) (state : State) : Nat :=
   weight view.authorityCount view.stake (view.quorumBlockLayerAuthors round state)
-
-def selectedLeaderSlotValidators {State : Type}
-    (view : CommitProgressRecoveryView State) (round : Nat) (state : State) :
-    List Nat :=
-  (view.selectedLeaderSlots round state).map SelectedLeaderSlotView.validator
 
 def selectedLeaderSlotStatuses {State : Type}
     (view : CommitProgressRecoveryView State) (round : Nat) (state : State) :
@@ -798,12 +781,6 @@ def RecoveryLayerWindowAt {State : Type}
   fun state => RecoveryQuorumAt view thresholds baseline state ∧
     HasQuorumBlockLayerWindowAt view thresholds baseline count state
 
-def HasUsableAnchorWindowAt {State : Type}
-    (view : CommitProgressRecoveryView State)
-    (baseline count : Nat) : State → Prop :=
-  fun state => AtCommitIndex view baseline state ∧
-    HasUsableAnchorWindow view count state
-
 /-- The indirect scan contains one usable anchor window. The base is an index in
 Rust's pending-round array. -/
 def HasCoveredUsableAnchorWindowAt {State : Type}
@@ -888,23 +865,6 @@ theorem quorum_block_layer_window_yields_anchor_window
         ((base + offset) + directVoteRoundOffset) state := by
     simpa [Nat.add_assoc] using voteLayer
   exact usableAnchorFromLayers (base + offset) leaderLayer voteLayerAtRound
-
-theorem quorum_block_layer_window_yields_usable_anchor_window
-    {State : Type} (view : CommitProgressRecoveryView State)
-    (thresholds : Thresholds view.authorityCount view.stake)
-    {state : State} {anchorCount : Nat}
-    (usableAnchorFromLayers :
-      ∀ round,
-        RetainedQuorumBlockLayer view thresholds round state →
-        RetainedQuorumBlockLayer view thresholds
-          (round + directVoteRoundOffset) state →
-        UsableAnchorRound view round state)
-    (window : HasQuorumBlockLayerWindow view thresholds
-      (requiredRecoveryLayerCount anchorCount) state) :
-    HasUsableAnchorWindow view anchorCount state := by
-  rcases window with ⟨base, layers⟩
-  exact ⟨base, quorum_block_layer_window_yields_anchor_window view thresholds
-    usableAnchorFromLayers layers⟩
 
 /-- A next-round recovery target cannot skip forward or reuse an old own
 proposal round. -/

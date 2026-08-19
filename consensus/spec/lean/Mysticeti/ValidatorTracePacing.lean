@@ -152,6 +152,7 @@ def timer
     highestObservedRound := ready.highestObservedRound
     startsAfterParentQuorum := ready.startsAfterParentReady }
 
+/-- The pure timer made from a ready proposal has the stored absolute deadline. -/
 @[simp]
 theorem timer_deadline
     {BlockId CommitId PacketId : Type}

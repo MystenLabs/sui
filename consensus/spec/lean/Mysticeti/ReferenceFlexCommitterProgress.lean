@@ -116,13 +116,6 @@ theorem set_indexed_reference_round_same {Digest : Type}
     setIndexedReferenceRound rounds target round target = round := by
   simp [setIndexedReferenceRound]
 
-@[simp]
-theorem set_indexed_reference_round_other {Digest : Type}
-    (rounds : Nat → ReferenceFlexRoundView Digest) (target index : Nat)
-    (round : ReferenceFlexRoundView Digest) (different : index ≠ target) :
-    setIndexedReferenceRound rounds target round index = rounds index := by
-  simp [setIndexedReferenceRound, different]
-
 /-- One exact `decide_with_anchor_block` transition. -/
 def indexedReferenceIndirectStep {Digest History : Type}
     (depth : Nat) (rule : ReferenceIndirectRule Digest History)
@@ -261,6 +254,8 @@ theorem indexed_reference_rounds_from_cons_succ
       exact congrArg (fun suffix => referenceRoundAtList tail start :: suffix)
         (inductionHypothesis (start + 1))
 
+/-- Converting a pending-round list to the indexed model and back preserves the
+complete list and its order. -/
 @[simp]
 theorem indexed_reference_state_from_list_to_round_list
     {Digest : Type} (commitIndex : Nat)
@@ -274,6 +269,7 @@ theorem indexed_reference_state_from_list_to_round_list
       rw [indexed_reference_rounds_from_cons_succ head tail 0 tail.length]
       exact congrArg (List.cons head) inductionHypothesis
 
+/-- Reading an indexed range returns exactly the requested number of rounds. -/
 @[simp]
 theorem indexed_reference_rounds_from_length
     {Digest : Type}
@@ -698,18 +694,7 @@ theorem find_indexed_reference_anchor_after_final_prefix
             exact ⟨block, by
               simp [findIndexedReferenceAnchorFrom, firstFound]⟩
 
-@[simp]
-theorem indexed_reference_indirect_step_commit_index
-    {Digest History : Type}
-    (depth decisionIndex : Nat)
-    (rule : ReferenceIndirectRule Digest History)
-    (state : IndexedReferenceFlexState Digest) :
-    (indexedReferenceIndirectStep depth rule decisionIndex state).commitIndex =
-      state.commitIndex := by
-  cases found : findIndexedReferenceAnchorFrom state.rounds
-      (decisionIndex + depth) (state.roundCount - (decisionIndex + depth)) <;>
-    simp [indexedReferenceIndirectStep, found]
-
+/-- One exact indirect step preserves the finite pending-round count. -/
 @[simp]
 theorem indexed_reference_indirect_step_round_count
     {Digest History : Type}
@@ -937,6 +922,8 @@ theorem run_indexed_reference_indirect_descending_append
               prefixCount state))
       rw [ih, Nat.sub_sub]
 
+/-- The exact descending scan changes pending decisions only. It does not change
+the current commit index. -/
 @[simp]
 theorem run_indexed_reference_indirect_commit_index
     {Digest History : Type}
@@ -948,7 +935,9 @@ theorem run_indexed_reference_indirect_commit_index
   induction stepCount with
   | zero => rfl
   | succ count =>
-      simp [runIndexedReferenceIndirectDescending, *]
+      simp only [runIndexedReferenceIndirectDescending,
+        indexedReferenceIndirectStep]
+      split <;> simp_all
 
 @[simp]
 theorem run_indexed_reference_indirect_round_count
@@ -961,7 +950,9 @@ theorem run_indexed_reference_indirect_round_count
   induction stepCount with
   | zero => rfl
   | succ count =>
-      simp [runIndexedReferenceIndirectDescending, *]
+      simp only [runIndexedReferenceIndirectDescending,
+        indexedReferenceIndirectStep]
+      split <;> simp_all
 
 theorem run_indexed_reference_indirect_preserves_anchor
     {Digest History : Type}
@@ -977,6 +968,7 @@ theorem run_indexed_reference_indirect_preserves_anchor
   | succ count =>
       exact indexed_reference_indirect_step_preserves_anchor ‹_›
 
+/-- A complete exact descending scan does not reopen a final pending round. -/
 theorem run_indexed_reference_indirect_preserves_final
     {Digest History : Type}
     {depth highestIndex stepCount protectedIndex : Nat}
@@ -991,6 +983,7 @@ theorem run_indexed_reference_indirect_preserves_final
   | succ count =>
       exact indexed_reference_indirect_step_preserves_final ‹_›
 
+/-- A complete exact descending scan keeps an existing final commit result. -/
 theorem run_indexed_reference_indirect_preserves_final_commit
     {Digest History : Type}
     {depth highestIndex stepCount protectedIndex : Nat}

@@ -117,7 +117,8 @@ def freezeAtHead
     CommonRoundWaitSchedule (ValidatorCommitHead CommitId) :=
   schedule.freezeAtRound commitHead.round (ValidatorCommitHead CommitId)
 
-/-- The frozen adapter gives the exact run-time value for its fixed head. -/
+/-- The frozen adapter gives the exact run-time value for its fixed head. The
+other head argument cannot change this frozen value. -/
 @[simp]
 theorem freezeAtHead_wait_eq
     {CommitId : Type}
@@ -288,6 +289,8 @@ def schedule
       ValidatorQuadraticGapWaitParameters.wait,
       ValidatorQuadraticGapWaitParameters.gap] using result
 
+/-- The concrete quadratic schedule uses the same wait value as its parameter
+record for each head and round. -/
 @[simp]
 theorem schedule_wait_eq
     {CommitId : Type}

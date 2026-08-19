@@ -15,6 +15,9 @@ Applying this theorem to Rust requires the assumption ledger. Key obligations ar
 `ASM-SAFE-FIRST-TRIGGER`, `ASM-SAFE-COMMITTED-PREFIX`, and `ASM-SAFE-GC`.
 -/
 
+/-- Valid modeled evidence cannot produce conflicting leader or transaction
+decisions. Correct views with the same commit stream also choose one indirect
+result at the first eligible trigger. -/
 theorem mysticeti_v3_safety
     {authorityCount : Nat} {stake : Nat → Nat}
     {thresholds : Thresholds authorityCount stake}

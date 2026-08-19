@@ -140,10 +140,12 @@ the prefix on local, synchronization, replay, and restart paths.
 For one continuous common commit stream, the first eligible trigger is unique and
 stays first as the visible prefix grows. Correct validators with the same stream
 and trigger make the same indirect decision.
+`first_trigger_result_is_prefix_stable` states the prefix result.
 
 This result does not apply to an arbitrary larger prefix. A later prefix can
 introduce a new accept certificate and change an earlier indirect reject
-calculation. Safety depends on ordered processing and the same first trigger.
+calculation. `arbitrary_prefix_decision_can_flip` gives this counterexample.
+Safety depends on ordered processing and the same first trigger.
 
 ## Conditional progress
 
@@ -188,7 +190,7 @@ blocks.
 
 The model includes a local counterexample in which a direct jump omits one required
 proposal. It does not claim that the complete published attack applies unchanged
-to v3.
+to v3. The local result is `direct_jump_can_violate_safe_catchup`.
 
 For one favorable leader window, the current stage-composition model gives a
 `10 * delta` bound. This is a sum of supplied stage bounds, not a derived product
@@ -273,7 +275,8 @@ every transaction commits. See the
 
 The current transaction theorem composes supplied commit-stream, trigger,
 decision, storage, and consumer stages. It does not yet derive transaction
-progress from fundamental inputs. The epoch-tail case also remains open.
+progress from fundamental inputs. The theorem is
+`transaction_liveness_stage_composition`. The epoch-tail case also remains open.
 
 Transaction payload retention is not required. A validator or user can submit a
 transaction again.
@@ -292,6 +295,12 @@ A <= P_r
 Current v3 selects the full schedule in each pending leader round, so `P_r = S`.
 The optional `P_r <= Q` limit controls work. Per-slot safety and quorum coverage
 do not require it. A larger selection can still affect the ordered anchor scan.
+
+`schedule_upper_bound_alone_is_not_sufficient` shows that `S <= N` alone does
+not give liveness. `schedule_bounds_do_not_force_round_leader_selection` shows
+that schedule viability does not give `A <= P_r`.
+`threshold_safety_is_independent_of_leader_selection` separates the per-slot
+safety inequalities from the leader selection.
 
 The leader-order model treats each round-seeded shuffle as an independent
 uniform pseudorandom permutation of the current allowed-leader list. All correct

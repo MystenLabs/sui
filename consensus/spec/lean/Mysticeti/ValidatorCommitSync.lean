@@ -150,6 +150,7 @@ namespace ValidatorCommitEvidenceDurable
 variable {BlockId CommitId : Type}
 variable {before after : ValidatorCommitEvidenceLocalState BlockId CommitId}
 
+/-- A durable transition cannot remove an exact recorded commit reference. -/
 theorem recorded_exact_persists
     (durable : ValidatorCommitEvidenceDurable before after)
     {reference : CommonCommitRef CommitId}

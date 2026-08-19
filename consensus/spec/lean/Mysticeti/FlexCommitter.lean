@@ -452,26 +452,8 @@ theorem run_flex_indirect_descending_append
               prefixCount state))
       rw [ih, Nat.sub_sub]
 
-@[simp]
-theorem flex_indirect_step_commit_index
-    (depth decisionRound : Nat)
-    (outcome : Nat → IndirectRoundOutcome)
-    (state : FlexCommitState) :
-    (flexIndirectStep depth outcome decisionRound state).commitIndex =
-      state.commitIndex := by
-  simp only [flexIndirectStep]
-  split <;> rfl
-
-@[simp]
-theorem flex_indirect_step_round_count
-    (depth decisionRound : Nat)
-    (outcome : Nat → IndirectRoundOutcome)
-    (state : FlexCommitState) :
-    (flexIndirectStep depth outcome decisionRound state).roundCount =
-      state.roundCount := by
-  simp only [flexIndirectStep]
-  split <;> rfl
-
+/-- The descending indirect scan changes round decisions only. Recording a found
+candidate is the separate operation that changes the commit index. -/
 @[simp]
 theorem run_flex_indirect_commit_index
     (depth highestRound stepCount : Nat)
@@ -481,7 +463,9 @@ theorem run_flex_indirect_commit_index
       state.commitIndex := by
   induction stepCount with
   | zero => rfl
-  | succ count ih => simp [runFlexIndirectDescending, ih]
+  | succ count ih =>
+      simp only [runFlexIndirectDescending, flexIndirectStep]
+      split <;> exact ih
 
 @[simp]
 theorem run_flex_indirect_round_count
@@ -492,7 +476,9 @@ theorem run_flex_indirect_round_count
       state.roundCount := by
   induction stepCount with
   | zero => rfl
-  | succ count ih => simp [runFlexIndirectDescending, ih]
+  | succ count ih =>
+      simp only [runFlexIndirectDescending, flexIndirectStep]
+      split <;> exact ih
 
 /-- `count` adjacent rounds have usable anchors, starting at `base`. -/
 def FlexAnchorWindow
@@ -680,6 +666,7 @@ theorem run_flex_indirect_preserves_anchor
   | succ count ih =>
       exact flex_indirect_step_preserves_anchor ih
 
+/-- A complete descending scan does not reopen a final round. -/
 theorem run_flex_indirect_preserves_final
     {depth highestRound stepCount protectedRound : Nat}
     {outcome : Nat → IndirectRoundOutcome}
@@ -692,6 +679,7 @@ theorem run_flex_indirect_preserves_final
   | succ count ih =>
       exact flex_indirect_step_preserves_final ih
 
+/-- A complete descending scan cannot replace an existing final commit. -/
 theorem run_flex_indirect_preserves_final_commit
     {depth highestRound stepCount protectedRound : Nat}
     {outcome : Nat → IndirectRoundOutcome}

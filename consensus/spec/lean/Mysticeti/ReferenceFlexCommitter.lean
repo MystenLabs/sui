@@ -401,15 +401,6 @@ def toCommitRecord {BlockId CommitId : Type}
     ExactCommitRecord CommitId (LeaderBlockRef BlockId) :=
   (candidate.toBuilderInput prior material).toCommitRecord
 
-@[simp]
-theorem to_builder_input_uses_next_index
-    {BlockId CommitId : Type}
-    (prior : ExactCommitReference CommitId)
-    (material : ExactCommitBuildMaterial (LeaderBlockRef BlockId))
-    (candidate : ReferenceFlexCandidate BlockId) :
-    (candidate.toBuilderInput prior material).UsesNextIndex := by
-  rfl
-
 end ReferenceFlexCandidate
 
 /-- A one-validator source map for the Rust data that is not in selected-slot

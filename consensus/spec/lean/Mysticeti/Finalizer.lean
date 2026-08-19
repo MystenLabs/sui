@@ -39,6 +39,8 @@ def accepts (vote : TransactionVote) : Bool :=
 /-- Every next-round block that does not accept is a reject vote. -/
 def rejects (vote : TransactionVote) : Bool := !vote.accepts
 
+/-- Each modeled transaction vote selects exactly one result. An accept vote and
+a reject vote cannot occur together. -/
 theorem exactly_one (vote : TransactionVote) :
     (vote.accepts = true ∧ vote.rejects = false) ∨
       (vote.accepts = false ∧ vote.rejects = true) := by
@@ -58,6 +60,7 @@ theorem cutoff_rejects (vote : TransactionVote)
     vote.rejects = true := by
   simp [rejects, accepts, targetAboveCutoff, Nat.not_lt.mpr collected]
 
+/-- A valid next-round vote cannot carry a cleanup cutoff after its target. -/
 theorem valid_cutoff_is_before_or_at_target (vote : TransactionVote)
     (valid : vote.Valid) :
     vote.transactionVoteCutoffRound < vote.targetRound ∨
@@ -65,10 +68,12 @@ theorem valid_cutoff_is_before_or_at_target (vote : TransactionVote)
   unfold Valid at valid
   omega
 
+/-- A present next-round block rejects a target that it does not reference. -/
 theorem missing_reference_rejects (vote : TransactionVote)
     (missing : vote.targetReferenced = false) : vote.rejects = true := by
   simp [rejects, accepts, missing]
 
+/-- An explicit rejection makes the modeled next-round vote reject. -/
 theorem explicit_reject_rejects (vote : TransactionVote)
     (explicit : vote.explicitlyRejects = true) : vote.rejects = true := by
   simp [rejects, accepts, explicit]
@@ -366,12 +371,16 @@ def indirectDecision (thresholds : Thresholds authorityCount stake)
     (acceptStake : Nat) : Outcome :=
   if thresholds.certificate ≤ acceptStake then .accept else .reject
 
+/-- The indirect rule accepts exactly when accept stake reaches the certificate
+threshold. -/
 theorem indirectDecision_accept_iff
     (thresholds : Thresholds authorityCount stake) (acceptStake : Nat) :
     indirectDecision thresholds acceptStake = .accept ↔
       thresholds.certificate ≤ acceptStake := by
   simp [indirectDecision]
 
+/-- The indirect rule rejects exactly when accept stake is below the certificate
+threshold. -/
 theorem indirectDecision_reject_iff
     (thresholds : Thresholds authorityCount stake) (acceptStake : Nat) :
     indirectDecision thresholds acceptStake = .reject ↔

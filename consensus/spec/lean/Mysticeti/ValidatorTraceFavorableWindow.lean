@@ -25,18 +25,21 @@ def toLeaderBlockRef {BlockId : Type}
     author := reference.author
     digest := reference.id }
 
+/-- Converting a validator reference preserves its round. -/
 @[simp]
 theorem to_leader_block_ref_round
     {BlockId : Type} (reference : ValidatorBlockRef BlockId) :
     reference.toLeaderBlockRef.round = reference.round := by
   rfl
 
+/-- Converting a validator reference preserves its author. -/
 @[simp]
 theorem to_leader_block_ref_author
     {BlockId : Type} (reference : ValidatorBlockRef BlockId) :
     reference.toLeaderBlockRef.author = reference.author := by
   rfl
 
+/-- Converting a validator reference keeps its exact block ID as the digest. -/
 @[simp]
 theorem to_leader_block_ref_digest
     {BlockId : Type} (reference : ValidatorBlockRef BlockId) :

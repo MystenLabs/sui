@@ -325,7 +325,8 @@ ancestor selection can still omit one after another parent quorum is ready.
 Prevent this exclusion for the exact accepted and retained allowed leader. The
 generic `force = true` path bypasses the waiter and does not satisfy this rule.
 Commit-progress recovery can instead use its stronger retained-representative
-parent rule.
+parent rule. `exclusion_cap_does_not_protect_a_fixed_first_slot` shows why an
+exclusion stake cap does not protect this exact slot.
 
 Compare proposal and Flex schedules through an effective schedule key. After a
 commit install, read the refreshed key. If `allowed_leaders` is unchanged, keep

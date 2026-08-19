@@ -57,6 +57,7 @@ def refreshValidatorFlexPendingCache
       scheduleKey := scheduleKeyForHead head
       rounds := [] }
 
+/-- An unchanged commit index keeps the complete pending-round cache. -/
 @[simp]
 theorem refresh_validator_flex_pending_cache_same_index
     {BlockId CommitId ScheduleKey : Type} [DecidableEq ScheduleKey]
@@ -69,6 +70,7 @@ theorem refresh_validator_flex_pending_cache_same_index
       scheduleKeyForHead head cache = cache := by
   simp [refreshValidatorFlexPendingCache, sameIndex]
 
+/-- A changed commit index and a changed schedule key clear all cached rounds. -/
 @[simp]
 theorem refresh_validator_flex_pending_cache_schedule_change
     {BlockId CommitId ScheduleKey : Type} [DecidableEq ScheduleKey]
@@ -86,6 +88,8 @@ theorem refresh_validator_flex_pending_cache_schedule_change
           rounds := [] } := by
   simp [refreshValidatorFlexPendingCache, indexChanged, scheduleChanged]
 
+/-- A changed commit index with the same schedule key keeps only rounds at or
+after the new minimum leader round. -/
 @[simp]
 theorem refresh_validator_flex_pending_cache_same_schedule
     {BlockId CommitId ScheduleKey : Type} [DecidableEq ScheduleKey]
@@ -193,6 +197,7 @@ theorem execute_reference_flex_commit_output
   | none => rfl
   | some candidate => rfl
 
+/-- The execution record keeps the exact prepared input that the scan used. -/
 @[simp]
 theorem execute_reference_flex_commit_prepared
     {BlockId CommitId History Encoding : Type}
@@ -582,23 +587,6 @@ def ValidatorFlexRunActionPrefix
     ValidatorWorldStep config faults protocolPacket program observation.time
       actionAfter afterEvents (timed.execution.trace (observation.time + 1)) ∧
     observation.input = actionBefore.validatorState observation.validator
-
-theorem validator_flex_run_has_action_prefix
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {faults : FixedFaultInterval config}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
-    {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
-      protocolPacket network program}
-    {observation : LocalFlexCommitterRunObservation BlockId CommitId}
-    (occurs : observation.OccursIn timed) :
-    ∃ beforeEvents afterEvents actionBefore actionAfter,
-      ValidatorFlexRunActionPrefix timed observation beforeEvents afterEvents
-        actionBefore actionAfter := by
-  exact occurs
 
 /-- One local action precedes an actual run, including earlier events in the
 same logical-time batch. -/

@@ -225,6 +225,7 @@ def deadline
     (schedule : CommonRoundWaitSchedule CommitPrefix) : Time :=
   timer.startedAt + schedule.wait commitHead targetRound
 
+/-- A later round observation does not change the timer start. -/
 @[simp]
 theorem observe_round_keeps_timer_start
     {CommitPrefix : Type} {commitHead : CommitPrefix} {targetRound : Nat}
@@ -232,6 +233,7 @@ theorem observe_round_keeps_timer_start
     (timer.observeRound observedRound).startedAt = timer.startedAt := by
   rfl
 
+/-- A later round observation does not change the recorded parent-ready time. -/
 @[simp]
 theorem observe_round_keeps_parent_ready_time
     {CommitPrefix : Type} {commitHead : CommitPrefix} {targetRound : Nat}
@@ -240,6 +242,7 @@ theorem observe_round_keeps_parent_ready_time
       timer.parentQuorumReadyAt := by
   rfl
 
+/-- A later round observation cannot reset or extend the recovery deadline. -/
 @[simp]
 theorem observe_round_does_not_reset_deadline
     {CommitPrefix : Type} {commitHead : CommitPrefix} {targetRound : Nat}

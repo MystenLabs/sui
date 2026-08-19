@@ -17,7 +17,7 @@ that remain.
 ## Safety properties
 
 The following safety results are proved in Lean, subject to the conditions in
-the assumption ledger.
+the assumption ledger. The aggregate result is `mysticeti_v3_safety`.
 
 ### Leader decisions do not conflict
 
@@ -48,7 +48,8 @@ hold.
 If a correct validator installs a later exact reference, its durable installed
 prefix contains every earlier exact reference in that chain. A later local
 FlexCommitter run cannot silently replace an earlier exact successor with a
-different successor.
+different successor. The local successor result is
+`later_correct_local_flex_run_cannot_skip_exact_successor`.
 
 ### GC does not change old decisions
 
@@ -70,12 +71,18 @@ Quorum availability and the two weighted safety inequalities require:
 N >= 5f + 3c + 1
 ```
 
+`Thresholds.hybrid_total_lower_bound` proves this lower bound from a checked
+threshold structure and an unavailable-stake budget.
+
 At equality, those three guarantees force the nominal values:
 
 ```text
 Q = 4f + 2c + 1
 A = 2f + c + 1
 ```
+
+`Thresholds.tight_hybrid_total_has_nominal_thresholds` proves these two values
+at equality.
 
 This is tightness of the weighted intersection and availability guarantees. It
 does not state that every unsafe parameter choice occurs in one executable
@@ -87,7 +94,8 @@ Each valid Mysticeti block has immediate parents from distinct authors with
 quorum stake. After the Byzantine stake bound is removed, the remaining
 non-Byzantine parent-author stake is at least `Q - f`. For every block above
 round one in a causal recovery capsule, the capsule contains the exact parent
-bodies that realize this bound.
+bodies that realize this bound. The stake result is
+`ValidatorBlock.non_byzantine_parent_stake_at_least_quorum_minus_fault`.
 
 This is a weighted, per-layer quality result. It is not Narwhal's raw block-count
 result for a complete causal read. Mysticeti accepts uncertified blocks and its
@@ -100,6 +108,8 @@ The same bound holds for the block set that the product actually commits. With
 `enable_v3`, one committed flush is one `FlexCommitter::build_commit` result. The
 sorted vector of that flush goes into the `CommittedSubDag` and into the
 serialized `CommitV1` body, and the bound holds for every block of it.
+`CommitMaterializerView.sorted_commit_block_has_non_byzantine_parent_layer`
+states this result for the sorted vector.
 
 For each block in a flush and each distinct non-Byzantine parent author counted
 by the bound, the exact parent reference stands in one of three places: the same
@@ -109,7 +119,8 @@ boundary result. A reference below the boundary can have been pruned without
 entering any commit body. The counted parents are the
 one-round-below layer that carries quorum stake, so the third place is reachable
 only one round above the boundary. Above that round the complete honest layer is
-inside the installed committed prefix.
+inside the installed committed prefix. The stronger boundary result is
+`CommitMaterializerView.committed_flush_block_covers_non_byzantine_parent_layer`.
 
 A local commit sets its earlier marks through this same walk. A synchronized
 certified commit sets them through `FlexCommitter::handle_certified_commit`
@@ -141,13 +152,16 @@ If two correct validators cover one absolute commit index, their durable exact
 commit entries agree at every index through that point. Their block-GC rounds
 do not need to be equal or ordered. This result concerns installed commits. It
 does not compare pending Flex decisions that two validators recompute from
-different pruned DAG views.
+different pruned DAG views. The theorem is
+`ExactCommitInstallProvenance.exactInstalledPrefixesAgreeAcrossGcHorizons`.
 
 ### Exact commit prefixes fix adaptive schedule replay
 
 For deterministic v3 scoring rules, two correct installed heads at the same
 index replay to the same schedule state. They therefore have the same ordered
-allowed-leader vector and the same selected order for each round.
+allowed-leader vector and the same selected order for each round. The model-level
+result is
+`ExactCommitInstallProvenance.exactInstalledHeadsAtSameIndexShareV3Schedule`.
 
 The Lean model now contains that replay in the shape `LeaderScheduleV3` runs. It
 keeps the three-deep pending window, scores `C-3` against `[C-2, C-1, C]`, reads
@@ -328,11 +342,17 @@ specified leader-order rule. The accepted probability model treats each
 round-seeded shuffle as an independent uniform pseudorandom permutation of the
 current allowed-leader list. It proves that favorable future windows occur with
 probability one after the deterministic composition is complete.
+`independent_uniform_finite_failure_bound` gives the exact finite bound.
+`every_fixed_start_has_favorable_window_probability_one` gives the operational
+probability-one result for each fixed start.
+`favorable_window_transfers_to_liveness_probability_one` transfers that result
+through a deterministic liveness implication.
 
 Lean uses only the first selected slot from each permutation. Current Rust uses
 one deterministic round seed so all validators get the same result and can
 reproduce it after a crash. A deterministic repeated-first order is a separate
-proved option, but current Rust does not use it.
+proved option, but current Rust does not use it. The separate theorem is
+`deterministic_repeated_first_depth_instance`.
 
 ## Required commit-install and GC order
 

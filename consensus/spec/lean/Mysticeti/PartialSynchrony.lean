@@ -29,20 +29,6 @@ structure PartialSynchrony (protocolPacket : Packet → Prop) where
     packet.sentAt ≤ packet.deliveredAt ∧
       packet.deliveredAt ≤ packet.sentAt + delta
 
-namespace PartialSynchrony
-
-theorem protocol_packet_is_delivered
-    {protocolPacket : Packet → Prop}
-    (network : PartialSynchrony protocolPacket)
-    (packet : Packet) (valid : protocolPacket packet)
-    (afterGst : network.gst ≤ packet.sentAt) :
-    ∃ deliveryTime,
-      packet.sentAt ≤ deliveryTime ∧
-      deliveryTime ≤ packet.sentAt + network.delta := by
-  exact ⟨packet.deliveredAt, network.postGstDelivery packet valid afterGst⟩
-
-end PartialSynchrony
-
 /-- One local consensus action at a correct validator. The action becomes enabled
 when its required input is available. A covered action stays enabled until it
 completes. Its result then becomes visible to later local consensus actions. -/
@@ -68,18 +54,6 @@ structure BoundedLocalProcessing
       action.completedAt ≤ action.enabledAt + epsilon
 
 namespace BoundedLocalProcessing
-
-theorem protocol_action_completes
-    {protocolPacket : Packet → Prop}
-    {network : PartialSynchrony protocolPacket}
-    {protocolAction : LocalConsensusAction → Prop}
-    (processing : BoundedLocalProcessing network protocolAction)
-    (action : LocalConsensusAction) (valid : protocolAction action)
-    (afterGst : network.gst ≤ action.enabledAt) :
-    ∃ completionTime,
-      action.enabledAt ≤ completionTime ∧
-      completionTime ≤ action.enabledAt + processing.epsilon := by
-  exact ⟨action.completedAt, processing.postGstCompletion action valid afterGst⟩
 
 /-- A post-GST message becomes visible to later local consensus actions within the
 combined delivery and processing bound. -/

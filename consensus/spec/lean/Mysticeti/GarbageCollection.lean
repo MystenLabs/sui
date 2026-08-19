@@ -39,6 +39,7 @@ def collectDag {Evidence : Type} (store : BlockEvidenceStore Evidence)
   { dag := remainingDag
     committedPrefix := store.committedPrefix }
 
+/-- Collecting the live DAG leaves the pending committed evidence unchanged. -/
 @[simp]
 theorem committed_prefix_unchanged {Evidence : Type}
     (store : BlockEvidenceStore Evidence) (remainingDag : Evidence) :
@@ -82,6 +83,7 @@ theorem round_from_decision_is_retained (state : CoreGcState) {round : Nat}
     Nat.lt_of_lt_of_le state.nextLeaderRound notEarlier
   exact Nat.lt_of_le_of_lt (Nat.sub_le _ _) lastBeforeRound
 
+/-- The GC boundary keeps both the direct decision round and its voting round. -/
 theorem direct_evidence_retained (state : CoreGcState) :
     Retained state.boundary state.decisionRound ∧
       Retained state.boundary state.votingRound := by
@@ -122,9 +124,6 @@ namespace TransactionGcWindow
 
 def votingRound (window : TransactionGcWindow) : Nat :=
   window.targetRound + 1
-
-def firstCommitIsDeep (window : TransactionGcWindow) : Prop :=
-  window.targetRound + indirectCommitDepth <= window.firstCommitLeaderRound
 
 /-- This is the GC boundary used to preserve the anchor voting blocks.
 

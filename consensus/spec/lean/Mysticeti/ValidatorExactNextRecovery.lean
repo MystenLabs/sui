@@ -1640,6 +1640,8 @@ def ValidatorRequestedRecoveryRound
     (correctValidatorRecoveryBaseMaximumUpTo faults world
       config.authorityCount)
 
+/-- The requested recovery round meets the requested minimum. It is also above
+the signer floor and the GC round of each correct available validator. -/
 theorem requested_recovery_round_bounds_correct_validator
     {BlockId CommitId PacketId : Type}
     {config : ValidatorEpochConfig CommitId}

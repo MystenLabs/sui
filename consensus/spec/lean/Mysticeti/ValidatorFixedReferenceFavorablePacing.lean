@@ -70,16 +70,6 @@ private def ValidatorQuadraticGapWaitParameters.referenceHead
     (witness : ValidatorCommitHead CommitId) : ValidatorCommitHead CommitId :=
   { witness with round := parameters.referenceRound }
 
-@[simp]
-private theorem ValidatorQuadraticGapWaitParameters.reference_head_wait_eq
-    {CommitId : Type}
-    (parameters : ValidatorQuadraticGapWaitParameters)
-    (witness : ValidatorCommitHead CommitId)
-    (round : Nat) :
-    parameters.asHeadRelative.wait (parameters.referenceHead witness) round =
-      parameters.wait round := by
-  rfl
-
 /-- One fixed-reference quadratic wait eventually covers a quadratic timer
 spread, a linear causal backlog above round zero, and fixed pipeline work. -/
 theorem fixed_reference_quadratic_value_eventually_covers_visibility
