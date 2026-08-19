@@ -1,0 +1,21 @@
+---
+source: crates/sui/tests/shell_tests.rs
+assertion_line: 114
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# The configured environment serves the right chain, but its endpoint can't be reached, so the
+# framework version for `custom_env` is unknown. We must not guess one: pinning the newest
+# framework we ship would compile locally and then fail at publish.
+sui move --client.config configs/serves_chain.yaml build -p example
+
+----- results -----
+success: false
+exit_code: 1
+----- stdout -----
+Error while loading dependency .: Could not determine the system dependencies for environment `1234`: could not reach an RPC endpoint serving the chain `1234`. Tried:
+  - `custom_env` (bogus): Failed to query chain identifier: code: 'Unknown error', message: "transport error", source: tonic::transport::Error(Transport, tonic::transport::Error(InvalidUri)): transport error: invalid URI
+
+----- stderr -----

@@ -5,13 +5,13 @@
 //! Defines the [Vanilla] implementation of the [MoveFlavor] trait. This implementation supports no
 //! flavor-specific resolvers and stores no additional metadata in the lockfile.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
 use crate::schema::{
     Environment, EnvironmentID, EnvironmentName, LockfileDependencyInfo, OriginalID, PackageName,
-    ParsedManifest, ReplacementDependency,
+    ParsedManifest, ReplacementDependency, SystemDepName,
 };
 
 use async_trait::async_trait;
@@ -57,11 +57,15 @@ impl MoveFlavor for Vanilla {
         envs
     }
 
+    fn system_dep_names(&self) -> BTreeSet<SystemDepName> {
+        BTreeSet::new()
+    }
+
     async fn system_deps(
         &self,
         _environment: &EnvironmentID,
-    ) -> BTreeMap<String, LockfileDependencyInfo> {
-        BTreeMap::new()
+    ) -> Result<BTreeMap<String, LockfileDependencyInfo>, String> {
+        Ok(BTreeMap::new())
     }
 
     async fn implicit_dependencies(
