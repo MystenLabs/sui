@@ -371,6 +371,26 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         Ok(Box::new(mapped))
     }
 
+    fn get_package_version_storage_id(
+        &self,
+        original_id: ObjectID,
+        version: u64,
+    ) -> StorageResult<Option<ObjectID>> {
+        self.schema()
+            .get_package_storage_id(original_id, version)
+            .map_err(sui_types::storage::error::Error::custom)
+    }
+
+    fn get_package_at_checkpoint(
+        &self,
+        original_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> StorageResult<Option<(u64, ObjectID)>> {
+        self.schema()
+            .get_package_at_checkpoint(original_id, checkpoint)
+            .map_err(sui_types::storage::error::Error::custom)
+    }
+
     fn get_highest_indexed_checkpoint_seq_number(
         &self,
     ) -> StorageResult<Option<CheckpointSequenceNumber>> {
@@ -1149,5 +1169,64 @@ mod tests {
         unique.sort();
         unique.dedup();
         assert_eq!(unique, versions, "every version, no gaps or duplicates");
+    }
+
+    #[test]
+    fn package_lookups_resolve_exact_version_and_checkpoint_bound() {
+        let (_dir, db, reader) = setup();
+        let original = ObjectID::from_single_byte(0xCC);
+        let s1 = ObjectID::from_single_byte(0x01);
+        let s2 = ObjectID::from_single_byte(0x02);
+
+        let mut batch = db.batch();
+        let (k, v) = crate::schema::package_versions::store(original, 1, s1, 1);
+        batch
+            .put(&reader.schema().package_versions, &k, &v)
+            .unwrap();
+        let (k, v) = crate::schema::package_versions::store(original, 2, s2, 10);
+        batch
+            .put(&reader.schema().package_versions, &k, &v)
+            .unwrap();
+        batch.commit().unwrap();
+
+        assert_eq!(
+            reader.get_package_version_storage_id(original, 1).unwrap(),
+            Some(s1),
+        );
+        assert_eq!(
+            reader.get_package_version_storage_id(original, 2).unwrap(),
+            Some(s2),
+        );
+        assert_eq!(
+            reader.get_package_version_storage_id(original, 3).unwrap(),
+            None,
+        );
+
+        assert_eq!(reader.get_package_at_checkpoint(original, 0).unwrap(), None);
+        assert_eq!(
+            reader.get_package_at_checkpoint(original, 1).unwrap(),
+            Some((1, s1)),
+        );
+        assert_eq!(
+            reader.get_package_at_checkpoint(original, 9).unwrap(),
+            Some((1, s1)),
+        );
+        assert_eq!(
+            reader.get_package_at_checkpoint(original, 10).unwrap(),
+            Some((2, s2)),
+        );
+        assert_eq!(
+            reader
+                .get_package_at_checkpoint(original, u64::MAX)
+                .unwrap(),
+            Some((2, s2)),
+        );
+
+        let unknown = ObjectID::from_single_byte(0xDD);
+        assert_eq!(
+            reader.get_package_version_storage_id(unknown, 1).unwrap(),
+            None,
+        );
+        assert_eq!(reader.get_package_at_checkpoint(unknown, 5).unwrap(), None);
     }
 }
