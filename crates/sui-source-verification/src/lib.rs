@@ -37,6 +37,11 @@ pub struct VerifiedMetadata {
     pub toolchain_version: Option<String>,
     /// The path to the `sui` binary used for the rebuild.
     pub binary_path: PathBuf,
+    /// Dependencies pinned to a moving revision — a branch or tag rather than a commit hash. Empty
+    /// when every dependency is commit-pinned. A non-empty list means the source is not
+    /// *reproducibly* verified: it matched the on-chain package now, but the same source could
+    /// resolve to different dependency versions later.
+    pub moving_dependencies: Vec<pinning::MovingRevision>,
 }
 
 /// How to obtain the `sui` toolchain that rebuilds a package.
@@ -111,6 +116,7 @@ pub async fn verify_source(
         published_at,
         toolchain_version,
         binary_path: binary,
+        moving_dependencies: pinning::moving_revisions(source_path),
     })
 }
 
