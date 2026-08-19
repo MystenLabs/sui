@@ -10,3 +10,6 @@ rev = "v4.33.0"
 [[lean_lib]]
 name = "Mysticeti"
 srcDir = "."
+# Build every module in the directory, not only the import closure of the root.
+# Without this, a module that nothing imports is never compiled.
+globs = ["Mysticeti", "Mysticeti.+"]
