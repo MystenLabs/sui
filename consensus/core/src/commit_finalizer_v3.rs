@@ -163,7 +163,7 @@ impl CommitFinalizerV3 {
         finalized_commits
     }
 
-    fn prepare_direct_voting_blocks(&self) -> BTreeMap<Round, Vec<PreparedVotingBlock>> {
+    fn prepare_direct_voting_blocks(&self) -> BTreeMap<Round, Vec<VotingBlock>> {
         let voting_rounds: BTreeSet<_> = self
             .pending_commits
             .iter()
@@ -177,7 +177,7 @@ impl CommitFinalizerV3 {
                 let voting_blocks = dag_state
                     .get_cached_blocks_at_round(round)
                     .into_iter()
-                    .map(PreparedVotingBlock::new)
+                    .map(VotingBlock::new)
                     .collect();
                 (round, voting_blocks)
             })
@@ -187,7 +187,7 @@ impl CommitFinalizerV3 {
     fn try_direct_finalize_commit(
         &mut self,
         commit_index: usize,
-        voting_blocks_by_round: &BTreeMap<Round, Vec<PreparedVotingBlock>>,
+        voting_blocks_by_round: &BTreeMap<Round, Vec<VotingBlock>>,
     ) {
         let pending_transactions = self.pending_commits[commit_index]
             .pending_transactions
@@ -212,7 +212,7 @@ impl CommitFinalizerV3 {
         &self,
         block_ref: BlockRef,
         transaction_indices: &BTreeSet<TransactionIndex>,
-        voting_blocks: &[PreparedVotingBlock],
+        voting_blocks: &[VotingBlock],
     ) -> TransactionDecisions {
         let reject_stake_by_transaction: BTreeMap<_, _> = self
             .transaction_vote_tracker
@@ -224,19 +224,23 @@ impl CommitFinalizerV3 {
             })
             .into_iter()
             .collect();
+
+        // Most transactions have no reject votes. The first pass builds one shared accept
+        // aggregator for them and finds transactions with explicit rejects. The second pass
+        // builds transaction-specific accept aggregators for only those transactions.
         let mut base_accept_votes = StakeAggregator::<QuorumThreshold>::new();
         let mut transactions_with_explicit_rejects = BTreeSet::new();
         for voting_block in voting_blocks {
             assert_eq!(
-                voting_block.reference.round,
+                voting_block.block_ref.round,
                 block_ref.round.saturating_add(1),
                 "Voting block {} is not in the next round of {}",
-                voting_block.reference,
+                voting_block.block_ref,
                 block_ref,
             );
-            if voting_block.can_accept(block_ref) {
+            if voting_block.votes(block_ref) {
                 base_accept_votes
-                    .add_unique(voting_block.reference.author, &self.context.committee);
+                    .add_unique(voting_block.block_ref.author, &self.context.committee);
                 if let Some(explicit_rejects) = voting_block.explicit_rejects.get(&block_ref) {
                     transactions_with_explicit_rejects
                         .extend(explicit_rejects.intersection(transaction_indices).copied());
@@ -244,24 +248,32 @@ impl CommitFinalizerV3 {
             }
         }
 
+        // Count transaction-specific accept votes instead of subtracting reject voters from the
+        // base. An equivocating authority can reject in one block and accept in another.
+        let mut accept_votes_by_transaction: BTreeMap<_, _> = transactions_with_explicit_rejects
+            .iter()
+            .map(|transaction_index| {
+                (
+                    *transaction_index,
+                    StakeAggregator::<QuorumThreshold>::new(),
+                )
+            })
+            .collect();
+        for voting_block in voting_blocks {
+            for transaction_index in voting_block
+                .select_accepted_transactions(block_ref, &transactions_with_explicit_rejects)
+            {
+                accept_votes_by_transaction
+                    .get_mut(&transaction_index)
+                    .expect("Accept votes are collected only for explicitly rejected transactions")
+                    .add_unique(voting_block.block_ref.author, &self.context.committee);
+            }
+        }
+
         let mut decisions = TransactionDecisions::default();
         for transaction_index in transaction_indices {
-            let transaction_accept_votes = transactions_with_explicit_rejects
-                .contains(transaction_index)
-                .then(|| {
-                    // Rescan the blocks instead of subtracting reject voters from the base.
-                    // An equivocating authority can reject in one block and accept in another.
-                    let mut accept_votes = StakeAggregator::<QuorumThreshold>::new();
-                    for voting_block in voting_blocks {
-                        if voting_block.accepts_transaction(block_ref, *transaction_index) {
-                            accept_votes
-                                .add_unique(voting_block.reference.author, &self.context.committee);
-                        }
-                    }
-                    accept_votes
-                });
-            let accept_votes = transaction_accept_votes
-                .as_ref()
+            let accept_votes = accept_votes_by_transaction
+                .get(transaction_index)
                 .unwrap_or(&base_accept_votes);
             let accepted = accept_votes.reached_threshold(&self.context.committee);
             let reject_stake = reject_stake_by_transaction
@@ -292,18 +304,17 @@ impl CommitFinalizerV3 {
             .keys()
             .map(|block_ref| block_ref.round.saturating_add(1))
             .collect();
-        let mut committed_voting_blocks_by_round: BTreeMap<Round, Vec<PreparedVotingBlock>> =
-            voting_rounds
-                .into_iter()
-                .map(|round| (round, vec![]))
-                .collect();
+        let mut committed_voting_blocks_by_round: BTreeMap<Round, Vec<VotingBlock>> = voting_rounds
+            .into_iter()
+            .map(|round| (round, vec![]))
+            .collect();
         for block in self
             .pending_commits
             .iter()
             .flat_map(|state| &state.commit.blocks)
         {
             if let Some(voting_blocks) = committed_voting_blocks_by_round.get_mut(&block.round()) {
-                voting_blocks.push(PreparedVotingBlock::new(block.clone()));
+                voting_blocks.push(VotingBlock::new(block.clone()));
             }
         }
 
@@ -333,42 +344,37 @@ impl CommitFinalizerV3 {
         &self,
         block_ref: BlockRef,
         transaction_indices: &BTreeSet<TransactionIndex>,
-        committed_voting_blocks: &[PreparedVotingBlock],
+        committed_voting_blocks: &[VotingBlock],
     ) -> TransactionDecisions {
-        let mut base_accept_votes = StakeAggregator::<CertificationThreshold>::new();
-        let mut explicitly_rejected_transactions = BTreeSet::new();
+        let mut accept_votes_by_transaction: BTreeMap<_, _> = transaction_indices
+            .iter()
+            .map(|transaction_index| {
+                (
+                    *transaction_index,
+                    StakeAggregator::<CertificationThreshold>::new(),
+                )
+            })
+            .collect();
         for voting_block in committed_voting_blocks {
-            if voting_block.can_accept(block_ref) {
-                base_accept_votes
-                    .add_unique(voting_block.reference.author, &self.context.committee);
-                if let Some(explicit_rejects) = voting_block.explicit_rejects.get(&block_ref) {
-                    explicitly_rejected_transactions
-                        .extend(explicit_rejects.intersection(transaction_indices).copied());
-                }
+            for transaction_index in
+                voting_block.select_accepted_transactions(block_ref, transaction_indices)
+            {
+                accept_votes_by_transaction
+                    .get_mut(&transaction_index)
+                    .expect("The selected transaction is pending")
+                    .add_unique(voting_block.block_ref.author, &self.context.committee);
             }
         }
 
         let mut decisions = TransactionDecisions::default();
         for transaction_index in transaction_indices {
-            let transaction_accept_votes = explicitly_rejected_transactions
-                .contains(transaction_index)
-                .then(|| {
-                    let mut accept_votes = StakeAggregator::<CertificationThreshold>::new();
-                    for voting_block in committed_voting_blocks {
-                        if voting_block.accepts_transaction(block_ref, *transaction_index) {
-                            accept_votes
-                                .add_unique(voting_block.reference.author, &self.context.committee);
-                        }
-                    }
-                    accept_votes
-                });
-            let accept_votes = transaction_accept_votes
-                .as_ref()
-                .unwrap_or(&base_accept_votes);
-            // A depth-two anchor has a voting-round quorum in its causal history. The v3
-            // quorum-intersection checks guarantee that a direct accept quorum leaves an accept
-            // certificate in that history after f equivocations. Accept voters cannot commit
-            // before the target, so this certificate must be in the buffered commit prefix.
+            let accept_votes = accept_votes_by_transaction
+                .get(transaction_index)
+                .expect("Accept votes are initialized for every pending transaction");
+            // Quorum intersection guarantees that a direct accept quorum leaves an accept
+            // certificate in the causal history of the anchor block, which is 2 or more rounds
+            // above. And if there is an accept certificate, the transaction cannot have been
+            // directly rejected with at most f faulty stake.
             if accept_votes.reached_threshold(&self.context.committee) {
                 decisions.accepted.push(*transaction_index);
             } else {
@@ -464,14 +470,14 @@ impl CommitFinalizerV3 {
     }
 }
 
-struct PreparedVotingBlock {
-    reference: BlockRef,
+struct VotingBlock {
+    block_ref: BlockRef,
     cutoff_round: Round,
     ancestors: BTreeSet<BlockRef>,
     explicit_rejects: BTreeMap<BlockRef, BTreeSet<TransactionIndex>>,
 }
 
-impl PreparedVotingBlock {
+impl VotingBlock {
     fn new(block: VerifiedBlock) -> Self {
         let mut explicit_rejects: BTreeMap<BlockRef, BTreeSet<TransactionIndex>> = BTreeMap::new();
         for votes in block.transaction_votes() {
@@ -481,27 +487,31 @@ impl PreparedVotingBlock {
                 .extend(votes.rejects.iter().copied());
         }
         Self {
-            reference: block.reference(),
+            block_ref: block.reference(),
             cutoff_round: block.transaction_votes_cutoff_round(),
             ancestors: block.ancestors().iter().copied().collect(),
             explicit_rejects,
         }
     }
 
-    fn can_accept(&self, block_ref: BlockRef) -> bool {
-        block_ref.round > self.cutoff_round && self.ancestors.contains(&block_ref)
+    fn votes(&self, block_ref: BlockRef) -> bool {
+        block_ref.round.checked_add(1) == Some(self.block_ref.round)
+            && block_ref.round > self.cutoff_round
+            && self.ancestors.contains(&block_ref)
     }
 
-    fn accepts_transaction(
+    fn select_accepted_transactions(
         &self,
         block_ref: BlockRef,
-        transaction_index: TransactionIndex,
-    ) -> bool {
-        self.can_accept(block_ref)
-            && !self
-                .explicit_rejects
-                .get(&block_ref)
-                .is_some_and(|rejects| rejects.contains(&transaction_index))
+        transaction_indices: &BTreeSet<TransactionIndex>,
+    ) -> Vec<TransactionIndex> {
+        if !self.votes(block_ref) {
+            return vec![];
+        }
+        let Some(rejects) = self.explicit_rejects.get(&block_ref) else {
+            return transaction_indices.iter().copied().collect();
+        };
+        transaction_indices.difference(rejects).copied().collect()
     }
 }
 
