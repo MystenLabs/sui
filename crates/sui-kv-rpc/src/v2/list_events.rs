@@ -31,10 +31,13 @@ use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
 use sui_rpc_api::ledger_history::query_options::IntraTxScanBounds;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
-use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
 use sui_rpc_api::ledger_history::query_options::ResolvedScan;
 use sui_rpc_api::ledger_history::query_options::validate_checkpoint_bounds;
+use sui_rpc_api::ledger_history::response::end_response;
+use sui_rpc_api::ledger_history::response::item_response;
+use sui_rpc_api::ledger_history::response::range_end_response;
+use sui_rpc_api::ledger_history::response::watermark_response;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
@@ -315,7 +318,8 @@ pub(crate) async fn list_events(
                     );
                     emitted += 1;
                     ctx.observe_response_render(resolution, render_elapsed);
-                    let mut response = event_item_response(rendered.event, watermark);
+                    let mut response =
+                        item_response::<ListEventsResponse>(rendered.event, watermark);
                     let item_limit = emitted == limit_items;
                     if item_limit {
                         let mut end = QueryEnd::default();
@@ -388,19 +392,6 @@ pub(crate) async fn list_events(
         );
     }
     .boxed())
-}
-
-fn watermark_response(watermark: Watermark) -> ListEventsResponse {
-    let mut response = ListEventsResponse::default();
-    response.watermark = Some(watermark);
-    response
-}
-
-fn event_item_response(event: ProtoEvent, watermark: Watermark) -> ListEventsResponse {
-    let mut response = ListEventsResponse::default();
-    response.event = Some(event);
-    response.watermark = Some(watermark);
-    response
 }
 
 /// Stage B: for filtered refs (no `tx_seq_digest`), dedupe tx_seqs in the
@@ -591,37 +582,6 @@ async fn render_event(
         checkpoint_number: tx.checkpoint_number,
         position: event_ref.position,
     })
-}
-
-fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListEventsResponse {
-    let mut end = QueryEnd::default();
-    end.reason = Some(reason as i32);
-
-    let mut response = ListEventsResponse::default();
-    response.watermark = Some(watermark);
-    response.end = Some(end);
-    response
-}
-
-/// Trailing terminal frame for range exhaustion. Reason and watermark derive
-/// from one `ScanTerminal`, so they cannot disagree. Natural completion of an
-/// empty interval retains its cursor but claims no checkpoint.
-fn range_end_response(
-    options: &QueryOptions,
-    exhaustion: RangeExhaustion,
-    position: Position,
-    covered_checkpoint_bound: Option<u64>,
-    interval_empty: bool,
-) -> (ListEventsResponse, QueryEndReason) {
-    let terminal = ScanTerminal::from_range_exhaustion(exhaustion, position, interval_empty);
-    let reason = terminal.reason();
-    (
-        end_response(
-            terminal.into_watermark(options, covered_checkpoint_bound),
-            reason,
-        ),
-        reason,
-    )
 }
 
 fn event_frontier_watermark(

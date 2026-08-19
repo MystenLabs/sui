@@ -36,11 +36,14 @@ use sui_rpc::proto::sui::rpc::v2::transaction_literal::Predicate;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
-use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
 use sui_rpc_api::ledger_history::query_options::ResolvedScan;
 use sui_rpc_api::ledger_history::query_options::ScanBounds;
 use sui_rpc_api::ledger_history::query_options::validate_checkpoint_bounds;
+use sui_rpc_api::ledger_history::response::end_response;
+use sui_rpc_api::ledger_history::response::item_response;
+use sui_rpc_api::ledger_history::response::range_end_response;
+use sui_rpc_api::ledger_history::response::watermark_response;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
@@ -282,7 +285,10 @@ pub(crate) async fn list_packages(
                     );
                     emitted += 1;
                     ctx.observe_response_render(RESOLUTION, render_elapsed);
-                    let mut response = package_item_response(&write.object_ref, watermark);
+                    let mut response = item_response::<ListPackagesResponse>(
+                        package_version_proto(&write.object_ref),
+                        watermark,
+                    );
                     let item_limit = emitted == limit_items;
                     if item_limit {
                         let mut end = QueryEnd::default();
@@ -432,50 +438,6 @@ fn package_version_proto((object_id, version, _): &ObjectRef) -> PackageVersion 
     package.package_id = Some(object_id.to_canonical_string(true));
     package.version = Some(version.value());
     package
-}
-
-fn watermark_response(watermark: Watermark) -> ListPackagesResponse {
-    let mut response = ListPackagesResponse::default();
-    response.watermark = Some(watermark);
-    response
-}
-
-fn package_item_response(object_ref: &ObjectRef, watermark: Watermark) -> ListPackagesResponse {
-    let mut response = ListPackagesResponse::default();
-    response.package = Some(package_version_proto(object_ref));
-    response.watermark = Some(watermark);
-    response
-}
-
-fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListPackagesResponse {
-    let mut end = QueryEnd::default();
-    end.reason = Some(reason as i32);
-
-    let mut response = ListPackagesResponse::default();
-    response.watermark = Some(watermark);
-    response.end = Some(end);
-    response
-}
-
-/// Trailing terminal frame for range exhaustion. Reason and watermark derive
-/// from one `ScanTerminal`, so they cannot disagree. Natural completion of an
-/// empty interval retains its cursor but claims no checkpoint.
-fn range_end_response(
-    options: &QueryOptions,
-    exhaustion: RangeExhaustion,
-    position: Position,
-    covered_checkpoint_bound: Option<u64>,
-    interval_empty: bool,
-) -> (ListPackagesResponse, QueryEndReason) {
-    let terminal = ScanTerminal::from_range_exhaustion(exhaustion, position, interval_empty);
-    let reason = terminal.reason();
-    (
-        end_response(
-            terminal.into_watermark(options, covered_checkpoint_bound),
-            reason,
-        ),
-        reason,
-    )
 }
 
 fn package_frontier_watermark(

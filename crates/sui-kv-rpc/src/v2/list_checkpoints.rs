@@ -32,6 +32,9 @@ use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
 use sui_rpc_api::ledger_history::query_options::ResolvedScan;
 use sui_rpc_api::ledger_history::query_options::validate_checkpoint_bounds;
+use sui_rpc_api::ledger_history::response::end_response;
+use sui_rpc_api::ledger_history::response::range_end_response;
+use sui_rpc_api::ledger_history::response::watermark_response;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
@@ -513,12 +516,6 @@ fn terminal_response_from_scan_stop(
     ))
 }
 
-fn watermark_response(watermark: Watermark) -> ListCheckpointsResponse {
-    let mut response = ListCheckpointsResponse::default();
-    response.watermark = Some(watermark);
-    response
-}
-
 async fn scan_checkpoint_data(
     client: BigTableClient,
     columns: Arc<[&'static str]>,
@@ -621,37 +618,6 @@ fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsRes
     response.checkpoint = Some(message);
     response.watermark = Some(watermark);
     response
-}
-
-fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListCheckpointsResponse {
-    let mut end = QueryEnd::default();
-    end.reason = Some(reason as i32);
-
-    let mut response = ListCheckpointsResponse::default();
-    response.watermark = Some(watermark);
-    response.end = Some(end);
-    response
-}
-
-/// Trailing terminal frame for range exhaustion. Reason and watermark derive
-/// from one `ScanTerminal`, so they cannot disagree; natural completion of an
-/// empty interval retains its cursor but claims no checkpoint coverage.
-fn range_end_response(
-    options: &QueryOptions,
-    exhaustion: RangeExhaustion,
-    position: Position,
-    covered_checkpoint_bound: Option<u64>,
-    interval_empty: bool,
-) -> (ListCheckpointsResponse, QueryEndReason) {
-    let terminal = ScanTerminal::from_range_exhaustion(exhaustion, position, interval_empty);
-    let reason = terminal.reason();
-    (
-        end_response(
-            terminal.into_watermark(options, covered_checkpoint_bound),
-            reason,
-        ),
-        reason,
-    )
 }
 
 /// Determine the checkpoint_sequence_number scan window from the logical

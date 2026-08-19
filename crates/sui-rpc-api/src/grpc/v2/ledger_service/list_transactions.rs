@@ -31,6 +31,9 @@ use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::query_options::ResolvedCheckpointRange;
 use crate::ledger_history::query_options::ResolvedScan;
 use crate::ledger_history::query_options::validate_checkpoint_bounds;
+use crate::ledger_history::response::end_response;
+use crate::ledger_history::response::item_response;
+use crate::ledger_history::response::watermark_response;
 use crate::ledger_history::watermark::ScanTerminal;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
@@ -184,7 +187,7 @@ pub(crate) async fn list_transactions(
         if terminal_reason != QueryEndReason::ItemLimit {
             let terminal_watermark =
                 chunk_terminal.into_watermark(&terminal_options, covered_checkpoint_bound);
-            let response = end_response(terminal_watermark, terminal_reason);
+            let response = end_response::<ListTransactionsResponse>(terminal_watermark, terminal_reason);
             request_metrics.observe_frame(&response, false);
             request_metrics.finish_success(terminal_reason, bitmap_buckets_evaluated);
             let yield_started = request_metrics.yield_clock();
@@ -654,26 +657,7 @@ fn transaction_item_response(
         transaction.transaction_index = Some(tx_offset as u64);
     }
 
-    let mut response = ListTransactionsResponse::default();
-    response.transaction = Some(transaction);
-    response.watermark = Some(watermark);
-    response
-}
-
-fn watermark_response(watermark: Watermark) -> ListTransactionsResponse {
-    let mut response = ListTransactionsResponse::default();
-    response.watermark = Some(watermark);
-    response
-}
-
-fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListTransactionsResponse {
-    let mut end = QueryEnd::default();
-    end.reason = Some(reason as i32);
-
-    let mut response = ListTransactionsResponse::default();
-    response.watermark = Some(watermark);
-    response.end = Some(end);
-    response
+    item_response(transaction, watermark)
 }
 
 #[cfg(test)]
@@ -796,7 +780,7 @@ mod tests {
             );
             assert_eq!(watermark.checkpoint, expected_proof);
             let terminal = ScanTerminal::ScanLimit { watermark };
-            let response = end_response(
+            let response = end_response::<ListTransactionsResponse>(
                 terminal.into_watermark(&options, Some(123)),
                 QueryEndReason::ScanLimit,
             );
