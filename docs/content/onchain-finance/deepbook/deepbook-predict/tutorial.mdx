@@ -158,7 +158,7 @@ The protocol pays the caller no fee, rebate, or share of the payout for a permis
 
 Positions are rows in the manager's `positions` table keyed by `MarketKey`, not standalone objects, so you cannot discover them by scanning owned objects ([Binary position quantities](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager#binary-position-quantities)). An automated redeemer needs its own index, built from events:
 
-1. **Track positions as users open them.** Record the manager ID and `MarketKey` fields from each `PositionMinted` event, and clear the entry on the matching `PositionRedeemed`. This index is what makes step 3 possible, because nothing on chain enumerates a manager's positions for you.
+1. **Track positions as users open them.** Record the manager ID and `MarketKey` fields from each `PositionMinted` event, and clear the entry on the matching `PositionRedeemed`. This index is what makes step 3 possible, because nothing onchain enumerates a manager's positions for you.
 1. **Watch for settlement.** Subscribe to `OracleSettled` as [Stream events over gRPC](/onchain-finance/deepbook/deepbook-predict/contract-information#stream-events-over-grpc) shows. Trigger on the event rather than on the expiry timestamp, because the pending settlement gap has no fixed duration.
 1. **Select the affected positions.** On settlement of an oracle, take the tracked entries whose `MarketKey` names that oracle ID.
 1. **Confirm each is still open, then redeem.** Read the current quantity before submitting, so a position the owner already redeemed does not cost you a failed transaction. Build the `MarketKey` with `market_key::up`, `market_key::down`, or `market_key::new`, pass it to `predict_manager::position` in the same transaction, and simulate the pair. The key is command 0 and the quantity is command 1, so decode `returnValues[0]` of the second command with `bcs.U64`.
@@ -204,7 +204,7 @@ Three derived quantities matter to a liquidity provider, and the chain stores no
 
 - **Vault value:** `balance - total_mtm`. This is the net asset value your shares claim against.
 - **Share price:** `vault_value / plp_total_supply`. Use it to price a supply, and expect it to move between reading it and landing your transaction.
-- **Redemption value:** `shares_burned * vault_value / plp_total_supply`, rounded down. Burning the entire supply short-circuits on chain and returns the full vault value with no rounding loss.
+- **Redemption value:** `shares_burned * vault_value / plp_total_supply`, rounded down. Burning the entire supply short-circuits onchain and returns the full vault value with no rounding loss.
 
 Compute these in `BigInt`, as the sample does. Integer division truncates, which reproduces the contract's round-down behavior, and quote amounts exceed the range where floating point stays exact. See the [worked example](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#worked-example) for the same arithmetic with concrete numbers.
 
@@ -239,7 +239,7 @@ Build a transaction with a single `moveCall` targeting `predict::available_withd
 
 The Predict oracle feed service already does this, in [`simulateReturnValues`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-4-16/scripts/services/oracle-feed/chain.ts#L178-L196). Follow its 3 choices, because each one matters for read calls:
 
-- **Simulate with `checksEnabled: false`.** Validation checks reject calls that never execute on chain, including non-entry Move functions. Leaving checks on makes a read that would otherwise work fail.
+- **Simulate with `checksEnabled: false`.** Validation checks reject calls that never execute onchain, including non-entry Move functions. Leaving checks on makes a read that would otherwise work fail.
 - **Default the sender to `0x0`.** A simulated read needs no funded address and no signature, so it works before a user connects a wallet. Normalize the address rather than passing a bare string.
 - **Return the raw bytes per command.** The service maps `commandResults` to `returnValues[].bcs` and leaves decoding to the caller, which keeps one helper usable for every read function. Decode a `u64` return with `bcs.U64`.
 
