@@ -94,6 +94,45 @@ result for a complete causal read. Mysticeti accepts uncertified blocks and its
 causal history can contain Byzantine equivocations. Such extra blocks can make
 an unrestricted raw honest-block fraction false.
 
+### Every committed flush carries the same honest parent stake
+
+The same bound holds for the block set that the product actually commits. With
+`enable_v3`, one committed flush is one `FlexCommitter::build_commit` result. The
+sorted vector of that flush goes into the `CommittedSubDag` and into the
+serialized `CommitV1` body, and the bound holds for every block of it.
+
+For each block in a flush and each distinct non-Byzantine parent author counted
+by the bound, the exact parent reference stands in one of three places: the same
+flush, which supplies the body; the committed mark that an earlier commit set;
+or at or below the local GC round, where the walk stops. The third place is a
+boundary result. A reference below the boundary can have been pruned without
+entering any commit body. The counted parents are the
+one-round-below layer that carries quorum stake, so the third place is reachable
+only one round above the boundary. Above that round the complete honest layer is
+inside the installed committed prefix.
+
+A local commit sets its earlier marks through this same walk. A synchronized
+certified commit sets them through `FlexCommitter::handle_certified_commit`
+instead, so the earlier-marks set is the union of both routes.
+
+### A committed flush is the exact eligible causal closure
+
+The Rust materializer walk returns exactly the blocks that its ancestor filter
+reaches from the committed leaders of the commit round. The filter follows a
+reference only when the reference is above the local GC round and no earlier
+commit took it.
+
+Inclusion is conditional on the reads that Rust already relies on: each leader
+body is in the local `DagState`, every followed ancestor body is present, and
+the loop finishes. The first two are the `get_block(..).unwrap()` obligation
+inside the walk. The last is the finite store. The walk also commits each block
+once, which the leader `set_committed` assertions, the repeated-reference
+`continue`, and the verifier rule against two ancestors from one author supply.
+
+Two hosts whose walk reads agree therefore commit the same duplicate-free block
+set, and the deterministic seeded sort turns that set into one commit body and
+one commit digest.
+
 ### Different block-GC horizons keep one durable prefix
 
 If two correct validators cover one absolute commit index, their durable exact
@@ -108,9 +147,35 @@ For deterministic v3 scoring rules, two correct installed heads at the same
 index replay to the same schedule state. They therefore have the same ordered
 allowed-leader vector and the same selected order for each round.
 
-The remaining product refinement must map each exact commit to the block bodies
-and ancestors used by the Rust scorer. It must also map the replayed vectors to
-the vectors read by the proposer and FlexCommitter.
+The Lean model now contains that replay in the shape `LeaderScheduleV3` runs. It
+keeps the three-deep pending window, scores `C-3` against `[C-2, C-1, C]`, reads
+the exact commit index, the commit digest, the named leader, and the sorted
+committed block bodies, and recomputes the allowed-leader vector only at an
+update-interval boundary with a shuffle seeded from the last pending commit
+digest. It also derives the next commit index and the minimum next leader round
+that the proposer gate and the FlexCommitter read. The scorer input is the
+materializer flush above, so the exact commit reference fixes it.
+
+The scoring calculation is one deterministic function of the four committed
+materials. The model does not reproduce its arithmetic, because a shared schedule
+needs only that equal inputs give equal results.
+
+The model also proves that the incremental Rust accumulators are exact. The
+running per-authority totals, the leader count, and the leader stakes always
+equal a recomputation over the retained score entries. The `checked_sub` on an
+evicted entry therefore cannot underflow, and a restart that recomputes from the
+retained window reaches the same totals.
+
+Two correct hosts with exact installed heads at one commit index therefore reach
+the same replayed schedule state, so every read they take from it agrees. The
+scored input at each step is one host's actual materializer output, and any other
+host whose walk reads agree computes the same input.
+
+The remaining product conditions are the sort determinism for the commit body and
+the source rules that bind these reads to the running code. They are listed as
+`REF-COMMIT-MATERIALIZER-WALK`, `REF-COMMIT-BODY-ORDER`,
+`REF-V3-SCHEDULE-SCORER`, and `REF-V3-SCHEDULE-READERS` in the assumption
+ledger.
 
 ## End-to-end liveness properties
 
@@ -311,6 +376,17 @@ The strict proof derives timer spread from actual prior broadcasts and pinned
 sync. Its only promptness input is one action-local rule for an already-actual
 exact-next timer. The other strict source fields are static, local, current, or
 past.
+
+The commit materializer and the v3 schedule replay are now modeled on the
+running Rust loops. `CommitMaterializerView.buildCommit_materializes_exactly`
+fixes the committed block set, `buildCommit_output_nodup` proves it is duplicate
+free, `committed_flush_block_has_non_byzantine_parent_layer` carries the weighted
+honest-parent bound to it, and
+`ExactCommitInstallProvenance.exactInstalledHeadsAtSameIndexShareRustSchedule`
+gives two correct hosts one replayed schedule state at one commit index. The open
+rows are `REF-COMMIT-MATERIALIZER-WALK`, `REF-COMMIT-BODY-ORDER`,
+`REF-V3-SCHEDULE-SCORER`, and `REF-V3-SCHEDULE-READERS`. The Lean walk also uses
+a step budget for the Rust loop instead of deriving the finite-store bound.
 
 One safety-refinement obligation remains open. Lean now keeps the first direct
 or indirect origin, the exact historical indirect evidence, and the ordered

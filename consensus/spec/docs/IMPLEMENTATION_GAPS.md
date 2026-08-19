@@ -510,6 +510,78 @@ assumption.
 Evidence:
 [EV-CACHED-INDIRECT-ORIGIN](ASSUMPTION_EVIDENCE.md#ev-cached-indirect-origin).
 
+### P1: bind the commit materializer and the v3 scorer to Rust
+
+Related assumptions: `ASM-SAFE-GC`, `ASM-SAFE-COMMIT-CHAIN`,
+`ASM-SAFE-COMMITTED-PREFIX`, and `ASM-REFINE-INTEGERS`.
+
+Lean now models the v3 `FlexCommitter::build_commit` walk and the
+`LeaderScheduleV3` replay. `CommitMaterializerView.buildCommit_materializes_exactly`
+proves that a successful walk commits exactly the blocks its ancestor filter
+reaches, and `buildCommit_output_nodup` proves it commits each block once.
+`CommitMaterializerView.committed_flush_block_has_non_byzantine_parent_layer`
+carries the weighted honest-parent bound to that flush and locates each honest
+parent body. `V3ScheduleState.addCommit_sound` and
+`V3ReplayParameters.replayed_state_sound` prove that the incremental scorer
+totals stay equal to a recomputation over the retained window, so the Rust
+`checked_sub` cannot underflow.
+`ExactCommitInstallProvenance.exactInstalledHeadsAtSameIndexShareRustSchedule`
+gives one replayed schedule state to two correct hosts at one commit index, so
+every read they take from it agrees.
+
+Four source rows remain open.
+
+- `REF-COMMIT-MATERIALIZER-WALK`. Map the walk to the Rust loop. Show that
+  `get_block(..).unwrap()` finds every above-GC ancestor that no earlier commit
+  took, and that the finite store and the committed marks end the loop. The Lean
+  model uses a step budget for the loop instead of deriving the finite-store
+  bound, and it uses a front stack where Rust uses a back stack. The visit order
+  does not change the committed set, and the seeded sort fixes the vector.
+- `REF-COMMIT-BODY-ORDER`. `sort_committed_blocks` keys on the block round and
+  on a hash of the commit seed and the block digest, so equal keys need a hash
+  collision. Confirm that, and map the named leader and the commit timestamp.
+  The timestamp reads the leaders' one-round-below ancestors from `DagState`,
+  which can include blocks that an earlier commit already took, so it is not a
+  function of the flush alone. The pre-v3 `sort_sub_dag_blocks` keys only on
+  round and author and has no tie-break; two committed blocks from one
+  equivocating author can tie there.
+- `REF-V3-SCHEDULE-SCORER`. Map `add_commit` to the modeled window. Confirm that
+  the scoring calculation is a deterministic function of the four committed
+  materials and reads no other local state, that `refresh_current_schedule`
+  recomputes `allowed_leaders` only at an update-interval boundary, and that
+  `select_allowed_leaders` seeds its shuffle from the last pending commit digest.
+  The model does not reproduce the voting scan, the certifying scan, the
+  equivocation rule, or the distinct-author stake sums, so those stay source
+  obligations rather than checked Lean definitions.
+- `REF-V3-SCHEDULE-READERS`. Confirm that proposer ancestor selection and the
+  FlexCommitter read the current replayed allowed-leader vector, its round
+  order, and the minimum next leader round, and not separately derived values.
+  This row overlaps the first-Flex-leader parent work above.
+- `REF-V3-SCHEDULE-INPUTS`. Map the other two `add_commit` input routes. A
+  synchronized commit arrives from `FlexCommitter::handle_certified_commit`, and
+  `LeaderScheduleV3::from_store` replays stored sub-DAGs over a bounded suffix
+  that starts at `replay_start`. Lean replays from genesis and maps only the
+  local build path, so it has no theorem that equates the bounded suffix replay
+  with the full replay.
+
+The Lean model is also more permissive than the running code in two places. The
+walk drops a followed reference whose body is missing, and it accepts an empty
+leader set, an already-committed leader, and a leader at or below GC; Rust
+aborts in each case. `add_commit` carries no invariant for consecutive commit
+indexes, strictly increasing leader rounds, a nonempty leader set that contains
+the named leader, or the scan sentinel, all of which Rust asserts. A theorem
+about a successful modeled run therefore still applies to a successful Rust run,
+but the model does not reproduce the Rust failure conditions.
+
+The Lean model also carries the local walk view for two hosts. Deriving one
+committed block set from two hosts still needs their GC rounds, their prior
+committed marks, their ancestor lists, and the walk-reachable bodies to agree.
+That is the same completeness condition that
+`ReferenceCommitMaterializerSourceMap` records. The prior committed marks are set
+by this walk for a local commit and by
+`FlexCommitter::handle_certified_commit` for a synchronized certified commit, so
+both routes are part of that condition.
+
 ### P1: protect committed-prefix evidence
 
 Related assumptions: `ASM-SAFE-COMMITTED-PREFIX`, `ASM-SAFE-GC`, and

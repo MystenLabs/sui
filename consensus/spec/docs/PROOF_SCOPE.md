@@ -76,6 +76,47 @@ The signed cutoff is the maximum of the block-cleanup round and the
 transaction-vote cleanup round. A target at or below either boundary receives a
 reject vote. An accept vote is above both boundaries.
 
+### Committed material
+
+The model contains the Rust v3 commit materializer walk. A successful
+`FlexCommitter::build_commit` run returns exactly the blocks that its ancestor
+filter reaches from the committed leaders of the commit round: above the local GC
+round and not taken by an earlier commit. The conditions are the reads that Rust
+already relies on. Each leader body is local, every followed ancestor body is in
+the local `DagState`, and the loop finishes on the finite store.
+`Linearizer::linearize_sub_dag` is the one-leader pre-v3 form of the same walk.
+
+The walk commits each block once. Two hosts whose walk reads agree commit the
+same duplicate-free block set. The deterministic seeded sort then gives one
+commit body and one commit digest. That sort keys on the block round and on a
+hash of the commit seed and the block digest, so its determinism reduces to
+collision freedom of that hash.
+
+The weighted honest-parent bound holds for every block in a committed flush. Each
+counted non-Byzantine parent reference is in the same flush, which supplies its
+body; or it carries the committed mark of an earlier commit; or it is at or below
+the GC boundary, where the walk stops. The third case is a boundary result, not a
+durability claim. The result also applies to the sorted committed vector that
+`build_commit` puts in the sub-DAG and in the serialized commit body.
+
+### Adaptive leader schedule
+
+The model contains the `LeaderScheduleV3` replay bookkeeping: the three-deep
+pending window, the sliding score window, the boundary-only allowed-leader
+refresh, and the shuffle seed taken from the last pending commit digest. It also
+derives the next commit index and the minimum next leader round. The scorer input
+is the sorted materializer flush, so the exact commit reference fixes it.
+
+The scoring calculation itself is one deterministic function of the four
+committed materials. The model does not reproduce its arithmetic; equal inputs
+give equal score entries, which is what a shared schedule needs.
+
+The running per-authority totals, leader count, and leader stakes always equal a
+recomputation over the retained score entries. The Rust `checked_sub` on an
+evicted entry therefore cannot underflow. Two correct hosts with exact installed
+heads at one commit index reach the same replayed schedule state, so every read
+that the proposer and the FlexCommitter take from it agrees.
+
 ## Evidence retention and old-block cleanup
 
 The model proves that the pre-commit cleanup boundary keeps the leader block, its
@@ -267,6 +308,11 @@ including thresholds, authentication, unique voter stake, parent quorum, common
 ordering from fixed compatible inputs, decision scans, local evidence ownership,
 and commit recording. This evidence is not a machine-checked proof that the source
 follows the model.
+
+The commit materializer and adaptive-schedule results above are stated on models
+of the running Rust loops. Their open source rows are
+`REF-COMMIT-MATERIALIZER-WALK`, `REF-COMMIT-BODY-ORDER`,
+`REF-V3-SCHEDULE-SCORER`, and `REF-V3-SCHEDULE-READERS`.
 
 The current product does not implement commit progress recovery, the
 fixed-reference quadratic wait, or the V2 no-skip proposal sequence. Exact

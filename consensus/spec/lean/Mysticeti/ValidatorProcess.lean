@@ -144,6 +144,7 @@ structure ValidatorBlockRef (BlockId : Type) where
   id : BlockId
   author : Nat
   round : Nat
+  deriving DecidableEq
 
 /-- One block and its explicit immediate-parent references. -/
 structure ValidatorBlock (BlockId : Type) where
