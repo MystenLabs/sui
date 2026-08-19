@@ -35,6 +35,7 @@ import Mysticeti.ValidatorV3AdaptiveScheduleSafety
 import Mysticeti.ValidatorV3AdaptiveScheduleFixpoint
 import Mysticeti.ValidatorV3AdaptiveScheduleExistence
 import Mysticeti.ValidatorV3FlexScheduleRun
+import Mysticeti.ValidatorV3FlexCrossHostAgreement
 import Mysticeti.KnownReferencePropagation
 import Mysticeti.ValidatorReferenceFlexTrace
 import Mysticeti.ValidatorStrictRecoveryDirectQuorum
