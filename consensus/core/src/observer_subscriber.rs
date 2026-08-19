@@ -13,7 +13,7 @@ use parking_lot::Mutex;
 use tokio::{
     sync::oneshot,
     task::{JoinError, JoinHandle, JoinSet},
-    time::{Instant, sleep, sleep_until, timeout},
+    time::{Instant, sleep, timeout},
 };
 use tracing::{debug, info, warn};
 
@@ -45,19 +45,25 @@ const RESUBSCRIBE_LAG_BATCHES: u32 = 1;
 /// How often a suspended subscription re-evaluates commit lag.
 const SUSPENSION_CHECK_INTERVAL: Duration = Duration::from_secs(1);
 
-/// Maximum time establishing a stream or `blocks.next()` may take before the attempt is
-/// considered stalled and the stream is dropped. Bounds the case where the peer accepts
-/// connections (so no network error surfaces) but sends nothing, e.g. a wedged runtime;
-/// without it the subscription would hang until the http2 keepalive gives up, or forever.
+/// Maximum time establishing a stream may take before the attempt is considered stalled
+/// and dropped. Bounds the case where the peer accepts connections (so no network error
+/// surfaces) but never responds, e.g. a wedged runtime; without it the subscription would
+/// hang until the http2 keepalive gives up, or forever.
 const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// How long an established stream may go without delivering a block before it is dropped
+/// and re-established. Longer than `SUBSCRIPTION_TIMEOUT`: a quiet stream can be a
+/// transient network issue rather than a peer failure, so give it extra grace before
+/// tearing it down.
+const STREAM_STALL_TIMEOUT: Duration = SUBSCRIPTION_TIMEOUT.saturating_mul(2);
 
 /// How long the current peer may go without delivering a block — across reconnection
 /// attempts, excluding time suspended on commit lag — before the subscription rotates to
-/// the next configured peer. Deliberately equal to `SUBSCRIPTION_TIMEOUT`, so a silent
+/// the next configured peer. Deliberately equal to `STREAM_STALL_TIMEOUT`, so a silent
 /// stall exhausts the budget exactly when the stall is detected and rotates immediately,
 /// while fast-failing connection attempts get the immediate retries and first backoff
 /// delays on the current peer before the budget expires.
-const PEER_FAILURE_BUDGET: Duration = Duration::from_secs(30);
+const PEER_FAILURE_BUDGET: Duration = STREAM_STALL_TIMEOUT;
 
 /// ObserverSubscriber manages block stream subscriptions to peers (validators or other observers),
 /// taking care of retrying when subscription streams break. Blocks returned from peers are sent
@@ -393,37 +399,37 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             };
 
             let max_parallel_tasks = context.committee.size();
-            // The stall deadline is re-armed only when an item is received — not per select
-            // iteration — so frequent block handler completions cannot mask a stalled stream.
-            let mut stall_deadline = Instant::now() + SUBSCRIPTION_TIMEOUT;
             'stream: loop {
                 let _scope = monitored_scope("ObserverSubscriberStreamConsumer");
 
                 let next_item = tokio::select! {
-                    // Biased so that when the stall deadline expired while the stream was not
-                    // being polled (handler backpressure), an already-buffered item still wins
-                    // over the stall arm.
                     biased;
                     result = tasks.join_next(), if !tasks.is_empty() => {
                         Self::handle_task_result(result);
                         continue 'stream;
                     }
-                    item = blocks.next(), if tasks.len() < max_parallel_tasks => item,
-                    // Only armed while the stream is actually polled: a quiet stream under
-                    // handler backpressure is a local processing problem, not a peer stall.
-                    _ = sleep_until(stall_deadline), if tasks.len() < max_parallel_tasks => {
-                        info!(
-                            "Subscription to blocks from peer {:?} made no progress for {:?}",
-                            peer, SUBSCRIPTION_TIMEOUT
-                        );
-                        retries += 1;
-                        break 'stream;
+                    // The stream is only polled (and the stall timer only runs) while there is
+                    // handler capacity: a quiet stream under handler backpressure is a local
+                    // processing problem, not a peer stall. `timeout` polls the stream before
+                    // checking the timer, so an already-buffered item wins over an expired
+                    // deadline.
+                    item = timeout(STREAM_STALL_TIMEOUT, blocks.next()), if tasks.len() < max_parallel_tasks => {
+                        match item {
+                            Ok(item) => item,
+                            Err(_) => {
+                                info!(
+                                    "Subscription to blocks from peer {:?} made no progress for {:?}",
+                                    peer, STREAM_STALL_TIMEOUT
+                                );
+                                retries += 1;
+                                break 'stream;
+                            }
+                        }
                     }
                 };
 
                 match next_item {
                     Some(item) => {
-                        stall_deadline = Instant::now() + SUBSCRIPTION_TIMEOUT;
                         last_progress = Instant::now();
                         context
                             .metrics
@@ -1482,7 +1488,7 @@ mod tests {
 
         // With a single configured peer there is nothing to rotate to: the stall timeout
         // must keep dropping and reconnecting the stalled stream instead of hanging forever.
-        sleep(Duration::from_secs(100)).await;
+        sleep(STREAM_STALL_TIMEOUT * 3 + Duration::from_secs(10)).await;
         assert!(
             network_client.stream_blocks_calls() >= 3,
             "The stalled stream should have been dropped and reconnected repeatedly, got {} attempts",
