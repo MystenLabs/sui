@@ -43,6 +43,17 @@ pub enum ConsensusError {
     #[error("Genesis blocks should only be generated from Committee!")]
     UnexpectedGenesisBlock,
 
+    #[error("Block version does not match the protocol config: {version}")]
+    UnexpectedBlockVersion { version: String },
+
+    #[error(
+        "Transaction vote cutoff round must be lower than the block round: cutoff {cutoff}, block {block}"
+    )]
+    InvalidTransactionVotesCutoff { cutoff: Round, block: Round },
+
+    #[error("Invalid transaction votes: {0}")]
+    InvalidTransactionVotes(String),
+
     #[error("Genesis blocks should not be queried!")]
     UnexpectedGenesisBlockRequested,
 
@@ -83,8 +94,12 @@ pub enum ConsensusError {
     #[error("Invalid fetch blocks request: {0}")]
     InvalidFetchBlocksRequest(String),
 
-    #[error("Invalid authority index: {index} > {max}")]
-    InvalidAuthorityIndex { index: AuthorityIndex, max: usize },
+    #[error("Invalid authority index at {loc}: {index} > {max}")]
+    InvalidAuthorityIndex {
+        loc: String,
+        index: AuthorityIndex,
+        max: usize,
+    },
 
     #[error("Failed to deserialize signature: {0}")]
     MalformedSignature(FastCryptoError),
@@ -244,6 +259,7 @@ mod test {
 
         {
             let error = ConsensusError::InvalidAuthorityIndex {
+                loc: "test".to_string(),
                 index: AuthorityIndex::new_for_test(3),
                 max: 10,
             };
