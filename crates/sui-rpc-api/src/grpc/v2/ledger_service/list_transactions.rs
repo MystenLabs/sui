@@ -26,10 +26,11 @@ use crate::RpcError;
 use crate::RpcService;
 use crate::grpc::v2::ledger_service::get_transaction::render_executed_transaction;
 use crate::ledger_history::filter::transaction_filter_to_query;
-use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::RangeExhaustion;
+use crate::ledger_history::query_options::ResolvedCheckpointRange;
 use crate::ledger_history::query_options::ResolvedRange;
+use crate::ledger_history::query_options::validate_checkpoint_bounds;
 use crate::ledger_history::watermark::ScanTerminal;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
@@ -56,7 +57,6 @@ use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::get_tx_seq_digest_rows;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::sequence_frontier_checkpoint;
-use super::ledger_read::validate_checkpoint_bounds;
 use super::object_set::fetch_object_sets_for_chunk;
 use super::object_set::mask_requests_object_set;
 
@@ -286,10 +286,11 @@ fn next_transaction_chunk(
                 end_checkpoint,
                 filter_query,
             } => {
-                let checkpoint_range = CheckpointRange::from_request(
+                let checkpoint_range = ResolvedCheckpointRange::from_request(
                     start_checkpoint,
                     end_checkpoint,
                     checkpoint_hi_exclusive(&service)?,
+                    &options,
                 )?;
                 let tx_range =
                     resolve_tx_range(&service, start_checkpoint, checkpoint_range, &options)?;
@@ -627,10 +628,9 @@ fn should_render_transaction_contents(read_mask: &FieldMaskTree) -> bool {
 fn resolve_tx_range(
     service: &RpcService,
     start_checkpoint: Option<u64>,
-    checkpoint_range: CheckpointRange,
+    cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
 ) -> Result<ResolvedRange, RpcError> {
-    let cp_range = checkpoint_range.resolve(options);
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
     if cp_range.is_empty() {
         return Ok(cp_range.with_range(tx_range, options.ordering));

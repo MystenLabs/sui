@@ -4,32 +4,14 @@
 use std::ops::Range;
 
 use mysten_common::ZipDebugEqIteratorExt;
-use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::storage::LedgerTxSeqDigest;
 
-use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
 
 pub(super) fn storage_error(e: impl std::fmt::Display) -> RpcError {
     RpcError::new(tonic::Code::Internal, e.to_string())
-}
-
-pub(super) fn validate_checkpoint_bounds(
-    start_checkpoint: Option<u64>,
-    end_checkpoint: Option<u64>,
-) -> Result<(), RpcError> {
-    let start = start_checkpoint.unwrap_or(0);
-    if let Some(end) = end_checkpoint
-        && end < start
-    {
-        return Err(FieldViolation::new("end_checkpoint")
-            .with_description("end_checkpoint must be greater than or equal to start_checkpoint")
-            .with_reason(ErrorReason::FieldInvalid)
-            .into());
-    }
-    Ok(())
 }
 
 pub(super) fn checkpoint_hi_exclusive(service: &RpcService) -> Result<u64, RpcError> {
