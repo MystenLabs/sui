@@ -10,9 +10,9 @@
 //! - `ReadRows`: explicit row-key lookups with an optional row limit. Supports
 //!   the column filters this crate builds (`None`, `CellsPerColumnLimitFilter(1)`,
 //!   `ColumnQualifierRegexFilter`, and `Chain`s of those plus an optional
-//!   `FamilyNameRegexFilter`), records each call for assertions, and can emit
-//!   rows in reverse request order and ascending row-range scans.
-//!   Reverse scans are unsupported.
+//!   `FamilyNameRegexFilter`), records each call for assertions, can emit
+//!   rows in reverse request order, and serves row-range scans in either
+//!   direction (reversed scans are range-only).
 //! - `CheckAndMutateRow`: `PassAllFilter(true)` and the CAS helper shape used
 //!   by this crate (`Chain` of family regex, column qualifier regex, optional
 //!   value range, and optional cells-per-column limit).
@@ -667,6 +667,11 @@ impl Bigtable for MockBigtableServer {
         if !row_set.row_keys.is_empty() && !row_set.row_ranges.is_empty() {
             return Err(Status::unimplemented(
                 "mock ReadRows does not support mixing row_keys and row_ranges",
+            ));
+        }
+        if req.reversed && !row_set.row_keys.is_empty() {
+            return Err(Status::unimplemented(
+                "mock ReadRows supports reversed scans only for row ranges",
             ));
         }
 
