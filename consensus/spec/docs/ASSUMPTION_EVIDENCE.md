@@ -479,7 +479,14 @@ Audit date and source revision
 - **Revalidation triggers:** Changes to `LeaderScheduleV3`,
   `NextCommitLeaderSchedule`, `Core::try_commit_v3`, `Core::post_commit`,
   `ProposalLeaderWaiter`, FlexCommitter refresh, schedule update intervals, or
-  the Lean schedule-key fields.
+  the Lean schedule-key fields. Also any change to
+  `FlexCommitter::maybe_refresh_pending_commit_state` or to
+  `LeaderScheduleV3::min_next_leader_round`. The adaptive-schedule fixpoint
+  proof uses three assertions of that function: the gate is identical at one
+  commit index, the gate moves strictly forward with the index, and a schedule
+  change drops every pending round below the new gate. Removing an assertion
+  removes the stratification that makes the schedule recursion well founded, and
+  no Lean build failure reports it.
 - **Audit date and source revision:** 2026-08-17 at
   `2fecfec37462785ccd6684195aac9131e54ad251`.
 

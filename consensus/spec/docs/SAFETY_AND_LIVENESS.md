@@ -182,9 +182,25 @@ candidates through every round bound, so they agree on the commit sequence and
 on the leaders inside each commit. The common commit chain follows for the
 adaptive schedule instead of being assumed.
 
-Two limits remain. The rule does not yet state that the running FlexCommitter
-loop is a consistent run of one common rule. The result is uniqueness only; it
-does not construct a run.
+`V3FlexScheduleHost.consistentRun` now proves the single-host composition. The
+proof reconstructs the modeled `LeaderScheduleV3` state from earlier round
+verdicts. A round without a candidate keeps the state. A round with a candidate
+applies the modeled `add_commit` step. The selected order then reads the state
+at the governing gate. The direct and indirect passes supply each post-scan
+slot. The Flex round scan supplies the verdict.
+
+The theorem does not assume `ConsistentRun` or any cross-host schedule or
+verdict equality. It does not compare two hosts.
+
+One limit remains. The current Lean result does not instantiate the local fields
+from a Rust trace. It also does not prove that all correct Rust hosts instantiate
+the same model functions. The source refinement must prove that local execution,
+certified commit installation, and restart use the same commit material,
+governing gate, and final slot function. Local DAG views can differ. Thus, this
+common-model step needs the protocol evidence proofs and the exact installation
+proofs. The refinement must also map the full pending-prefix scan, which stops at
+the first undecided slot, to the final per-round verdict function. Source review
+of one function is not sufficient for these steps.
 
 ### Exact commit prefixes fix adaptive schedule replay
 
