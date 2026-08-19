@@ -27,13 +27,12 @@ module examples::sword {
 /// Module that defines the in-game currency: GEMs which can be purchased with
 /// SUI and used to buy swords (in the `sword` module).
 module examples::gem {
-    use std::option::none;
-    use std::string::{Self, String};
+    use std::string::String;
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin, TreasuryCap};
+    use sui::coin_registry;
     use sui::sui::SUI;
     use sui::token::{Self, Token, ActionRequest};
-    use sui::tx_context::sender;
 
     /// Trying to purchase Gems with an unexpected amount.
     const EUnknownAmount: u64 = 0;
@@ -65,15 +64,14 @@ module examples::gem {
 
     // In the module initializer we create the in-game currency and define the
     // rules for different types of actions.
-    #[allow(deprecated_usage)]
     fun init(otw: GEM, ctx: &mut TxContext) {
-        let (treasury_cap, coin_metadata) = coin::create_currency(
+        let (builder, treasury_cap) = coin_registry::new_currency_with_otw(
             otw,
-            0,
-            b"GEM",
-            b"Capy Gems", // otw, decimal, symbol, name
-            b"In-game currency for Capy Miners",
-            none(), // description, url
+            0, // no decimals
+            b"GEM".to_string(),
+            b"Capy Gems".to_string(),
+            b"In-game currency for Capy Miners".to_string(),
+            b"".to_string(),
             ctx,
         );
 
@@ -90,8 +88,9 @@ module examples::gem {
             profits: balance::zero(),
         });
 
-        // deal with `TokenPolicy`, `CoinMetadata` and `TokenPolicyCap`
-        transfer::public_freeze_object(coin_metadata);
+        // deal with `TokenPolicy`, `MetadataCap` and `TokenPolicyCap`
+        let metadata_cap = builder.finalize(ctx);
+        transfer::public_transfer(metadata_cap, ctx.sender());
         transfer::public_transfer(cap, ctx.sender());
         token::share_policy(policy);
     }
@@ -118,11 +117,11 @@ module examples::gem {
 
         // create custom request and mint some Gems
         let gems = token::mint(&mut self.gem_treasury, purchased, ctx);
-        let req = token::new_request(buy_action(), purchased, none(), none(), ctx);
+        let req = token::new_request(buy_action(), purchased, option::none(), option::none(), ctx);
 
         (gems, req)
     }
 
     /// The name of the `buy` action in the `GemStore`.
-    public fun buy_action(): String { string::utf8(b"buy") }
+    public fun buy_action(): String { b"buy".to_string() }
 }
