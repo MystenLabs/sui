@@ -170,9 +170,21 @@ every commit that produced it has a leader round below that gate.
 
 The decision at one round then reads a schedule built from strictly earlier
 rounds. That stratification makes the recursion well founded, so at most one run
-of decisions is consistent with the rule, and every reading of that run agrees.
-The common commit chain follows for the adaptive schedule instead of being
-assumed.
+of decisions is consistent with the rule.
+
+The proof is induction on the round. Agreement below a round gives one schedule
+at that round, and one schedule gives one verdict. Prefix agreement is the
+conclusion at each step, not a hypothesis.
+
+Sequence agreement follows. `v3_committed_candidates_agree` states it at the
+model's commit types: two consistent runs install the same ordered exact commit
+candidates through every round bound, so they agree on the commit sequence and
+on the leaders inside each commit. The common commit chain follows for the
+adaptive schedule instead of being assumed.
+
+Two limits remain. The rule does not yet state that the running FlexCommitter
+loop is a consistent run of one common rule. The result is uniqueness only; it
+does not construct a run.
 
 ### Exact commit prefixes fix adaptive schedule replay
 

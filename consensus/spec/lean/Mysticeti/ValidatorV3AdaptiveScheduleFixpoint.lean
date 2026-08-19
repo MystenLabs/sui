@@ -110,7 +110,84 @@ theorem consistent_run_readings_agree {Output : Type}
     reading left = reading right := by
   rw [rule.consistent_runs_are_equal leftConsistent rightConsistent]
 
+/-- The ordered committed leaders that one run produces through a round bound.
+
+`commitAt` reads one round's verdict and returns the committed leader when that
+round commits. This is the shape of the sequence a host installs. -/
+def committedPrefix {Leader : Type} (commitAt : Verdict → Option Leader)
+    (run : Nat → Verdict) (bound : Nat) : List Leader :=
+  (List.range bound).filterMap fun round => commitAt (run round)
+
+/-- Sequence agreement. Two consistent runs commit the same ordered leaders
+through every bound.
+
+The argument is induction on the round, not an assumption that the prefixes
+match. Agreement below a round gives the same schedule at that round, because
+the schedule reads only rounds below its gate and the gate never sits above the
+round. The same schedule then gives the same verdict. Prefix agreement is the
+conclusion at each step, not a hypothesis. -/
+theorem committed_prefix_agrees {Leader : Type}
+    (rule : V3AdaptiveScheduleRule Verdict)
+    (commitAt : Verdict → Option Leader)
+    {left right : Nat → Verdict}
+    (leftConsistent : rule.ConsistentRun left)
+    (rightConsistent : rule.ConsistentRun right)
+    (bound : Nat) :
+    committedPrefix commitAt left bound =
+      committedPrefix commitAt right bound :=
+  rule.consistent_run_readings_agree
+    (fun run => committedPrefix commitAt run bound) leftConsistent
+    rightConsistent
+
 end V3AdaptiveScheduleRule
+
+/-! ### The rule at the model's own commit types
+
+The results above hold for any verdict type. This section fixes the verdict to
+the exact commit candidate that a FlexCommitter round scan returns, so sequence
+agreement is stated about commits rather than about an abstract reading.
+-/
+
+/-- One round's verdict: the exact commit candidate that the round produces, or
+none when the round does not commit. -/
+abbrev V3RoundVerdict (BlockId : Type) := Option (ReferenceFlexCandidate BlockId)
+
+/-- The exact commit candidates that one run installs through a round bound. -/
+def v3CommittedCandidates {BlockId : Type}
+    (run : Nat → V3RoundVerdict BlockId) (bound : Nat) :
+    List (ReferenceFlexCandidate BlockId) :=
+  V3AdaptiveScheduleRule.committedPrefix (fun verdict => verdict) run bound
+
+/-- Sequence agreement at the model's commit types.
+
+Two consistent runs of one stratified rule install the same ordered exact commit
+candidates through every bound. Each candidate carries its leader round and its
+ordered committed leaders, so the two hosts agree on the commit sequence and on
+the leaders inside each commit. -/
+theorem v3_committed_candidates_agree {BlockId : Type}
+    (rule : V3AdaptiveScheduleRule (V3RoundVerdict BlockId))
+    {left right : Nat → V3RoundVerdict BlockId}
+    (leftConsistent : rule.ConsistentRun left)
+    (rightConsistent : rule.ConsistentRun right)
+    (bound : Nat) :
+    v3CommittedCandidates left bound = v3CommittedCandidates right bound :=
+  rule.committed_prefix_agrees _ leftConsistent rightConsistent bound
+
+/-- The ordered committed leaders of every commit also agree.
+
+`ReferenceFlexCandidate.committedLeaderRefs` is the list that the commit builder
+reads, so this is the leader-level form of the same result. -/
+theorem v3_committed_leaders_agree {BlockId : Type}
+    (rule : V3AdaptiveScheduleRule (V3RoundVerdict BlockId))
+    {left right : Nat → V3RoundVerdict BlockId}
+    (leftConsistent : rule.ConsistentRun left)
+    (rightConsistent : rule.ConsistentRun right)
+    (bound : Nat) :
+    (v3CommittedCandidates left bound).map
+        ReferenceFlexCandidate.committedLeaderRefs =
+      (v3CommittedCandidates right bound).map
+        ReferenceFlexCandidate.committedLeaderRefs := by
+  rw [v3_committed_candidates_agree rule leftConsistent rightConsistent bound]
 
 /-! ### The gate sequence that Rust runs
 
