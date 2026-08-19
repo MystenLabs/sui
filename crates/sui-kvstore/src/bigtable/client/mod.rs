@@ -72,6 +72,7 @@ use crate::bigtable::proto::bigtable::v2::mutation::SetCell;
 use crate::bigtable::proto::bigtable::v2::read_rows_response::cell_chunk::RowStatus;
 use crate::bigtable::proto::bigtable::v2::request_stats::StatsView;
 use crate::bigtable::proto::bigtable::v2::row_filter::Chain;
+use crate::bigtable::proto::bigtable::v2::row_filter::Condition;
 use crate::bigtable::proto::bigtable::v2::row_filter::Filter;
 use crate::bigtable::proto::bigtable::v2::row_range::EndKey;
 use crate::bigtable::proto::bigtable::v2::row_range::StartKey;
@@ -2032,31 +2033,43 @@ impl KeyValueStoreReader for BigTableClient {
         original_id: ObjectID,
         cp_bound: u64,
     ) -> Result<Option<PackageData>> {
-        // Over-fetch up to 50 versions in reverse order, then filter by cp_bound.
-        // Packages rarely have 50+ upgrades.
         let start_key = Bytes::from(tables::packages::encode_key(original_id.as_ref(), 0));
         let end_key = Bytes::from(tables::packages::encode_key_upper_bound(
             original_id.as_ref(),
         ));
 
-        let rows = self
+        // Filter to versions published at or before `cp_bound` server-side,
+        // wrapped in a Condition so matching rows keep all their columns (a
+        // bare chain would strip everything but the `cp` cell). The first
+        // row of the reversed scan is then the highest qualifying version.
+        let filter = RowFilter {
+            filter: Some(Filter::Condition(Box::new(Condition {
+                predicate_filter: Some(Box::new(column_value_at_most_filter(
+                    tables::packages::col::CP,
+                    u64_be(cp_bound),
+                ))),
+                true_filter: Some(Box::new(RowFilter {
+                    filter: Some(Filter::PassAllFilter(true)),
+                })),
+                false_filter: None,
+            }))),
+        };
+
+        match self
             .range_scan(
                 tables::packages::NAME,
                 Some(start_key),
                 Some(end_key),
-                50,
+                1,
                 true,
-                None,
+                Some(filter),
             )
-            .await?;
-
-        for (key, row) in rows {
-            let pkg = tables::packages::decode(key.as_ref(), &row)?;
-            if pkg.cp_sequence_number <= cp_bound {
-                return Ok(Some(pkg));
-            }
+            .await?
+            .pop()
+        {
+            Some((key, row)) => Ok(Some(tables::packages::decode(key.as_ref(), &row)?)),
+            None => Ok(None),
         }
-        Ok(None)
     }
 
     async fn get_package_versions(
@@ -2234,6 +2247,33 @@ fn column_value_at_least_filter(column: &str, value: Bytes) -> RowFilter {
                     filter: Some(Filter::ValueRangeFilter(ValueRange {
                         start_value: Some(value_range::StartValue::StartValueClosed(value)),
                         end_value: None,
+                    })),
+                },
+            ],
+        })),
+    }
+}
+
+/// Build a `RowFilter` matching rows whose `sui:<column>` value is at most `value`
+/// (big-endian lexicographic comparison). Used as a Condition predicate for
+/// upper-bounded reads.
+fn column_value_at_most_filter(column: &str, value: Bytes) -> RowFilter {
+    RowFilter {
+        filter: Some(Filter::Chain(Chain {
+            filters: vec![
+                RowFilter {
+                    filter: Some(Filter::FamilyNameRegexFilter(tables::FAMILY.to_string())),
+                },
+                RowFilter {
+                    filter: Some(Filter::ColumnQualifierRegexFilter(Bytes::from(format!(
+                        "^{}$",
+                        column
+                    )))),
+                },
+                RowFilter {
+                    filter: Some(Filter::ValueRangeFilter(ValueRange {
+                        start_value: None,
+                        end_value: Some(value_range::EndValue::EndValueClosed(value)),
                     })),
                 },
             ],
@@ -2552,6 +2592,88 @@ mod tests {
         assert!(rows.next().await.is_none());
         assert!(mock.read_rows_calls().await.is_empty());
         assert_eq!(counts(&registry, [name, "empty-table"]), [0; 2]);
+    }
+
+    /// Runs against the real BigTable emulator (gated on gcloud being
+    /// installed, like the store tests): the checkpoint-bound semantics
+    /// (Condition filter, closed upper bound, reversed limit-1 scan) are
+    /// asserted against Google's implementation rather than a mock.
+    #[tokio::test]
+    async fn get_package_latest_bounds_by_publish_checkpoint() {
+        use crate::testing::{
+            BigTableEmulator, INSTANCE_ID, create_tables, require_bigtable_emulator,
+        };
+
+        require_bigtable_emulator();
+        let emulator = tokio::task::spawn_blocking(BigTableEmulator::start)
+            .await
+            .unwrap()
+            .unwrap();
+        create_tables(emulator.host(), INSTANCE_ID).await.unwrap();
+        let mut client = BigTableClient::new_local(emulator.host().to_string(), INSTANCE_ID.into())
+            .await
+            .unwrap();
+
+        // 60 versions, published ten checkpoints apart: a lineage long
+        // enough that an old bound must reach past the newest 50 versions,
+        // the page the previous implementation silently capped at.
+        let original = ObjectID::from_single_byte(0xAA);
+        let storage_id = |version: u64| ObjectID::from_single_byte(version as u8);
+        let entries: Vec<_> = (1..=60u64)
+            .map(|version| {
+                tables::make_entry(
+                    Bytes::from(tables::packages::encode_key(original.as_ref(), version)),
+                    tables::packages::encode(version * 10, storage_id(version).as_ref(), false),
+                    None,
+                )
+            })
+            .collect();
+        client
+            .write_entries(tables::packages::NAME, entries)
+            .await
+            .unwrap();
+
+        // Unbounded resolves the newest version.
+        let latest = client
+            .get_package_latest(original, u64::MAX)
+            .await
+            .unwrap()
+            .expect("latest version");
+        assert_eq!(latest.package_version, 60);
+        assert_eq!(latest.package_id, storage_id(60).to_vec());
+
+        // The bound includes a version published exactly at it, and a bound
+        // between two publishes resolves the earlier one.
+        let at_publish = client
+            .get_package_latest(original, 190)
+            .await
+            .unwrap()
+            .expect("version at bound");
+        assert_eq!(at_publish.package_version, 19);
+        let between = client
+            .get_package_latest(original, 195)
+            .await
+            .unwrap()
+            .expect("version below bound");
+        assert_eq!(between.package_version, 19);
+
+        // A bound below all but the first publish reaches past the newest 50
+        // versions -- the case the old 50-row page missed.
+        let oldest = client
+            .get_package_latest(original, 10)
+            .await
+            .unwrap()
+            .expect("first version");
+        assert_eq!(oldest.package_version, 1);
+
+        // A bound before the first publish resolves nothing.
+        assert!(
+            client
+                .get_package_latest(original, 9)
+                .await
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[tokio::test]
