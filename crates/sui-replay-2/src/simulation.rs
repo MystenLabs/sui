@@ -19,6 +19,7 @@ use crate::{
 };
 use anyhow::{Error, Result, ensure};
 use std::path::{Path, PathBuf};
+use sui_core::authority::DEV_INSPECT_GAS_COIN_VALUE;
 use sui_data_store::{
     EpochData, EpochStore, Node, ObjectKey, ObjectStore, TransactionInfo, TransactionStore,
     VersionQuery, stores::DataStore,
@@ -32,9 +33,6 @@ use sui_types::{
     supported_protocol_versions::ProtocolConfig,
     transaction::{TransactionData, TransactionDataAPI},
 };
-
-// Keep this in sync with `DEV_INSPECT_GAS_COIN_VALUE` in `sui-core/src/authority.rs`.
-const SIMULATION_GAS_COIN_VALUE: u64 = 1_000_000_000_000_000_000;
 
 /// Provenance and artifact status for a locally traced fullnode simulation.
 pub struct SimulatedTransactionTrace {
@@ -272,7 +270,7 @@ fn new_mock_gas_object(owner: sui_types::base_types::SuiAddress) -> Object {
         MoveObject::new_gas_coin(
             OBJECT_START_VERSION,
             ObjectID::MAX,
-            SIMULATION_GAS_COIN_VALUE,
+            DEV_INSPECT_GAS_COIN_VALUE,
         ),
         Owner::AddressOwner(owner),
         TransactionDigest::genesis_marker(),
