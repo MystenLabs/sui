@@ -76,16 +76,22 @@ theorem validator_causal_reference_resolved_persists
       (timed.execution.durableStateMonotone validator earlier later
         validatorInRange ordered).2.2.2.2.2.2.2.2.2.2.2)
 
-/-- Local post-GST causal-queue service rules for one fixed validator.
+/-- Local post-GST causal-queue behavior for one fixed validator, without a
+service margin.
 
 `known` identifies causal references that have entered this queue model.
 `knownAccounted` requires each known reference to be pending or already
 resolved. Queue removals include normal acceptance and GC obsolescence.
 
 `workAdded` and `workRemoved` are accounting values for one service interval.
-The balance equation prevents the rate bounds from creating a queue decrease
-without matching local queue work. -/
-structure ValidatorPostGstCausalQueueServiceRules
+The removal cap prevents an accounting value from claiming unbounded service.
+The balance equation prevents a rate bound from creating a queue decrease
+without matching local queue work.
+
+`ValidatorPostGstCausalQueueServiceRules` adds an assumed service margin over
+this base. `ValidatorCausalQueueTransferBudget` instead derives that margin from
+a block-transfer budget. -/
+structure ValidatorCausalQueueBehavior
     {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
     {config : ValidatorEpochConfig CommitId}
@@ -104,13 +110,13 @@ structure ValidatorPostGstCausalQueueServiceRules
     (timed.execution.trace time).epochActive = true
   serviceInterval : Nat
   serviceIntervalPositive : 0 < serviceInterval
-  cAdd : Nat
-  cService : Nat
-  serviceMargin : cAdd < cService
   pending : Nat → List (ValidatorBlockRef BlockId)
   known : Nat → ValidatorBlockRef BlockId → Prop
   workAdded : Nat → Nat
   workRemoved : Nat → Nat
+  /-- A uniform upper bound on removals in one service interval. -/
+  workRemovalCap : Nat
+  workRemovedBound : ∀ interval, workRemoved interval ≤ workRemovalCap
   knownMonotone : ∀ {earlier later reference},
     earlier ≤ later → known earlier reference → known later reference
   pendingIsRequired : ∀ interval reference,
@@ -127,10 +133,28 @@ structure ValidatorPostGstCausalQueueServiceRules
         ValidatorCausalReferenceResolvedAt timed validator
           (validatorPostGstCausalQueueSampleTime start serviceInterval interval)
           reference
-  workAddedBound : ∀ interval, workAdded interval ≤ cAdd
   queueBalance : ∀ interval,
     (pending (interval + 1)).length + workRemoved interval =
       (pending interval).length + workAdded interval
+
+/-- Causal-queue behavior with an assumed strict service margin. -/
+structure ValidatorPostGstCausalQueueServiceRules
+    {BlockId CommitId PacketId : Type}
+    [DecidableEq BlockId]
+    {config : ValidatorEpochConfig CommitId}
+    {faults : FixedFaultInterval config}
+    {protocolPacket :
+      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+    {network : AddressedPartialSynchrony config faults protocolPacket}
+    {program : ValidatorExecutionProgram BlockId CommitId}
+    (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
+      protocolPacket network program)
+    (validator start : Nat)
+    extends ValidatorCausalQueueBehavior timed validator start where
+  cAdd : Nat
+  cService : Nat
+  serviceMargin : cAdd < cService
+  workAddedBound : ∀ interval, workAdded interval ≤ cAdd
   highBacklogService : ∀ interval,
     cService ≤ (pending interval).length →
       cService ≤ workRemoved interval

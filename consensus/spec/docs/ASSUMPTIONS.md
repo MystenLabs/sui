@@ -215,9 +215,9 @@ See [EV-COMMIT-SYNC-COVERAGE](ASSUMPTION_EVIDENCE.md#ev-commit-sync-coverage).
 | `REF-GC-BOUNDARY` | Local cleanup keeps above-boundary blocks. Pending commit state and finalizer state own copied evidence independently of the live cache. |
 | `REF-COMMIT-INSTALL-DAG` | Before a local or synchronized commit install moves GC, accept and catalogue every exact commit-body block. Retain the accumulated closed frontier above the new GC round. |
 | `REF-FLEX-RESULT` | When the current decision scan finds a commit, the local commit state records it through the normal commit path. |
-| `REF-COMMIT-MATERIALIZER-WALK` | With `enable_v3`, `FlexCommitter::build_commit` marks every committed leader of the commit round and walks their causal history. It follows an ancestor only when the reference is above the local GC round and no earlier commit took it, and it marks each followed reference before it pushes the body. `get_block(..).unwrap()` must find every such body in the local `DagState`. The finite store and the committed marks must end the loop. A repeated ancestor reference is dropped by `if !set_committed(..) { continue; }`; block verification also rejects two ancestors from one author. `Linearizer::linearize_sub_dag` is the one-leader pre-v3 form of the same walk. Rust also aborts on an empty leader set, on a leader that is already committed, and on a committed block at or below GC. The Lean walk has no such failure, so a modeled run can succeed where Rust panics. |
+| `REF-COMMIT-MATERIALIZER-WALK` | With `enable_v3`, `FlexCommitter::build_commit` marks every committed leader of the commit round and walks their causal history. It follows an ancestor only when the reference is above the local GC round and no earlier commit took it. It marks each followed reference before it pushes the body. `get_block(..).unwrap()` must find every such body in the local `DagState`. Lean records a finite duplicate-free catalog domain. Every successful catalog read must use an identifier in that domain. `buildCommit_terminates` gives a fuel value at most one more than the domain length. A repeated ancestor reference is dropped by `if !set_committed(..) { continue; }`; block verification also rejects two ancestors from one author. `Linearizer::linearize_sub_dag` is the one-leader pre-v3 form of the same walk. The V3 source map requires a nonempty leader list and requires every leader to have the commit-head round. Rust also aborts on a leader that is already committed and on a committed block at or below GC. The raw Lean walk has no such failure, so an unmapped modeled run can succeed where Rust panics. |
 | `REF-COMMIT-BODY-ORDER` | `sort_committed_blocks` keys on the block round and on `hash(seed \|\| digest)`, with a seed over the committed leader digests. Distinct committed references must therefore get distinct keys. The named leader is the last block of the sorted vector, and `calculate_commit_timestamp` reads the leaders' one-round-below ancestors from `DagState`, which can include blocks that an earlier commit already took. The pre-v3 `sort_sub_dag_blocks` keys only on round and author and has no such tie-break. |
-| `REF-V3-SCHEDULE-SCORER` | `LeaderScheduleV3::add_commit` keeps a three-deep pending window and scores `C-3` against `[C-2, C-1, C]`. Its scoring calculation must be a deterministic function of those four committed materials: it must read only the commit index, the commit digest, the named leader, and the sorted committed block bodies with their `ancestors()`, and no other local state. The model takes that calculation as one function and does not reproduce its arithmetic, so the voting scan, the certifying scan, the equivocation rule, and the distinct-author stake sums stay source obligations. Its running per-authority totals move by `checked_add` and `checked_sub` over the sliding entry window. `refresh_current_schedule` recomputes `allowed_leaders` only at an update-interval boundary, and `select_allowed_leaders` seeds its shuffle from the commit digest of the last pending commit. Rust also asserts consecutive commit indexes, strictly increasing leader rounds across the pending window, a nonempty leader set that contains the named leader, and a scan that ends above its bound. The Lean model does not carry those invariants, so it accepts histories that Rust would abort. |
+| `REF-V3-SCHEDULE-SCORER` | `LeaderScheduleV3::add_commit` keeps a three-deep pending window and scores `C-3` against `[C-2, C-1, C]`. Its scoring calculation must be a deterministic function of those four committed materials. It must read only the commit index, the commit digest, the named leader, and the sorted committed block bodies with their `ancestors()`. It must not read other local state. The model takes that calculation as one function and does not reproduce its arithmetic, so the voting scan, the certifying scan, the equivocation rule, and the distinct-author stake sums stay source obligations. Its running per-authority totals move by `checked_add` and `checked_sub` over the sliding entry window. `refresh_current_schedule` recomputes `allowed_leaders` only at an update-interval boundary. `select_allowed_leaders` seeds its shuffle from the commit digest of the last pending commit. The source map requires the same ordered committed-leader list at two hosts for one exact head. Exact commit-decision replay must supply this condition because `compute_sort_seed` hashes leader digests in list order. Rust also asserts consecutive commit indexes, strictly increasing leader rounds across the pending window, a leader set that contains the named leader, and a scan that ends above its bound. The Lean model does not carry these remaining invariants, so it accepts histories that Rust would abort. |
 | `REF-V3-SCHEDULE-READERS` | Proposer ancestor selection and the FlexCommitter must read the allowed-leader vector, the round order, and the minimum next leader round of the current replayed schedule state, not separately derived values. |
 | `REF-V3-SCHEDULE-INPUTS` | `LeaderScheduleV3::add_commit` is also called for a synchronized commit that `FlexCommitter::handle_certified_commit` built, and `from_store` replays committed sub-DAGs from storage over a bounded suffix that starts at `replay_start`. The Lean model replays from genesis and maps only the local build path. Map the other two input routes, and show that the bounded suffix replay reaches the same schedule state. |
 
@@ -567,6 +567,7 @@ finalizer work is not evidence for this result.
   interval. If at least `C_service` items are pending, fetch, verification, and
   acceptance remove at least `C_service` items in that interval. If fewer items
   are pending, all pending items finish or become obsolete because GC moved.
+  One finite removal cap bounds `workRemoved` in every interval.
   Thus, each fixed known above-GC causal history eventually becomes accepted
   while rounds can continue. The validator can skip authoring rounds, but it
   eventually stores and sends own blocks at later unbounded rounds. It does not
@@ -600,15 +601,20 @@ finalizer work is not evidence for this result.
 
 - **Claim:** After GST, at most a fixed number of whole blocks can reach one
   correct, available validator in one `delta`. That budget is large enough for
-  ordinary round advancement, with room to spare: the above-GC references that
-  new rounds require stay strictly below it. A validator whose causal-work queue
-  holds at least one interval's budget uses the whole budget in that interval.
+  ordinary round advancement, with room to spare. The production bound is the
+  committee size times a positive rounds-per-interval bound. One author can add
+  at most one block in each round. The above-GC references that new rounds
+  require stay strictly below the transfer budget. The queue removal cap equals
+  that interval budget. A validator whose causal-work queue holds at least one
+  interval's budget uses the whole budget in that interval.
 - **Type:** Network and pipeline environment.
 - **Status:** Environmental assumption.
 - **Effect if false:** Liveness. If arrivals reach the budget, the causal-work
   backlog cannot shrink, so catch-up stops.
 - **Lean use:** `ValidatorCausalQueueTransferBudget.toServiceRules` supplies the
   service margin of `ASM-LIVE-POST-GST-CAUSAL-SERVICE`.
+  `productionBoundPositive` prevents a zero production bound for a populated
+  committee and a positive round bound.
   `high_backlog_drains_by_spare_capacity` gives the drain rate as the surplus
   over the production bound, and `saturated_interval_does_not_drain` shows that
   the budget is necessary and not only sufficient.

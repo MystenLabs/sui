@@ -122,16 +122,18 @@ reaches from the committed leaders of the commit round. The filter follows a
 reference only when the reference is above the local GC round and no earlier
 commit took it.
 
-Inclusion is conditional on the reads that Rust already relies on: each leader
-body is in the local `DagState`, every followed ancestor body is present, and
-the loop finishes. The first two are the `get_block(..).unwrap()` obligation
-inside the walk. The last is the finite store. The walk also commits each block
-once, which the leader `set_committed` assertions, the repeated-reference
-`continue`, and the verifier rule against two ancestors from one author supply.
+Inclusion is conditional on the reads that Rust already relies on. Each leader
+body is in the local `DagState`, and every followed ancestor body is present.
+These reads are the `get_block(..).unwrap()` obligation inside the walk. The
+Lean view records a finite, duplicate-free catalog domain.
+`buildCommit_terminates` proves that the walk finishes with fuel at most one
+more than the domain length. The walk also commits each block once. The leader
+`set_committed` assertions, the repeated-reference `continue`, and the verifier
+rule against two ancestors from one author supply this property.
 
-Two hosts whose walk reads agree therefore commit the same duplicate-free block
-set, and the deterministic seeded sort turns that set into one commit body and
-one commit digest.
+Two hosts whose walk reads and ordered committed-leader decisions agree commit
+the same duplicate-free block set. The deterministic seeded sort turns that set
+into one commit body and one commit digest.
 
 ### Different block-GC horizons keep one durable prefix
 
@@ -154,7 +156,10 @@ committed block bodies, and recomputes the allowed-leader vector only at an
 update-interval boundary with a shuffle seeded from the last pending commit
 digest. It also derives the next commit index and the minimum next leader round
 that the proposer gate and the FlexCommitter read. The scorer input is the
-materializer flush above, so the exact commit reference fixes it.
+materializer flush above. A mapped V3 run has at least one committed leader, and
+all committed leaders have the commit-head round. The source map also requires
+the same ordered committed-leader decisions for one exact head. Exact decision
+replay must supply this condition because the sort seed uses leader-digest order.
 
 The scoring calculation is one deterministic function of the four committed
 materials. The model does not reproduce its arithmetic, because a shared schedule
@@ -169,7 +174,7 @@ retained window reaches the same totals.
 Two correct hosts with exact installed heads at one commit index therefore reach
 the same replayed schedule state, so every read they take from it agrees. The
 scored input at each step is one host's actual materializer output, and any other
-host whose walk reads agree computes the same input.
+host whose ordered leader decisions and walk reads agree computes the same input.
 
 The remaining product conditions are the sort determinism for the commit body and
 the source rules that bind these reads to the running code. They are listed as
@@ -303,9 +308,13 @@ A correct validator can receive at most a fixed number of whole blocks in one
 `delta`. The budget is coarse: a larger block does not take longer to transfer.
 
 The budget is assumed large enough for ordinary round advancement, with room to
-spare. The cap therefore binds only on bulk movement, which is recursive causal
-block sync and commit sync over many blocks. The surplus over what round
-advancement demands is the rate at which a lagging validator drains its backlog.
+spare. The production bound is the committee size times a positive
+rounds-per-interval bound. One author produces at most one block in each round.
+The base queue also has a removal cap. The transfer model sets this cap to the
+interval budget. The cap therefore binds only on bulk movement, which is
+recursive causal block sync and commit sync over many blocks. The surplus over
+what round advancement demands is the rate at which a lagging validator drains
+its backlog.
 
 This replaces an assumed service margin with an inequality between two named
 quantities. It also makes the failure mode explicit: if arrivals reach the
@@ -400,8 +409,9 @@ honest-parent bound to it, and
 `ExactCommitInstallProvenance.exactInstalledHeadsAtSameIndexShareRustSchedule`
 gives two correct hosts one replayed schedule state at one commit index. The open
 rows are `REF-COMMIT-MATERIALIZER-WALK`, `REF-COMMIT-BODY-ORDER`,
-`REF-V3-SCHEDULE-SCORER`, and `REF-V3-SCHEDULE-READERS`. The Lean walk also uses
-a step budget for the Rust loop instead of deriving the finite-store bound.
+`REF-V3-SCHEDULE-SCORER`, and `REF-V3-SCHEDULE-READERS`.
+`CommitMaterializerView.buildCommit_terminates` now derives a finite fuel bound
+from the finite catalog domain.
 
 One safety-refinement obligation remains open. Lean now keeps the first direct
 or indirect origin, the exact historical indirect evidence, and the ordered

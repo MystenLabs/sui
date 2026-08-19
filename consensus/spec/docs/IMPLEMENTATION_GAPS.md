@@ -347,6 +347,10 @@ whole blocks that can reach one correct validator in one `delta`, which must sta
 strictly above what ordinary round advancement demands. Neither quantity is
 measured today.
 
+The Lean production bound is no longer a free number. It is the committee size
+times a positive rounds-per-interval bound. The base causal queue also has a
+uniform removal cap. The transfer model sets this cap to the interval budget.
+
 `max_blocks_per_fetch` and `max_blocks_per_sync` cap the blocks in one fetch and
 one sync response, and `max_transactions_in_block_bytes` and
 `max_num_transactions_in_block` cap one block. No component measures a link
@@ -544,6 +548,8 @@ Lean now models the v3 `FlexCommitter::build_commit` walk and the
 `LeaderScheduleV3` replay. `CommitMaterializerView.buildCommit_materializes_exactly`
 proves that a successful walk commits exactly the blocks its ancestor filter
 reaches, and `buildCommit_output_nodup` proves it commits each block once.
+`buildCommit_terminates` derives fuel at most one more than the finite catalog
+domain length.
 `CommitMaterializerView.committed_flush_block_has_non_byzantine_parent_layer`
 carries the weighted honest-parent bound to that flush and locates each honest
 parent body. `V3ScheduleState.addCommit_sound` and
@@ -554,13 +560,13 @@ totals stay equal to a recomputation over the retained window, so the Rust
 gives one replayed schedule state to two correct hosts at one commit index, so
 every read they take from it agrees.
 
-Four source rows remain open.
+Five source rows remain open.
 
 - `REF-COMMIT-MATERIALIZER-WALK`. Map the walk to the Rust loop. Show that
   `get_block(..).unwrap()` finds every above-GC ancestor that no earlier commit
-  took, and that the finite store and the committed marks end the loop. The Lean
-  model uses a step budget for the loop instead of deriving the finite-store
-  bound, and it uses a front stack where Rust uses a back stack. The visit order
+  took. Map the finite Lean catalog domain to the finite `DagState` keys, and
+  show that every successful read is in that domain. Lean then derives the fuel
+  bound. Lean uses a front stack where Rust uses a back stack. The visit order
   does not change the committed set, and the seeded sort fixes the vector.
 - `REF-COMMIT-BODY-ORDER`. `sort_committed_blocks` keys on the block round and
   on a hash of the commit seed and the block digest, so equal keys need a hash
@@ -575,6 +581,10 @@ Four source rows remain open.
   materials and reads no other local state, that `refresh_current_schedule`
   recomputes `allowed_leaders` only at an update-interval boundary, and that
   `select_allowed_leaders` seeds its shuffle from the last pending commit digest.
+  Derive `orderedLeaderDecisionsAgree` from exact ordered commit decisions at
+  the two hosts. The order is necessary because `compute_sort_seed` hashes the
+  leader digests in that order. Map the nonempty leader list and show that every
+  committed leader has the commit-head round.
   The model does not reproduce the voting scan, the certifying scan, the
   equivocation rule, or the distinct-author stake sums, so those stay source
   obligations rather than checked Lean definitions.
@@ -590,13 +600,15 @@ Four source rows remain open.
   with the full replay.
 
 The Lean model is also more permissive than the running code in two places. The
-walk drops a followed reference whose body is missing, and it accepts an empty
-leader set, an already-committed leader, and a leader at or below GC; Rust
-aborts in each case. `add_commit` carries no invariant for consecutive commit
-indexes, strictly increasing leader rounds, a nonempty leader set that contains
-the named leader, or the scan sentinel, all of which Rust asserts. A theorem
-about a successful modeled run therefore still applies to a successful Rust run,
-but the model does not reproduce the Rust failure conditions.
+raw walk drops a followed reference whose body is missing. It accepts an empty
+leader set, an already-committed leader, and a leader at or below GC. The V3
+source map excludes an empty leader list and requires every leader to have the
+commit-head round. It does not exclude the other raw-walk failures.
+`add_commit` carries no invariant for consecutive commit indexes, strictly
+increasing leader rounds, a leader set that contains the named leader, or the
+scan sentinel. Rust asserts all these conditions. A theorem about a successful
+mapped run therefore still applies to a successful Rust run, but the model does
+not reproduce all Rust failure conditions.
 
 The Lean model also carries the local walk view for two hosts. Deriving one
 committed block set from two hosts still needs their GC rounds, their prior

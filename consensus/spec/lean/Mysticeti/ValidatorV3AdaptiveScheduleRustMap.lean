@@ -42,9 +42,10 @@ The mapping covers four Rust steps.
 
 The scorer reads the `CommittedSubDag` that the materializer built, so its block
 vector is already sorted. Two correct hosts therefore give the scorer the same
-list, not only the same set. `V3ScheduleRustSourceMap.localMaterial_agrees`
-derives that from the walk and the sort, and the scoring rule is a function, so
-equal inputs give equal score entries.
+list, not only the same set. The source map requires their ordered committed
+leader decisions to agree. `V3ScheduleRustSourceMap.localMaterial_agrees` then
+derives the common block vector from the walk and the sort. The scoring rule is
+a function, so equal inputs give equal score entries.
 -/
 
 /-- The exact committed material of one commit that the Rust scorer reads. -/
@@ -416,6 +417,16 @@ structure V3ScheduleRustSourceMap (BlockId CommitId : Type)
     (parameters : V3ReplayParameters BlockId CommitId) where
   view : Nat → ValidatorCommitHead CommitId → CommitMaterializerView BlockId
   leaders : Nat → ValidatorCommitHead CommitId → List (ValidatorBlock BlockId)
+  /-- Rust aborts when a commit round has no committed leader. -/
+  leadersNonempty : ∀ validator head, leaders validator head ≠ []
+  /-- Every committed leader comes from the round stored in the commit head. -/
+  leadersAtCommitRound : ∀ validator head leader,
+    leader ∈ leaders validator head → leader.reference.round = head.round
+  /-- Exact commit-decision replay must supply the same ordered committed-leader
+  list at both hosts for one exact head. Set equality is not sufficient because
+  `compute_sort_seed` hashes the leader digests in list order. -/
+  orderedLeaderDecisionsAgree : ∀ left right head,
+    leaders left head = leaders right head
   fuel : Nat → ValidatorCommitHead CommitId → Nat
   flush : Nat → ValidatorCommitHead CommitId → List (ValidatorBlock BlockId)
   marks : Nat → ValidatorCommitHead CommitId → List BlockId
@@ -443,9 +454,9 @@ structure V3ScheduleRustSourceMap (BlockId CommitId : Type)
       some (localMaterial validator head).leader
   /-- The replay scores the material that one designated host actually built.
   `materialOf_is_the_common_flush` then carries that choice to any other host
-  whose walk reads agree, through `localMaterial_agrees`. Stating this field for
-  every host at once would assume the cross-host agreement instead of deriving
-  it. -/
+  whose ordered leader decisions and walk reads agree, through
+  `localMaterial_agrees`. Stating this field for every host at once would assume
+  the complete cross-host material agreement instead of deriving it. -/
   canonicalHost : Nat
   materialOfIsCanonical : ∀ head,
     parameters.materialOf head = localMaterial canonicalHost head
@@ -471,8 +482,9 @@ namespace V3ScheduleRustSourceMap
 variable {BlockId CommitId : Type} [DecidableEq BlockId]
 variable {parameters : V3ReplayParameters BlockId CommitId}
 
-/-- Two hosts that materialize one exact commit head from agreeing walk views
-give the scorer the same input.
+/-- Two hosts that materialize one exact commit head from the source map's
+ordered leader decisions and from agreeing walk views give the scorer the same
+input.
 
 The block set comes from `CommitMaterializerView.buildCommit_outputs_agree`, the
 duplicate-free vector from `CommitMaterializerView.buildCommit_output_nodup`, and
@@ -481,10 +493,10 @@ last block of that vector. -/
 theorem localMaterial_agrees
     (map : V3ScheduleRustSourceMap BlockId CommitId parameters)
     {left right : Nat} {head : ValidatorCommitHead CommitId}
-    (sameLeaders : map.leaders left head = map.leaders right head)
     (agreement : CommitMaterializerView.ViewAgreement (map.view left head)
       (map.view right head)) :
     map.localMaterial left head = map.localMaterial right head := by
+  have sameLeaders := map.orderedLeaderDecisionsAgree left right head
   have sameBlocks :
       (map.localMaterial left head).blocks =
         (map.localMaterial right head).blocks := by
@@ -519,19 +531,18 @@ theorem localMaterial_agrees
     commitIds.trans rightCommitIds.symm, sameLeaderRef, sameBlocks⟩
 
 /-- The replay input is well defined. It is the designated host's actual
-materializer output, and any other host whose walk reads agree computes the same
-input. The second part is derived from the walk, not assumed. -/
+materializer output. Any other host with the same ordered leader decisions and
+the same walk reads computes the same input. The source map supplies the ordered
+decision agreement. The walk derives the block-set agreement. -/
 theorem materialOf_is_the_common_flush
     (map : V3ScheduleRustSourceMap BlockId CommitId parameters)
     {validator : Nat} {head : ValidatorCommitHead CommitId}
-    (sameLeaders :
-      map.leaders map.canonicalHost head = map.leaders validator head)
     (agreement :
       CommitMaterializerView.ViewAgreement (map.view map.canonicalHost head)
         (map.view validator head)) :
     parameters.materialOf head = map.localMaterial validator head := by
   rw [map.materialOfIsCanonical head]
-  exact map.localMaterial_agrees sameLeaders agreement
+  exact map.localMaterial_agrees agreement
 
 end V3ScheduleRustSourceMap
 

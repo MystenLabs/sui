@@ -80,10 +80,12 @@ reject vote. An accept vote is above both boundaries.
 
 The model contains the Rust v3 commit materializer walk. A successful
 `FlexCommitter::build_commit` run returns exactly the blocks that its ancestor
-filter reaches from the committed leaders of the commit round: above the local GC
-round and not taken by an earlier commit. The conditions are the reads that Rust
-already relies on. Each leader body is local, every followed ancestor body is in
-the local `DagState`, and the loop finishes on the finite store.
+filter reaches from the committed leaders of the commit round. These blocks are
+above the local GC round and are not in an earlier commit. The conditions are
+the reads that Rust already relies on. Each leader body is local, and every
+followed ancestor body is in the local `DagState`. The view has a finite,
+duplicate-free catalog domain. `buildCommit_terminates` proves that the walk
+finishes with fuel at most one more than the domain length.
 `Linearizer::linearize_sub_dag` is the one-leader pre-v3 form of the same walk.
 
 The walk commits each block once. Two hosts whose walk reads agree commit the
@@ -105,7 +107,11 @@ The model contains the `LeaderScheduleV3` replay bookkeeping: the three-deep
 pending window, the sliding score window, the boundary-only allowed-leader
 refresh, and the shuffle seed taken from the last pending commit digest. It also
 derives the next commit index and the minimum next leader round. The scorer input
-is the sorted materializer flush, so the exact commit reference fixes it.
+is the sorted materializer flush. A mapped V3 run has a nonempty leader list,
+and every leader has the commit-head round. The source map requires exact
+commit-decision replay to supply the same ordered committed-leader list at two
+hosts. This order fixes the sort seed. The exact commit reference and this
+source condition then fix the scorer input.
 
 The scoring calculation itself is one deterministic function of the four
 committed materials. The model does not reproduce its arithmetic; equal inputs

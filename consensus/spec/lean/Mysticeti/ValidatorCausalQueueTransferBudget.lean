@@ -50,57 +50,35 @@ structure ValidatorCausalQueueTransferBudget
     {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
-    (validator start : Nat) where
-  validatorInRange : validator < config.authorityCount
-  validatorCorrectAvailable : faults.correctAvailable validator = true
-  startAfterGst : network.gst ≤ start
-  active : ∀ time, start ≤ time →
-    (timed.execution.trace time).epochActive = true
+    (validator start : Nat)
+    extends ValidatorCausalQueueBehavior timed validator start where
   /-- The accounting interval, counted in whole `delta` periods. -/
   deltasPerInterval : Nat
   deltasPerIntervalPositive : 0 < deltasPerInterval
+  serviceIntervalIsWholeDeltas :
+    serviceInterval = deltasPerInterval * network.delta
   /-- At most this many whole blocks can reach the validator in one `delta`. -/
   blocksPerDelta : Nat
+  /-- An upper bound on the number of rounds in one accounting interval. -/
+  roundsPerInterval : Nat
+  roundsPerIntervalPositive : 0 < roundsPerInterval
   /-- New above-GC references that ordinary round advancement requires in one
-  interval. Block production bounds this: one block per author per round. -/
+  interval. One author can produce at most one block in each round. -/
   productionBound : Nat
+  /-- The production bound is committee size times the round bound. -/
+  productionBoundIsCommitteeRounds :
+    productionBound = config.authorityCount * roundsPerInterval
   /-- The budget is large enough for round advancement, with room to spare. -/
   budgetExceedsProduction :
     productionBound < blocksPerDelta * deltasPerInterval
-  pending : Nat → List (ValidatorBlockRef BlockId)
-  known : Nat → ValidatorBlockRef BlockId → Prop
-  workAdded : Nat → Nat
-  workRemoved : Nat → Nat
-  knownMonotone : ∀ {earlier later reference},
-    earlier ≤ later → known earlier reference → known later reference
-  pendingIsRequired : ∀ interval reference,
-    reference ∈ pending interval →
-      ((timed.execution.trace
-        (validatorPostGstCausalQueueSampleTime start
-          (deltasPerInterval * network.delta) interval)
-          ).validatorState validator).accepted reference = false ∧
-      ((timed.execution.trace
-        (validatorPostGstCausalQueueSampleTime start
-          (deltasPerInterval * network.delta) interval)
-          ).validatorState validator).gcRound < reference.round
-  knownAccounted : ∀ interval reference,
-    known interval reference →
-      reference ∈ pending interval ∨
-        ValidatorCausalReferenceResolvedAt timed validator
-          (validatorPostGstCausalQueueSampleTime start
-            (deltasPerInterval * network.delta) interval)
-          reference
   workAddedBound : ∀ interval, workAdded interval ≤ productionBound
-  /-- The transfer cap. No interval moves more than the budget. -/
-  transferCap : ∀ interval,
-    workRemoved interval ≤ blocksPerDelta * deltasPerInterval
+  /-- The base queue removal cap is the transfer budget. -/
+  workRemovalCapIsIntervalBudget :
+    workRemovalCap = blocksPerDelta * deltasPerInterval
   /-- A full queue uses the whole budget. -/
   backlogUsesBudget : ∀ interval,
     blocksPerDelta * deltasPerInterval ≤ (pending interval).length →
       blocksPerDelta * deltasPerInterval ≤ workRemoved interval
-  queueBalance : ∀ interval,
-    (pending (interval + 1)).length + workRemoved interval =
-      (pending interval).length + workAdded interval
   lowBacklogClearsOld : ∀ interval,
     (pending interval).length < blocksPerDelta * deltasPerInterval →
       ∀ reference, reference ∈ pending interval →
@@ -125,10 +103,15 @@ def intervalBudget
     (budget : ValidatorCausalQueueTransferBudget timed validator start) : Nat :=
   budget.blocksPerDelta * budget.deltasPerInterval
 
-/-- The accounting interval in time units. -/
-def serviceInterval
-    (budget : ValidatorCausalQueueTransferBudget timed validator start) : Nat :=
-  budget.deltasPerInterval * network.delta
+/-- A populated committee and a positive round bound give positive production. -/
+theorem productionBoundPositive
+    (budget : ValidatorCausalQueueTransferBudget timed validator start) :
+    0 < budget.productionBound := by
+  have authorityCountPositive : 0 < config.authorityCount := by
+    have validatorInRange := budget.validatorInRange
+    omega
+  rw [budget.productionBoundIsCommitteeRounds]
+  exact Nat.mul_pos authorityCountPositive budget.roundsPerIntervalPositive
 
 /-- Capacity left over after ordinary round advancement. This is the rate at
 which a backlog drains. -/
@@ -148,28 +131,11 @@ causal-work queue therefore holds without a separate margin assumption. -/
 def toServiceRules
     (budget : ValidatorCausalQueueTransferBudget timed validator start) :
     ValidatorPostGstCausalQueueServiceRules timed validator start :=
-  { validatorInRange := budget.validatorInRange
-    validatorCorrectAvailable := budget.validatorCorrectAvailable
-    startAfterGst := budget.startAfterGst
-    active := budget.active
-    serviceInterval := budget.serviceInterval
-    serviceIntervalPositive := by
-      have deltas := budget.deltasPerIntervalPositive
-      have delta := network.deltaPositive
-      unfold serviceInterval
-      exact Nat.mul_pos deltas delta
+  { budget.toValidatorCausalQueueBehavior with
     cAdd := budget.productionBound
     cService := budget.intervalBudget
     serviceMargin := budget.budgetExceedsProduction
-    pending := budget.pending
-    known := budget.known
-    workAdded := budget.workAdded
-    workRemoved := budget.workRemoved
-    knownMonotone := budget.knownMonotone
-    pendingIsRequired := budget.pendingIsRequired
-    knownAccounted := budget.knownAccounted
     workAddedBound := budget.workAddedBound
-    queueBalance := budget.queueBalance
     highBacklogService := budget.backlogUsesBudget
     lowBacklogClearsOld := budget.lowBacklogClearsOld }
 
@@ -214,7 +180,8 @@ theorem saturated_interval_does_not_drain
     (saturated : budget.intervalBudget ≤ budget.workAdded interval) :
     (budget.pending interval).length ≤
       (budget.pending (interval + 1)).length := by
-  have cap := budget.transferCap interval
+  have cap := budget.workRemovedBound interval
+  rw [budget.workRemovalCapIsIntervalBudget] at cap
   unfold intervalBudget at *
   exact budget.no_margin_no_drain (Nat.le_trans cap saturated)
 

@@ -4,6 +4,8 @@ SPDX-License-Identifier: Apache-2.0
 -/
 
 import Mysticeti.ValidatorCausalReadQuality
+import Mathlib.Data.Finset.Card
+import Mathlib.Data.List.Nodup
 
 namespace Mysticeti
 
@@ -17,21 +19,19 @@ above the local GC round and is not already marked committed, and it marks each
 followed reference before it pushes the body. `Linearizer::linearize_sub_dag`
 runs the same shape for the pre-v3 path from a single leader.
 
-This module models that loop and proves the conditional inclusion theorem: a
-successful run materializes exactly the blocks that the eligible-ancestor
-relation reaches from the committed leaders. "Conditional" has two parts. The
-local view must hold the body of each eligible ancestor, which is the Rust
-`get_block(..).unwrap()` inside the walk. The loop must also finish, which the
-Rust finite store supplies.
+This module models that loop and proves the inclusion theorem: a successful run
+materializes exactly the blocks that the eligible-ancestor relation reaches
+from the committed leaders. The local view must hold the body of each eligible
+ancestor. This is the Rust `get_block(..).unwrap()` inside the walk. A finite
+catalog domain also gives a fuel value for which the modeled walk finishes.
 
 The model uses a front stack instead of the Rust back stack. Both keep the same
 last-in-first-out discipline and reach the same set. Rust sorts the result
 before it builds the commit body, so the visit order of sibling ancestors does
 not change the committed set that the sort receives.
 
-Two modeling limits stay open in `REF-COMMIT-MATERIALIZER-WALK`. The loop takes
-a step budget instead of deriving its bound from the finite store and the
-committed marks. Rust also drops a repeated ancestor reference through
+One modeling limit stays open in `REF-COMMIT-MATERIALIZER-WALK`. Rust drops a
+repeated ancestor reference through
 `if !set_committed(..) { continue; }`; the model relies on the verifier rule
 that rejects two ancestors from one author, which `ancestorIdsNodup` records.
 -/
@@ -44,6 +44,11 @@ structure CommitMaterializerView (BlockId : Type) where
   gcRound : Nat
   committedBefore : List BlockId
   catalog : BlockId → Option (ValidatorBlock BlockId)
+  /-- A finite list of all identifiers that this local catalog can return. -/
+  catalogDomain : List BlockId
+  catalogDomainNodup : catalogDomain.Nodup
+  /-- Every successful catalog read is inside the finite domain. -/
+  catalogSupported : ∀ id block, catalog id = some block → id ∈ catalogDomain
   /-- Rust looks up a full `BlockRef`. The identifier therefore names one exact
   reference, in the same shape that the rest of the model uses for
   `blockCatalog`. Read across two references that share an identifier, this
@@ -282,10 +287,49 @@ theorem linearizeFrom_zero {buffer : List (ValidatorBlock BlockId)}
 
 /-! ### Loop invariants
 
-Each result below is proved by induction on the fuel with the stack and the
-running marks generalized. Together they give the conditional inclusion theorem
-for one successful run.
+`run_rec` is the induction principle for one successful run. Each invariant
+below is one application of it: what holds for the empty stack, and how popping
+one block preserves the property.
 -/
+
+/-- Induction over one successful run. The empty stack returns nothing, and a
+popped block prepends itself to the run of the extended stack. The step also
+exposes that recursive run, so one invariant can use an earlier invariant on
+it. -/
+theorem run_rec
+    {motive : List (ValidatorBlock BlockId) → List BlockId →
+      List (ValidatorBlock BlockId) → List BlockId → Prop}
+    (empty : ∀ committed, motive [] committed [] committed)
+    (pop : ∀ block tail committed rest finalCommitted,
+      (∃ fuel, view.linearizeFrom fuel
+        (view.eligibleAncestors committed block ++ tail)
+        (view.eligibleAncestorIds committed block ++ committed) =
+          some (rest, finalCommitted)) →
+      motive (view.eligibleAncestors committed block ++ tail)
+        (view.eligibleAncestorIds committed block ++ committed) rest
+        finalCommitted →
+      motive (block :: tail) committed (block :: rest) finalCommitted) :
+    ∀ (fuel : Nat) (buffer : List (ValidatorBlock BlockId))
+      (committed : List BlockId) (out : List (ValidatorBlock BlockId))
+      (finalCommitted : List BlockId),
+      view.linearizeFrom fuel buffer committed = some (out, finalCommitted) →
+      motive buffer committed out finalCommitted := by
+  intro fuel
+  induction fuel with
+  | zero => intro _ _ _ _ run; rw [linearizeFrom_zero] at run; exact absurd run (by simp)
+  | succ fuel ih =>
+      intro buffer committed out finalCommitted run
+      cases buffer with
+      | nil =>
+          obtain ⟨outShape, marksShape⟩ := linearizeFrom_nil run
+          subst outShape
+          subst marksShape
+          exact empty _
+      | cons block tail =>
+          obtain ⟨rest, outShape, step⟩ := linearizeFrom_cons run
+          subst outShape
+          exact pop block tail committed rest finalCommitted ⟨fuel, step⟩
+            (ih _ _ _ _ step)
 
 /-- Every block on the stack reaches the output. -/
 theorem linearizeFrom_drains_buffer :
@@ -294,21 +338,12 @@ theorem linearizeFrom_drains_buffer :
       (finalCommitted : List BlockId),
       view.linearizeFrom fuel buffer committed = some (out, finalCommitted) →
       ∀ block, block ∈ buffer → block ∈ out := by
-  intro fuel
-  induction fuel with
-  | zero => intro _ _ _ _ run; rw [linearizeFrom_zero] at run; exact absurd run (by simp)
-  | succ fuel ih =>
-      intro buffer committed out finalCommitted run
-      cases buffer with
-      | nil => intro block member; exact absurd member (by simp)
-      | cons block tail =>
-          obtain ⟨rest, outShape, step⟩ := linearizeFrom_cons run
-          subst outShape
-          intro other member
-          rcases List.mem_cons.mp member with rfl | tailMember
-          · exact List.mem_cons_self
-          · exact List.mem_cons_of_mem _
-              (ih _ _ _ _ step other (List.mem_append_right _ tailMember))
+  refine run_rec (motive := fun buffer _ out _ =>
+    ∀ block, block ∈ buffer → block ∈ out) (fun _ _ member => member) ?_
+  intro block tail committed rest _ _ ih other member
+  rcases List.mem_cons.mp member with rfl | tailMember
+  · exact List.mem_cons_self
+  · exact List.mem_cons_of_mem _ (ih other (List.mem_append_right _ tailMember))
 
 /-- Conditional inclusion for one run: an ancestor reference that is above the
 GC round, is not already marked, and has a local body is materialized. -/
@@ -323,48 +358,40 @@ theorem linearizeFrom_includes_eligible_ancestor :
           reference.id ∉ committed →
           ∀ ancestor, view.catalog reference.id = some ancestor →
             ancestor ∈ out := by
-  intro fuel
-  induction fuel with
-  | zero => intro _ _ _ _ run; rw [linearizeFrom_zero] at run; exact absurd run (by simp)
-  | succ fuel ih =>
-      intro buffer committed out finalCommitted run
-      cases buffer with
-      | nil =>
-          obtain ⟨outShape, _⟩ := linearizeFrom_nil run
-          subst outShape
-          intro block member
-          exact absurd member (by simp)
-      | cons block tail =>
-          obtain ⟨rest, outShape, step⟩ := linearizeFrom_cons run
-          subst outShape
-          intro other otherMember reference referenceMember aboveGc notMarked
-            ancestor body
-          have ancestorEligible :
-              ancestor ∈ view.eligibleAncestors committed block →
-                ancestor ∈ block :: rest := fun member =>
-            List.mem_cons_of_mem _
-              (linearizeFrom_drains_buffer _ _ _ _ _ step ancestor
-                (List.mem_append_left _ member))
-          rcases List.mem_cons.mp otherMember with rfl | restMember
-          · exact ancestorEligible
-              (mem_eligibleAncestors.mpr
-                ⟨reference, referenceMember, aboveGc, notMarked, body⟩)
-          · by_cases stepMarked :
-                reference.id ∈ view.eligibleAncestorIds committed block
-            · rcases mem_eligibleAncestorIds.mp stepMarked with
-                ⟨earlier, earlierMember, earlierId⟩
-              rcases mem_eligibleAncestors.mp earlierMember with
-                ⟨parent, _, _, _, earlierBody⟩
-              rw [view.catalogNamesBlock parent earlier earlierBody] at earlierId
-              rw [earlierId] at earlierBody
-              rw [body] at earlierBody
-              exact ancestorEligible (Option.some.inj earlierBody ▸ earlierMember)
-            · exact List.mem_cons_of_mem _
-                (ih _ _ _ _ step other restMember reference referenceMember
-                  aboveGc
-                  (fun member =>
-                    (List.mem_append.mp member).elim stepMarked notMarked)
-                  ancestor body)
+  refine run_rec (motive := fun _ committed out _ =>
+    ∀ block, block ∈ out →
+      ∀ reference, reference ∈ view.ancestorsOf block →
+        view.gcRound < reference.round →
+        reference.id ∉ committed →
+        ∀ ancestor, view.catalog reference.id = some ancestor →
+          ancestor ∈ out)
+    (fun _ _ member => absurd member (by simp)) ?_
+  rintro block tail committed rest _ ⟨fuel, step⟩ ih other otherMember reference
+    referenceMember aboveGc notMarked ancestor body
+  have ancestorEligible :
+      ancestor ∈ view.eligibleAncestors committed block →
+        ancestor ∈ block :: rest := fun member =>
+    List.mem_cons_of_mem _
+      (linearizeFrom_drains_buffer _ _ _ _ _ step ancestor
+        (List.mem_append_left _ member))
+  rcases List.mem_cons.mp otherMember with rfl | restMember
+  · exact ancestorEligible
+      (mem_eligibleAncestors.mpr
+        ⟨reference, referenceMember, aboveGc, notMarked, body⟩)
+  · by_cases stepMarked :
+        reference.id ∈ view.eligibleAncestorIds committed block
+    · rcases mem_eligibleAncestorIds.mp stepMarked with
+        ⟨earlier, earlierMember, earlierId⟩
+      rcases mem_eligibleAncestors.mp earlierMember with
+        ⟨parent, _, _, _, earlierBody⟩
+      rw [view.catalogNamesBlock parent earlier earlierBody] at earlierId
+      rw [earlierId] at earlierBody
+      rw [body] at earlierBody
+      exact ancestorEligible (Option.some.inj earlierBody ▸ earlierMember)
+    · exact List.mem_cons_of_mem _
+        (ih other restMember reference referenceMember aboveGc
+          (fun member => (List.mem_append.mp member).elim stepMarked notMarked)
+          ancestor body)
 
 /-- A run follows only eligible-ancestor edges, so every output block is
 materialized. -/
@@ -377,31 +404,21 @@ theorem linearizeFrom_output_materialized
       (∀ id, id ∈ view.committedBefore → id ∈ committed) →
       (∀ block, block ∈ buffer → view.Materialized leaders block) →
       ∀ block, block ∈ out → view.Materialized leaders block := by
-  intro fuel
-  induction fuel with
-  | zero => intro _ _ _ _ run; rw [linearizeFrom_zero] at run; exact absurd run (by simp)
-  | succ fuel ih =>
-      intro buffer committed out finalCommitted run start bufferMaterialized
-      cases buffer with
-      | nil =>
-          obtain ⟨outShape, _⟩ := linearizeFrom_nil run
-          subst outShape
-          intro block member
-          exact absurd member (by simp)
-      | cons block tail =>
-          obtain ⟨rest, outShape, step⟩ := linearizeFrom_cons run
-          subst outShape
-          have blockMaterialized := bufferMaterialized block List.mem_cons_self
-          intro other member
-          rcases List.mem_cons.mp member with rfl | restMember
-          · exact blockMaterialized
-          · refine ih _ _ _ _ step
-              (fun id before => List.mem_append_right _ (start id before))
-              (fun candidate candidateMember => ?_) other restMember
-            rcases List.mem_append.mp candidateMember with ancestor | old
-            · exact eligibleAncestor_extends_materialized start blockMaterialized
-                ancestor
-            · exact bufferMaterialized candidate (List.mem_cons_of_mem _ old)
+  refine run_rec (motive := fun buffer committed out _ =>
+    (∀ id, id ∈ view.committedBefore → id ∈ committed) →
+      (∀ block, block ∈ buffer → view.Materialized leaders block) →
+      ∀ block, block ∈ out → view.Materialized leaders block)
+    (fun _ _ _ _ member => absurd member (by simp)) ?_
+  intro block tail committed rest _ _ ih start bufferMaterialized other member
+  have blockMaterialized := bufferMaterialized block List.mem_cons_self
+  rcases List.mem_cons.mp member with rfl | restMember
+  · exact blockMaterialized
+  · refine ih (fun id before => List.mem_append_right _ (start id before))
+      (fun candidate candidateMember => ?_) other restMember
+    rcases List.mem_append.mp candidateMember with ancestor | old
+    · exact eligibleAncestor_extends_materialized start blockMaterialized
+        ancestor
+    · exact bufferMaterialized candidate (List.mem_cons_of_mem _ old)
 
 /-! ### The materializer inclusion theorem -/
 
@@ -461,23 +478,22 @@ theorem filterMap_catalog_ids_nodup :
       (((references.filterMap fun reference => view.catalog reference.id)).map
         fun block => block.reference.id).Nodup := by
   intro references
-  induction references with
-  | nil => intro _; simp
-  | cons reference tail ih =>
-      intro nodup
-      simp only [List.map_cons, List.nodup_cons] at nodup
-      cases body : view.catalog reference.id with
-      | none => simpa [List.filterMap_cons, body] using ih nodup.2
-      | some block =>
-          have named := view.catalogNamesBlock reference block body
-          simp only [List.filterMap_cons, body, List.map_cons, List.nodup_cons]
-          refine ⟨fun clash => ?_, ih nodup.2⟩
-          rcases List.mem_map.mp clash with ⟨other, otherMember, otherId⟩
-          rcases List.mem_filterMap.mp otherMember with
-            ⟨otherReference, otherReferenceMember, otherBody⟩
-          rw [view.catalogNamesBlock otherReference other otherBody] at otherId
-          rw [named] at otherId
-          exact nodup.1 (otherId ▸ List.mem_map_of_mem otherReferenceMember)
+  have resultSublist :
+      List.Sublist
+        ((references.filterMap fun reference => view.catalog reference.id).map
+          fun block => block.reference.id)
+        (references.map ValidatorBlockRef.id) := by
+    induction references with
+    | nil => simp
+    | cons reference tail ih =>
+        cases body : view.catalog reference.id with
+        | none =>
+            simpa [body] using List.sublist_cons_of_sublist reference.id ih
+        | some block =>
+            simpa [body, view.catalogNamesBlock reference block body] using
+              ih.cons_cons reference.id
+  exact fun referencesNodup =>
+    List.Nodup.sublist resultSublist referencesNodup
 
 theorem eligibleAncestors_ids_nodup {committed : List BlockId}
     {block : ValidatorBlock BlockId} :
@@ -486,6 +502,247 @@ theorem eligibleAncestors_ids_nodup {committed : List BlockId}
   filterMap_catalog_ids_nodup _
     (List.Nodup.sublist (List.Sublist.map _ List.filter_sublist)
       (view.ancestorIdsNodup block))
+
+/-! ### Termination from the finite catalog -/
+
+/-- Catalog identifiers that the running marks do not contain. -/
+def unmarkedCatalogIds
+    (view : CommitMaterializerView BlockId) (committed : List BlockId) :
+    Finset BlockId :=
+  view.catalogDomain.toFinset \ committed.toFinset
+
+/-- The number of unmarked catalog identifiers plus the stack length.
+
+One loop iteration reduces this measure by one. Pushed ancestors leave the
+first term and enter the second term. The popped block then leaves the second
+term. -/
+def walkMeasure
+    (view : CommitMaterializerView BlockId)
+    (buffer : List (ValidatorBlock BlockId)) (committed : List BlockId) : Nat :=
+  (view.unmarkedCatalogIds committed).card + buffer.length
+
+/-- One step marks only distinct identifiers from the finite unmarked catalog. -/
+theorem eligibleAncestorIds_subset_unmarkedCatalog
+    {committed : List BlockId} {block : ValidatorBlock BlockId} :
+    (view.eligibleAncestorIds committed block).toFinset ⊆
+      view.unmarkedCatalogIds committed := by
+  intro id idMember
+  simp only [List.mem_toFinset] at idMember
+  rcases mem_eligibleAncestorIds.mp idMember with
+    ⟨ancestor, ancestorMember, rfl⟩
+  rcases mem_eligibleAncestors.mp ancestorMember with
+    ⟨reference, _, _, _, body⟩
+  have inDomain := view.catalogSupported reference.id ancestor body
+  have fresh := (eligibleAncestor_facts ancestorMember).2
+  have named := view.catalogNamesBlock reference ancestor body
+  simp only [unmarkedCatalogIds, Finset.mem_sdiff, List.mem_toFinset]
+  exact ⟨by simpa only [named] using inDomain, fresh⟩
+
+/-- Adding marks removes their identifiers from the unmarked catalog. -/
+theorem unmarkedCatalogIds_append (newIds committed : List BlockId) :
+    view.unmarkedCatalogIds (newIds ++ committed) =
+      view.unmarkedCatalogIds committed \ newIds.toFinset := by
+  ext id
+  simp only [unmarkedCatalogIds, Finset.mem_sdiff, List.mem_toFinset,
+    List.toFinset_append, Finset.mem_union]
+  aesop
+
+/-- Fresh followed ancestors and an already marked duplicate-free stack give
+the next duplicate-free stack. -/
+theorem eligibleAncestors_append_ids_nodup
+    {committed : List BlockId} {block : ValidatorBlock BlockId}
+    {buffer : List (ValidatorBlock BlockId)}
+    (bufferNodup : (buffer.map fun candidate => candidate.reference.id).Nodup)
+    (bufferMarked : ∀ candidate, candidate ∈ buffer →
+      candidate.reference.id ∈ committed) :
+    ((view.eligibleAncestors committed block ++ buffer).map
+      fun candidate => candidate.reference.id).Nodup := by
+  rw [List.map_append]
+  refine List.Nodup.append eligibleAncestors_ids_nodup bufferNodup ?_
+  rw [List.disjoint_left]
+  intro id ancestorId bufferId
+  rcases List.mem_map.mp ancestorId with
+    ⟨ancestor, ancestorMember, ancestorEq⟩
+  rcases List.mem_map.mp bufferId with
+    ⟨candidate, candidateMember, candidateEq⟩
+  exact (eligibleAncestor_facts ancestorMember).2
+    (ancestorEq ▸ candidateEq ▸ bufferMarked candidate candidateMember)
+
+/-- The marks after one step cover the complete next stack. -/
+theorem eligibleAncestors_append_marked
+    {committed : List BlockId} {block : ValidatorBlock BlockId}
+    {buffer : List (ValidatorBlock BlockId)}
+    (bufferMarked : ∀ candidate, candidate ∈ buffer →
+      candidate.reference.id ∈ committed) :
+    ∀ candidate,
+      candidate ∈ view.eligibleAncestors committed block ++ buffer →
+        candidate.reference.id ∈
+          view.eligibleAncestorIds committed block ++ committed := by
+  intro candidate candidateMember
+  rcases List.mem_append.mp candidateMember with ancestor | old
+  · exact List.mem_append_left _
+      (mem_eligibleAncestorIds.mpr ⟨candidate, ancestor, rfl⟩)
+  · exact List.mem_append_right _ (bufferMarked candidate old)
+
+/-- Every block on the next stack has an identifier in the finite catalog. -/
+theorem eligibleAncestors_append_in_domain
+    {committed : List BlockId} {block : ValidatorBlock BlockId}
+    {buffer : List (ValidatorBlock BlockId)}
+    (bufferInDomain : ∀ candidate, candidate ∈ buffer →
+      candidate.reference.id ∈ view.catalogDomain) :
+    ∀ candidate,
+      candidate ∈ view.eligibleAncestors committed block ++ buffer →
+        candidate.reference.id ∈ view.catalogDomain := by
+  intro candidate candidateMember
+  rcases List.mem_append.mp candidateMember with ancestor | old
+  · rcases mem_eligibleAncestors.mp ancestor with
+      ⟨reference, _, _, _, body⟩
+    rw [view.catalogNamesBlock reference candidate body]
+    exact view.catalogSupported reference.id candidate body
+  · exact bufferInDomain candidate old
+
+/-- One nonempty loop iteration reduces the finite-catalog measure by one. -/
+theorem walkMeasure_step
+    {committed : List BlockId} {block : ValidatorBlock BlockId}
+    {buffer : List (ValidatorBlock BlockId)} :
+    view.walkMeasure
+          (view.eligibleAncestors committed block ++ buffer)
+          (view.eligibleAncestorIds committed block ++ committed) + 1 =
+      view.walkMeasure (block :: buffer) committed := by
+  have idsSubset :=
+    eligibleAncestorIds_subset_unmarkedCatalog
+      (view := view) (committed := committed) (block := block)
+  have idsNodup := eligibleAncestors_ids_nodup
+    (view := view) (committed := committed) (block := block)
+  have markedIdsNodup :
+      (view.eligibleAncestorIds committed block).Nodup := by
+    simpa [eligibleAncestorIds] using idsNodup
+  have cardStep := Finset.card_sdiff_add_card_eq_card idsSubset
+  rw [List.toFinset_card_of_nodup markedIdsNodup] at cardStep
+  have idsLength :
+      (view.eligibleAncestorIds committed block).length =
+        (view.eligibleAncestors committed block).length := by
+    simp [eligibleAncestorIds]
+  unfold walkMeasure
+  rw [unmarkedCatalogIds_append]
+  simp only [List.length_append, List.length_cons]
+  omega
+
+/-- A well-formed stack finishes with the fuel given by its finite-catalog
+measure. The extra unit performs the final empty-stack check. -/
+theorem linearizeFrom_sufficient_fuel
+    {buffer : List (ValidatorBlock BlockId)} {committed : List BlockId}
+    (bufferNodup : (buffer.map fun block => block.reference.id).Nodup)
+    (bufferMarked : ∀ block, block ∈ buffer →
+      block.reference.id ∈ committed)
+    (bufferInDomain : ∀ block, block ∈ buffer →
+      block.reference.id ∈ view.catalogDomain) :
+    ∃ out finalCommitted,
+      view.linearizeFrom (view.walkMeasure buffer committed + 1)
+          buffer committed = some (out, finalCommitted) := by
+  have terminate : ∀ measure buffer committed,
+      view.walkMeasure buffer committed = measure →
+      (buffer.map fun block => block.reference.id).Nodup →
+      (∀ block, block ∈ buffer → block.reference.id ∈ committed) →
+      (∀ block, block ∈ buffer → block.reference.id ∈ view.catalogDomain) →
+      ∃ out finalCommitted,
+        view.linearizeFrom (measure + 1) buffer committed =
+          some (out, finalCommitted) := by
+    intro measure
+    induction measure using Nat.strong_induction_on with
+    | h measure ih =>
+        intro buffer committed measureEq currentNodup currentMarked
+          currentInDomain
+        cases buffer with
+        | nil => exact ⟨[], committed, by simp [linearizeFrom]⟩
+        | cons block tail =>
+            let nextBuffer := view.eligibleAncestors committed block ++ tail
+            let nextCommitted :=
+              view.eligibleAncestorIds committed block ++ committed
+            have tailNodup := (List.nodup_cons.mp currentNodup).2
+            have tailMarked : ∀ candidate, candidate ∈ tail →
+                candidate.reference.id ∈ committed := fun candidate member =>
+              currentMarked candidate (List.mem_cons_of_mem _ member)
+            have tailInDomain : ∀ candidate, candidate ∈ tail →
+                candidate.reference.id ∈ view.catalogDomain :=
+              fun candidate member =>
+                currentInDomain candidate (List.mem_cons_of_mem _ member)
+            have nextNodup :
+                (nextBuffer.map fun candidate => candidate.reference.id).Nodup :=
+              eligibleAncestors_append_ids_nodup tailNodup tailMarked
+            have nextMarked : ∀ candidate, candidate ∈ nextBuffer →
+                candidate.reference.id ∈ nextCommitted :=
+              eligibleAncestors_append_marked tailMarked
+            have nextInDomain : ∀ candidate, candidate ∈ nextBuffer →
+                candidate.reference.id ∈ view.catalogDomain :=
+              eligibleAncestors_append_in_domain tailInDomain
+            have stepMeasure :
+                view.walkMeasure nextBuffer nextCommitted + 1 = measure := by
+              rw [← measureEq]
+              exact walkMeasure_step
+            have nextSmaller :
+                view.walkMeasure nextBuffer nextCommitted < measure := by
+              omega
+            rcases ih _ nextSmaller nextBuffer nextCommitted rfl nextNodup
+                nextMarked nextInDomain with ⟨rest, finalCommitted, step⟩
+            refine ⟨block :: rest, finalCommitted, ?_⟩
+            rw [← stepMeasure]
+            simp [linearizeFrom, nextBuffer, nextCommitted, step]
+  exact terminate _ buffer committed rfl bufferNodup bufferMarked bufferInDomain
+
+/-- A complete materializer walk always finishes. It needs at most one loop
+check more than the number of identifiers in the finite catalog. -/
+theorem buildCommit_terminates
+    {leaders : List (ValidatorBlock BlockId)}
+    (leadersCatalogued : ∀ leader, leader ∈ leaders →
+      view.catalog leader.reference.id = some leader)
+    (leadersNodup : (leaders.map fun leader => leader.reference.id).Nodup) :
+    ∃ fuel out finalCommitted,
+      fuel ≤ view.catalogDomain.length + 1 ∧
+        view.buildCommit fuel leaders = some (out, finalCommitted) := by
+  let committed :=
+    leaders.map (fun leader => leader.reference.id) ++ view.committedBefore
+  have leadersMarked : ∀ leader, leader ∈ leaders →
+      leader.reference.id ∈ committed := fun leader member =>
+    List.mem_append_left _ (List.mem_map_of_mem member)
+  have leadersInDomain : ∀ leader, leader ∈ leaders →
+      leader.reference.id ∈ view.catalogDomain := fun leader member =>
+    view.catalogSupported leader.reference.id leader
+      (leadersCatalogued leader member)
+  rcases linearizeFrom_sufficient_fuel leadersNodup leadersMarked
+      leadersInDomain with ⟨out, finalCommitted, run⟩
+  let fuel := view.walkMeasure leaders committed + 1
+  have leaderIdsSubset :
+      (leaders.map fun leader => leader.reference.id).toFinset ⊆
+        view.catalogDomain.toFinset := by
+    intro id idMember
+    simp only [List.mem_toFinset] at idMember ⊢
+    rcases List.mem_map.mp idMember with ⟨leader, member, rfl⟩
+    exact leadersInDomain leader member
+  have remainingDisjoint :
+      Disjoint (view.unmarkedCatalogIds committed)
+        (leaders.map fun leader => leader.reference.id).toFinset := by
+    rw [Finset.disjoint_left]
+    intro id remaining leaderId
+    exact (Finset.mem_sdiff.mp remaining).2
+      (by
+        simp only [committed, List.toFinset_append, Finset.mem_union]
+        exact Or.inl leaderId)
+  have unionSubset :
+      view.unmarkedCatalogIds committed ∪
+          (leaders.map fun leader => leader.reference.id).toFinset ⊆
+        view.catalogDomain.toFinset :=
+    Finset.union_subset (fun _ member => (Finset.mem_sdiff.mp member).1)
+      leaderIdsSubset
+  have measureBound := Finset.card_le_card unionSubset
+  rw [Finset.card_union_of_disjoint remainingDisjoint,
+    List.toFinset_card_of_nodup leadersNodup,
+    List.toFinset_card_of_nodup view.catalogDomainNodup] at measureBound
+  simp only [List.length_map] at measureBound
+  have fuelBound : fuel ≤ view.catalogDomain.length + 1 := by
+    unfold fuel walkMeasure
+    omega
+  exact ⟨fuel, out, finalCommitted, fuelBound, run⟩
 
 /-- An output block was already on the stack, or its mark is new. -/
 theorem linearizeFrom_output_is_fresh :
@@ -496,33 +753,23 @@ theorem linearizeFrom_output_is_fresh :
       ∀ block, block ∈ out →
         block.reference.id ∈ buffer.map (fun other => other.reference.id) ∨
           block.reference.id ∉ committed := by
-  intro fuel
-  induction fuel with
-  | zero => intro _ _ _ _ run; rw [linearizeFrom_zero] at run; exact absurd run (by simp)
-  | succ fuel ih =>
-      intro buffer committed out finalCommitted run
-      cases buffer with
-      | nil =>
-          obtain ⟨outShape, _⟩ := linearizeFrom_nil run
-          subst outShape
-          intro block member
-          exact absurd member (by simp)
-      | cons block tail =>
-          obtain ⟨rest, outShape, step⟩ := linearizeFrom_cons run
-          subst outShape
-          intro other member
-          rcases List.mem_cons.mp member with rfl | restMember
-          · exact Or.inl List.mem_cons_self
-          · rcases ih _ _ _ _ step other restMember with stepBuffer | stepFresh
-            · rcases List.mem_map.mp stepBuffer with
-                ⟨candidate, candidateMember, candidateId⟩
-              rcases List.mem_append.mp candidateMember with ancestor | old
-              · exact Or.inr (candidateId ▸
-                  (eligibleAncestor_facts ancestor).2)
-              · exact Or.inl (candidateId ▸
-                  List.mem_cons_of_mem _ (List.mem_map_of_mem old))
-            · exact Or.inr fun marked =>
-                stepFresh (List.mem_append_right _ marked)
+  refine run_rec (motive := fun (buffer : List (ValidatorBlock BlockId))
+      (committed : List BlockId) (out : List (ValidatorBlock BlockId)) _ =>
+    ∀ block, block ∈ out →
+      block.reference.id ∈ buffer.map (fun other => other.reference.id) ∨
+        block.reference.id ∉ committed)
+    (fun _ _ member => absurd member (by simp)) ?_
+  intro block tail committed rest _ _ ih other member
+  rcases List.mem_cons.mp member with rfl | restMember
+  · exact Or.inl List.mem_cons_self
+  · rcases ih other restMember with stepBuffer | stepFresh
+    · rcases List.mem_map.mp stepBuffer with
+        ⟨candidate, candidateMember, candidateId⟩
+      rcases List.mem_append.mp candidateMember with ancestor | old
+      · exact Or.inr (candidateId ▸ (eligibleAncestor_facts ancestor).2)
+      · exact Or.inl (candidateId ▸
+          List.mem_cons_of_mem _ (List.mem_map_of_mem old))
+    · exact Or.inr fun marked => stepFresh (List.mem_append_right _ marked)
 
 /-- No block is committed twice in one run. -/
 theorem linearizeFrom_output_nodup :
@@ -533,63 +780,40 @@ theorem linearizeFrom_output_nodup :
       (buffer.map fun block => block.reference.id).Nodup →
       (∀ block, block ∈ buffer → block.reference.id ∈ committed) →
       (out.map fun block => block.reference.id).Nodup := by
-  intro fuel
-  induction fuel with
-  | zero => intro _ _ _ _ run; rw [linearizeFrom_zero] at run; exact absurd run (by simp)
-  | succ fuel ih =>
-      intro buffer committed out finalCommitted run bufferNodup bufferMarked
-      cases buffer with
-      | nil =>
-          obtain ⟨outShape, _⟩ := linearizeFrom_nil run
-          subst outShape
-          simp
-      | cons block tail =>
-          obtain ⟨rest, outShape, step⟩ := linearizeFrom_cons run
-          subst outShape
-          simp only [List.map_cons, List.nodup_cons] at bufferNodup
-          have blockMarked := bufferMarked block List.mem_cons_self
-          have ancestorsFresh : ∀ ancestor,
-              ancestor ∈ view.eligibleAncestors committed block →
-                ancestor.reference.id ∉ committed := fun _ member =>
-            (eligibleAncestor_facts member).2
-          have stepNodup :
-              ((view.eligibleAncestors committed block ++ tail).map
-                fun other => other.reference.id).Nodup := by
-            rw [List.map_append]
-            refine List.nodup_append.mpr
-              ⟨eligibleAncestors_ids_nodup, bufferNodup.2, ?_⟩
-            intro ancestorId ancestorMemberId tailId tailMemberId sameId
-            rcases List.mem_map.mp ancestorMemberId with
-              ⟨ancestor, ancestorMember, ancestorEq⟩
-            rcases List.mem_map.mp tailMemberId with
-              ⟨other, otherMember, otherEq⟩
-            exact ancestorsFresh ancestor ancestorMember
-              (ancestorEq ▸ sameId ▸ otherEq ▸ bufferMarked other
-                (List.mem_cons_of_mem _ otherMember))
-          have stepMarked : ∀ candidate,
-              candidate ∈ view.eligibleAncestors committed block ++ tail →
-                candidate.reference.id ∈
-                  view.eligibleAncestorIds committed block ++ committed := by
-            intro candidate candidateMember
-            rcases List.mem_append.mp candidateMember with ancestor | old
-            · exact List.mem_append_left _
-                (mem_eligibleAncestorIds.mpr ⟨candidate, ancestor, rfl⟩)
-            · exact List.mem_append_right _
-                (bufferMarked candidate (List.mem_cons_of_mem _ old))
-          refine List.nodup_cons.mpr ⟨fun clash => ?_,
-            ih _ _ _ _ step stepNodup stepMarked⟩
-          rcases List.mem_map.mp clash with ⟨other, otherMember, otherId⟩
-          rcases linearizeFrom_output_is_fresh _ _ _ _ _ step other otherMember with
-            stepBuffer | stepFresh
-          · rw [otherId] at stepBuffer
-            rw [List.map_append] at stepBuffer
-            rcases List.mem_append.mp stepBuffer with ancestorId | tailId
-            · rcases List.mem_map.mp ancestorId with
-                ⟨ancestor, ancestorMember, ancestorEq⟩
-              exact ancestorsFresh ancestor ancestorMember
-                (ancestorEq ▸ blockMarked)
-            · exact bufferNodup.1 tailId
-          · exact stepFresh (otherId ▸ List.mem_append_right _ blockMarked)
+  refine run_rec (motive := fun (buffer : List (ValidatorBlock BlockId))
+      (committed : List BlockId) (out : List (ValidatorBlock BlockId)) _ =>
+    (buffer.map fun block => block.reference.id).Nodup →
+      (∀ block, block ∈ buffer → block.reference.id ∈ committed) →
+      (out.map fun block => block.reference.id).Nodup)
+    (fun _ _ _ => by simp) ?_
+  rintro block tail committed rest _ ⟨fuel, step⟩ ih bufferNodup bufferMarked
+  simp only [List.map_cons, List.nodup_cons] at bufferNodup
+  have blockMarked := bufferMarked block List.mem_cons_self
+  have stepNodup :
+      ((view.eligibleAncestors committed block ++ tail).map
+        fun other => other.reference.id).Nodup :=
+    eligibleAncestors_append_ids_nodup bufferNodup.2
+      (fun candidate member =>
+        bufferMarked candidate (List.mem_cons_of_mem _ member))
+  have stepMarked : ∀ candidate,
+      candidate ∈ view.eligibleAncestors committed block ++ tail →
+        candidate.reference.id ∈
+          view.eligibleAncestorIds committed block ++ committed :=
+    eligibleAncestors_append_marked (fun candidate member =>
+      bufferMarked candidate (List.mem_cons_of_mem _ member))
+  refine List.nodup_cons.mpr ⟨fun clash => ?_, ih stepNodup stepMarked⟩
+  rcases List.mem_map.mp clash with ⟨other, otherMember, otherId⟩
+  rcases linearizeFrom_output_is_fresh _ _ _ _ _ step other otherMember with
+    stepBuffer | stepFresh
+  · rw [otherId] at stepBuffer
+    rw [List.map_append] at stepBuffer
+    rcases List.mem_append.mp stepBuffer with ancestorId | tailId
+    · rcases List.mem_map.mp ancestorId with
+        ⟨ancestor, ancestorMember, ancestorEq⟩
+      exact (eligibleAncestor_facts ancestorMember).2
+        (ancestorEq ▸ blockMarked)
+    · exact bufferNodup.1 tailId
+  · exact stepFresh (otherId ▸ List.mem_append_right _ blockMarked)
 
 /-- A complete run commits each block once. -/
 theorem buildCommit_output_nodup {fuel : Nat}
@@ -644,6 +868,29 @@ theorem buildCommit_outputs_agree
       agreement.ancestors agreement.catalog,
     materialized_congr agreement.symm.gcRound agreement.symm.committedBefore
       agreement.symm.ancestors agreement.symm.catalog⟩
+
+/-- The walk always runs, and its result is exactly the eligible causal closure.
+
+This is the unconditional form. `buildCommit_terminates` discharges the run
+condition, `buildCommit_output_nodup` gives the duplicate-free vector that the
+sort needs, and `buildCommit_materializes_exactly` fixes the block set. The only
+remaining conditions are that each leader body is in the local view and that the
+leaders are distinct. -/
+theorem buildCommit_materializes_closure
+    {leaders : List (ValidatorBlock BlockId)}
+    (leadersCatalogued : ∀ leader, leader ∈ leaders →
+      view.catalog leader.reference.id = some leader)
+    (leadersNodup : (leaders.map fun leader => leader.reference.id).Nodup) :
+    ∃ fuel out finalCommitted,
+      view.buildCommit fuel leaders = some (out, finalCommitted) ∧
+        (out.map fun block => block.reference.id).Nodup ∧
+        ∀ block, block ∈ out ↔ view.Materialized leaders block := by
+  rcases buildCommit_terminates leadersCatalogued leadersNodup with
+    ⟨fuel, out, finalCommitted, _, run⟩
+  exact ⟨fuel, out, finalCommitted, run,
+    buildCommit_output_nodup run leadersNodup,
+    buildCommit_materializes_exactly run leadersCatalogued⟩
+
 
 end CommitMaterializerView
 
