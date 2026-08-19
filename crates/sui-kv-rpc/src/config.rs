@@ -44,6 +44,11 @@ const LIST_EVENTS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDef
     max_limit_items: 1_000,
     render_ahead: DEFAULT_RENDER_AHEAD,
 };
+const LIST_PACKAGES_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
+    default_limit_items: 50,
+    max_limit_items: 1_000,
+    render_ahead: DEFAULT_RENDER_AHEAD,
+};
 const LIST_CHECKPOINTS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
     default_limit_items: 10,
     max_limit_items: 50,
@@ -224,6 +229,10 @@ pub struct LedgerHistoryConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub list_checkpoints: Option<LedgerHistoryMethodConfig>,
 
+    /// Per-endpoint tunables for `MovePackageService.ListPackages`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_packages: Option<LedgerHistoryMethodConfig>,
+
     /// Per-request evaluated-bucket budget for filtered tx-bitmap scans, shared
     /// across all DNF dimensions of one query. Caps how many fetched buckets the
     /// eval evaluates, NOT how many bucket reads BigTable receives — at
@@ -280,6 +289,10 @@ impl LedgerHistoryConfig {
             self.list_checkpoints.as_ref(),
             LIST_CHECKPOINTS_DEFAULTS,
         )
+    }
+
+    pub fn list_packages(&self) -> ResolvedLedgerHistoryMethodConfig {
+        LedgerHistoryMethodConfig::resolve(self.list_packages.as_ref(), LIST_PACKAGES_DEFAULTS)
     }
 
     pub fn bitmap_bucket_budget_tx(&self) -> u64 {

@@ -501,7 +501,7 @@ async fn scan_tx_seq_digests(
         .boxed())
 }
 
-async fn fetch_tx_seq_digests(
+pub(crate) async fn fetch_tx_seq_digests(
     client: BigTableClient,
     seqs: Vec<u64>,
 ) -> Result<BoxStream<'static, Result<TxSeqDigestData, anyhow::Error>>, anyhow::Error> {
@@ -533,7 +533,7 @@ async fn fetch_tx_seq_digests(
     .boxed())
 }
 
-async fn fetch_transactions(
+pub(crate) async fn fetch_transactions(
     client: BigTableClient,
     columns: Arc<[&'static str]>,
     rows: Vec<TxSeqDigestData>,
