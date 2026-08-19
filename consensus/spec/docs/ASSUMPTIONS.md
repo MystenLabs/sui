@@ -527,7 +527,11 @@ finalizer work is not evidence for this result.
 
 ## ASM-LIVE-FIRST-SLOT-SAMPLING
 
-- **Claim:** During one stall, each pending round has one common independent uniform leader order over a stable schedule and fixed Byzantine and unavailable sets.
+- **Claim:** For each round, the round-seeded shuffle is modeled as an
+  independent uniform permutation of the current allowed-leader list. The list
+  is chosen before that round's shuffle. All correct validators use the same
+  result for a round. The Byzantine and unavailable sets stay fixed during the
+  proof interval.
 - **Type:** Accepted probabilistic protocol model.
 - **Status:** Accepted modeling assumption.
 - **Effect if false:** Liveness.
@@ -535,11 +539,20 @@ finalizer work is not evidence for this result.
   event from the abstract independent-uniform law. The conditional commit
   capstone then uses that event. The final entry theorem is
   `current_sources_give_end_to_end_liveness_probability_one`.
-- **Rust evidence:** The product uses a deterministic round-based shuffle, not independent random samples.
-- **Boundary:** This ideal probability law is not current Rust behavior. Do not
-  claim that the round-seeded Rust shuffle gives independent samples.
+- **Rust evidence:** The product seeds the same deterministic shuffle from the
+  round number. This gives validator agreement and crash-recovery
+  reproducibility. The assumption treats the shuffle results for distinct round
+  seeds as independent uniform pseudorandom permutations.
+- **Boundary:** This is a pseudorandomness assumption. It is not a claim that the
+  deterministic runtime uses fresh entropy. Lean uses only the first selected
+  slot, so the proof also works with the weaker first-slot-only assumption. The
+  first output word of the generator is not the proof boundary because the
+  shuffle can consume more than one output word.
 - **Evidence record:** [EV-FIRST-SLOT-PROBABILITY](ASSUMPTION_EVIDENCE.md#ev-first-slot-probability).
-- **Discharge:** Keep the probability model explicit or replace it with a proved deterministic coverage rule.
+- **Discharge:** Keep the first-slot pseudorandomness model explicit. Pin the
+  generator and shuffle algorithm if exact cross-version reproducibility is a
+  protocol requirement, or replace the assumption with a proved deterministic
+  coverage rule.
 
 ## ASM-LIVE-POST-GST-CAUSAL-SERVICE
 

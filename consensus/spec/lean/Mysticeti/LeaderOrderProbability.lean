@@ -223,8 +223,10 @@ has `scheduleMemberCount ^ windowLength` equally weighted results. Exactly
 `correctAvailableMemberCount ^ windowLength` results have a correct, available
 first slot in every round.
 
-This is an ideal probability model. It is not a claim about the current Rust
-seeded shuffle.
+This is the mathematical first-slot model used by
+`ASM-LIVE-FIRST-SLOT-SAMPLING`. That assumption interprets the first selected
+slots from distinct Rust round seeds as pseudorandom samples. This structure
+does not derive that statistical property from the generator implementation.
 -/
 structure IndependentUniformFirstSlotLaw where
   scheduleMemberCount : Nat

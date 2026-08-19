@@ -454,8 +454,14 @@ theorem operational_maximum_already_signed_tip_gives_carrier
   intro receiver receiverInRange differentValidator
   exact broadcast.recovery_mode_sends_exact_current_tip_packet effects
     authorInRange authorCorrectAvailable receiverInRange differentValidator
-      source.recoveryMode (by simpa [currentFloor] using source.roundPositive)
-        (by simpa [currentFloor] using source.ownTip) localTip.2.2.1
+      source.recoveryMode
+        (by
+          rw [currentFloor]
+          exact source.roundPositive)
+        (by
+          rw [currentFloor]
+          exact source.ownTip)
+        localTip.2.2.1
 
 /-- An already-signed successor carrier which does not depend on recovery
 mode. Its exact current pin supplies the body and causal source. Each correct

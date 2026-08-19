@@ -354,12 +354,14 @@ Epoch configuration must ensure `f + c < S` and `A <= P_r` from actual stake.
 Current v3 has `P_r = S`. The optional `P_r <= Q` rule limits work; it is not a
 per-slot safety or quorum-coverage condition.
 
-Bind the leader-order algorithm to a protocol version. The current deterministic
-shuffle is not stable across all build configurations and has no proved coverage
-for the accepted probability model. Lean proves the finite geometric failure
-bound for an independent uniform model. A true measure-one theorem still needs a
-probability-measure and limit foundation. The proved deterministic repeated-first
-rule is a separate product alternative; current Rust does not implement it.
+Bind the leader-order algorithm to a protocol version. The accepted model treats
+the shuffle results for distinct round seeds as independent uniform
+permutations. Lean uses only the first selected slot. The current `StdRng` and
+shuffle dependency is not a stable protocol definition across all dependency
+versions. Lean proves the finite geometric failure bound for the first-slot
+consequence. A true measure-one theorem still needs a probability-measure and
+limit foundation. The proved deterministic repeated-first rule is a separate
+product alternative; current Rust does not implement it.
 
 ### P1: prove ordinary causal block synchronization progress
 

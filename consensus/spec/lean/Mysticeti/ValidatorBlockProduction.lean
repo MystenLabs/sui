@@ -737,7 +737,7 @@ theorem accepted_representative_of_every_correct_acceptance
       have canonical := rules.acceptedRepresentativeIsCanonical time observer
         author round reference observerInRange observerLive authorInRange
         authorLive representativeValue
-      simpa [canonical] using representativeValue
+      simp [canonical]
 
 /-- Completed correct-validator production persists in an active epoch. -/
 theorem every_correct_available_production_persists
@@ -874,7 +874,7 @@ theorem correct_validator_eventually_produces_successor
     | some reference =>
         have canonical := rules.ownBlockIsCanonical start validator round reference
           validatorInRange validatorLive ownRoundValue
-        simpa [canonical] using ownRoundValue
+        simp [canonical]
   have targetNotSentGivesEnabled :
       ((trace start).validatorState validator).sentOwnBlockAt (round + 1) = false →
       ExactNextProposalEnabledAt config faults trace validator (round + 1)
@@ -887,7 +887,7 @@ theorem correct_validator_eventually_produces_successor
         have canonical := rules.ownBlockIsCanonical start validator (round + 1)
           reference validatorInRange validatorLive targetValue
         right
-        exact ⟨by simpa [canonical] using targetValue, targetNotSent⟩
+        exact ⟨by simp [canonical], targetNotSent⟩
     | none =>
         have signerAtRound :
             ((trace start).validatorState validator).highestSignedRound = round :=
@@ -1242,7 +1242,7 @@ theorem every_successor_block_eventually_accepted
       | some reference =>
           have canonical := rules.ownBlockIsCanonical start author (round + 1)
             reference authorInRange authorLive ownValue
-          simpa [canonical] using ownValue
+          simp [canonical]
     rcases correct_author_successor_eventually_accepted_by_all requestCursor
         storage requests serving accepting rules active afterGst authorBlock
         acceptedParents producedSuccessor authorInRange authorLive with
@@ -1461,7 +1461,7 @@ theorem genesis_correct_round_is_complete
     {faults : FixedFaultInterval config}
     {trace : Trace
       (ValidatorWorldState ScheduledBlockId CommitId PacketId)}
-    (rules : ExactNextBlockProductionRules config faults trace)
+    (_rules : ExactNextBlockProductionRules config faults trace)
     (genesis : CanonicalGenesisRules config faults trace)
     (time : Nat) :
     EveryCorrectAvailableValidatorProduced faults (trace time) 0 ∧

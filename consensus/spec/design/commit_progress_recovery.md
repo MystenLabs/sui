@@ -391,20 +391,20 @@ counts follow from the scan depth; they are not configured constants.
 
 ## Leader-order model
 
-The accepted liveness model treats each round's complete selected leader slot
-order as an independent uniform permutation of one stable schedule. The Byzantine,
+The accepted liveness model treats each round-seeded shuffle as an independent
+uniform pseudorandom permutation of one stable schedule. The Byzantine,
 crashed, and unavailable set stays fixed during the stalled period. All correct
-validators use the same result. The network and task scheduler do not control the
-sample.
+validators use the same deterministic result. The network and task scheduler do
+not control the modeled sample.
 
 For depth two, the model needs three consecutive rounds with a correct available
 validator in the first slot. Repeated independent samples produce this event with
 probability one.
 
-The product uses a deterministic round-based shuffle. The independent uniform
-law is an ideal model. It is not a claim about current Rust. There is no proof
-that the Rust sequence is independent or has the required coverage for all
-schedules and start rounds.
+The product uses a deterministic round-based shuffle for agreement and crash
+recovery. The assumption models the shuffle results across distinct round seeds
+as independent and uniform. Lean uses only the first selected slot, and the
+model does not claim that the runtime obtains fresh entropy.
 
 A deterministic alternative puts each schedule member first for `d + 1`
 consecutive rounds, then moves the first position to the next member. All schedule

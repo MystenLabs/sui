@@ -12,7 +12,7 @@ current lemmas. It proves safety, evidence retention, unbounded network DAG
 progress, network commit progress, and pointwise exact-reference catch-up. The
 theorem `current_sources_give_end_to_end_liveness_probability_one` completes
 the adopted ordinary-DAG route in Lean under proposed local source rules and
-the independent-uniform ranking law. Exact replay remains a separate
+the independent-uniform first-slot law. Exact replay remains a separate
 non-adopted proof experiment. See the plain-language
 [safety and liveness properties](SAFETY_AND_LIVENESS.md).
 
@@ -223,11 +223,12 @@ Current v3 selects the full schedule in each pending leader round, so `P_r = S`.
 The optional `P_r <= Q` limit controls work. Per-slot safety and quorum coverage
 do not require it. A larger selection can still affect the ordered anchor scan.
 
-The leader-order model treats each round's complete order as a common independent
-uniform permutation. This is an ideal probability law. It is not current Rust
-behavior. The product uses a deterministic round-based shuffle, and the proof
-does not establish independent samples or the same coverage for that exact
-sequence.
+The leader-order model treats each round-seeded shuffle as an independent
+uniform pseudorandom permutation of the current allowed-leader list. All correct
+validators still compute the same deterministic result. The list is fixed
+before that round's shuffle. Lean uses only the first selected slot. Thus, full
+tail uniformity is stronger than the proof needs. This is not a claim that the
+runtime uses fresh entropy.
 
 ## Conditions and proof goals
 

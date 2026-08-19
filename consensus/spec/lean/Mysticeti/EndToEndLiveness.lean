@@ -38,7 +38,7 @@ The permitted input boundary for the end-to-end liveness proof.
 
 This module proves unconditional network quorum-round progress from the local
 execution inputs. The later DAG-to-commit composition is not complete. It is
-not sound to add that remaining result as an axiom or as an input field.
+not sound to add that remaining result as an unchecked premise or input field.
 
 The inputs below contain only:
 
@@ -602,7 +602,7 @@ def identityValidatorRanking (authorityCount : Nat) :
   memberAtInjective := Function.injective_id
   memberAtSurjective := Function.surjective_id
 
-/-- One independently sampled complete validator ranking for each round. -/
+/-- One complete-ranking representation for each round's first-slot sample. -/
 abbrev UniformRoundRankingTrace (authorityCount : Nat) :=
   Nat → ValidatorRanking authorityCount
 
@@ -663,11 +663,11 @@ def adaptiveFirstSlotIsCorrect
   | none => False
   | some validator => correctAvailable validator = true
 
-/-- Events on the ideal complete-ranking sample space. -/
+/-- Events on the first-slot sample space represented by complete rankings. -/
 abbrev RoundRankingEvent (authorityCount : Nat) :=
   UniformRoundRankingTrace authorityCount → Prop
 
-/-- One event for each round of a complete-ranking sample. -/
+/-- One event for each round of the represented first-slot sample. -/
 abbrev RoundRankingTrial (authorityCount : Nat) :=
   Nat → RoundRankingEvent authorityCount
 
@@ -680,12 +680,17 @@ def HasConsecutiveRankingTrialAfter
     start ≤ base ∧
       ∀ offset, offset < length → trial (base + offset) trace
 
-/-- The ideal independent-uniform law for complete round rankings.
+/-- The independent-uniform first-slot law, represented with complete round
+rankings.
 
 `conditionalChanceAtLeast` is the probability model's conditional lower-bound
 relation. `adaptiveFirstSlotChance` states the uniform-ranking fact: after every
 past history, the chance that the first member of any viable current schedule is
 correct and available is at least `1 / authorityCount`.
+
+Only the first selected slot is used by the liveness proof. The remaining order
+can follow the deterministic Rust shuffle and does not need an independent
+uniform interpretation.
 
 The last three fields are standard probability rules. They do not state that a
 protocol execution succeeds. -/
@@ -760,11 +765,12 @@ theorem adaptive_viable_schedule_has_favorable_windows_probability_one
     exact law.authorityCountPositive) (law.adaptiveFirstSlotChance
       correctAvailable schedule)
 
-/-- Complete-ranking samples mapped to deterministic protocol executions.
+/-- First-slot samples mapped to deterministic protocol executions.
 
 The validator set and correct-available set stay fixed across samples. Each
-commit head has one fixed leader schedule. For each round, the selected leader
-slot order is the sampled complete ranking restricted to that schedule. -/
+commit head has one fixed leader schedule. For each round, only the head of the
+selected leader order must match the sampled ranking restricted to that
+schedule. The tail order is not constrained by the probability model. -/
 structure UniformRankingEndToEndExecutionFamily
     (BlockId CommitId PacketId Encoding : Type)
     [DecidableEq BlockId]
@@ -785,9 +791,10 @@ structure UniformRankingEndToEndExecutionFamily
   leaderScheduleMatches : ∀ sampled commitId validator,
     (execution sampled).config.leaderSchedule commitId validator.val =
       leaderSchedule commitId validator
-  selectedOrderMatchesRanking : ∀ sampled commitId round,
-    (execution sampled).config.selectedLeaderOrder commitId round =
-      restrictedValidatorRanking (sampled round) (leaderSchedule commitId)
+  firstSelectedLeaderMatchesRanking : ∀ sampled commitId round,
+    ((execution sampled).config.selectedLeaderOrder commitId round).head? =
+      (restrictedValidatorRanking
+        (sampled round) (leaderSchedule commitId)).head?
 
 /-- Static data that does not use a sampled round ranking. -/
 structure UniformRankingStaticData
@@ -948,7 +955,7 @@ end UniformRankingExecutionSourceMap
 namespace UniformRankingEndToEndExecutionFamily
 
 /-- The static stake bound gives a correct, available member of every leader
-schedule in the complete-ranking family. -/
+schedule in the first-slot execution family. -/
 theorem leader_schedule_has_correct_available
     {BlockId CommitId PacketId Encoding : Type}
     [DecidableEq BlockId]
@@ -1074,7 +1081,7 @@ theorem adaptive_first_slot_maps_to_execution
       refine ⟨validator.val, ?_, ?_, ?_⟩
       · rw [family.authorityCountMatches sampled]
         exact validator.isLt
-      · rw [family.selectedOrderMatchesRanking]
+      · rw [family.firstSelectedLeaderMatchesRanking]
         rw [restricted_validator_ranking_head]
         simp [selected, members, found]
       · rw [family.correctAvailableMatches sampled validator]

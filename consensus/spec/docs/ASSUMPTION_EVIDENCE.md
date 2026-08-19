@@ -53,7 +53,7 @@ Audit date and source revision
   `ASM-LIVE-FIRST-SLOT-SAMPLING`, `ASM-LIVE-POST-GST-CAUSAL-SERVICE`,
   `ASM-LIVE-BLOCK-SYNC`, `REF-RECOVERY-PACING`, `REF-ROUND-CATCHUP`,
   `REF-POST-GST-CAUSAL-SERVICE`, and `REF-PARENT-SYNC`.
-- **Exact claim:** Under the independent-uniform ranking law and the listed
+- **Exact claim:** Under the independent-uniform first-slot law and the listed
   local current or past source maps, ordinary DAG behavior gives probability-one
   end-to-end liveness. The current green proof uses one fixed-reference
   quadratic wait, timer spread derived from actual prior broadcasts and pinned
@@ -529,16 +529,19 @@ Audit date and source revision
 
 - **Related assumptions and review IDs:** `ASM-LIVE-FIRST-SLOT-SAMPLING`,
   `ASM-LIVE-LEADER`, and `REF-LEADER-ORDER-COMPATIBILITY`.
-- **Exact claim:** During one stable proof interval, independent uniform round
-  orders have a fixed positive conditional probability of producing the
-  required adjacent correct, available first-slot window. The probability that
-  no such window occurs tends to zero.
-- **Classification and status:** Accepted ideal probability model. It is not a
-  verified current Rust property.
+- **Exact claim:** For each round, after the allowed-leader list is fixed, the
+  round-seeded shuffle is modeled as an independent uniform permutation of that
+  list. This gives a fixed positive conditional probability of the required
+  correct, available first-slot window. The probability that no such window
+  occurs tends to zero.
+- **Classification and status:** Accepted pseudorandomness model for the
+  implementation's first selected slots.
 - **Rust evidence:** Current FlexCommitter uses a deterministic round-seeded
   shuffle in [flex_committer.rs](../../core/src/flex_committer.rs#L505-L529).
-  Different deterministic seeds do not establish independent random samples or
-  a deterministic coverage bound.
+  The round seed gives one common result at all validators and reproduces that
+  result after a crash. The assumption models the shuffle results across
+  distinct round seeds as independent uniform pseudorandom permutations. It
+  does not model fresh runtime entropy.
 - **Lean evidence:** `IndependentUniformRoundRankingLaw` and
   `adaptive_viable_schedule_has_favorable_windows_probability_one` state and
   use the ideal law in
@@ -547,9 +550,9 @@ Audit date and source revision
   favorable event. `current_sources_give_end_to_end_liveness_probability_one`
   transfers that event through the fixed-reference ordinary-DAG capstone in
   [ValidatorFixedReferenceCurrentPacing.lean](../lean/Mysticeti/ValidatorFixedReferenceCurrentPacing.lean).
-- **What this evidence does not prove:** It does not prove that the current Rust
-  shuffle has independent outputs, has the required weighted coverage, or
-  follows the ideal probability law. The probability-one theorem is
+- **What this evidence does not prove:** It does not prove this statistical
+  property from the `StdRng` implementation. Lean uses only its first-slot
+  consequence. The probability-one theorem is
   conditional on the fixed-reference, V2 production, no-skip, pinned-sync,
   retention, local Flex, and exact-prefix source maps for each sampled
   execution. It does not require exact replay.

@@ -126,7 +126,7 @@ structure ValidatorInstalledCommitParentSourceMap
       CommitId (LeaderBlockRef BlockId) Encoding)
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program) where
-  projectedDecisionDag : ∀ time validator head targetRound,
+  projectedDecisionDag : ∀ time validator head _targetRound,
     Option (ValidatorGcTruncatedDecisionDag config
       (timed.execution.trace (time + 1)) validator head)
   selectedParents : Time → Nat → ValidatorCommitHead CommitId → Nat →
@@ -858,7 +858,7 @@ theorem record_commit_preserves_above_gc_normal_parent_list
     (parentsReady : ValidatorProposalParentListReady .normal config
       ((timed.execution.trace time).validatorState validator)
       targetRound parents)
-    (parentsInRange : ∀ parent, parent ∈ parents →
+    (_parentsInRange : ∀ parent, parent ∈ parents →
       parent.author < config.authorityCount)
     (parentsAreRepresentatives : ∀ parent, parent ∈ parents →
       ((timed.execution.trace time).validatorState
@@ -960,7 +960,7 @@ theorem normal_parent_list_gives_compatible_local_source
     {time validator : Time}
     {need : ValidatorRecoveryParentNeed BlockId CommitId config}
     {parents : List (ValidatorBlockRef BlockId)}
-    (normalOrigin : need.proposalOrigin = .normal)
+    (_normalOrigin : need.proposalOrigin = .normal)
     (signerFloorMatches : need.signerFloor =
       ((timed.execution.trace time).validatorState
         validator).highestSignedRound)
@@ -4454,7 +4454,7 @@ theorem compatible_ready_source_closes_normal_parent_need
     (validatorInRange : validator < config.authorityCount)
     (active : (needs.trace time validator).active = some need)
     (normalOrigin : need.proposalOrigin = .normal)
-    (notReady : ¬ValidatorRecoveryParentNeedReadyAt
+    (_notReady : ¬ValidatorRecoveryParentNeedReadyAt
       ((timed.execution.trace time).validatorState validator) need)
     (targetNotReached :
       ((timed.execution.trace (time + 1)).validatorState

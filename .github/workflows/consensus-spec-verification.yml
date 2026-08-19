@@ -42,7 +42,8 @@ jobs:
         run: |
           set -euo pipefail
           set +e
-          rg -n '\b(sorry|admit|axiom)\b' Mysticeti.lean Mysticeti
+          grep -R -nE -- '(^|[^[:alnum:]_])(sorry|admit|axiom)([^[:alnum:]_]|$)' \
+            Mysticeti.lean Mysticeti
           status=$?
           set -e
           if [ "$status" -eq 0 ]; then

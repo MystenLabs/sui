@@ -83,7 +83,7 @@ if [ "$status_total" -ne "$defined_count" ]; then
     exit 1
 fi
 
-rg --no-filename --only-matching 'ASM-[A-Z0-9-]+' \
+grep -RhoE -- 'ASM-[A-Z0-9-]+' \
     "$spec_dir/README.md" \
     "$spec_dir/design" \
     "$spec_dir/docs/PROOF_SCOPE.md" \

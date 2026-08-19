@@ -102,7 +102,7 @@ theorem current_timer_input_gives_bounded_start_or_receiver_commit_advance
               goalValidator] using goalHead
           · simpa [start, ValidatorRecoveryTimerArmGoal.toTimerStart,
               goalValidator] using goalTarget
-          · simpa [start, ValidatorRecoveryTimerArmGoal.toTimerStart,
+          · simp [start, ValidatorRecoveryTimerArmGoal.toTimerStart,
               goalReadyAt]
           · dsimp [start, ValidatorRecoveryTimerArmGoal.toTimerStart]
             have visible := Nat.add_le_add_right completionBound 1

@@ -10,7 +10,7 @@ goals: unbounded network DAG progress, unbounded network commit progress, and
 pointwise commit catch-up. The theorem
 `current_sources_give_end_to_end_liveness_probability_one` completes the
 adopted ordinary-DAG composition in Lean under proposed local source rules and
-the independent-uniform ranking law. Exact replay remains a separate
+the independent-uniform first-slot law. Exact replay remains a separate
 non-adopted proof experiment.
 
 The main input record contains only static configuration, fault bounds, partial
@@ -166,12 +166,10 @@ timer goal.
 
 ## Leader-order boundary
 
-The canonical model samples one independent uniform ranking of the complete
-validator set in each round. This is an ideal probability law. It is not current
-Rust behavior. The round leader selection is that ranking with all validators
-outside the current leader schedule removed. This gives one model for all
-schedule sizes. A schedule change can use past samples, but it cannot use the
-current or future ranking.
+The canonical model treats each round-seeded shuffle as an independent uniform
+pseudorandom permutation of the current allowed-leader list. The list is chosen
+before that round's shuffle. A schedule change can use past samples, but it
+cannot use the current or future shuffle sample.
 
 `IndependentUniformRoundRankingLaw` contains only a conditional chance relation
 and standard probability-one rules. For every past-dependent viable leader
@@ -181,11 +179,11 @@ available is at least one over the validator count.
 and countable intersection to get favorable windows after every start. It does
 not take a favorable trace.
 
-`UniformRankingEndToEndExecutionFamily` maps each complete-ranking sample to one
-deterministic execution. It requires the validator set, correct-available set,
-and leader schedule for each commit head to stay fixed across samples. It also
-requires the configured round leader selection to equal the sampled ranking
-restricted to that leader schedule.
+`UniformRankingEndToEndExecutionFamily` maps each sample to one deterministic
+execution. It requires the validator set, correct-available set, and leader
+schedule for each commit head to stay fixed across samples. It requires only the
+first configured selected leader to equal the head of the sampled ranking after
+the leader-schedule filter. It does not constrain the remaining order.
 
 `UniformRankingExecutionSourceMap` fixes the stake, threshold numbers, fault
 sets, network bounds, program, local-action bound, commit functions, wait rule,
@@ -214,9 +212,10 @@ current head. It does not quantify unused commit IDs.
 causal-head event has probability one. The fixed-reference capstone transfers
 the event through V2 round catch-up, pinned sync, receiver-local direct ranges,
 local Flex execution, and finite exact-index induction. It already uses the
-proved network DAG result. The independent ranking law is an ideal law, not
-current Rust behavior. The separate exact-replay experiment does not contribute
-to this route.
+proved network DAG result. The independent uniform shuffle law is an accepted
+pseudorandomness model of the round-seeded Rust outputs. Lean uses only its
+first-slot consequence. It is not a fresh-entropy claim. The separate
+exact-replay experiment does not contribute to this route.
 
 The repeated-first rule is a separate deterministic option.
 `DeterministicLeaderCoverageInput.first_slot_path_coverage` proves its complete
@@ -238,7 +237,7 @@ Each open result below is an internal theorem. It must not become a field of
 | V2 current no-idle block production and no-skip catch-up | A finite family of exact timer-paced productions | Select one later actual own block for each correct author. Use the first signer-floor crossing and its past fixed-round proposal origin to recover every required intermediate target. | Proved by `block_production_liveness_gives_backfilled_timer_paced_window`; the no-idle and no-skip source rules are proposed product behavior |
 | Exact adjacent productions and one fixed-reference quadratic wait | Timely leader acceptance | Derive pointwise causal visibility and timer spread from actual prior broadcasts, pinned sync, and action-local exact-next promptness. Select the favorable base after every numeric threshold. | Proved by `strict_v2_backfill_and_favorable_path_give_fixed_reference_direct_range`; the action-local promptness rule and Rust source mappings remain product gaps |
 | Timely accepted leaders and accepted child blocks | Actual direct-vote quorum range | Use exact adjacent parent evidence at one receiver and aggregate the correct child authors by stake. | Pointwise and finite aggregation are proved in the fixed-reference receiver path |
-| Uniform complete-ranking law | Favorable selected leader path | `all_validator_causal_head_favorable_windows_probability_one` covers every causally reached receiver head, and `stable_execution_receiver_suffix_has_future_causal_head_path` gives the exact stable-head suffix. | Proved for the ideal law and used by the adopted fixed-reference proof. The law is not current Rust behavior |
+| Independent uniform shuffle model | Favorable selected leader path | `all_validator_causal_head_favorable_windows_probability_one` covers every causally reached receiver head, and `stable_execution_receiver_suffix_has_future_causal_head_path` gives the exact stable-head suffix. | Proved from the first-slot consequence of the accepted pseudorandomness model and used by the adopted fixed-reference proof |
 | Actual direct-quorum range | Actual successful run or commit advance | The prepared scan uses the literal input read after pending refresh. Its direct range gives the exact deterministic result. Protected `runCommitter` work records it, or an intervening install closes the branch. | Proved from the prepared Flex, runtime, and commit-prefix maps. Exact Rust source mapping remains open |
 | Two exact successful Flex inputs | One exact commit output | `successful_cross_view_try_reference_flex_outputs_agree` covers direct and indirect results, different local scan horizons, and no shared candidate premise. | Exact conditional agreement proved; derive its direct-prefix and causal-material premises from the main trace |
 | One successful local Flex run | Durable local commit | `successful_local_flex_run_completes_and_persists_exact` maps the returned result to a protected record action and stores its exact reference. | Proved from the audited local Flex snapshot and runtime maps |

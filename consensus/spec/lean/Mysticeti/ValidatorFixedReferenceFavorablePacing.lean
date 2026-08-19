@@ -555,7 +555,7 @@ theorem fixed_reference_direct_range_records_local_commit_or_installed_next
     inputs.flexCommitterSource inputs.flexCommitterRuntime inputs.commitPrefix
       inputs.exactPendingIngestion inputs.exactDirectRule
         inputs.successfulFlexScanWork directRange.range
-  · simpa only [inputs.flex_committer_depth_matches_leader_schedule]
+  · simp only [inputs.flex_committer_depth_matches_leader_schedule]
   · exact Nat.le_trans directRange.startBeforeObservation
       directRange.observationBeforeFinish
   · exact receiverInRange

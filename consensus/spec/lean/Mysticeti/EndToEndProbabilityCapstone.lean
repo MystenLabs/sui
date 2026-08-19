@@ -20,10 +20,11 @@ Its last theorem is an internal transfer lemma. A final public theorem must call
 the deterministic composition theorem directly. It must not take that theorem
 or a successful-execution property as an input.
 
-`IndependentUniformRoundRankingLaw.probabilityOne` is still an abstract ideal
-law. A real measure-one result must construct this law from the countable
-product of uniform finite rankings, or give an interpretation theorem for that
-measure. This module does not hide that construction in a protocol premise.
+`IndependentUniformRoundRankingLaw.probabilityOne` is still an abstract
+probability law. A real measure-one result must construct this law from the
+countable product of uniform finite first-slot samples, or give an
+interpretation theorem for that measure. This module does not hide that
+construction in a protocol premise.
 -/
 
 namespace UniformRankingEndToEndExecutionFamily

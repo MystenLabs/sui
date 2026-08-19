@@ -308,7 +308,7 @@ theorem latch_event_has_exact_local_target
     {obligations : ValidatorProposalObligationExecution timed}
     {time validator : Nat}
     {proposal : ValidatorReadyProposal BlockId}
-    (latched : obligations.event time validator = .latchProposal proposal)
+    (_latched : obligations.event time validator = .latchProposal proposal)
     (recoveryOrigin : proposal.origin = .commitProgressRecovery)
     (exactNext : proposal.block.reference.round =
       ((timed.execution.trace (time + 1)).validatorState

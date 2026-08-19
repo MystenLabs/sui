@@ -62,6 +62,56 @@ and accepts only the causal history that is above its own GC round.
 This cutoff is local. A source can still serve an older stored block to a peer
 whose GC round is lower.
 
+### The v3 threshold construction is tight
+
+Quorum availability and the two weighted safety inequalities require:
+
+```text
+N >= 5f + 3c + 1
+```
+
+At equality, those three guarantees force the nominal values:
+
+```text
+Q = 4f + 2c + 1
+A = 2f + c + 1
+```
+
+This is tightness of the weighted intersection and availability guarantees. It
+does not state that every unsafe parameter choice occurs in one executable
+protocol trace.
+
+### Causal reads contain honest parent stake
+
+Each valid Mysticeti block has immediate parents from distinct authors with
+quorum stake. After the Byzantine stake bound is removed, the remaining
+non-Byzantine parent-author stake is at least `Q - f`. For every block above
+round one in a causal recovery capsule, the capsule contains the exact parent
+bodies that realize this bound.
+
+This is a weighted, per-layer quality result. It is not Narwhal's raw block-count
+result for a complete causal read. Mysticeti accepts uncertified blocks and its
+causal history can contain Byzantine equivocations. Such extra blocks can make
+an unrestricted raw honest-block fraction false.
+
+### Different block-GC horizons keep one durable prefix
+
+If two correct validators cover one absolute commit index, their durable exact
+commit entries agree at every index through that point. Their block-GC rounds
+do not need to be equal or ordered. This result concerns installed commits. It
+does not compare pending Flex decisions that two validators recompute from
+different pruned DAG views.
+
+### Exact commit prefixes fix adaptive schedule replay
+
+For deterministic v3 scoring rules, two correct installed heads at the same
+index replay to the same schedule state. They therefore have the same ordered
+allowed-leader vector and the same selected order for each round.
+
+The remaining product refinement must map each exact commit to the block bodies
+and ancestors used by the Rust scorer. It must also map the replayed vectors to
+the vectors read by the proposer and FlexCommitter.
+
 ## End-to-end liveness properties
 
 The final end-to-end theorem has three parts. These are the public liveness
@@ -185,15 +235,15 @@ progress with blocks from other validators.
 ## Leader-order and probability boundary
 
 The deterministic theorem must derive each favorable leader window from one
-specified leader-order rule. The canonical probability model uses one common
-independent uniform validator ranking for each round and proves that favorable
-future windows occur with probability one, after the deterministic composition
-is complete.
+specified leader-order rule. The accepted probability model treats each
+round-seeded shuffle as an independent uniform pseudorandom permutation of the
+current allowed-leader list. It proves that favorable future windows occur with
+probability one after the deterministic composition is complete.
 
-Current Rust uses a deterministic round-seeded shuffle. The proof does not claim
-that this shuffle is an independent uniform sample or that it has the same
-coverage. A deterministic repeated-first order is a separate proved option, but
-current Rust does not use it.
+Lean uses only the first selected slot from each permutation. Current Rust uses
+one deterministic round seed so all validators get the same result and can
+reproduce it after a crash. A deterministic repeated-first order is a separate
+proved option, but current Rust does not use it.
 
 ## Required commit-install and GC order
 

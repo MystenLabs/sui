@@ -46,7 +46,7 @@ at-or-below-GC block legal as an immediate proposal parent.
 -/
 def ValidatorProposalParentListReady
     {BlockId CommitId : Type}
-    (origin : ValidatorProposalOrigin)
+    (_origin : ValidatorProposalOrigin)
     (config : ValidatorEpochConfig CommitId)
     (state : ValidatorLocalState BlockId CommitId)
     (targetRound : Nat)
@@ -564,7 +564,7 @@ theorem latched_normal_proposal_parent_is_usable
     {parent : ValidatorBlockRef BlockId}
     (latched : (obligations.trace time validator).readyProposal =
       some proposal)
-    (normal : proposal.origin = .normal)
+    (_normal : proposal.origin = .normal)
     (parentMember : parent ∈ proposal.block.parents) :
     ((timed.execution.trace time).validatorState validator).retained parent =
         true ∧

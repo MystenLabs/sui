@@ -985,7 +985,7 @@ theorem accepted_successor_or_gc_root_gives_receiver_frontier_or_later_layer
           receiverSource.acceptedCausalClosure
             |>.acceptedBodyHasAcceptedParentsAboveGc block.reference block
               parent blockCatalogued rfl accepted parentMember parentAboveGc'
-        exact ⟨by simpa [parentExact], parentAccepted⟩
+        exact ⟨by simp [parentExact], parentAccepted⟩
       exact receiverSource.upperBound parentRound acceptedParents
   · right
     have successorAtMostGc : parentRound + 1 ≤
@@ -1227,7 +1227,7 @@ theorem accepted_correct_successors_give_later_operational_layer
       have authorExact := (blockForFacts author authorMember).1
       simp only [validatorParentAuthors, List.any_eq_true]
       exact ⟨(blockFor author).reference, selectedReference, by
-        simpa [authorExact]⟩
+        simp [authorExact]⟩
   rcases frontiers.currentSource time holder holderInRange
       holderCorrectAvailable active with ⟨holderSource⟩
   have successorAtMostFrontier : base + 1 ≤ frontiers.frontier time holder :=

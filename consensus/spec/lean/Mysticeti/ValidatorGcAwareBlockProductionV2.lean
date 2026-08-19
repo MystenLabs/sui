@@ -245,7 +245,7 @@ structure ValidatorSelectedSupportQueueAt
       parent.round →
     Nonempty (ValidatorSelectedParentFetchSourceAt recursive selected parent)
   sourceProjectsRootNeedToQueue : ∀ parent
-      (source : ValidatorSelectedParentFetchSourceAt recursive selected parent),
+      (_source : ValidatorSelectedParentFetchSourceAt recursive selected parent),
     queue.known 0 parent
 
 /-- Current per-support queue construction. No field names a later queue
@@ -379,12 +379,13 @@ variable {supports : ValidatorRecoverySelectedSupportExecution needs}
 variable {recursive : ValidatorRecoveryRecursiveParentNeedExecution syncRules}
 variable {obligations : ValidatorProposalObligationExecution timed}
 
+omit [DecidableEq BlockId] in
 /-- Accepted selected parents make any active accumulator extension of the
 latched need ready. The active-need GC fence rules out a positive immediate
 parent which is at or below GC. -/
 theorem ready_of_active_extension_and_accepted
     {start finish validator : Time}
-    (validatorInRange : validator < config.authorityCount)
+    (_validatorInRange : validator < config.authorityCount)
     (selected : ValidatorRecoverySelectedSupportAt supports start validator)
     {laterNeed : ValidatorRecoveryParentNeed BlockId CommitId config}
     (laterActive : (needs.trace finish validator).active = some laterNeed)
@@ -430,6 +431,7 @@ theorem ready_of_active_extension_and_accepted
           (allAccepted parent member)
       exact ⟨retained, permitted⟩
 
+omit [DecidableEq BlockId] in
 /-- A ready normal parent build is one strict production phase. -/
 theorem normal_build_eventually_produces_strict
     (latchSource : ValidatorProposalLatchSourceMap obligations)
@@ -694,6 +696,7 @@ variable {mode : ValidatorBlockProgressRecoveryModeExecution timed thresholds}
 variable {thresholds : ValidatorBlockProgressRecoveryThresholds}
 variable {mode : ValidatorBlockProgressRecoveryModeExecution timed thresholds}
 
+omit [DecidableEq BlockId] in
 /-- Accepted selected recovery parents first create the real current timer
 input. The timer and proposal workers then derive production. -/
 theorem accepted_recovery_support_eventually_produces_strict
@@ -1158,6 +1161,7 @@ variable {needs : ValidatorRecoveryParentNeedExecution pins arms recoveryWait}
 variable {supports : ValidatorRecoverySelectedSupportExecution needs}
 variable {obligations : ValidatorProposalObligationExecution timed}
 
+omit [DecidableEq BlockId] in
 /-- Every active parent need already has a V2 phase. An unready need has its
 stored support. A ready normal need has a protected build. A ready recovery
 need has a real current timer input. -/
@@ -1202,6 +1206,7 @@ theorem active_need_has_phase
         needActive ready with ⟨support, stored⟩
     exact .selected ⟨support, stored⟩
 
+omit [DecidableEq BlockId] in
 /-- The one no-active-need map and the derived active-need cases cover every
 active correct host. -/
 theorem active_host_has_phase
@@ -1220,6 +1225,7 @@ theorem active_host_has_phase
       exact active_need_has_phase validatorInRange validatorCorrectAvailable
         epochActive activeNeed
 
+omit [DecidableEq BlockId] in
 /-- Every current immediate phase produces one strict own-block send. The
 recovery constructor consumes the current timer input, including an exact
 timer which is already stored. -/
