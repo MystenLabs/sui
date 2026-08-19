@@ -31,6 +31,8 @@ use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::query_options::ResolvedCheckpointRange;
 use crate::ledger_history::query_options::ResolvedScan;
 use crate::ledger_history::query_options::validate_checkpoint_bounds;
+use crate::ledger_history::response::end_response;
+use crate::ledger_history::response::watermark_response;
 use crate::metrics::ListRequestMetrics;
 use crate::metrics::ListStreamMetrics;
 use crate::read_mask_defaults;
@@ -184,7 +186,7 @@ pub(crate) async fn list_checkpoints(
         if terminal_reason != QueryEndReason::ItemLimit {
             let terminal_watermark =
                 chunk_terminal.into_watermark(&terminal_options, covered_checkpoint_bound);
-            let response = end_response(terminal_watermark, terminal_reason);
+            let response = end_response::<ListCheckpointsResponse>(terminal_watermark, terminal_reason);
             request_metrics.observe_frame(&response, false);
             request_metrics.finish_success(terminal_reason, bitmap_buckets_evaluated);
             let yield_started = request_metrics.yield_clock();
@@ -938,22 +940,6 @@ fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsRes
     response
 }
 
-fn watermark_response(watermark: Watermark) -> ListCheckpointsResponse {
-    let mut response = ListCheckpointsResponse::default();
-    response.watermark = Some(watermark);
-    response
-}
-
-fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListCheckpointsResponse {
-    let mut end = QueryEnd::default();
-    end.reason = Some(reason as i32);
-
-    let mut response = ListCheckpointsResponse::default();
-    response.watermark = Some(watermark);
-    response.end = Some(end);
-    response
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1137,7 +1123,10 @@ mod tests {
                 if ascending { 4 } else { 7 },
             )
             .unwrap();
-            let terminal = end_response(terminal_watermark, QueryEndReason::ScanLimit);
+            let terminal = end_response::<ListCheckpointsResponse>(
+                terminal_watermark,
+                QueryEndReason::ScanLimit,
+            );
             let frames = emitted
                 .iter()
                 .copied()
@@ -1342,7 +1331,7 @@ mod tests {
             }
 
             let terminal = ScanTerminal::ScanLimit { watermark };
-            let response = end_response(
+            let response = end_response::<ListCheckpointsResponse>(
                 terminal.into_watermark(&options, covered),
                 QueryEndReason::ScanLimit,
             );

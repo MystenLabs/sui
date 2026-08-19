@@ -27,6 +27,8 @@ use sui_package_resolver::Resolver;
 use sui_rpc::proto::sui::rpc::v2::GetServiceInfoResponse;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerService;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer;
+use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageServiceServer;
 use sui_rpc_api::ServerVersion;
 use sui_types::digests::ChainIdentifier;
 use sui_types::message_envelope::Message;
@@ -322,7 +324,8 @@ fn spawn_listener(
             ),
         ))
         .layer(request_log_layer)
-        .add_service(ledger_service_with_response_compression(ledger));
+        .add_service(ledger_service_with_response_compression(ledger.clone()))
+        .add_service(move_package_service_with_response_compression(ledger));
 
     if enable_reflection {
         let mut reflection_v1_builder = tonic_reflection::server::Builder::configure();
@@ -350,6 +353,13 @@ fn spawn_listener(
         .with_shutdown_signal(async move {
             let _ = tx.send(());
         }))
+}
+
+fn move_package_service_with_response_compression<T>(service: T) -> MovePackageServiceServer<T>
+where
+    T: MovePackageService,
+{
+    MovePackageServiceServer::new(service).send_compressed(tonic::codec::CompressionEncoding::Zstd)
 }
 
 impl KvRpcServer {

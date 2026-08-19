@@ -7,8 +7,9 @@ use sui_rpc::proto::sui::rpc::v2::{
     BatchGetTransactionsResponse, GetCheckpointRequest, GetCheckpointResponse, GetEpochRequest,
     GetEpochResponse, GetObjectRequest, GetObjectResponse, GetServiceInfoRequest,
     GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse, ListCheckpointsRequest,
-    ListCheckpointsResponse, ListEventsRequest, ListEventsResponse, ListTransactionsRequest,
-    ListTransactionsResponse, ledger_service_server::LedgerService,
+    ListCheckpointsResponse, ListEventsRequest, ListEventsResponse, ListPackagesRequest,
+    ListPackagesResponse, ListTransactionsRequest, ListTransactionsResponse,
+    ledger_service_server::LedgerService, move_package_service_server::MovePackageService,
 };
 use sui_rpc_api::proto::timestamp_ms_to_proto;
 use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};
@@ -24,6 +25,7 @@ mod get_object;
 pub(crate) mod get_transaction;
 mod list_checkpoints;
 mod list_events;
+mod list_packages;
 mod list_transactions;
 
 #[tonic::async_trait]
@@ -186,6 +188,57 @@ impl LedgerService for KvRpcServer {
         )
         .await
     }
+}
+
+/// Only the ledger-history list method is served here for now; the
+/// per-package lookup methods keep their generated `UNIMPLEMENTED` defaults.
+#[tonic::async_trait]
+impl MovePackageService for KvRpcServer {
+    async fn list_packages(
+        &self,
+        request: tonic::Request<ListPackagesRequest>,
+    ) -> Result<tonic::Response<BoxStream<ListPackagesResponse>>, tonic::Status> {
+        self.check_list_apis_enabled()?;
+        self.serve_query_stream(
+            OperationSpec::new("list_packages", self.ledger_history.list_packages().timeout),
+            request,
+            list_packages::list_packages,
+        )
+        .await
+    }
+}
+
+/// The empty-resolved-range reply, shared by every list endpoint: one
+/// terminal frame built from the range's exhaustion and the lane's terminal
+/// cursor, yielded through the standard single-frame metrics ceremony.
+pub(crate) fn empty_range_stream<F>(
+    ctx: crate::operation::QueryContext,
+    resolution: &'static str,
+    started: std::time::Instant,
+    options: &sui_rpc_api::ledger_history::query_options::QueryOptions,
+    exhaustion: sui_rpc_api::ledger_history::query_options::RangeExhaustion,
+    terminal_position: sui_rpc_cursor::Position,
+) -> futures::stream::BoxStream<'static, Result<F, sui_rpc_api::RpcError>>
+where
+    F: sui_rpc_api::ledger_history::response::ListResponseFrame + Send + 'static,
+{
+    use futures::StreamExt;
+    let response = sui_rpc_api::ledger_history::response::range_end_response::<F>(
+        options,
+        exhaustion,
+        terminal_position,
+        None,
+        true,
+    )
+    .0;
+    async_stream::try_stream! {
+        ctx.inc_stream_watermark_frames();
+        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+        let yield_started = std::time::Instant::now();
+        yield response;
+        ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
+    }
+    .boxed()
 }
 
 pub(crate) async fn get_service_info(
@@ -460,6 +513,7 @@ pub(crate) mod test_utils {
         let ledger_history = LedgerHistoryConfig {
             list_transactions: Some(method_config.clone()),
             list_events: Some(method_config.clone()),
+            list_packages: Some(method_config.clone()),
             list_checkpoints: Some(method_config),
             bitmap_bucket_budget_tx: Some(10),
             bitmap_bucket_budget_event: Some(10),

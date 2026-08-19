@@ -33,6 +33,8 @@ use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::ResolvedCheckpointRange;
 use crate::ledger_history::query_options::ResolvedScan;
 use crate::ledger_history::query_options::validate_checkpoint_bounds;
+use crate::ledger_history::response::end_response;
+use crate::ledger_history::response::watermark_response;
 use crate::metrics::ListRequestMetrics;
 use crate::metrics::ListStreamMetrics;
 use crate::read_mask_defaults;
@@ -179,7 +181,7 @@ pub(crate) async fn list_events(
         if terminal_reason != QueryEndReason::ItemLimit {
             let terminal_watermark =
                 chunk_terminal.into_watermark(&terminal_options, covered_checkpoint_bound);
-            let response = end_response(terminal_watermark, terminal_reason);
+            let response = end_response::<ListEventsResponse>(terminal_watermark, terminal_reason);
             request_metrics.observe_frame(&response, false);
             request_metrics.finish_success(terminal_reason, bitmap_buckets_evaluated);
             let yield_started = request_metrics.yield_clock();
@@ -776,22 +778,6 @@ fn resolve_event_range(
     Ok(resolved)
 }
 
-fn watermark_response(watermark: Watermark) -> ListEventsResponse {
-    let mut response = ListEventsResponse::default();
-    response.watermark = Some(watermark);
-    response
-}
-
-fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListEventsResponse {
-    let mut end = QueryEnd::default();
-    end.reason = Some(reason as i32);
-
-    let mut response = ListEventsResponse::default();
-    response.watermark = Some(watermark);
-    response.end = Some(end);
-    response
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -919,7 +905,7 @@ mod tests {
             );
             assert_eq!(watermark.checkpoint, expected_proof);
             let terminal = ScanTerminal::ScanLimit { watermark };
-            let response = end_response(
+            let response = end_response::<ListEventsResponse>(
                 terminal.into_watermark(&options, Some(123)),
                 QueryEndReason::ScanLimit,
             );

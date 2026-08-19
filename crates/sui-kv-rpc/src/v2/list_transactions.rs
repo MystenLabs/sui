@@ -24,10 +24,13 @@ use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
-use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
 use sui_rpc_api::ledger_history::query_options::ResolvedScan;
 use sui_rpc_api::ledger_history::query_options::validate_checkpoint_bounds;
+use sui_rpc_api::ledger_history::response::end_response;
+use sui_rpc_api::ledger_history::response::item_response;
+use sui_rpc_api::ledger_history::response::range_end_response;
+use sui_rpc_api::ledger_history::response::watermark_response;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
@@ -41,6 +44,7 @@ use tracing::info;
 
 use crate::bigtable_client::BigTableClient;
 use crate::config::PipelineStage;
+use crate::config::ResolvedStageConfig;
 use crate::object_cache::ObjectMap;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
@@ -57,6 +61,7 @@ use crate::resolve;
 use crate::resolve::compute_object_keys;
 use crate::resolve::needs_transaction_objects;
 use crate::resolve::transaction_columns;
+use crate::v2::empty_range_stream;
 use crate::v2::get_transaction::validate_read_mask;
 
 pub(crate) type ListTransactionsStream =
@@ -130,27 +135,17 @@ pub(crate) async fn list_transactions(
             elapsed_ms = started.elapsed().as_millis(),
             "list_transactions: empty range"
         );
-        // Empty resolved ranges still surface their terminal cursor, but claim
-        // no checkpoint coverage.
-        let response = range_end_response(
+        return Ok(empty_range_stream(
+            ctx,
+            resolution,
+            started,
             &options,
             exhaustion,
             Position::Transactions {
                 checkpoint: range_end_checkpoint,
                 tx_seq: range_end_position,
             },
-            None,
-            true,
-        )
-        .0;
-        return Ok(async_stream::try_stream! {
-            ctx.inc_stream_watermark_frames();
-            ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
-            let yield_started = Instant::now();
-            yield response;
-            ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
-        }
-        .boxed());
+        ));
     }
 
     // Stage 1: discover tx_seq_digest rows for the requested response.
@@ -171,23 +166,7 @@ pub(crate) async fn list_transactions(
                 ctx.bitmap_scan_observer(),
             );
             let seq_stream = take_items(seq_stream, limit_items);
-            pipelined_chunks(
-                seq_stream,
-                tx_seq_digest_stage.chunk_size,
-                tx_seq_digest_stage.concurrency,
-                {
-                    let client = client.clone();
-                    move |seqs| {
-                        let client = client.clone();
-                        async move {
-                            fetch_tx_seq_digests(client, seqs)
-                                .await
-                                .map(|s| s.map_err(ScanStop::Fault).boxed())
-                                .map_err(ScanStop::Fault)
-                        }
-                    }
-                },
-            )
+            tx_seq_digest_chunks(client.clone(), tx_seq_digest_stage, seq_stream)
         } else {
             scan_tx_seq_digests(client.clone(), tx_range.clone(), limit_items, &options).await?
         };
@@ -198,24 +177,11 @@ pub(crate) async fn list_transactions(
 
             // Stage 3: Watermarked<TxSeqDigestData> ->
             // Watermarked<(tx_seq, TransactionData)>.
-            let tx_stream = pipelined_chunks(
+            let tx_stream = transaction_chunks(
+                client.clone(),
+                transactions_stage,
+                columns.clone(),
                 digest_stream,
-                transactions_stage.chunk_size,
-                transactions_stage.concurrency,
-                {
-                    let client = client.clone();
-                    let columns = columns.clone();
-                    move |rows| {
-                        let client = client.clone();
-                        let columns = columns.clone();
-                        async move {
-                            fetch_transactions(client, columns, rows)
-                                .await
-                                .map(|s| s.map_err(ScanStop::Fault).boxed())
-                                .map_err(ScanStop::Fault)
-                        }
-                    }
-                },
             );
 
             // Stage 4: + ObjectMap. Object refs are precomputed per Item; Frontier
@@ -422,13 +388,6 @@ pub(crate) async fn list_transactions(
     .boxed())
 }
 
-/// Wrap a constructed `Watermark` as a progress-only wire frame.
-fn watermark_response(watermark: Watermark) -> ListTransactionsResponse {
-    let mut response = ListTransactionsResponse::default();
-    response.watermark = Some(watermark);
-    response
-}
-
 fn transaction_frontier_watermark(
     options: &QueryOptions,
     direction: ScanDirection,
@@ -501,7 +460,54 @@ async fn scan_tx_seq_digests(
         .boxed())
 }
 
-async fn fetch_tx_seq_digests(
+/// A chunked transaction-fetch stage's output: `(tx_seq, tx_offset, body)`
+/// items under the scan's watermarks.
+pub(crate) type TransactionChunkStream =
+    BoxStream<'static, Result<Watermarked<(u64, u32, TransactionData)>, ScanStop>>;
+
+/// Chunked stage: tx sequence numbers -> `tx_seq_digest` rows. Shared by the
+/// filtered transactions scan and `ListPackages`.
+pub(crate) fn tx_seq_digest_chunks(
+    client: BigTableClient,
+    stage: ResolvedStageConfig,
+    seq_stream: BoxStream<'static, Result<Watermarked<u64>, ScanStop>>,
+) -> BoxStream<'static, Result<Watermarked<TxSeqDigestData>, ScanStop>> {
+    pipelined_chunks(seq_stream, stage.chunk_size, stage.concurrency, {
+        move |seqs| {
+            let client = client.clone();
+            async move {
+                fetch_tx_seq_digests(client, seqs)
+                    .await
+                    .map(|s| s.map_err(ScanStop::Fault).boxed())
+                    .map_err(ScanStop::Fault)
+            }
+        }
+    })
+}
+
+/// Chunked stage: `tx_seq_digest` rows -> transaction bodies with the given
+/// columns. Shared by the transactions and `ListPackages` scans.
+pub(crate) fn transaction_chunks(
+    client: BigTableClient,
+    stage: ResolvedStageConfig,
+    columns: Arc<[&'static str]>,
+    digest_stream: BoxStream<'static, Result<Watermarked<TxSeqDigestData>, ScanStop>>,
+) -> TransactionChunkStream {
+    pipelined_chunks(digest_stream, stage.chunk_size, stage.concurrency, {
+        move |rows| {
+            let client = client.clone();
+            let columns = columns.clone();
+            async move {
+                fetch_transactions(client, columns, rows)
+                    .await
+                    .map(|s| s.map_err(ScanStop::Fault).boxed())
+                    .map_err(ScanStop::Fault)
+            }
+        }
+    })
+}
+
+pub(crate) async fn fetch_tx_seq_digests(
     client: BigTableClient,
     seqs: Vec<u64>,
 ) -> Result<BoxStream<'static, Result<TxSeqDigestData, anyhow::Error>>, anyhow::Error> {
@@ -533,7 +539,7 @@ async fn fetch_tx_seq_digests(
     .boxed())
 }
 
-async fn fetch_transactions(
+pub(crate) async fn fetch_transactions(
     client: BigTableClient,
     columns: Arc<[&'static str]>,
     rows: Vec<TxSeqDigestData>,
@@ -643,41 +649,7 @@ fn transaction_item_response(
         transaction.transaction_index = Some(tx_offset as u64);
     }
 
-    let mut response = ListTransactionsResponse::default();
-    response.transaction = Some(transaction);
-    response.watermark = Some(watermark);
-    response
-}
-
-fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListTransactionsResponse {
-    let mut end = QueryEnd::default();
-    end.reason = Some(reason as i32);
-
-    let mut response = ListTransactionsResponse::default();
-    response.watermark = Some(watermark);
-    response.end = Some(end);
-    response
-}
-
-/// Trailing terminal frame for range exhaustion. Reason and watermark derive
-/// from one `ScanTerminal`, so they cannot disagree; natural completion of an
-/// empty interval claims no checkpoint coverage.
-fn range_end_response(
-    options: &QueryOptions,
-    exhaustion: RangeExhaustion,
-    position: Position,
-    covered_checkpoint_bound: Option<u64>,
-    interval_empty: bool,
-) -> (ListTransactionsResponse, QueryEndReason) {
-    let terminal = ScanTerminal::from_range_exhaustion(exhaustion, position, interval_empty);
-    let reason = terminal.reason();
-    (
-        end_response(
-            terminal.into_watermark(options, covered_checkpoint_bound),
-            reason,
-        ),
-        reason,
-    )
+    item_response(transaction, watermark)
 }
 
 #[cfg(test)]
