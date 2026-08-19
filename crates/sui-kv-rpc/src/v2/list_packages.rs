@@ -65,6 +65,7 @@ use crate::pipeline::Watermarked;
 use crate::pipeline::render_ahead;
 use crate::pipeline::resolve_scan_watermarks;
 use crate::pipeline::take_items;
+use crate::v2::empty_range_stream;
 use crate::v2::list_transactions::transaction_chunks;
 use crate::v2::list_transactions::tx_seq_digest_chunks;
 
@@ -119,24 +120,14 @@ pub(crate) async fn list_packages(
             elapsed_ms = started.elapsed().as_millis(),
             "list_packages: empty range"
         );
-        // Empty resolved ranges still surface their terminal cursor, but
-        // natural completion claims no checkpoint.
-        let response = range_end_response(
+        return Ok(empty_range_stream(
+            ctx,
+            RESOLUTION,
+            started,
             &options,
             exhaustion,
             package_position_cursor(range_end_checkpoint, range_end_position),
-            None,
-            true,
-        )
-        .0;
-        return Ok(async_stream::try_stream! {
-            ctx.inc_stream_watermark_frames();
-            ctx.observe_stream_first_frame_latency(RESOLUTION, started.elapsed());
-            let yield_started = Instant::now();
-            yield response;
-            ctx.observe_stream_frame_yield_wait(RESOLUTION, yield_started.elapsed());
-        }
-        .boxed());
+        ));
     }
 
     let Some(tx_range) = bounds.tx_range() else {

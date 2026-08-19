@@ -64,6 +64,7 @@ use crate::pipeline::render_ahead;
 use crate::pipeline::resolve_scan_watermarks;
 use crate::pipeline::take_items;
 use crate::render::render_json;
+use crate::v2::empty_range_stream;
 
 const EVENT_READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::EVENT;
 
@@ -125,22 +126,18 @@ pub(crate) async fn list_events(
             elapsed_ms = started.elapsed().as_millis(),
             "list_events: empty range"
         );
-        // Empty resolved ranges still surface their terminal cursor, but
-        // natural completion claims no checkpoint.
-        let terminal_position = Position::Events {
-            checkpoint: range_end_checkpoint,
-            tx_seq: range_end_position.tx_seq,
-            event_index: range_end_position.index,
-        };
-        let response = range_end_response(&options, exhaustion, terminal_position, None, true).0;
-        return Ok(async_stream::try_stream! {
-            ctx.inc_stream_watermark_frames();
-            ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
-            let yield_started = Instant::now();
-            yield response;
-            ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
-        }
-        .boxed());
+        return Ok(empty_range_stream(
+            ctx,
+            resolution,
+            started,
+            &options,
+            exhaustion,
+            Position::Events {
+                checkpoint: range_end_checkpoint,
+                tx_seq: range_end_position.tx_seq,
+                event_index: range_end_position.index,
+            },
+        ));
     }
 
     let scan_budget = ctx.scan_budget(BitmapIndexSpec::event());

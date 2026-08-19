@@ -61,6 +61,7 @@ use crate::resolve;
 use crate::resolve::compute_object_keys;
 use crate::resolve::needs_transaction_objects;
 use crate::resolve::transaction_columns;
+use crate::v2::empty_range_stream;
 use crate::v2::get_transaction::validate_read_mask;
 
 pub(crate) type ListTransactionsStream =
@@ -134,27 +135,17 @@ pub(crate) async fn list_transactions(
             elapsed_ms = started.elapsed().as_millis(),
             "list_transactions: empty range"
         );
-        // Empty resolved ranges still surface their terminal cursor, but claim
-        // no checkpoint coverage.
-        let response = range_end_response(
+        return Ok(empty_range_stream(
+            ctx,
+            resolution,
+            started,
             &options,
             exhaustion,
             Position::Transactions {
                 checkpoint: range_end_checkpoint,
                 tx_seq: range_end_position,
             },
-            None,
-            true,
-        )
-        .0;
-        return Ok(async_stream::try_stream! {
-            ctx.inc_stream_watermark_frames();
-            ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
-            let yield_started = Instant::now();
-            yield response;
-            ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
-        }
-        .boxed());
+        ));
     }
 
     // Stage 1: discover tx_seq_digest rows for the requested response.

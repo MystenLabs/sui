@@ -208,6 +208,39 @@ impl MovePackageService for KvRpcServer {
     }
 }
 
+/// The empty-resolved-range reply, shared by every list endpoint: one
+/// terminal frame built from the range's exhaustion and the lane's terminal
+/// cursor, yielded through the standard single-frame metrics ceremony.
+pub(crate) fn empty_range_stream<F>(
+    ctx: crate::operation::QueryContext,
+    resolution: &'static str,
+    started: std::time::Instant,
+    options: &sui_rpc_api::ledger_history::query_options::QueryOptions,
+    exhaustion: sui_rpc_api::ledger_history::query_options::RangeExhaustion,
+    terminal_position: sui_rpc_cursor::Position,
+) -> futures::stream::BoxStream<'static, Result<F, sui_rpc_api::RpcError>>
+where
+    F: sui_rpc_api::ledger_history::response::ListResponseFrame + Send + 'static,
+{
+    use futures::StreamExt;
+    let response = sui_rpc_api::ledger_history::response::range_end_response::<F>(
+        options,
+        exhaustion,
+        terminal_position,
+        None,
+        true,
+    )
+    .0;
+    async_stream::try_stream! {
+        ctx.inc_stream_watermark_frames();
+        ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
+        let yield_started = std::time::Instant::now();
+        yield response;
+        ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
+    }
+    .boxed()
+}
+
 pub(crate) async fn get_service_info(
     mut client: BigTableClient,
     chain_id: ChainIdentifier,

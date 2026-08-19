@@ -64,6 +64,7 @@ use crate::render::render_full_checkpoint;
 use crate::resolve;
 use crate::resolve::list_checkpoint_columns;
 use crate::resolve::needs_transactions_or_objects;
+use crate::v2::empty_range_stream;
 
 const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::CHECKPOINT;
 
@@ -156,26 +157,16 @@ pub(crate) async fn list_checkpoints(
             elapsed_ms = started.elapsed().as_millis(),
             "list_checkpoints: empty range"
         );
-        // Empty resolved ranges still surface their terminal cursor, but
-        // natural completion claims no checkpoint coverage.
-        let response = range_end_response(
+        return Ok(empty_range_stream(
+            ctx,
+            resolution,
+            started,
             &options,
             exhaustion,
             Position::Checkpoints {
                 checkpoint: range_end_position,
             },
-            None,
-            true,
-        )
-        .0;
-        return Ok(async_stream::try_stream! {
-            ctx.inc_stream_watermark_frames();
-            ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
-            let yield_started = Instant::now();
-            yield response;
-            ctx.observe_stream_frame_yield_wait(resolution, yield_started.elapsed());
-        }
-        .boxed());
+        ));
     }
 
     let cp_columns: Arc<[&'static str]> = list_checkpoint_columns(&read_mask, needs_full).into();
