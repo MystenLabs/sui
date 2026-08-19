@@ -1003,6 +1003,24 @@ impl RpcIndexes for RpcStoreReadStore {
         self.reader.package_versions_iter(original_id, cursor)
     }
 
+    fn get_package_version_storage_id(
+        &self,
+        original_id: ObjectID,
+        version: u64,
+    ) -> Result<Option<ObjectID>> {
+        self.reader
+            .get_package_version_storage_id(original_id, version)
+    }
+
+    fn get_package_at_checkpoint(
+        &self,
+        original_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Option<(u64, ObjectID)>> {
+        self.reader
+            .get_package_at_checkpoint(original_id, checkpoint)
+    }
+
     fn get_highest_indexed_checkpoint_seq_number(
         &self,
     ) -> Result<Option<CheckpointSequenceNumber>> {
