@@ -194,12 +194,6 @@ impl BigTableStore {
         }
     }
 
-    /// Cloned handle to the underlying client. Cheap: `BigTableClient` is
-    /// a thin `Clone` wrapper over shared gRPC channels.
-    pub fn client(&self) -> BigTableClient {
-        self.client.clone()
-    }
-
     pub(crate) fn bitmap_initial_watermarks(&self) -> BitmapInitialWatermarks {
         BitmapInitialWatermarks {
             init_results: self.init_results.clone(),
@@ -216,7 +210,8 @@ impl BigTableStore {
 
 impl BigTableConnection<'_> {
     /// Returns a mutable reference to the underlying BigTable client.
-    pub fn client(&mut self) -> &mut BigTableClient {
+    #[cfg(test)]
+    pub(crate) fn client(&mut self) -> &mut BigTableClient {
         &mut self.client
     }
 
