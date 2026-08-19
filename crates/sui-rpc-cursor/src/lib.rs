@@ -43,6 +43,55 @@ impl Position {
     }
 }
 
+/// Nameable payload of [`Position::Checkpoints`] — the wire's own shape for
+/// the variant (mirrors `sui.rpc.cursor.v1.CheckpointsPosition`).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CheckpointsPosition {
+    pub checkpoint: u64,
+}
+
+/// Nameable payload of [`Position::Transactions`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TransactionsPosition {
+    pub checkpoint: u64,
+    pub tx_seq: u64,
+}
+
+/// Nameable payload of [`Position::Events`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EventsPosition {
+    pub checkpoint: u64,
+    pub tx_seq: u64,
+    pub event_index: u32,
+}
+
+impl From<CheckpointsPosition> for Position {
+    fn from(position: CheckpointsPosition) -> Self {
+        Position::Checkpoints {
+            checkpoint: position.checkpoint,
+        }
+    }
+}
+
+impl From<TransactionsPosition> for Position {
+    fn from(position: TransactionsPosition) -> Self {
+        Position::Transactions {
+            checkpoint: position.checkpoint,
+            tx_seq: position.tx_seq,
+        }
+    }
+}
+
+impl From<EventsPosition> for Position {
+    fn from(position: EventsPosition) -> Self {
+        Position::Events {
+            checkpoint: position.checkpoint,
+            tx_seq: position.tx_seq,
+            event_index: position.event_index,
+        }
+    }
+}
+
 /// Whether a cursor position is a matched row that was returned to the client (`Item`) or a scan
 /// frontier the server reached (`Boundary`).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
