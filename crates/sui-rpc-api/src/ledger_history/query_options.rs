@@ -25,7 +25,7 @@ pub enum Ordering {
 }
 
 /// Intra-transaction coordinate: a transaction and an index within it
-/// (events today; any per-transaction-indexed lane). Boundary cursors may
+/// (events and package writes; any per-transaction-indexed lane). Boundary cursors may
 /// point at slots with no item.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct IntraTxCoordinate {
@@ -156,6 +156,16 @@ impl QueryOptions {
     ) -> Result<Self, RpcError> {
         Self::from_proto_with_position(request, default_limit_items, max_limit_items, |position| {
             matches!(position, Position::Events { .. })
+        })
+    }
+
+    pub fn packages_from_proto(
+        request: Option<&ProtoQueryOptions>,
+        default_limit_items: u32,
+        max_limit_items: u32,
+    ) -> Result<Self, RpcError> {
+        Self::from_proto_with_position(request, default_limit_items, max_limit_items, |position| {
+            matches!(position, Position::Packages { .. })
         })
     }
 
@@ -632,7 +642,9 @@ impl ScanCursor<u64> for CursorToken {
         match self.position {
             Position::Checkpoints { checkpoint } => checkpoint,
             Position::Transactions { tx_seq, .. } => tx_seq,
-            Position::Events { .. } => unreachable!("validated at decode"),
+            Position::Events { .. } | Position::Packages { .. } => {
+                unreachable!("validated at decode")
+            }
         }
     }
 }
@@ -647,6 +659,14 @@ impl ScanCursor<IntraTxCoordinate> for CursorToken {
             } => IntraTxCoordinate {
                 tx_seq,
                 index: event_index,
+            },
+            Position::Packages {
+                tx_seq,
+                write_index,
+                ..
+            } => IntraTxCoordinate {
+                tx_seq,
+                index: write_index,
             },
             _ => unreachable!("validated at decode"),
         }

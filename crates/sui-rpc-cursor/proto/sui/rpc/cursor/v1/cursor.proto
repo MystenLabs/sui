@@ -33,6 +33,7 @@ message CursorToken {
         CheckpointsPosition checkpoints = 6;
         TransactionsPosition transactions = 7;
         EventsPosition events = 8;
+        PackagesPosition packages = 9;
     }
 }
 
@@ -64,3 +65,19 @@ message EventsPosition {
 // event coordinate; the start of transaction N is `{ tx_seq: N, event_index: 0 }`.
 // `before` cursors bound the scan exclusively at the event coordinate for both
 // Item and Boundary kinds.
+
+message PackagesPosition {
+    // Checkpoint containing or bounding the package-write position.
+    optional uint64 checkpoint = 1;
+    // Global transaction sequence number.
+    optional uint64 tx_seq = 2;
+    // Index of the write among the transaction's package writes, in the order
+    // they appear in the transaction's effects.
+    optional uint32 write_index = 3;
+}
+
+// Package cursors are ordered lexicographically by `(tx_seq, write_index)`,
+// with the same inclusivity rules as event cursors: Item cursors resume
+// strictly after the write, Boundary cursors resume at the coordinate, and
+// `before` cursors bound the scan exclusively at the coordinate for both
+// kinds.
