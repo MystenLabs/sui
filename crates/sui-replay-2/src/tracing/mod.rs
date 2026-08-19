@@ -5,7 +5,7 @@
 //! Mostly deals with directory/file saving and what gets saved in the trace output.
 
 use crate::{
-    artifacts::{Artifact, ArtifactManager},
+    artifacts::{Artifact, ArtifactManager, BCODE_DIR},
     execution::TxnContextAndEffects,
 };
 use anyhow::{Context, Error};
@@ -18,7 +18,6 @@ use move_trace_format::format::MoveTraceBuilder;
 use std::fs;
 use sui_types::object::Data;
 
-pub(crate) const BCODE_DIR: &str = "bytecode";
 const SOURCE_DIR: &str = "source";
 
 /// Saves the trace and additional metadata needed to analyze the trace
