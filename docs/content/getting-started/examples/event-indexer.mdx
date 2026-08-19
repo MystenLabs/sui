@@ -89,9 +89,9 @@ This example teaches:
 
 - **Move events:** A struct with `copy` and `drop` abilities that you pass to `sui::event::emit`. The network indexes events and makes them queryable by type. They carry data but do not create onchain objects.
 
-- **gRPC checkpoint streaming:** The `SuiGrpcClient.subscribeCheckpoint` method opens a persistent stream that yields each new checkpoint as it finalizes. The `readMask` parameter filters the response to only include the fields you need (in this case, `transactions.events`).
+- **gRPC checkpoint streaming:** The `SuiGrpcClient.subscriptionService.subscribeCheckpoints` method opens a persistent stream that yields each new checkpoint as it finalizes. The `readMask` parameter filters the response to only include the fields you need (in this case, `transactions.events`).
 
-- **BCS event decoding:** Move encodes events with BCS. The TypeScript SDK provides `BCS.struct` to define a schema that matches the Move struct layout. Parsing the raw bytes with this schema produces a typed JavaScript object.
+- **BCS event decoding:** Move encodes events with BCS. The TypeScript SDK provides `bcs.struct` (from `@mysten/sui/bcs`) to define a schema that matches the Move struct layout. Parsing the raw bytes with this schema produces a typed JavaScript object.
 
 - **Shared counter pattern:** The `UsersCounter` is a shared object that tracks how many users have registered. Each `register_user` call reads the current count as the user's ID, then increments it. This is a common pattern for sequential ID assignment.
 
@@ -126,9 +126,9 @@ The following steps walk through the flow:
 
 3. The next finalized checkpoint includes the event. The gRPC stream delivers the checkpoint to the indexer.
 
-4. The indexer filters the checkpoint's transactions for events matching the `UserRegistered` type string (`PACKAGE_ID::indexer::UserRegistered`).
+4. The indexer filters the checkpoint's transactions for events matching the `UserRegistered` type string (`PACKAGE_ID::indexer_sample::UserRegistered`).
 
-5. For each matching event, the indexer passes the raw bytes to `decodeBcsEvent`, which uses the `BCS.struct` schema to parse the owner (address), name (string), and user_id (u64) fields.
+5. For each matching event, the indexer passes the raw bytes to `decodeBcsEvent`, which uses the `bcs.struct` schema to parse the owner (address), name (string), and user_id (u64) fields.
 
 ## Prerequisites
 
@@ -216,7 +216,7 @@ Edit `.env` with the values from the publish step:
 
 ```bash title='.env'
 PACKAGE_ID=PACKAGE_ID_FROM_STEP_2
-MODULE_NAME=indexer
+MODULE_NAME=indexer_sample
 PRIVATE_KEY=YOUR_BASE64_PRIVATE_KEY
 USERS_COUNTER_OBJECT_ID=COUNTER_OBJECT_ID_FROM_STEP_2
 ```
@@ -278,7 +278,7 @@ The indexer subscribes to checkpoints and filters for `UserRegistered` events.
 
 <ImportContent source="K1/backend/indexer.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" fun="main" />
 
-The `subscribeCheckpoint` call opens a persistent gRPC stream starting from the latest checkpoint. The `readMask` limits the response to `transactions.events`, reducing bandwidth. The `for await` loop processes each checkpoint as it arrives, calling `processCheckpoint` to filter and decode events.
+The `subscriptionService.subscribeCheckpoints` call opens a persistent gRPC stream starting from the latest checkpoint. The `readMask` limits the response to `transactions.events`, reducing bandwidth. The `for await` loop processes each checkpoint as it arrives, calling `processCheckpoint` to filter and decode events.
 
 ### BCS event decoding
 
@@ -286,7 +286,7 @@ The `decodeBcsEvent` function parses raw event bytes using a BCS schema that mat
 
 <ImportContent source="K1/backend/utils/parseEvent.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" fun="decodeBcsEvent" />
 
-The `userRegisteredSchema` defines the BCS layout: `Address` for the owner, `string()` for the name, and `u64()` for the user ID. The function extracts the raw bytes from the event, converts them to a `Uint8Array`, and parses them with the schema. The function converts `user_id` to a string because JavaScript cannot safely represent all u64 values as numbers.
+The `USER_REGISTERED_EVENT_BCS` schema defines the BCS layout: `bcs.Address` for the owner, `bcs.string()` for the name, and `bcs.u64()` for the user ID. The function extracts the raw bytes from the event, converts them to a `Uint8Array`, and parses them with the schema. The function converts `user_id` to a string because JavaScript cannot safely represent all u64 values as numbers.
 
 ## Common modifications
 
@@ -303,9 +303,9 @@ The following sections address common issues with this example.
 
 **Symptom:** The indexer runs but no events appear, even after running the registration test.
 
-**Cause:** The `EVENT_TYPE` string does not match the deployed contract's event type. The format must be `PACKAGE_ID::MODULE_NAME::UserRegistered` with the exact package ID and module name.
+**Cause:** The `FULL_EVENT_NAME` string does not match the deployed contract's event type. The format must be `PACKAGE_ID::MODULE_NAME::UserRegistered` with the exact package ID and module name.
 
-**Fix:** Verify `PACKAGE_ID` and `MODULE_NAME` in `.env` match the deployed contract. The module name in the Move source is `indexer` (from `module indexer_sample::indexer`), not `indexer_sample`.
+**Fix:** Verify `PACKAGE_ID` and `MODULE_NAME` in `.env` match the deployed contract. The module name in the Move source is `indexer_sample` (from `module indexer_sample::indexer_sample`).
 
 ### BCS decoding fails with `invalid bytes`
 
@@ -313,7 +313,7 @@ The following sections address common issues with this example.
 
 **Cause:** The BCS schema field order or types do not match the Move struct. BCS is sensitive to field order: `owner` must come before `name`, which must come before `user_id`.
 
-**Fix:** Verify the TypeScript `BCS.struct` field order matches the Move struct exactly. `Address` maps to `address`, `string()` maps to `String`, and `u64()` maps to `u64`.
+**Fix:** Verify the TypeScript `bcs.struct` field order matches the Move struct exactly. `bcs.Address` maps to `address`, `bcs.string()` maps to `String`, and `bcs.u64()` maps to `u64`.
 
 ### Registration test fails with `insufficient gas`
 
