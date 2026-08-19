@@ -115,11 +115,11 @@ inputs.
 |---|---:|
 | Discharged in Lean | 1 |
 | Enforced in Rust | 2 |
-| Partially verified | 8 |
-| Environmental assumption | 4 |
+| Partially verified | 9 |
+| Environmental assumption | 5 |
 | Open proof obligation | 4 |
 | Abstraction gap | 1 |
-| Accepted modeling assumption | 4 |
+| Accepted modeling assumption | 3 |
 | Known mismatch | 7 |
 
 A known mismatch blocks the affected product claim. Other open statuses identify
@@ -570,9 +570,12 @@ finalizer work is not evidence for this result.
   Thus, each fixed known above-GC causal history eventually becomes accepted
   while rounds can continue. The validator can skip authoring rounds, but it
   eventually stores and sends own blocks at later unbounded rounds. It does not
-  have to author every intermediate round.
-- **Type:** Accepted single-validator performance model.
-- **Status:** Accepted modeling assumption.
+  have to author every intermediate round. The margin `C_add < C_service` is no
+  longer assumed on its own. `ValidatorCausalQueueTransferBudget` derives it from
+  a coarse block-transfer budget and a block-production bound; see
+  `ASM-LIVE-TRANSFER-BUDGET`.
+- **Type:** Single-validator performance model, with a derived service margin.
+- **Status:** Partially verified.
 - **Effect if false:** The completed conditional commit theorem does not apply
   to the product.
 - **Lean use:** `BlockProductionLiveness` requires unbounded own-block
@@ -592,6 +595,30 @@ finalizer work is not evidence for this result.
 - **Discharge:** Define measurable queue work and round-created work. Prove or
   enforce the strict service margin. Map the V2 selected support, recursive
   need, queue source, no-idle rule, and skipped-round proposal continuity.
+
+## ASM-LIVE-TRANSFER-BUDGET
+
+- **Claim:** After GST, at most a fixed number of whole blocks can reach one
+  correct, available validator in one `delta`. That budget is large enough for
+  ordinary round advancement, with room to spare: the above-GC references that
+  new rounds require stay strictly below it. A validator whose causal-work queue
+  holds at least one interval's budget uses the whole budget in that interval.
+- **Type:** Network and pipeline environment.
+- **Status:** Environmental assumption.
+- **Effect if false:** Liveness. If arrivals reach the budget, the causal-work
+  backlog cannot shrink, so catch-up stops.
+- **Lean use:** `ValidatorCausalQueueTransferBudget.toServiceRules` supplies the
+  service margin of `ASM-LIVE-POST-GST-CAUSAL-SERVICE`.
+  `high_backlog_drains_by_spare_capacity` gives the drain rate as the surplus
+  over the production bound, and `saturated_interval_does_not_drain` shows that
+  the budget is necessary and not only sufficient.
+- **Rust evidence:** `max_blocks_per_fetch` and `max_blocks_per_sync` cap the
+  blocks in one fetch and one sync response, and `max_transactions_in_block_bytes`
+  and `max_num_transactions_in_block` cap one block. No component measures or
+  enforces a link budget, and no configured value is derived from one.
+- **Discharge:** Keep the budget in the deployment model. Choose the block and
+  fetch limits so that the budget stays above the production bound for the
+  planned committee size and round rate, and measure both.
 
 ## ASM-LIVE-BLOCK-SYNC
 

@@ -297,6 +297,21 @@ These properties can improve fairness, latency, or recovery. They are separate
 from the core safety and liveness result. A lagging validator can make commit
 progress with blocks from other validators.
 
+## Transfer budget for catch-up
+
+A correct validator can receive at most a fixed number of whole blocks in one
+`delta`. The budget is coarse: a larger block does not take longer to transfer.
+
+The budget is assumed large enough for ordinary round advancement, with room to
+spare. The cap therefore binds only on bulk movement, which is recursive causal
+block sync and commit sync over many blocks. The surplus over what round
+advancement demands is the rate at which a lagging validator drains its backlog.
+
+This replaces an assumed service margin with an inequality between two named
+quantities. It also makes the failure mode explicit: if arrivals reach the
+budget, the backlog cannot shrink, so catch-up stops. The proof states that
+necessity separately from the progress result.
+
 ## Leader-order and probability boundary
 
 The deterministic theorem must derive each favorable leader window from one

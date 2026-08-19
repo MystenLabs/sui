@@ -188,6 +188,29 @@ For one favorable leader window, the current stage-composition model gives a
 `10 * delta` bound. This is a sum of supplied stage bounds, not a derived product
 latency.
 
+### Transfer budget
+
+The causal-work queue no longer assumes its own service margin. A coarse
+per-validator transfer budget supplies it. The budget counts whole blocks in one
+`delta`; it does not give a larger block a longer transfer time.
+
+The budget is assumed large enough for ordinary round advancement, with room to
+spare. The above-GC references that new rounds require stay strictly below it,
+so the cap binds only on bulk movement: recursive causal block sync and commit
+sync over many blocks. The surplus over the production bound is the rate at
+which a backlog drains, and `high_backlog_drains_by_spare_capacity` states that
+rate.
+
+The budget is necessary and not only sufficient. If arrivals in one interval
+reach the budget, the backlog cannot shrink in that interval, whatever the rest
+of the pipeline does. `saturated_interval_does_not_drain` proves this from the
+cap alone.
+
+This models one validator's ingest capacity. It is not a network model: it has
+no cross-flow contention, no shared bottleneck, and no queueing discipline
+between peers. Message delivery stays capacity-blind, so partial synchrony still
+carries one `delta` for every protocol message whatever its size.
+
 ### Commit progress recovery
 
 The model proves the stake, next-round, direct-vote, pending-round, anchor-scan,
@@ -286,6 +309,7 @@ The results depend on these groups of conditions:
 - **Configuration:** `ASM-CONFIG-V3-ACTIVATION`, `ASM-CONFIG-VOTING`, and
   `ASM-REFINE-INTEGERS`.
 - **Network and runtime:** `ASM-LIVE-PARTIAL-SYNCHRONY`,
+  `ASM-LIVE-TRANSFER-BUDGET`,
   `ASM-LIVE-PEER-FAIRNESS`, `ASM-LIVE-TASK-FAIRNESS`,
   `ASM-LIVE-LOCAL-RESPONSE`, `ASM-LIVE-PIPELINE-BOUNDS`, and
   `ASM-LIVE-COMMIT-SYNC`. The commit-sync condition is resource isolation for
@@ -327,7 +351,10 @@ The current review also does not prove the V2 current no-idle sources, pinned
 sync sources, commit-orthogonal retention, exact-next timer promptness,
 authenticated correct-body ownership, past recovery-timer origin mapping, or
 the strict post-GST causal-service margin under the fastest permitted round
-creation. These rules are conditional inputs to the completed Lean theorem.
+creation. These rules are conditional inputs to the completed Lean theorem. The
+causal-service margin now follows from the transfer budget below, so what
+remains for it is measuring the budget and the production bound rather than
+accepting the margin outright.
 
 Other open work includes common epoch parameters, complete commit-chain agreement,
 synchronization progress, committed-prefix evidence, integer bounds, stable leader

@@ -337,6 +337,31 @@ Evidence:
 [EV-SCHEDULE-HEAD-LOCAL](ASSUMPTION_EVIDENCE.md#ev-schedule-head-local) and
 [EV-FIRST-FLEX-LEADER-PARENT](ASSUMPTION_EVIDENCE.md#ev-first-flex-leader-parent).
 
+### P2: measure the block-transfer budget
+
+Related assumptions: `ASM-LIVE-TRANSFER-BUDGET` and
+`ASM-LIVE-POST-GST-CAUSAL-SERVICE`.
+
+The causal-work service margin now follows from a coarse transfer budget: the
+whole blocks that can reach one correct validator in one `delta`, which must stay
+strictly above what ordinary round advancement demands. Neither quantity is
+measured today.
+
+`max_blocks_per_fetch` and `max_blocks_per_sync` cap the blocks in one fetch and
+one sync response, and `max_transactions_in_block_bytes` and
+`max_num_transactions_in_block` cap one block. No component measures a link
+budget, and no configured value is derived from one.
+
+Add metrics for blocks received per peer per unit time and for the above-GC
+references that new rounds add. Then choose the block and fetch limits so that
+the budget stays above the production bound for the planned committee size and
+round rate. A budget at or below that bound gives no catch-up, whatever the rest
+of the pipeline does.
+
+This model covers one validator's ingest capacity. Cross-flow contention, a
+shared bottleneck, and the queueing discipline between peers are outside it, as
+is any size-dependent transfer time.
+
 ### P1: protect signer state after complete data loss
 
 Related assumption: `ASM-SAFE-NON-EQUIVOCATION`.

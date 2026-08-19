@@ -38,6 +38,7 @@ import Mysticeti.ValidatorStrictRecoveryDirectQuorum
 import Mysticeti.ValidatorAdjacentRecoveryPropagation
 import Mysticeti.ValidatorCommitCausalCarry
 import Mysticeti.ValidatorCausalReadQuality
+import Mysticeti.ValidatorCausalQueueTransferBudget
 import Mysticeti.ReferenceCommitMaterializerDfs
 import Mysticeti.CommittedFlushCausalReadQuality
 import Mysticeti.ValidatorV3AdaptiveScheduleRustMap
