@@ -118,9 +118,10 @@ that, an inverse of `Balance::restore` used to retract a coin's contribution, wa
 kind of duplicate that goes stale silently.
 
 The `SimulatorStore` write surface cannot return errors, so a failed persist panics rather
-than letting execution continue on state that has diverged from disk. An indexer stoppage
-is likewise surfaced the moment it happens, because the startup loop watches for it as a
-liveness watchdog, instead of appearing later as a publication timeout.
+than letting execution continue on state that has diverged from disk. An indexer task that
+fails or panics surfaces through the fork service's `join`; a wedged indexer that keeps
+retrying internally instead shows up as a logged 30-second wait on each subsequent
+checkpoint-producing call.
 
 ## Seeding
 

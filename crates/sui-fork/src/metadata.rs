@@ -18,7 +18,7 @@ use anyhow::bail;
 
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
-use crate::Node;
+use crate::Network;
 use crate::seed::SeedManifest;
 
 /// Environment variable name for an explicit fork data directory.
@@ -39,13 +39,13 @@ impl MetadataStore {
     /// Create a new fork metadata store. An explicit data directory is used as the exact root, and
     /// without one the root is `{base_path}/{network_name}/forked_at_{checkpoint}`.
     pub(crate) fn new(
-        node: &Node,
+        network: &Network,
         forked_at_checkpoint: CheckpointSequenceNumber,
         data_dir: Option<PathBuf>,
     ) -> Result<Self, Error> {
         let root = match data_dir {
             Some(dir) => dir,
-            None => Self::default_root(node, forked_at_checkpoint)?,
+            None => Self::default_root(network, forked_at_checkpoint)?,
         };
         Ok(Self { root })
     }
@@ -97,14 +97,14 @@ impl MetadataStore {
         Ok(PathBuf::from(app_data).join(DATA_DIR))
     }
 
-    /// Construct the default root directory for a given node and fork checkpoint.
+    /// Construct the default root directory for a given network and fork checkpoint.
     fn default_root(
-        node: &Node,
+        network: &Network,
         forked_at_checkpoint: CheckpointSequenceNumber,
     ) -> Result<PathBuf, Error> {
         Ok(Self::root_from_base(
             Self::base_path()?,
-            node,
+            network,
             forked_at_checkpoint,
         ))
     }
@@ -112,10 +112,10 @@ impl MetadataStore {
     /// Construct the path from base path joined with `{network_name}/forked_at_{checkpoint}`.
     fn root_from_base(
         base: PathBuf,
-        node: &Node,
+        network: &Network,
         forked_at_checkpoint: CheckpointSequenceNumber,
     ) -> PathBuf {
-        base.join(node.network_name())
+        base.join(network.network_name())
             .join(format!("forked_at_{}", forked_at_checkpoint))
     }
 

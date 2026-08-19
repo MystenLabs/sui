@@ -28,11 +28,11 @@ use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
-use crate::ForkStore;
 use crate::gql::AddressOwnedObject;
 use crate::gql::ObjectSeedMetadata;
 use crate::metadata::MetadataStore;
 use crate::remote::RemoteSource;
+use crate::store::ForkStore;
 
 /// Objects fetched per GraphQL query when querying for seed objects. The load commits as one batch
 /// regardless, and this only bounds the size of an individual query.
@@ -179,7 +179,11 @@ pub(crate) fn load_seed_objects(store: &ForkStore, manifest: &SeedManifest) -> R
 
     let mut objects = Vec::with_capacity(object_refs.len());
     for chunk in object_refs.chunks(OBJECTS_PER_QUERY) {
-        objects.extend(store.fetch_seed_objects(chunk)?);
+        objects.extend(
+            store
+                .remote()
+                .fetch_objects_by_obj_refs(chunk, "seed objects")?,
+        );
     }
 
     store.local_store().restore_seed_objects(&objects)

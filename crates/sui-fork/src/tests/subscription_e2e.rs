@@ -7,7 +7,6 @@
 
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -17,34 +16,30 @@ use rand::rngs::OsRng;
 use simulacrum::Simulacrum;
 use simulacrum::SimulatorStore;
 use simulacrum::store::in_mem_store::KeyStore;
-use sui_rpc_api::RpcService;
-use sui_rpc_api::ServerVersion;
 use sui_rpc_api::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
 use sui_rpc_api::proto::sui::rpc::v2::subscription_service_client::SubscriptionServiceClient;
 use sui_rpc_api::subscription::SubscriptionService;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::ObjectID;
 use sui_types::object::Object;
-use sui_types::storage::RpcStateReader;
 
 use crate::AdvanceCheckpointRequest;
 use crate::AdvanceClockRequest;
+use crate::ForkNode;
 use crate::ForkingServiceClient;
 use crate::GetStatusRequest;
 use crate::context::Context;
-use crate::proto::forking::forking_service_server::ForkingServiceServer;
-use crate::rpc::executor::ForkedTransactionExecutor;
-use crate::rpc::forking_service::ForkingServiceImpl;
 use crate::services::ServiceManager;
+use crate::startup::ForkParts;
 use crate::store::ForkStore;
 
-/// In-process gRPC harness. It builds a fresh Simulacrum from a genesis `NetworkConfig`, wires up
-/// the subscription broker, and starts a tonic server on an ephemeral port. The server task is
-/// aborted when the harness is dropped.
+/// In-process gRPC harness. It builds a fresh Simulacrum from a genesis `NetworkConfig`, assembles
+/// [`ForkParts`] over it, and serves through [`ForkNode::from_parts`] on an ephemeral port, which
+/// is the same serving path production takes. Dropping the harness drops the `ForkNode`, which
+/// aborts the fork's tasks.
 struct ServerHarness {
-    server_task: tokio::task::JoinHandle<()>,
+    fork: ForkNode,
     grpc_endpoint: String,
-    // Held to keep the RPC store alive for the lifetime of the server.
     // Held to keep the metadata and RPC store directory alive for the server lifetime.
     _temp: tempfile::TempDir,
     // Held so remote object probes keep resolving to "not found".
@@ -77,7 +72,9 @@ impl ServerHarness {
             forked_at_checkpoint,
             services.local_store(),
         );
-        store.save_checkpoint(&genesis_checkpoint, &genesis_contents)?;
+        store
+            .local_store()
+            .save_checkpoint(&genesis_checkpoint, &genesis_contents)?;
         let written: BTreeMap<ObjectID, Object> = config
             .genesis
             .objects()
@@ -92,7 +89,7 @@ impl ServerHarness {
             genesis_checkpoint,
             config.genesis.sui_system_object(),
             &config,
-            store.clone(),
+            store,
             rng,
         );
 
@@ -103,55 +100,34 @@ impl ServerHarness {
         // Service-backed on purpose: subscribers are published to by the
         // indexer's broadcast pipeline, so a service-less context would
         // exercise a publication path production never takes.
-        let context = Arc::new(
-            Context::new(sim, services, checkpoint_sender, &registry)
-                .await
-                .expect("service-backed context should initialize"),
-        );
+        let (context, indexer_service) = Context::new(sim, services, checkpoint_sender, &registry)
+            .await
+            .expect("service-backed context should initialize");
 
-        let reader: Arc<dyn RpcStateReader> = Arc::new(store);
-        let mut service = RpcService::new(reader);
-        service.with_server_version(ServerVersion::new("sui-fork", "test"));
-        service.with_subscription_service(subscription_handle);
-        service.with_executor(Arc::new(ForkedTransactionExecutor::new(context.clone())));
-        service.with_custom_service(ForkingServiceServer::new(ForkingServiceImpl::new(
-            context.clone(),
-        )));
-        service.with_file_descriptor_set(crate::proto::FILE_DESCRIPTOR_SET);
+        let fork = ForkNode::from_parts(
+            ForkParts {
+                context,
+                subscription_handle,
+                indexer_service,
+                data_dir: temp.path().to_path_buf(),
+                network_name: "localnet".to_owned(),
+                forked_at_checkpoint,
+                starting_checkpoint: forked_at_checkpoint,
+                resumed: false,
+            },
+            crate::startup::bind("127.0.0.1:0".parse()?).await?,
+            "test",
+            &registry,
+        )
+        .await?;
 
-        // Bind to ephemeral port via a probe listener, then drop and let
-        // `start_service` rebind. The window between is short enough not to
-        // matter for in-process tests.
-        let probe = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
-        let addr = probe.local_addr()?;
-        drop(probe);
-
-        let server_task = tokio::spawn(async move { service.start_service(addr).await });
-
-        let grpc_endpoint = format!("http://{addr}");
-
-        // Wait for the server to come up by polling a connect.
-        for _ in 0..50 {
-            if ForkingServiceClient::connect(grpc_endpoint.clone())
-                .await
-                .is_ok()
-            {
-                return Ok(Self {
-                    server_task,
-                    grpc_endpoint,
-                    _temp: temp,
-                    _gql_server: gql_server,
-                });
-            }
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-        Err(anyhow!("timed out waiting for gRPC server to bind"))
-    }
-}
-
-impl Drop for ServerHarness {
-    fn drop(&mut self) {
-        self.server_task.abort();
+        let grpc_endpoint = format!("http://{}", fork.rpc_address());
+        Ok(Self {
+            fork,
+            grpc_endpoint,
+            _temp: temp,
+            _gql_server: gql_server,
+        })
     }
 }
 
@@ -307,6 +283,69 @@ async fn advance_clock_creates_and_streams_checkpoint() -> Result<()> {
         checkpoint_sequence_number
     );
     assert_eq!(status.timestamp_ms, clock.timestamp_ms);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn shutdown_stops_serving() -> Result<()> {
+    let harness = ServerHarness::start().await?;
+    assert_ne!(
+        harness.fork.rpc_address().port(),
+        0,
+        "a requested port 0 should resolve to a real ephemeral port",
+    );
+
+    let mut forking = ForkingServiceClient::connect(harness.grpc_endpoint.clone()).await?;
+    forking.get_status(GetStatusRequest {}).await?;
+    drop(forking);
+
+    let ServerHarness {
+        fork,
+        grpc_endpoint,
+        _temp,
+        _gql_server,
+    } = harness;
+    fork.shutdown().await?;
+
+    assert!(
+        ForkingServiceClient::connect(grpc_endpoint).await.is_err(),
+        "endpoint should stop accepting connections after shutdown",
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn in_process_admin_ops_share_the_grpc_contract() -> Result<()> {
+    let harness = ServerHarness::start().await?;
+
+    let advanced = harness
+        .fork
+        .advance_clock(Duration::from_millis(1_000))
+        .await;
+    let created = harness.fork.create_checkpoint().await;
+    assert_eq!(
+        created.sequence_number,
+        advanced.checkpoint.sequence_number + 1
+    );
+
+    let status = harness.fork.status().await;
+    assert_eq!(status.checkpoint_sequence_number, created.sequence_number);
+    assert_eq!(status.timestamp_ms, advanced.timestamp_ms);
+
+    // The gRPC surface reports the same state the in-process handle does.
+    let mut forking = ForkingServiceClient::connect(harness.grpc_endpoint.clone()).await?;
+    let grpc_status = forking.get_status(GetStatusRequest {}).await?.into_inner();
+    assert_eq!(
+        grpc_status.checkpoint_sequence_number,
+        status.checkpoint_sequence_number
+    );
+    assert_eq!(grpc_status.timestamp_ms, status.timestamp_ms);
+    assert_eq!(
+        grpc_status.forked_at_checkpoint,
+        status.forked_at_checkpoint
+    );
 
     Ok(())
 }

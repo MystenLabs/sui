@@ -77,6 +77,12 @@ use tracing::info;
 /// [`simulacrum::Simulacrum::new_from_custom_state`], and the upstream RPC storage traits
 /// (`ReadStore`, `RpcStateReader`, `RpcIndexes`) so the same store backs the `sui-rpc-api`
 /// `RpcService`.
+///
+/// Steady-state reads and writes go through this type's policy methods and trait impls, which own
+/// the resolution order and the write-back rules. Creation-time workflows (startup persistence and
+/// seeding) instead reach the components directly through [`Self::remote`], [`Self::local_store`],
+/// and [`Self::metadata`], because those flows have no fallback policy to apply and forwarding
+/// them here would only mirror the component APIs.
 #[derive(Clone)]
 pub struct ForkStore {
     inner: Arc<ForkStoreInner>,
@@ -257,16 +263,8 @@ impl ForkStore {
         let Some((checkpoint, contents)) = self.inner.remote.checkpoint(sequence)? else {
             return Ok(None);
         };
-        self.save_checkpoint(&checkpoint, &contents)?;
+        self.local_store().save_checkpoint(&checkpoint, &contents)?;
         Ok(Some((checkpoint, contents)))
-    }
-
-    pub(crate) fn save_checkpoint(
-        &self,
-        checkpoint: &VerifiedCheckpoint,
-        contents: &CheckpointContents,
-    ) -> anyhow::Result<()> {
-        self.local_store().save_checkpoint(checkpoint, contents)
     }
 
     /// Get the latest known object, fetching it at the forked checkpoint from remote GraphQL and
@@ -527,7 +525,7 @@ impl ForkStore {
     #[cfg(test)]
     pub(crate) fn new_for_testing(root: std::path::PathBuf, local_store: LocalStore) -> Self {
         let gql = GraphQLClient::new(
-            crate::Node::Custom("http://localhost:1".to_string()),
+            crate::Network::Custom("http://localhost:1".to_string()),
             "test",
         )
         .expect("graphql store with localhost url should construct");
@@ -544,7 +542,7 @@ impl ForkStore {
         forked_at_checkpoint: CheckpointSequenceNumber,
         local_store: LocalStore,
     ) -> Self {
-        let gql = GraphQLClient::new(crate::Node::Custom(gql_url), "test")
+        let gql = GraphQLClient::new(crate::Network::Custom(gql_url), "test")
             .expect("graphql store with custom url should construct");
         let metadata = MetadataStore::new_with_root(root);
         Self::from_parts(forked_at_checkpoint, gql, metadata, local_store)
@@ -562,21 +560,6 @@ impl ForkStore {
             RpcIndexes::owned_objects_iter(local_store.reader(), owner, object_type, cursor)?;
         iter.collect::<Result<Vec<_>, _>>()
             .map_err(|e| StorageError::custom(e.to_string()))
-    }
-
-    /// Fetch the objects behind a batch of seed references from the live network, pinned at the
-    /// fork checkpoint.
-    ///
-    /// Every reference names an exact `(id, version)`, so this is an immutable key. The remote
-    /// either has that version, or the manifest is describing a chain this fork did not come from,
-    /// which [`RemoteSource::fetch_objects_by_obj_refs`] rejects.
-    pub(crate) fn fetch_seed_objects(
-        &self,
-        object_refs: &[ObjectRef],
-    ) -> anyhow::Result<Vec<Object>> {
-        self.inner
-            .remote
-            .fetch_objects_by_obj_refs(object_refs, "seed objects")
     }
 
     /// Seal the staged checkpoint matching `contents` into the rpc-store, committing every staged

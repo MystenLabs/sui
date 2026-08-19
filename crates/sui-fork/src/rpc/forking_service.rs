@@ -3,20 +3,18 @@
 
 //! gRPC service for administrative control of the forked network: advancing the clock, creating
 //! checkpoints, and querying status.
+//!
+//! Each method is a thin delegate to the corresponding [`ForkAdmin`] operation, which the
+//! in-process [`crate::ForkNode`] handle also delegates to, so the two surfaces share one
+//! contract.
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;
-use tracing::info;
 
-use simulacrum::SimulatorStore as _;
-use sui_types::effects::TransactionEffectsAPI as _;
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait as _;
-
-use crate::context::Context;
+use crate::ForkAdmin;
 use crate::proto::forking::AdvanceCheckpointRequest;
 use crate::proto::forking::AdvanceCheckpointResponse;
 use crate::proto::forking::AdvanceClockRequest;
@@ -28,12 +26,12 @@ use crate::proto::forking::forking_service_server::ForkingService;
 const DEFAULT_ADVANCE_CLOCK_MS: u64 = 1;
 
 pub(crate) struct ForkingServiceImpl {
-    context: Arc<Context>,
+    admin: ForkAdmin,
 }
 
 impl ForkingServiceImpl {
-    pub(crate) fn new(context: Arc<Context>) -> Self {
-        Self { context }
+    pub(crate) fn new(admin: ForkAdmin) -> Self {
+        Self { admin }
     }
 }
 
@@ -48,27 +46,14 @@ impl ForkingService for ForkingServiceImpl {
             .duration_ms
             .unwrap_or(DEFAULT_ADVANCE_CLOCK_MS);
 
-        let ((tx_digest, timestamp_ms), checkpoint_metadata) = self
-            .context
-            .run_with_new_checkpoint(|sim| {
-                let effects = sim.advance_clock(Duration::from_millis(duration_ms));
-                let tx_digest = *effects.transaction_digest();
-                let timestamp_ms = sim.store().get_clock().timestamp_ms;
-                (tx_digest, timestamp_ms)
-            })
+        let advanced = self
+            .admin
+            .advance_clock(Duration::from_millis(duration_ms))
             .await;
 
-        info!(
-            %tx_digest,
-            duration_ms,
-            timestamp_ms,
-            checkpoint_sequence_number = checkpoint_metadata.sequence_number,
-            "clock advanced"
-        );
-
         Ok(Response::new(AdvanceClockResponse {
-            timestamp_ms,
-            tx_digest: tx_digest.to_string(),
+            timestamp_ms: advanced.timestamp_ms,
+            tx_digest: advanced.tx_digest.to_string(),
         }))
     }
 
@@ -76,17 +61,11 @@ impl ForkingService for ForkingServiceImpl {
         &self,
         _request: Request<AdvanceCheckpointRequest>,
     ) -> Result<Response<AdvanceCheckpointResponse>, Status> {
-        let (_, checkpoint_metadata) = self.context.run_with_new_checkpoint(|_| ()).await;
-
-        info!(
-            checkpoint_sequence_number = checkpoint_metadata.sequence_number,
-            timestamp_ms = checkpoint_metadata.timestamp_ms,
-            "checkpoint created"
-        );
+        let checkpoint = self.admin.create_checkpoint().await;
 
         Ok(Response::new(AdvanceCheckpointResponse {
-            checkpoint_sequence_number: checkpoint_metadata.sequence_number,
-            timestamp_ms: checkpoint_metadata.timestamp_ms,
+            checkpoint_sequence_number: checkpoint.sequence_number,
+            timestamp_ms: checkpoint.timestamp_ms,
         }))
     }
 
@@ -94,22 +73,13 @@ impl ForkingService for ForkingServiceImpl {
         &self,
         _request: Request<GetStatusRequest>,
     ) -> Result<Response<GetStatusResponse>, Status> {
-        let sim = self.context.simulacrum().read().await;
-        let epoch = sim.epoch_start_state().epoch();
-        let timestamp_ms = sim.store().get_clock().timestamp_ms;
-        let checkpoint_sequence_number = sim
-            .store()
-            .get_highest_checkpint()
-            .map(|cp| cp.data().sequence_number)
-            .unwrap_or(0);
-
-        let forked_at_checkpoint = sim.store().forked_at_checkpoint();
+        let status = self.admin.status().await;
 
         Ok(Response::new(GetStatusResponse {
-            epoch,
-            checkpoint_sequence_number,
-            timestamp_ms,
-            forked_at_checkpoint,
+            epoch: status.epoch,
+            checkpoint_sequence_number: status.checkpoint_sequence_number,
+            timestamp_ms: status.timestamp_ms,
+            forked_at_checkpoint: status.forked_at_checkpoint,
         }))
     }
 }
