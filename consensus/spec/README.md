@@ -70,11 +70,16 @@ From the repository root, run:
 
 ```sh
 cd consensus/spec/lean
+lake exe cache get
 lake build
 rg -n '\b(sorry|admit|axiom)\b' Mysticeti.lean Mysticeti
 cd ../../..
 bash consensus/spec/check-assumption-ledger.sh
 ```
+
+The specification depends on Mathlib. `lake exe cache get` downloads the
+prebuilt Mathlib files. Without it, the first build compiles Mathlib from
+source, which takes hours.
 
 The build and ledger check must succeed. The search command must return no
 results.

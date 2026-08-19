@@ -34,7 +34,7 @@ jobs:
           build-args: "--wfail"
           test: false
           lint: false
-          use-mathlib-cache: false
+          use-mathlib-cache: true
 
       - name: Reject unchecked proof declarations
         working-directory: consensus/spec/lean
