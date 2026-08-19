@@ -818,31 +818,7 @@ async fn resolve_event_range(
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
-    if cp_range.is_empty() {
-        return Ok(ResolvedIntraTxRange::empty_at(
-            cp_range.terminal_checkpoint(options.ordering),
-            IntraTxCoordinate::start_of_tx(tx_range.start),
-            cp_range.exhaustion,
-        ));
-    }
-    Ok(options.apply_intra_tx_cursor_bounds(ResolvedIntraTxRange {
-        bounds: IntraTxScanBounds::tx_span(tx_range.start, tx_range.end),
-        entry_checkpoint: if options.is_ascending() {
-            cp_range.range.start
-        } else {
-            cp_range.range.end.saturating_sub(1)
-        },
-        end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
-        end_position: match options.ordering {
-            sui_rpc_api::ledger_history::query_options::Ordering::Ascending => {
-                IntraTxCoordinate::start_of_tx(tx_range.end)
-            }
-            sui_rpc_api::ledger_history::query_options::Ordering::Descending => {
-                IntraTxCoordinate::start_of_tx(tx_range.start)
-            }
-        },
-        exhaustion: cp_range.exhaustion,
-    }))
+    Ok(ResolvedIntraTxRange::resolve(cp_range, tx_range, options).apply_cursor_bounds(options))
 }
 
 #[cfg(test)]

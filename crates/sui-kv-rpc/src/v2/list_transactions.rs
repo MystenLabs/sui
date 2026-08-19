@@ -631,7 +631,9 @@ async fn resolve_tx_range(
     if cp_range.is_empty() {
         return Ok(cp_range.with_range(tx_range, options.ordering));
     }
-    Ok(options.apply_cursor_bounds(cp_range.with_range(tx_range, options.ordering)))
+    Ok(cp_range
+        .with_range(tx_range, options.ordering)
+        .apply_cursor_bounds(options))
 }
 
 fn transaction_item_response(
