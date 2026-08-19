@@ -67,7 +67,7 @@ Sui Foundation manages several categories of data stores for Sui operators and b
 
 Checkpoint stores contain protobuf-encoded checkpoint blobs (`.binpb.zst`). They are used by [indexers](/operators/data-management/indexer-stack-setup), [remote store operators](/operators/data-management/remote-store-setup), the [archival service](/operators/data-management/archival-stack-setup), and [full node archival fallback](/operators/data-management/archives).
 
-### GCS buckets (full retention, requester pays) {#checkpoint-gcs}
+### GCS buckets (full retention, Requester Pays) {#checkpoint-gcs}
 
 These buckets contain the complete checkpoint history from genesis. Use them for production backfill and recovery.
 
@@ -87,7 +87,7 @@ $ export GOOGLE_CLOUD_PROJECT=your-billing-project
 
 Workload Identity or another supported Google credential source can replace the credential file. Commands that read from these buckets must include the `x-goog-user-project` header (for example, `--remote-store-header "x-goog-user-project:${GOOGLE_CLOUD_PROJECT}"`). See Google Cloud's [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays) documentation for billing and IAM requirements.
 
-### S3 bucket (full retention, requester pays) {#checkpoint-s3}
+### S3 bucket (full retention, Requester Pays) {#checkpoint-s3}
 
 | **Network** | **Endpoint** | **CLI usage** |
 | --- | --- | --- |
@@ -150,7 +150,7 @@ Use these endpoints for:
 - [Consistent store restore](/operators/data-management/indexer-stack-setup#consistent-store-setup) with the `--http` flag.
 - [Full node formal snapshot restore](/operators/snapshots) with `sui-tool download-formal-snapshot`.
 
-### Formal snapshot buckets (requester pays) {#formal-buckets}
+### Formal snapshot buckets (Requester Pays) {#formal-buckets}
 
 | **Network** | **S3** | **GCS** |
 | --- | --- | --- |
