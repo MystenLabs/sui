@@ -5,10 +5,11 @@ use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::proto::sui::rpc::v2::{
     BatchGetObjectsRequest, BatchGetObjectsResponse, BatchGetTransactionsRequest,
     BatchGetTransactionsResponse, GetCheckpointRequest, GetCheckpointResponse, GetEpochRequest,
-    GetEpochResponse, GetObjectRequest, GetObjectResponse, GetServiceInfoRequest,
-    GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse, ListCheckpointsRequest,
-    ListCheckpointsResponse, ListEventsRequest, ListEventsResponse, ListTransactionsRequest,
-    ListTransactionsResponse, ledger_service_server::LedgerService,
+    GetEpochResponse, GetObjectRequest, GetObjectResponse, GetPackageRequest, GetPackageResponse,
+    GetServiceInfoRequest, GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse,
+    ListCheckpointsRequest, ListCheckpointsResponse, ListEventsRequest, ListEventsResponse,
+    ListTransactionsRequest, ListTransactionsResponse, ledger_service_server::LedgerService,
+    move_package_service_server::MovePackageService,
 };
 use sui_rpc_api::proto::timestamp_ms_to_proto;
 use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};
@@ -21,6 +22,7 @@ use crate::operation::OperationSpec;
 pub(crate) mod get_checkpoint;
 mod get_epoch;
 mod get_object;
+mod get_package;
 pub(crate) mod get_transaction;
 mod list_checkpoints;
 mod list_events;
@@ -185,6 +187,21 @@ impl LedgerService for KvRpcServer {
             list_events::list_events,
         )
         .await
+    }
+}
+
+/// Only `GetPackage` is served; the remaining `MovePackageService` methods
+/// fall back to the generated default stubs (`UNIMPLEMENTED`).
+#[tonic::async_trait]
+impl MovePackageService for KvRpcServer {
+    async fn get_package(
+        &self,
+        request: tonic::Request<GetPackageRequest>,
+    ) -> Result<tonic::Response<GetPackageResponse>, tonic::Status> {
+        get_package::get_package(self.client.clone(), request.into_inner())
+            .await
+            .map(tonic::Response::new)
+            .map_err(Into::into)
     }
 }
 
