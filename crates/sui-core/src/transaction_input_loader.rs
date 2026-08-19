@@ -3,7 +3,8 @@
 
 use crate::{
     authority::{
-        authority_per_epoch_store::CertLockGuard, shared_object_version_manager::AssignedVersions,
+        authority_per_epoch_store::CertLockGuard,
+        shared_object_version_manager::{AssignedVersion, AssignedVersions},
     },
     execution_cache::ObjectCacheRead,
 };
@@ -185,17 +186,20 @@ impl TransactionInputLoader {
                     let version = assigned_shared_versions.get(&(*id, *initial_shared_version)).unwrap_or_else(|| {
                         panic!("Shared object version should have been assigned. key: {tx_key:?}, obj id: {id:?}")
                     });
-                    if version.is_cancelled() {
-                        // Do not need to fetch shared object for cancelled transaction.
-                        results[i] = Some(ObjectReadResult {
-                            input_object_kind: *input,
-                            object: ObjectReadResultKind::CancelledTransactionSharedObject(
-                                *version,
-                            ),
-                        })
-                    } else {
-                        object_keys.push(ObjectKey(*id, *version));
-                        fetches.push((i, input));
+                    match version {
+                        AssignedVersion::Cancelled(version) => {
+                            // Do not need to fetch shared object for cancelled transaction.
+                            results[i] = Some(ObjectReadResult {
+                                input_object_kind: *input,
+                                object: ObjectReadResultKind::CancelledTransactionSharedObject(
+                                    *version,
+                                ),
+                            })
+                        }
+                        AssignedVersion::Assigned(version) => {
+                            object_keys.push(ObjectKey(*id, *version));
+                            fetches.push((i, input));
+                        }
                     }
                 }
             }
