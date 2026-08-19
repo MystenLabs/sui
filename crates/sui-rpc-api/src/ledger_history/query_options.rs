@@ -629,14 +629,14 @@ impl ScanCursor<u64> for CursorToken {
         }
     }
 
-    /// Item cursors resume at their inclusive successor. Saturating at
-    /// `u64::MAX` is exact, not lossy: no half-open scan range can contain an
-    /// item at MAX, so `Included(MAX)` admits nothing and the interval
-    /// resolves empty through the ordinary bounds check.
+    /// Symbolic resume, same as the intra-tx lane: an Item cursor admits
+    /// strictly-after as an exclusive bound. The dense lane's successor
+    /// arithmetic lives at the store edge ([`ScanBounds::to_range`]), where
+    /// `u64::MAX` saturates into an empty fetch.
     fn resume_lo(&self) -> Bound<u64> {
         let position: u64 = self.coordinate();
         match self.kind {
-            sui_rpc_cursor::CursorKind::Item => Bound::Included(position.saturating_add(1)),
+            sui_rpc_cursor::CursorKind::Item => Bound::Excluded(position),
             sui_rpc_cursor::CursorKind::Boundary => Bound::Included(position),
         }
     }
@@ -1201,23 +1201,31 @@ mod tests {
         );
         assert_eq!(bounded.end_position, 11);
 
+        // Descending crossed-adjacent: nothing lies strictly between the
+        // cursors, but symbolically the record stays non-empty with an empty
+        // fetch; the frame is the descending stop side's (the after cursor's)
+        // admission-time stamp.
         let options = QueryOptions {
             before: Some(tx_item(1, 12)),
             ..options
         };
+        let crossed = resolved_range(10..20).apply_cursor_bounds(&options);
         assert_eq!(
-            resolved_range(10..20).apply_cursor_bounds(&options),
+            crossed,
             ResolvedScan {
+                bounds: ScanBounds {
+                    lo: Bound::Excluded(11),
+                    hi: Bound::Excluded(12),
+                },
                 entry_checkpoint: 0,
-                ..empty_resolved_range(
-                    1,
-                    12,
-                    RangeExhaustion::CursorBound {
-                        kind: sui_rpc_cursor::CursorKind::Boundary,
-                    },
-                )
+                end_checkpoint: 1,
+                end_position: 11,
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
             }
         );
+        assert!(crossed.range().is_empty());
     }
 
     #[test]
@@ -1933,16 +1941,22 @@ mod tests {
 
     #[test]
     fn tx_after_cursor_tightens_ascending_lower_bound() {
-        // Item at n resumes at n + 1; Boundary at n resumes at n.
+        // Item at n admits strictly-after symbolically; the successor lives
+        // at the store edge, so both forms fetch from n + 1.
         let options = after_options(Ordering::Ascending, tx_item(3, 12));
+        let tightened = resolved_range(10..20).apply_cursor_bounds(&options);
         assert_eq!(
-            resolved_range(10..20).apply_cursor_bounds(&options),
+            tightened,
             ResolvedScan {
-                bounds: ScanBounds::from_range(13..20),
+                bounds: ScanBounds {
+                    lo: Bound::Excluded(12),
+                    hi: Bound::Excluded(20),
+                },
                 entry_checkpoint: 3,
                 ..resolved_range(10..20)
             }
         );
+        assert_eq!(tightened.range(), 13..20);
 
         let options = after_options(Ordering::Ascending, tx_boundary(3, 12));
         assert_eq!(
@@ -1963,7 +1977,10 @@ mod tests {
         assert_eq!(
             resolved_range(10..20).apply_cursor_bounds(&options),
             ResolvedScan {
-                bounds: ScanBounds::from_range(13..20),
+                bounds: ScanBounds {
+                    lo: Bound::Excluded(12),
+                    hi: Bound::Excluded(20),
+                },
                 entry_checkpoint: 0,
                 end_checkpoint: 3,
                 end_position: 12,
@@ -2127,12 +2144,14 @@ mod tests {
         let item = after_options(Ordering::Ascending, tx_item(3, 24));
         let successor = after_options(Ordering::Ascending, tx_boundary(3, 25));
 
-        // Non-empty remainder: identical scan bounds either way.
+        // Non-empty remainder: identical fetch range either way (the bounds
+        // differ structurally — Excluded(24) vs Included(25) — but admit the
+        // same set).
         assert_eq!(
-            resolved_range(10..30).apply_cursor_bounds(&item).bounds,
+            resolved_range(10..30).apply_cursor_bounds(&item).range(),
             resolved_range(10..30)
                 .apply_cursor_bounds(&successor)
-                .bounds,
+                .range(),
         );
 
         // Drained window: both resumptions admit nothing.
@@ -2141,6 +2160,69 @@ mod tests {
             resolved_range(10..20)
                 .apply_cursor_bounds(&successor)
                 .is_empty()
+        );
+    }
+
+    /// Exact window-edge adjacency, ascending: after = the window's last
+    /// item. Symbolically the record stays non-empty (nothing detects that
+    /// (19, 20) holds no integer), the fetch is empty, and the terminal
+    /// keeps the window's own frame — the drain answers, as the event lane
+    /// always has.
+    #[test]
+    fn tx_after_item_at_window_edge_defers_to_drain() {
+        let options = after_options(Ordering::Ascending, tx_item(5, 19));
+        let resolved = resolved_range(10..20).apply_cursor_bounds(&options);
+        assert_eq!(
+            resolved,
+            ResolvedScan {
+                bounds: ScanBounds {
+                    lo: Bound::Excluded(19),
+                    hi: Bound::Excluded(20),
+                },
+                entry_checkpoint: 5,
+                ..resolved_range(10..20)
+            }
+        );
+        assert!(!resolved.is_empty());
+        assert!(resolved.range().is_empty());
+    }
+
+    /// The descending mirror keeps its cursor frame: the after cursor is the
+    /// descending stop side, so admission stamps the terminal before any
+    /// emptiness question arises — same frame the resolution-time collapse
+    /// used to produce.
+    #[test]
+    fn tx_after_item_at_window_edge_descending_keeps_stamped_terminal() {
+        let options = after_options(Ordering::Descending, tx_item(5, 19));
+        let resolved = resolved_range(10..20).apply_cursor_bounds(&options);
+        assert_eq!(
+            resolved,
+            ResolvedScan {
+                bounds: ScanBounds {
+                    lo: Bound::Excluded(19),
+                    hi: Bound::Excluded(20),
+                },
+                entry_checkpoint: 0,
+                end_checkpoint: 5,
+                end_position: 19,
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            }
+        );
+        assert!(resolved.range().is_empty());
+    }
+
+    /// An after-Item one position below the window compares below the
+    /// window's own Included lo, so it is rejected outright — descending, it
+    /// no longer repins the terminal the way its Boundary-at-window-start
+    /// equivalent does.
+    #[test]
+    fn tx_after_item_below_window_start_descending_is_noop() {
+        let options = after_options(Ordering::Descending, tx_item(5, 9));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            resolved_range(10..20)
         );
     }
 

@@ -1036,6 +1036,44 @@ async fn test_list_transactions_crossed_adjacent_terminal_is_stable() {
     assert!(resp.end_cursor.is_some());
 }
 
+/// Exact window-edge adjacency: after = the window's last item serves
+/// nothing, and under symbolic resume the frame comes from the drain at the
+/// window's own end — CheckpointBound, window-end cursor — rather than a
+/// resolution-time CursorBound echo of the request cursor.
+#[sim_test]
+async fn test_list_transactions_after_last_item_ends_at_window_bound() {
+    let cluster = new_cluster().await;
+    let sender = cluster.get_address_0();
+    let tx = transfer_self(&cluster, sender).await;
+    let (start, end) = checkpoint_range(&[&tx]);
+
+    let mut client = new_ledger_client(&cluster).await;
+
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.options = Some(query_options(100));
+    let baseline = list_transactions_result(&mut client, req).await;
+    assert!(baseline.end);
+    let last_cursor = last_transaction_cursor(&baseline, "last item cursor");
+
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.options = Some(query_options_after(3, last_cursor.clone()));
+    let resp = list_transactions_result(&mut client, req).await;
+    assert!(resp.transactions.is_empty());
+    assert!(resp.end);
+    assert_eq!(resp.end_reason, Some(QueryEndReason::CheckpointBound));
+    assert_ne!(
+        resp.end_cursor,
+        Some(last_cursor),
+        "the drain frame carries the window's cursor, not the request echo"
+    );
+}
+
 #[sim_test]
 async fn test_list_transactions_rich_mask_matches_get_transaction() {
     let cluster = new_cluster().await;
