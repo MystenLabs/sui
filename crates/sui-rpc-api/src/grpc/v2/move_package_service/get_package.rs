@@ -10,6 +10,7 @@ use crate::{
 };
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::{GetPackageRequest, GetPackageResponse, Package};
+use sui_types::move_package::MovePackage;
 
 #[tracing::instrument(skip(service))]
 pub fn get_package(service: &RpcService, request: GetPackageRequest) -> Result<GetPackageResponse> {
@@ -20,10 +21,16 @@ pub fn get_package(service: &RpcService, request: GetPackageRequest) -> Result<G
     })?;
 
     let package = load_package(service, package_id_str)?;
+    get_package_response(&package)
+}
+
+/// Build a `GetPackage` response from an already-loaded package. Shared with other implementors
+/// of `MovePackageService` (e.g. sui-kv-rpc) that load packages from a different backend.
+pub fn get_package_response(package: &MovePackage) -> Result<GetPackageResponse> {
     let package_id = package.id();
 
     let resolved_package =
-        sui_package_resolver::Package::read_from_package(&package).map_err(convert_error)?;
+        sui_package_resolver::Package::read_from_package(package).map_err(convert_error)?;
 
     let modules: Vec<_> = resolved_package
         .modules()
