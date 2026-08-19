@@ -15801,6 +15801,7 @@ dependencies = [
  "dashmap 5.5.3",
  "fastcrypto",
  "futures",
+ "move-binary-format",
  "move-core-types",
  "mysten-common",
  "mysten-metrics",
