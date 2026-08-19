@@ -68,12 +68,20 @@ mod testing_imports {
 use testing_imports::*;
 
 #[cfg(feature = "testing")]
+static TELEMETRY: std::sync::OnceLock<(
+    telemetry_subscribers::TelemetryGuards,
+    telemetry_subscribers::TracingHandle,
+)> = std::sync::OnceLock::new();
+
+#[cfg(feature = "testing")]
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
-        .with_env()
-        .init();
+    TELEMETRY.get_or_init(|| {
+        telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init()
+    });
     run_test_impl::<SuiTestAdapter>(path, Some(std::sync::Arc::new(PRE_COMPILED.clone())), None)
         .await?;
     Ok(())
