@@ -33,6 +33,7 @@ use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
 use sui_rpc_api::ledger_history::watermark::scan_frontier_cursor_cp;
 use sui_rpc_cursor::Position;
+use sui_rpc_cursor::TransactionsPosition;
 use sui_types::digests::TransactionDigest;
 use tracing::Instrument;
 use tracing::debug_span;
@@ -115,8 +116,8 @@ pub(crate) async fn list_transactions(
         .instrument(debug_span!("resolve_tx_range"))
         .await?;
     let exhaustion = tx_range.exhaustion;
-    let range_end_checkpoint = tx_range.end_checkpoint;
-    let range_end_position = tx_range.end_position;
+    let range_end_checkpoint = tx_range.end_checkpoint();
+    let range_end_position = tx_range.end_position();
     let entry_checkpoint = tx_range.entry_checkpoint;
     let tx_range = tx_range.range();
 
@@ -622,7 +623,7 @@ async fn resolve_tx_range(
     client: &BigTableClient,
     cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedScan<u64>, RpcError> {
+) -> Result<ResolvedScan<TransactionsPosition>, RpcError> {
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;

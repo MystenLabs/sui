@@ -37,6 +37,7 @@ use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc_cursor::CheckpointsPosition;
 use sui_rpc_cursor::Position;
 use tracing::Instrument;
 use tracing::debug_span;
@@ -134,7 +135,7 @@ pub(crate) async fn list_checkpoints(
         .instrument(debug_span!("resolve_cp_range"))
         .await?;
     let exhaustion = cp_range.exhaustion;
-    let range_end_position = cp_range.end_position;
+    let range_end_position = cp_range.end_position();
     let entry_checkpoint = if direction.is_ascending() {
         cp_range.range().start
     } else {
@@ -660,7 +661,7 @@ fn range_end_response(
 fn resolve_cp_range(
     cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
-) -> ResolvedScan<u64> {
+) -> ResolvedScan<CheckpointsPosition> {
     let range = cp_range.range.clone();
     ResolvedScan::<u64>::resolve(cp_range, range, options)
 }

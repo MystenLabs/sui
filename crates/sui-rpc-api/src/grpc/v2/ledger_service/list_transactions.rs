@@ -16,6 +16,7 @@ use sui_rpc::proto::sui::rpc::v2::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_cursor::Position;
+use sui_rpc_cursor::TransactionsPosition;
 use sui_sdk_types::Digest;
 use sui_types::storage::LedgerTxSeqDigest;
 use tokio::task::JoinHandle;
@@ -298,8 +299,8 @@ fn next_transaction_chunk(
                 let terminal = ScanTerminal::from_range_exhaustion(
                     tx_range.exhaustion,
                     Position::Transactions {
-                        checkpoint: tx_range.end_checkpoint,
-                        tx_seq: tx_range.end_position,
+                        checkpoint: tx_range.end_checkpoint(),
+                        tx_seq: tx_range.end_position(),
                     },
                     tx_range.is_empty(),
                 );
@@ -320,15 +321,15 @@ fn next_transaction_chunk(
                         entry_checkpoint,
                         pending_bucket: None,
                         exhaustion: tx_range.exhaustion,
-                        end_checkpoint: tx_range.end_checkpoint,
-                        end_position: tx_range.end_position,
+                        end_checkpoint: tx_range.end_checkpoint(),
+                        end_position: tx_range.end_position(),
                     },
                     None => TransactionScanState::Unfiltered {
                         range,
                         entry_checkpoint,
                         exhaustion: tx_range.exhaustion,
-                        end_checkpoint: tx_range.end_checkpoint,
-                        end_position: tx_range.end_position,
+                        end_checkpoint: tx_range.end_checkpoint(),
+                        end_position: tx_range.end_position(),
                     },
                 };
                 continue;
@@ -630,14 +631,20 @@ fn resolve_tx_range(
     start_checkpoint: Option<u64>,
     cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedScan<u64>, RpcError> {
+) -> Result<ResolvedScan<TransactionsPosition>, RpcError> {
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
     let mut resolved = ResolvedScan::<u64>::resolve(cp_range, tx_range, options);
     if !resolved.is_empty()
         && let Some(floor) =
             clamp_to_serving_floor(service, resolved.range().start, start_checkpoint, options)?
     {
-        resolved.apply_serving_floor(floor.tx_seq, floor.checkpoint, options);
+        resolved.apply_serving_floor(
+            TransactionsPosition {
+                checkpoint: floor.checkpoint,
+                tx_seq: floor.tx_seq,
+            },
+            options,
+        );
     }
     Ok(resolved)
 }

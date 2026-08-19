@@ -17,6 +17,7 @@ use sui_rpc::proto::sui::rpc::v2::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
+use sui_rpc_cursor::CheckpointsPosition;
 use sui_rpc_cursor::Position;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -309,11 +310,11 @@ fn next_checkpoint_chunk(
                     &options,
                 )?
             {
-                cp_range.apply_serving_floor(floor, floor, &options);
+                cp_range.apply_serving_floor(CheckpointsPosition { checkpoint: floor }, &options);
             }
             let interval_empty = cp_range.is_empty();
-            let mut end_checkpoint = cp_range.end_checkpoint;
-            let mut end_position = cp_range.end_position;
+            let mut end_checkpoint = cp_range.end_checkpoint();
+            let mut end_position = cp_range.end_position();
             let mut terminal = ScanTerminal::from_range_exhaustion(
                 cp_range.exhaustion,
                 Position::Checkpoints {
@@ -926,7 +927,7 @@ fn apply_serving_floor_to_filtered_window(
 fn resolve_cp_range(
     cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
-) -> ResolvedScan<u64> {
+) -> ResolvedScan<CheckpointsPosition> {
     let range = cp_range.range.clone();
     ResolvedScan::<u64>::resolve(cp_range, range, options)
 }

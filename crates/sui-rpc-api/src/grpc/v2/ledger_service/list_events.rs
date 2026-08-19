@@ -19,6 +19,7 @@ use sui_rpc::proto::sui::rpc::v2::ListEventsResponse;
 use sui_rpc::proto::sui::rpc::v2::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
+use sui_rpc_cursor::EventsPosition;
 use sui_rpc_cursor::Position;
 use sui_types::storage::LedgerTxSeqDigest;
 use tokio::task::JoinHandle;
@@ -296,9 +297,9 @@ fn next_event_chunk(
                 return Err(cancelled());
             }
             let terminal_position = Position::Events {
-                checkpoint: event_range.end_checkpoint,
-                tx_seq: event_range.end_position.tx_seq,
-                event_index: event_range.end_position.event_index,
+                checkpoint: event_range.end_checkpoint(),
+                tx_seq: event_range.end_position().tx_seq,
+                event_index: event_range.end_position().event_index,
             };
             let terminal = ScanTerminal::from_range_exhaustion(
                 event_range.exhaustion,
@@ -322,16 +323,16 @@ fn next_event_chunk(
                     entry_checkpoint: event_range.entry_checkpoint,
                     pending_bucket: None,
                     exhaustion: event_range.exhaustion,
-                    end_checkpoint: event_range.end_checkpoint,
-                    end_position: event_range.end_position,
+                    end_checkpoint: event_range.end_checkpoint(),
+                    end_position: event_range.end_position(),
                 },
                 None => EventScanState::Unfiltered {
                     bounds,
                     entry_checkpoint: event_range.entry_checkpoint,
                     row_scan_budget: unfiltered_row_scan_budget,
                     exhaustion: event_range.exhaustion,
-                    end_checkpoint: event_range.end_checkpoint,
-                    end_position: event_range.end_position,
+                    end_checkpoint: event_range.end_checkpoint(),
+                    end_position: event_range.end_position(),
                 },
             };
             return next_event_chunk(
@@ -753,7 +754,7 @@ fn resolve_event_range(
     start_checkpoint: Option<u64>,
     cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedScan<IntraTxCoordinate>, RpcError> {
+) -> Result<ResolvedScan<EventsPosition>, RpcError> {
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
     let mut resolved = ResolvedScan::<IntraTxCoordinate>::resolve(
         cp_range,
@@ -767,8 +768,10 @@ fn resolve_event_range(
         };
         if let Some(floor) = clamp_to_serving_floor(service, start_tx, start_checkpoint, options)? {
             resolved.apply_serving_floor(
-                IntraTxCoordinate::start_of_tx(floor.tx_seq),
-                floor.checkpoint,
+                EventsPosition::new(
+                    floor.checkpoint,
+                    IntraTxCoordinate::start_of_tx(floor.tx_seq),
+                ),
                 options,
             );
         }

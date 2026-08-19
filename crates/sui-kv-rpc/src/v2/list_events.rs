@@ -40,6 +40,7 @@ use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
 use sui_rpc_api::ledger_history::watermark::scan_frontier_cursor_cp;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc_cursor::EventsPosition;
 use sui_rpc_cursor::Position;
 use sui_types::digests::TransactionDigest;
 use tracing::Instrument;
@@ -106,8 +107,8 @@ pub(crate) async fn list_events(
         .await?;
     let exhaustion = event_range.exhaustion;
     let entry_checkpoint = event_range.entry_checkpoint;
-    let range_end_checkpoint = event_range.end_checkpoint;
-    let range_end_position = event_range.end_position;
+    let range_end_checkpoint = event_range.end_checkpoint();
+    let range_end_position = event_range.end_position();
     let event_bounds = event_range.bounds;
 
     if event_range.is_empty() {
@@ -812,7 +813,7 @@ async fn resolve_event_range(
     client: &BigTableClient,
     cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedScan<IntraTxCoordinate>, RpcError> {
+) -> Result<ResolvedScan<EventsPosition>, RpcError> {
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
