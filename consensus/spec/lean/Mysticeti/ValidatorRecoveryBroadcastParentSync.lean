@@ -20,6 +20,14 @@ predicate requires every parent to be accepted at the exact packet-delivery
 time. Parent synchronization after delivery cannot establish that predicate.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- One correct holder supplies the finite causal history needed by one
 receiver for one proposal.
 
@@ -28,13 +36,6 @@ history. Each item remains a local request goal until that item is accepted.
 The last field connects the supplied history to the proposal's direct parents.
 -/
 structure ValidatorBroadcastParentSyncSource
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (syncRules : ValidatorBlockSyncExecutionRules timed)
@@ -73,13 +74,6 @@ The proposal can be buffered at delivery. The supplied source begins when that
 delivery is visible. Block synchronization first accepts every missing parent.
 The protected local acceptance task then accepts the proposal. -/
 theorem completed_broadcast_parents_ready_then_processed_via_parent_sync
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (acceptanceRules : ValidatorParentReadyAcceptanceRules timed)
@@ -171,13 +165,6 @@ theorem completed_broadcast_parents_ready_then_processed_via_parent_sync
 /-- The result-only form of
 `completed_broadcast_parents_ready_then_processed_via_parent_sync`. -/
 theorem completed_broadcast_eventually_accepted_or_gc_root_via_parent_sync
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (acceptanceRules : ValidatorParentReadyAcceptanceRules timed)
@@ -214,13 +201,6 @@ theorem completed_broadcast_eventually_accepted_or_gc_root_via_parent_sync
 /-- The recovery-proposal form of
 `completed_broadcast_eventually_accepted_or_gc_root_via_parent_sync`. -/
 theorem completed_recovery_broadcast_eventually_accepted_or_gc_root_via_parent_sync
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (acceptanceRules : ValidatorParentReadyAcceptanceRules timed)

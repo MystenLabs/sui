@@ -22,6 +22,14 @@ later broadcast facts. The adopted path uses recovery `proposeNext` work for
 each backfilled round.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- Past-only no-skip and fixed-gate provenance for actual correct proposal
 persistence.
 
@@ -32,13 +40,6 @@ fresh persistence. The timer source then gives full retained-representative
 selection at that snapshot.
 -/
 structure ValidatorV2RoundCatchupSourceMap
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -95,13 +96,6 @@ The adopted fixed-reference path uses the proposed no-skip recovery worker.
 Its origin provides the exact recovery snapshot, deadline, selected parents,
 and addressed broadcasts required by the adjacent-round proof. -/
 theorem actual_high_own_block_gives_fresh_timer_paced_intermediate
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -244,13 +238,6 @@ family used by the fixed-reference direct-vote consumer. It does not include
 common retention, receiver acceptance, a future carrier, or a commit result.
 -/
 structure ValidatorV2BackfilledTimerPacedWindow
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (obligations : ValidatorProposalObligationExecution timed)
@@ -263,13 +250,6 @@ namespace ValidatorV2BackfilledTimerPacedWindow
 
 /-- Erase the V2 source label and keep the minimal production family. -/
 theorem toFreshFamily
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -290,13 +270,6 @@ The premise `baseAboveObservedFloors` gives one unused warm-up round. Thus, all
 returned timer starts and proposal snapshots are strictly after `observation`.
 -/
 theorem block_production_liveness_gives_backfilled_timer_paced_window
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}

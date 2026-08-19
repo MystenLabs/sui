@@ -19,6 +19,14 @@ needs. A small local body pin keeps each observed above-GC body usable until
 the local commit changes, GC reaches it, or the epoch ends.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- Requester-local pins for exact block bodies observed during recursive
 recovery. Each reference has independent state. -/
 structure ValidatorRecoveryObservedBodyPinState
@@ -27,13 +35,6 @@ structure ValidatorRecoveryObservedBodyPinState
 
 /-- Main-trace recursive synchronization and requester-local body pins. -/
 structure ValidatorRecoveryCapsuleSyncExecution
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (syncRules : ValidatorBlockSyncExecutionRules timed) where
@@ -86,13 +87,6 @@ structure ValidatorRecoveryCapsuleSyncExecution
 /-- Recovery block acceptance can stop dependency checks at the requester's
 local committed GC roots. It uses the normal delivery and buffer rules. -/
 structure ValidatorRecoveryGcParentReadyAcceptanceRules
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     extends ValidatorParentReadyAcceptanceRules timed where

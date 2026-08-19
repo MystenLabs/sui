@@ -23,6 +23,14 @@ the manifest to retained material with an actual local-run or verified-sync
 origin before it protects the send action.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- Convert replay-material order to the block-sync order after one validator
 has accepted every explicit root. -/
 theorem replay_parent_first_to_block_sync
@@ -57,13 +65,6 @@ def ValidatorExactReplayMaterial.toReplayManifest
 
 /-- A receiver can check this manifest header from its own durable prefix. -/
 def ValidatorReplayManifest.LocallyValidAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (time validator : Nat)
@@ -101,13 +102,6 @@ that list. `sendActionCreatesPacket` binds a protected main-trace send action to
 the exact manifest bytes sent to one receiver.
 -/
 structure ValidatorReplayManifestExecution
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program) where
   trace : Time → Nat → ValidatorReplayManifestNeedState BlockId CommitId

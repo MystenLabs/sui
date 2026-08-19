@@ -18,6 +18,14 @@ This file does not assume a block layer, a direct-vote quorum, or a usable
 anchor. It defines the local facts that a later trace proof must compose.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 private instance validatorBlockRefDecidableEq
     {BlockId : Type} [DecidableEq BlockId] :
     DecidableEq (ValidatorBlockRef BlockId) := by
@@ -39,7 +47,6 @@ private instance validatorBlockRefDecidableEq
 
 /-- One local recovery parent-selection snapshot and the block that uses it. -/
 structure ValidatorProposalSnapshot
-    {BlockId CommitId PacketId : Type}
     (config : ValidatorEpochConfig CommitId)
     (faults : FixedFaultInterval config)
     (trace : Trace (ValidatorWorldState BlockId CommitId PacketId)) where
@@ -72,7 +79,6 @@ A later theorem must derive this witness from local action transitions and packe
 creation. A final liveness theorem must not take a successful family of these
 witnesses as an input. -/
 structure ValidatorTimedBlockFlow
-    {BlockId CommitId PacketId : Type}
     (config : ValidatorEpochConfig CommitId)
     (faults : FixedFaultInterval config)
     (trace : Trace (ValidatorWorldState BlockId CommitId PacketId))
@@ -131,13 +137,6 @@ namespace ValidatorTimedBlockFlow
 
 /-- A completed acceptance action stays visible at the later parent snapshot. -/
 theorem acceptance_visible_at_parent_snapshot
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {timingProtocolPacket : Packet → Prop}
@@ -159,13 +158,6 @@ theorem acceptance_visible_at_parent_snapshot
 /-- The spread form of the pacing theorem makes an accepted correct leader block
 visible in the actual local state before the next proposal selects parents. -/
 theorem acceptance_visible_at_parent_snapshot_from_spread
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {timingProtocolPacket : Packet → Prop}
@@ -212,7 +204,6 @@ end ValidatorTimedBlockFlow
 /-- Authors whose accepted next-round block contains the exact leader reference.
 The set counts each author once, even if that author made more than one block. -/
 def traceDirectVoters
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
     (world : ValidatorWorldState BlockId CommitId PacketId)
     (observer : Nat) (leader : ValidatorBlockRef BlockId) : VoterSet :=
@@ -232,7 +223,6 @@ def traceDirectVoters
 /-- An accepted next-round child with the exact leader parent is one direct
 voter. This is a local DAG fact, not a quorum result. -/
 theorem accepted_child_with_leader_parent_is_direct_voter
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
     {world : ValidatorWorldState BlockId CommitId PacketId}
     {observer voter : Nat}
@@ -256,9 +246,7 @@ votes for the exact leader block, those votes have quorum stake.
 This is an internal aggregation lemma. A trace proof must derive the pointwise
 `allVote` premise from delivery, pacing, and the local parent-selection rule. -/
 theorem all_correct_available_children_vote_gives_quorum
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
     (faults : FixedFaultInterval config)
     {world : ValidatorWorldState BlockId CommitId PacketId}
     {observer : Nat} {leader : ValidatorBlockRef BlockId}
@@ -307,7 +295,6 @@ end ValidatorFlexInput
 Each field describes one validator's parent selection or one local FlexCommitter
 evaluation. No field says that a future proposal, vote quorum, or anchor exists. -/
 structure ValidatorAnchorLocalRules
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
     (config : ValidatorEpochConfig CommitId)
     (faults : FixedFaultInterval config)
@@ -382,10 +369,7 @@ namespace ValidatorAnchorLocalRules
 /-- An accepted correct leader is included when the next correct validator
 selects its recovery parents. This result uses only one parent snapshot. -/
 theorem timed_flow_includes_visible_leader
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
     {trace : Trace (ValidatorWorldState BlockId CommitId PacketId)}
     {timingProtocolPacket : Packet → Prop}
     {timingProtocolAction : LocalConsensusAction → Prop}
@@ -411,14 +395,7 @@ theorem timed_flow_includes_visible_leader
 /-- The pacing bounds and local parent rule make the correct leader an actual
 parent of the next proposal. Timely parent inclusion is a result, not an input. -/
 theorem timed_flow_includes_leader_from_spread
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {timingProtocolPacket : Packet → Prop}
@@ -456,13 +433,6 @@ theorem timed_flow_includes_leader_from_spread
 
 /-- A proposal remains in the ghost block catalog at each later trace time. -/
 theorem proposal_catalog_entry_persists
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (snapshot : ValidatorProposalSnapshot config faults execution.trace)
@@ -476,14 +446,7 @@ theorem proposal_catalog_entry_persists
 direct vote for each exact parent that it contains. This result counts only one
 author and does not state a quorum result. -/
 theorem accepted_proposal_with_parent_is_direct_voter
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (rules : ValidatorAnchorLocalRules config faults execution.trace)
@@ -525,10 +488,7 @@ theorem accepted_proposal_with_parent_is_direct_voter
 /-- A direct-vote quorum for the covered first selected leader slot gives one
 usable ordered anchor in the local FlexCommitter input. -/
 theorem covered_first_slot_quorum_is_usable
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
     {trace : Trace (ValidatorWorldState BlockId CommitId PacketId)}
     (rules : ValidatorAnchorLocalRules config faults trace)
     {time observer round : Nat} {leader : ValidatorBlockRef BlockId}
@@ -560,10 +520,7 @@ theorem covered_first_slot_quorum_is_usable
 /-- Pointwise direct-vote quorums for a covered consecutive range give the
 corresponding local FlexCommitter anchor window. -/
 theorem covered_direct_quorum_range_gives_anchor_window
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
     {trace : Trace (ValidatorWorldState BlockId CommitId PacketId)}
     (rules : ValidatorAnchorLocalRules config faults trace)
     {time observer baseIndex count : Nat}
@@ -622,9 +579,7 @@ for this target must start from network, local processing, leader coverage, and
 one-validator rules. It must derive block delivery, parent inclusion, direct
 vote stake, and the anchor window. -/
 def TraceUsableAnchorWindowLiveness
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
     (faults : FixedFaultInterval config)
     (trace : Trace (ValidatorWorldState BlockId CommitId PacketId))
     (rules : ValidatorAnchorLocalRules config faults trace)

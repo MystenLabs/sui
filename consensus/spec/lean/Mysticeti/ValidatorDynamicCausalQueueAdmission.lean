@@ -21,6 +21,14 @@ body that was already local. It contains no future body, delivery, acceptance,
 carrier, proposal, Flex result, or commit install.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- A past local body admits one unresolved direct parent to the sampled
 causal-work queue.
 
@@ -28,14 +36,7 @@ causal-work queue.
 queue sample is not earlier than that batch. The parent is admitted only when
 it is still unaccepted and above the GC round at the sample. -/
 structure ValidatorDynamicCausalQueueAdmission
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {validator start : Nat}

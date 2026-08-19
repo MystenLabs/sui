@@ -15,6 +15,14 @@ other validator. The local work can retry. Network delivery is not a field of
 this execution.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- Durable send goals for locally owned recovery tips. -/
 structure ValidatorRecoveryTipRebroadcastState (BlockId : Type) where
   pending : ValidatorBlockRef BlockId → Nat → Bool
@@ -42,13 +50,6 @@ structure ValidatorRecoveryTipRebroadcastTransition
 
 /-- One source-local recovery-tip rebroadcast execution. -/
 structure ValidatorRecoveryTipRebroadcastExecution
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}

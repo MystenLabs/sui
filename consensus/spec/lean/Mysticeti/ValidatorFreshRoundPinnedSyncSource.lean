@@ -22,6 +22,14 @@ causal-history list that the backlog projection names. It does not state a
 future delivery, acceptance, proposal, layer, or commit.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- The persisted projection and the durable pin use one exact history.
 
 `ValidatorRecoverySourcePinExecution.persistedProposalAddsCapsule` already
@@ -29,13 +37,6 @@ creates the entry and its pin. This rule only identifies that entry with the
 static history projection used by the causal-backlog bound. Full capsule
 equality is not required. -/
 structure ValidatorPersistedCausalCapsulePinProjectionRules
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -60,13 +61,6 @@ projection rule supplies only the identity of the capsule added by an actual
 past persistence action. The method below still needs the concrete post-GST
 packet and active-epoch interval before it can produce a sync source. -/
 structure ValidatorFreshRoundPinnedSyncSourceRules
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -83,13 +77,6 @@ structure ValidatorFreshRoundPinnedSyncSourceRules
 /-- Erase timer-specific packet data and retain the exact completed block
 packet used by the block-sync bridge. -/
 theorem ValidatorTimerPacedPeerBroadcast.toCompletedBlockBroadcast
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -120,13 +107,6 @@ The source starts when packet delivery is visible. Its history is the exact
 persisted projection. The pin supplies retained bodies and source protection;
 the current operational frontier supplies the receiver's genesis roots. -/
 theorem timer_paced_peer_broadcast_has_projected_parent_sync_source
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -198,13 +178,6 @@ theorem timer_paced_peer_broadcast_has_projected_parent_sync_source
 
 /-- The bundled current local rules derive the same pointwise source. -/
 theorem ValidatorFreshRoundPinnedSyncSourceRules.sourceFor
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}

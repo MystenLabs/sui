@@ -30,6 +30,14 @@ only past actions and current scheduled work. Bounded execution supplies the
 later proposal and broadcast in a separate theorem.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- Current protected normal work after one local commit.
 
 `frontierRound` is the exact immediate-parent round of the protected proposal.
@@ -37,13 +45,6 @@ The two strict bounds say that these parents are later than the committed
 leader and remain above local GC. The protected action's program guard supplies
 the accepted, retained, quorum parent-list facts. -/
 structure ValidatorAuthorLocalNormalContinuationAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (time validator : Time) where
@@ -65,13 +66,6 @@ one armed exact timer or one occupied protected timer-arm goal. In all branches,
 the absence of a latched proposal excludes callbacks which already ran their
 proposal action. Raw parent readiness is not a scheduled callback. -/
 inductive ValidatorAuthorLocalPreAttemptScheduleAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -96,13 +90,6 @@ inductive ValidatorAuthorLocalPreAttemptScheduleAt
 
 /-- The exact round selected by one scheduled callback. -/
 def ValidatorAuthorLocalPreAttemptScheduleAt.targetRound
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -125,13 +112,6 @@ def ValidatorAuthorLocalPreAttemptScheduleAt.targetRound
 The mode guard permits normal persistence only after recovery exits or while
 the signer floor is at the GC safe-resume boundary. -/
 structure ValidatorAuthorLocalPostInstallNormalScheduleAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -158,13 +138,6 @@ The persistence branch names the exact scheduled round and an action which
 already occurred before or in the install batch. The continuation branch names
 only a legal normal callback which is scheduled after that atomic handler. -/
 inductive ValidatorAuthorLocalFirstInstallScheduleDispositionAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -203,13 +176,6 @@ in-progress callback state: the exact scheduled proposal already persisted, or
 the post-install state schedules one legal normal callback. An install by
 another validator is outside this rule. -/
 structure ValidatorAuthorLocalCommitContinuationRules
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -240,13 +206,6 @@ structure ValidatorAuthorLocalCommitContinuationRules
 rule. A no-sync interval uses this theorem after selecting its first exact
 `recordCommit` action. -/
 theorem ValidatorAuthorLocalCommitContinuationRules.firstRecordDisposesScheduledAttempt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -282,13 +241,6 @@ theorem ValidatorAuthorLocalCommitContinuationRules.firstRecordDisposesScheduled
 /-- The protected action keeps the concrete accepted and retained quorum
 frontier named by the normal continuation. -/
 theorem author_local_normal_continuation_has_ready_frontier
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {time validator : Time}
@@ -305,13 +257,6 @@ theorem author_local_normal_continuation_has_ready_frontier
 /-- The protected normal target is above the signer floor, the commit voting
 frontier, and the new GC safe-resume boundary. -/
 theorem author_local_normal_continuation_has_safe_target
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {time validator : Time}
@@ -351,12 +296,6 @@ theorem author_local_normal_continuation_has_safe_target
 state in that atomic step. In particular, another validator's commit record
 cannot end this validator's proposal-continuation branch. -/
 theorem other_validator_local_action_preserves_validator_state
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {time : Time}
     {before after : ValidatorWorldState BlockId CommitId PacketId}
     {actor validator : Nat}
@@ -375,13 +314,6 @@ commit-install batch. No earlier local commit install occurs after `start`.
 This theorem only selects an action from the finite past interval. It does not
 use either install kind as liveness progress. -/
 theorem commit_index_advance_has_first_install_before
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {start finish validator : Time}
@@ -466,13 +398,6 @@ theorem commit_index_advance_has_first_install_before
 /-- Without synchronized commits, the first install selected above is an exact
 same-author `recordCommit`. -/
 theorem commit_index_advance_without_sync_has_first_record_commit_before
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {start finish validator : Time}
@@ -507,13 +432,6 @@ theorem commit_index_advance_without_sync_has_first_record_commit_before
 
 /-- Every scheduled callback selects a round above its current signer floor. -/
 theorem ValidatorAuthorLocalPreAttemptScheduleAt.target_above_signer_floor
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -544,13 +462,6 @@ theorem ValidatorAuthorLocalPreAttemptScheduleAt.target_above_signer_floor
 
 /-- Exact broadcast evidence after one serialized install-handler race. -/
 inductive ValidatorAuthorLocalScheduledBroadcastAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (obligations : ValidatorProposalObligationExecution timed)
@@ -585,13 +496,6 @@ Core serialization gives an exact past persistence or one legal protected
 normal callback after the handler. Bounded execution turns either case into
 an exact addressed broadcast. The install itself is not a result. -/
 theorem first_install_scheduled_attempt_eventually_produces_broadcast
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -653,13 +557,6 @@ theorem first_install_scheduled_attempt_eventually_produces_broadcast
 
 /-- The record-only specialization of the serialized first-install theorem. -/
 theorem first_record_scheduled_attempt_eventually_produces_broadcast
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -703,13 +600,6 @@ The first actual install in the finite interval is selected from the past
 trace. The serialized first-install rule then returns an exact proposal
 broadcast, never the install and never another commit race. -/
 theorem commit_advance_disposes_scheduled_attempt_with_broadcast
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -758,13 +648,6 @@ theorem commit_advance_disposes_scheduled_attempt_with_broadcast
 
 /-- No-sync specialization which selects the first exact local record. -/
 theorem commit_advance_without_sync_disposes_scheduled_attempt_with_broadcast
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}

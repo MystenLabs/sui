@@ -16,16 +16,17 @@ import graph. It keeps the pointwise GC race out of the lower direct-quorum
 module.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- If no correct, available validator advances after `start`, one selected
 correct validator keeps its exact commit head at every later time. -/
 private theorem no_correct_advance_keeps_exact_head
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {start later validator : Time} {prior : ValidatorCommitHead CommitId}
@@ -54,13 +55,6 @@ private theorem no_correct_advance_keeps_exact_head
 /-- For one fixed commit head, the recovery wait eventually covers one
 complete adjacent-round propagation edge. -/
 theorem same_head_recovery_wait_eventually_covers_adjacent_flow
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId))
@@ -84,13 +78,6 @@ receiver pins the delivered body, accepts it after its already-known parents,
 and keeps it above GC until the next proposal snapshot. For the same validator,
 the durable own-block record gives the same result without a network packet. -/
 theorem adjacent_timer_paced_productions_include_previous_or_commit_advance
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -361,13 +348,6 @@ The next proposal uses the previous block as a parent. At the same proposal
 snapshot, the receiver has that exact reference as its current representative,
 retains its body, and has the exact block in the global catalog. -/
 structure ValidatorAdjacentTimerPacedParentEvidence
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -390,13 +370,6 @@ structure ValidatorAdjacentTimerPacedParentEvidence
 /-- The adjacent propagation theorem also preserves the exact local evidence
 needed by the direct-vote and causal-carrier proofs. -/
 theorem adjacent_timer_paced_productions_give_parent_evidence_or_commit_advance
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -495,13 +468,6 @@ The first edge puts the leader in the voter block. The second edge puts that
 exact voter block in the carrier and records its body as the carrier host's
 current retained representative. -/
 theorem adjacent_parent_evidence_pair_gives_vote_ready
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -546,14 +512,7 @@ This lemma removes the `votesReady` adapter from later trace composition. The
 finite recovery-window proof constructs `voteEvidence` from actual proposal,
 delivery, acceptance, and refreshed-parent events. -/
 theorem adjacent_parent_evidence_family_gives_full_direct_vote_quorum
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}

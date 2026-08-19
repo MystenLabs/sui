@@ -23,16 +23,17 @@ normal max-timeout scheduler must derive the first actual broadcast from the
 current maximum source.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- The exact parent quorum of one persisted proposal remains accepted at the
 production finish. -/
 theorem persisted_broadcast_parents_are_accepted_at_finish
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -72,13 +73,6 @@ total-quorum layer.
 This is an internal rich result. The exact-child branch retains the proposal
 body, broadcasts, and its exact accepted parent quorum. -/
 inductive ValidatorOperationalMaximumSuccessorResult
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (obligations : ValidatorProposalObligationExecution timed)
@@ -110,13 +104,6 @@ accepted quorum at `childRound - 1` at the correct author. The author's current
 operational frontier at the production finish is at least that round, so one
 correct host holds a later public total-quorum layer. -/
 theorem at_or_above_broadcast_gives_operational_successor
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -208,13 +195,6 @@ current operational frontier at the production finish is at least that round.
 The finite correct-host maximum therefore exposes a positive public layer no
 earlier than `maximum + 1`. -/
 theorem at_or_above_broadcast_gives_operational_maximum_successor
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}

@@ -20,19 +20,20 @@ This module proves a current-state fact. It does not state future delivery,
 synchronization, proposal, layer, timer, or commit progress.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- Acceptance of one exact capsule target gives an accepted-or-GC cutoff for
 the complete capsule at the same receiver and time.
 
 The source time is used only to identify each immutable exact body in the
 global catalog. -/
 theorem accepted_capsule_target_gives_receiver_cutoff
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}

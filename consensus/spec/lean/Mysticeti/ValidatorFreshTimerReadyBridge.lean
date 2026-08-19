@@ -20,18 +20,19 @@ exact timer start, and a validator has at most one timer start for one exact
 future timer, proposal, layer, or commit exists.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- One actual timer start derived from a current parent-ready state.
 
 The selected start can be in the current or bounded next local batch. Its
 parent-ready observation is no later than `readyAt`. -/
 structure ValidatorBoundedCurrentRecoveryTimerStart
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -56,13 +57,6 @@ commit-index advance at the same validator.
 This theorem handles an empty worker, an occupied worker, and an already stored
 exact timer. The caller supplies no timer-start observation. -/
 theorem current_timer_input_gives_bounded_start_or_receiver_commit_advance
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -170,13 +164,6 @@ does not retain the `timerStarted` proof which created them. This source map
 restores only that past identity. Exact timer keys are unique at one validator.
 -/
 structure ValidatorTimerPacedRecoveryOriginRules
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -203,13 +190,6 @@ structure ValidatorTimerPacedRecoveryOriginRules
 /-- The past timer origin also proves that the production's stored commit head
 is the current local head at its timer start. -/
 theorem ValidatorTimerPacedRecoveryOriginRules.production_head_at_timer_start
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -231,13 +211,6 @@ theorem ValidatorTimerPacedRecoveryOriginRules.production_head_at_timer_start
 /-- A fresh production on a no-advance suffix uses the exact common head from
 the start of that suffix. -/
 theorem ValidatorTimerPacedRecoveryOriginRules.fresh_production_head_on_suffix
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -274,13 +247,6 @@ theorem ValidatorTimerPacedRecoveryOriginRules.fresh_production_head_on_suffix
 /-- Without a receiver-local commit-index advance, its commit head stays fixed
 between two ordered trace times. -/
 theorem receiver_head_stays_fixed_without_local_commit_advance
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {start later receiver : Time}
@@ -316,13 +282,6 @@ value at the same round contradicts the timer's exact-next signer floor. A past
 persistence of the same functional own-block reference must be the same action
 batch as the production's persistence. -/
 theorem owned_round_bounds_timer_paced_persistence
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -401,13 +360,6 @@ second persistence in a later batch cannot pass its basic guard. If both
 actions are in the same batch, their durable `ownBlockAt` results identify the
 same exact reference. -/
 theorem persist_proposal_same_round_blocks_are_equal
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {validator left right : Nat}
@@ -471,13 +423,6 @@ started, its own parent-ready field is already before `readyAt`. Otherwise, the
 current timer worker derives the same exact timer key within the local bound.
 Only a commit advance at this receiver can terminate that comparison. -/
 theorem synchronized_prior_quorum_bounds_actual_fresh_timer_or_receiver_advances
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -599,13 +544,6 @@ synchronized exact quorum is accepted, retained, and ready for the next timer.
 Thus, a higher theorem can pass the result of ordinary source synchronization
 directly. It does not need to assume a separate timer-ready time. -/
 theorem receiver_source_window_bounds_actual_fresh_timer_or_receiver_advances
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -662,13 +600,6 @@ theorem receiver_source_window_bounds_actual_fresh_timer_or_receiver_advances
 /-- The synchronized-quorum bound supplies the upper edge of one timer-spread
 recurrence step. -/
 theorem synchronized_prior_quorum_gives_next_start_upper_edge_or_receiver_advances
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -711,13 +642,6 @@ pairwise spread bound.
 This predicate refers only to timer-paced productions which already occur in
 the trace. -/
 def ValidatorFreshRoundTimerStartSpreadAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (obligations : ValidatorProposalObligationExecution timed)
@@ -737,13 +661,6 @@ actual next-round timer.
 A receiver synchronization theorem supplies this result. The result does not
 assert that a timer or proposal exists. -/
 def ValidatorFreshTimerStartSuccessorUpperAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (obligations : ValidatorProposalObligationExecution timed)
@@ -764,13 +681,6 @@ actual next-round timer.
 The correct initial-parent origin theorem supplies this result. It does not
 assert that a timer or proposal exists. -/
 def ValidatorFreshTimerStartSuccessorLowerAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (obligations : ValidatorProposalObligationExecution timed)
@@ -792,13 +702,6 @@ authors. Durable signer-floor uniqueness identifies that correct parent with
 the exact fresh production by the same author in the prior round. The existing
 initial-parent theorem then puts the next timer after the prior deadline. -/
 theorem fresh_family_gives_timer_start_successor_lower
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -877,13 +780,6 @@ theorem fresh_family_gives_timer_start_successor_lower
 /-- Two fresh production records for one validator, round, and exact commit
 head have the same actual timer start. -/
 theorem same_validator_round_and_head_fresh_timer_starts_equal
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -945,13 +841,6 @@ The bound is the absolute maximum selected timer start. It need not be tight.
 Timer-origin uniqueness makes it apply to every proof record for the same
 validator and round. -/
 theorem fresh_family_has_finite_timer_start_spread
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -1007,13 +896,6 @@ The proof does not select a global earliest or latest timer. It selects one
 prior timer for each of the two next-round timers and uses the prior pairwise
 spread between those two selected timers. -/
 theorem fresh_timer_start_pairwise_spread_successor
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -1056,13 +938,6 @@ theorem fresh_timer_start_pairwise_spread_successor
 /-- A prior-round pairwise spread and one lower successor edge give the
 directional adjacent start bound used by the leader-to-voter proof. -/
 theorem fresh_timer_start_spread_gives_adjacent_bound
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -1095,13 +970,6 @@ theorem fresh_timer_start_spread_gives_adjacent_bound
 /-- Repeated current/past successor edges give a linear pairwise spread over
 one finite actual fresh suffix. -/
 theorem fresh_timer_start_pairwise_spread_recurrence_is_linear
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}

@@ -21,15 +21,16 @@ not require proactive sender-side work for every peer. It does not state a
 future quorum, layer, commit, or receiver acceptance result.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- One actual block packet emitted by a successful subscription snapshot. -/
 structure ValidatorSubscriptionReplayPacketAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (start sender receiver : Time)
@@ -52,13 +53,6 @@ structure ValidatorSubscriptionReplayPacketAt
 /-- A successful subscription replays the exact observed tip, or a newer tip
 which was current when the sender took the subscription snapshot. -/
 inductive ValidatorCurrentTipSubscriptionDispositionAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (start sender receiver : Time)
@@ -91,13 +85,6 @@ current tip.
 The implementation mapping must cover stream establishment timeout, idle or
 broken stream termination, retry, and the successful snapshot rule. -/
 structure ValidatorCurrentTipSubscriptionExecution
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}

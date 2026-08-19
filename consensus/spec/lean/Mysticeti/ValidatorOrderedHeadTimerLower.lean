@@ -21,16 +21,17 @@ edge producer, its head-relative wait is no larger. A same-round start spread
 then transports the leader's complete deadline across the lower edge.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- One actual next-round timer has a lower edge from one correct prior-round
 fresh production and that production's own commit head. -/
 def ValidatorFreshTimerStartSuccessorHeadRelativeLowerAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (obligations : ValidatorProposalObligationExecution timed)
@@ -51,13 +52,6 @@ def ValidatorFreshTimerStartSuccessorHeadRelativeLowerAt
 Unlike `fresh_family_gives_timer_start_successor_lower`, this result does not
 replace each actual producer head with one common head. -/
 theorem fresh_family_gives_timer_start_successor_head_relative_lower
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -131,13 +125,6 @@ theorem fresh_family_gives_timer_start_successor_head_relative_lower
 /-- On one no-advance suffix, two fresh productions by the same author use the
 same author-local commit head. Other correct authors can use different heads. -/
 theorem no_advance_fresh_productions_same_author_head
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -176,13 +163,6 @@ theorem no_advance_fresh_productions_same_author_head
 /-- One heterogeneous-head fresh family still has a finite pairwise timer-start
 spread when each author's actual timer key is stable. -/
 theorem fresh_family_has_finite_timer_start_spread_of_same_author_heads
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -234,13 +214,6 @@ theorem fresh_family_has_finite_timer_start_spread_of_same_author_heads
 /-- A no-advance suffix supplies a finite timer-start spread for one actual
 fresh family, without common-head equality. -/
 theorem fresh_family_has_finite_timer_start_spread_on_no_advance_suffix
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -273,13 +246,6 @@ theorem ordered_wait_transports_deadline_across_start_spread
 production. The leader head only needs to be no earlier than this one producer
 head. -/
 theorem ordered_head_fresh_spread_and_one_lower_give_deadline_bound
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -322,13 +288,6 @@ It is sufficient that the leader head is no earlier than every production in
 the fresh prior-round family. A caller can use a weaker condition which covers
 only the lower-edge production if that production is already known. -/
 theorem ordered_head_fresh_spread_and_successor_lower_give_deadline_bound
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}

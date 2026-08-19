@@ -16,6 +16,14 @@ is accepted, the epoch ends, the local commit head passes its baseline, or the
 local GC frontier reaches the parent round.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- One requester-local recursive goal created from one concrete child body. -/
 structure ValidatorRecoveryRecursiveParentNeed
     {BlockId CommitId : Type}
@@ -35,13 +43,6 @@ structure ValidatorRecoveryRecursiveParentNeedState
 
 /-- Fundamental single-host rules for recursive recovery dependency work. -/
 structure ValidatorRecoveryRecursiveParentNeedExecution
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (syncRules : ValidatorBlockSyncExecutionRules timed) where

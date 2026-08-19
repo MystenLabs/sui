@@ -20,6 +20,14 @@ accepted and retained. The proof does not assume a useful peer, a ready server,
 or completed synchronization.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- The finite peer order used by one block synchronization retry cycle. -/
 def validatorBlockSyncPeerOrder (authorityCount : Nat) : List Nat :=
   List.range authorityCount
@@ -33,13 +41,6 @@ theorem validator_block_sync_peer_order_contains
 
 /-- One correct holder has an exact retained block at one execution time. -/
 structure RetainedValidatorBlock
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (holder : Nat) (block : ValidatorBlock BlockId) (time : Time) : Prop where
@@ -62,13 +63,6 @@ one local action or one delivered addressed packet. No field states that another
 validator has data or that synchronization succeeds.
 -/
 structure ValidatorBlockSyncExecutionRules
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program) where
   /-- A source-specific pin prevents cleanup of one retained block. -/
@@ -215,13 +209,6 @@ structure ValidatorBlockSyncExecutionRules
 /-- A completed block-acceptance action stores the accepted block at the end of
 its execution batch. -/
 theorem accept_block_occurrence_stores_accepted_block
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {time validator : Nat} {block : ValidatorBlock BlockId}
@@ -242,13 +229,6 @@ theorem accept_block_occurrence_stores_accepted_block
 
 /-- One retained block remains a retained source at every later active time. -/
 theorem retained_validator_block_persists
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (rules : ValidatorBlockSyncExecutionRules timed)
@@ -273,13 +253,6 @@ theorem retained_validator_block_persists
 /-- One exact block body is available at one host. A delivered packet can be
 buffered before acceptance. An accepted body must also have its catalog entry. -/
 inductive ValidatorLocalBlockBodyAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (time validator : Time) (block : ValidatorBlock BlockId) : Prop where
@@ -303,13 +276,6 @@ inductive ValidatorLocalBlockBodyAt
 
 /-- A block packet sent after GST is delivered in the main execution. -/
 theorem validator_protocol_packet_is_delivered
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {packetId : PacketId}
@@ -329,13 +295,6 @@ theorem validator_protocol_packet_is_delivered
 /-- The maximum time for one requester to rotate to one correct source, send a
 request, receive a response, and accept one parent-ready block. -/
 def validatorBlockSyncAcceptanceBound
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (rules : ValidatorBlockSyncExecutionRules timed) : Nat :=
@@ -394,13 +353,6 @@ request bound, or the requester goal becomes obsolete first.
 This theorem stops at exact packet delivery. It does not require the block's
 parents to be ready and does not assume that the block is accepted. -/
 theorem retained_validator_block_body_delivered_or_obsolete_within_bound
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (rules : ValidatorBlockSyncExecutionRules timed)
@@ -674,13 +626,6 @@ or the local request goal becomes obsolete.
 The source pin is required only while the request is not accepted and is not
 obsolete. A later commit or cleanup boundary can therefore release the pin. -/
 theorem retained_validator_block_accepted_or_obsolete_within_bound
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (rules : ValidatorBlockSyncExecutionRules timed)
@@ -1024,13 +969,6 @@ theorem retained_validator_block_accepted_or_obsolete_within_bound
 /-- A retained parent-ready block is eventually accepted, or the local request
 goal becomes obsolete. -/
 theorem retained_validator_block_eventually_accepted_or_obsolete
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (rules : ValidatorBlockSyncExecutionRules timed)
@@ -1066,13 +1004,6 @@ theorem retained_validator_block_eventually_accepted_or_obsolete
 /-- A still-required protected block is eventually accepted. The pin can be
 released immediately after acceptance. -/
 theorem retained_validator_block_eventually_accepted
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (rules : ValidatorBlockSyncExecutionRules timed)
@@ -1133,13 +1064,6 @@ def ParentFirstValidatorBlockHistory
 /-- One reference is ready for causal processing when it is accepted or when
 the receiver's current GC round has made it a committed root. -/
 def ValidatorReferenceAcceptedOrGcRootAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (time validator : Nat) (reference : ValidatorBlockRef BlockId) : Prop :=
@@ -1150,13 +1074,6 @@ def ValidatorReferenceAcceptedOrGcRootAt
 /-- Acceptance and GC-root readiness both persist in one correct validator's
 trace. -/
 theorem validator_reference_accepted_or_gc_root_persists
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {earlier later validator : Nat} {reference : ValidatorBlockRef BlockId}
@@ -1253,13 +1170,6 @@ theorem list_before_member_of_front
 
 /-- One correct holder retains a finite parent-history list. -/
 structure RetainedValidatorBlockHistory
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (holder : Nat) (blocks : List (ValidatorBlock BlockId))
@@ -1281,13 +1191,6 @@ namespace RetainedValidatorBlockHistory
 
 /-- Select one exact block source from a retained finite history. -/
 theorem item
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {holder : Nat} {blocks : List (ValidatorBlock BlockId)} {time : Time}
@@ -1308,13 +1211,6 @@ end RetainedValidatorBlockHistory
 /-- Every item in one retained finite history remains a source at a later active
 time. -/
 theorem retained_validator_block_history_persists
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (rules : ValidatorBlockSyncExecutionRules timed)
@@ -1351,13 +1247,6 @@ Each block is either accepted or is at or below the receiver's current GC
 round. The proof does not preserve a request job across a commit. Each fetch
 response uses the GC round that is current when the response is processed. -/
 theorem retained_parent_first_history_eventually_ready
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (rules : ValidatorBlockSyncExecutionRules timed)
@@ -1498,13 +1387,6 @@ Ready means that the requester accepted the block, or that the block is at or
 below the GC round that is current when its fetch result is processed. A commit
 does not have to preserve or rebase the old fetch job. -/
 theorem retained_parent_first_history_ready_within_length_bound
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (rules : ValidatorBlockSyncExecutionRules timed)
@@ -1663,13 +1545,6 @@ theorem retained_parent_first_history_ready_within_length_bound
 /-- Every block in one finite retained parent-first history is eventually
 accepted by one correct, available requester. -/
 theorem retained_parent_first_history_eventually_accepted
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (rules : ValidatorBlockSyncExecutionRules timed)
@@ -1816,13 +1691,6 @@ The requester can already have some items. The bound still charges one full
 cost for each list position. A goal cannot become obsolete while its exact
 history item is still missing. -/
 theorem retained_parent_first_history_accepted_within_length_bound
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (rules : ValidatorBlockSyncExecutionRules timed)
@@ -2000,13 +1868,6 @@ theorem retained_parent_first_history_accepted_within_length_bound
 same retained finite parent-first history. Each requester has its own finish
 time. -/
 theorem retained_parent_first_history_accepted_by_each_correct_requester
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (rules : ValidatorBlockSyncExecutionRules timed)
@@ -2167,13 +2028,6 @@ The holder pin is local. It applies only to this capsule history. A recovery
 task can release it after the history is accepted or the recovery goal becomes
 obsolete. -/
 structure CausalRecoveryCapsuleExecutionSource
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (rules : ValidatorBlockSyncExecutionRules timed)
@@ -2197,13 +2051,6 @@ structure CausalRecoveryCapsuleExecutionSource
 /-- Convert the causal capsule history to the main-execution retained-history
 source used by the synchronization theorem. -/
 theorem causal_recovery_capsule_to_retained_validator_history
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {rules : ValidatorBlockSyncExecutionRules timed}
@@ -2227,13 +2074,6 @@ theorem causal_recovery_capsule_to_retained_validator_history
 /-- Convert one protected causal capsule to both main-execution inputs using
 only its exact configured genesis roots. -/
 theorem causal_recovery_capsule_to_parent_first_retained_history_from_capsule_genesis
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {rules : ValidatorBlockSyncExecutionRules timed}
@@ -2257,13 +2097,6 @@ theorem causal_recovery_capsule_to_parent_first_retained_history_from_capsule_ge
 /-- Backward-compatible conversion for callers that already accept every
 round-zero reference. -/
 theorem causal_recovery_capsule_to_parent_first_retained_history
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {rules : ValidatorBlockSyncExecutionRules timed}

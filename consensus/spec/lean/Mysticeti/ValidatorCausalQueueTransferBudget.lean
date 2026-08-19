@@ -34,20 +34,21 @@ The budget itself is `ASM-LIVE-TRANSFER-BUDGET`. It supplies the service margin
 of `ASM-LIVE-POST-GST-CAUSAL-SERVICE`.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- A per-validator block-transfer budget and the queue behavior it supports.
 
 `transferCap` is the max-throughput assumption itself. `backlogUsesBudget` says
 that a validator with a full queue actually uses that capacity.
 -/
 structure ValidatorCausalQueueTransferBudget
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (validator start : Nat)

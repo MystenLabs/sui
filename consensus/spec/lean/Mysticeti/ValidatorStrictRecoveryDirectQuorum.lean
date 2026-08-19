@@ -16,16 +16,17 @@ work. It does not assume a delivered block, timely parent inclusion, a direct
 vote, a quorum layer, an anchor window, or a successful committer result.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- Proposal persistence creates one exact source-local capsule. Its pin stays
 active for the remaining active epoch, including across local commit changes. -/
 theorem persisted_proposal_has_stable_capsule_source
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -80,7 +81,6 @@ This is stronger than one quorum-intersection witness. A peer can fetch and
 accept these exact parent bodies, then reconstruct the same direct-vote quorum.
 -/
 def ValidatorCorrectAvailableDirectVoteFrontier
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
     (config : ValidatorEpochConfig CommitId)
     (faults : FixedFaultInterval config)
@@ -110,14 +110,7 @@ quorum stake by the static availability bound.
 strict trace proof must derive these facts from the preceding common layers,
 delivery, acceptance, and recovery retention. -/
 theorem timer_paced_carrier_contains_full_direct_vote_quorum
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -189,14 +182,7 @@ The premise is pointwise parent acceptance, not a quorum or anchor result. The
 parent-first recovery sync and GC split must derive it for each parent above the
 peer's cutoff. -/
 theorem accepted_full_direct_vote_frontier_gives_peer_quorum
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (representatives : ValidatorAcceptedRepresentativeRules execution)

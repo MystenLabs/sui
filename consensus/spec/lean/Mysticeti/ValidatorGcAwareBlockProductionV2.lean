@@ -25,6 +25,14 @@ becomes a current timer input. A later proposal result is derived by the timer
 and proposal-worker theorems; it is not a field of a source record.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- The exact quorum support stored for one active requester parent need. -/
 structure ValidatorRecoverySelectedSupport
     (BlockId CommitId : Type)
@@ -53,13 +61,6 @@ host has already stored one support. Static genesis parents are accepted when
 they enter the latch.
 -/
 structure ValidatorRecoverySelectedSupportExecution
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -89,13 +90,6 @@ structure ValidatorRecoverySelectedSupportExecution
 
 /-- One actual selected-support latch at one trace state. -/
 structure ValidatorRecoverySelectedSupportAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -161,13 +155,6 @@ The source is linked to the active need in one of two ways. A pinned-tip need
 uses its own exact capsule key on this requester. A delivered-child need uses
 the exact local child which created the recursive parent need. -/
 structure ValidatorSelectedParentFetchSourceAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -213,14 +200,7 @@ current recursive need and its current pinned source. `dynamicAdmission`
 projects every later local child body to its missing direct parents.
 -/
 structure ValidatorSelectedSupportQueueAt
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -251,14 +231,7 @@ structure ValidatorSelectedSupportQueueAt
 /-- Current per-support queue construction. No field names a later queue
 result, accepted block, proposal, or commit. -/
 structure ValidatorSelectedSupportQueueSourceMap
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -548,13 +521,6 @@ private theorem gc_aware_production_other_receiver_is_different
 
 /-- An at-or-above addressed broadcast is one strict production phase. -/
 theorem validator_at_or_above_broadcast_is_strict_production
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -583,13 +549,6 @@ The timer theorem consumes same-author commit races internally. This adapter
 only forgets the concrete addressed-broadcast evidence.
 -/
 theorem validator_current_timer_input_eventually_produces_strict
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -629,13 +588,6 @@ namespace ValidatorRecoveryParentNeedExecution
 or extends the same recovery work, an actual commit rebase installs normal
 work, or the signer has reached its target. -/
 theorem active_recovery_need_steps_to_recovery_normal_or_target
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -968,13 +920,6 @@ end ValidatorRecoverySelectedSupportAt
 /-- A recorded parent-need rebase has a real same-host commit install. GC
 obsolescence alone is not a rebase source. -/
 structure ValidatorCommitOnlyParentNeedRebaseAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -1004,13 +949,6 @@ namespace ValidatorRecoveryParentNeedExecution
 /-- The existing requester transition rules derive the commit-only rebase
 witness from the current recorded event. -/
 theorem recorded_rebase_has_commit_only_source
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -1037,13 +975,6 @@ end ValidatorRecoveryParentNeedExecution
 fetch. Every constructor contains only current trace state or a protected
 current action. -/
 inductive ValidatorGcAwareImmediateProposalPhaseAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (obligations : ValidatorProposalObligationExecution timed)
@@ -1078,13 +1009,6 @@ inductive ValidatorGcAwareImmediateProposalPhaseAt
 /-- One current strict V2 phase. A parent-fetch phase contains the actual
 selected-support latch. Every other phase contains current local work. -/
 inductive ValidatorGcAwareStrictProposalPhaseAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -1113,13 +1037,6 @@ ready, protected, persisted-send, or current-timer action. Active parent needs
 do not appear in this field: the V2 support, normal-build, and timer rules
 derive their phases below. -/
 structure ValidatorGcAwareNoIdleSourceMap
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}

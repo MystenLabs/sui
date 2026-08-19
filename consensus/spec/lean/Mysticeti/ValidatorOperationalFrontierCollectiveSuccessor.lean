@@ -17,19 +17,20 @@ broadcasts, full dependency synchronization, and correct-stake aggregation.
 No future layer is an end-to-end input.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- One completed exact block packet without a recovery-mode snapshot.
 
 Operational frontier progress can use a normal proposal or a replayed current
 tip. This smaller packet record keeps the common delivery facts and does not
 claim that either block came from a recovery timer. -/
 structure ValidatorCompletedBlockBroadcast
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (block : ValidatorBlock BlockId) (sender receiver : Nat)
@@ -53,13 +54,6 @@ Fetch completion is independent of commit installation. A returned dependency
 is accepted when it remains above the current GC round. It is a completed GC
 root when the current GC round has passed it. -/
 structure ValidatorBlockParentSyncSource
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (syncRules : ValidatorBlockSyncExecutionRules timed)
@@ -87,13 +81,6 @@ structure ValidatorBlockParentSyncSource
 
 /-- One latched proposal send is a completed origin-neutral block packet. -/
 theorem ValidatorLatchedProposalBroadcast.toCompletedBlockBroadcast
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -122,13 +109,6 @@ theorem ValidatorLatchedProposalBroadcast.toCompletedBlockBroadcast
 /-- One origin-neutral persisted production has a completed exact block packet
 for each other validator. -/
 theorem persisted_production_has_completed_block_broadcast
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -148,13 +128,6 @@ theorem persisted_production_has_completed_block_broadcast
 /-- One subscription replay packet is a completed origin-neutral block
 broadcast. -/
 theorem subscription_replay_packet_is_completed_block_broadcast
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {start sender receiver : Time}
@@ -179,13 +152,6 @@ theorem subscription_replay_packet_is_completed_block_broadcast
 /-- A newer tip returned by a successful subscription proves that the sender's
 operational frontier already advanced beyond the requested successor. -/
 theorem newer_subscription_tip_gives_later_layer
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -241,13 +207,6 @@ and one completed packet for every other validator.
 The carrier can come from a new proposal or from replay of an already-signed
 current tip. The two cases use the same downstream delivery proof. -/
 structure ValidatorOperationalSuccessorCarrier
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -276,13 +235,6 @@ structure ValidatorOperationalSuccessorCarrier
 /-- Normalize a one-host pacemaker result into a later public layer or one
 exact successor carrier. -/
 theorem current_pacemaker_result_gives_later_layer_or_successor_carrier
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -446,13 +398,6 @@ Requester fetches can finish after a local commit. Response processing reads
 the current GC round and either accepts the dependency or treats it as a GC
 root. -/
 theorem pinned_successor_and_live_goals_give_block_parent_sync_source
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -540,13 +485,6 @@ theorem pinned_successor_and_live_goals_give_block_parent_sync_source
 /-- Parent-first synchronization accepts one exact normal or replayed block,
 or the receiver's GC frontier has already reached it. -/
 theorem completed_block_broadcast_eventually_accepted_or_gc_root_via_parent_sync
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (acceptanceRules : ValidatorParentReadyAcceptanceRules timed)
@@ -644,13 +582,6 @@ The bound charges one block-sync cost for each retained history item and one
 local acceptance cost for the target block. If GC reaches the target first,
 the result is the current GC-root branch. -/
 theorem completed_block_broadcast_accepted_or_gc_root_within_parent_sync_bound
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (acceptanceRules : ValidatorParentReadyAcceptanceRules timed)
@@ -751,9 +682,6 @@ theorem completed_block_broadcast_accepted_or_gc_root_within_parent_sync_bound
 
 /-- One public layer is an attained accepted quorum at its correct holder. -/
 theorem correct_held_total_quorum_layer_gives_accepted_quorum
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
     {world : ValidatorWorldState BlockId CommitId PacketId}
     {round : Nat}
     (layer : CorrectHeldTotalQuorumLayer config faults world round) :
@@ -773,13 +701,6 @@ theorem correct_held_total_quorum_layer_gives_accepted_quorum
 /-- A public layer at one trace time is no later than that time's finite
 correct-host operational maximum. -/
 theorem correct_held_total_quorum_layer_le_operational_maximum
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {canonicalGenesisParents : List (ValidatorBlockRef BlockId)}
@@ -803,13 +724,6 @@ theorem correct_held_total_quorum_layer_le_operational_maximum
 /-- A correct host's operational quorum frontier cannot decrease while its
 accepted parent references persist. -/
 theorem operational_quorum_frontier_mono
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {canonicalGenesisParents : List (ValidatorBlockRef BlockId)}
@@ -844,13 +758,6 @@ receiver's operational frontier at or above the block's immediate-parent
 round. If the parent round has crossed GC, the current frontier is already
 strictly above that GC boundary. -/
 theorem accepted_successor_closure_gives_operational_frontier_at_least
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {canonicalGenesisParents : List (ValidatorBlockRef BlockId)}
@@ -919,13 +826,6 @@ the receiver an accepted quorum at `parentRound`. If it is already a GC root,
 the receiver's current positive operational frontier is strictly later and
 projects directly to a public layer. -/
 theorem accepted_successor_or_gc_root_gives_receiver_frontier_or_later_layer
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {canonicalGenesisParents : List (ValidatorBlockRef BlockId)}
@@ -1009,13 +909,6 @@ after that parent frontier.
 The retained parent-sync source is an internal construction obligation. This
 theorem does not add it to the end-to-end input record. -/
 theorem completed_successor_broadcast_gives_receiver_frontier_or_later_layer
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (acceptanceRules : ValidatorParentReadyAcceptanceRules timed)
@@ -1071,13 +964,6 @@ theorem completed_successor_broadcast_gives_receiver_frontier_or_later_layer
 
 /-- The origin-neutral block-packet form of the receiver successor theorem. -/
 theorem completed_successor_block_broadcast_gives_receiver_frontier_or_later_layer
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (acceptanceRules : ValidatorParentReadyAcceptanceRules timed)
@@ -1144,13 +1030,6 @@ The blocks need not remain retained until the finite aggregation time. Their
 accepted references persist. The holder's current operational-frontier source
 then supplies an attained retained quorum at its current frontier. -/
 theorem accepted_correct_successors_give_later_operational_layer
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {canonicalGenesisParents : List (ValidatorBlockRef BlockId)}
@@ -1244,13 +1123,6 @@ GC state already exposes a public layer at the successor round or later.
 The self-receiver case uses the carrier's local pin. The remote case uses the
 completed packet, parent-first fetch, and current-GC response processing. -/
 theorem operational_successor_carrier_reaches_receiver_or_later_layer
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -1344,13 +1216,6 @@ theorem operational_successor_carrier_reaches_receiver_or_later_layer
 That host then produces or replays its own exact successor, unless its current
 frontier already exposes a later public layer. -/
 theorem operational_successor_carrier_gives_host_successor_or_later_layer
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -1437,13 +1302,6 @@ It advances beyond the finite correct-host maximum at the supplied start and
 returns a public layer. The protocol-specific construction can keep stronger
 proposal, source, and delivery witnesses before it projects to this result. -/
 def ValidatorOperationalFrontierStrictProgress
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {canonicalGenesisParents : List (ValidatorBlockRef BlockId)}
@@ -1470,13 +1328,6 @@ Correct, available stake is a quorum, so the owner's operational frontier is
 at least the successor round. Commit installation is never a progress result;
 it can only move GC and make an old dependency a completed GC root. -/
 theorem operational_frontier_pacemaker_gives_strict_progress
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -1604,13 +1455,6 @@ The `strictProgress` argument is not an end-to-end field. A higher theorem must
 derive it from the one-host pacemaker, ordinary broadcasts, recursive block
 synchronization, and finite correct-stake aggregation. -/
 theorem operational_frontier_strict_progress_gives_network_dag_progress
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {canonicalGenesisParents : List (ValidatorBlockRef BlockId)}

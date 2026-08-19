@@ -14,15 +14,16 @@ does not assume block production, quorum layers, anchor creation, commit
 progress, or synchronization progress.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- One concrete action is enabled at one execution time. -/
 def ValidatorActionEnabledAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (time : Time) (validator : Nat)
@@ -33,13 +34,6 @@ def ValidatorActionEnabledAt
 
 /-- A concrete local action with its enable and completion times. -/
 structure ValidatorActionCompletion
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (localActionBound validator : Nat)
@@ -57,13 +51,6 @@ structure ValidatorActionCompletion
 
 /-- One action has not run in a half-open local time interval. -/
 def ValidatorActionAbsentBefore
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (start finish : Time) (validator : Nat)
@@ -78,7 +65,6 @@ not protected by this structure. Such an action uses the weak continuous
 fairness rule in `ValidatorExecution`.
 -/
 structure ValidatorBoundedExecution
-    {BlockId CommitId PacketId : Type}
     (config : ValidatorEpochConfig CommitId)
     (faults : FixedFaultInterval config)
     (protocolPacket :
@@ -159,8 +145,6 @@ The committer observation is ghost data. It records an action return value. It
 does not add a result to the validator's durable state.
 -/
 structure ValidatorExactExecutionEffects
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
     (faults : FixedFaultInterval config)
     (protocolPacket :
       AddressedPacket (ValidatorMessage BlockId CommitId) → Prop)

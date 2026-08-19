@@ -22,11 +22,17 @@ install a verified synchronized commit. No case assumes a common future
 candidate, certificate, or server.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- All correct, available validators have installed one exact reference. Their
 current commit heads can be later descendants. -/
 def AllCorrectAvailableInstalledExactAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
     (faults : FixedFaultInterval config)
     (trace : Trace (ValidatorWorldState BlockId CommitId PacketId))
     (time : Time) (reference : ValidatorCommitHead CommitId) : Prop :=
@@ -40,8 +46,6 @@ def AllCorrectAvailableInstalledExactAt
 /-- Every correct, available validator records a permitted source for one exact
 installed reference. Genesis does not need this property. -/
 def AllCorrectAvailableInstallSourcesAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
     (faults : FixedFaultInterval config)
     (trace : Trace (ValidatorWorldState BlockId CommitId PacketId))
     (time : Time) (reference : ValidatorCommitHead CommitId) : Prop :=
@@ -66,8 +70,6 @@ This structure contains only results that the one-step proof must derive. It is
 not part of the final theorem input. `kindSound` keeps the three implementation
 paths explicit. -/
 structure PointwiseCommonCommitStepResult
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
     (faults : FixedFaultInterval config)
     (trace : Trace (ValidatorWorldState BlockId CommitId PacketId))
     (start : Time) (prior : ValidatorCommitHead CommitId) where
@@ -117,11 +119,7 @@ Do not add this proposition to `EndToEndLivenessInputs`. Its proof must use the
 permitted fundamental inputs and the derived block, anchor, committer, safety,
 and commit-sync lemmas. -/
 def DerivedPointwiseCommonCommitStep
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
     (faults : FixedFaultInterval config)
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
     (network : AddressedPartialSynchrony config faults protocolPacket)
     (trace : Trace (ValidatorWorldState BlockId CommitId PacketId)) : Prop :=
   ∀ start prior,
@@ -165,13 +163,6 @@ theorem completion_time_le_maximum_completion_time
 validator set is finite. Durable state keeps every earlier installation and
 source entry at that time. -/
 theorem pointwise_common_commit_step_has_common_finish
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {start : Time} {prior : ValidatorCommitHead CommitId}
@@ -222,13 +213,6 @@ theorem active_suffix_of_later_start
 /-- The derived pointwise step gives a common exact installed reference after
 any finite number of next-index steps. -/
 theorem derived_common_commit_step_iterates
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (step : DerivedPointwiseCommonCommitStep faults network execution.trace)
@@ -279,13 +263,6 @@ The proof starts from durable genesis and uses only finite index induction. It
 does not assume a future reference, commit certificate, or synchronization
 server. -/
 theorem derived_common_commit_step_proves_network_commit_progress
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (step : DerivedPointwiseCommonCommitStep faults network execution.trace)
@@ -332,13 +309,6 @@ The induction can construct a reference at the same index. The source has both
 entries in one durable map, so their IDs are equal. This proof does not assume
 a future synchronized commit or a future receiver run. -/
 theorem derived_common_commit_step_proves_pointwise_commit_catch_up
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (step : DerivedPointwiseCommonCommitStep faults network execution.trace)
@@ -389,7 +359,6 @@ theorem derived_common_commit_step_proves_pointwise_commit_catch_up
 /-- The maximum local commit index among the first `count` validators at one
 time. -/
 def maximumLocalCommitIndexAt
-    {BlockId CommitId PacketId : Type}
     (trace : Trace (ValidatorWorldState BlockId CommitId PacketId))
     (time : Time) : Nat → Nat
   | 0 => 0
@@ -398,7 +367,6 @@ def maximumLocalCommitIndexAt
         ((trace time).localCommitIndex count)
 
 theorem local_commit_index_le_maximum_at
-    {BlockId CommitId PacketId : Type}
     (trace : Trace (ValidatorWorldState BlockId CommitId PacketId))
     (time : Time) {validator count : Nat}
     (validatorInRange : validator < count) :
@@ -420,13 +388,6 @@ This theorem proves the complete induction after the internal pointwise step is
 available. It is not the final end-to-end theorem because `step` is still a
 derived protocol result. -/
 theorem derived_common_commit_step_proves_commit_progress
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (step : DerivedPointwiseCommonCommitStep faults network execution.trace)

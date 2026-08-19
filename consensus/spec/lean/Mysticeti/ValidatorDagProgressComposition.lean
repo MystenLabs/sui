@@ -22,15 +22,20 @@ must align the GC safe-resume cases across a quorum before it derives one common
 DAG layer.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- A positive operational quorum at one correct holder supplies the public
 DAG-layer witness.
 
 The operational source keeps exact references. This theorem selects their
 catalogued bodies and erases the stronger local parent-list source. -/
 theorem positive_operational_quorum_gives_correct_held_total_quorum_layer
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
     {world : ValidatorWorldState BlockId CommitId PacketId}
     {holder round : Nat}
     (holderInRange : holder < config.authorityCount)
@@ -127,9 +132,6 @@ theorem positive_operational_quorum_gives_correct_held_total_quorum_layer
 /-- A positive operational frontier at one correct holder projects directly to
 the public DAG-layer witness. -/
 theorem positive_operational_frontier_gives_correct_held_total_quorum_layer
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
     {world : ValidatorWorldState BlockId CommitId PacketId}
     {holder round : Nat}
     {canonicalGenesisParents : List (ValidatorBlockRef BlockId)}
@@ -173,13 +175,6 @@ private theorem dag_progress_other_receiver_is_different
 /-- One exact addressed proposal broadcast at a selected round which is not
 below the requested recovery target. -/
 def ValidatorAuthorLocalAtOrAboveBroadcastAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (obligations : ValidatorProposalObligationExecution timed)
@@ -193,13 +188,6 @@ def ValidatorAuthorLocalAtOrAboveBroadcastAt
 
 /-- Current latched proposal work gives one exact addressed broadcast. -/
 private theorem ready_proposal_eventually_produces_exact_broadcast
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -229,13 +217,6 @@ private theorem ready_proposal_eventually_produces_exact_broadcast
 /-- Re-index an exact persistence and broadcast from an earlier observation
 whose signer floor is below the produced block. -/
 private theorem persisted_broadcast_starts_earlier
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -270,13 +251,6 @@ private theorem persisted_broadcast_starts_earlier
 /-- Normalize the serialized first-install result to an exact broadcast from
 an earlier observation. Both result branches keep the requested lower bound. -/
 private theorem scheduled_broadcast_starts_earlier
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -327,13 +301,6 @@ private theorem scheduled_broadcast_starts_earlier
 /-- Normalize an exact strict recovery broadcast to the origin-neutral
 addressed-broadcast record used by DAG progress. -/
 private theorem strict_recovery_broadcast_is_at_target
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -374,13 +341,6 @@ The same-author commit race is consumed internally. An install by another
 validator is irrelevant to this fixed author's protected work. The conclusion
 contains no commit, future layer, window, or receiver-run alternative. -/
 theorem current_recovery_input_eventually_produces_at_or_above_broadcast
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -574,13 +534,6 @@ theorem current_recovery_input_eventually_produces_at_or_above_broadcast
 above one common requested target. The exact output rounds can differ after a
 GC safe-resume branch. -/
 def EveryCorrectAvailableValidatorAtOrAboveBroadcast
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (obligations : ValidatorProposalObligationExecution timed)
@@ -595,13 +548,6 @@ def EveryCorrectAvailableValidatorAtOrAboveBroadcast
 correct, available author. This is an unaligned internal frontier, not yet one
 common DAG layer. -/
 theorem common_recovery_current_inputs_eventually_produce_at_or_above_broadcasts
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}

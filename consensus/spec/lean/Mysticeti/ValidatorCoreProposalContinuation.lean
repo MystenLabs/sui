@@ -23,17 +23,18 @@ layer, or commit. Existing protected-work rules derive later execution from the
 current-state branches.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- The exact normal target and parent list selected by one Core attempt are
 ready in the current trace state. The program guard records that this concrete
 attempt can run now; protection remains a separate one-host rule. -/
 def ValidatorCoreNormalAttemptReadyAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (time validator : Time) (targetRound : Nat)
@@ -54,13 +55,6 @@ persisted-but-unsent per-peer block. Parent needs cover unresolved normal or
 recovery parent acquisition. The last two cases cover timer-arm work and the
 exact recovery timer after the arm worker completes. -/
 inductive ValidatorCoreDurableProposalRetryAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -91,13 +85,6 @@ inductive ValidatorCoreDurableProposalRetryAt
 /-- A normal attempt which did not run its proposal action in the same handler
 left one exact protected or durable retry state. -/
 inductive ValidatorCoreProposalContinuationAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -125,13 +112,6 @@ The target and parent functions are deterministic projections of the actual
 attempt. A successful attempt names only an event in the handler's existing
 suffix. A no-op attempt names only current work at `time + 1`. -/
 structure ValidatorCoreProposalAttemptContinuationRules
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {effects : ValidatorExactExecutionEffects faults protocolPacket network

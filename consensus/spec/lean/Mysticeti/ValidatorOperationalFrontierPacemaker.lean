@@ -23,15 +23,16 @@ threshold-clock observation. It does not state a future block, packet, quorum,
 layer, or commit.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- One eventual local disposition of protected normal frontier work. -/
 inductive ValidatorNormalFrontierPacemakerDispositionAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (start validator targetRound : Time)
@@ -77,13 +78,6 @@ parent list. It includes a pending max timeout or a watcher retry for a transien
 ownership from an exact active ready frontier. The second rule classifies the
 eventual forced-attempt result. -/
 structure ValidatorNormalFrontierPacemakerRules
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program) where
   protectedParentWork : Time → Nat → Nat →
@@ -110,13 +104,6 @@ structure ValidatorNormalFrontierPacemakerRules
 /-- One exact proposal persistence at or above a requested target gives the
 origin-neutral addressed broadcast used by the operational successor proof. -/
 private theorem pacemaker_persistence_gives_at_or_above_broadcast
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -152,13 +139,6 @@ The signer-floor branch uses the concrete persistence which crossed the target.
 The actual-action branch covers a proposal that ran in the same batch before a
 later trace-state obligation could be observed. -/
 theorem normal_frontier_pacemaker_eventually_broadcasts_or_clock_advances
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -236,13 +216,6 @@ theorem normal_frontier_pacemaker_eventually_broadcasts_or_clock_advances
 Positive parents come from the pinned causal history. Round-zero parents use
 the same canonical genesis list as the operational frontier. -/
 theorem pinned_current_tip_parents_are_ready
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -289,13 +262,6 @@ current operational quorum frontier.
 For a positive signer floor, the current pinned own block supplies an accepted
 quorum in the preceding round. The operational frontier bounds that quorum. -/
 theorem operational_maximum_owner_signer_floor_le_successor
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -332,13 +298,6 @@ theorem operational_maximum_owner_signer_floor_le_successor
 /-- One already-signed exact successor tip remains a current pinned source and
 is rebroadcast to every other validator after the observation time. -/
 structure ValidatorOperationalMaximumSignedTipCarrier
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -373,13 +332,6 @@ structure ValidatorOperationalMaximumSignedTipCarrier
 ordinary successor result. An already-signed exact successor uses its pinned
 current-tip source and actual post-observation rebroadcast work. -/
 inductive ValidatorOperationalMaximumPacemakerResult
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (obligations : ValidatorProposalObligationExecution timed)
@@ -400,13 +352,6 @@ inductive ValidatorOperationalMaximumPacemakerResult
 /-- An already-signed exact successor at an active recovery owner gives its
 current pinned body, accepted parent quorum, and actual peer rebroadcasts. -/
 theorem operational_maximum_already_signed_tip_gives_carrier
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -467,13 +412,6 @@ theorem operational_maximum_already_signed_tip_gives_carrier
 mode. Its exact current pin supplies the body and causal source. Each correct
 receiver's subscription replays this block or a newer current tip. -/
 structure ValidatorOperationalMaximumCurrentTipCarrier
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -508,13 +446,6 @@ structure ValidatorOperationalMaximumCurrentTipCarrier
 
 /-- Arbitrary-mode pacemaker progress at one operational maximum owner. -/
 inductive ValidatorOperationalMaximumCurrentPacemakerResult
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (obligations : ValidatorProposalObligationExecution timed)
@@ -535,13 +466,6 @@ inductive ValidatorOperationalMaximumCurrentPacemakerResult
 /-- An already-signed exact successor gives a current pinned carrier in normal
 or recovery mode. -/
 theorem operational_maximum_already_signed_current_tip_gives_carrier
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
@@ -616,13 +540,6 @@ The theorem covers the branch in which the owner's signer floor is below the
 successor target. A separate current-tip source handles the case in which that
 owner already persisted the successor. -/
 theorem operational_maximum_pacemaker_gives_successor
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -702,13 +619,6 @@ successor result. If it already signed `H + 1`, the current pinned exact tip is
 rebroadcast after the snapshot. The signer floor cannot be above `H + 1`
 because its own valid parent quorum would contradict the local frontier. -/
 theorem operational_maximum_recovery_pacemaker_gives_successor
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -811,13 +721,6 @@ later public layer.
 This pointwise theorem is suitable for correct-stake aggregation. It does not
 select a global owner and another validator's commit cannot close its result. -/
 theorem operational_frontier_host_current_tip_pacemaker_gives_successor
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -910,13 +813,6 @@ This theorem removes the recovery-mode restriction from the already-signed
 case. Each correct receiver's subscription replays the exact pinned `H + 1`
 tip or a newer current tip. No future delivery or layer is an input. -/
 theorem operational_maximum_current_tip_pacemaker_gives_successor
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}

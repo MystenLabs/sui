@@ -27,6 +27,14 @@ accounting invariant then derives that each removed known item was accepted or
 became obsolete because GC moved.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- The sampled time at one post-GST service interval. -/
 def validatorPostGstCausalQueueSampleTime
     (start serviceInterval interval : Nat) : Nat :=
@@ -35,13 +43,6 @@ def validatorPostGstCausalQueueSampleTime
 /-- One causal reference is complete for a validator if it is accepted or no
 longer required because the local GC round reached it. -/
 def ValidatorCausalReferenceResolvedAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (validator time : Nat)
@@ -53,13 +54,6 @@ def ValidatorCausalReferenceResolvedAt
 
 /-- Accepted or GC-obsolete causal work stays resolved. -/
 theorem validator_causal_reference_resolved_persists
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {validator earlier later : Nat}
@@ -92,14 +86,7 @@ without matching local queue work.
 this base. `ValidatorCausalQueueTransferBudget` instead derives that margin from
 a block-transfer budget. -/
 structure ValidatorCausalQueueBehavior
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (validator start : Nat) where
@@ -139,14 +126,7 @@ structure ValidatorCausalQueueBehavior
 
 /-- Causal-queue behavior with an assumed strict service margin. -/
 structure ValidatorPostGstCausalQueueServiceRules
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (validator start : Nat)
@@ -173,14 +153,7 @@ not state that delivery, acceptance, or a later proposal will occur.
 The `unresolvedAboveGcIsKnown` field is the exact BlockManager refinement
 boundary. The parent-sync source by itself does not prove this field. -/
 structure ValidatorBlockParentSyncQueueAdmissionAt
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {validator start : Nat}
@@ -210,14 +183,7 @@ namespace ValidatorPostGstCausalQueueServiceRules
 
 /-- Each queue sample is in the active post-GST suffix. -/
 theorem sample_is_active_after_gst
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {validator start : Nat}
@@ -239,14 +205,7 @@ theorem sample_is_active_after_gst
 
 /-- A positive service interval makes the next sample strictly later. -/
 theorem next_sample_is_later
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {validator start : Nat}
@@ -262,14 +221,7 @@ theorem next_sample_is_later
 
 /-- Sample times do not go backwards. -/
 theorem sample_time_mono
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {validator start : Nat}
@@ -284,14 +236,7 @@ theorem sample_time_mono
 
 /-- A high-backlog interval strictly decreases the queue size. -/
 theorem high_backlog_strictly_decreases
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {validator start : Nat}
@@ -308,14 +253,7 @@ theorem high_backlog_strictly_decreases
 
 /-- The strict service margin eventually reaches a low-backlog interval. -/
 private theorem eventually_reaches_low_backlog
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {validator start : Nat}
@@ -343,14 +281,7 @@ The result is stronger than pointwise completion. One finish sample works for
 all references that were known at `firstInterval`, including one complete
 finite causal history. -/
 theorem known_work_eventually_resolved
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {validator start : Nat}
@@ -385,14 +316,7 @@ theorem known_work_eventually_resolved
 /-- A fixed known causal history eventually has every reference accepted or
 GC-obsolete at one common trace time. -/
 theorem known_causal_history_eventually_resolved
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {validator start : Nat}
@@ -417,14 +341,7 @@ theorem known_causal_history_eventually_resolved
 /-- The same result for the exact reference list in one current or past causal
 capsule. The capsule is finite source data. It is not a future carrier. -/
 theorem known_causal_capsule_eventually_resolved
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {validator start : Nat}
@@ -464,14 +381,7 @@ ready by durable-state monotonicity. The pointwise admission adapter puts each
 remaining history reference in `known`. The queue theorem derives its later
 resolution. -/
 theorem block_parent_sync_source_eventually_resolved
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {validator start : Nat}

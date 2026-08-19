@@ -21,6 +21,14 @@ normal proposal attempt before the handler returns. It contains no proposal
 result, protected proposal action, block, quorum, or future commit.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- The terminal handler-local commit scan. It is not a `.runCommitter` action,
 because that main action requires a nonempty pending-round guard. -/
 structure ValidatorTerminalCommitScanObservation
@@ -52,7 +60,6 @@ structure ValidatorCoreHandlerInputObservation
 
 /-- The exact state-changing main events in one Core input batch. -/
 def ValidatorCoreHandlerInputObservation.events
-    {BlockId CommitId PacketId : Type}
     (input : ValidatorCoreHandlerInputObservation BlockId CommitId) :
     List (ValidatorAtomicEvent BlockId CommitId PacketId) :=
   input.acceptedBlocks.map fun block =>
@@ -61,13 +68,6 @@ def ValidatorCoreHandlerInputObservation.events
 /-- One ordinary block packet was delivered and the receiver later ran its
 actual block-accept action. All fields describe past main-trace events. -/
 structure ValidatorPacketDrivenBlockAcceptanceAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (acceptTime : Time) (validator : Nat)
@@ -94,13 +94,6 @@ actual `.recordCommit` action, and the finite post-commit event slice. The
 recursive tail is the next scan. Thus the indexed event list contains every
 successful iteration and no unlisted gap between iterations. -/
 inductive ValidatorFiniteCoreCommitProcessing
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (effects : ValidatorExactExecutionEffects faults protocolPacket network
@@ -164,13 +157,6 @@ handler-local observations because the present main action type cannot
 represent calls that return `None`. Local ordinals state their order before
 the handler returns. -/
 structure ValidatorFiniteCoreHandlerEpisode
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (effects : ValidatorExactExecutionEffects faults protocolPacket network
@@ -219,13 +205,6 @@ structure ValidatorFiniteCoreHandlerEpisode
 The remaining same-batch slice, including any successful proposal work, reaches
 the next main-trace state. -/
 theorem ValidatorFiniteCoreHandlerEpisode.proposal_attempt_input_and_suffix
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {effects : ValidatorExactExecutionEffects faults protocolPacket network
@@ -253,13 +232,6 @@ ordinary block to its exact past handler input. The last field maps only that
 qualifying input to its finite episode. No field states that another handler or
 proposal occurs in the future. -/
 structure ValidatorCoreHandlerRefinementRules
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (effects : ValidatorExactExecutionEffects faults protocolPacket network
@@ -284,13 +256,6 @@ proposal attempt before the same handler returns.
 This theorem exposes only observations inside the already occurring handler.
 It does not expose a proposal result or future execution. -/
 theorem qualifying_core_handler_input_has_terminal_scan_and_normal_proposal_attempt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {effects : ValidatorExactExecutionEffects faults protocolPacket network
@@ -312,13 +277,6 @@ theorem qualifying_core_handler_input_has_terminal_scan_and_normal_proposal_atte
 /-- One actual packet-driven acceptance has a concrete finite `add_blocks`
 episode at the same receiver and logical time. -/
 theorem packet_driven_acceptance_has_finite_core_handler
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {effects : ValidatorExactExecutionEffects faults protocolPacket network

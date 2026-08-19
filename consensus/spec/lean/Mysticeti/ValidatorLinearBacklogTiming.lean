@@ -11,6 +11,14 @@ namespace Mysticeti
 
 /-! Minimal timing and receiver-backlog lemmas used by fixed-reference recovery. -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- The quadratic term is a lower bound on the concrete quadratic gap wait. -/
 theorem quadraticGapWaitFromGap_quadratic_lower
     (baseWait linearCoefficient quadraticCoefficient gap : Nat) :
@@ -138,13 +146,6 @@ theorem head_relative_quadratic_value_eventually_covers_quadratic_spread_and_cut
 /-- Pairwise spread and the actual lower successor edge retain the complete
 prior-round wait in the deadline comparison. -/
 theorem fresh_timer_start_spread_and_successor_lower_gives_deadline_bound
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {obligations : ValidatorProposalObligationExecution timed}
@@ -176,13 +177,6 @@ before the next proposal snapshot.
 The prior-round wait is already in `previousDeadlineBound`. Therefore, the
 remaining visibility margin does not include that wait a second time. -/
 theorem adjacent_lower_edge_margin_covers_timer_paced_resolution_cost
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -245,13 +239,6 @@ parent-sync source starts when the delivered block is available. The proposed
 per-round admission rule supplies the linear unresolved-work bound. No field
 states a future acceptance, timer, layer, or commit result. -/
 structure ValidatorTimerPacedLinearBacklogSyncSource
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -278,13 +265,6 @@ cap in `admission`. Current Rust does not yet enforce that cap. All other
 premises describe the actual packet, persisted block, receiver cutoff, and
 protected synchronization source. -/
 theorem timer_paced_peer_broadcast_resolves_within_linear_backlog_or_gc
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -405,13 +385,6 @@ namespace ValidatorCausalCapsuleCatchupRateRules
 /-- An accepted and retained correct timer-paced block gives the complete
 exact parent evidence at the next-round proposal snapshot. -/
 theorem accepted_retained_timer_paced_block_gives_parent_evidence
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}

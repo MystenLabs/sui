@@ -16,19 +16,20 @@ local action bound. No rule in this file assumes that synchronization completes
 or that a parent quorum becomes available.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- One-host rules for a block that waits for its direct causal parents.
 
 `buffered` is a source-mapping predicate for the local suspended-block store.
 The rules do not require another validator to have or send any parent.
 -/
 structure ValidatorParentReadyAcceptanceRules
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program) where
   /-- The local suspended-block store contains this block. -/
@@ -72,13 +73,6 @@ structure ValidatorParentReadyAcceptanceRules
 
 /-- A completed normal acceptance action stores the exact block reference. -/
 theorem accept_block_action_makes_block_accepted
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {time validator : Nat} {block : ValidatorBlock BlockId}
@@ -105,13 +99,6 @@ parent fact separately. A parent that is at or below the current GC round is a
 committed root and does not need its body to remain accepted.
 -/
 theorem delivered_block_with_current_gc_ready_parents_is_accepted
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (rules : ValidatorParentReadyAcceptanceRules timed)
@@ -204,13 +191,6 @@ theorem delivered_block_with_current_gc_ready_parents_is_accepted
 /-- The accepted-parent specialization of
 `delivered_block_with_current_gc_ready_parents_is_accepted`. -/
 theorem delivered_block_with_ready_parents_is_accepted
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (rules : ValidatorParentReadyAcceptanceRules timed)
@@ -249,13 +229,6 @@ theorem delivered_block_with_ready_parents_is_accepted
 /-- The same theorem when all parents are ready as soon as delivery is visible.
 -/
 theorem delivered_parent_ready_block_is_accepted
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (rules : ValidatorParentReadyAcceptanceRules timed)
@@ -295,13 +268,6 @@ The fixed time makes the result easy to use in the pure pacing model. If local
 acceptance finishes earlier, durable acceptance carries the fact to this time.
 -/
 theorem delivered_parent_ready_block_is_accepted_by_bound
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (rules : ValidatorParentReadyAcceptanceRules timed)

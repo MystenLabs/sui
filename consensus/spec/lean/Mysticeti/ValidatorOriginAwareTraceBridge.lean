@@ -17,6 +17,14 @@ The result keeps the exact block, parent list, persistence event, and addressed
 broadcast from the main execution.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- One-host source mapping for commit-progress proposal pacing.
 
 Every actual `proposeNext` step must use the current timer record that was made
@@ -25,13 +33,6 @@ same recovery action without first using that timer. This rule is about the
 source of one local action. It does not state that an action, block, layer, or
 commit occurs in the future. -/
 structure ValidatorCommitProgressProposalPacingRules
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -69,13 +70,6 @@ structure ValidatorCommitProgressProposalPacingRules
 
 /-- Exact local facts at one actual paced recovery proposal. -/
 structure ValidatorPacedRecoveryProposalOccurrence
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -106,13 +100,6 @@ The action's basic guard supplies the exact-next, deadline, and parent checks.
 The pacing source rule supplies the timer that created the current recovery
 record. -/
 theorem actual_propose_next_uses_current_armed_recovery_timer
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -167,13 +154,6 @@ theorem actual_propose_next_uses_current_armed_recovery_timer
 /-- The exact main-trace result of one strict recovery proposal and one
 addressed broadcast. This is a theorem result, not a liveness input. -/
 structure ValidatorStrictRecoveryBroadcast
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId))
@@ -236,13 +216,6 @@ proposal through the durable latch.
 The extra receiver is used only to obtain the already proved persistence and
 broadcast result from the latch. It is not an anchor or quorum input. -/
 theorem origin_aware_proposal_latch_builds_recovery_snapshot
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -461,13 +434,6 @@ as an input. The timer worker selects one retained exact-next parent list. The
 bounded worker arms the timer. The recovery-origin latch then persists and
 sends the exact proposal. -/
 theorem ready_state_latches_recovery_snapshot_or_commit_race
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -572,13 +538,6 @@ theorem ready_state_latches_recovery_snapshot_or_commit_race
 
 /-- Pack the canonical pointwise result for finite range composition. -/
 theorem ready_state_builds_strict_recovery_broadcast_or_commit_advance
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -658,13 +617,6 @@ theorem ready_state_builds_strict_recovery_broadcast_or_commit_advance
 round. Persistence stores the own block and raises the durable signer floor to
 at least that round. -/
 theorem strict_recovery_persistence_is_not_before_exact_next_observation
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -704,13 +656,6 @@ observation. Therefore, the result does not claim that the proposal action is
 later than the observation. Exact-next persistence must still be later, and the
 durable send follows that persistence. -/
 theorem current_recovery_state_builds_strict_broadcast_or_commit_advance
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -805,13 +750,6 @@ theorem current_recovery_state_builds_strict_broadcast_or_commit_advance
 The source is one retained finite causal history for this already produced
 block. A higher theorem must derive it from the block-sync source rules. -/
 theorem strict_recovery_broadcast_eventually_accepted_or_gc_root_via_parent_sync
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -845,13 +783,6 @@ theorem strict_recovery_broadcast_eventually_accepted_or_gc_root_via_parent_sync
 /-- Two strict pointwise broadcasts for the same proposer and target round use
 the same durable block reference. -/
 theorem strict_recovery_broadcasts_same_round_have_same_reference
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {waits : CommonRoundWaitSchedule (ValidatorCommitHead CommitId)}
@@ -903,14 +834,7 @@ The leader acceptance at the child snapshot is a timing result. The local
 parent rule then includes that exact leader reference. The rest follows from
 the durable block catalog and accepted-representative update. -/
 theorem adjacent_recovery_snapshots_give_exact_direct_vote
-    {BlockId CommitId PacketId : Type}
     [DecidableEq BlockId]
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (anchorRules : ValidatorAnchorLocalRules config faults execution.trace)

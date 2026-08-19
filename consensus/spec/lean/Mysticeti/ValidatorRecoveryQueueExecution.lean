@@ -16,6 +16,14 @@ lets accepted block processing queue its round before the new accepted state is
 visible to the proposer.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- Local inputs processed in one recovery queue batch. -/
 structure ValidatorRecoveryQueueEvent
     (BlockId CommitId : Type) where
@@ -105,13 +113,6 @@ structure ValidatorRecoveryQueueTransition
 
 /-- A local recovery queue mapped to the main validator execution. -/
 structure ValidatorRecoveryQueueExecution
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (syncTrace : BlockSyncTrace (ValidatorBlock BlockId)) where

@@ -16,12 +16,17 @@ current commit index. If the current index is not ahead, the local exact-prefix
 rule identifies the complete current head with the prior reference.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- One correct, available validator is ahead of the installed prior reference,
 or its complete current head is that reference. -/
 theorem correct_available_installed_prior_is_ahead_or_exact_head
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
     {trace : Trace (ValidatorWorldState BlockId CommitId PacketId)}
     (prefixMap : ValidatorCommitPrefixSourceMap faults trace)
     {start : Time} {prior : ValidatorCommitHead CommitId}
@@ -45,9 +50,6 @@ theorem correct_available_installed_prior_is_ahead_or_exact_head
 /-- At one start state, some correct, available validator is ahead, or all such
 validators have the exact prior head. -/
 theorem all_correct_available_installed_prior_gives_collective_head_split
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
     {trace : Trace (ValidatorWorldState BlockId CommitId PacketId)}
     (prefixMap : ValidatorCommitPrefixSourceMap faults trace)
     {start : Time} {prior : ValidatorCommitHead CommitId}
@@ -78,12 +80,6 @@ theorem all_correct_available_installed_prior_gives_collective_head_split
 The pointwise-step proposition is not needed to prove the split. It records the
 future completion that uses this start state. -/
 theorem derived_pointwise_common_commit_step_start_head_split
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
     {trace : Trace (ValidatorWorldState BlockId CommitId PacketId)}
     (_step : DerivedPointwiseCommonCommitStep faults network trace)
     (prefixMap : ValidatorCommitPrefixSourceMap faults trace)

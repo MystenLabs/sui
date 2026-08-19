@@ -14,6 +14,14 @@ control this mode. The optional `recovery` field in `ValidatorLocalState` stores
 one armed target timer. It does not store the mode latch.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- The next legal proposal round while commit progress recovery is active.
 
 Genesis starts at round one. A signer floor at or below positive GC uses one
@@ -29,13 +37,6 @@ def ValidatorCommitProgressProposalRound
 /-- One validator is in commit progress recovery after its local commit-stall
 deadline expires. -/
 def ValidatorCommitProgressRecoveryModeAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (recoveryWait time validator : Time) : Prop :=
@@ -62,13 +63,6 @@ not truncate when the commit round is greater than the proposal target. The
 normal threshold-clock round is only the recovery signal. It is not the exact
 proposal target used after recovery starts. -/
 def ValidatorProposalRoundGapRecoveryAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (proposalGap time validator : Time) : Prop :=
@@ -80,13 +74,6 @@ def ValidatorProposalRoundGapRecoveryAt
 /-- An inactive host enters recovery when either the large round gap or the
 persisted commit-stall deadline is present. -/
 def ValidatorBlockProgressRecoveryEntryAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (thresholds : ValidatorBlockProgressRecoveryThresholds)
@@ -99,13 +86,6 @@ def ValidatorBlockProgressRecoveryEntryAt
 /-- An active host stays in recovery while either the smaller round gap or the
 persisted commit-stall deadline remains. -/
 def ValidatorBlockProgressRecoveryStayAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (thresholds : ValidatorBlockProgressRecoveryThresholds)
@@ -117,13 +97,6 @@ def ValidatorBlockProgressRecoveryStayAt
 
 /-- Both local recovery signals are below their exit thresholds. -/
 def ValidatorBlockProgressRecoveryExitReadyAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (thresholds : ValidatorBlockProgressRecoveryThresholds)
@@ -140,13 +113,6 @@ The Boolean trace maps the implementation mode bit. The transition law is
 local. It does not state that a future proposal, block, quorum, or commit
 exists. -/
 structure ValidatorBlockProgressRecoveryModeExecution
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (thresholds : ValidatorBlockProgressRecoveryThresholds) where
@@ -163,13 +129,6 @@ structure ValidatorBlockProgressRecoveryModeExecution
 /-- The implementation's latched block-progress recovery mode is active at one
 host and time. -/
 def ValidatorBlockProgressRecoveryModeAt
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {thresholds : ValidatorBlockProgressRecoveryThresholds}
@@ -179,13 +138,6 @@ def ValidatorBlockProgressRecoveryModeAt
 
 /-- The entry threshold is stronger than the stay threshold. -/
 theorem block_progress_recovery_entry_implies_stay
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {thresholds : ValidatorBlockProgressRecoveryThresholds}
@@ -208,13 +160,6 @@ theorem block_progress_recovery_entry_implies_stay
 /-- A current entry signal activates an inactive host or keeps an active host
 in recovery on the next local transition. -/
 theorem block_progress_recovery_entry_activates_or_keeps_mode
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {thresholds : ValidatorBlockProgressRecoveryThresholds}
@@ -233,13 +178,6 @@ theorem block_progress_recovery_entry_activates_or_keeps_mode
 /-- Recovery stays active across one local transition while either exit signal
 remains. This rule also applies to a commit-install transition. -/
 theorem block_progress_recovery_persists_while_either_signal_remains
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {thresholds : ValidatorBlockProgressRecoveryThresholds}
@@ -257,13 +195,6 @@ theorem block_progress_recovery_persists_while_either_signal_remains
 at least the smaller exit threshold. The commit index can advance by any
 amount; only the post-state round inequality matters. -/
 theorem block_progress_recovery_persists_while_round_gap_remains
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {thresholds : ValidatorBlockProgressRecoveryThresholds}
@@ -279,13 +210,6 @@ theorem block_progress_recovery_persists_while_round_gap_remains
 /-- Recovery cannot clear while the post-update commit-stall deadline remains,
 even if the round gap is below its exit threshold. -/
 theorem block_progress_recovery_persists_while_time_gap_remains
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {thresholds : ValidatorBlockProgressRecoveryThresholds}
@@ -301,13 +225,6 @@ theorem block_progress_recovery_persists_while_time_gap_remains
 /-- Recovery can deactivate only when both the round gap and the time gap are
 below their exit thresholds. -/
 theorem block_progress_recovery_deactivation_requires_both_recovered
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {thresholds : ValidatorBlockProgressRecoveryThresholds}
@@ -347,13 +264,6 @@ theorem block_progress_recovery_deactivation_requires_both_recovered
 /-- Recovery exits on the next local transition when both signals are below
 their exit thresholds. -/
 theorem block_progress_recovery_exits_when_both_recovered
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {thresholds : ValidatorBlockProgressRecoveryThresholds}
@@ -383,13 +293,6 @@ theorem block_progress_recovery_exits_when_both_recovered
 /-- Any proposal persisted while the combined recovery mode is active uses the
 single recovery proposal round derived from the same current host state. -/
 structure ValidatorBlockProgressProposalRoundRules
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {thresholds : ValidatorBlockProgressRecoveryThresholds}
@@ -407,13 +310,6 @@ structure ValidatorBlockProgressProposalRoundRules
 /-- Recovery mode stays active while the epoch and the persisted last-commit
 time stay unchanged. -/
 theorem recovery_mode_persists_with_stable_last_commit
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {recoveryWait validator earlier later : Time}

@@ -50,6 +50,14 @@ Certified commit sync is optional for the primary liveness proof. Exact local
 DAG replay can install the same common reference without this optional path.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 abbrev CommonCommitRef (CommitId : Type) := ValidatorCommitHead CommitId
 
 /-- One signed consensus block carries one author's exact commit vote. -/
@@ -184,7 +192,6 @@ def HasLocalVoteEvidence
 /-- Correct, available validators that recorded one exact reference. -/
 def recordedExactVoters
     {BlockId CommitId : Type}
-    {config : ValidatorEpochConfig CommitId}
     (faults : FixedFaultInterval config)
     (evidence : ValidatorCommitEvidenceTrace BlockId CommitId)
     (reference : CommonCommitRef CommitId) (time : Time) : VoterSet :=
@@ -194,7 +201,6 @@ def recordedExactVoters
 /-- The prior exact-commit stage supplies this internal condition. -/
 def HasRecordedExactQuorum
     {BlockId CommitId : Type}
-    {config : ValidatorEpochConfig CommitId}
     (faults : FixedFaultInterval config)
     (evidence : ValidatorCommitEvidenceTrace BlockId CommitId)
     (reference : CommonCommitRef CommitId) (time : Time) : Prop :=
@@ -206,7 +212,6 @@ def HasRecordedExactQuorum
 stake. The quorum fact is derived; it is not an additional network input. -/
 theorem all_correct_available_records_give_recorded_quorum
     {BlockId CommitId : Type}
-    {config : ValidatorEpochConfig CommitId}
     (faults : FixedFaultInterval config)
     (evidence : ValidatorCommitEvidenceTrace BlockId CommitId)
     (reference : CommonCommitRef CommitId) (time : Time)
@@ -250,13 +255,6 @@ The block-production proof supplies this finite result. This structure does not
 contain a block send or a network-delivery result.
 -/
 structure NextPersistedBlockProduction
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (readyAt : Time) where
@@ -289,13 +287,6 @@ structure NextPersistedBlockProduction
 /-- One retained signed carrier has a later protected send in the main
 execution. -/
 structure SentSignedVoteBlock
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (evidence : ValidatorCommitEvidenceTrace BlockId CommitId)
@@ -331,13 +322,6 @@ structure SentSignedVoteBlock
 vote and one later send event. Draining the queue transfers the obligation to
 the retained carrier before the send can run. -/
 structure ProducedSignedBlock
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (evidence : ValidatorCommitEvidenceTrace BlockId CommitId)
@@ -368,13 +352,6 @@ Each rule is local to one host or one delivered addressed packet. No field
 states that a quorum, certificate, server, or later installation exists.
 -/
 structure ValidatorCommitEvidenceSourceMap
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (validChain : Nat → List (CommonCommitRef CommitId) → Prop)

@@ -7,15 +7,16 @@ import Mysticeti.ValidatorTimedExecution
 
 namespace Mysticeti
 
+
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
 /-- A protected concrete local action has one bounded completion timestamp. -/
 theorem protected_validator_action_completes_within_bound
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {validator : Nat} {latchedAt : Time}
@@ -39,13 +40,6 @@ theorem protected_validator_action_completes_within_bound
 
 /-- Protected work remains enabled while it is latched and has not run. -/
 theorem protected_validator_action_remains_enabled_until_run
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {start finish : Time} {validator : Nat}
@@ -61,13 +55,6 @@ theorem protected_validator_action_remains_enabled_until_run
 
 /-- A transient action uses weak fairness only while it stays enabled. -/
 theorem continuously_enabled_validator_action_eventually_runs
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {start : Time} {validator : Nat}
@@ -84,12 +71,6 @@ theorem continuously_enabled_validator_action_eventually_runs
 
 /-- Split one batch at an appended event list. -/
 theorem validator_world_step_append_split
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {time : Time}
     {before after : ValidatorWorldState BlockId CommitId PacketId}
     {headEvents tailEvents :
@@ -112,12 +93,6 @@ theorem validator_world_step_append_split
 
 /-- A local action occurrence exposes its atomic step and the remaining batch. -/
 theorem validator_world_step_local_action_with_suffix
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {time : Time}
     {before after : ValidatorWorldState BlockId CommitId PacketId}
     {events : List (ValidatorAtomicEvent BlockId CommitId PacketId)}
@@ -140,12 +115,6 @@ theorem validator_world_step_local_action_with_suffix
 
 /-- A packet delivery occurrence exposes its atomic step and remaining batch. -/
 theorem validator_world_step_delivery_with_suffix
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {time : Time}
     {before after : ValidatorWorldState BlockId CommitId PacketId}
     {events : List (ValidatorAtomicEvent BlockId CommitId PacketId)}
@@ -170,12 +139,6 @@ theorem validator_world_step_delivery_with_suffix
 
 /-- One atomic step preserves all earlier block and packet history. -/
 theorem validator_atomic_step_history_monotone
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {time : Time}
     {before after : ValidatorWorldState BlockId CommitId PacketId}
     {event : ValidatorAtomicEvent BlockId CommitId PacketId}
@@ -199,12 +162,6 @@ theorem validator_atomic_step_history_monotone
 
 /-- Packet history persists through the rest of one event batch. -/
 theorem validator_world_step_packet_persists
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {time : Time}
     {before after : ValidatorWorldState BlockId CommitId PacketId}
     {events : List (ValidatorAtomicEvent BlockId CommitId PacketId)}
@@ -224,12 +181,6 @@ theorem validator_world_step_packet_persists
 
 /-- One atomic step preserves durable fields for each in-range validator. -/
 theorem validator_atomic_step_durable_monotone
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {time : Time}
     {before after : ValidatorWorldState BlockId CommitId PacketId}
     {event : ValidatorAtomicEvent BlockId CommitId PacketId}
@@ -263,12 +214,6 @@ theorem validator_atomic_step_durable_monotone
 
 /-- An accepted block persists through the rest of one event batch. -/
 theorem validator_world_step_accepted_block_persists
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {time : Time}
     {before after : ValidatorWorldState BlockId CommitId PacketId}
     {events : List (ValidatorAtomicEvent BlockId CommitId PacketId)}
@@ -287,12 +232,6 @@ theorem validator_world_step_accepted_block_persists
 
 /-- An own block persists through the rest of one event batch. -/
 theorem validator_world_step_own_block_persists
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {time : Time}
     {before after : ValidatorWorldState BlockId CommitId PacketId}
     {events : List (ValidatorAtomicEvent BlockId CommitId PacketId)}
@@ -312,12 +251,6 @@ theorem validator_world_step_own_block_persists
 
 /-- A sent-own-block record persists through the rest of one event batch. -/
 theorem validator_world_step_sent_own_block_persists
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {time : Time}
     {before after : ValidatorWorldState BlockId CommitId PacketId}
     {events : List (ValidatorAtomicEvent BlockId CommitId PacketId)}
@@ -336,12 +269,6 @@ theorem validator_world_step_sent_own_block_persists
 
 /-- A local action occurrence is at one correct, available validator. -/
 theorem validator_local_action_occurrence_is_correct_available
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {time : Time}
     {before after : ValidatorWorldState BlockId CommitId PacketId}
     {events : List (ValidatorAtomicEvent BlockId CommitId PacketId)}
@@ -359,12 +286,6 @@ theorem validator_local_action_occurrence_is_correct_available
 
 /-- A local action atomic step satisfies its basic action guard. -/
 theorem validator_atomic_local_action_has_basic_guard
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {time : Time}
     {before after : ValidatorWorldState BlockId CommitId PacketId}
     {validator : Nat}
@@ -379,13 +300,6 @@ theorem validator_atomic_local_action_has_basic_guard
 
 /-- A send action creates one exact addressed block packet. -/
 theorem send_block_occurrence_creates_addressed_packet
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (effects : ValidatorExactExecutionEffects faults protocolPacket network
@@ -416,13 +330,6 @@ theorem send_block_occurrence_creates_addressed_packet
 
 /-- Proposal persistence stores the exact own-block reference. -/
 theorem persist_proposal_occurrence_stores_own_block
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {time : Time} {validator : Nat} {block : ValidatorBlock BlockId}
@@ -444,13 +351,6 @@ theorem persist_proposal_occurrence_stores_own_block
 
 /-- A send occurrence records that the exact own-block round was sent. -/
 theorem send_block_occurrence_records_sent_own_block
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {time : Time} {validator receiver : Nat}
@@ -474,13 +374,6 @@ theorem send_block_occurrence_records_sent_own_block
 /-- `proposeNext` with one parent list leads to persistence of that exact block.
 -/
 theorem propose_next_parents_lead_to_persisted_block
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     (effects : ValidatorExactExecutionEffects faults protocolPacket network
@@ -521,13 +414,6 @@ theorem propose_next_parents_lead_to_persisted_block
 /-- A committer action returns the exact scan result for its local pending data.
 -/
 theorem run_committer_occurrence_returns_exact_pending_result
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     (effects : ValidatorExactExecutionEffects faults protocolPacket network

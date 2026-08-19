@@ -7,14 +7,16 @@ import Mysticeti.ValidatorExecution
 
 namespace Mysticeti
 
+
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
 /-- A member of an execution batch has one matching atomic step. -/
 theorem validator_world_step_member_has_atomic_step
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {time : Time}
     {before after : ValidatorWorldState BlockId CommitId PacketId}
     {events : List (ValidatorAtomicEvent BlockId CommitId PacketId)}
@@ -36,12 +38,6 @@ theorem validator_world_step_member_has_atomic_step
 /-- A local-action atomic step has the structural effect declared for that
 action. -/
 theorem validator_atomic_local_action_has_structural_effect
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {time : Time}
     {before after : ValidatorWorldState BlockId CommitId PacketId}
     {validator : Nat}
@@ -56,12 +52,6 @@ theorem validator_atomic_local_action_has_structural_effect
 /-- A local action in one execution batch has its declared structural effect at
 its atomic transition. -/
 theorem validator_local_action_occurrence_has_structural_effect
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {time : Time}
     {before after : ValidatorWorldState BlockId CommitId PacketId}
     {events : List (ValidatorAtomicEvent BlockId CommitId PacketId)}
@@ -399,13 +389,6 @@ theorem new_install_source_requires_commit_action
 /-- A local GC advance implies a local commit-head index advance in the same
 batch. -/
 theorem gc_round_advance_implies_commit_index_advance
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {time validator : Time}
@@ -440,13 +423,6 @@ theorem gc_round_advance_implies_commit_index_advance
 
 /-- Correct hosts at the same exact commit head use the same GC round. -/
 theorem correct_validators_same_head_have_same_gc_round
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {leftTime rightTime leftValidator rightValidator : Time}
@@ -467,13 +443,6 @@ theorem correct_validators_same_head_have_same_gc_round
 
 /-- A correct host cannot collect blocks past its installed commit round. -/
 theorem correct_validator_gc_round_at_most_commit_round
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program)
     {time validator : Time}
@@ -492,13 +461,6 @@ keeps one accepted branch. A correct author has only one branch, so its exact
 accepted reference is selected.
 -/
 structure ValidatorAcceptedRepresentativeRules
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     (execution : ValidatorExecution (PacketId := PacketId) config faults
       protocolPacket network program) where
   representativeIsSound : ∀ time observer round author reference,

@@ -20,6 +20,14 @@ The adapter is isolated from the shared end-to-end composition. The concrete
 Rust instantiation can use the 256-bit digest space for `blockIdCount`.
 -/
 
+variable {BlockId CommitId PacketId : Type}
+variable {config : ValidatorEpochConfig CommitId}
+variable {faults : FixedFaultInterval config}
+variable {protocolPacket :
+  AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
+variable {network : AddressedPartialSynchrony config faults protocolPacket}
+variable {program : ValidatorExecutionProgram BlockId CommitId}
+
 /-- A finite block-ID witness without a global `Fintype` dependency. -/
 structure ValidatorFiniteBlockIdEncoding
     (BlockId : Type) (blockIdCount : Nat) where
@@ -145,13 +153,6 @@ Reference uniqueness is already a field of `CausalRecoveryCapsule`. Author
 range is already a field of `CausalRecoveryCapsuleExecutionSource`. This map
 keeps only the actual persisted projection and the target-round upper bound. -/
 structure ValidatorPersistedCausalCapsuleFiniteReferenceSourceMap
-    {BlockId CommitId PacketId : Type}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed} : Type where
@@ -173,14 +174,7 @@ structure ValidatorPersistedCausalCapsuleFiniteReferenceSourceMap
 /-- Turn the small finite-space source map into the existing per-round
 admission interface. -/
 def ValidatorPersistedCausalCapsuleFiniteReferenceSourceMap.toRoundAdmission
-    {BlockId CommitId PacketId : Type}
     {blockIdCount : Nat}
-    {config : ValidatorEpochConfig CommitId}
-    {faults : FixedFaultInterval config}
-    {protocolPacket :
-      AddressedPacket (ValidatorMessage BlockId CommitId) → Prop}
-    {network : AddressedPartialSynchrony config faults protocolPacket}
-    {program : ValidatorExecutionProgram BlockId CommitId}
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}
     {syncRules : ValidatorBlockSyncExecutionRules timed}
