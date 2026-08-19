@@ -755,33 +755,8 @@ fn resolve_event_range(
     options: &QueryOptions,
 ) -> Result<ResolvedIntraTxRange, RpcError> {
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
-    if cp_range.is_empty() {
-        return Ok(ResolvedIntraTxRange::empty_at(
-            cp_range.terminal_checkpoint(options.ordering),
-            IntraTxCoordinate::start_of_tx(tx_range.start),
-            cp_range.exhaustion,
-        ));
-    }
-
-    let mut resolved = ResolvedIntraTxRange {
-        bounds: IntraTxScanBounds::tx_span(tx_range.start, tx_range.end),
-        entry_checkpoint: if options.is_ascending() {
-            cp_range.range.start
-        } else {
-            cp_range.range.end.saturating_sub(1)
-        },
-        end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
-        end_position: match options.ordering {
-            crate::ledger_history::query_options::Ordering::Ascending => {
-                IntraTxCoordinate::start_of_tx(tx_range.end)
-            }
-            crate::ledger_history::query_options::Ordering::Descending => {
-                IntraTxCoordinate::start_of_tx(tx_range.start)
-            }
-        },
-        exhaustion: cp_range.exhaustion,
-    };
-    resolved = options.apply_intra_tx_cursor_bounds(resolved);
+    let mut resolved =
+        ResolvedIntraTxRange::resolve(cp_range, tx_range, options).apply_cursor_bounds(options);
     if !resolved.is_empty() {
         let start_tx = match resolved.bounds.lo {
             Bound::Included(position) | Bound::Excluded(position) => position.tx_seq,
