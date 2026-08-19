@@ -69,14 +69,24 @@ npm install @mysten/sui
 
 ### 2. Request Testnet tokens
 
-You need two assets on Testnet:
+You need two assets on Testnet, from two separate sources. Neither one substitutes for the other:
 
-- **SUI for gas:** Request it from a [Sui Testnet faucet](/getting-started/onboarding/get-coins).
-- **DUSDC as the quote asset:** Request DUSDC and other Predict assets through the [DeepBook Predict Testnet token request form](https://tally.so/r/Xx102L).
+- **SUI for gas:** Every transaction on this page pays gas in SUI, including the ones that only move DUSDC. Request SUI from a [Sui Testnet faucet](/getting-started/onboarding/get-coins), which lists the browser, Discord, and cURL routes.
+- **DUSDC as the quote asset:** Predict denominates deposits, mints, and vault supplies in DUSDC. Request DUSDC and other Predict assets through the [DeepBook Predict Testnet token request form](https://tally.so/r/Xx102L). DUSDC never pays gas, so an address that holds DUSDC but no SUI cannot submit a Predict transaction.
+
+#### How much SUI to hold
+
+Keep at least 1 SUI on the address as a working reserve. That covers many Predict transactions with headroom, because a single faucet request supplies well above the cost of one transaction. The quickstart transactions cost more than a plain transfer: creating and sharing a `PredictManager` writes new objects, so it pays storage on top of computation. Sui refunds part of the storage cost as a rebate when you delete objects, so a session costs less in total than the sum of its gas budgets.
+
+Treat 1 SUI as a starting reserve, not a budget. Before you rely on a fixed gas budget in your own code, measure the real cost of each transaction with a dry run, then set the budget with margin for variable costs such as shared object contention. See [Gas Fees](/develop/transaction-payment/gas-in-sui) for the fee formula and budget rules.
+
+#### Request more SUI
+
+Check your balance with `sui client gas` before you request. Faucets rate-limit per address and per IP, so request only when the balance actually runs low. If the browser faucet rate-limits you, use the Discord or cURL routes under [alternative methods for getting SUI tokens](/getting-started/onboarding/get-coins#alternative-faucets). When you finish testing, return unused Testnet SUI to the faucet pool.
 
 ### 3. Set the configuration block
 
-Keep every onchain ID in one place. These values are Testnet-only and come from the [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information) page. They change at Mainnet launch, so never inline them elsewhere.
+Keep every onchain ID in one place. These values are Testnet-only and come from the [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information) page. They change at Mainnet launch, so never inline them elsewhere. The record keys on network, and you resolve it once at startup, which is the switch point when you add another environment. See [Manage configuration across networks](/onchain-finance/deepbook/deepbook-predict/contract-information#manage-configuration-across-networks) for what changes per network and which Testnet behavior you cannot assume carries to Mainnet.
 
 <ImportContent source="examples/deepbook-predict/src/config.ts" mode="code" tag="config" />
 
@@ -103,7 +113,7 @@ The mint succeeds only when the oracle is live, the quote asset is accepted, the
 The samples above pass compile checks but this page does not execute them. To confirm them end to end on Testnet:
 
 1. Fund a Testnet address with SUI, then confirm a nonzero balance with `sui client gas`.
-2. Request DUSDC through the token request form, then confirm you own a DUSDC coin with `sui client objects`.
+2. Request DUSDC through the token request form, then confirm your DUSDC balance with `sui client balance`.
 3. Run `createManager`, then confirm the returned ID resolves with `sui client object MANAGER_ID`.
 4. Fetch a live oracle: `curl https://predict-server.testnet.mystenlabs.com/predicts/PREDICT_OBJECT_ID/oracles`. Confirm at least one oracle reports an active lifecycle state.
 5. Run `mintBinaryUp` with that oracle, a `depositAmount` at or above the mint cost, and a small `quantity`. Confirm the effects report a success status and a `PositionMinted` event.

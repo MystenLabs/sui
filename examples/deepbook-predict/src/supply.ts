@@ -9,13 +9,14 @@ import { PREDICT } from './config.js';
 
 export async function supplyLiquidity(params: {
 	signer: Ed25519Keypair;
-	dusdcCoinId: string;
 	amount: bigint;
 }) {
-	const { signer, dusdcCoinId, amount } = params;
+	const { signer, amount } = params;
 	const tx = new Transaction();
 
-	const [supply] = tx.splitCoins(tx.object(dusdcCoinId), [amount]);
+	// Sourced from the signer's DUSDC, whether it sits in an address balance or
+	// across several coin objects.
+	const supply = tx.coin({ balance: amount, type: PREDICT.quoteType });
 	const plp = tx.moveCall({
 		target: `${PREDICT.packageId}::predict::supply`,
 		typeArguments: [PREDICT.quoteType],
@@ -23,12 +24,21 @@ export async function supplyLiquidity(params: {
 	});
 	tx.transferObjects([plp], signer.toSuiAddress());
 
-	const result = await client.core.signAndExecuteTransaction({
+	const result = await client.signAndExecuteTransaction({
 		transaction: tx,
 		signer,
 		include: { effects: true },
 	});
-	if (result.$kind === 'FailedTransaction') throw new Error('supply failed');
+	// Wait for finality before acting on the result, so later reads reflect it.
+	await client.waitForTransaction({ result });
+
+	if (result.$kind === 'FailedTransaction') {
+		// The transaction is onchain and the sender paid gas. Do not retry it.
+		const { status } = result.FailedTransaction;
+		throw new Error(
+			`supply aborted: ${status.success ? 'unknown' : JSON.stringify(status.error)}`,
+		);
+	}
 	return result.Transaction;
 }
 // docs::/#supply
