@@ -217,44 +217,54 @@ Use the server for historical pagination. Use the live stream for freshness.
 
 ### Stream events over gRPC
 
-Stream Predict events with `SubscriptionService.SubscribeEvents` over gRPC, passing an `EventFilter` for the Predict package ID. Sui full nodes no longer serve the older WebSocket subscription API (`sui_subscribeEvent`), so do not build a Predict integration on it. For paginated historical queries over a checkpoint range, use `LedgerService.ListEvents` with the same filter. See [Querying events with gRPC](/develop/accessing-data/using-events#querying-events-with-grpc).
+Stream Predict events with `SubscriptionService.SubscribeEvents`, filtering on the Predict package ID, and page through the same events historically with `LedgerService.ListEvents` using an identical filter. Sui full nodes no longer serve the older WebSocket subscription API (`sui_subscribeEvent`), so do not build a Predict integration on it.
 
-The event APIs require `@mysten/sui` version 2.23.1 or later. Earlier versions expose only `subscribeCheckpoints`, with no event subscription and no `listEvents`. The Predict transaction samples on these pages pin version 2.22.1, so event streaming needs a newer SDK than the samples themselves use.
+Subscribe to oracle activation and settlement:
 
-A subscription consumer needs to filter on both event types, record the watermark cursor for backfill, reconnect with capped jittered backoff, and close the stream when its caller aborts.
+```shell
+$ PACKAGE=0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138
+$ ENDPOINT=fullnode.testnet.sui.io:443
+$ METHOD=sui.rpc.v2.SubscriptionService/SubscribeEvents
 
-{/* TODO: Import a verified subscribeEvents consumer once one exists in a source repo. */}
-{/* Needs: EventFilter on OracleActivated and OracleSettled, watermark cursor capture, AbortController teardown, exponential backoff with jitter. */}
-{/* Do not inline an unexecuted sample here. */}
+$ grpcurl -format text -d "
+read_mask {
+  paths: \"event_type\"
+  paths: \"json\"
+  paths: \"sender\"
+  paths: \"checkpoint\"
+  paths: \"transaction_digest\"
+  paths: \"transaction_index\"
+  paths: \"event_index\"
+}
+filter {
+  terms {
+    literals {
+      event_type {
+        event_type: \"${PACKAGE}::oracle::OracleActivated\"
+      }
+    }
+  }
+  terms {
+    literals {
+      event_type {
+        event_type: \"${PACKAGE}::oracle::OracleSettled\"
+      }
+    }
+  }
+}
+" "$ENDPOINT" "$METHOD"
+```
 
-For a worked implementation of the same structure against checkpoints, see the [reconnect pattern in the gRPC migration cookbook](/develop/accessing-data/grpc/grpc-migration-cookbook#reconnect-a-checkpoint-stream) and the [event indexer example](/getting-started/examples/event-indexer). Both apply to events once you swap in the Predict `EventFilter`.
+Swap the method for `sui.rpc.v2.LedgerService/ListEvents` to page through the same events historically. The filter is disjunctive normal form, so each `terms` block is ORed: the request above matches either event type and scopes both to this deployment's package.
 
-The filter is disjunctive normal form: terms are ORed and the literals within a term are ANDed. One term per fully qualified event type matches either type and scopes the match to this deployment's package. To watch a single event type, pass one term. To narrow further, add literals to the same term, for example an `emitModule` predicate alongside the type.
+Subscriptions begin at the current tip and accept no resume point, so recovering events missed during a disconnect always requires a `ListEvents` backfill. Those mechanics are the same for every gRPC event consumer and are documented once, for all of them:
 
-These 2 details matter in production and are easy to miss:
+- [Subscribe to events with a filter](/develop/accessing-data/grpc/using-grpc#subscribe-to-events-with-a-filter) for the subscription call itself.
+- [Pagination with watermarks](/develop/accessing-data/grpc/using-grpc#list-api-pagination) for cursor semantics and the reasons a stream ends.
+- [Connection and buffer limits](/develop/accessing-data/grpc/using-grpc#connection-limits) for subscriber buffer sizes and slow-consumer eviction.
+- [Backfill and subscribe without gaps](/develop/accessing-data/grpc/grpc-migration-cookbook#backfill-and-subscribe-without-gaps) and [Reconnect a checkpoint stream](/develop/accessing-data/grpc/grpc-migration-cookbook#reconnect-a-checkpoint-stream) for the pairing pattern and reconnect backoff.
 
-- **Skip the opening frame's empty event, but keep its cursor.** A filtered subscription opens with a progress-only frame that carries a watermark and no event.
-- **Reset the backoff counter on a delivered event, not on connection.** A stream that connects and immediately drops is still failing, and resetting on connect turns exponential backoff into a tight reconnect loop.
-
-:::caution
-
-Subscriptions start at the current tip of the chain and do not accept a resume point. You cannot reopen a dropped subscription from a stored cursor and expect the gap to replay. Recovering missed events always requires a `ListEvents` backfill.
-
-:::
-
-### Resume after a disconnect
-
-Because subscriptions do not resume, treat the live stream and the historical query as one pair. Each `ListEvents` response frame carries a `watermark` with a resume `cursor`, an opaque binary token rather than an event sequence number you can construct yourself. Pass it as `options.after` to continue ascending pagination.
-
-To reconnect without losing events:
-
-1. Open the subscription first and immediately drain its frames into durable, bounded storage. Do not leave the stream unread while you backfill, because the server's per-subscriber buffer holds 256 frames and evicts a slow consumer when it fills. See [Backfill and subscribe without gaps](/develop/accessing-data/grpc/grpc-migration-cookbook#backfill-and-subscribe-without-gaps).
-1. Take the first frame's cursor as the live boundary. A filtered subscription, which is what a Predict package filter produces, starts with a progress-only frame whose cursor marks the checkpoint immediately before live delivery.
-1. Backfill from the last durably processed cursor with `ListEvents` until the server reports `CURSOR_BOUND`.
-1. Process the spool after the backfill catches up, deduplicating by cursor. Persist each cursor atomically with the application updates it produced, so a crash between the two does not skip an event.
-1. If the spool fills or the stream ends, restart from the last durable cursor and backfill the gap before you resume live processing.
-
-The [reconnect pattern in the gRPC migration cookbook](/develop/accessing-data/grpc/grpc-migration-cookbook#reconnect-a-checkpoint-stream) gives a worked TypeScript implementation of this two-worker structure, and the [event indexer example](/getting-started/examples/event-indexer) applies it to events specifically. Both work unchanged for Predict once you swap in the Predict `EventFilter`.
+All of it applies unchanged to Predict once you use the Predict filter above.
 
 ### Trigger redemption from `OracleSettled`
 
@@ -264,16 +274,12 @@ Do not trigger redemption from the expiry timestamp alone. An oracle sits in pen
 
 On `OracleSettled`, resolve the open positions on that oracle and redeem them. After settlement, `predict::redeem_permissionless` lets anyone redeem a settled position on the owner's behalf, and the payout still lands in the owner's manager, so the worker closes out user positions without holding their keys. Use `predict::redeem_range` for vertical ranges. See [Redeem and settlement](/onchain-finance/deepbook/deepbook-predict/tutorial#redeem-and-settlement).
 
-Make the worker idempotent. At-least-once delivery is a property of the backfill-and-spool pattern, so the same `OracleSettled` event can reach your handler twice after a reconnect. Track which positions you already redeemed and confirm each redemption with the resulting `PositionRedeemed` event rather than assuming a submitted transaction succeeded.
+These 2 cautions are specific to a Predict redemption worker:
 
-### Retry and backoff
+- **Make it idempotent.** At-least-once delivery is a property of the backfill-and-spool pattern, so the same `OracleSettled` event can reach your handler twice after a reconnect. Track which positions you already redeemed and confirm each redemption with the resulting `PositionRedeemed` event rather than assuming a submitted transaction succeeded.
+- **Do not blindly retry a rejected redemption.** Resubmitting can leave the gas coin equivocation-locked. Wait for finality, then rebuild from current state.
 
-Reconnect with exponential backoff and jitter rather than a fixed retry interval, so a full node restart does not bring every client back simultaneously. The cookbook pattern caps the delay at 30 seconds and adds up to 40 percent jitter.
-
-- **Reset the attempt counter on sustained health, not on the first frame.** A stream that delivers one frame and drops again is still failing. Require the connection to stay healthy for an application-defined interval before you treat it as recovered.
-- **Separate the retry loops.** Back off the subscription independently from the backfill worker. Awaiting a backfill inside the subscription loop stops the client from reading live frames and triggers the eviction the backoff is meant to avoid.
-- **Do not blindly retry a rejected redemption transaction.** Resubmitting can leave the gas coin equivocation-locked. Wait for finality, then rebuild from current state.
-- **Fall back to the indexed server for long outages.** After an outage long enough to exceed the full node's retention window, backfill from the [history endpoints](#history-data) such as `GET /positions/redeemed`, then rejoin the live stream.
+After an outage long enough to exceed the full node's retention window, backfill from the [history endpoints](#history-data) such as `GET /positions/redeemed`, then rejoin the live stream.
 
 ## Source pointers
 
