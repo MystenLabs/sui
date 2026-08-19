@@ -15,7 +15,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use futures::StreamExt;
-use futures::TryStreamExt;
 use futures::stream::BoxStream;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::ScanStop;
@@ -63,12 +62,11 @@ use crate::pipeline::RenderAheadError;
 use crate::pipeline::ResolvedScanStop;
 use crate::pipeline::ResolvedWatermarked;
 use crate::pipeline::Watermarked;
-use crate::pipeline::pipelined_chunks;
 use crate::pipeline::render_ahead;
 use crate::pipeline::resolve_scan_watermarks;
 use crate::pipeline::take_items;
-use crate::v2::list_transactions::fetch_transactions;
-use crate::v2::list_transactions::fetch_tx_seq_digests;
+use crate::v2::list_transactions::transaction_chunks;
+use crate::v2::list_transactions::tx_seq_digest_chunks;
 
 /// Metrics resolution label: `ListPackages` serves refs only, with no per-item
 /// rendering choices.
@@ -169,45 +167,16 @@ pub(crate) async fn list_packages(
     let seq_stream = take_items(seq_stream, limit_items.saturating_add(2));
 
     // Stage B: tx sequence numbers -> tx_seq_digest rows.
-    let digest_stream = pipelined_chunks(
-        seq_stream,
-        tx_seq_digest_stage.chunk_size,
-        tx_seq_digest_stage.concurrency,
-        {
-            let client = client.clone();
-            move |seqs| {
-                let client = client.clone();
-                async move {
-                    fetch_tx_seq_digests(client, seqs)
-                        .await
-                        .map(|s| s.map_err(ScanStop::Fault).boxed())
-                        .map_err(ScanStop::Fault)
-                }
-            }
-        },
-    );
+    let digest_stream = tx_seq_digest_chunks(client.clone(), tx_seq_digest_stage, seq_stream);
 
     // Stage C: tx_seq_digest rows -> transaction bodies. Only the effects
     // identify package writes; the checkpoint number stamps cursors.
     let columns: Arc<[&'static str]> = Arc::from([col::EFFECTS, col::CHECKPOINT_NUMBER]);
-    let tx_stream = pipelined_chunks(
+    let tx_stream = transaction_chunks(
+        client.clone(),
+        transactions_stage,
+        columns.clone(),
         digest_stream,
-        transactions_stage.chunk_size,
-        transactions_stage.concurrency,
-        {
-            let client = client.clone();
-            let columns = columns.clone();
-            move |rows| {
-                let client = client.clone();
-                let columns = columns.clone();
-                async move {
-                    fetch_transactions(client, columns, rows)
-                        .await
-                        .map(|s| s.map_err(ScanStop::Fault).boxed())
-                        .map_err(ScanStop::Fault)
-                }
-            }
-        },
     );
 
     // Stage D: expand each transaction into its package writes, skipping the

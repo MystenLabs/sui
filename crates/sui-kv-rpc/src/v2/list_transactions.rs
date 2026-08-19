@@ -44,6 +44,7 @@ use tracing::info;
 
 use crate::bigtable_client::BigTableClient;
 use crate::config::PipelineStage;
+use crate::config::ResolvedStageConfig;
 use crate::object_cache::ObjectMap;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
@@ -174,23 +175,7 @@ pub(crate) async fn list_transactions(
                 ctx.bitmap_scan_observer(),
             );
             let seq_stream = take_items(seq_stream, limit_items);
-            pipelined_chunks(
-                seq_stream,
-                tx_seq_digest_stage.chunk_size,
-                tx_seq_digest_stage.concurrency,
-                {
-                    let client = client.clone();
-                    move |seqs| {
-                        let client = client.clone();
-                        async move {
-                            fetch_tx_seq_digests(client, seqs)
-                                .await
-                                .map(|s| s.map_err(ScanStop::Fault).boxed())
-                                .map_err(ScanStop::Fault)
-                        }
-                    }
-                },
-            )
+            tx_seq_digest_chunks(client.clone(), tx_seq_digest_stage, seq_stream)
         } else {
             scan_tx_seq_digests(client.clone(), tx_range.clone(), limit_items, &options).await?
         };
@@ -201,24 +186,11 @@ pub(crate) async fn list_transactions(
 
             // Stage 3: Watermarked<TxSeqDigestData> ->
             // Watermarked<(tx_seq, TransactionData)>.
-            let tx_stream = pipelined_chunks(
+            let tx_stream = transaction_chunks(
+                client.clone(),
+                transactions_stage,
+                columns.clone(),
                 digest_stream,
-                transactions_stage.chunk_size,
-                transactions_stage.concurrency,
-                {
-                    let client = client.clone();
-                    let columns = columns.clone();
-                    move |rows| {
-                        let client = client.clone();
-                        let columns = columns.clone();
-                        async move {
-                            fetch_transactions(client, columns, rows)
-                                .await
-                                .map(|s| s.map_err(ScanStop::Fault).boxed())
-                                .map_err(ScanStop::Fault)
-                        }
-                    }
-                },
             );
 
             // Stage 4: + ObjectMap. Object refs are precomputed per Item; Frontier
@@ -495,6 +467,53 @@ async fn scan_tx_seq_digests(
         .map_ok(Watermarked::Item)
         .map_err(ScanStop::Fault)
         .boxed())
+}
+
+/// A chunked transaction-fetch stage's output: `(tx_seq, tx_offset, body)`
+/// items under the scan's watermarks.
+pub(crate) type TransactionChunkStream =
+    BoxStream<'static, Result<Watermarked<(u64, u32, TransactionData)>, ScanStop>>;
+
+/// Chunked stage: tx sequence numbers -> `tx_seq_digest` rows. Shared by the
+/// filtered transactions scan and `ListPackages`.
+pub(crate) fn tx_seq_digest_chunks(
+    client: BigTableClient,
+    stage: ResolvedStageConfig,
+    seq_stream: BoxStream<'static, Result<Watermarked<u64>, ScanStop>>,
+) -> BoxStream<'static, Result<Watermarked<TxSeqDigestData>, ScanStop>> {
+    pipelined_chunks(seq_stream, stage.chunk_size, stage.concurrency, {
+        move |seqs| {
+            let client = client.clone();
+            async move {
+                fetch_tx_seq_digests(client, seqs)
+                    .await
+                    .map(|s| s.map_err(ScanStop::Fault).boxed())
+                    .map_err(ScanStop::Fault)
+            }
+        }
+    })
+}
+
+/// Chunked stage: `tx_seq_digest` rows -> transaction bodies with the given
+/// columns. Shared by the transactions and `ListPackages` scans.
+pub(crate) fn transaction_chunks(
+    client: BigTableClient,
+    stage: ResolvedStageConfig,
+    columns: Arc<[&'static str]>,
+    digest_stream: BoxStream<'static, Result<Watermarked<TxSeqDigestData>, ScanStop>>,
+) -> TransactionChunkStream {
+    pipelined_chunks(digest_stream, stage.chunk_size, stage.concurrency, {
+        move |rows| {
+            let client = client.clone();
+            let columns = columns.clone();
+            async move {
+                fetch_transactions(client, columns, rows)
+                    .await
+                    .map(|s| s.map_err(ScanStop::Fault).boxed())
+                    .map_err(ScanStop::Fault)
+            }
+        }
+    })
 }
 
 pub(crate) async fn fetch_tx_seq_digests(
