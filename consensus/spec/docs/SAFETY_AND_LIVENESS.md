@@ -155,6 +155,25 @@ does not compare pending Flex decisions that two validators recompute from
 different pruned DAG views. The theorem is
 `ExactCommitInstallProvenance.exactInstalledPrefixesAgreeAcrossGcHorizons`.
 
+### The adaptive schedule has one fixpoint
+
+The v3 schedule is adaptive, so leader identity flows upward from committed
+scores while a decision flows downward from its anchor. Without a restriction,
+two schedules could each justify themselves.
+
+Rust prevents this with `min_next_leader_round`. That value is one round above
+the leader round of the last commit in the pending window. `FlexCommitter`
+asserts that it is identical at one commit index, that it moves strictly forward
+with the index, and that a schedule change drops every pending round below the
+new gate. A schedule therefore governs only rounds at or above its gate, and
+every commit that produced it has a leader round below that gate.
+
+The decision at one round then reads a schedule built from strictly earlier
+rounds. That stratification makes the recursion well founded, so at most one run
+of decisions is consistent with the rule, and every reading of that run agrees.
+The common commit chain follows for the adaptive schedule instead of being
+assumed.
+
 ### Exact commit prefixes fix adaptive schedule replay
 
 For deterministic v3 scoring rules, two correct installed heads at the same

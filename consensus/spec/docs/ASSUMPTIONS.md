@@ -316,7 +316,7 @@ finalizer work is not evidence for this result.
 - **Type:** Derived protocol and Rust refinement theorem.
 - **Status:** Partially verified.
 - **Effect if false:** Safety.
-- **Lean use:** Current safety lemmas use this condition. The final system proof must derive it from deterministic commit construction, exact-reference certification, and verified in-order installation.
+- **Lean use:** Current safety lemmas use this condition. `V3AdaptiveScheduleRule.consistent_runs_are_equal` now derives the common chain for the adaptive v3 schedule: the schedule that governs a round reads only decisions below its gate, so at most one run of decisions is consistent with the rule, and every reading of that run agrees. What remains is the refinement obligation that each correct host's behavior is a consistent run of one common rule. The final system proof must still derive that from deterministic commit construction, exact-reference certification, and verified in-order installation.
 - **Rust evidence:** Local and synchronized inputs have chain checks, but no cross-validator proof exists.
 - **Evidence records:** [EV-EXACT-COMMIT-PREFIX](ASSUMPTION_EVIDENCE.md#ev-exact-commit-prefix) and [EV-DURABLE-COMMIT-PREFIX](ASSUMPTION_EVIDENCE.md#ev-durable-commit-prefix).
 - **Discharge:** Prove the common-chain result across local production, synchronization, and restart.

@@ -32,6 +32,7 @@ import Mysticeti.ReachableAnchorFlexAgreement
 import Mysticeti.ExactCommitPrefixSafety
 import Mysticeti.ValidatorGcHorizonAgreement
 import Mysticeti.ValidatorV3AdaptiveScheduleSafety
+import Mysticeti.ValidatorV3AdaptiveScheduleFixpoint
 import Mysticeti.KnownReferencePropagation
 import Mysticeti.ValidatorReferenceFlexTrace
 import Mysticeti.ValidatorStrictRecoveryDirectQuorum
