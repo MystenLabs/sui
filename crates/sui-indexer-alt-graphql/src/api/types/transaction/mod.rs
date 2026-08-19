@@ -146,7 +146,8 @@ impl TransactionContents {
                 TransactionExpiration::Epoch(epoch_id) => {
                     Ok(Some(Epoch::with_id(self.scope.clone(), *epoch_id)))
                 }
-                TransactionExpiration::ValidDuring { max_epoch, .. } => {
+                TransactionExpiration::ValidDuring { max_epoch, .. }
+                | TransactionExpiration::Validity { max_epoch, .. } => {
                     if let Some(epoch_id) = max_epoch {
                         Ok(Some(Epoch::with_id(self.scope.clone(), *epoch_id)))
                     } else {

@@ -29,7 +29,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 134;
+const MAX_PROTOCOL_VERSION: u64 = 135;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -377,6 +377,7 @@ const MAINNET_USDB: &str =
 //              Bound type nodes in accumulators.
 // Version 134: Add `package::original_package_id` and its native costs.
 //              Reduce the consensus block transaction count and payload limits.
+// Version 135: Enable allowed_proposers on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1148,6 +1149,11 @@ struct FeatureFlags {
     // in the same commit attempted to lock the same object (double-spend attempt).
     #[serde(skip_serializing_if = "is_false")]
     defer_owned_object_double_spend: bool,
+
+    // If true, `TransactionExpiration::Validity` is accepted, allowing a transaction to
+    // restrict which validators may propose it in consensus.
+    #[serde(skip_serializing_if = "is_false")]
+    allowed_proposers: bool,
 
     #[serde(skip_serializing_if = "is_false")]
     randomize_checkpoint_tx_limit_in_tests: bool,
@@ -4587,6 +4593,11 @@ impl ProtocolConfig {
 
                     cfg.consensus_max_transactions_in_block_bytes = Some(288 * 1024);
                     cfg.consensus_max_num_transactions_in_block = Some(128);
+                }
+                135 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.allowed_proposers = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
