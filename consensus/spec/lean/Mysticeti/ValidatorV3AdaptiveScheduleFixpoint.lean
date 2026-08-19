@@ -3,6 +3,7 @@ Copyright (c) Mysten Labs, Inc.
 SPDX-License-Identifier: Apache-2.0
 -/
 
+import Mathlib.Data.Nat.Find
 import Mysticeti.ValidatorV3AdaptiveScheduleRustMap
 
 namespace Mysticeti
@@ -255,6 +256,66 @@ theorem governing_commits_are_below_round
   have gateLe := seq.gate_monotone earlier
   have governs := seq.governingGateNotAbove round
   omega
+
+/-! ### The governing index is derived, not chosen
+
+`governingIndex` is a field, so two hosts could in principle pick different
+governing commit indexes for one round. They cannot. The gate moves strictly
+forward, so the largest index whose gate does not exceed a round is unique, and
+it is a function of the schedule states alone. This section derives it.
+-/
+
+/-- A gate is at least its own index, because the gate moves forward by at
+least one at each commit. -/
+theorem index_le_gate (seq : V3ScheduleGateSequence BlockId CommitId)
+    (index : Nat) : index ≤ (seq.stateAt index).minNextLeaderRound := by
+  induction index with
+  | zero => exact Nat.zero_le _
+  | succ index ih =>
+      have step := seq.gateStrictlyIncreases index
+      omega
+
+/-- The commit index that governs one round: the largest index whose gate does
+not exceed the round. This is a function of the schedule states, so two hosts
+with the same states cannot disagree about it. -/
+def derivedGoverningIndex (seq : V3ScheduleGateSequence BlockId CommitId)
+    (round : Nat) : Nat :=
+  Nat.findGreatest
+    (fun index => (seq.stateAt index).minNextLeaderRound ≤ round) round
+
+/-- The derived governing gate never sits above the round that it governs. This
+discharges `governingGateNotAbove` for every round at or above the first gate. -/
+theorem derived_gate_not_above (seq : V3ScheduleGateSequence BlockId CommitId)
+    {round : Nat} (started : (seq.stateAt 0).minNextLeaderRound ≤ round) :
+    (seq.stateAt (seq.derivedGoverningIndex round)).minNextLeaderRound ≤ round := by
+  unfold derivedGoverningIndex
+  exact Nat.findGreatest_spec
+    (P := fun index => (seq.stateAt index).minNextLeaderRound ≤ round)
+    (Nat.zero_le round) started
+
+/-- No later commit index governs the round. -/
+theorem derived_governing_is_greatest
+    (seq : V3ScheduleGateSequence BlockId CommitId) {round index : Nat}
+    (governs : (seq.stateAt index).minNextLeaderRound ≤ round) :
+    index ≤ seq.derivedGoverningIndex round := by
+  unfold derivedGoverningIndex
+  exact Nat.le_findGreatest
+    (P := fun other => (seq.stateAt other).minNextLeaderRound ≤ round)
+    (Nat.le_trans (seq.index_le_gate index) governs) governs
+
+/-- Two hosts with the same schedule states govern each round with the same
+commit index. The choice is not a degree of freedom. -/
+theorem derived_governing_index_agrees
+    {left right : V3ScheduleGateSequence BlockId CommitId}
+    (sameStates : ∀ index, left.stateAt index = right.stateAt index)
+    (round : Nat) :
+    left.derivedGoverningIndex round = right.derivedGoverningIndex round := by
+  unfold derivedGoverningIndex
+  have samePredicate :
+      (fun index => (left.stateAt index).minNextLeaderRound ≤ round) =
+        fun index => (right.stateAt index).minNextLeaderRound ≤ round :=
+    funext fun index => by rw [sameStates index]
+  simp only [samePredicate]
 
 /-- Build the stratified rule from the gate sequence. `gateNotAbove` is now the
 Rust gate rule rather than a field of the fixpoint argument. -/
