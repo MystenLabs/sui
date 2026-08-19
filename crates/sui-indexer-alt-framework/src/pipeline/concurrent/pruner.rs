@@ -8,6 +8,7 @@ use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use sui_futures::service::Service;
 use tokio::sync::Semaphore;
+use tokio::sync::mpsc;
 use tokio::time::MissedTickBehavior;
 use tokio::time::interval;
 use tracing::debug;
@@ -18,8 +19,6 @@ use tracing::warn;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::concurrent::Handler;
 use crate::pipeline::concurrent::PrunerConfig;
-use crate::pipeline::logging::LoggerWatermark;
-use crate::pipeline::logging::WatermarkLogger;
 use crate::store::ConcurrentConnection;
 use crate::store::Store;
 
@@ -65,19 +64,6 @@ impl PendingRanges {
     fn remove(&mut self, from: &u64) {
         self.ranges.remove(from).unwrap();
     }
-
-    /// Returns the current pruner_hi watermark, i.e. the first checkpoint that has not yet been pruned.
-    /// This will be the first key in the pending_prune_ranges map.
-    /// If the map is empty, then it is the last checkpoint that has been scheduled for pruning.
-    fn get_pruner_hi(&self) -> u64 {
-        self.ranges.keys().next().cloned().unwrap_or(
-            self.last_scheduled_range
-                .map(|(_, t)| t)
-                // get_pruner_hi will generally not be called until we have scheduled something.
-                // But return 0 just in case we called it earlier.
-                .unwrap_or_default(),
-        )
-    }
 }
 
 /// The pruner task is responsible for deleting old data from the database. It will periodically
@@ -91,14 +77,15 @@ impl PendingRanges {
 /// The task will not prune data until at least `config.delay()` has passed since `pruner_timestamp`
 /// to give in-flight reads time to land.
 ///
-/// The task regularly traces its progress, outputting at a higher log level every
-/// [LOUD_WATERMARK_UPDATE_INTERVAL]-many checkpoints.
+/// After each chunk is successfully pruned, the range is forwarded on `tx` to the
+/// [super::prune_watermark] task, which is responsible for advancing `pruner_hi` in the database.
 ///
 /// If the `config` is `None`, the task will shutdown immediately.
 pub(super) fn pruner<H: Handler>(
     handler: Arc<H>,
     config: Option<PrunerConfig>,
     store: H::Store,
+    tx: mpsc::Sender<(u64, u64)>,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
@@ -117,10 +104,6 @@ pub(super) fn pruner<H: Handler>(
         // compressed to make up for missed ticks.
         let mut poll = interval(config.interval());
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
-
-        // The pruner task will periodically output a log message at a higher log level to
-        // demonstrate that it is making progress.
-        let mut logger = WatermarkLogger::new("pruner");
 
         // Maintains the list of chunks that are ready to be pruned but not yet pruned.
         // This map can contain ranges that were attempted to be pruned in previous iterations,
@@ -171,12 +154,6 @@ pub(super) fn pruner<H: Handler>(
                 tokio::time::sleep(wait_for).await;
             }
 
-            // Tracks the current highest `pruner_hi` not yet written to db. This is updated as
-            // chunks complete.
-            let mut highest_pruned = watermark.pruner_hi;
-            // Tracks the `pruner_hi` that has been written to the db.
-            let mut highest_watermarked = watermark.pruner_hi;
-
             // (3) Collect all the new chunks that are ready to be pruned.
             // This will also advance the watermark.
             while let Some((from, to_exclusive)) = watermark.next_chunk(config.max_chunk_size) {
@@ -189,7 +166,7 @@ pub(super) fn pruner<H: Handler>(
                 pending_prune_ranges.len()
             );
 
-            // (3) Prune chunk by chunk to avoid the task waiting on a long-running database
+            // (4) Prune chunk by chunk to avoid the task waiting on a long-running database
             // transaction, between tests for cancellation.
             // Spawn all tasks in parallel, but limit the number of concurrent tasks.
             let semaphore = Arc::new(Semaphore::new(config.prune_concurrency as usize));
@@ -208,69 +185,25 @@ pub(super) fn pruner<H: Handler>(
                 }));
             }
 
-            // (4) Wait for all tasks to finish. For each task, if it succeeds, remove the range
-            // from the pending_prune_ranges. Otherwise the range will remain in the map and will be
-            // retried in the next iteration. Update the highest_pruned watermark if the task
-            // succeeds in metrics and in db, to minimize redundant pruner work if the pipeline is
-            // restarted.
+            // (5) Wait for all tasks to finish. For each task, if it succeeds, remove the range
+            // from the pending_prune_ranges and forward it to the prune_watermark task.
+            // Otherwise the range will remain in the map and will be retried in the next
+            // iteration.
             while let Some(r) = tasks.next().await {
                 let ((from, to_exclusive), result) = r.unwrap();
                 match result {
                     Ok(()) => {
                         pending_prune_ranges.remove(&from);
-                        let pruner_hi = pending_prune_ranges.get_pruner_hi();
-                        highest_pruned = highest_pruned.max(pruner_hi);
+                        if tx.send((from, to_exclusive)).await.is_err() {
+                            info!(pipeline = H::NAME, "Prune watermark channel closed");
+                            return Ok(());
+                        }
                     }
                     Err(e) => {
                         error!(
                             pipeline = H::NAME,
                             "Failed to prune data for range: {from} to {to_exclusive}: {e}"
                         );
-                    }
-                }
-
-                if highest_pruned > highest_watermarked {
-                    metrics
-                        .watermark_pruner_hi
-                        .with_label_values(&[H::NAME])
-                        .set(highest_pruned as i64);
-
-                    let guard = metrics
-                        .watermark_pruner_write_latency
-                        .with_label_values(&[H::NAME])
-                        .start_timer();
-
-                    let Ok(mut conn) = store.connect().await else {
-                        warn!(
-                            pipeline = H::NAME,
-                            "Pruner failed to connect while updating watermark"
-                        );
-                        continue;
-                    };
-
-                    match conn.set_pruner_watermark(H::NAME, highest_pruned).await {
-                        Err(e) => {
-                            let elapsed = guard.stop_and_record();
-                            error!(
-                                pipeline = H::NAME,
-                                elapsed_ms = elapsed * 1000.0,
-                                "Failed to update pruner watermark: {e}"
-                            )
-                        }
-                        Ok(true) => {
-                            highest_watermarked = highest_pruned;
-                            let elapsed = guard.stop_and_record();
-                            logger.log::<H>(
-                                LoggerWatermark::checkpoint(highest_watermarked),
-                                elapsed,
-                            );
-
-                            metrics
-                                .watermark_pruner_hi_in_db
-                                .with_label_values(&[H::NAME])
-                                .set(highest_watermarked as i64);
-                        }
-                        Ok(false) => {}
                     }
                 }
             }
@@ -335,6 +268,7 @@ mod tests {
     use prometheus::Registry;
     use sui_indexer_alt_framework_store_traits::testing::mock_store::MockWatermark;
     use sui_types::full_checkpoint_content::Checkpoint;
+    use tokio::sync::mpsc;
     use tokio::time::Duration;
 
     use crate::FieldCount;
@@ -343,8 +277,27 @@ mod tests {
     use crate::mocks::store::FallibleMockStore;
     use crate::pipeline::Processor;
     use crate::pipeline::concurrent::BatchStatus;
+    use crate::pipeline::concurrent::prune_watermark::prune_watermark;
 
     use super::*;
+
+    fn spawn_pruner_stack(
+        handler: Arc<DataPipeline>,
+        config: PrunerConfig,
+        store: MockStore,
+        metrics: Arc<IndexerMetrics>,
+    ) -> (Service, Service) {
+        let (tx, rx) = mpsc::channel(16);
+        let s_pruner = pruner(
+            handler,
+            Some(config.clone()),
+            store.clone(),
+            tx,
+            metrics.clone(),
+        );
+        let s_prune_watermark = prune_watermark::<DataPipeline>(Some(config), rx, store, metrics);
+        (s_pruner, s_prune_watermark)
+    }
 
     #[derive(Clone, FieldCount)]
     pub struct StoredData;
@@ -460,60 +413,6 @@ mod tests {
         assert_eq!(scheduled, vec![(1, 5), (5, 10)]);
     }
 
-    #[test]
-    fn test_pending_ranges_remove_and_watermark() {
-        let mut ranges = PendingRanges::default();
-
-        // Schedule multiple ranges
-        ranges.schedule(1, 5);
-        ranges.schedule(10, 15);
-        ranges.schedule(20, 25);
-        assert_eq!(ranges.len(), 3);
-        assert_eq!(ranges.get_pruner_hi(), 1);
-
-        // Remove first range - watermark should advance
-        ranges.remove(&1);
-        assert_eq!(ranges.len(), 2);
-        assert_eq!(ranges.get_pruner_hi(), 10); // Next range starts at 10
-
-        // Remove middle range
-        ranges.remove(&10);
-        assert_eq!(ranges.len(), 1);
-        assert_eq!(ranges.get_pruner_hi(), 20);
-
-        // Remove last range - watermark should use last_scheduled_range
-        ranges.remove(&20);
-        assert_eq!(ranges.len(), 0);
-        assert_eq!(ranges.get_pruner_hi(), 25); // End of last scheduled range
-    }
-
-    #[test]
-    fn test_pending_ranges_remove_and_watermark_out_of_order() {
-        let mut ranges = PendingRanges::default();
-
-        // Schedule multiple ranges
-        ranges.schedule(1, 5);
-        ranges.schedule(10, 15);
-        ranges.schedule(20, 25);
-        assert_eq!(ranges.len(), 3);
-        assert_eq!(ranges.get_pruner_hi(), 1);
-
-        // Remove middle range
-        ranges.remove(&10);
-        assert_eq!(ranges.len(), 2);
-        assert_eq!(ranges.get_pruner_hi(), 1);
-
-        // Remove first range
-        ranges.remove(&1);
-        assert_eq!(ranges.len(), 1);
-        assert_eq!(ranges.get_pruner_hi(), 20);
-
-        // Remove last range - watermark should use last_scheduled_range
-        ranges.remove(&20);
-        assert_eq!(ranges.len(), 0);
-        assert_eq!(ranges.get_pruner_hi(), 25); // End of last scheduled range
-    }
-
     #[tokio::test]
     async fn test_pruner() {
         let handler = Arc::new(DataPipeline);
@@ -549,9 +448,8 @@ mod tests {
             .with_watermark(DataPipeline::NAME, watermark)
             .with_data(DataPipeline::NAME, test_data);
 
-        // Start the pruner
-        let store_clone = store.clone();
-        let _pruner = pruner(handler, Some(pruner_config), store_clone, metrics);
+        // Start the pruner + prune_watermark stack
+        let _services = spawn_pruner_stack(handler, pruner_config, store.clone(), metrics);
 
         // Wait a short time within delay_ms
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -629,9 +527,8 @@ mod tests {
             .with_watermark(DataPipeline::NAME, watermark)
             .with_data(DataPipeline::NAME, test_data);
 
-        // Start the pruner
-        let store_clone = store.clone();
-        let _pruner = pruner(handler, Some(pruner_config), store_clone, metrics);
+        // Start the pruner + prune_watermark stack
+        let _services = spawn_pruner_stack(handler, pruner_config, store.clone(), metrics);
 
         // Because the `pruner_timestamp` is in the past, even with the delay_ms it should be pruned
         // close to immediately. To be safe, sleep for 1000ms before checking, which is well under
@@ -699,9 +596,8 @@ mod tests {
             .with_data(DataPipeline::NAME, test_data.clone())
             .with_prune_failures(1, 2, 1);
 
-        // Start the pruner
-        let store_clone = store.clone();
-        let _pruner = pruner(handler, Some(pruner_config), store_clone, metrics);
+        // Start the pruner + prune_watermark stack
+        let _services = spawn_pruner_stack(handler, pruner_config, store.clone(), metrics);
 
         // Wait for first pruning cycle - ranges [2,3) and [3,4) should succeed, [1,2) should fail
         tokio::time::sleep(Duration::from_millis(500)).await;
