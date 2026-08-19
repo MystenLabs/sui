@@ -1,0 +1,44 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 3-28:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::freeze_parent_write_child'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::freeze_parent_write_child,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}
+
+task 1, lines 30-60:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::freeze_parent_call_then_write_child'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::freeze_parent_call_then_write_child,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 10)],
+}
+
+task 2, lines 62-87:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000005::freeze_enum_parent_mut_variant_field'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x5::freeze_enum_parent_mut_variant_field,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 9)],
+}
+
+task 3, lines 89-108:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::freeze_vector_parent_mut_elem'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x6::freeze_vector_parent_mut_elem,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}

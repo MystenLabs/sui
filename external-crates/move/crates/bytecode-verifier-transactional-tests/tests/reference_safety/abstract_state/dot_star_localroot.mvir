@@ -1,0 +1,152 @@
+// no extension of local_root may be epsilon or a bare dot-star
+
+//# publish
+mvir 0x91::zzds_localroot {
+
+public struct S has copy, drop, store { f: u64, g: u64 }
+public struct O has copy, drop, store { a: Self::S, b: Self::S }
+
+fun id_s(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+fun id_o(o: &mut Self::O): &mut Self::O {
+label b0:
+    return move(o);
+}
+
+fun id_o_imm(o: &Self::O): &Self::O {
+label b0:
+    return move(o);
+}
+
+// chain of dot-star extensions rooted at a local
+fun chain() {
+    let o: Self::O;
+    let r: &mut Self::O;
+    let x: &mut Self::O;
+    let y: &mut Self::S;
+    let z: &mut Self::S;
+label b0:
+    o = O { a: S { f: 0, g: 0 }, b: S { f: 0, g: 0 } };
+    r = &mut o;
+    x = Self::id_o(move(r));
+    y = &mut copy(x).O::a;
+    z = Self::id_s(move(y));
+    jump b1;
+label b1:
+    _ = move(x);
+    _ = move(z);
+    return;
+}
+
+// join two locals, then push through calls
+fun joined(cond: bool) {
+    let a: Self::S;
+    let b: Self::S;
+    let r: &mut Self::S;
+    let x: &mut Self::S;
+    let y: &mut u64;
+label b0:
+    a = S { f: 0, g: 0 };
+    b = S { f: 0, g: 0 };
+    jump_if (move(cond)) b2;
+label b1:
+    r = &mut a;
+    jump b3;
+label b2:
+    r = &mut b;
+    jump b3;
+label b3:
+    x = Self::id_s(move(r));
+    y = &mut copy(x).S::g;
+    jump b4;
+label b4:
+    _ = move(x);
+    _ = move(y);
+    return;
+}
+
+// freeze a local borrow, call on it, re-borrow the local mutably
+fun freeze_then_reborrow() {
+    let o: Self::O;
+    let r: &mut Self::O;
+    let i: &Self::O;
+    let n: &Self::O;
+    let r2: &mut Self::O;
+label b0:
+    o = O { a: S { f: 0, g: 0 }, b: S { f: 0, g: 0 } };
+    r = &mut o;
+    i = freeze(move(r));
+    n = Self::id_o_imm(move(i));
+    r2 = &mut o;
+    jump b1;
+label b1:
+    _ = move(n);
+    _ = move(r2);
+    return;
+}
+
+}
+
+//# view-abstract-state 0x91::zzds_localroot::chain
+
+//# view-abstract-state 0x91::zzds_localroot::joined
+
+//# view-abstract-state 0x91::zzds_localroot::freeze_then_reborrow
+
+// w descends from o only via the alias z
+//# publish
+mvir 0x92::zzds_alias_descendant {
+
+public struct S has copy, drop, store { f: u64 }
+public struct O has copy, drop, store { a: Self::S, b: Self::S }
+
+fun id_o(o: &mut Self::O): &mut Self::O {
+label b0:
+    return move(o);
+}
+
+fun t(o: &mut Self::O) {
+    let z: &mut Self::O;
+    let w: &mut Self::S;
+    let n: &mut Self::O;
+label b0:
+    z = copy(o);
+    w = &mut move(z).O::b;
+    n = Self::id_o(copy(o));
+    _ = move(w);
+    _ = move(n);
+    _ = move(o);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x93::zzds_alias_descendant_write {
+
+public struct S has copy, drop, store { f: u64 }
+public struct O has copy, drop, store { a: Self::S, b: Self::S }
+
+fun id_o(o: &mut Self::O): &mut Self::O {
+label b0:
+    return move(o);
+}
+
+fun t(o: &mut Self::O) {
+    let z: &mut Self::O;
+    let n: &mut Self::O;
+    let w: &mut Self::S;
+label b0:
+    z = copy(o);
+    n = Self::id_o(copy(o));
+    w = &mut move(z).O::b;
+    *move(w) = S { f: 1 };
+    _ = move(n);
+    _ = move(o);
+    return;
+}
+
+}

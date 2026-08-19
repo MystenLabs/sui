@@ -1,0 +1,21 @@
+// CopyLoc of a local whose field is mutably borrowed. old: COPYLOC_EXISTS_BORROW_ERROR;
+// new: no check
+
+//# run
+mvir 0x42::m {
+    public struct S has drop, copy { f: u64 }
+
+    entry fun t() {
+        let x: Self::S;
+        let r: &mut u64;
+        let y: Self::S;
+    label b0:
+        x = S { f: 1 };
+        r = &mut (&mut x).S::f;
+        y = copy(x);
+        *move(r) = 42;
+        assert(*(&(&y).S::f) == 1, 200);
+        assert(*(&(&x).S::f) == 42, 201);
+        return;
+    }
+}

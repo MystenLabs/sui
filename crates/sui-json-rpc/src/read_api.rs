@@ -12,7 +12,7 @@ use backoff::future::retry;
 use fastcrypto::encoding::Base64;
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::join_all;
-use im::hashmap::HashMap as ImHashMap;
+use imbl::hashmap::HashMap as ImHashMap;
 use indexmap::map::IndexMap;
 use itertools::Itertools;
 use jsonrpsee::RpcModule;
@@ -1198,10 +1198,10 @@ impl ReadApiServer for ReadApi {
         for active_jwk in new_jwks.iter() {
             let ActiveJwk { jwk_id, jwk, .. } = active_jwk;
             match oidc_provider_jwks.entry(jwk_id.clone()) {
-                im::hashmap::Entry::Occupied(_) => {
+                imbl::hashmap::Entry::Occupied(_) => {
                     warn!("JWK with kid {:?} already exists", jwk_id);
                 }
-                im::hashmap::Entry::Vacant(entry) => {
+                imbl::hashmap::Entry::Vacant(entry) => {
                     entry.insert(jwk.clone());
                 }
             }

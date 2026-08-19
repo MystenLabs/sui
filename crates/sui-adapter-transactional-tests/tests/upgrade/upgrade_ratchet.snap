@@ -63,8 +63,8 @@ gas summary: computation_cost: 1000000, storage_cost: 5023600,  storage_rebate: 
 
 task 11, lines 59-61:
 //# run sui::package::only_additive_upgrades --args object(1,1) --sender A
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::restrict (function index 23) at offset 10, Abort Code: 1
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 23, instruction: 10, function_name: Some("restrict") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("sui::package::restrict at offset 10"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("package") }), indices: [], offsets: [(FunctionDefinitionIndex(23), 10)] }), command: Some(0) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::restrict (function index 25) at offset 10, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 25, instruction: 10, function_name: Some("restrict") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("sui::package::restrict at offset 10"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("package") }), indices: [], offsets: [(FunctionDefinitionIndex(25), 10)] }), command: Some(0) } }
 
 task 12, line 62:
 //# run sui::package::make_immutable --args object(1,1) --sender A

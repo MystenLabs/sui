@@ -1,0 +1,34 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 0, lines 3-21:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::eq_mut_and_its_frozen_alias'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::eq_mut_and_its_frozen_alias,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 17)],
+}
+
+task 1, lines 23-45:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::eq_while_mut_extension_live'. Got VMError: {
+    major_status: BORROWLOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::eq_while_mut_extension_live,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 5)],
+}
+
+task 2, lines 47-75:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000005::eq_enum_refs_after_alias_write'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x5::eq_enum_refs_after_alias_write,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 24)],
+}

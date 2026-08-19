@@ -6,7 +6,7 @@ use crate::{
     account_address::AccountAddress,
     gas_algebra::{AbstractMemorySize, BOX_ABSTRACT_SIZE, ENUM_BASE_ABSTRACT_SIZE},
     identifier::{IdentStr, Identifier},
-    parsing::types::{ParsedModuleId, ParsedStructType, ParsedType},
+    parsing::types::{ParsedDatatype, ParsedModuleId, ParsedType},
 };
 
 use move_proc_macros::test_variant_order;
@@ -130,6 +130,29 @@ impl TypeTag {
                 TypeTag::Vector(x) => x.abstract_size_for_gas_metering(),
                 TypeTag::Struct(y) => y.abstract_size_for_gas_metering(),
             }
+    }
+
+    /// The number of nodes in the type.
+    pub fn node_count(&self) -> u64 {
+        let mut count = 0u64;
+        let mut frontier = vec![self];
+        while let Some(tag) = frontier.pop() {
+            count = count.saturating_add(1);
+            match tag {
+                TypeTag::Vector(inner) => frontier.push(inner),
+                TypeTag::Struct(tag) => frontier.extend(tag.type_params.iter()),
+                TypeTag::Bool
+                | TypeTag::U8
+                | TypeTag::U16
+                | TypeTag::U32
+                | TypeTag::U64
+                | TypeTag::U128
+                | TypeTag::U256
+                | TypeTag::Address
+                | TypeTag::Signer => (),
+            }
+        }
+        count
     }
 
     /// Return all of the addresses used inside of the type.
@@ -291,7 +314,7 @@ impl FromStr for StructTag {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        ParsedStructType::parse(s)?.into_struct_tag(&|_| None)
+        ParsedDatatype::parse(s)?.into_struct_tag(&|_| None)
     }
 }
 

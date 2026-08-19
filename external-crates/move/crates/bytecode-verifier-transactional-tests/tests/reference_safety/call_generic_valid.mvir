@@ -1,0 +1,74 @@
+// CallGeneric shapes accepted by both checkers. CallGeneric uses the uninstantiated signatures.
+
+//# publish
+mvir 0x2::generic_ref_return {
+
+public struct S<T> has copy, drop { f: T }
+
+fun borrow_f<T>(s: &mut Self::S<T>): &mut T {
+label b0:
+    return &mut move(s).S<T>::f;
+}
+
+fun id_imm<T>(s: &Self::S<T>): &Self::S<T> {
+label b0:
+    return move(s);
+}
+
+fun t(s: &mut Self::S<u64>) {
+    let m: &mut u64;
+label b0:
+    m = Self::borrow_f<u64>(copy(s));
+    *copy(m) = 1;
+    _ = move(m);
+    // extension released, s writable again
+    *move(s) = S<u64> { f: 2 };
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::generic_type_param_return {
+
+public struct S<T> has copy, drop { f: T }
+
+// return type is a bare type parameter
+fun get<T: copy>(s: &Self::S<T>): T {
+label b0:
+    return *&move(s).S<T>::f;
+}
+
+fun t(s: &Self::S<u64>) {
+    let v: u64;
+label b0:
+    v = Self::get<u64>(move(s));
+    _ = move(v);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x4::generic_two_mut_returns {
+
+public struct P<T> has copy, drop { x: T, y: T }
+
+fun split<T>(p: &mut Self::P<T>): &mut T * &mut T {
+label b0:
+    return (&mut copy(p).P<T>::x, &mut copy(p).P<T>::y);
+}
+
+fun t(p: &mut Self::P<u64>) {
+    let a: &mut u64;
+    let b: &mut u64;
+label b0:
+    a, b = Self::split<u64>(move(p));
+    *copy(a) = 1;
+    *copy(b) = 2;
+    _ = move(a);
+    _ = move(b);
+    return;
+}
+
+}

@@ -1,0 +1,68 @@
+---
+title: Hashi
+description: >-
+  Hashi is the Sui native Bitcoin orchestrator that enables depositing and
+  withdrawing BTC for use as a fungible Coin on Sui through threshold
+  cryptography.
+keywords:
+  - Hashi
+  - Bitcoin
+  - BTC
+  - bridge
+  - threshold cryptography
+  - hBTC
+  - Bitcoin on Sui
+  - cross-chain
+goal:
+  description: >-
+    Reader understands what Hashi is, how it bridges BTC to Sui, and where
+    to find the full Hashi documentation
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Hashi on Sui?
+  - How do I use Bitcoin on Sui?
+  - How does the Hashi Bitcoin bridge work?
+  - Where are the Hashi docs?
+  - What is hBTC on Sui?
+answer: >-
+  Hashi is the Sui native Bitcoin orchestrator. It enables depositing and
+  withdrawing BTC through a managed pool secured by threshold cryptography,
+  with ownership represented as a fungible Coin<BTC> on Sui.
+---
+
+Hashi is the Sui native Bitcoin orchestrator. It is a protocol for securing and managing BTC for use on Sui through threshold cryptography ([Hashi documentation](https://mystenlabs.github.io/hashi/design/)). You deposit BTC into a managed pool, and Hashi represents your ownership as a fungible `Coin<BTC>` on Sui. You can then use this coin in Sui apps, DeFi protocols, and [programmable transaction blocks](/develop/transactions/ptbs/prog-txn-blocks) like any other Sui coin.
+
+:::info
+
+Hashi is currently live on Testnet. Access the Testnet instance at [testnet.hashi.sui.io](https://testnet.hashi.sui.io).
+
+:::
+
+## How Hashi works
+
+Hashi uses a committee of operators running threshold cryptography to manage a Bitcoin custody pool. The committee jointly controls the Bitcoin private keys, so no single operator can move funds unilaterally ([Hashi design docs](https://mystenlabs.github.io/hashi/design/)).
+
+The protocol supports 2 core flows:
+
+- **Deposit:** You send BTC to a Hashi-managed Bitcoin address derived for your Sui address. Once the Bitcoin transaction is confirmed, Hashi mints an equivalent `Coin<BTC>` on Sui and delivers it to your address.
+- **Withdrawal:** You burn your `Coin<BTC>` on Sui and specify a Bitcoin destination address. The committee signs and broadcasts a Bitcoin transaction to send BTC to your destination.
+
+### Security
+
+Hashi protects against outflow vulnerabilities through a Guardian-based rate limiter on Bitcoin withdrawals. The rate limiter uses a configurable token-bucket mechanism denominated in BTC. Withdrawals are processed in approximate FIFO order, and you can cancel a pending withdrawal at any time before the committee selects it for processing ([rate limiter design](https://mystenlabs.github.io/hashi/design/limiter/)).
+
+## Hashi SDK
+
+The Hashi TypeScript SDK (`@mysten/hashi`) provides programmatic access to deposits, withdrawals, and pool state queries. For SDK documentation and examples, see the [Hashi SDK reference](https://mystenlabs.github.io/hashi/sdks/) and the [hashi-integrations example repo](https://github.com/MystenLabs/hashi-integrations).
+
+## Full documentation
+
+For the complete Hashi reference covering committee design, governance, operator runbooks, and protocol flows, see the [Hashi documentation](https://mystenlabs.github.io/hashi/design/).

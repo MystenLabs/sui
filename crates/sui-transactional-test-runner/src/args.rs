@@ -10,8 +10,8 @@ use clap::{ArgAction, Args, Parser};
 use move_compiler::editions::Flavor;
 use move_core_types::parsing::{
     parser::Parser as MoveCLParser,
-    parser::{Token, parse_u64, parse_u256},
-    types::{ParsedType, TypeToken},
+    parser::{parse_u64, parse_u256},
+    types::ParsedType,
     values::ValueToken,
     values::{ParsableValue, ParsedValue},
 };
@@ -552,58 +552,14 @@ impl SuiExtraValueArgs {
         ensure!(contents == "withdraw");
 
         // Format: withdraw<Type>(amount)
-        parser.advance(ValueToken::LAngle)?;
-
-        // Parse type - collect all tokens until we hit the matching RAngle
-        // Need to track nesting level for types like Balance<Coin<SUI>>
-        let mut type_parts = Vec::new();
-        let mut angle_bracket_depth = 1; // We already consumed the opening <
-        loop {
-            let (tok, s) = match parser.peek() {
-                Some(v) => v,
-                None => bail!("Unexpected end of input while parsing withdraw type"),
-            };
-            match tok {
-                ValueToken::Whitespace => {
-                    parser.advance(ValueToken::Whitespace)?;
-                    // Skip whitespace
-                }
-                ValueToken::Ident => {
-                    parser.advance(ValueToken::Ident)?;
-                    type_parts.push(s.to_string());
-                }
-                ValueToken::ColonColon => {
-                    parser.advance(ValueToken::ColonColon)?;
-                    type_parts.push("::".to_string());
-                }
-                ValueToken::LAngle => {
-                    parser.advance(ValueToken::LAngle)?;
-                    type_parts.push("<".to_string());
-                    angle_bracket_depth += 1;
-                }
-                ValueToken::RAngle => {
-                    parser.advance(ValueToken::RAngle)?;
-                    angle_bracket_depth -= 1;
-                    if angle_bracket_depth == 0 {
-                        // This is the closing > for withdraw<Type>
-                        break;
-                    }
-                    type_parts.push(">".to_string());
-                }
-                ValueToken::Comma => {
-                    parser.advance(ValueToken::Comma)?;
-                    type_parts.push(",".to_string());
-                }
-                _ => bail!("Unexpected token {:?} while parsing withdraw type", tok),
-            }
-        }
-
-        let type_str = type_parts.join("");
-
-        // Parse the type from the type string
-        let type_tokens: Vec<_> = TypeToken::tokenize(&type_str)?.into_iter().collect();
-        let mut type_parser = move_core_types::parsing::parser::Parser::new(type_tokens);
-        let parsed_type = type_parser.parse_type()?;
+        let type_args = parser.parse_type_args()?;
+        let [parsed_type]: [ParsedType; 1] =
+            type_args.try_into().map_err(|type_args: Vec<_>| {
+                anyhow::anyhow!(
+                    "withdraw expects exactly one type argument, got {}",
+                    type_args.len()
+                )
+            })?;
 
         // Now parse (amount)
         parser.advance(ValueToken::LParen)?;

@@ -152,7 +152,7 @@ Debugging a Move unit test is a two-step process:
       </div>
 
       :::info
-        This command uses the `sui` binary under the hood which needs to be [pre-installed](#install). The location of the binary needs to be [discoverable by the Move extension](/references/ide/move#build-test-and-trace).
+        This command uses the `sui` binary under the hood, which needs to be [pre-installed](/references/ide/move#install-the-sui-binary).
       :::
 
 
@@ -225,7 +225,7 @@ For example, consider a situation when an onchain transaction executes a call to
 
 Using the newest version of the package sources might still work, particularly for packages whose existing functionality is largely stabilized and whose source code rarely changes, such as the Sui framework package. However, it does not work if someone already upgraded the package onchain after the debugged transaction executed and metadata in its package directory reflects this (in which case you need to obtain package sources from before the upgrade).
 
-Use the button on top of the window displaying the trace file to add sources to the debugger before starting the debugging session. The following section explains how this machinery works under the hood and how to add sources to the debugger manually, but it is for advanced users only.
+Use the button on top of the window displaying the trace file to add sources to the debugger before starting the debugging session. The debugger then verifies the locally built bytecode in the selected package directory against the onchain bytecode, and issues a warning if it detects an incompatibility or if the verification process itself fails. Verification uses the `sui` binary, which needs to be [pre-installed](/references/ide/move#install-the-sui-binary). The following section explains how this machinery works under the hood and how to add sources to the debugger manually, but it is for advanced users only.
 
 ## Advanced source-level debugging instructions
 

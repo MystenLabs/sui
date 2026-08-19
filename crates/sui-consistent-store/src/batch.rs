@@ -19,10 +19,9 @@
 //! [`Batch::merge`] stages a merge operand against a key. The
 //! merge operator that combines the operand with any existing value
 //! is configured by the schema author on the column family's
-//! [`rocksdb::Options`] (returned from
-//! [`Schema::cfs`](crate::Schema::cfs)) at open time. RocksDB
-//! applies the operator lazily at read or compaction time; this
-//! crate simply forwards the bytes.
+//! [`rocksdb::Options`] when the database is opened. RocksDB applies
+//! the operator lazily at read or compaction time; this crate forwards
+//! the bytes.
 //!
 //! # Examples
 //!
@@ -64,14 +63,24 @@
 //! }
 //!
 //! impl Schema for MySchema {
-//!     fn cfs(opts: &sui_consistent_store::CfOptionsResolver) -> Vec<sui_consistent_store::CfDescriptor> {
-//!         vec![sui_consistent_store::CfDescriptor::new("items", opts.options("items"))]
-//!     }
-//!
-//!     fn open(db: &Db) -> Result<Self, OpenError> {
-//!         Ok(Self {
+//!     fn open(
+//!         path: &std::path::Path,
+//!         opts: &sui_consistent_store::CfOptionsResolver,
+//!         snapshot_capacity: usize,
+//!     ) -> Result<(Db, Self), OpenError> {
+//!         let db = Db::open_cfs(
+//!             path,
+//!             opts,
+//!             snapshot_capacity,
+//!             vec![sui_consistent_store::CfDescriptor::new(
+//!                 "items",
+//!                 opts.options("items"),
+//!             )],
+//!         )?;
+//!         let schema = Self {
 //!             items: DbMap::new(db.clone(), "items")?,
-//!         })
+//!         };
+//!         Ok((db, schema))
 //!     }
 //! }
 //!
@@ -371,18 +380,25 @@ mod tests {
     }
 
     impl Schema for TestSchema {
-        fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<crate::CfDescriptor> {
-            vec![
-                crate::CfDescriptor::new("items", opts.options("items")),
-                crate::CfDescriptor::new("other", opts.options("other")),
-            ]
-        }
-
-        fn open(db: &Db) -> Result<Self, OpenError> {
-            Ok(Self {
+        fn open(
+            path: &std::path::Path,
+            opts: &crate::CfOptionsResolver,
+            snapshot_capacity: usize,
+        ) -> Result<(Db, Self), OpenError> {
+            let db = Db::open_cfs(
+                path,
+                opts,
+                snapshot_capacity,
+                vec![
+                    crate::CfDescriptor::new("items", opts.options("items")),
+                    crate::CfDescriptor::new("other", opts.options("other")),
+                ],
+            )?;
+            let schema = Self {
                 items: DbMap::new(db.clone(), "items")?,
                 other: DbMap::new(db.clone(), "other")?,
-            })
+            };
+            Ok((db, schema))
         }
     }
 
@@ -624,16 +640,20 @@ mod tests {
     }
 
     impl Schema for MergeSchema {
-        fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<crate::CfDescriptor> {
-            let mut counter_opts = opts.options("counters");
-            counter_opts.set_merge_operator_associative("u64-add", add_u64_merge_op);
-            vec![crate::CfDescriptor::new("counters", counter_opts)]
-        }
-
-        fn open(db: &Db) -> Result<Self, OpenError> {
-            Ok(Self {
+        fn open(
+            path: &std::path::Path,
+            opts: &crate::CfOptionsResolver,
+            snapshot_capacity: usize,
+        ) -> Result<(Db, Self), OpenError> {
+            let db = Db::open_cfs(path, opts, snapshot_capacity, {
+                let mut counter_opts = opts.options("counters");
+                counter_opts.set_merge_operator_associative("u64-add", add_u64_merge_op);
+                vec![crate::CfDescriptor::new("counters", counter_opts)]
+            })?;
+            let schema = Self {
                 counters: DbMap::new(db.clone(), "counters")?,
-            })
+            };
+            Ok((db, schema))
         }
     }
 

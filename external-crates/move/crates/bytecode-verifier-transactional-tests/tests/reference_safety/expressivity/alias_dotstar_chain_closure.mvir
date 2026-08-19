@@ -1,0 +1,43 @@
+// a mutable extension two hops below an immutable parent must still block a write at the top
+
+//# run
+mvir 0x3::frozen_top_dotstar_mut_grandchild {
+
+public struct Inner has copy, drop { v: u64 }
+public struct Mid has copy, drop { i: Self::Inner }
+public struct Outer has copy, drop { m: Self::Mid }
+
+fun get_mid(o: &mut Self::Outer): &mut Self::Mid {
+label b0:
+    return &mut move(o).Outer::m;
+}
+
+fun observe(o: &Self::Outer): u64 {
+    let m: &Self::Mid;
+    let i: &Self::Inner;
+label b0:
+    m = &move(o).Outer::m;
+    i = &move(m).Mid::i;
+    return *&move(i).Inner::v;
+}
+
+entry fun t() {
+    let a: Self::Outer;
+    let p: &mut Self::Outer;
+    let frozen: &Self::Outer;
+    let mid: &mut Self::Mid;
+    let inner: &mut Self::Inner;
+label b0:
+    a = Outer { m: Mid { i: Inner { v: 0 } } };
+    p = &mut a;
+    mid = Self::get_mid(copy(p));
+    inner = &mut move(mid).Mid::i;
+    // imm parent two levels above a live mut grandchild
+    frozen = freeze(move(p));
+    assert(Self::observe(copy(frozen)) == 0, 42);
+    *move(inner) = Inner { v: 6 };
+    assert(Self::observe(move(frozen)) == 6, 43);
+    return;
+}
+
+}

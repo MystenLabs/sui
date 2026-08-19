@@ -36,6 +36,7 @@ url.workspace = true
 zstd.workspace = true
 
 simulacrum.workspace = true
+sui-config.workspace = true
 sui-futures.workspace = true
 sui-indexer-alt.workspace = true
 sui-kv-rpc.workspace = true

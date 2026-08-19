@@ -1,0 +1,28 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, line 31:
+//# view-abstract-state 0x2::reborrow::t
+view-abstract-state subcommand is only available with regex reference safety
+
+task 2, lines 33-58:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::reborrow_then_write'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::reborrow_then_write,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 11)],
+}
+
+task 3, lines 60-85:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::reborrow_then_write_result'. Got VMError: {
+    major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x4::reborrow_then_write_result,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 13)],
+}

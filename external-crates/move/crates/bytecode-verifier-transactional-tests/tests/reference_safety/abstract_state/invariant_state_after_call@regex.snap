@@ -1,0 +1,116 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 1, line 46:
+//# view-abstract-state 0x2::call_shapes::one_result
+{
+  "after": {
+    "local_root": "ROOT",
+    "locals": {
+      "a": {
+        "Reference": "r#a"
+      },
+      "r": {
+        "Reference": "r#r"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#a": true,
+        "r#r": true
+      },
+      "outgoing": {
+        "r#a": {
+          "r#r": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        },
+        "r#r": {
+          "r#a": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        }
+      }
+    }
+  },
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true
+      },
+      "outgoing": {}
+    }
+  }
+}
+
+task 2, line 48:
+//# view-abstract-state 0x2::call_shapes::imm_pair
+{
+  "after": {
+    "local_root": "ROOT",
+    "locals": {
+      "p": {
+        "Reference": "r#p"
+      },
+      "q": {
+        "Reference": "r#q"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#p": false,
+        "r#q": false
+      },
+      "outgoing": {
+        "r#p": {
+          "r#q": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        },
+        "r#q": {
+          "r#p": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  },
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": false
+      },
+      "outgoing": {}
+    }
+  }
+}

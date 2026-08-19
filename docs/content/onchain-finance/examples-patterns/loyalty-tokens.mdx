@@ -43,11 +43,13 @@ answer: >-
   tickets or upgrades.
 ---
 
+A closed-loop token is a token that can only be used within specific workflows you define. Unlike standard `Coin` types that users can freely transfer and trade, closed-loop tokens restrict what actions holders can perform. You control minting, spending, and transfer through a [`TokenPolicy`](/onchain-finance/closed-loop-token/token-policy) that enforces your rules onchain ([Closed-Loop Token standard](/onchain-finance/closed-loop-token)).
+
 Using the Sui [Closed-Loop Token](/onchain-finance/closed-loop-token) standard, you can create tokens that are valid only for a specific service, like an airline that wants to grant tokens to frequent flyers to purchase tickets or upgrades.
 
 In this example, the Admin sends `LOYALTY` tokens to the users of your service as a reward for their continued business. The example creates a `GiftShop` where holders can spend `LOYALTY` tokens to buy `Gift`s.
 
-The `loyalty.move` source file contains the `examples::loyalty` module code that creates the loyalty token. The module includes the One-Time Witness (OTW) that creates the coin (with the same name as the module, `LOYALTY`), possesses only the `drop` ability, and has no fields.
+The `loyalty.move` source file contains the `examples::loyalty` module code that creates the loyalty token. The module includes the [One-Time Witness](https://move-book.com/programmability/one-time-witness/) (OTW), a struct with the same name as the module (`LOYALTY`) that has only the `drop` ability and no fields. The OTW ensures that the currency can only be created once, during the module's `init` function.
 
 <ImportContent source="examples/move/token/sources/loyalty.move" mode="code" struct="LOYALTY" />
 
@@ -68,5 +70,22 @@ The `LOYALTY` minting function is called `reward_user`. The holder of the `Treas
 Lastly, a `buy_a_gift` function handles the redemption of `LOYALTY` tokens for `Gift` types. The function ensures the gift price matches the number of loyalty tokens spent, then uses the `token::spend` function to handle the treasury bookkeeping.
 
 <ImportContent source="examples/move/token/sources/loyalty.move" mode="code" fun="buy_a_gift" noComments />
+
+## Implementation considerations
+
+When you implement loyalty tokens, consider the following:
+
+- **Protect the `TreasuryCap`.** The holder of the `TreasuryCap` can mint unlimited tokens. Store it in a multisig address or a dedicated custody solution, not a single hot wallet ([Security Best Practices](/develop/security/best-practices)).
+- **Gate the spend action with rules.** Without a rule on the `spend` action, any holder can spend tokens without authorization. The `GiftShop` witness pattern shown above ensures tokens can only be spent through the `buy_a_gift` function. See [Spending](/onchain-finance/closed-loop-token/spending) for details.
+- **Handle insufficient balance.** If a user tries to spend more tokens than they hold, the transaction aborts. Your frontend should check the user's token balance before constructing the spend transaction.
+
+## Token lifecycle
+
+Loyalty tokens follow this lifecycle:
+
+1. **Minting:** The `TreasuryCap` holder calls `reward_user` to mint tokens to a recipient.
+2. **Spending:** The recipient calls `buy_a_gift` to spend tokens. The `token::spend` function consumes the token and creates an `ActionRequest`.
+3. **Settlement:** The `ActionRequest` is confirmed against the `TokenPolicy`, which accumulates the spent balance.
+4. **Burning:** The `TreasuryCap` holder can remove the accumulated spent balance from the `TokenPolicy`, effectively burning the tokens.
 
 [View the full example on GitHub](https://github.com/MystenLabs/sui/tree/main/examples/move/token/sources/loyalty.move).

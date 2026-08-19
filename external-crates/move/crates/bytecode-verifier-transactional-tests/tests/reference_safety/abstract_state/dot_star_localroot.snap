@@ -1,0 +1,36 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 1, line 93:
+//# view-abstract-state 0x91::zzds_localroot::chain
+view-abstract-state subcommand is only available with regex reference safety
+
+task 2, line 95:
+//# view-abstract-state 0x91::zzds_localroot::joined
+view-abstract-state subcommand is only available with regex reference safety
+
+task 3, lines 97-99:
+//# view-abstract-state 0x91::zzds_localroot::freeze_then_reborrow
+view-abstract-state subcommand is only available with regex reference safety
+
+task 4, lines 100-125:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000092::zzds_alias_descendant'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x92::zzds_alias_descendant,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 6)],
+}
+
+task 5, lines 127-152:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000093::zzds_alias_descendant_write'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x93::zzds_alias_descendant_write,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 3)],
+}

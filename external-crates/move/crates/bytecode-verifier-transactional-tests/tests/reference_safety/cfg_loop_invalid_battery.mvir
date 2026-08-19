@@ -1,0 +1,217 @@
+// CFG shapes that must be rejected. Each case marks the unsafe instruction.
+
+//# publish
+mvir 0x2::a_write_head_live_ext {
+public struct S has copy, drop { f: u64 }
+// p is live across the back edge and on the entry edge
+fun t(s: &mut Self::S, n: u64) {
+    let p: &mut u64;
+label b0:
+    p = &mut copy(s).S::f;
+label h:
+    // overwriting the whole struct replaces the field p names
+    *copy(s) = S { f: 1 };
+    jump_if (copy(n) == 0) e;
+    n = move(n) - 1;
+    jump h;
+label e:
+    *move(p) = 2;
+    _ = move(s);
+    return;
+}
+}
+
+//# publish
+mvir 0x3::b_move_local_live_ext {
+public struct S has copy, drop { f: u64 }
+// a field reference into a local stays live across the loop, then the local is moved out
+fun t(n: u64): Self::S {
+    let s: Self::S;
+    let p: &mut u64;
+label b0:
+    s = S { f: 0 };
+    p = &mut (&mut s).S::f;
+label h:
+    jump_if (copy(n) == 0) e;
+    n = move(n) - 1;
+    jump h;
+label e:
+    // the move leaves the slot invalid while p points into it
+    return move(s);
+}
+}
+
+//# publish
+mvir 0x4::c_call_mut_live_ext {
+public struct S has copy, drop { f: u64 }
+// the mutable reference is handed to a callee while a field extension of it is live
+fun use_s(s: &mut Self::S) { label b0: *move(s) = S { f: 9 }; return; }
+fun t(s: &mut Self::S, n: u64) {
+    let p: &mut u64;
+label b0:
+    p = &mut copy(s).S::f;
+label h:
+    // the callee may overwrite *s, invalidating p
+    Self::use_s(copy(s));
+    jump_if (copy(n) == 0) e;
+    n = move(n) - 1;
+    jump h;
+label e:
+    *move(p) = 2;
+    _ = move(s);
+    return;
+}
+}
+
+//# publish
+mvir 0x5::d_vec_push_live_elem {
+// the vector grows on every iteration while an element reference is live
+fun t(v: &mut vector<u64>, n: u64) {
+    let p: &mut u64;
+label b0:
+    p = vec_mut_borrow<u64>(copy(v), 0);
+label h:
+    // growing the vector may move the storage p names
+    vec_push_back<u64>(copy(v), 1);
+    jump_if (copy(n) == 0) e;
+    n = move(n) - 1;
+    jump h;
+label e:
+    *move(p) = 2;
+    _ = move(v);
+    return;
+}
+}
+
+//# publish
+mvir 0x6::e_stloc_live_ext {
+public struct S has copy, drop { f: u64 }
+// the borrowed local is overwritten at the loop head
+fun t(n: u64) {
+    let s: Self::S;
+    let p: &mut u64;
+label b0:
+    s = S { f: 0 };
+    p = &mut (&mut s).S::f;
+label h:
+    // the store drops the struct p points into
+    s = S { f: 1 };
+    jump_if (copy(n) == 0) e;
+    n = move(n) - 1;
+    jump h;
+label e:
+    *move(p) = 2;
+    return;
+}
+}
+
+//# publish
+mvir 0x7::f_join_ext_one_branch {
+public struct S has copy, drop { f: u64 }
+// only one branch creates the extension
+fun t(cond: bool, s: &mut Self::S, o: &mut u64) {
+    let p: &mut u64;
+label b0:
+    jump_if (move(cond)) l2;
+label l1:
+    p = &mut copy(s).S::f;
+    jump l3;
+label l2:
+    p = move(o);
+label l3:
+    // on the l1 path p is inside s
+    *copy(s) = S { f: 1 };
+    *move(p) = 2;
+    _ = move(s);
+    return;
+}
+}
+
+//# publish
+mvir 0x8::g_enum_variant_write_live_field {
+public enum E has copy, drop { A { x: u64 }, B { y: u64 } }
+// the active variant is changed while a field reference into the old variant is live
+fun t(e: &mut Self::E, n: u64) {
+    let p: &mut u64;
+label b0:
+    &mut E::A { x: p } = copy(e);
+label h:
+    // p names A.x, which stops existing once e becomes B
+    *copy(e) = E::B { y: 7 };
+    jump_if (copy(n) == 0) ex;
+    n = move(n) - 1;
+    jump h;
+label ex:
+    *move(p) = 2;
+    _ = move(e);
+    return;
+}
+}
+
+//# publish
+mvir 0x9::h_nested_loop_inner_ext_outer_write {
+public struct S has copy, drop { f: u64 }
+// the extension is live across both loops and the write sits in the inner loop's exit block
+fun t(s: &mut Self::S, n: u64, m: u64) {
+    let p: &mut u64;
+    let k: u64;
+label b0:
+    p = &mut copy(s).S::f;
+label ho:
+    jump_if (copy(n) == 0) eo;
+    n = move(n) - 1;
+    k = copy(m);
+label hi:
+    jump_if (copy(k) == 0) ei;
+    k = move(k) - 1;
+    jump hi;
+label ei:
+    // the outer back edge carries p, so the write replaces the field it names
+    *copy(s) = S { f: 1 };
+    jump ho;
+label eo:
+    *move(p) = 2;
+    _ = move(s);
+    return;
+}
+}
+
+//# publish
+mvir 0xa::i_ret_local_ref_from_loop {
+public struct S has copy, drop { f: u64 }
+// a reference into a frame-local struct is returned after the loop
+fun t(n: u64): &mut u64 {
+    let s: Self::S;
+    let p: &mut u64;
+label b0:
+    s = S { f: 0 };
+    p = &mut (&mut s).S::f;
+label h:
+    jump_if (copy(n) == 0) e;
+    n = move(n) - 1;
+    jump h;
+label e:
+    // p points into local s, which dies at return
+    return move(p);
+}
+}
+
+//# publish
+mvir 0xb::j_write_after_abort_join {
+public struct S has copy, drop { f: u64 }
+// the aborting path must not clear the other path extension
+fun t(cond: bool, s: &mut Self::S) {
+    let p: &mut u64;
+label b0:
+    p = &mut copy(s).S::f;
+    jump_if (move(cond)) l2;
+label l1:
+    abort 7;
+label l2:
+    // p is still inside s on the path that reaches here
+    *copy(s) = S { f: 1 };
+    *move(p) = 2;
+    _ = move(s);
+    return;
+}
+}

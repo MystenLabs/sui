@@ -17,7 +17,6 @@ use diesel::sql_types::BigInt;
 use diesel::sql_types::Text;
 use futures::future::OptionFuture;
 use sui_futures::service::Service;
-use sui_indexer_alt_reader::bigtable_reader::BigtableReader;
 use sui_indexer_alt_reader::consistent_reader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
 use sui_indexer_alt_reader::consistent_reader::proto::AvailableRangeResponse;
@@ -54,9 +53,6 @@ pub(crate) struct WatermarkTask {
 
     /// Access to the Postgres DB
     pg_reader: PgReader,
-
-    /// Access to Bigtable.
-    bigtable_reader: Option<BigtableReader>,
 
     /// Access to the Ledger gRPC service.
     ledger_grpc_reader: Option<LedgerGrpcReader>,
@@ -137,7 +133,6 @@ impl WatermarkTask {
         config: WatermarkConfig,
         pg_pipelines: Vec<String>,
         pg_reader: PgReader,
-        bigtable_reader: Option<BigtableReader>,
         ledger_grpc_reader: Option<LedgerGrpcReader>,
         consistent_reader: ConsistentReader,
         metrics: Arc<RpcMetrics>,
@@ -151,7 +146,6 @@ impl WatermarkTask {
             watermarks: Default::default(),
             watermarks_tx,
             pg_reader,
-            bigtable_reader,
             ledger_grpc_reader,
             consistent_reader,
             interval: watermark_polling_interval,
@@ -178,7 +172,6 @@ impl WatermarkTask {
                 watermarks,
                 watermarks_tx,
                 pg_reader,
-                bigtable_reader,
                 ledger_grpc_reader,
                 consistent_reader,
                 interval,
@@ -191,7 +184,7 @@ impl WatermarkTask {
             loop {
                 interval.tick().await;
 
-                let rows = match WatermarkRow::read(&pg_reader, bigtable_reader.as_ref(), ledger_grpc_reader.as_ref(), &pg_pipelines).await {
+                let rows = match WatermarkRow::read(&pg_reader, ledger_grpc_reader.as_ref(), &pg_pipelines).await {
                     Ok(rows) => rows,
                     Err(e) => {
                         warn!("Failed to read watermarks: {e:#}");
@@ -346,22 +339,15 @@ impl Pipeline {
 impl WatermarkRow {
     async fn read(
         pg_reader: &PgReader,
-        bigtable_reader: Option<&BigtableReader>,
         ledger_grpc_reader: Option<&LedgerGrpcReader>,
         pg_pipelines: &[String],
     ) -> anyhow::Result<Vec<WatermarkRow>> {
         let rows = watermarks_from_pg(pg_reader, pg_pipelines);
-        let bigtable: OptionFuture<_> = bigtable_reader.map(watermark_from_bigtable).into();
         let ledger_grpc: OptionFuture<_> =
             ledger_grpc_reader.map(watermark_from_ledger_grpc).into();
 
-        let (rows, bigtable, ledger_grpc) = tokio::join!(rows, bigtable, ledger_grpc);
+        let (rows, ledger_grpc) = tokio::join!(rows, ledger_grpc);
         let mut rows = rows.context("Failed to read watermarks from Postgres")?;
-
-        let bigtable = bigtable
-            .transpose()
-            .context("Failed to read watermarks from Bigtable")?;
-        rows.extend(bigtable);
 
         let ledger_grpc = ledger_grpc
             .transpose()
@@ -443,28 +429,6 @@ impl Watermarks {
         }
         w
     }
-}
-
-async fn watermark_from_bigtable(bigtable_reader: &BigtableReader) -> anyhow::Result<WatermarkRow> {
-    let wm = bigtable_reader
-        .watermark()
-        .await
-        .context("Failed to get checkpoint watermark")?
-        .context("Checkpoint watermark not found")?;
-    let checkpoint_hi_inclusive = wm
-        .checkpoint_hi_inclusive
-        .context("Checkpoint watermark not found")?;
-
-    Ok(WatermarkRow {
-        pipeline: "bigtable".to_owned(),
-        epoch_hi_inclusive: wm.epoch_hi_inclusive as i64,
-        checkpoint_hi_inclusive: checkpoint_hi_inclusive as i64,
-        tx_hi: wm.tx_hi as i64,
-        timestamp_ms_hi_inclusive: wm.timestamp_ms_hi_inclusive as i64,
-        epoch_lo: 0,
-        checkpoint_lo: wm.reader_lo as i64,
-        tx_lo: 0,
-    })
 }
 
 async fn watermark_from_ledger_grpc(

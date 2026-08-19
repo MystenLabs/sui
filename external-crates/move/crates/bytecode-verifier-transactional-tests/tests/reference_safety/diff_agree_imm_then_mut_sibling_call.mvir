@@ -1,0 +1,28 @@
+// the immutable borrow taken first: siblings in the old graph, epsilon aliases in the regex one
+
+//# run
+
+mvir 0x42::zzs2_a {
+
+public struct T has copy, drop { f: u64 }
+
+fun g(a: &Self::T, b: &mut Self::T) {
+label b0:
+    *move(b) = T { f: 7 };
+    _ = move(a);
+    return;
+}
+
+entry fun t() {
+    let x: Self::T;
+    let i: &Self::T;
+    let s: &mut Self::T;
+label b0:
+    x = T { f: 0 };
+    i = &x;
+    s = &mut x;
+    Self::g(move(i), move(s));
+    return;
+}
+
+}

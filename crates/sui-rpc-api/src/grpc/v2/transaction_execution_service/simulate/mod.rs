@@ -8,6 +8,7 @@ use crate::RpcService;
 use itertools::Itertools;
 use sui_protocol_config::ProtocolConfig;
 use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::Bcs;
@@ -46,11 +47,19 @@ pub fn simulate_transaction(
         .as_ref()
         .ok_or_else(|| RpcError::new(tonic::Code::Unimplemented, "no transaction executor"))?;
 
-    let read_mask = request
-        .read_mask
-        .as_ref()
-        .map(FieldMaskTree::from_field_mask)
-        .unwrap_or_else(FieldMaskTree::new_wildcard);
+    let read_mask = match request.read_mask.as_ref() {
+        Some(read_mask) => {
+            read_mask
+                .validate::<SimulateTransactionResponse>()
+                .map_err(|path| {
+                    FieldViolation::new("read_mask")
+                        .with_description(format!("invalid read_mask path: {path}"))
+                        .with_reason(ErrorReason::FieldInvalid)
+                })?;
+            FieldMaskTree::from_field_mask(read_mask)
+        }
+        None => FieldMaskTree::new_wildcard(),
+    };
 
     let transaction_proto = request
         .transaction

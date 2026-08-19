@@ -29,6 +29,9 @@ use crate::api::scalars::uint53::UInt53;
 use crate::api::types::address;
 use crate::api::types::address::Address;
 use crate::api::types::address::AddressKey;
+use crate::api::types::balance;
+use crate::api::types::balance::Balance;
+use crate::api::types::balance::BalanceKey;
 use crate::api::types::checkpoint;
 use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
@@ -39,7 +42,6 @@ use crate::api::types::epoch::CEpoch;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::event::CEvent;
 use crate::api::types::event::Event;
-use crate::api::types::event::EventConnection;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::move_object::MoveObject;
 use crate::api::types::move_package;
@@ -64,7 +66,6 @@ use crate::api::types::signature_verify::SignatureVerifyResult;
 use crate::api::types::simulation_result::SimulationResult;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
-use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::transaction_effects::TransactionEffects;
@@ -77,6 +78,7 @@ use crate::error::feature_unavailable;
 use crate::error::upcast;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
+use crate::pagination::StreamConnection;
 use crate::scope::Scope;
 use crate::task::chain_identifier::ChainIdentifier;
 
@@ -312,7 +314,7 @@ impl Query {
         last: Option<u64>,
         before: Option<CEvent>,
         filter: Option<EventFilter>,
-    ) -> Option<Result<EventConnection, RpcError>> {
+    ) -> Option<Result<StreamConnection<Event>, RpcError>> {
         Some(
             async {
                 let scope = self.scope(ctx)?;
@@ -335,11 +337,32 @@ impl Query {
         keys: Vec<AddressKey>,
     ) -> Result<Vec<Option<Address>>, RpcError<address::Error>> {
         let scope = self.scope(ctx)?;
-        try_join_all(
-            keys.into_iter()
-                .map(|k| Address::by_key(ctx, scope.clone(), k)),
-        )
-        .await
+        let addresses = keys
+            .into_iter()
+            .map(|k| Address::by_key(ctx, scope.clone(), k));
+
+        try_join_all(addresses).await
+    }
+
+    /// Fetch balances by their addresses and coin types.
+    ///
+    /// Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns a list that is guaranteed to be the same length as `keys`. If an address has no balance of a given type, all three values are zero for that key.
+    async fn multi_get_balances(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<BalanceKey>,
+    ) -> Result<Vec<Balance>, RpcError<balance::Error>> {
+        let scope = self.scope(ctx)?;
+        let keys = keys
+            .into_iter()
+            .map(|key| (key.address.into(), key.coin_type.into()))
+            .collect();
+
+        // Query is only exposed at the request root or through Checkpoint.query, both of which
+        // set a checkpoint bound.
+        Ok(Balance::fetch_many(ctx, &scope, keys)
+            .await?
+            .context("Query scope is missing a checkpoint bound")?)
     }
 
     /// Fetch checkpoints by their sequence numbers.
@@ -720,7 +743,7 @@ impl Query {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Option<Result<TransactionConnection, RpcError>> {
+    ) -> Option<Result<StreamConnection<Transaction>, RpcError>> {
         Some(
             async {
                 let scope = self.scope(ctx)?;

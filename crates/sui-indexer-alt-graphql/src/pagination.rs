@@ -1,18 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ops::Range;
 
+use anyhow::Context as _;
+use async_graphql::Object;
 use async_graphql::OutputType;
+use async_graphql::TypeName;
 use async_graphql::connection::Connection;
 use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
+use async_graphql::connection::EmptyFields;
+use async_graphql::connection::PageInfo;
 use async_graphql::registry::MetaField;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_pg_db::query::Query;
+use sui_rpc_cursor::CursorToken;
 use sui_sql_macro::query;
 
 use crate::api::scalars::cursor::JsonCursor;
+use crate::error::RpcError;
 
 /// Configuration for page size limits, specifying a max multi-get size, as well as a default and
 /// max page size for each paginated fields. Page limits can be customized for specific fields,
@@ -57,6 +66,13 @@ pub(crate) struct Page<C> {
 pub(crate) enum End {
     Front,
     Back,
+}
+
+/// Connection for fields served by a gRPC stream. Unlike the stock `Connection`, pages may be
+/// partially filled, with `PageInfo` cursors decoupled from the edge list.
+pub(crate) struct StreamConnection<N: OutputType> {
+    pub edges: Vec<Edge<String, N, EmptyFields>>,
+    pub page_info: PageInfo,
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -327,6 +343,119 @@ impl<C: CursorType + Eq + PartialEq + Clone> Page<C> {
         }
 
         Ok(conn)
+    }
+}
+
+impl<C> Page<C>
+where
+    C: CursorType + TryFrom<CursorToken, Error = anyhow::Error>,
+{
+    /// Translate a `StreamPage` into a `StreamConnection`. The server is expected to have already
+    /// applied page bounds and limit.
+    ///
+    /// `node` converts one stream payload into the connection's node type; cursors are minted
+    /// here, from the server's per-item tokens. Edges are returned in ascending order (the stream
+    /// emits descending order when paginating from the back).
+    pub(crate) fn paginate_stream_results<T, N: OutputType>(
+        &self,
+        result: StreamPage<T>,
+        node: impl Fn(&T) -> Result<N, RpcError>,
+    ) -> Result<StreamConnection<N>, RpcError> {
+        let more = result.has_more();
+        let start = result.first_cursor().cloned();
+        let end = result.last_cursor().cloned();
+        let mut items = result.items;
+
+        let (has_previous_page, has_next_page, start, end) = if self.is_from_front() {
+            (self.after().is_some(), more, start, end)
+        } else {
+            items.reverse();
+            (more, self.before().is_some(), end, start)
+        };
+
+        let mut edges = Vec::with_capacity(items.len());
+        for item in items {
+            edges.push(Edge::new(
+                Self::encode_stream_cursor(&item.cursor)?,
+                node(&item.payload)?,
+            ));
+        }
+
+        Ok(StreamConnection {
+            edges,
+            page_info: PageInfo {
+                has_previous_page,
+                has_next_page,
+                start_cursor: start.map(|b| Self::encode_stream_cursor(&b)).transpose()?,
+                end_cursor: end.map(|b| Self::encode_stream_cursor(&b)).transpose()?,
+            },
+        })
+    }
+
+    /// Re-encode a server-minted cursor (raw encoded `CursorToken` bytes from the gRPC stream) as a
+    /// GraphQL cursor string in this page's cursor format.
+    fn encode_stream_cursor(bytes: &[u8]) -> Result<String, RpcError> {
+        let token = CursorToken::decode(bytes).context("Failed to decode stream cursor")?;
+        let cursor = C::try_from(token).context("Unexpected position in stream cursor")?;
+        Ok(cursor.encode_cursor())
+    }
+}
+
+#[Object(name_type)]
+impl<N: OutputType> StreamConnection<N> {
+    /// Information to aid in pagination.
+    async fn page_info(&self) -> &PageInfo {
+        &self.page_info
+    }
+
+    /// A list of edges.
+    async fn edges(&self) -> &[Edge<String, N, EmptyFields>] {
+        &self.edges
+    }
+
+    /// A list of nodes.
+    async fn nodes(&self) -> Vec<&N> {
+        self.edges.iter().map(|e| &e.node).collect()
+    }
+}
+
+impl<N: OutputType> StreamConnection<N> {
+    pub(crate) fn empty() -> Self {
+        Self {
+            edges: vec![],
+            page_info: PageInfo {
+                has_previous_page: false,
+                has_next_page: false,
+                start_cursor: None,
+                end_cursor: None,
+            },
+        }
+    }
+}
+
+impl<N: OutputType> TypeName for StreamConnection<N> {
+    /// Names each instantiation `{Node}Connection`, matching the convention of the stock
+    /// `Connection`.
+    fn type_name() -> Cow<'static, str> {
+        format!("{}Connection", N::type_name()).into()
+    }
+}
+
+impl<N: OutputType> From<Connection<String, N>> for StreamConnection<N> {
+    /// Convert a stock async-graphql `Connection` (as produced by `Page::paginate_results`) into
+    /// the custom shape. Cursors are derived from edges, matching stock semantics.
+    fn from(conn: Connection<String, N>) -> Self {
+        let start_cursor = conn.edges.first().map(|e| e.cursor.clone());
+        let end_cursor = conn.edges.last().map(|e| e.cursor.clone());
+        Self {
+            edges: conn.edges,
+            page_info: PageInfo {
+                has_previous_page: conn.has_previous_page,
+                has_next_page: conn.has_next_page,
+                start_cursor,
+                end_cursor,
+            },
+        }
     }
 }
 

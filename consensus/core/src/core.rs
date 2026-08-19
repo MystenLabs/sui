@@ -33,11 +33,13 @@ use crate::{
     block_manager::BlockManager,
     commit::{
         CertifiedCommit, CertifiedCommits, CommitAPI, CommittedSubDag, DecidedLeader, Decision,
+        TrustedCommit,
     },
     commit_observer::CommitObserver,
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
+    flex_committer::FlexCommitter,
     leader_schedule::LeaderSchedule,
     leader_schedule_v3::LeaderScheduleV3,
     leader_scoring::ReputationScores,
@@ -72,6 +74,10 @@ pub(crate) struct Core {
     /// The commit observer is responsible for observing the commits and collecting
     /// + sending subdags over the consensus output channel.
     commit_observer: CommitObserver,
+    /// The v3 commit pipeline helper. Set when `enable_v3` is on. Owns both
+    /// the local decision rule via `try_commit` and the certified-commit
+    /// sub-dag construction via `handle_certified_commit`.
+    flex_committer: Option<FlexCommitter>,
     /// Sender of outgoing signals from Core.
     signals: CoreSignals,
     /// Keeping track of state of the DAG, including blocks, commits and last committed rounds.
@@ -104,6 +110,12 @@ impl Core {
                 context.clone(),
                 dag_state.clone(),
             ))
+        } else {
+            None
+        };
+
+        let flex_committer = if context.protocol_config.enable_v3() {
+            Some(FlexCommitter::new(context.clone(), dag_state.clone()))
         } else {
             None
         };
@@ -182,6 +194,7 @@ impl Core {
             block_manager,
             committer,
             commit_observer,
+            flex_committer,
             signals,
             dag_state,
             proposer,
@@ -218,6 +231,12 @@ impl Core {
             None
         };
 
+        let flex_committer = if context.protocol_config.enable_v3() {
+            Some(FlexCommitter::new(context.clone(), dag_state.clone()))
+        } else {
+            None
+        };
+
         let committer = Arc::new(
             UniversalCommitterBuilder::new(
                 context.clone(),
@@ -241,6 +260,7 @@ impl Core {
             block_manager,
             committer,
             commit_observer,
+            flex_committer,
             signals,
             dag_state,
             proposer: None,
@@ -258,7 +278,7 @@ impl Core {
             .start_timer();
 
         // Try to commit and propose, since they may not have run after the last storage write.
-        self.try_commit(vec![]).unwrap();
+        self.try_commit_local().unwrap();
 
         let last_proposed_block = if let Some(last_proposed_block) = self.try_propose(true).unwrap()
         {
@@ -310,7 +330,7 @@ impl Core {
             .start_timer();
 
         // Try to commit, since they may not have run after the last storage write.
-        self.try_commit(vec![]).unwrap();
+        self.try_commit_local().unwrap();
 
         self.try_signal_new_round();
 
@@ -385,7 +405,7 @@ impl Core {
             );
 
             // Try to commit the new blocks if possible.
-            self.try_commit(vec![])?;
+            self.try_commit_local()?;
 
             // Try to propose now since there are new blocks accepted.
             self.try_propose(false)?;
@@ -406,10 +426,10 @@ impl Core {
         Ok(missing_block_refs)
     }
 
-    // Adds the certified commits that have been synced via the commit syncer. We are using the commit info in order to skip running the decision
-    // rule and immediately commit the corresponding leaders and sub dags. Pay attention that no block acceptance is happening here, but rather
-    // internally in the `try_commit` method which ensures that everytime only the blocks corresponding to the certified commits that are about to
-    // be committed are accepted.
+    /// Adds certified commits synced from peers via the commit syncer. Local commit rule is
+    /// skipped and the corresponding leaders and sub dags are committed directly. Blocks of
+    /// the certified commits themselves are accepted inside `try_commit()` or
+    /// `process_certified_commits()`.
     #[tracing::instrument(skip_all)]
     pub(crate) fn add_certified_commits(
         &mut self,
@@ -427,8 +447,12 @@ impl Core {
         // commits when helping peers sync commits.
         let (_, missing_block_refs) = self.accept_blocks(votes);
 
-        // Try to commit the new blocks. Take into account the trusted commit that has been provided.
-        self.try_commit(commits)?;
+        if self.context.protocol_config.enable_v3() {
+            self.process_certified_commits(commits)?;
+            self.try_commit_v3()?;
+        } else {
+            self.try_commit(commits)?;
+        }
 
         // Try to propose now since there are new blocks accepted.
         self.try_propose(false)?;
@@ -535,6 +559,12 @@ impl Core {
                 if commit.index() > last_commit_index {
                     true
                 } else {
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .core_certified_commits_processed
+                        .with_label_values(&["skipped"])
+                        .inc();
                     tracing::debug!(
                         "Skip commit for index {} as it is already committed with last commit index {}",
                         commit.index(),
@@ -573,7 +603,7 @@ impl Core {
             fail_point!("consensus-after-propose");
 
             // The new block may help commit.
-            self.try_commit(vec![])?;
+            self.try_commit_local()?;
             return Ok(Some(extended_block.block));
         }
         Ok(None)
@@ -652,6 +682,18 @@ impl Core {
                 .into_iter()
                 .unzip();
 
+            // Selected certified leaders are guaranteed to be sequenced below,
+            // so count them as committed here, keeping this metric consistent
+            // with the v3 path (`process_certified_commits`).
+            if !decided_certified_commits.is_empty() {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .core_certified_commits_processed
+                    .with_label_values(&["committed"])
+                    .inc_by(decided_certified_commits.len() as u64);
+            }
+
             // Only accept blocks for the certified commits that we are certain to sequence.
             // This ensures that only blocks corresponding to committed certified commits are flushed to disk.
             // Blocks from non-committed certified commits will not be flushed, preventing issues during crash-recovery.
@@ -712,7 +754,7 @@ impl Core {
             // TODO: refcount subdags
             let subdags = self
                 .commit_observer
-                .handle_commit(sequenced_leaders, local)?;
+                .handle_committed_leaders(sequenced_leaders, local)?;
 
             // Try to unsuspend blocks if gc_round has advanced.
             self.block_manager
@@ -749,6 +791,200 @@ impl Core {
         }
 
         Ok(committed_sub_dags)
+    }
+
+    // Processes certified commits that have been synced from peers. Each commit
+    // is already quorum-certified, so the decision rule is skipped and the
+    // corresponding leaders and sub dags are committed directly. Blocks for the
+    // decided certified commits are accepted inside this function to avoid
+    // flushing blocks that belong to certified commits which end up not being
+    // linearized (see the comment on `accept_committed_blocks` below).
+    fn process_certified_commits(
+        &mut self,
+        certified_commits: Vec<CertifiedCommit>,
+    ) -> ConsensusResult<Vec<CommittedSubDag>> {
+        if certified_commits.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::process_certified_commits"])
+            .start_timer();
+        info!(
+            "Processing certified commits: {:?}",
+            certified_commits
+                .iter()
+                .map(|c| (c.index(), c.leader()))
+                .collect::<Vec<_>>()
+        );
+
+        let num_certified = certified_commits.len();
+        let mut subdags = Vec::with_capacity(num_certified);
+        for cert in certified_commits {
+            // Accept blocks belonging to this commit before building its sub dag — the
+            // sub dag is reconstructed by reading the commit's blocks from DagState.
+            // Accepting per commit (rather than up front) keeps the read-after-write
+            // coupling local and obvious.
+            self.accept_committed_blocks(cert.blocks().to_vec());
+
+            let commit: TrustedCommit = (*cert).clone();
+
+            // A certified commit must extend the local commit chain. A mismatch means
+            // local commits have diverged from the quorum-certified chain, which
+            // should be surfaced immediately instead of corrupting the commit chain.
+            assert_eq!(
+                commit.previous_digest(),
+                self.dag_state.read().last_commit_digest(),
+                "Certified commit {} does not chain onto the last local commit",
+                commit.reference(),
+            );
+
+            // Certified commits are not decided locally — mark blocks
+            // committed and build the sub-dag in one shot.
+            let subdag = self
+                .flex_committer
+                .as_ref()
+                .expect("FlexCommitter must be initialized on the v3 path")
+                .handle_certified_commit(&commit);
+
+            self.post_commit(commit, subdag.clone())?;
+            subdags.push(subdag);
+
+            fail_point!("consensus-after-handle-commit");
+        }
+
+        self.context
+            .metrics
+            .node_metrics
+            .core_certified_commits_processed
+            .with_label_values(&["committed"])
+            .inc_by(num_certified as u64);
+
+        Ok(subdags)
+    }
+
+    /// Runs the local commit decision rule on the path selected by `enable_v3`,
+    /// without processing any certified commits.
+    fn try_commit_local(&mut self) -> ConsensusResult<Vec<CommittedSubDag>> {
+        if self.context.protocol_config.enable_v3() {
+            self.try_commit_v3()
+        } else {
+            self.try_commit(vec![])
+        }
+    }
+
+    // Runs the local commit decision rule on the current DAG and linearizes any
+    // newly-decided sub dags. Does not process certified commits — see
+    // `Self::process_certified_commits` for that path. Used when
+    // `ConsensusProtocolConfig::enable_v3()` is enabled; otherwise the legacy
+    // `try_commit` is used.
+    fn try_commit_v3(&mut self) -> ConsensusResult<Vec<CommittedSubDag>> {
+        // Deliberately reuses the legacy `Core::try_commit` label: only one of the
+        // two paths is active for a given protocol config, and sharing the label
+        // keeps dashboards working across the transition.
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::try_commit"])
+            .start_timer();
+
+        let mut committed_sub_dags = Vec::new();
+        loop {
+            let next_commit_leaders = self
+                .leader_schedule_v3
+                .as_ref()
+                .expect("LeaderScheduleV3 must be initialized on the v3 path")
+                .next_commit_leader_schedule();
+            let Some((commit, subdag)) = self
+                .flex_committer
+                .as_mut()
+                .expect("FlexCommitter must be initialized on the v3 path")
+                .try_commit(next_commit_leaders)
+            else {
+                break;
+            };
+
+            self.post_commit(commit, subdag.clone())?;
+            committed_sub_dags.push(subdag);
+
+            fail_point!("consensus-after-handle-commit");
+        }
+
+        Ok(committed_sub_dags)
+    }
+
+    // Post-processing for a single committed subdag on the v3 path: persists the
+    // commit, forwards to the finalizer, updates bookkeeping, unsuspends blocks,
+    // notifies the proposer about own blocks, and feeds v3 leader
+    // scoring.
+    fn post_commit(
+        &mut self,
+        commit: TrustedCommit,
+        subdag: CommittedSubDag,
+    ) -> ConsensusResult<()> {
+        self.dag_state.write().add_commit(commit);
+
+        self.commit_observer.report_commit_metrics(&subdag);
+        self.commit_observer.send_to_finalizer(subdag.clone())?;
+
+        self.last_decided_leader = subdag.leader.into();
+        self.context
+            .metrics
+            .node_metrics
+            .last_decided_leader_round
+            .set(self.last_decided_leader.round as i64);
+
+        self.block_manager
+            .try_unsuspend_blocks_for_latest_gc_round();
+
+        let committed_block_refs = subdag
+            .blocks
+            .iter()
+            .filter_map(|block| {
+                (block.author() == self.context.own_index).then_some(block.reference())
+            })
+            .collect::<Vec<_>>();
+        if let Some(proposer) = &self.proposer {
+            proposer.notify_own_blocks_committed(
+                committed_block_refs,
+                self.dag_state.read().gc_round(),
+            );
+        }
+
+        if let Some(schedule) = self.leader_schedule_v3.as_mut() {
+            schedule.add_commit(subdag);
+            let next = schedule.next_commit_leader_schedule();
+            debug!(
+                "Next v3 commit leaders: index={} min_round={} num={} allowed={:?}",
+                next.next_commit_index,
+                next.min_next_leader_round,
+                next.num_leaders(),
+                next.allowed_leaders,
+            );
+            // Push the refreshed schedule into the proposer so its
+            // `allowed_leaders` waiting list tracks current scoring instead
+            // of being frozen at the epoch-start (all-zero-scores) shuffle.
+            if let Some(proposer) = self.proposer.as_mut() {
+                proposer.set_next_commit_leader_schedule(next);
+            }
+        }
+
+        // Refresh the proposer's propagation scores so score-based ancestor
+        // exclusion tracks current v3 leader scoring, instead of staying frozen
+        // at the scores from Core construction. The legacy path refreshes them
+        // on leader schedule updates.
+        let propagation_scores = self.current_reputation_scores();
+        if let Some(proposer) = &mut self.proposer {
+            proposer.set_propagation_scores(propagation_scores);
+        }
+
+        Ok(())
     }
 
     pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
@@ -1026,6 +1262,32 @@ impl CoreTestFixture {
         sync_last_known_own_block: bool,
         prepopulated_blocks: Vec<VerifiedBlock>,
     ) -> Self {
+        let store = Arc::new(MemStore::new());
+        if !prepopulated_blocks.is_empty() {
+            store
+                .write(WriteBatch::default().blocks(prepopulated_blocks))
+                .expect("Storage error");
+        }
+        Self::new_with_store(
+            context,
+            authorities,
+            own_index,
+            sync_last_known_own_block,
+            store,
+        )
+        .await
+    }
+
+    /// Variant of `new` that builds `DagState` and `Core` against the provided
+    /// store. Used by tests exercising restart and recovery: constructing a
+    /// second fixture from the same store simulates a node restart.
+    async fn new_with_store(
+        context: Context,
+        authorities: Vec<Stake>,
+        own_index: AuthorityIndex,
+        sync_last_known_own_block: bool,
+        store: Arc<MemStore>,
+    ) -> Self {
         let (committee, mut signers) = local_committee_and_keys(0, authorities.clone());
         let mut context = context.clone();
         context = context
@@ -1036,12 +1298,6 @@ impl CoreTestFixture {
             .set_bad_nodes_stake_threshold_for_testing(33);
 
         let context = Arc::new(context);
-        let store = Arc::new(MemStore::new());
-        if !prepopulated_blocks.is_empty() {
-            store
-                .write(WriteBatch::default().blocks(prepopulated_blocks))
-                .expect("Storage error");
-        }
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
@@ -1115,7 +1371,11 @@ impl CoreTestFixture {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::BTreeSet, iter, time::Duration};
+    use std::{
+        collections::{BTreeMap, BTreeSet},
+        iter,
+        time::Duration,
+    };
 
     use consensus_config::{AuthorityIndex, Parameters};
     use consensus_types::block::BlockTimestampMs;
@@ -1125,9 +1385,11 @@ mod test {
     use super::*;
     use crate::{
         CommitConsumerArgs, CommitIndex,
-        block::{TestBlock, genesis_blocks},
+        block::{TestBlock, genesis_blocks, max_transaction_vote_targets},
         block_verifier::NoopBlockVerifier,
         commit::CommitAPI,
+        leader_schedule::LeaderSwapTable,
+        leader_schedule_v3::NextCommitLeaderSchedule,
         leader_scoring::ReputationScores,
         storage::{Store, WriteBatch, mem_store::MemStore},
         test_dag_builder::DagBuilder,
@@ -1467,6 +1729,125 @@ mod test {
         let last_commit = fixture.store.read_last_commit().unwrap();
         assert!(last_commit.is_none());
         assert_eq!(fixture.dag_state.read().last_commit_index(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_core_proposes_v3_block_with_gc_cutoff() {
+        telemetry_subscribers::init_for_testing();
+        const GC_DEPTH: u32 = 3;
+        let (mut context, _) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        context.protocol_config.set_gc_depth_for_testing(GC_DEPTH);
+
+        let mut fixture = CoreTestFixture::new(
+            context,
+            vec![1, 1, 1, 1],
+            AuthorityIndex::new_for_test(0),
+            false,
+        )
+        .await;
+        let first_proposal = fixture
+            .block_receiver
+            .recv()
+            .await
+            .expect("Recovery should propose the first v3 block");
+        assert_eq!(
+            first_proposal.block.transaction_votes_cutoff_round(),
+            GENESIS_ROUND,
+            "Nothing is committed yet, so the cutoff must be the genesis round"
+        );
+
+        // Commit enough rounds to move the GC round above the genesis round.
+        // Core proposes the blocks of its own authority, so the builder must skip them.
+        let mut builder = DagBuilder::new(fixture.core.context.clone());
+        builder
+            .layers(1..=10)
+            .authorities(vec![fixture.core.context.own_index])
+            .skip_block()
+            .build();
+        assert!(
+            fixture
+                .add_blocks(builder.blocks.values().cloned().collect())
+                .unwrap()
+                .is_empty()
+        );
+        let gc_round = fixture.dag_state.read().gc_round();
+        assert!(gc_round > GENESIS_ROUND, "GC round should have advanced");
+
+        fixture.core.try_propose(true).unwrap();
+        let proposed = fixture.core.last_proposed_block();
+        assert!(proposed.round() > first_proposal.block.round());
+        assert_eq!(proposed.transaction_votes_cutoff_round(), gc_round);
+    }
+
+    // Adds 3 rounds of peer blocks. The local authority rejects transaction 0 in each block.
+    // Then proposes a block.
+    // Returns the fixture, the proposed block and the peer blocks.
+    async fn propose_after_peer_blocks_with_reject_votes(
+        context: Context,
+    ) -> (CoreTestFixture, VerifiedBlock, Vec<VerifiedBlock>) {
+        let mut fixture = CoreTestFixture::new(
+            context,
+            vec![1, 1, 1, 1],
+            AuthorityIndex::new_for_test(0),
+            false,
+        )
+        .await;
+        let mut builder = DagBuilder::new(fixture.core.context.clone());
+        builder
+            .layers(1..=3)
+            .authorities(vec![fixture.core.context.own_index])
+            .skip_block()
+            .build();
+        let blocks = builder.blocks.values().cloned().collect::<Vec<_>>();
+        fixture
+            .transaction_vote_tracker
+            .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![0])).collect());
+        assert!(fixture.core.add_blocks(blocks.clone()).unwrap().is_empty());
+
+        fixture.core.try_propose(true).unwrap();
+        let proposed = fixture.core.last_proposed_block();
+        (fixture, proposed, blocks)
+    }
+
+    #[tokio::test]
+    async fn test_core_v2_proposal_keeps_all_transaction_vote_targets() {
+        telemetry_subscribers::init_for_testing();
+        let (mut context, _) = Context::new_for_test(4);
+        context.protocol_config.set_gc_depth_for_testing(1);
+        let vote_target_limit = max_transaction_vote_targets(&context);
+
+        let (_fixture, proposed, blocks) =
+            propose_after_peer_blocks_with_reject_votes(context).await;
+
+        // V2 blocks have no signed cutoff round, so the V3 limit must not remove their targets.
+        assert!(blocks.len() > vote_target_limit);
+        assert_eq!(proposed.transaction_votes().len(), blocks.len());
+    }
+
+    #[tokio::test]
+    async fn test_core_v3_proposal_limits_transaction_vote_targets() {
+        telemetry_subscribers::init_for_testing();
+        let (mut context, _) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        context.protocol_config.set_gc_depth_for_testing(1);
+        let vote_target_limit = max_transaction_vote_targets(&context);
+
+        let (fixture, proposed, blocks) =
+            propose_after_peer_blocks_with_reject_votes(context).await;
+
+        assert!(blocks.len() > vote_target_limit);
+        assert!(!proposed.transaction_votes().is_empty());
+        assert!(proposed.transaction_votes().len() <= vote_target_limit);
+        // The signed cutoff moves above the GC round and covers every removed target. Only the
+        // targets above the cutoff stay in the block.
+        let cutoff_round = proposed.transaction_votes_cutoff_round();
+        assert!(cutoff_round > fixture.dag_state.read().gc_round());
+        let expected_targets = blocks
+            .iter()
+            .filter(|block| block.round() > cutoff_round)
+            .count();
+        assert_eq!(proposed.transaction_votes().len(), expected_targets);
     }
 
     #[tokio::test]
@@ -2405,6 +2786,163 @@ mod test {
         assert_eq!(extended_block.excluded_ancestors.len(), 0);
     }
 
+    // Builds a core of 7 authorities and adds blocks up to round 14, with no block from
+    // authority 1. The core proposed its last block at round 13. The first proposal of the
+    // caller gives authority 1 the EXCLUDE state.
+    async fn fixture_with_excluded_authority(
+        enable_v3: bool,
+    ) -> (CoreTestFixture, DagBuilder, AuthorityIndex) {
+        let (mut context, _) = Context::new_for_test(7);
+        context.protocol_config.set_enable_v3_for_testing(enable_v3);
+        let context = context.with_parameters(Parameters {
+            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
+            ..Default::default()
+        });
+        let mut fixture =
+            CoreTestFixture::new(context, vec![1; 7], AuthorityIndex::new_for_test(0), true).await;
+        let excluded = AuthorityIndex::new_for_test(1);
+
+        // The DAG holds no block from this authority, so its propagation score stays zero and
+        // the proposer moves it to the EXCLUDE state. The state lock keeps that state for the
+        // next rounds.
+        let mut builder = DagBuilder::new(fixture.core.context.clone());
+        builder
+            .layers(1..=12)
+            .authorities(vec![excluded])
+            .skip_block()
+            .build();
+        assert!(
+            fixture
+                .add_blocks(builder.blocks(1..=12))
+                .unwrap()
+                .is_empty()
+        );
+        fixture.core.set_last_known_proposed_round(12);
+        let mut quorum_rounds = vec![vec![12; 7]; 7];
+        quorum_rounds[excluded] = vec![0; 7];
+        fixture
+            .core
+            .round_tracker_for_tests()
+            .write()
+            .update_from_probe(quorum_rounds.clone(), quorum_rounds);
+        assert_eq!(
+            fixture
+                .core
+                .try_propose(true)
+                .expect("No error")
+                .unwrap()
+                .round(),
+            13
+        );
+
+        builder
+            .layers(13..=14)
+            .authorities(vec![AuthorityIndex::new_for_test(0)])
+            .skip_block()
+            .build();
+        assert!(
+            fixture
+                .add_blocks(builder.blocks(13..=14))
+                .unwrap()
+                .is_empty()
+        );
+        (fixture, builder, excluded)
+    }
+
+    // A v3 proposal must keep a leader ancestor which has the EXCLUDE state.
+    #[tokio::test]
+    async fn test_smart_ancestor_selection_keeps_v3_leader() {
+        telemetry_subscribers::init_for_testing();
+        let (mut fixture, mut builder, excluded) = fixture_with_excluded_authority(true).await;
+        // Each commit sets the leader schedule of the proposer, so the schedule below must be set
+        // after the last add_blocks() and before the proposal which reads it.
+        let set_leader = |fixture: &mut CoreTestFixture, leader: AuthorityIndex, round: Round| {
+            fixture
+                .core
+                .proposer
+                .as_mut()
+                .unwrap()
+                .set_next_commit_leader_schedule(NextCommitLeaderSchedule {
+                    next_commit_index: 1,
+                    min_next_leader_round: round,
+                    allowed_leaders: vec![leader],
+                });
+        };
+
+        // Another authority is the leader of round 14, so the proposal excludes authority 1.
+        set_leader(&mut fixture, AuthorityIndex::new_for_test(2), 14);
+        let block = fixture.core.try_propose(true).expect("No error").unwrap();
+        assert_eq!(block.round(), 15);
+        assert!(
+            block.ancestors().iter().all(|a| a.author != excluded),
+            "The EXCLUDE authority is not a leader, so the proposal must not include it"
+        );
+
+        builder
+            .layer(15)
+            .authorities(vec![AuthorityIndex::new_for_test(0)])
+            .skip_block()
+            .build();
+        assert!(
+            fixture
+                .add_blocks(builder.blocks(15..=15))
+                .unwrap()
+                .is_empty()
+        );
+        // The minimum round delay stops a proposal inside add_blocks(), so the leader schedule
+        // below is the schedule of the round 16 proposal.
+        assert_eq!(fixture.core.last_proposed_block().round(), 15);
+
+        // Make the EXCLUDE authority the only allowed leader of round 15.
+        set_leader(&mut fixture, excluded, 15);
+        let proposed = fixture.core.try_propose(true).expect("No error").unwrap();
+        assert_eq!(proposed.round(), 16);
+        assert!(
+            proposed.ancestors().iter().any(|a| a.author == excluded),
+            "The proposal must include the leader block, even with its EXCLUDE state"
+        );
+    }
+
+    // A v2 proposal must not keep a leader ancestor which has the EXCLUDE state.
+    #[tokio::test]
+    async fn test_smart_ancestor_selection_excludes_v2_leader() {
+        telemetry_subscribers::init_for_testing();
+        let (mut fixture, mut builder, excluded) = fixture_with_excluded_authority(false).await;
+
+        let block = fixture.core.try_propose(true).expect("No error").unwrap();
+        assert_eq!(block.round(), 15);
+
+        builder
+            .layer(15)
+            .authorities(vec![AuthorityIndex::new_for_test(0)])
+            .skip_block()
+            .build();
+        assert!(
+            fixture
+                .add_blocks(builder.blocks(15..=15))
+                .unwrap()
+                .is_empty()
+        );
+
+        // The minimum round delay stops a proposal inside add_blocks(), so the swap table below
+        // is the table of the round 16 proposal.
+        assert_eq!(fixture.core.last_proposed_block().round(), 15);
+
+        // The leader schedule removes a bad node from the leader slots, so the default swap
+        // table is necessary to make the EXCLUDE authority the leader of round 15. Test leader
+        // election is `round % committee size`, which selects authority 1 for round 15. A commit
+        // can update the swap table, so the table must be set after the last add_blocks().
+        *fixture.core.leader_schedule.leader_swap_table.write() = LeaderSwapTable::default();
+        assert_eq!(fixture.core.committer.get_leaders(15), vec![excluded]);
+
+        let proposed = fixture.core.try_propose(true).expect("No error").unwrap();
+        assert_eq!(proposed.round(), 16);
+        assert!(
+            proposed.ancestors().iter().all(|a| a.author != excluded),
+            "V2 must not keep the EXCLUDE ancestor, even when it is the leader"
+        );
+    }
+
     #[tokio::test]
     async fn test_excluded_ancestor_limit() {
         telemetry_subscribers::init_for_testing();
@@ -2875,6 +3413,551 @@ mod test {
             let commit = &commits[i - 6];
             assert_eq!(commit.reference().index, i as u32);
         }
+    }
+
+    #[tokio::test]
+    async fn try_commit_v3_local_commits() {
+        telemetry_subscribers::init_for_testing();
+
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        let context = context.with_parameters(Parameters {
+            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
+            ..Default::default()
+        });
+
+        let authority_index = AuthorityIndex::new_for_test(0);
+        let core = CoreTestFixture::new(context, vec![1, 1, 1, 1], authority_index, true).await;
+        let mut core = core.core;
+
+        // Build a fully connected DAG and accept its blocks, without any commits yet.
+        let mut dag_builder = DagBuilder::new(core.context.clone());
+        dag_builder.layers(1..=12).build();
+        core.dag_state
+            .write()
+            .accept_blocks(dag_builder.blocks(1..=12));
+
+        let committed = core.try_commit_v3().unwrap();
+
+        // With a fully connected DAG up to round 12, the direct rule can decide leaders
+        // up to round 11 (quorum of votes at leader round + 1), one commit per leader round.
+        assert_eq!(committed.len(), 11);
+        for (i, subdag) in committed.iter().enumerate() {
+            assert_eq!(subdag.commit_ref.index, (i + 1) as CommitIndex);
+            assert_eq!(subdag.leader.round, (i + 1) as Round);
+            assert!(subdag.decided_with_local_blocks);
+        }
+        assert_eq!(core.dag_state.read().last_commit_index(), 11);
+
+        // Re-running the commit rule must be a no-op.
+        assert!(core.try_commit_v3().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn add_certified_commits_v3() {
+        telemetry_subscribers::init_for_testing();
+
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        let context = context.with_parameters(Parameters {
+            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
+            ..Default::default()
+        });
+
+        let authority_index = AuthorityIndex::new_for_test(0);
+        let core = CoreTestFixture::new(context, vec![1, 1, 1, 1], authority_index, true).await;
+        let store = core.store.clone();
+        let mut core = core.core;
+
+        let mut dag_builder = DagBuilder::new(core.context.clone());
+        dag_builder.layers(1..=12).build();
+
+        // Certified commits for leader rounds 1..=5. Their blocks have not been
+        // accepted locally and are provided by the certified commits themselves.
+        let certified_commits = dag_builder
+            .get_sub_dag_and_certified_commits(1..=5)
+            .into_iter()
+            .map(|(_, c)| c)
+            .collect::<Vec<_>>();
+
+        core.add_certified_commits(CertifiedCommits::new(certified_commits.clone(), vec![]))
+            .expect("Should not fail");
+
+        assert_eq!(core.dag_state.read().last_commit_index(), 5);
+        assert_eq!(
+            core.context
+                .metrics
+                .node_metrics
+                .core_certified_commits_processed
+                .with_label_values(&["committed"])
+                .get(),
+            5
+        );
+
+        // The certified commits should be stored as-is.
+        core.dag_state.write().flush();
+        let commits = store.scan_commits((1..=5).into()).unwrap();
+        assert_eq!(commits.len(), 5);
+        for (i, commit) in commits.iter().enumerate() {
+            assert_eq!(commit.reference(), certified_commits[i].reference());
+        }
+
+        // Accept the rest of the DAG. The local commit rule should continue from the
+        // certified commits and commit the leaders of rounds 6..=11.
+        core.dag_state
+            .write()
+            .accept_blocks(dag_builder.blocks(1..=12));
+        let committed = core.try_commit_v3().unwrap();
+        assert!(!committed.is_empty());
+        assert!(committed.iter().all(|s| s.decided_with_local_blocks));
+        assert_eq!(committed.last().unwrap().commit_ref.index, 11);
+        assert_eq!(core.dag_state.read().last_commit_index(), 11);
+
+        // Re-sending the same certified commits should skip all of them.
+        core.add_certified_commits(CertifiedCommits::new(certified_commits, vec![]))
+            .expect("Should not fail");
+        assert_eq!(core.dag_state.read().last_commit_index(), 11);
+        assert_eq!(
+            core.context
+                .metrics
+                .node_metrics
+                .core_certified_commits_processed
+                .with_label_values(&["skipped"])
+                .get(),
+            5
+        );
+    }
+
+    #[tokio::test]
+    async fn add_multi_leader_certified_commits_v3() {
+        const PREFIX_LAST_ROUND: Round = 5;
+        const INITIAL_DAG_LAST_ROUND: Round = PREFIX_LAST_ROUND + 1;
+        const CONTINUATION_DAG_LAST_ROUND: Round = INITIAL_DAG_LAST_ROUND + 2;
+
+        telemetry_subscribers::init_for_testing();
+
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        let context = context.with_parameters(Parameters {
+            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
+            ..Default::default()
+        });
+        let authority_index = AuthorityIndex::new_for_test(0);
+
+        // Use the real v3 commit path as the producer. The legacy DagBuilder certified-commit
+        // helper creates single-leader commits and cannot exercise this commit shape.
+        let source_fixture =
+            CoreTestFixture::new(context.clone(), vec![1, 1, 1, 1], authority_index, true).await;
+        let source_store = source_fixture.store.clone();
+        let mut source = source_fixture.core;
+
+        let receiver_fixture =
+            CoreTestFixture::new(context, vec![1, 1, 1, 1], authority_index, true).await;
+        let receiver_store = receiver_fixture.store.clone();
+        let mut receiver = receiver_fixture.core;
+
+        let next_commit_leaders = source
+            .leader_schedule_v3
+            .as_ref()
+            .expect("LeaderScheduleV3 must be initialized")
+            .next_commit_leader_schedule();
+        assert!(next_commit_leaders.num_leaders() > 1);
+        assert!(
+            source
+                .context
+                .protocol_config
+                .leader_schedule_update_interval()
+                > PREFIX_LAST_ROUND
+        );
+        let scheduled_leaders = next_commit_leaders
+            .allowed_leaders
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>();
+
+        let mut dag_builder = DagBuilder::new(source.context.clone());
+        dag_builder.layers(1..=INITIAL_DAG_LAST_ROUND).build();
+        source
+            .dag_state
+            .write()
+            .accept_blocks(dag_builder.blocks(1..=INITIAL_DAG_LAST_ROUND));
+
+        let source_subdags = source.try_commit_v3().unwrap();
+        // Round 6 supplies direct votes for leader rounds through round 5.
+        assert_eq!(source_subdags.len(), PREFIX_LAST_ROUND as usize);
+        source.dag_state.write().flush();
+        let source_commits = source_store
+            .scan_commits((1..=PREFIX_LAST_ROUND).into())
+            .unwrap();
+        assert_eq!(source_commits.len(), source_subdags.len());
+
+        let source_scores_at_prefix = source.current_reputation_scores();
+        assert_ne!(source_scores_at_prefix, ReputationScores::default());
+
+        let certified_leader_counts = |core: &Core| {
+            core.context
+                .committee
+                .authorities()
+                .map(|(authority_index, authority)| {
+                    (
+                        authority_index,
+                        core.context
+                            .metrics
+                            .node_metrics
+                            .committed_leaders_total
+                            .with_label_values(&[&authority.hostname, "certified-commit"])
+                            .get(),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>()
+        };
+        // The fixtures share a metrics registry. No source commit below uses the
+        // `certified-commit` label, and the baseline is taken before receiver processing.
+        let certified_leaders_before = certified_leader_counts(&receiver);
+
+        let mut source_subdags_by_commit = source_subdags
+            .into_iter()
+            .map(|subdag| (subdag.commit_ref, subdag))
+            .collect::<BTreeMap<_, _>>();
+        let mut expected_certified_leaders = BTreeMap::<AuthorityIndex, u64>::new();
+        let mut expected_receiver_subdags = Vec::new();
+        let mut has_multi_leader_commit = false;
+        let certified_commits = source_commits
+            .iter()
+            .map(|commit| {
+                let subdag = source_subdags_by_commit
+                    .remove(&commit.reference())
+                    .expect("Every source commit must have a matching subdag");
+                let block_refs = subdag
+                    .blocks
+                    .iter()
+                    .map(|block| block.reference())
+                    .collect::<Vec<_>>();
+                assert_eq!(block_refs, commit.blocks());
+
+                // V3 treats each scheduled block in the named leader round as a leader.
+                let leader_blocks = subdag
+                    .blocks
+                    .iter()
+                    .filter(|block| block.round() == commit.leader().round)
+                    .map(|block| block.reference())
+                    .collect::<Vec<_>>();
+                assert!(leader_blocks.contains(&commit.leader()));
+                assert!(
+                    leader_blocks
+                        .iter()
+                        .all(|block| scheduled_leaders.contains(&block.author))
+                );
+                has_multi_leader_commit |= leader_blocks.len() > 1;
+                for block in leader_blocks {
+                    *expected_certified_leaders.entry(block.author).or_default() += 1;
+                }
+
+                let mut expected_receiver_subdag = subdag.clone();
+                expected_receiver_subdag.decided_with_local_blocks = false;
+                expected_receiver_subdags.push(expected_receiver_subdag);
+
+                // Certification is tested in CommitSyncer. This test starts after verification
+                // and checks multi-leader reconstruction and continued local commits.
+                CertifiedCommit::new_certified(commit.clone(), subdag.blocks)
+            })
+            .collect::<Vec<_>>();
+        assert!(source_subdags_by_commit.is_empty());
+        assert!(has_multi_leader_commit);
+        assert!(expected_certified_leaders.values().sum::<u64>() > source_commits.len() as u64);
+
+        let receiver_subdags = receiver
+            .process_certified_commits(certified_commits)
+            .expect("Certified commits should be accepted");
+        assert_eq!(receiver_subdags, expected_receiver_subdags);
+        assert!(receiver.try_commit_v3().unwrap().is_empty());
+        assert_eq!(
+            receiver.dag_state.read().last_commit_index(),
+            PREFIX_LAST_ROUND
+        );
+        assert_eq!(
+            receiver.current_reputation_scores(),
+            source_scores_at_prefix
+        );
+
+        receiver.dag_state.write().flush();
+        let receiver_commits = receiver_store
+            .scan_commits((1..=PREFIX_LAST_ROUND).into())
+            .unwrap();
+        assert_eq!(receiver_commits, source_commits);
+        let certified_leaders_after = certified_leader_counts(&receiver);
+        for (authority_index, expected) in expected_certified_leaders {
+            assert_eq!(
+                certified_leaders_after[&authority_index]
+                    - certified_leaders_before[&authority_index],
+                expected
+            );
+        }
+
+        // Give both nodes the same remaining DAG. The receiver must produce the same next
+        // commits as the source after the certified prefix.
+        dag_builder
+            .layers(INITIAL_DAG_LAST_ROUND + 1..=CONTINUATION_DAG_LAST_ROUND)
+            .build();
+        source.dag_state.write().accept_blocks(
+            dag_builder.blocks(INITIAL_DAG_LAST_ROUND + 1..=CONTINUATION_DAG_LAST_ROUND),
+        );
+        // Re-accepting the prefix simulates normal block dissemination after commit sync.
+        // DagState ignores blocks that the certified commits already marked committed.
+        receiver
+            .dag_state
+            .write()
+            .accept_blocks(dag_builder.blocks(1..=CONTINUATION_DAG_LAST_ROUND));
+
+        let source_continuation = source.try_commit_v3().unwrap();
+        let receiver_continuation = receiver.try_commit_v3().unwrap();
+        assert_eq!(
+            source_continuation
+                .iter()
+                .map(|subdag| subdag.leader.round)
+                .collect::<Vec<_>>(),
+            vec![PREFIX_LAST_ROUND + 1, PREFIX_LAST_ROUND + 2]
+        );
+        assert_eq!(receiver_continuation, source_continuation);
+
+        source.dag_state.write().flush();
+        receiver.dag_state.write().flush();
+        let first_continuation_index = PREFIX_LAST_ROUND + 1;
+        let last_continuation_index = source_continuation.last().unwrap().commit_ref.index;
+        let source_continuation_commits = source_store
+            .scan_commits((first_continuation_index..=last_continuation_index).into())
+            .unwrap();
+        let receiver_continuation_commits = receiver_store
+            .scan_commits((first_continuation_index..=last_continuation_index).into())
+            .unwrap();
+        assert_eq!(receiver_continuation_commits, source_continuation_commits);
+        assert_eq!(
+            receiver_continuation_commits[0].previous_digest(),
+            source_commits.last().unwrap().digest()
+        );
+    }
+
+    #[tokio::test]
+    async fn add_certified_commits_v3_gced_blocks() {
+        const GC_DEPTH: u32 = 3;
+        telemetry_subscribers::init_for_testing();
+
+        let (mut context, _key_pairs) = Context::new_for_test(5);
+        context.protocol_config.set_gc_depth_for_testing(GC_DEPTH);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        let context = context.with_parameters(Parameters {
+            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
+            ..Default::default()
+        });
+
+        let authority_index = AuthorityIndex::new_for_test(0);
+        let core = CoreTestFixture::new(context, vec![1, 1, 1, 1, 1], authority_index, true).await;
+        let store = core.store.clone();
+        let mut core = core.core;
+
+        // Authority E proposes only at rounds 1 and 5: E1 stays outside the DAG
+        // until E5 links back to it. E5 is first committed by the leader round 6
+        // commit, whose gc bound (6 - 1 - GC_DEPTH = 2) excludes E1.
+        let dag_str = "DAG {
+            Round 0 : { 5 },
+            Round 1 : { * },
+            Round 2 : {
+                A -> [-E1],
+                B -> [-E1],
+                C -> [-E1],
+                D -> [-E1],
+            },
+            Round 3 : {
+                A -> [*],
+                B -> [*],
+                C -> [*],
+                D -> [*],
+            },
+            Round 4 : {
+                A -> [*],
+                B -> [*],
+                C -> [*],
+                D -> [*],
+            },
+            Round 5 : {
+                A -> [*],
+                B -> [*],
+                C -> [*],
+                D -> [*],
+                E -> [A4, B4, C4, D4, E1]
+            },
+            Round 6 : { * },
+            Round 7 : { * },
+        }";
+
+        let (_, mut dag_builder) = parse_dag(dag_str).expect("Invalid dag");
+
+        // parse_dag creates the DagBuilder with a default context. Apply the same
+        // gc_depth so certified commits are linearized with the same gc bound as
+        // the receiving Core, like commits certified by peers sharing the
+        // protocol config.
+        {
+            let mut builder_context = (*dag_builder.context).clone();
+            builder_context
+                .protocol_config
+                .set_gc_depth_for_testing(GC_DEPTH);
+            dag_builder.context = Arc::new(builder_context);
+        }
+
+        // Certified commits for the leader rounds in 1..=6 that have a leader
+        // block. Rounds where the elected leader is authority E produce no
+        // commit, so commit indices stay consecutive across leader round gaps.
+        let certified_commits = dag_builder
+            .get_sub_dag_and_certified_commits(1..=6)
+            .into_iter()
+            .map(|(_, c)| c)
+            .collect::<Vec<_>>();
+        let num_certified = certified_commits.len() as CommitIndex;
+        assert!(num_certified > 0);
+
+        core.add_certified_commits(CertifiedCommits::new(certified_commits, vec![]))
+            .expect("Should not fail");
+
+        assert_eq!(core.dag_state.read().last_commit_index(), num_certified);
+
+        // E5 must be committed (every round 6 block links to it), while its
+        // ancestor E1 must be excluded by the gc bound. This also exercises
+        // accepting a committed block (E5) whose ancestor (E1) is gc'ed and
+        // never accepted locally.
+        core.dag_state.write().flush();
+        let commits = store.scan_commits((1..=num_certified).into()).unwrap();
+        assert_eq!(commits.len(), num_certified as usize);
+        let authority_e = AuthorityIndex::new_for_test(4);
+        let mut e5_committed = false;
+        for commit in &commits {
+            for block_ref in commit.blocks() {
+                assert!(
+                    !(block_ref.round == 1 && block_ref.author == authority_e),
+                    "Did not expect to commit block E1"
+                );
+                if block_ref.round == 5 && block_ref.author == authority_e {
+                    e5_committed = true;
+                }
+            }
+        }
+        assert!(e5_committed, "Expected block E5 to be committed");
+    }
+
+    #[tokio::test]
+    async fn test_core_recover_v3_keeps_zero_scores_unavailable() {
+        telemetry_subscribers::init_for_testing();
+
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        let context = context.with_parameters(Parameters {
+            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
+            ..Default::default()
+        });
+        let store = Arc::new(MemStore::new());
+        let authority_index = AuthorityIndex::new_for_test(0);
+
+        {
+            let mut fixture = CoreTestFixture::new_with_store(
+                context.clone(),
+                vec![1, 1, 1, 1],
+                authority_index,
+                true,
+                store.clone(),
+            )
+            .await;
+            assert_eq!(
+                fixture.core.current_reputation_scores(),
+                ReputationScores::default()
+            );
+
+            let mut dag_builder = DagBuilder::new(fixture.core.context.clone());
+            dag_builder.layers(1..=4).build();
+            fixture
+                .dag_state
+                .write()
+                .accept_blocks(dag_builder.blocks(1..=4));
+            assert_eq!(fixture.core.try_commit_v3().unwrap().len(), 3);
+            assert_eq!(
+                fixture.core.current_reputation_scores(),
+                ReputationScores::default()
+            );
+            fixture.dag_state.write().flush();
+        }
+
+        let fixture = CoreTestFixture::new_with_store(
+            context,
+            vec![1, 1, 1, 1],
+            authority_index,
+            true,
+            store,
+        )
+        .await;
+        assert_eq!(fixture.dag_state.read().last_commit_index(), 3);
+        assert_eq!(
+            fixture.core.current_reputation_scores(),
+            ReputationScores::default()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_core_recover_from_store_v3() {
+        telemetry_subscribers::init_for_testing();
+
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        let context = context.with_parameters(Parameters {
+            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
+            ..Default::default()
+        });
+        let store = Arc::new(MemStore::new());
+        let authority_index = AuthorityIndex::new_for_test(0);
+
+        // Commit with v3 and flush the resulting state to the store.
+        let (last_commit_index, last_committed_rounds) = {
+            let mut fixture = CoreTestFixture::new_with_store(
+                context.clone(),
+                vec![1, 1, 1, 1],
+                authority_index,
+                true,
+                store.clone(),
+            )
+            .await;
+            let mut dag_builder = DagBuilder::new(fixture.core.context.clone());
+            dag_builder.layers(1..=12).build();
+            fixture
+                .dag_state
+                .write()
+                .accept_blocks(dag_builder.blocks(1..=12));
+            let committed = fixture.core.try_commit_v3().unwrap();
+            assert!(!committed.is_empty());
+            fixture.dag_state.write().flush();
+            (
+                fixture.dag_state.read().last_commit_index(),
+                fixture.dag_state.read().last_committed_rounds(),
+            )
+        };
+
+        // "Restart" by recovering DagState and Core from the store. On the v3 path,
+        // recovery does not read CommitInfo (never persisted with v3): committed
+        // rounds are rebuilt from the bounded commit scan, and the scoring subdag
+        // stays empty since only legacy leader scoring reads it.
+        let fixture = CoreTestFixture::new_with_store(
+            context,
+            vec![1, 1, 1, 1],
+            authority_index,
+            true,
+            store,
+        )
+        .await;
+        assert_eq!(
+            fixture.dag_state.read().last_commit_index(),
+            last_commit_index
+        );
+        assert_eq!(
+            fixture.dag_state.read().last_committed_rounds(),
+            last_committed_rounds
+        );
+        assert_eq!(fixture.dag_state.read().scoring_subdags_count(), 0);
     }
 
     #[tokio::test]

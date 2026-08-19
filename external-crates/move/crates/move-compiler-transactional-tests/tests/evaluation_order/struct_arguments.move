@@ -1,4 +1,5 @@
 //# publish
+#[allow(always_errors)]
 module 0x42::M {
     struct S has drop {
         a: u64,

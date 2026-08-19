@@ -1,0 +1,78 @@
+// reading through an imm reference while a mut alias changes the runtime layout
+
+//# run
+mvir 0x2::imm_alias_sees_new_variant {
+
+public enum E has copy, drop {
+    One { a: u64 },
+    Two { b: address },
+}
+
+entry fun t() {
+    let e: Self::E;
+    let m: &mut Self::E;
+    let i: &Self::E;
+    let v: Self::E;
+    let b: &address;
+label b0:
+    e = E::One { a: 0 };
+    m = &mut e;
+    i = freeze(copy(m));
+    // the write through m changes the variant i observes
+    *move(m) = E::Two { b: 0x1 };
+    v = *copy(i);
+    &E::Two { b: b } = &v;
+    assert(*move(b) == 0x1, 42);
+    _ = move(i);
+    return;
+}
+
+}
+
+//# run
+mvir 0x6::imm_elem_and_mut_alias_len_only {
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let vr2: &mut vector<u64>;
+    let e: &u64;
+label b0:
+    v = vector<u64; 2>(1, 2);
+    vr = &mut v;
+    vr2 = copy(vr);
+    e = vec_imm_borrow<u64>(freeze(copy(vr)), 1);
+    // non-mutating op through the mut alias
+    assert(vec_len<u64>(freeze(move(vr2))) == 2, 42);
+    assert(*move(e) == 2, 43);
+    _ = move(vr);
+    return;
+}
+
+}
+
+//# run
+mvir 0x7::imm_struct_field_and_mut_field_alias {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+entry fun t() {
+    let s: Self::S;
+    let m: &mut Self::S;
+    let i: &Self::S;
+    let mf: &mut u64;
+    let ig: &u64;
+label b0:
+    s = S { f: 0, g: 1 };
+    m = &mut s;
+    i = freeze(copy(m));
+    // disjoint fields through a mut and an imm ref that alias
+    mf = &mut copy(m).S::f;
+    ig = &move(i).S::g;
+    *move(mf) = 7;
+    assert(*move(ig) == 1, 42);
+    assert(*&mut move(m).S::f == 7, 43);
+    return;
+}
+
+}

@@ -146,6 +146,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) block_timestamp_drift_ms: IntCounterVec,
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) blocks_pruned_on_commit: IntCounterVec,
+    pub(crate) block_sync_service_read_blocks_count: IntCounter,
     pub(crate) commit_observer_last_recovered_commit_index: IntGauge,
     pub(crate) core_add_blocks_batch_size: Histogram,
     pub(crate) core_check_block_refs_batch_size: Histogram,
@@ -153,6 +154,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) core_lock_enqueued: IntCounter,
     pub(crate) priority_submission_backpressure: IntCounter,
     pub(crate) core_skipped_proposals: IntCounterVec,
+    pub(crate) core_certified_commits_processed: IntCounterVec,
     pub(crate) handler_received_block_missing_ancestors: IntCounterVec,
     pub(crate) highest_accepted_authority_round: IntGaugeVec,
     pub(crate) highest_accepted_round: IntGauge,
@@ -178,6 +180,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) rejected_blocks: IntCounterVec,
     pub(crate) subscribed_blocks: IntCounterVec,
     pub(crate) observer_subscribed_blocks_batch_size: Histogram,
+    pub(crate) observer_subscription_suspended: IntGauge,
     pub(crate) verified_blocks: IntCounterVec,
     pub(crate) committed_leaders_total: IntCounterVec,
     pub(crate) last_committed_authority_round: IntGaugeVec,
@@ -390,6 +393,11 @@ impl NodeMetrics {
                 &["authority", "commit_status"],
                 registry,
             ).unwrap(),
+            block_sync_service_read_blocks_count: register_int_counter_with_registry!(
+                "block_sync_service_read_blocks_count",
+                "Number of times the block sync service needs to read blocks from the store",
+                registry,
+            ).unwrap(),
             commit_observer_last_recovered_commit_index: register_int_gauge_with_registry!(
                 "commit_observer_last_recovered_commit_index",
                 "The last commit index recovered by the commit observer",
@@ -426,6 +434,12 @@ impl NodeMetrics {
                 "core_skipped_proposals",
                 "Number of proposals skipped in the Core, per reason",
                 &["reason"],
+                registry,
+            ).unwrap(),
+            core_certified_commits_processed: register_int_counter_vec_with_registry!(
+                "core_certified_commits_processed",
+                "Number of certified commits processed by the Core",
+                &["result"],
                 registry,
             ).unwrap(),
             handler_received_block_missing_ancestors: register_int_counter_vec_with_registry!(
@@ -581,6 +595,11 @@ impl NodeMetrics {
                 "observer_subscribed_blocks_batch_size",
                 "The number of blocks received from a peer before verification in a single batch",
                 NUM_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            observer_subscription_suspended: register_int_gauge_with_registry!(
+                "observer_subscription_suspended",
+                "Whether the observer block stream subscription is currently suspended due to commit lag (1) or active (0)",
                 registry,
             ).unwrap(),
             verified_blocks: register_int_counter_vec_with_registry!(

@@ -1,0 +1,57 @@
+---
+title: Fiat On-Ramps
+description: >-
+  Accept fiat payments and deliver Sui-native tokens to user wallets using
+  third-party on-ramp providers integrated with the Sui network.
+keywords:
+  - fiat
+  - on-ramp
+  - payments
+  - stablecoins
+  - USDC
+  - SUI
+  - wallet integration
+  - credit card
+goal:
+  description: >-
+    Reader can choose and integrate a fiat on-ramp provider for their Sui app
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What fiat on-ramp providers support Sui?
+answer: >-
+  Multiple third-party providers offer fiat on-ramp integration with Sui,
+  including Banxa, Stripe, Coinbase, Meld, and Onramper.
+---
+
+Fiat on-ramp providers enable you to buy Sui-native tokens (SUI, WAL, DEEP, and others) using fiat currency from a user's bank account, card, or payment method. Embedding an on-ramp provider into your app allows users to convert their Sui assets to traditional currency without leaving your interface. Verify current provider capabilities before integrating.
+
+The following table summarizes providers with live Sui on-ramp integration as of August 2026. All columns refer to Sui chain and Sui asset support specifically.
+
+:::info
+
+On-ramp coverage is evolving. Provider asset support and regional availability change frequently. Confirm current capabilities with your chosen provider before launching an integration.
+
+:::
+
+| **Provider** | **Supported assets** | **Documentation** |
+|---|---|---|
+| [Banxa](https://banxa.com/) | SUI, USDC | [Banxa docs](https://docs.banxa.com/products/hosted-checkout/docs/reference/supported-cryptocurrencies-and-blockchains) |
+| [Bridge.xyz](https://bridge.xyz) | USDSui | [Bridge docs](https://apidocs.bridge.xyz/platform/issuance/designing-your-stablecoin#supported-chains) |
+| [Stripe](https://stripe.com/) | SUI, USDSui | [Stripe crypto on-ramp docs](https://docs.stripe.com/crypto/onramp) |
+| [Coinbase](https://coinbase.com/) | SUI, USDC, WAL, DEEP | [Coinbase CDP docs](https://docs.cdp.coinbase.com/onramp/offramp/offramp-overview) |
+| [Alchemy Pay](https://alchemypay.org/) | AUSD, SUI, USD | [Alchemy Pay docs](https://alchemypay.readme.io/docs/api-integration-3) |
+| [OnRamp.money](https://onramp.money/) | SUI, USDC, WAL | [OnRamp.money docs](https://onramp.money/supported-token/) |
+| [CoinVoyage](https://www.coinvoyage.io/) | Sui Dollar | [CoinVoyage docs](https://docs.coinvoyage.io/sdk/paykit-headless#sui-payment-signatures) |
+| [Onramper](https://onramper.com/) | SUI | [Onramper docs](https://docs.onramper.com/docs/network-support) |
+| [Meld](https://www.meld.io) | SUI, USDC, CETUS, NAVI | [Meld docs](https://www.meld.io/coverage/service-providers?cryptoCurrencies=SUI) |
+
+See [Fiat Off-Ramps](/onchain-finance/asset-custody/fiat-off-ramps) for the full off-ramp provider list.

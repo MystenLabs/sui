@@ -1393,6 +1393,7 @@ impl VMTracer<'_> {
             B::PackGeneric(struct_inst_ptr) => {
                 let field_count = struct_inst_ptr.field_count as usize;
                 let struct_type = instantiate_struct_type(
+                    &machine.type_limits,
                     struct_inst_ptr,
                     &machine.call_stack.current_frame.ty_args,
                 )
@@ -1587,8 +1588,12 @@ impl VMTracer<'_> {
                     .instruction(instruction, ty_args, effects, *remaining_gas, pc);
             }
             B::VecPack(ty_ptr, n) => {
-                let ty = instantiate_single_type(ty_ptr, &machine.call_stack.current_frame.ty_args)
-                    .ok()?;
+                let ty = instantiate_single_type(
+                    &machine.type_limits,
+                    ty_ptr,
+                    &machine.call_stack.current_frame.ty_args,
+                )
+                .ok()?;
                 let ty = vtables.type_to_fully_annotated_layout(&ty).ok()?;
                 let ty = AnnotatedTypeLayout::Vector(Box::new(ty));
                 let stack_len = self.type_stack.len();
@@ -1746,6 +1751,7 @@ impl VMTracer<'_> {
                 let ty = vtables
                     .type_to_fully_annotated_layout(
                         &instantiate_enum_type(
+                            &machine.type_limits,
                             variant_inst_ptr,
                             &machine.call_stack.current_frame.ty_args,
                         )

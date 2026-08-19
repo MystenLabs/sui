@@ -795,6 +795,10 @@ impl ValidatorService {
             let tx_size = transaction.validity_check(&epoch_store.tx_validity_check_context())?;
             let tx_digest = *transaction.digest();
 
+            // Reject up front rather than proposing a block that peers would reject: the client
+            // must submit to one of the proposers the transaction allows.
+            epoch_store.check_self_allowed_proposer(transaction.data().transaction_data())?;
+
             // A request must not repeat a transaction.
             if !request_digests.insert(tx_digest) {
                 let error: SuiError = SuiErrorKind::UserInputError {
@@ -934,6 +938,15 @@ impl ValidatorService {
                 .get_executed_effects(&tx_digest)
             {
                 let effects_digest = effects.digest();
+                if let Err(error) = state.check_effects_against_previously_signed(
+                    &epoch_store,
+                    &tx_digest,
+                    &effects_digest,
+                    "submit_transaction",
+                ) {
+                    results[idx] = Some(SubmitTxResult::Rejected { error });
+                    continue;
+                }
                 if let Ok(executed_data) = self.complete_executed_data(effects).await {
                     let executed_result = SubmitTxResult::Executed {
                         effects_digest,
@@ -1030,6 +1043,15 @@ impl ValidatorService {
                         .get_executed_effects(&tx_digest)
                     {
                         let effects_digest = effects.digest();
+                        if let Err(error) = state.check_effects_against_previously_signed(
+                            &epoch_store,
+                            &tx_digest,
+                            &effects_digest,
+                            "submit_transaction",
+                        ) {
+                            results[idx] = Some(SubmitTxResult::Rejected { error });
+                            continue;
+                        }
                         if let Ok(executed_data) = self.complete_executed_data(effects).await {
                             results[idx] = Some(SubmitTxResult::Executed {
                                 effects_digest,
@@ -1133,6 +1155,15 @@ impl ValidatorService {
                         .get_executed_effects(&tx_digest)
                     {
                         let effects_digest = effects.digest();
+                        if let Err(error) = state.check_effects_against_previously_signed(
+                            &epoch_store,
+                            &tx_digest,
+                            &effects_digest,
+                            "submit_transaction",
+                        ) {
+                            results[idx] = Some(SubmitTxResult::Rejected { error });
+                            continue;
+                        }
                         if let Ok(executed_data) = self.complete_executed_data(effects).await {
                             let executed_result = SubmitTxResult::Executed {
                                 effects_digest,
@@ -1733,6 +1764,12 @@ impl ValidatorService {
                 ) => {
                 let effects = effects_result?.pop().unwrap();
                 let effects_digest = effects.digest();
+                self.state.check_effects_against_previously_signed(
+                    epoch_store,
+                    &tx_digest,
+                    &effects_digest,
+                    "wait_for_effects",
+                )?;
                 let details = if request.include_details {
                     Some(self.complete_executed_data(effects).await?)
                 } else {

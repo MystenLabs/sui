@@ -1331,6 +1331,17 @@ pub struct AuthorityStorePruningConfig {
         skip_serializing_if = "Option::is_none"
     )]
     pub periodic_compaction_threshold_days: Option<usize>,
+    /// Optional periodic-compaction interval override for the embedded
+    /// RPC store's transaction and event bitmap SSTs, in days. When
+    /// omitted, the RPC store's RocksDB configuration uses its 7-day
+    /// default. Zero disables periodic compaction; positive values are
+    /// the SST-age interval.
+    ///
+    /// Expired merge-written buckets may need one interval to
+    /// materialize and another to be filtered, so this is not a
+    /// wall-clock deletion SLA.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rpc_store_bitmap_periodic_compaction_days: Option<u64>,
     /// number of epochs to keep the latest version of transactions and effects for
     #[serde(skip_serializing_if = "Option::is_none")]
     pub num_epochs_to_retain_for_checkpoints: Option<u64>,
@@ -1377,6 +1388,7 @@ impl Default for AuthorityStorePruningConfig {
             max_checkpoints_in_batch: default_max_checkpoints_in_batch(),
             max_transactions_in_batch: default_max_transactions_in_batch(),
             periodic_compaction_threshold_days: None,
+            rpc_store_bitmap_periodic_compaction_days: None,
             num_epochs_to_retain_for_checkpoints: if cfg!(msim) { Some(2) } else { None },
             killswitch_tombstone_pruning: false,
             smooth: true,
@@ -1892,7 +1904,7 @@ mod tests {
     use sui_keys::keypair_file::{write_authority_keypair_to_file, write_keypair_to_file};
     use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair, SuiKeyPair, get_key_pair_from_rng};
 
-    use super::{Genesis, StateArchiveConfig};
+    use super::{AuthorityStorePruningConfig, Genesis, StateArchiveConfig};
     use crate::NodeConfig;
 
     #[test]
@@ -1917,7 +1929,37 @@ mod tests {
     fn legacy_validator_config() {
         const FILE: &str = include_str!("../data/sui-node-legacy.yaml");
 
-        let _template: NodeConfig = serde_yaml::from_str(FILE).unwrap();
+        let template: NodeConfig = serde_yaml::from_str(FILE).unwrap();
+        assert_eq!(
+            template
+                .authority_store_pruning_config
+                .rpc_store_bitmap_periodic_compaction_days,
+            None
+        );
+    }
+
+    #[test]
+    fn rpc_store_bitmap_periodic_compaction_days_override_deserializes() {
+        assert_eq!(
+            AuthorityStorePruningConfig::default().rpc_store_bitmap_periodic_compaction_days,
+            None
+        );
+
+        let omitted: AuthorityStorePruningConfig = serde_yaml::from_str("{}").unwrap();
+        assert_eq!(omitted.rpc_store_bitmap_periodic_compaction_days, None);
+
+        let disabled: AuthorityStorePruningConfig =
+            serde_yaml::from_str("rpc-store-bitmap-periodic-compaction-days: 0").unwrap();
+        assert_eq!(disabled.rpc_store_bitmap_periodic_compaction_days, Some(0));
+
+        let configured: AuthorityStorePruningConfig =
+            serde_yaml::from_str("rpc-store-bitmap-periodic-compaction-days: 17").unwrap();
+        let serialized = serde_yaml::to_string(&configured).unwrap();
+        let round_tripped: AuthorityStorePruningConfig = serde_yaml::from_str(&serialized).unwrap();
+        assert_eq!(
+            round_tripped.rpc_store_bitmap_periodic_compaction_days,
+            Some(17)
+        );
     }
 
     #[test]

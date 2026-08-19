@@ -33,7 +33,8 @@ use move_symbol_pool::Symbol;
 use crate::diagnostics::{
     Diagnostic,
     codes::{
-        Category, Declarations, DiagnosticOrigin, DiagnosticsID, Severity, TypeSafety, UnusedItem,
+        Category, CodeGeneration, Declarations, DiagnosticOrigin, DiagnosticsID, Severity,
+        TypeSafety, UnusedItem,
     },
 };
 use crate::shared::{format_allow_attr, known_attributes};
@@ -68,6 +69,7 @@ pub const FILTER_DEPRECATED: &str = "deprecated_usage";
 pub const FILTER_IDE_PATH_AUTOCOMPLETE: &str = "ide_path_autocomplete";
 pub const FILTER_IDE_DOT_AUTOCOMPLETE: &str = "ide_dot_autocomplete";
 pub const FILTER_LITERAL_ENFORCEMENT: &str = "untyped_literal";
+pub const FILTER_ALWAYS_ERRORS: &str = "always_errors";
 
 //**************************************************************************************************
 // Types
@@ -367,6 +369,10 @@ pub static COMPILER_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpans
             (
                 FILTER_LITERAL_ENFORCEMENT,
                 leak(vec![code!(TypeSafety::MissingLiteralType)]),
+            ),
+            (
+                FILTER_ALWAYS_ERRORS,
+                leak(vec![code!(CodeGeneration::AlwaysErrors)]),
             ),
         ]
     });

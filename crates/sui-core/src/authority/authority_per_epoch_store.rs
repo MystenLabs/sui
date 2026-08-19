@@ -45,12 +45,13 @@ use sui_types::crypto::{AuthoritySignInfo, RandomnessRound};
 use sui_types::digests::{ChainIdentifier, TransactionEffectsDigest};
 use sui_types::dynamic_field::get_dynamic_field_from_store;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
 use sui_types::executable_transaction::{
     TrustedExecutableTransactionWithAliases, VerifiedExecutableTransaction,
     VerifiedExecutableTransactionWithAliases,
 };
 use sui_types::execution::{ExecutionTimeObservationKey, ExecutionTiming};
+use sui_types::fp_ensure;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary};
 use sui_types::messages_consensus::{
@@ -313,6 +314,9 @@ pub struct AuthorityPerEpochStore {
     /// Committee of validators for the current epoch.
     committee: Arc<Committee>,
 
+    /// This authority's index in `committee`, or None if it is not a member.
+    own_committee_index: Option<u32>,
+
     /// Holds the underlying per-epoch typed store tables.
     /// This is an ArcSwapOption because it needs to be used concurrently,
     /// and it needs to be cleared at the end of the epoch.
@@ -350,8 +354,8 @@ pub struct AuthorityPerEpochStore {
     executed_digests_notify_read: NotifyRead<TransactionKey, TransactionDigest>,
 
     /// In-memory cache of signed effects digests. Populated from disk at startup, updated on
-    /// insert, and pruned on checkpoint finalization. Avoids disk reads on the hot execution path
-    /// where the vast majority of lookups return None.
+    /// insert, and pruned on checkpoint finalization. Consulted when reporting effects over
+    /// RPC to refuse reporting effects that differ from previously signed effects.
     signed_effects_digests_cache: DashMap<TransactionDigest, TransactionEffectsDigest>,
 
     /// Cancellation token used to signal epoch termination to all in-flight tasks.
@@ -441,10 +445,10 @@ pub struct AuthorityEpochTables {
     effects_signatures: DBMap<TransactionDigest, AuthoritySignInfo>,
 
     /// When we sign a TransactionEffects, we must record the digest of the effects in order
-    /// to detect and prevent equivocation when re-executing a transaction that may not have been
-    /// committed to disk.
+    /// to refuse to sign different effects for the same transaction later, e.g. after a
+    /// re-execution of an uncommitted transaction produced divergent results.
     /// Entries are removed from this table after the transaction in question has been committed
-    /// to disk.
+    /// to a checkpoint.
     signed_effects_digests: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
     /// Next available shared object versions for each shared object.
@@ -1014,6 +1018,7 @@ impl AuthorityPerEpochStore {
 
         let s = Arc::new(Self {
             name,
+            own_committee_index: committee.authority_index(&name),
             committee: committee.clone(),
             protocol_config,
             tables: ArcSwapOption::new(Some(Arc::new(tables))),
@@ -1311,7 +1316,45 @@ impl AuthorityPerEpochStore {
             epoch: self.epoch(),
             chain_identifier: self.get_chain_identifier(),
             reference_gas_price: self.reference_gas_price(),
+            committee_size: self.committee.num_members() as u32,
         }
+    }
+
+    /// This validator's index in the current epoch's committee, if it is a member.
+    pub fn own_committee_index(&self) -> Option<u32> {
+        self.own_committee_index
+    }
+
+    /// Checks that the validator at committee index `proposer` is allowed to propose `tx` in
+    /// consensus. Enforced at admission, and again when verifying blocks received from peers,
+    /// where proposal by a disallowed validator is byzantine behavior.
+    pub fn check_allowed_proposer(&self, tx: &TransactionData, proposer: u32) -> SuiResult {
+        // When the feature is disabled, `validity_check` rejects the expiration variant
+        // outright, so there is nothing to enforce here.
+        if !self.protocol_config().allowed_proposers() {
+            return Ok(());
+        }
+        fp_ensure!(
+            tx.expiration().is_allowed_proposer(proposer, self.epoch()),
+            UserInputError::ProposerNotAllowed { proposer }.into()
+        );
+        Ok(())
+    }
+
+    /// Checks that this validator is allowed to propose `tx` in consensus.
+    pub fn check_self_allowed_proposer(&self, tx: &TransactionData) -> SuiResult {
+        if !self.protocol_config().allowed_proposers()
+            || !tx.expiration().restricts_proposers(self.epoch())
+        {
+            return Ok(());
+        }
+        let Some(own_index) = self.own_committee_index() else {
+            return Err(SuiErrorKind::InvalidRequest(
+                "this node is not a member of the current committee".to_string(),
+            )
+            .into());
+        };
+        self.check_allowed_proposer(tx, own_index)
     }
 
     pub fn get_state_hash_for_checkpoint(
@@ -1719,6 +1762,26 @@ impl AuthorityPerEpochStore {
         effects_digest: &TransactionEffectsDigest,
         effects_signature: &AuthoritySignInfo,
     ) -> SuiResult {
+        // The entry guard serializes concurrent signers of the same transaction, so at most one
+        // effects digest can ever be recorded per transaction within an epoch.
+        match self.signed_effects_digests_cache.entry(*tx_digest) {
+            dashmap::mapref::entry::Entry::Occupied(entry) => {
+                if entry.get() != effects_digest {
+                    return Err(SuiErrorKind::GenericAuthorityError {
+                        error: format!(
+                            "Refusing to report effects for transaction {tx_digest}: effects \
+                             digest {effects_digest} differs from previously signed effects \
+                             digest {}",
+                            entry.get()
+                        ),
+                    }
+                    .into());
+                }
+            }
+            dashmap::mapref::entry::Entry::Vacant(entry) => {
+                entry.insert(*effects_digest);
+            }
+        }
         let tables = self.tables()?;
         let mut batch = tables.effects_signatures.batch();
         batch.insert_batch(&tables.effects_signatures, [(tx_digest, effects_signature)])?;
@@ -1727,8 +1790,6 @@ impl AuthorityPerEpochStore {
             [(tx_digest, effects_digest)],
         )?;
         batch.write()?;
-        self.signed_effects_digests_cache
-            .insert(*tx_digest, *effects_digest);
         Ok(())
     }
 

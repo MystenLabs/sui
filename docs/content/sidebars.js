@@ -234,11 +234,13 @@ export default {
         'develop/security/best-practices',
       ],
     },
+    'develop/production-readiness',
   ],
 
   gettingStartedSidebar: [
     'getting-started',
     { type: 'link', label: 'Skills', href: '/skills' },
+    'getting-started/sui-mcp-server',
     {
       type: 'category',
       label: 'Hello, World!',
@@ -336,6 +338,9 @@ export default {
               'onchain-finance/asset-custody/wallets/suilink',
             ],
           },
+          'onchain-finance/asset-custody/address-aliases',
+          'onchain-finance/asset-custody/fiat-on-ramps',
+          'onchain-finance/asset-custody/fiat-off-ramps',
         ],
       },
       {
@@ -359,7 +364,6 @@ export default {
                 'onchain-finance/fungible-tokens/create-a-fungible-token',
             ],
           },
-          'onchain-finance/fungible-tokens/integrating-with-stablecoins',
           'onchain-finance/fungible-tokens/regulated-tokens',
           'onchain-finance/fungible-tokens/token-vesting-strategies',
           'onchain-finance/fungible-tokens/sui-bridging',
@@ -375,6 +379,17 @@ export default {
           'onchain-finance/tokenized-assets/create-nft',
         ],
       },
+    {
+      type: 'category',
+      label: 'Payments',
+      link: { type: 'doc', id: 'onchain-finance/payments' },
+      items: [
+        'onchain-finance/choose-payments-model',
+        'onchain-finance/payment-kit',
+        'onchain-finance/payment-intents',
+        'onchain-finance/funding-wallets',
+      ],
+    },
       {
         type: 'category',
         label: 'Example Asset Patterns',
@@ -548,8 +563,6 @@ export default {
         'onchain-finance/kiosk/kiosk-apps',
       ],
     },
-    'onchain-finance/payment-kit',
-	'onchain-finance/payment-intents',
   ],
 
 suiStackSidebar: [
@@ -657,12 +670,34 @@ suiStackSidebar: [
       label: 'SuiNS',
       link: { type: 'doc', id: 'sui-stack/suins/index' },
       items: [
+        'sui-stack/suins/user',
+        'sui-stack/suins/communities',
+        'sui-stack/suins/developer',
         {
-          type: 'link',
-          label: 'SuiNS Docs',
-          href: 'https://docs.suins.io',
+          type: 'category',
+          label: 'SDK',
+          link: { type: 'doc', id: 'sui-stack/suins/developer/sdk' },
+          items: [
+            'sui-stack/suins/developer/sdk/querying',
+            'sui-stack/suins/developer/sdk/transactions',
+            'sui-stack/suins/developer/sdk/subnames',
+          ],
         },
+        'sui-stack/suins/node-operator',
+        'sui-stack/suins/dao',
         'sui-stack/suins/sui-stack-suins',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Move Registry (MVR)',
+      link: { type: 'doc', id: 'sui-stack/mvr/move-registry' },
+      items: [
+        'sui-stack/mvr/mvr-names',
+        'sui-stack/mvr/managing-package-info',
+        'sui-stack/mvr/maintainer-practices',
+        'sui-stack/mvr/tooling/mvr-cli',
+        'sui-stack/mvr/tooling/typescript-sdk',
       ],
     },
     {
@@ -722,6 +757,18 @@ suiStackSidebar: [
         'sui-stack/zklogin-integration/developer-account',
         'sui-stack/zklogin-integration/zklogin-demo',
         'sui-stack/zklogin-integration/zklogin',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Hashi',
+      link: { type: 'doc', id: 'sui-stack/hashi/index' },
+      items: [
+        {
+          type: 'link',
+          label: 'Hashi Docs',
+          href: 'https://mystenlabs.github.io/hashi/design/',
+        },
       ],
     },
     {

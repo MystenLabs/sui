@@ -544,11 +544,6 @@ fn recover_switches_in_tree(s: &mut D::Structured, input: &BTreeMap<NodeIndex, D
                 recover_switches_in_tree(body, input);
             }
         }
-        DS::SelectorMatch(_, arms) => {
-            for (_, body) in arms.iter_mut() {
-                recover_switches_in_tree(body, input);
-            }
-        }
         _ => {}
     }
 }

@@ -1,0 +1,17 @@
+// whether a reference-typed local can itself be borrowed
+
+//# publish
+mvir 0x42::m {
+    fun t() {
+        let x: u64;
+        let r: &mut u64;
+        let rr: &mut &mut u64;
+    label b0:
+        x = 1;
+        r = &mut x;
+        rr = &mut r;
+        _ = move(rr);
+        _ = move(r);
+        return;
+    }
+}

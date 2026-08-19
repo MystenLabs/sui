@@ -1,0 +1,125 @@
+// the caller assumes mut results are pairwise disjoint and live inside a mut argument; try to
+// build a callee that violates each
+
+//# publish
+mvir 0x2::callee_returns_aliasing_mut_pair {
+
+public struct S has copy, drop { f: u64 }
+
+// two mutable results that are epsilon aliases
+fun bad(p: &mut Self::S): &mut Self::S * &mut Self::S {
+label b0:
+    return copy(p), move(p);
+}
+
+}
+
+//# publish
+mvir 0x3::callee_returns_mut_and_its_extension {
+
+public struct S has copy, drop { f: u64 }
+
+fun bad(p: &mut Self::S): &mut Self::S * &mut u64 {
+label b0:
+    return copy(p), &mut move(p).S::f;
+}
+
+}
+
+//# publish
+mvir 0x4::callee_returns_imm_parent_mut_child {
+
+public struct S has copy, drop { f: u64 }
+
+fun bad(p: &mut Self::S): &Self::S * &mut u64 {
+label b0:
+    return freeze(copy(p)), &mut move(p).S::f;
+}
+
+}
+
+//# publish
+mvir 0x5::callee_returns_mut_alias_of_imm {
+
+public struct S has copy, drop { f: u64 }
+
+fun bad(p: &mut Self::S): &Self::S * &mut Self::S {
+label b0:
+    return freeze(copy(p)), move(p);
+}
+
+}
+
+//# publish
+mvir 0x6::caller_passes_aliasing_mut_pair {
+
+public struct S has copy, drop { f: u64 }
+
+fun two(a: &mut Self::S, b: &mut Self::S) {
+label b0:
+    _ = move(a);
+    _ = move(b);
+    return;
+}
+
+fun t() {
+    let s: Self::S;
+    let a: &mut Self::S;
+label b0:
+    s = S { f: 0 };
+    a = &mut s;
+    Self::two(copy(a), move(a));
+    return;
+}
+
+}
+
+//# publish
+mvir 0x7::caller_passes_mut_and_imm_alias {
+
+public struct S has copy, drop { f: u64 }
+
+fun two(a: &mut Self::S, b: &Self::S) {
+label b0:
+    _ = move(a);
+    _ = *move(b);
+    return;
+}
+
+fun t() {
+    let s: Self::S;
+    let a: &mut Self::S;
+label b0:
+    s = S { f: 0 };
+    a = &mut s;
+    Self::two(copy(a), freeze(move(a)));
+    return;
+}
+
+}
+
+//# run
+mvir 0x8::two_disjoint_mut_returns_are_writable {
+
+public struct P has copy, drop { x: u64, y: u64 }
+
+fun split(p: &mut Self::P): &mut u64 * &mut u64 {
+label b0:
+    return &mut copy(p).P::x, &mut move(p).P::y;
+}
+
+entry fun t() {
+    let p: Self::P;
+    let x: &mut u64;
+    let y: &mut u64;
+label b0:
+    p = P { x: 0, y: 0 };
+    x, y = Self::split(&mut p);
+    *copy(x) = 1;
+    *copy(y) = 2;
+    assert(*move(x) == 1, 42);
+    assert(*move(y) == 2, 43);
+    return;
+}
+
+}

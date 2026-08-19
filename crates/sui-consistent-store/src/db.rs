@@ -59,6 +59,7 @@ use crate::snapshot::Snapshot;
 /// // More background threads for compactions and flushes.
 /// opts.rocksdb.db.parallelism = Some(8);
 /// ```
+#[derive(Clone)]
 pub struct DbOptions {
     /// Tunable RocksDB options applied database-wide and per column
     /// family when the database is opened.
@@ -78,9 +79,10 @@ pub struct DbOptions {
 
 /// An opened RocksDB database.
 ///
-/// `Db` is not constructed directly; obtain one via [`Db::open`],
-/// which also constructs the typed schema struct that names its
-/// column families. `Db` is `Clone` and cheap to clone — every
+/// Schema implementations construct a `Db` through [`Db::open_cfs`];
+/// applications obtain one through [`Db::open`], which also returns
+/// the typed schema struct that names its column families. `Db` is
+/// `Clone` and cheap to clone — every
 /// clone shares the same underlying database via an internal
 /// [`Arc`], so handles can be freely passed by value to typed
 /// column-family wrappers and across threads.
@@ -99,12 +101,19 @@ pub struct DbOptions {
 /// }
 ///
 /// impl Schema for MySchema {
-///     fn cfs(opts: &sui_consistent_store::CfOptionsResolver) -> Vec<CfDescriptor> {
-///         vec![CfDescriptor::new("my_cf", opts.options("my_cf"))]
-///     }
-///
-///     fn open(db: &Db) -> Result<Self, OpenError> {
-///         Ok(Self { _db: db.clone() })
+///     fn open(
+///         path: &std::path::Path,
+///         opts: &sui_consistent_store::CfOptionsResolver,
+///         snapshot_capacity: usize,
+///     ) -> Result<(Db, Self), OpenError> {
+///         let db = Db::open_cfs(
+///             path,
+///             opts,
+///             snapshot_capacity,
+///             vec![CfDescriptor::new("my_cf", opts.options("my_cf"))],
+///         )?;
+///         let schema = Self { _db: db.clone() };
+///         Ok((db, schema))
 ///     }
 /// }
 ///
@@ -229,8 +238,8 @@ impl fmt::Debug for Db {
 impl Db {
     /// Open a database at `path` with the given schema.
     ///
-    /// Column families named by [`Schema::cfs`] that do not yet exist
-    /// on disk are created — [`Db::open`] always sets
+    /// Column families declared by the schema that do not yet exist
+    /// on disk are created — [`Db::open_cfs`] always sets
     /// `create_if_missing` and `create_missing_column_families`.
     /// RocksDB opens its mandatory `default` column family on its own;
     /// the schema neither declares nor uses it.
@@ -256,11 +265,22 @@ impl Db {
             rocksdb,
             snapshot_capacity,
         } = opts;
+        let opts = CfOptionsResolver::new(rocksdb)?;
+        S::open(path.as_ref(), &opts, snapshot_capacity)
+    }
 
-        let resolver = CfOptionsResolver::new(rocksdb)?;
-        let db_options = resolver.db_options();
-
-        let mut cfs = S::cfs(&resolver);
+    /// Open a database with the supplied column families.
+    ///
+    /// This method adds the framework bookkeeping column families,
+    /// validates configured per-CF overrides, opens RocksDB, and
+    /// retains up to `snapshot_capacity` database snapshots.
+    pub fn open_cfs(
+        path: &Path,
+        opts: &CfOptionsResolver,
+        snapshot_capacity: usize,
+        mut cfs: Vec<CfDescriptor>,
+    ) -> Result<Self, OpenError> {
+        let db_options = opts.db_options();
 
         // The framework owns its bookkeeping CFs (restore, watermark,
         // chain-id); a consumer schema must not declare one itself, or
@@ -281,14 +301,14 @@ impl Db {
         // [`FrameworkSchema`] is always available via [`Db::framework`]
         // without the consumer having to declare it.
         for name in FRAMEWORK_CFS {
-            cfs.push(CfDescriptor::new(name, resolver.options(name)));
+            cfs.push(CfDescriptor::new(name, opts.options(name)));
         }
 
         let cf_names: Vec<&'static str> = cfs.iter().map(|cf| cf.name).collect();
 
         // Reject per-CF overrides that name a column family this schema
         // does not declare — almost always a typo in configuration.
-        for configured in resolver.configured_cf_names() {
+        for configured in opts.configured_cf_names() {
             if !cf_names.contains(&configured) {
                 return Err(OpenError::msg(format!(
                     "rocksdb config names unknown column family `{configured}`"
@@ -299,27 +319,23 @@ impl Db {
         let descriptors = cfs
             .into_iter()
             .map(|cf| rocksdb::ColumnFamilyDescriptor::new(cf.name, cf.options));
-        let path = path.as_ref();
         let db = rocksdb::DB::open_cf_descriptors(&db_options, path, descriptors)?;
         tracing::info!(path = %path.display(), "opened consistent-store database");
 
-        let db = Self {
+        Ok(Self {
             inner: Arc::new(DbInner {
                 snapshots: RwLock::new(BTreeMap::new()),
                 snapshot_capacity,
                 cf_names,
                 db,
             }),
-        };
-        let schema = S::open(&db)?;
-        Ok((db, schema))
+        })
     }
 
     /// Names of the column families that were registered when this
     /// database was opened — both schema-declared CFs and the
     /// framework-internal ones (`__restore`, `__watermark`,
-    /// `__chain_id`). Order matches what [`Schema::cfs`] returned,
-    /// with the framework CFs appended.
+    /// `__chain_id`). Framework CFs follow the schema CFs.
     ///
     /// RocksDB's mandatory `default` column family is not included:
     /// the store never uses it, so it is left untracked.
@@ -528,8 +544,8 @@ impl Db {
     ///
     /// # Schema-set tip defaults are not preserved
     ///
-    /// Per-CF tip-mode values for these specific keys set via
-    /// [`crate::Schema::cfs`] at open time are *not*
+    /// Per-CF tip-mode values configured by the schema at open time
+    /// are *not*
     /// captured for reversal by
     /// [`set_tip_options_cf`](Self::set_tip_options_cf), which
     /// applies RocksDB defaults. A schema that needs non-default
@@ -663,12 +679,11 @@ impl Db {
     /// Possible optimization: the compaction reads every overlapping
     /// SST to produce empty output, so this is O(data size) I/O. A
     /// faster wipe would `drop_cf` each column family and recreate it,
-    /// which unlinks SSTs in O(file count). That requires re-deriving
-    /// each CF's options from the schema (merge operators and
-    /// compaction filters live in `Schema::cfs`, not on the open
-    /// `Db`), so it would make this method generic over the schema and
-    /// take the [`RocksDbConfig`]. Worth pursuing
-    /// if the wipe-then-restore path proves slow on large databases.
+    /// which unlinks SSTs in O(file count). Recreating the CFs requires
+    /// their schema-defined merge operators and compaction filters,
+    /// which are not available from an open `Db`. Worth pursuing with
+    /// a schema-specific reopen path if the wipe-then-restore path
+    /// proves slow on large databases.
     pub fn clear_all(&self) -> Result<(), Error> {
         let mut batch = rocksdb::WriteBatch::default();
         let mut cleared = Vec::new();
@@ -887,6 +902,10 @@ impl Default for RocksMetrics {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::Ordering;
+
     use tempfile::TempDir;
 
     use super::*;
@@ -895,18 +914,28 @@ mod tests {
     #[derive(Debug)]
     struct TestSchema {
         _db: Db,
+        open_state: Arc<AtomicU64>,
     }
 
     impl Schema for TestSchema {
-        fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
-            vec![
-                CfDescriptor::new("foo", opts.options("foo")),
-                CfDescriptor::new("bar", opts.options("bar")),
-            ]
-        }
-
-        fn open(db: &Db) -> Result<Self, OpenError> {
-            Ok(Self { _db: db.clone() })
+        fn open(
+            path: &Path,
+            opts: &CfOptionsResolver,
+            snapshot_capacity: usize,
+        ) -> Result<(Db, Self), OpenError> {
+            let open_state = Arc::new(AtomicU64::new(0));
+            let db = Db::open_cfs(path, opts, snapshot_capacity, {
+                open_state.store(42, Ordering::Relaxed);
+                vec![
+                    CfDescriptor::new("foo", opts.options("foo")),
+                    CfDescriptor::new("bar", opts.options("bar")),
+                ]
+            })?;
+            let schema = Self {
+                _db: db.clone(),
+                open_state,
+            };
+            Ok((db, schema))
         }
     }
 
@@ -916,6 +945,13 @@ mod tests {
         let (db, _schema) = Db::open::<TestSchema>(dir.path(), DbOptions::default()).unwrap();
         assert!(db.cf_handle("foo").is_some());
         assert!(db.cf_handle("bar").is_some());
+    }
+
+    #[test]
+    fn schema_can_create_state_before_opening_cfs() {
+        let dir = TempDir::new().unwrap();
+        let (_db, schema) = Db::open::<TestSchema>(dir.path(), DbOptions::default()).unwrap();
+        assert_eq!(schema.open_state.load(Ordering::Relaxed), 42);
     }
 
     #[test]
@@ -938,15 +974,21 @@ mod tests {
         struct ShadowSchema;
 
         impl Schema for ShadowSchema {
-            fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
-                vec![CfDescriptor::new(
-                    "__watermark",
-                    opts.options("__watermark"),
-                )]
-            }
-
-            fn open(_: &Db) -> Result<Self, OpenError> {
-                Ok(Self)
+            fn open(
+                path: &Path,
+                opts: &CfOptionsResolver,
+                snapshot_capacity: usize,
+            ) -> Result<(Db, Self), OpenError> {
+                let db = Db::open_cfs(
+                    path,
+                    opts,
+                    snapshot_capacity,
+                    vec![CfDescriptor::new(
+                        "__watermark",
+                        opts.options("__watermark"),
+                    )],
+                )?;
+                Ok((db, Self))
             }
         }
 
@@ -1201,14 +1243,21 @@ mod tests {
         }
 
         impl Schema for PersistSchema {
-            fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
-                vec![CfDescriptor::new("items", opts.options("items"))]
-            }
-
-            fn open(db: &Db) -> Result<Self, OpenError> {
-                Ok(Self {
+            fn open(
+                path: &std::path::Path,
+                opts: &crate::CfOptionsResolver,
+                snapshot_capacity: usize,
+            ) -> Result<(Db, Self), OpenError> {
+                let db = Db::open_cfs(
+                    path,
+                    opts,
+                    snapshot_capacity,
+                    vec![CfDescriptor::new("items", opts.options("items"))],
+                )?;
+                let schema = Self {
                     items: DbMap::new(db.clone(), "items")?,
-                })
+                };
+                Ok((db, schema))
             }
         }
 
@@ -1290,14 +1339,21 @@ mod tests {
         }
 
         impl Schema for ItemsSchema {
-            fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
-                vec![CfDescriptor::new("items", opts.options("items"))]
-            }
-
-            fn open(db: &Db) -> Result<Self, OpenError> {
-                Ok(Self {
+            fn open(
+                path: &std::path::Path,
+                opts: &crate::CfOptionsResolver,
+                snapshot_capacity: usize,
+            ) -> Result<(Db, Self), OpenError> {
+                let db = Db::open_cfs(
+                    path,
+                    opts,
+                    snapshot_capacity,
+                    vec![CfDescriptor::new("items", opts.options("items"))],
+                )?;
+                let schema = Self {
                     items: DbMap::new(db.clone(), "items")?,
-                })
+                };
+                Ok((db, schema))
             }
         }
 
@@ -1418,18 +1474,25 @@ mod tests {
             }
 
             impl Schema for TwoCfSchema {
-                fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
-                    vec![
-                        CfDescriptor::new("a", opts.options("a")),
-                        CfDescriptor::new("b", opts.options("b")),
-                    ]
-                }
-
-                fn open(db: &Db) -> Result<Self, OpenError> {
-                    Ok(Self {
+                fn open(
+                    path: &std::path::Path,
+                    opts: &crate::CfOptionsResolver,
+                    snapshot_capacity: usize,
+                ) -> Result<(Db, Self), OpenError> {
+                    let db = Db::open_cfs(
+                        path,
+                        opts,
+                        snapshot_capacity,
+                        vec![
+                            CfDescriptor::new("a", opts.options("a")),
+                            CfDescriptor::new("b", opts.options("b")),
+                        ],
+                    )?;
+                    let schema = Self {
                         a: DbMap::new(db.clone(), "a")?,
                         b: DbMap::new(db.clone(), "b")?,
-                    })
+                    };
+                    Ok((db, schema))
                 }
             }
 

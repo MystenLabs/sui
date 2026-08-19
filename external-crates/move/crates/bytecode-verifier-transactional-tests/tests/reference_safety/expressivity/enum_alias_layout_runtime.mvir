@@ -1,0 +1,45 @@
+// which "layout changed under an alias" shapes the new checker allows, and what the VM does
+
+//# run
+mvir 0x502::stloc_same_variant_under_alias {
+
+public enum X has drop { One { a: u64 }, Two { b: address } }
+
+// same, but the store keeps the variant, so the alias sees the new payload
+entry fun t() {
+    let e: Self::X;
+    let r: &mut Self::X;
+    let a: &mut u64;
+label b0:
+    e = X::One { a: 0 };
+    r = &mut e;
+    e = X::One { a: 7 };
+    &mut X::One { a: a } = move(r);
+    assert(*move(a) == 7, 42);
+    return;
+}
+
+}
+
+//# run
+mvir 0x504::alias_write_keeps_variant {
+
+public enum X has drop { One { a: u64 }, Two { b: address } }
+
+// same variant: no tag mismatch
+entry fun t() {
+    let e: Self::X;
+    let r: &mut Self::X;
+    let alias: &mut Self::X;
+    let a: &mut u64;
+label b0:
+    e = X::One { a: 0 };
+    r = &mut e;
+    alias = copy(r);
+    *move(r) = X::One { a: 9 };
+    &mut X::One { a: a } = move(alias);
+    assert(*move(a) == 9, 42);
+    return;
+}
+
+}

@@ -1,0 +1,14 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 1 task
+
+task 0, lines 3-19:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000033::c3_stloc_alias_only'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x33::c3_stloc_alias_only,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 7)],
+}

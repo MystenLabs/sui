@@ -39,7 +39,6 @@ use mysten_metrics::spawn_logged_monitored_task;
 use parking_lot::RwLock;
 use rand::{prelude::SliceRandom as _, rngs::ThreadRng};
 use tokio::{
-    runtime::Handle,
     sync::oneshot,
     task::{JoinHandle, JoinSet},
     time::{MissedTickBehavior, sleep},
@@ -63,7 +62,7 @@ use crate::{
     peers_pool::PeersPool,
     round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
-    task::{join_and_propagate_panic, shutdown_join_set},
+    task::{join_and_propagate_panic, shutdown_join_set, spawn_blocking},
     transaction_vote_tracker::TransactionVoteTracker,
 };
 
@@ -570,24 +569,22 @@ where
         // 2. Verify the response contains blocks that can certify the last returned commit,
         // and the returned commits are chained by digests, so earlier commits are certified
         // as well.
-        let (commits, commit_certifying_blocks_and_votes) = Handle::current()
-            .spawn_blocking({
-                let context = inner.context.clone();
-                let block_verifier = inner.block_verifier.clone();
-                let peer = target_peer.clone();
-                move || {
-                    Inner::<VC, OC>::verify_commits(
-                        &context,
-                        block_verifier.as_ref(),
-                        peer,
-                        commit_range,
-                        serialized_commits,
-                        serialized_blocks,
-                    )
-                }
-            })
-            .await
-            .expect("Spawn blocking should not fail")?;
+        let (commits, commit_certifying_blocks_and_votes) = spawn_blocking({
+            let context = inner.context.clone();
+            let block_verifier = inner.block_verifier.clone();
+            let peer = target_peer.clone();
+            move || {
+                Inner::<VC, OC>::verify_commits(
+                    &context,
+                    block_verifier.as_ref(),
+                    peer,
+                    commit_range,
+                    serialized_commits,
+                    serialized_blocks,
+                )
+            }
+        })
+        .await??;
 
         // Only the vote tracker needs the reject votes, so move them into it without cloning.
         // Cheap clones of the blocks are enough for the rest of the fetch handling.

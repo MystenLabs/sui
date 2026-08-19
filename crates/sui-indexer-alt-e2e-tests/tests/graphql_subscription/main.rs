@@ -7,4 +7,5 @@ mod testing;
 
 mod checkpoint_subscription;
 mod event_subscription;
+mod throttle_subscription;
 mod transaction_subscription;

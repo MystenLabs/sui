@@ -1,0 +1,10 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 616b704c06920d98198c59555393960735fb6387c11bb3becf26cd3a081e01ea # shrinks to ops = [Field(0, 0, false)]
+cc aefaf330e85cc8f38bef5b1c858a4b5f2becad4a75d61d179a25f059329cd57d # shrinks to ops = [Alias(0, false), Root(false), Root(false), Call([24], [(false, 0, [])])]
+cc 8029009e8a899b295e9701e5b8dedb4972a4bf7f0003e2f60650dabcddfaae2e # shrinks to ops = [Alias(0, false), Call([0], [(false, 0, [])]), Root(false), Root(false), Field(13, 0, false)]
+cc 7c48b4911d80cc1185dcafea4618f63f80aeb80556ad2cda17d535d1d8f5937b # shrinks to ops = [Call([0], [(false, 0, []), (false, 0, [])]), Call([0], [(false, 0, [104]), (true, 0, [49])]), Root(false), Call([29, 235], [(false, 0, []), (false, 0, [])]), Field(128, 29, false), Root(false)]

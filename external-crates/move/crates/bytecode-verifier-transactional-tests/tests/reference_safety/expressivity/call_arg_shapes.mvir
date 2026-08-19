@@ -1,0 +1,52 @@
+// argument shapes at a Call: extensions, epsilon aliases, the same ref twice, mixed mut/imm
+
+//# publish
+mvir 0x6::mut_with_live_imm_alias_outside {
+
+fun one(a: &mut u64) {
+label b0:
+    _ = move(a);
+    return;
+}
+
+fun t() {
+    let v: u64;
+    let m: &mut u64;
+    let i: &u64;
+label b0:
+    v = 0;
+    m = &mut v;
+    // an imm alias that stays in the caller
+    i = &v;
+    Self::one(move(m));
+    _ = *move(i);
+    return;
+}
+
+}
+
+//# publish
+mvir 0xa::mut_arg_with_mut_epsilon_alias_outside_ok {
+
+fun one(a: &mut u64): &mut u64 {
+label b0:
+    return move(a);
+}
+
+fun t() {
+    let v: u64;
+    let m: &mut u64;
+    let m2: &mut u64;
+    let r: &mut u64;
+label b0:
+    v = 0;
+    m = &mut v;
+    m2 = copy(m);
+    r = Self::one(move(m));
+    // release the call result first
+    *move(r) = 1;
+    *move(m2) = 2;
+    return;
+}
+
+}

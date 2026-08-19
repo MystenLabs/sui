@@ -1,0 +1,114 @@
+---
+title: Production Readiness
+description: >-
+  Prepare a Sui application for Mainnet deployment with checklists covering
+  smart contract security, key management, package upgrades, infrastructure,
+  and operational monitoring.
+keywords:
+  - production readiness
+  - mainnet deployment
+  - launch checklist
+  - smart contract security
+  - key management
+  - upgrade policy
+  - monitoring
+  - gas estimation
+  - audit
+  - multisig
+goal:
+  description: >-
+    Reader can evaluate their Sui application against a structured production
+    readiness checklist before deploying to Mainnet
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I prepare a Sui application for Mainnet?
+  - What is the production readiness checklist for Sui?
+  - What should I check before deploying a Move package to Mainnet?
+  - How do I secure my Sui deployment for production?
+  - What key management practices should I follow for Mainnet?
+answer: >-
+  Production readiness for a Sui application involves verifying smart contract
+  security (audits, testing, access control), configuring key and capability
+  management (multisig, role separation, hardware custody), choosing an
+  upgrade strategy (UpgradeCap governance or immutability), setting up
+  infrastructure (RPC endpoints, gas budgets, monitoring), and planning
+  operational procedures (incident response, upgrade runbooks, event indexing).
+---
+
+Production readiness is the process of verifying that a Sui application is secure, correctly configured, and operationally prepared before deploying to [Mainnet](/develop/sui-architecture/networks). Moving from Testnet to Mainnet introduces real financial risk, so each area below requires deliberate verification rather than assumption.
+
+
+## Smart contract security
+
+Before publishing a Move package to Mainnet, verify the following:
+
+- [ ] **Complete test coverage.** All public and entry functions have [unit tests](/develop/testing-debugging/testing) covering positive cases, negative cases, and edge cases. Critical paths have integration tests using `test_scenario`.
+- [ ] **Security best practices.** Review your code against the full [Security Best Practices](/develop/security/best-practices) checklist, including access control patterns, capability governance, and event emission on privileged actions.
+- [ ] **Access control.** Every privileged function requires an explicit [capability parameter](/develop/security/best-practices). Do not rely solely on `tx_context::sender()` for authorization because it does not compose safely across modules.
+- [ ] **Audit.** For packages that manage user assets, commission an independent security audit. Note that upgradeable dependencies can change behavior after an audit, so pin dependency versions or verify dependency package IDs at publish time.
+- [ ] **Dry run.** Execute all critical transaction paths with [dry run](/develop/transactions/ptbs/prog-txn-blocks) against the Mainnet state (or a representative Testnet state) to verify expected behavior and gas costs before publishing.
+
+## Key and capability management
+
+Capabilities (`UpgradeCap`, `TreasuryCap`, `DenyCapV2`, `MetadataCap`, `AdminCap`) are the root of authority for your application. A compromised capability can cause irreversible damage.
+
+- [ ] **Multisig for all admin capabilities.** Store every administrative capability behind a [multisig address](/develop/transactions/transaction-auth/multisig) with an appropriate threshold. A single key pair controlling a `TreasuryCap` or `UpgradeCap` is a single point of failure.
+- [ ] **Role separation.** Assign different capabilities to different multisig addresses. The address that controls minting (`TreasuryCap`) should differ from the address that controls upgrades (`UpgradeCap`) and the address that controls access restrictions (`DenyCapV2`).
+- [ ] **Hardware custody.** Store multisig key shares on hardware wallets or HSMs. Do not store Mainnet admin keys in software wallets, environment variables, or source code. For high-security operations, use [offline signing](/develop/transactions/transaction-auth/offline-signing).
+- [ ] **Network-separated keys.** Use different key pairs for Testnet and Mainnet. A key compromise on Testnet should not affect Mainnet operations.
+- [ ] **Document recovery procedures.** Record how to reconstruct multisig authority if a key holder is unavailable. Define the quorum needed for recovery and the process for rotating compromised keys.
+
+## Package upgrade strategy
+
+Decide and configure your upgrade strategy before publishing. This decision is difficult to change after publication.
+
+- [ ] **Choose an upgrade policy.** Decide between keeping the package upgradeable (with a governed `UpgradeCap`) or making it [immutable](/develop/publish-upgrade-packages/upgrade) (calling `make_immutable`). Immutability provides the strongest guarantee to users but prevents all future changes.
+- [ ] **Custom upgrade policy.** If keeping the package upgradeable, consider a [custom upgrade policy](/develop/publish-upgrade-packages/custom-policies) that enforces constraints such as time delays between authorization and execution. This provides a review window for stakeholders.
+- [ ] **`UpgradeCap` governance.** Store the `UpgradeCap` in a multisig address with a higher threshold than operational capabilities. A package upgrade affects all users, so it warrants the highest approval bar.
+- [ ] **Test the upgrade path.** Publish your package to Testnet, create representative state (objects, balances, configurations), publish an upgrade, and verify that existing state works correctly with the new code. Learn more about [upgrading packages](/develop/publish-upgrade-packages/upgrade).
+- [ ] **Versioning strategy.** If your package uses [versioning](/develop/publish-upgrade-packages/versioning), verify that version checks work correctly and that the upgrade procedure increments the version as expected.
+
+## Gas and transaction configuration
+
+- [ ] **Gas budget estimation.** Run critical transaction paths with dry run to measure actual gas costs. Set gas budgets with sufficient margin for variable costs (shared object contention, dynamic field depth). Learn more about [gas in Sui](/develop/transaction-payment/gas-in-sui).
+- [ ] **Sponsored transactions.** If using [gas sponsorship](/develop/transaction-payment/sponsor-txn), verify that the gas station has sufficient SUI balance and rate limiting appropriate for your expected transaction volume.
+
+## Infrastructure
+
+- [ ] **RPC endpoint selection.** Choose an [RPC provider](/develop/accessing-data/rpc-providers) with sufficient rate limits and reliability for your expected traffic. Consider running your own full node for high-availability applications.
+- [ ] **Data access strategy.** Decide how your application reads onchain data. See [Accessing Data](/develop/accessing-data) for options including [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc), [gRPC](/develop/accessing-data/grpc), and [custom indexers](/develop/accessing-data/custom-indexer/custom-indexers).
+- [ ] **Event indexing.** If your application depends on [event data](/develop/accessing-data/using-events), set up an indexing pipeline with monitoring for lag and errors. Onchain events are permanent, but your indexer might miss them if it falls behind.
+- [ ] **Redundancy.** For applications that cannot tolerate downtime, configure failover across multiple RPC endpoints or run redundant infrastructure.
+
+## Operational readiness
+
+- [ ] **Monitoring and alerting.** Set up monitoring for transaction success rates, gas consumption, event indexer lag, and RPC endpoint availability. Define alert thresholds for each metric.
+- [ ] **Incident response plan.** Document how to respond to emergencies: capability compromise, contract vulnerability discovery, or unexpected transaction behavior. If your application supports [global pause](/onchain-finance/fungible-tokens/currency), verify the pause procedure works and that the authorized multisig can execute it within your target response time.
+- [ ] **Upgrade runbook.** Document the step-by-step process for publishing a package upgrade, including who approves, how the upgrade is tested, and how integrators are notified.
+- [ ] **Dependency monitoring.** If your package depends on upgradeable third-party packages, monitor those packages for upgrades that might change behavior. Consider pinning dependency versions or wrapping external calls with validation.
+
+## Pre-launch sequence
+
+After completing the checklists above, follow this sequence for the Mainnet launch:
+
+1. **Final Testnet validation.** Run the complete application flow on Testnet one final time, using the same configuration and key setup that Mainnet will use (except for the actual Mainnet keys).
+2. **Publish to Mainnet.** [Publish the package](/develop/publish-upgrade-packages) to Mainnet. Record the package ID, all capability object IDs, and the transaction digest.
+3. **Transfer capabilities.** Move all administrative capabilities to their designated multisig addresses. Verify each transfer by querying the object ownership.
+4. **Verify deployment.** Query the published package and its objects through [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) to confirm the onchain state matches expectations.
+5. **Smoke test.** Execute a small-value transaction through the full application flow to verify end-to-end functionality on Mainnet.
+6. **Enable monitoring.** Confirm that all monitoring and alerting systems are receiving data from the Mainnet deployment.
+7. **Announce.** Notify integrators, users, and stakeholders that the deployment is live.

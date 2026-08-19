@@ -1,0 +1,123 @@
+// the dot-star shapes of the Ret check that keeps mut and imm returns disjoint
+
+// imm return inside the mut return, both through calls
+//# publish
+mvir 0xd1::m1_ret_dotstar_nested {
+
+public struct Mid has copy, drop, store { y: u64 }
+public struct O has copy, drop, store { x: Self::Mid }
+
+fun f_mut(p: &mut Self::O): &mut Self::Mid {
+label b0:
+    return &mut move(p).O::x;
+}
+
+fun f_imm(p: &Self::O): &u64 {
+    let q: &Self::Mid;
+label b0:
+    q = &move(p).O::x;
+    return &move(q).Mid::y;
+}
+
+fun h(a: &mut Self::O): &mut Self::Mid * &u64 {
+    let m: &mut Self::Mid;
+    let q: &Self::O;
+    let i: &u64;
+label b0:
+    m = Self::f_mut(copy(a));
+    q = freeze(move(a));
+    i = Self::f_imm(move(q));
+    return move(m), move(i);
+}
+
+}
+
+// same, immutable side first
+//# publish
+mvir 0xd2::m2_ret_dotstar_imm_first {
+
+public struct Mid has copy, drop, store { y: u64 }
+public struct O has copy, drop, store { x: Self::Mid }
+
+fun f_mut(p: &mut Self::O): &mut Self::Mid {
+label b0:
+    return &mut move(p).O::x;
+}
+
+fun f_imm(p: &Self::O): &u64 {
+    let q: &Self::Mid;
+label b0:
+    q = &move(p).O::x;
+    return &move(q).Mid::y;
+}
+
+fun h(a: &mut Self::O): &mut Self::Mid * &u64 {
+    let m: &mut Self::Mid;
+    let q: &Self::O;
+    let i: &u64;
+label b0:
+    q = freeze(copy(a));
+    i = Self::f_imm(move(q));
+    m = Self::f_mut(move(a));
+    return move(m), move(i);
+}
+
+}
+
+// two mutable returns related only through calls
+//# publish
+mvir 0xd3::m3_ret_dotstar_two_mut {
+
+public struct Mid has copy, drop, store { y: u64 }
+public struct O has copy, drop, store { x: Self::Mid }
+
+fun f_mut(p: &mut Self::O): &mut Self::Mid {
+label b0:
+    return &mut move(p).O::x;
+}
+
+fun g_mut(p: &mut Self::Mid): &mut u64 {
+label b0:
+    return &mut move(p).Mid::y;
+}
+
+fun h(a: &mut Self::O): &mut Self::Mid * &mut u64 {
+    let m: &mut Self::Mid;
+    let n: &mut u64;
+label b0:
+    m = Self::f_mut(move(a));
+    n = Self::g_mut(copy(m));
+    return move(m), move(n);
+}
+
+}
+
+// control: genuinely disjoint parameters
+//# publish
+mvir 0xd4::m4_ret_disjoint_control {
+
+public struct Mid has copy, drop, store { y: u64 }
+public struct O has copy, drop, store { x: Self::Mid }
+
+fun f_mut(p: &mut Self::O): &mut Self::Mid {
+label b0:
+    return &mut move(p).O::x;
+}
+
+fun f_imm(p: &Self::O): &u64 {
+    let q: &Self::Mid;
+label b0:
+    q = &move(p).O::x;
+    return &move(q).Mid::y;
+}
+
+fun h(a: &mut Self::O, b: &Self::O): &mut Self::Mid * &u64 {
+    let m: &mut Self::Mid;
+    let i: &u64;
+label b0:
+    m = Self::f_mut(move(a));
+    i = Self::f_imm(move(b));
+    return move(m), move(i);
+}
+
+}

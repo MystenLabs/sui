@@ -21,7 +21,6 @@ itertools.workspace = true
 jsonrpsee.workspace = true
 test-cluster.workspace = true
 rand.workspace = true
-im.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

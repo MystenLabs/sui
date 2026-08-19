@@ -1,0 +1,56 @@
+// VariantSwitch is read_ref in the new checker and release_value in the old; both must see
+// live extensions
+
+//# run
+mvir 0x301::switch_with_live_mut_extension {
+
+public enum X has drop { One { a: u64 }, Two { b: u64 } }
+
+entry fun t() {
+    let e: Self::X;
+    let r: &mut Self::X;
+    let a: &mut u64;
+label b0:
+    e = X::One { a: 0 };
+    r = &mut e;
+    &mut X::One { a: a } = copy(r);
+    variant_switch X (freeze(move(r))) {
+        One: b1,
+        Two: b2
+    };
+label b1:
+    *move(a) = 1;
+    return;
+label b2:
+    *move(a) = 2;
+    return;
+}
+
+}
+
+//# publish
+mvir 0x303::switch_operand_is_field_extension {
+
+public enum Inner has drop { P { n: u64 }, Q { n: u64 } }
+public enum Outer has drop { A { i: Self::Inner } }
+
+// switch on the inner enum with a ref into its field live
+fun t(o: &mut Self::Outer) {
+    let i: &mut Self::Inner;
+    let n: &mut u64;
+label b0:
+    &mut Outer::A { i: i } = move(o);
+    &mut Inner::P { n: n } = copy(i);
+    variant_switch Inner (freeze(move(i))) {
+        P: b1,
+        Q: b2
+    };
+label b1:
+    *move(n) = 1;
+    return;
+label b2:
+    *move(n) = 2;
+    return;
+}
+
+}

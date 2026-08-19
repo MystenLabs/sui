@@ -1,0 +1,90 @@
+// a mutable extension that is live but not transferred, at a call and at a return
+
+//# run
+mvir 0x2::ret_imm_parent_with_local_mut_child {
+
+public struct Inner has copy, drop { v: u64 }
+public struct Outer has copy, drop { f: Self::Inner }
+
+// return the imm parent while a mut extension is live in a local
+fun freeze_and_drop_child(p: &mut Self::Outer): &Self::Outer {
+    let c: &mut Self::Inner;
+    let frozen: &Self::Outer;
+label b0:
+    c = &mut copy(p).Outer::f;
+    frozen = freeze(move(p));
+    *move(c) = Inner { v: 9 };
+    return move(frozen);
+}
+
+entry fun t() {
+    let a: Self::Outer;
+    let i: &Self::Outer;
+    let inner: &Self::Inner;
+label b0:
+    a = Outer { f: Inner { v: 0 } };
+    i = Self::freeze_and_drop_child(&mut a);
+    inner = &move(i).Outer::f;
+    assert(*&move(inner).Inner::v == 9, 42);
+    return;
+}
+
+}
+
+//# run
+mvir 0x3::ret_mut_child_with_local_imm_parent {
+
+public struct Inner has copy, drop { v: u64 }
+public struct Outer has copy, drop { f: Self::Inner }
+
+// return the mut child while the imm parent is live in a local
+fun child_of_frozen(p: &mut Self::Outer): &mut Self::Inner {
+    let c: &mut Self::Inner;
+    let frozen: &Self::Outer;
+label b0:
+    c = &mut copy(p).Outer::f;
+    frozen = freeze(move(p));
+    _ = move(frozen);
+    return move(c);
+}
+
+entry fun t() {
+    let a: Self::Outer;
+    let c: &mut Self::Inner;
+label b0:
+    a = Outer { f: Inner { v: 0 } };
+    c = Self::child_of_frozen(&mut a);
+    *move(c) = Inner { v: 5 };
+    assert(*&(&(&a).Outer::f).Inner::v == 5, 42);
+    return;
+}
+
+}
+
+//# run
+mvir 0x5::closure_after_intermediate_released {
+
+public struct Inner has copy, drop { v: u64 }
+public struct Mid has copy, drop { i: Self::Inner }
+public struct Outer has copy, drop { m: Self::Mid }
+
+entry fun t() {
+    let a: Self::Outer;
+    let p: &mut Self::Outer;
+    let mid: &mut Self::Mid;
+    let inner: &mut Self::Inner;
+    let frozen: &Self::Outer;
+label b0:
+    a = Outer { m: Mid { i: Inner { v: 0 } } };
+    p = &mut a;
+    mid = &mut copy(p).Outer::m;
+    inner = &mut move(mid).Mid::i;
+    // mid is gone; p --Outer.m.Mid.i--> inner must survive
+    frozen = freeze(copy(p));
+    *move(inner) = Inner { v: 4 };
+    _ = *move(frozen);
+    _ = move(p);
+    return;
+}
+
+}

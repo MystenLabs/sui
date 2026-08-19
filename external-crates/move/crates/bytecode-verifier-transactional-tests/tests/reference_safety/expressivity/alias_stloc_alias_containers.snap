@@ -1,0 +1,34 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 0, lines 3-25:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::stloc_over_struct_alias'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x2::stloc_over_struct_alias,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 9)],
+}
+
+task 1, lines 27-49:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::stloc_over_enum_alias_changes_variant'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x3::stloc_over_enum_alias_changes_variant,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 7)],
+}
+
+task 2, lines 51-66:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::stloc_over_vector_alias'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x4::stloc_over_vector_alias,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 9)],
+}

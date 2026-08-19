@@ -1,0 +1,143 @@
+// calls in loops: dot-star edges accumulate, and a second-iteration violation must still be
+// caught
+
+//# publish
+mvir 0x2::loop_call_second_iteration_invalid {
+
+public struct S has copy, drop { f: u64 }
+
+fun borrow_f(s: &mut Self::S): &mut u64 {
+label b0:
+    return &mut move(s).S::f;
+}
+
+fun t(s: &mut Self::S, cond: bool) {
+    let x: &mut u64;
+label b0:
+    x = &mut copy(s).S::f;
+    jump b1;
+label b1:
+    // on the second iteration the previous x is still an extension of s
+    x = Self::borrow_f(copy(s));
+    jump_if (copy(cond)) b1;
+label b2:
+    _ = move(cond);
+    *copy(s) = S { f: 0 };
+    _ = move(x);
+    _ = move(s);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::loop_call_release_each_iteration {
+
+public struct S has copy, drop { f: u64 }
+
+fun borrow_f(s: &mut Self::S): &mut u64 {
+label b0:
+    return &mut move(s).S::f;
+}
+
+fun t(s: &mut Self::S, cond: bool) {
+    let x: &mut u64;
+label b0:
+    jump b1;
+label b1:
+    x = Self::borrow_f(copy(s));
+    *move(x) = 1;
+    jump_if (copy(cond)) b1;
+label b2:
+    _ = move(cond);
+    // every extension released inside the loop
+    *copy(s) = S { f: 0 };
+    _ = move(s);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x4::loop_call_self_extension {
+
+fun id_mut(r: &mut u64): &mut u64 {
+label b0:
+    return move(r);
+}
+
+fun t(s: &mut u64, cond: bool) {
+    let r: &mut u64;
+label b0:
+    r = copy(s);
+    jump b1;
+label b1:
+    r = Self::id_mut(move(r));
+    jump_if (copy(cond)) b1;
+label b2:
+    _ = move(cond);
+    *copy(s) = 1;
+    _ = move(r);
+    _ = move(s);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x5::loop_call_two_results_disjoint {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun split(s: &mut Self::S): &mut u64 * &mut u64 {
+label b0:
+    return (&mut copy(s).S::f, &mut copy(s).S::g);
+}
+
+fun t(s: &mut Self::S, cond: bool) {
+    let x: &mut u64;
+    let y: &mut u64;
+label b0:
+    jump b1;
+label b1:
+    x, y = Self::split(copy(s));
+    *copy(x) = 1;
+    *copy(y) = 2;
+    _ = move(x);
+    _ = move(y);
+    jump_if (copy(cond)) b1;
+label b2:
+    _ = move(cond);
+    _ = move(s);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x6::loop_call_result_escapes_into_next_iteration {
+
+public struct S has copy, drop { f: u64 }
+
+fun borrow_f(s: &mut Self::S): &mut u64 {
+label b0:
+    return &mut move(s).S::f;
+}
+
+fun t(s: &mut Self::S, cond: bool) {
+    let x: &mut u64;
+label b0:
+    x = Self::borrow_f(copy(s));
+    jump b1;
+label b1:
+    // pass s again while the previous result is live
+    x = Self::borrow_f(copy(s));
+    jump_if (copy(cond)) b1;
+label b2:
+    _ = move(cond);
+    _ = move(x);
+    _ = move(s);
+    return;
+}
+
+}

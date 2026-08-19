@@ -1,0 +1,127 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, lines 42-44:
+//# view-abstract-state 0xb1::zzds_mixedargs::t
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "a": {
+        "Reference": "r#a"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#a": true
+      },
+      "outgoing": {}
+    }
+  },
+  "b1": {
+    "local_root": "ROOT",
+    "locals": {
+      "a": {
+        "Reference": "r#a"
+      },
+      "j": {
+        "Reference": "r#j"
+      },
+      "m": {
+        "Reference": "r#m"
+      },
+      "w": {
+        "Reference": "r#w"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#a": true,
+        "r#j": false,
+        "r#m": true,
+        "r#w": true
+      },
+      "outgoing": {
+        "r#a": {
+          "r#j": [
+            {
+              "labels": [
+                "O.x"
+              ],
+              "ends_in_dot_star": true
+            },
+            {
+              "labels": [
+                "O.z"
+              ],
+              "ends_in_dot_star": true
+            }
+          ],
+          "r#m": [
+            {
+              "labels": [
+                "O.z"
+              ],
+              "ends_in_dot_star": true
+            }
+          ],
+          "r#w": [
+            {
+              "labels": [
+                "O.x",
+                "Mid.y"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#j": {
+          "r#w": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "Mid.y"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#w": {
+          "r#j": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 2, lines 45-82:
+//# publish
+Error: Unable to publish module '00000000000000000000000000000000000000000000000000000000000000b2::zzds_mixedargs_write_w'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0xb2::zzds_mixedargs_write_w,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 19)],
+}
+
+task 3, lines 83-118:
+//# publish
+Error: Unable to publish module '00000000000000000000000000000000000000000000000000000000000000b3::zzds_mixedargs_write_m'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0xb3::zzds_mixedargs_write_m,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 22)],
+}

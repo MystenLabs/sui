@@ -639,10 +639,8 @@ fn test_address_balance_max_epoch_edge_case() {
     };
 
     let context_at_max = TxValidityCheckContext {
-        config: &config,
         epoch: u64::MAX,
-        chain_identifier: ChainIdentifier::default(),
-        reference_gas_price: 1000,
+        ..TxValidityCheckContext::from_cfg_for_testing(&config)
     };
     let result = tx_data.validity_check(&context_at_max);
     assert!(result.is_ok(), "Should not panic with u64::MAX epoch");

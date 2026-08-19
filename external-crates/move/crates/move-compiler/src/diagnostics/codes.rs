@@ -352,6 +352,7 @@ codes!(
     ],
     CodeGeneration: [
         UnfoldableConstant: { msg: "cannot compute constant value", severity: NonblockingError },
+        AlwaysErrors: { msg: "operation always errors", severity: Warning },
     ],
     // errors for any unused code or items
     UnusedItem: [

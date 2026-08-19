@@ -29,6 +29,7 @@ use crate::{
     network::{BlockStream, ExtendedSerializedBlock, PeerId, ValidatorNetworkService},
     round_tracker::RoundTracker,
     synchronizer::SynchronizerHandle,
+    task::spawn_blocking,
     transaction_vote_tracker::TransactionVoteTracker,
 };
 
@@ -103,8 +104,9 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
                     bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedBlock)?;
                 if !self.context.committee.is_valid_index(block_ref.author) {
                     return Err(ConsensusError::InvalidAuthorityIndex {
+                        loc: format!("excluded ancestor {}", block_ref),
                         index: block_ref.author,
-                        max: self.context.committee.size(),
+                        max: self.context.committee.size() - 1,
                     });
                 }
                 if block_ref.round >= block.round() {
@@ -176,20 +178,18 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         // Reject blocks failing parsing and validations.
         let block_verifier = self.block_verifier.clone();
         let serialized = serialized_block.block.clone();
-        let (verified_block, reject_txn_votes) = tokio::task::spawn_blocking(move || {
-            block_verifier.verify_and_vote(signed_block, serialized)
-        })
-        .await
-        .expect("verify_and_vote blocking task panicked")
-        .tap_err(|e| {
-            self.context
-                .metrics
-                .node_metrics
-                .invalid_blocks
-                .with_label_values(&[peer_hostname.as_str(), "handle_send_block", e.name()])
-                .inc();
-            info!("Invalid block from {}: {}", peer, e);
-        })?;
+        let (verified_block, reject_txn_votes) =
+            spawn_blocking(move || block_verifier.verify_and_vote(signed_block, serialized))
+                .await?
+                .tap_err(|e| {
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .invalid_blocks
+                        .with_label_values(&[peer_hostname.as_str(), "handle_send_block", e.name()])
+                        .inc();
+                    info!("Invalid block from {}: {}", peer, e);
+                })?;
         let excluded_ancestors = self
             .parse_excluded_ancestors(peer, &verified_block, serialized_block.excluded_ancestors)
             .tap_err(|e| {

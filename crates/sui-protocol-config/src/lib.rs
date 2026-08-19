@@ -29,7 +29,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 132;
+const MAX_PROTOCOL_VERSION: u64 = 135;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -373,6 +373,11 @@ const MAINNET_USDB: &str =
 //              root version of hash-derived UIDs (`new_uid_from_hash`).
 //              Create the ForwardingAddressRegistry system object on devnet.
 //              Make upgrade-init linkage checks independent of PTB command order.
+// Version 133: Include function signatures in type-node limits.
+//              Bound type nodes in accumulators.
+// Version 134: Add `package::original_package_id` and its native costs.
+//              Reduce the consensus block transaction count and payload limits.
+// Version 135: Enable allowed_proposers on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1038,6 +1043,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     framework_tx_context_mut_restrictions: bool,
 
+    // Count function and local signatures towards type-node budgets.
+    #[serde(skip_serializing_if = "is_false")]
+    include_function_signatures_in_instantiation_limits: bool,
+
     // Enable display registry protocol
     #[serde(skip_serializing_if = "is_false")]
     enable_display_registry: bool,
@@ -1140,6 +1149,11 @@ struct FeatureFlags {
     // in the same commit attempted to lock the same object (double-spend attempt).
     #[serde(skip_serializing_if = "is_false")]
     defer_owned_object_double_spend: bool,
+
+    // If true, `TransactionExpiration::Validity` is accepted, allowing a transaction to
+    // restrict which validators may propose it in consensus.
+    #[serde(skip_serializing_if = "is_false")]
+    allowed_proposers: bool,
 
     #[serde(skip_serializing_if = "is_false")]
     randomize_checkpoint_tx_limit_in_tests: bool,
@@ -1485,6 +1499,9 @@ pub struct ProtocolConfig {
     /// Maximum number of "type nodes" that can be instantiated in a module.
     max_generic_instantiation_type_nodes_per_module: Option<u64>,
 
+    /// Maximum number of "type nodes" allowed in an accumulator.
+    max_accumulator_type_nodes: Option<u64>,
+
     /// Maximum number of push instructions in one function. Enforced by the Move bytecode verifier.
     max_push_size: Option<u64>,
 
@@ -1676,6 +1693,9 @@ pub struct ProtocolConfig {
     // >(config: address, name: address, current_epoch: u64): Option<Value>`
     config_read_setting_impl_cost_base: Option<u64>,
     config_read_setting_impl_cost_per_byte: Option<u64>,
+
+    package_original_package_id_impl_cost_base: Option<u64>,
+    package_original_package_id_impl_cost_per_byte: Option<u64>,
 
     // `dynamic_field` module
     // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
@@ -2524,6 +2544,7 @@ impl ProtocolConfig {
             max_type_nodes: Some(256),
             max_generic_instantiation_type_nodes_per_function: None,
             max_generic_instantiation_type_nodes_per_module: None,
+            max_accumulator_type_nodes: None,
             max_push_size: Some(10000),
             max_struct_definitions: Some(200),
             max_function_definitions: Some(1000),
@@ -2587,6 +2608,9 @@ impl ProtocolConfig {
             // Cost params for the Move native function `read_setting_impl``
             config_read_setting_impl_cost_base: None,
             config_read_setting_impl_cost_per_byte: None,
+
+            package_original_package_id_impl_cost_base: None,
+            package_original_package_id_impl_cost_per_byte: None,
 
             // `dynamic_field` module
             // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
@@ -4556,6 +4580,25 @@ impl ProtocolConfig {
                     cfg.feature_flags
                         .enable_order_independent_upgrade_init_linkage = true;
                 }
+                133 => {
+                    cfg.feature_flags
+                        .include_function_signatures_in_instantiation_limits = true;
+                    cfg.max_accumulator_type_nodes = Some(16);
+                }
+                134 => {
+                    cfg.package_original_package_id_impl_cost_base = Some(52);
+                    let package_read_cost_per_byte = cfg.obj_access_cost_read_per_byte();
+                    cfg.package_original_package_id_impl_cost_per_byte =
+                        Some(package_read_cost_per_byte);
+
+                    cfg.consensus_max_transactions_in_block_bytes = Some(288 * 1024);
+                    cfg.consensus_max_num_transactions_in_block = Some(128);
+                }
+                135 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.allowed_proposers = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4642,6 +4685,8 @@ impl ProtocolConfig {
             max_generic_instantiation_type_nodes_per_module: self
                 .max_generic_instantiation_type_nodes_per_module_as_option()
                 .map(|v| v as usize),
+            include_function_signatures_in_instantiation_limits: self
+                .include_function_signatures_in_instantiation_limits(),
             max_push_size: Some(self.max_push_size() as usize),
             max_dependency_depth: Some(self.max_dependency_depth() as usize),
             max_fields_in_struct: Some(self.max_fields_in_struct() as usize),

@@ -4,6 +4,8 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
 
 use async_graphql::Response;
 use async_graphql::ServerError;
@@ -34,6 +36,21 @@ mod payload;
 pub(crate) mod rich;
 pub(crate) mod show_usage;
 mod visitor;
+
+/// The validated query's depth, in a shared slot so it can be read after validation computes it.
+#[derive(Default, Clone)]
+pub(crate) struct QueryDepth(Arc<AtomicU32>);
+
+impl QueryDepth {
+    pub(crate) fn get(&self) -> u32 {
+        self.0.load(Ordering::Relaxed)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_test(depth: u32) -> Self {
+        Self(Arc::new(AtomicU32::new(depth)))
+    }
+}
 
 pub(crate) struct QueryLimitsConfig {
     pub(crate) max_output_nodes: u32,
@@ -192,6 +209,12 @@ impl Extension for QueryLimitsCheckerExt {
         self.metrics.input_depth.observe(input.depth as f64);
         self.metrics.input_nodes.observe(input.nodes as f64);
         self.metrics.output_nodes.observe(output.nodes as f64);
+
+        // Stash the validated depth so the subscription handler can add its depth surcharge to each
+        // payload's throttle cost.
+        if let Some(QueryDepth(depth)) = ctx.data_opt() {
+            depth.store(input.depth, Ordering::Relaxed);
+        }
 
         if let Some(ShowUsage(_)) = ctx.data_opt() {
             *self.usage.lock().unwrap() = Some(Usage {

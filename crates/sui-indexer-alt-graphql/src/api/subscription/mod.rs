@@ -1,0 +1,266 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use std::sync::Arc;
+
+use async_graphql::Context;
+use async_graphql::connection::CursorType;
+use async_graphql::connection::Edge;
+use async_graphql::connection::EmptyFields;
+use futures::StreamExt;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
+use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
+use tokio::sync::OnceCell;
+use tokio::sync::watch;
+
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::checkpoint::CCheckpoint;
+use crate::api::types::checkpoint::Checkpoint;
+use crate::api::types::checkpoint::CheckpointToken;
+use crate::api::types::event::Event;
+use crate::api::types::event::EventToken;
+use crate::api::types::event::filter::EventFilter;
+use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::config::Limits;
+use crate::config::SubscriptionConfig;
+use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::scope::Scope;
+use crate::task::streaming::StreamingPackageStore;
+use crate::task::streaming::SubscriptionBroadcast;
+use crate::task::streaming::broadcast_error;
+use crate::task::watermark::Watermarks;
+
+mod transactions;
+
+use transactions::ResumeFrom;
+use transactions::transactions_stream;
+
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum Error {
+    #[error("At most one of `after` or `afterCheckpoint` can be specified")]
+    MutuallyExclusiveResume,
+
+    #[error("Invalid `after` cursor: {0}")]
+    InvalidCursor(String),
+
+    #[error(
+        "Filtering by checkpoint (`afterCheckpoint`, `atCheckpoint`, `beforeCheckpoint`) is not supported for subscriptions"
+    )]
+    CheckpointBoundsUnsupported,
+}
+
+#[derive(Default)]
+pub struct Subscription;
+
+#[async_graphql::Subscription]
+impl Subscription {
+    /// Subscribe to checkpoints as they are finalized.
+    ///
+    /// Pass `after` (opaque cursor) or `afterCheckpoint` (sequence number) to resume from a known point. If both are provided, the subscription resumes from whichever is later.
+    ///
+    /// This subscription is not yet available for use.
+    async fn checkpoints(
+        &self,
+        ctx: &Context<'_>,
+        after: Option<CCheckpoint>,
+        after_checkpoint: Option<UInt53>,
+    ) -> Result<
+        impl futures::Stream<Item = Result<Edge<String, Checkpoint, EmptyFields>, RpcError>>,
+        RpcError,
+    > {
+        let package_store: &Arc<StreamingPackageStore> = ctx.data()?;
+        let limits: &Limits = ctx.data()?;
+        let config: &SubscriptionConfig = ctx.data()?;
+        let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
+        let fetcher: &LedgerGrpcReader = ctx.data()?;
+
+        let resume_from: Option<u64> = match (
+            after.map(|c| c.sequence_number()),
+            after_checkpoint.map(u64::from),
+        ) {
+            (Some(a), Some(b)) => Some(a.max(b)),
+            (a, b) => a.or(b),
+        };
+        let package_store = package_store.clone();
+        let resolver_limits = limits.package_resolver();
+
+        let stream = broadcast
+            .clone()
+            .subscribe(resume_from, fetcher.clone(), config);
+
+        Ok(stream.map(move |item| {
+            item.map(|processed| {
+                let sequence_number = processed.summary.sequence_number;
+                let scope = Scope::for_streamed_checkpoint(
+                    package_store.clone(),
+                    resolver_limits.clone(),
+                    processed.clone(),
+                );
+                let cursor = CheckpointToken::cursor(sequence_number).encode_cursor();
+                Edge::new(
+                    cursor,
+                    Checkpoint {
+                        sequence_number,
+                        scope,
+                        streamed_data: Some(processed),
+                    },
+                )
+            })
+        }))
+    }
+
+    /// Subscribe to transactions as they are finalized, with optional filtering.
+    ///
+    /// Pass `after` (opaque cursor) or `afterCheckpoint` (sequence number), but not both, to resume from a known point. The subscription first backfills the matching transactions after that point via the scanning API, then continues with the live stream.
+    ///
+    /// Each matching transaction is yielded individually as an edge, ordered by checkpoint and then by position within the checkpoint. Each edge carries a cursor for resumption.
+    ///
+    /// This subscription is not yet available for use.
+    async fn transactions(
+        &self,
+        ctx: &Context<'_>,
+        filter: Option<TransactionFilter>,
+        after: Option<String>,
+        after_checkpoint: Option<UInt53>,
+    ) -> Result<
+        impl futures::Stream<Item = Result<Edge<String, Transaction, EmptyFields>, RpcError>>,
+        RpcError<Error>,
+    > {
+        // `after` (resume from a specific transaction) and `afterCheckpoint` (resume from a
+        // checkpoint) are distinct resume modes, not bounds to reconcile, so only one is allowed.
+        if after.is_some() && after_checkpoint.is_some() {
+            return Err(bad_user_input(Error::MutuallyExclusiveResume));
+        }
+
+        let package_store: &Arc<StreamingPackageStore> = ctx.data()?;
+        let limits: &Limits = ctx.data()?;
+        let config: &SubscriptionConfig = ctx.data()?;
+        let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
+        let reader: &AlphaLedgerGrpcReader = ctx.data()?;
+        let watermarks_rx: &watch::Receiver<Arc<Watermarks>> = ctx.data()?;
+
+        let package_store = package_store.clone();
+        let resolver_limits = limits.package_resolver();
+        let filter = filter.unwrap_or_default();
+
+        // Size the backfill scan page to the resolve concurrency. Scans are sequential (each needs
+        // the previous page's cursor), so feeding one window of `n` concurrent resolutions takes
+        // ceil(n / page) scans: a page much smaller than the concurrency makes scanning the
+        // bottleneck, a much larger one just holds a bigger page in memory. Matching them is roughly
+        // one scan per resolution window.
+        let scan_page_size = config.max_concurrent_resolutions;
+
+        // Pin the handoff once the scan comes within half the live buffer of the tip, leaving room
+        // for checkpoints that arrive during the handoff so the receiver does not lag.
+        let handoff_threshold = config.broadcast_buffer as u64 / 2;
+
+        // A subscription streams forward from its resume point, so filter-level checkpoint bounds
+        // have no meaning; reject them rather than silently dropping them.
+        if filter.after_checkpoint.is_some()
+            || filter.at_checkpoint.is_some()
+            || filter.before_checkpoint.is_some()
+        {
+            return Err(bad_user_input(Error::CheckpointBoundsUnsupported));
+        }
+
+        // Decode `after` here so a bad cursor surfaces as `BadUserInput`; the backfill resumes
+        // pagination from it.
+        let resume = if let Some(cursor) = after {
+            let ctransaction = CTransaction::decode_cursor(&cursor)
+                .map_err(|_| bad_user_input(Error::InvalidCursor(cursor)))?;
+            Some(ResumeFrom::Cursor(ctransaction))
+        } else {
+            after_checkpoint.map(|cp| ResumeFrom::Checkpoint(u64::from(cp)))
+        };
+
+        Ok(transactions_stream(
+            reader.clone(),
+            broadcast.clone(),
+            package_store,
+            resolver_limits,
+            watermarks_rx.clone(),
+            filter,
+            resume,
+            scan_page_size,
+            handoff_threshold,
+        ))
+    }
+
+    /// Subscribe to events as they are emitted, with optional filtering.
+    ///
+    /// Each matching event is yielded individually as it appears in finalized
+    /// checkpoints. Events are ordered by checkpoint, then by transaction
+    /// position within the checkpoint, then by position within the transaction.
+    ///
+    /// This subscription is not yet available for use.
+    async fn events(
+        &self,
+        ctx: &Context<'_>,
+        filter: Option<EventFilter>,
+    ) -> Result<
+        impl futures::Stream<Item = Result<Edge<String, Event, EmptyFields>, RpcError>>,
+        RpcError,
+    > {
+        let package_store: &Arc<StreamingPackageStore> = ctx.data()?;
+        let limits: &Limits = ctx.data()?;
+        let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
+
+        let package_store = package_store.clone();
+        let resolver_limits = limits.package_resolver();
+        let mut receiver = broadcast.broadcaster().resubscribe();
+        let filter = filter.unwrap_or_default();
+
+        Ok(async_stream::stream! {
+            loop {
+                match receiver.recv().await {
+                    Ok(processed) => {
+                        let timestamp_ms = Some(processed.summary.timestamp_ms);
+                        let scope = Scope::for_streamed_checkpoint(
+                            package_store.clone(),
+                            resolver_limits.clone(),
+                            processed.clone(),
+                        );
+                        for tx in &processed.transactions {
+                            let digest = tx
+                                .contents
+                                .digest()
+                                .expect("ExecutedTransaction digest is infallible");
+                            let events = tx.contents.events().unwrap_or_default();
+                            for (idx, native) in events.into_iter().enumerate() {
+                                if !filter.matches(&native) {
+                                    continue;
+                                }
+                                let cursor = EventToken::cursor(
+                                    processed.summary.sequence_number,
+                                    tx.tx_sequence_number,
+                                    idx as u32,
+                                )
+                                .encode_cursor();
+                                yield Ok(Edge::new(
+                                    cursor,
+                                    Event {
+                                        scope: scope.with_active_transaction_contents(
+                                            digest,
+                                            tx.contents.clone(),
+                                        ),
+                                        native,
+                                        transaction_digest: digest,
+                                        sequence_number: idx as u64,
+                                        timestamp_ms: OnceCell::from(timestamp_ms),
+                                    },
+                                ));
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        yield Err(broadcast_error(e));
+                        break;
+                    }
+                }
+            }
+        })
+    }
+}

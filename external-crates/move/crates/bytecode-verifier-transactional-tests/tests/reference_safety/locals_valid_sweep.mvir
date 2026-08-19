@@ -1,0 +1,122 @@
+// locals patterns the old checker accepts; every task must publish under both
+
+//# publish
+mvir 0x51::a {
+    public struct S has copy, drop { f: u64, g: u64 }
+
+    // StLoc after the borrow is dead
+    fun t1() {
+        let x: Self::S;
+        let r: &mut u64;
+    label b0:
+        x = S { f: 1, g: 2 };
+        r = &mut (&mut x).S::f;
+        *move(r) = 3;
+        x = S { f: 4, g: 5 };
+        return;
+    }
+
+    // MoveLoc after the borrow is dead
+    fun t2() {
+        let x: Self::S;
+        let y: Self::S;
+        let r: &mut u64;
+    label b0:
+        x = S { f: 1, g: 2 };
+        r = &mut (&mut x).S::f;
+        _ = move(r);
+        y = move(x);
+        _ = move(y);
+        return;
+    }
+
+    // CopyLoc of an immutably borrowed local
+    fun t3() {
+        let x: Self::S;
+        let y: Self::S;
+        let r: &u64;
+    label b0:
+        x = S { f: 1, g: 2 };
+        r = &(&x).S::f;
+        y = copy(x);
+        _ = *move(r);
+        _ = move(y);
+        return;
+    }
+
+    // reference local reassigned repeatedly
+    fun t4() {
+        let x: Self::S;
+        let y: Self::S;
+        let r: &mut Self::S;
+    label b0:
+        x = S { f: 1, g: 2 };
+        y = S { f: 3, g: 4 };
+        r = &mut x;
+        r = &mut y;
+        r = copy(r);
+        *move(r) = S { f: 5, g: 6 };
+        return;
+    }
+
+    // move a reference local out and back in
+    fun t5() {
+        let x: Self::S;
+        let r: &mut Self::S;
+        let r2: &mut Self::S;
+    label b0:
+        x = S { f: 1, g: 2 };
+        r = &mut x;
+        r2 = move(r);
+        r = move(r2);
+        *move(r) = S { f: 7, g: 8 };
+        return;
+    }
+
+    // StLoc while a different local is borrowed
+    fun t6() {
+        let x: Self::S;
+        let y: Self::S;
+        let r: &mut Self::S;
+    label b0:
+        x = S { f: 1, g: 2 };
+        y = S { f: 3, g: 4 };
+        r = &mut y;
+        x = S { f: 5, g: 6 };
+        *move(r) = copy(x);
+        return;
+    }
+
+    // Pop a reference with a live field extension
+    fun t7() {
+        let x: Self::S;
+        let r: &mut Self::S;
+        let fr: &mut u64;
+    label b0:
+        x = S { f: 1, g: 2 };
+        r = &mut x;
+        fr = &mut copy(r).S::f;
+        _ = move(r);
+        *move(fr) = 9;
+        return;
+    }
+
+    // copy out of a local immutably borrowed via a call result
+    fun id(s: &Self::S): &Self::S {
+    label b0:
+        return move(s);
+    }
+
+    fun t8() {
+        let x: Self::S;
+        let y: Self::S;
+        let r: &Self::S;
+    label b0:
+        x = S { f: 1, g: 2 };
+        r = Self::id(&x);
+        y = copy(x);
+        _ = move(r);
+        _ = move(y);
+        return;
+    }
+}
