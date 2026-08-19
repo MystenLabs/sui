@@ -183,26 +183,21 @@ By default, `sui start` uses an existing genesis and network configuration if th
 
 To generate a custom genesis, use the `sui genesis` command and pass the desired custom values. For more information about possible flags and options, run `sui genesis --help`.
 
-To view the transaction history for your local network, use the following command to retrieve the local total transaction count:
+To view the transaction history for your local network, query the latest checkpoint over [gRPC](/develop/accessing-data/grpc/using-grpc). Its summary includes the total number of transactions committed since genesis. The following command uses [`grpcurl`](https://github.com/fullstorydev/grpcurl):
 
 ```sh
-$ curl --location --request POST 'http://127.0.0.1:9000' \
---header 'Content-Type: application/json' \
---data-raw '{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "sui_getTotalTransactionBlocks",
-  "params": []
-}'
+$ grpcurl -plaintext -d '{ "read_mask": { "paths": ["summary.total_network_transactions"] } }' 127.0.0.1:9000 sui.rpc.v2.LedgerService/GetCheckpoint
 ```
 
 If successful, the response resembles the following:
 
 ```json
 {
-	"jsonrpc": "2.0",
-	"result": 168,
-	"id": 1
+  "checkpoint": {
+    "summary": {
+      "totalNetworkTransactions": "168"
+    }
+  }
 }
 ```
 
