@@ -100,12 +100,9 @@ pub struct ResolvedScan<P> {
 }
 
 /// How a lane reads wire cursors: the token's coordinate in the lane's
-/// position space, and the lo-bound its resume admits.
+/// position space.
 pub trait ScanCursor<P> {
     fn coordinate(&self) -> P;
-    /// Dense lanes canonicalize an Item cursor to its inclusive successor;
-    /// lanes without a successor keep the exclusive raw bound.
-    fn resume_lo(&self) -> Bound<P>;
 }
 
 impl IntraTxCoordinate {
@@ -422,7 +419,13 @@ where
             self.entry_checkpoint = self.entry_checkpoint.max(checkpoint);
         }
 
-        let candidate = cursor.resume_lo();
+        // Symbolic resume in every lane: an Item admits strictly-after, a
+        // Boundary admits from itself; successor arithmetic exists only at
+        // the store edge.
+        let candidate = match cursor.kind {
+            sui_rpc_cursor::CursorKind::Item => Bound::Excluded(position),
+            sui_rpc_cursor::CursorKind::Boundary => Bound::Included(position),
+        };
 
         if !lower_bound_gte(candidate, self.bounds.lo) {
             return None;
@@ -632,18 +635,6 @@ impl ScanCursor<u64> for CursorToken {
             Position::Events { .. } => unreachable!("validated at decode"),
         }
     }
-
-    /// Symbolic resume, same as the intra-tx lane: an Item cursor admits
-    /// strictly-after as an exclusive bound. The dense lane's successor
-    /// arithmetic lives at the store edge ([`ScanBounds::to_range`]), where
-    /// `u64::MAX` saturates into an empty fetch.
-    fn resume_lo(&self) -> Bound<u64> {
-        let position: u64 = self.coordinate();
-        match self.kind {
-            sui_rpc_cursor::CursorKind::Item => Bound::Excluded(position),
-            sui_rpc_cursor::CursorKind::Boundary => Bound::Included(position),
-        }
-    }
 }
 
 impl ScanCursor<IntraTxCoordinate> for CursorToken {
@@ -658,14 +649,6 @@ impl ScanCursor<IntraTxCoordinate> for CursorToken {
                 index: event_index,
             },
             _ => unreachable!("validated at decode"),
-        }
-    }
-
-    fn resume_lo(&self) -> Bound<IntraTxCoordinate> {
-        let position: IntraTxCoordinate = self.coordinate();
-        match self.kind {
-            sui_rpc_cursor::CursorKind::Item => Bound::Excluded(position),
-            sui_rpc_cursor::CursorKind::Boundary => Bound::Included(position),
         }
     }
 }
@@ -1034,9 +1017,8 @@ mod tests {
         assert_eq!(bounds.tx_range(), None);
     }
 
-    /// Nothing constructs an Excluded lo in the dense lane yet (resume_lo
-    /// canonicalizes Item cursors to their inclusive successor), but the
-    /// symbolic-resume flip will; pin the store-edge collapse first.
+    /// Every after-Item cursor now resumes as an Excluded lo; the successor
+    /// arithmetic and its `u64::MAX` saturation live here at the store edge.
     #[test]
     fn to_range_collapses_excluded_lo_at_successor() {
         let bounds = ScanBounds {
