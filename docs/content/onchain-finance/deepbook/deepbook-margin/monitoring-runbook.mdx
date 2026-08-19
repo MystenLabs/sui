@@ -1,0 +1,160 @@
+---
+title: Monitoring Runbook for Risky Accounts
+sidebar_label: Monitoring Runbook
+description: >-
+  Operational runbook for watching DeepBook Margin positions that approach
+  liquidation: what to watch, how to poll it, how to choose alert thresholds,
+  and what to do at each stage as a position holder or a protocol operator.
+keywords:
+  - monitoring
+  - runbook
+  - liquidation
+  - risk ratio
+  - alerting
+  - deepbook margin
+  - keeper
+  - oracle freshness
+goal:
+  description: >-
+    Reader can stand up monitoring for margin positions approaching liquidation
+    and knows what action each alert calls for.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I monitor a DeepBook margin position for liquidation risk?
+  - What should I alert on for a leveraged position?
+  - How do I know if my risk ratio data is stale?
+  - What do I do when my position approaches liquidation?
+answer: >-
+  Watch the risk ratio against the pool's thresholds, and watch oracle freshness
+  alongside it, because a ratio you cannot read is an alert rather than a gap.
+  Poll the indexer to enumerate positions and confirm each one against onchain
+  state before acting. Choose alert thresholds yourself from the cushion you
+  need. A holder responds by adding collateral, reducing the position, or
+  closing it; an operator responds by watching cohort health and keeper
+  liveness.
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Monitor risky accounts
+    stage: Margin
+---
+
+A leveraged position degrades quietly. The risk ratio falls when the price moves against you, and it falls on its own as interest accrues even when the price does not move. Nothing warns the holder, and [liquidation is immediate](/onchain-finance/deepbook/deepbook-margin/margin-risks#liquidation-is-immediate) once the threshold is reached. Monitoring is the only thing between a position and that outcome.
+
+This runbook serves two readers: someone holding a position, and someone operating a protocol with positions in it. The first half is shared, because both watch the same numbers through the same interfaces. They diverge at what to do about it.
+
+Monitoring and liquidating read identical state; only the response differs. See [Liquidation paths and who gets paid](/onchain-finance/deepbook/deepbook-margin/margin-integration#liquidation-paths-and-who-gets-paid) for what a liquidator does with the same signals.
+
+## What to watch
+
+**The risk ratio against the pool's thresholds.** [Risk ratio](/onchain-finance/deepbook/deepbook-margin/contract-information/risk-ratio) defines the four that matter and their fixed ordering: liquidation, min borrow, min withdraw, and target liquidation. All four are per-pool governance parameters, so read them rather than hardcoding them.
+
+**Oracle freshness, as a first-class signal.** This is the part most monitoring setups miss. Every risk ratio is oracle-priced, so when the pool's price feeds go stale the protocol refuses to value the position at all. Your dashboard does not degrade gracefully into showing an old number; the read aborts. If your monitoring silently falls back to a cached value at that moment, it displays confidence it does not have, precisely when the position is least observable.
+
+**Interest drift.** Debt grows continuously, so a position with no price movement still loses ratio over time. A holder who checks only after price moves misses this entirely.
+
+## How to watch it
+
+### There is no subscription
+
+Neither the [DeepBook indexer](/onchain-finance/deepbook/deepbookv3/deepbookv3-indexer) nor the [margin indexer](/onchain-finance/deepbook/deepbook-margin/deepbook-margin-indexer) offers a subscription. Every endpoint is REST with `start_time`, `end_time`, and `limit` parameters. Plan for polling.
+
+The lower-level alternative is subscribing to raw chain events with the gRPC `SubscriptionService.SubscribeEvents` method and filtering for the `deepbook_margin::margin_manager` event types listed in [Events to index](/onchain-finance/deepbook/deepbook-margin/margin-integration#events-to-index). See the [gRPC migration cookbook](/develop/accessing-data/grpc/grpc-migration-cookbook) for the request shape.
+
+:::info[SDK version boundary, as of 2026-08-07]
+
+`subscribeEvents` is not available in every `@mysten/sui` release. Version 2.22.x exposes `SubscriptionService` with `subscribeCheckpoints` only; `subscribeEvents` arrives in 2.23.1 and later. The examples on these pages pin 2.22.1, so they poll. `@mysten/deepbook-v3` 1.5.9 declares a peer dependency of `^2.22.1`, which permits the upgrade if you want streaming in your own keeper.
+
+:::
+
+### Enumerate positions, then confirm them
+
+Polling has two stages, and the split matters more for monitoring than for anything else you build on this data.
+
+**Stage 1, enumerate.** The indexer's `margin_manager_created` feed lists every manager anyone has opened; omit the `margin_manager_id` filter and set `limit` to page through them. `loan_borrowed` and `loan_repaid` narrow that to positions carrying debt. See [DeepBook Margin Indexer](/onchain-finance/deepbook/deepbook-margin/deepbook-margin-indexer) for the endpoints and response shapes. Treat this stage as enumeration only: it tells you which positions exist, never whether one is liquidatable right now.
+
+**Stage 2, confirm.** Read authoritative state for anything you are about to alarm about, with `managerState`, which values the position through the pool's own Pyth price objects:
+
+<ImportContent
+	source="packages/deepbook-v3/src/transactions/marginManager.ts"
+	mode="code"
+	org="MystenLabs"
+	repo="ts-sdks"
+	fun="managerState"
+	signatureOnly
+/>
+
+See [Margin SDK: Manager](/onchain-finance/deepbook/deepbook-margin-sdk/margin-manager#read-only-functions) for the full read surface, including the balance and borrow-share queries that let you skip the oracle-priced read for positions with no debt.
+
+A keeper that acts on stage 1 alone loses money. A dashboard that displays stage 1 alone tells a person their position is safe when it is not.
+
+:::caution
+
+The indexer also exposes `margin_manager_states` with a `max_risk_ratio` filter, which looks like it collapses both stages into one call. Do not decide on it. It serves a precomputed snapshot whose freshness you do not control: on Testnet its rows carried an `updated_at` about four months old, with every row sharing one stale Pyth price. A risk ratio of 1000 there is the protocol's no-debt sentinel, not a measurement.
+
+:::
+
+## Choosing your alert thresholds
+
+The thresholds below are yours to set. There is no correct cushion, only a tradeoff: alarm early and you page yourself through normal volatility, alarm late and you find out from the liquidation event. What follows are the conditions worth defining and the reasoning behind each, not values to copy.
+
+Keep the values you land on in configuration rather than scattered through your alerting rules, so retuning after a volatile week is one edit.
+
+| **Condition** | **What it means** | **Who acts** | **Action** |
+| --- | --- | --- | --- |
+| Risk ratio cannot be read | The pool's price feeds are stale, so no position can be valued. You are blind, not safe | Both | Escalate immediately. Treat every position as unobserved until reads recover |
+| Risk ratio at or below the pool's liquidation ratio | Liquidatable now. Anyone can take the reward out of the collateral | Holder | [Close or reduce](#if-you-hold-the-position) if a keeper has not already acted |
+| Risk ratio within your chosen cushion of the liquidation ratio | Approaching, with time to respond | Holder | [Add collateral or reduce](#if-you-hold-the-position) |
+| Risk ratio falling with a flat price | Interest is eroding the position on its own | Holder | Repay part of the borrow; reassess whether the carry is worth it |
+| Oracle price age rising toward the pool's maximum | Feeds are lagging. Valuation, trading, and liquidation all stop when it crosses | Operator | Investigate the feed before positions become unmanageable |
+| Positions liquidatable but no `LiquidationEvent` following | Keepers are not running, or cannot execute | Operator | Check keeper liveness and whether feeds are fresh enough to permit liquidation |
+| `pool_default` nonzero in a `LiquidationEvent` | A liquidation left bad debt with the lending pool | Operator | Review pool risk parameters and utilization |
+
+The first row is the one to build first, and it is not hypothetical. During a Testnet run for this documentation, all four Pyth feeds backing the margin pools were roughly 73 hours stale against a protocol ceiling of 1 hour, and **14 of 14 indebted positions returned a refusal rather than a risk ratio**. Monitoring that treated an unreadable ratio as an absence of bad news would have reported a healthy book.
+
+## If you hold the position {#if-you-hold-the-position}
+
+Three responses, in increasing order of cost to you. All of them raise the risk ratio; they differ in what you give up.
+
+**Add collateral.** Raises the asset side without closing anything, so you keep the exposure. Needs funds ready before you need them, which is why [Margin Risks](/onchain-finance/deepbook/deepbook-margin/margin-risks#risk-mitigation-strategies) recommends holding reserves rather than sourcing them mid-event. See [Deposit collateral](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow#deposit-collateral).
+
+**Reduce the position.** A reduce-only order shrinks exposure and can only decrease it, never flip you or add leverage. This is the response that both lowers risk and takes profit or loss off the table. See [Close the position](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow#close-the-position).
+
+**Repay the borrow.** Shrinks the debt side and stops interest accruing on the repaid amount. The right move when interest rather than price is what is eroding your ratio. See [Close the position](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow#close-the-position), then [Withdraw collateral](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow#withdraw-collateral).
+
+Automating the response onchain is also an option. [TPSL orders](/onchain-finance/deepbook/deepbook-margin/contract-information/tpsl) close a position at a trigger you set, which exits at a loss you chose rather than one a liquidator chose. They are best-effort: like keepers, they can be delayed or fail during congestion, so treat them as a reduction in exposure to your own reaction time, not a guarantee.
+
+## If you operate the protocol
+
+An operator watches a distribution rather than a position, and watches whether the mechanisms meant to protect it are working.
+
+**Cohort health.** Track how many positions sit in each band relative to the liquidation ratio, not just the worst one. A book where many positions cluster just above the threshold is one adverse move away from correlated liquidations.
+
+**Keeper liveness.** Liquidation is permissionless, which means nobody is obliged to do it. Positions that stay liquidatable with no following `LiquidationEvent` mean keepers are absent or blocked. Because feeds gate liquidation the same way they gate valuation, a feed outage stops liquidation exactly when it is most needed.
+
+**Bad debt.** A `LiquidationEvent` with nonzero `pool_default` records a shortfall the lending pool absorbed. See [Events to index](/onchain-finance/deepbook/deepbook-margin/margin-integration#events-to-index) for the full event surface.
+
+Whatever you build, read the pool's thresholds and the position's state in the same pass that decides, and print or log the reason for each decision alongside it. An alert that fires without recording which read produced it is the hardest kind to debug at the moment you need it.
+
+## Before you rely on any of this
+
+- **Read thresholds onchain, every time.** Governance changes them, and a cached threshold silently desynchronizes your alerting from the protocol.
+- **Alarm on your monitoring, not only through it.** A poller that has stopped and a book with no risky positions look identical from the dashboard.
+- **Pace your reads.** Running the scan 12 reads wide against a public fullnode failed 102 of 200 reads, while the same reads run serially succeeded 40 of 40. Monitoring that rate-limits itself goes blind under exactly the load that matters.

@@ -41,7 +41,7 @@ export async function mintRange(params: {
 		],
 	});
 
-	const result = await client.core.signAndExecuteTransaction({
+	const result = await client.signAndExecuteTransaction({
 		transaction: tx,
 		signer,
 		include: { effects: true },

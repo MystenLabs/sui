@@ -57,17 +57,17 @@ builder_paths:
 
 Both Pyth and Switchboard on Sui are pull oracles: a transaction fetches a fresh signed update offchain, applies it onchain, and reads it, in that order, atomically. This walkthrough reads a Pyth feed end to end on Testnet, then shows the Switchboard on-demand variant.
 
-The TypeScript samples live in the `examples/oracle-adapter/ts` package and type-check with `tsc --noEmit`. They pin the network's package and object IDs in a config module rather than inline, so a rotated ID is a one-line change:
+The Pyth samples live in the `examples/oracle-adapter/ts` package and type-check with `tsc --noEmit` against `@mysten/sui` 2.22.1 and `@pythnetwork/pyth-sui-js` 4.0.0. They pin the network's package and object IDs in a config module rather than inline, so a rotated ID is a one-line change:
 
 <ImportContent source="examples/oracle-adapter/ts/src/config.ts" mode="code" tag="config" />
 
-:::caution
+The Pyth and Wormhole state object IDs and the Hermes endpoint come from the [Pyth Sui addresses](https://docs.pyth.network/price-feeds/contract-addresses/sui); feed IDs come from the [Pyth feed list](https://pyth.network/developers/price-feed-ids).
 
-The Pyth Sui SDK talks JSON-RPC, but the Mysten Testnet fullnode serves gRPC, so the default `getFullnodeUrl('testnet')` returns 404 for every SDK call. Point `rpcUrl` at a JSON-RPC provider or your own node. Every Testnet Pyth consumer hits this, and the failure looks like an unrelated 404 rather than an RPC-protocol mismatch.
+:::info
+
+`pyth-sui-js` 4.0.0 reads through the `@mysten/sui` 2.x unified `.core` API, so it accepts either a `SuiGrpcClient` or a `SuiJsonRpcClient`. Earlier releases bundled the 1.x SDK and worked only over JSON-RPC, which meant pointing at a JSON-RPC provider because the Mysten Testnet fullnode serves gRPC. On 4.0.0 that workaround is unnecessary.
 
 :::
-
-The Pyth and Wormhole state object IDs and the Hermes endpoint come from the [Pyth Sui addresses](https://docs.pyth.network/price-feeds/contract-addresses/sui); feed IDs come from the [Pyth feed list](https://pyth.network/developers/price-feed-ids).
 
 ## Set up the clients
 
@@ -81,22 +81,32 @@ Fetch the latest update for your feed from Hermes, apply it with `updatePriceFee
 
 <ImportContent source="examples/oracle-adapter/ts/src/read.ts" mode="code" tag="update-read" />
 
-**Observe:** the transaction succeeds and the read returns a current price. Running this against Testnet for `SUI/USD` returns a price near the live market rate (for example a magnitude of `68005477` at exponent `-8`, or about `0.68` USD) with a confidence interval around `0.1%` of the price. The read goes through the adapter's staleness bound, so a price the update failed to refresh aborts rather than reading old.
+**Observe:** the transaction succeeds and the `PriceRead` event carries the normalized price. A Testnet run for `SUI/USD` returned a magnitude of `69791021` at exponent `-8` (about `0.70` USD) with a confidence of `73911`, roughly `0.1%` of the price. The read goes through the adapter's staleness bound, so a price the update failed to refresh aborts rather than reading old.
+
+:::caution
+
+That run needed a wide `maxAgeSecs`, because the Testnet beta Hermes deployment was several days behind at the time and the freshest update it served was already stale. A 60-second bound aborts against a lagging feed, which is the guard working as intended rather than a bug in the flow. Check what Hermes is actually serving before assuming your transaction is at fault. Mainnet Hermes does not lag this way.
+
+:::
 
 ## The stale-price rejection
 
-A price that has not been updated recently is stale. Reading it with a tight maximum age aborts with the provider's staleness error rather than returning an old value. This is `dev-inspect`-able, so you can confirm the rejection without spending gas or updating the feed:
+A price that has not been updated recently is stale. Reading it with a tight maximum age aborts with the provider's staleness error rather than returning an old value. Simulating the read confirms the rejection without spending gas or updating the feed:
 
 <ImportContent source="examples/oracle-adapter/ts/src/read.ts" mode="code" tag="stale-read" />
 
-**Observe:** with a one-second bound on a feed nobody just updated, the call fails with a `MoveAbort` in `pyth::check_price_is_fresh` (error code `3`, stale price). This is the single most important behavior for a high-stakes consumer to rely on, covered in depth in [Oracle safety](/onchain-finance/oracles/oracle-safety).
+**Observe:** with a one-second bound on a feed nobody just updated, the simulation reports `success: false` and a `MoveAbort` in `pyth::check_price_is_fresh` with abort code `3`. This is the single most important behavior for a high-stakes consumer to rely on, covered in depth in [Oracle safety](/onchain-finance/oracles/oracle-safety).
 
 ## Switchboard: the on-demand variant
 
 Switchboard is also pull, with a different shape. Instead of a shared price object you update, you hold an `Aggregator` feed and pull a fresh oracle response into your transaction with `fetchUpdateTx`, which must be the first action in the [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks). Your Move consumer then reads `switchboard::aggregator::current_result`.
 
-<ImportContent source="examples/oracle-adapter/ts/src/switchboard.ts" mode="code" tag="switchboard" />
+`current_result` returns a `CurrentResult` exposing the median `result()` (a `Decimal`) along with `min_timestamp_ms()` and `max_timestamp_ms()`. Unlike Pyth's `get_price_no_older_than`, it does not gate on age, so the consumer checks the timestamps against the clock itself.
 
-`current_result` returns a `CurrentResult` exposing the median `result()` (a `Decimal`) along with `min_timestamp_ms()` and `max_timestamp_ms()`. Unlike Pyth's `get_price_no_older_than`, it does not gate on age, so the consumer checks the timestamps against the clock itself. See the [Switchboard Sui docs](https://docs.switchboard.xyz/product-documentation/data-feeds/sui) for feed creation and the on-demand flow.
+:::caution
+
+`@switchboard-xyz/sui-sdk` still requires `@mysten/sui` 1.x, which is built on the deprecated JSON-RPC API. This page shows no Switchboard sample for that reason: code written against the 1.x client would not carry over to the gRPC stack the rest of these docs use. See the [Switchboard Sui docs](https://docs.switchboard.xyz/product-documentation/data-feeds/sui) for feed creation and the on-demand flow, and check whether a 2.x-compatible release is available before you build on it.
+
+:::
 
 Next, wrap a provider read behind a single internal interface with the safety checks built in: [The Move adapter pattern](/onchain-finance/oracles/move-adapter).

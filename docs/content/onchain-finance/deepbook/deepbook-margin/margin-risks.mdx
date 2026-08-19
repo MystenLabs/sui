@@ -183,16 +183,16 @@ Interest accrues to your debt, which means:
 
 DeepBook Margin uses Pyth price oracles to value your assets and debts. While the protocol includes several protections, some oracle-related risks remain:
 
-- **Price delays:** Oracle prices might lag behind real market prices during extremely volatile periods. The protocol mitigates this by rejecting prices older than around 60 seconds, but brief delays within this window can still occur.
+- **Price delays:** Oracle prices might lag behind real market prices during extremely volatile periods. The protocol mitigates this by rejecting prices older than the pool's maximum price age, but brief delays within that window can still occur.
 - **Price manipulation:** Although Pyth is designed to be manipulation-resistant and DeepBook validates prices against confidence intervals and EWMA (exponentially weighted moving average) prices, extreme market conditions could still affect price accuracy.
 
 ### Oracle protections
 
 DeepBook Margin implements multiple safeguards against oracle issues:
 
-- **Staleness protection:** Prices older than around 60 seconds are automatically rejected, preventing liquidations based on stale data
-- **Confidence interval checks:** The protocol validates that Pyth price confidence intervals are within acceptable bounds
-- **EWMA price verification:** Spot prices are validated against EWMA prices to detect and reject anomalous price spikes
+- **Staleness protection:** Prices older than the pool's maximum price age are automatically rejected, preventing liquidations based on stale data. That age is a per-pool governance parameter, not a constant: it defaults to 5 minutes and governance can set it anywhere between 30 seconds and 1 hour. Read the value for your pool onchain rather than assuming one, as [Keep the price feeds fresh](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow#keep-the-price-feeds-fresh) shows.
+- **Confidence interval checks:** The protocol validates that Pyth price confidence intervals are within acceptable bounds.
+- **EWMA price verification:** Spot prices are validated against EWMA prices to detect and reject anomalous price spikes.
 
 :::caution
 

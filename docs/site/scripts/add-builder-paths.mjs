@@ -98,6 +98,7 @@ const BUILDER_PATHS = [
       { step: 'Margin SDK: Pool', stage: 'Margin', page: 'onchain-finance/deepbook/deepbook-margin-sdk/margin-pool.mdx', eval: null },
       { step: 'Margin SDK: TP/SL', stage: 'Margin', page: 'onchain-finance/deepbook/deepbook-margin-sdk/tpsl.mdx', eval: null },
       { step: 'Margin SDK: Maintainer', stage: 'Margin', page: 'onchain-finance/deepbook/deepbook-margin-sdk/maintainer.mdx', eval: null },
+      { step: 'Monitor risky accounts', stage: 'Margin', page: 'onchain-finance/deepbook/deepbook-margin/monitoring-runbook.mdx', eval: null },
       // ── Move Contract ──
       { step: 'Custom coin creation', stage: 'Move Contract', page: 'onchain-finance/fungible-tokens/create-a-fungible-token-coin.mdx', eval: 'covered' },
       { step: 'TradeProof lifecycle', stage: 'Move Contract', page: null, eval: 'missing' },
@@ -106,7 +107,7 @@ const BUILDER_PATHS = [
       // ── Advanced ──
       { step: 'PTB composition examples', stage: 'Advanced', page: 'develop/transactions/ptbs/prog-txn-blocks.mdx', eval: 'missing' },
       { step: 'Compose DeepBook PTBs', stage: 'Advanced', page: 'onchain-finance/deepbook/deepbookv3-sdk/composing-transactions.mdx', eval: null },
-      { step: 'Oracle integration', stage: 'Advanced', page: null, eval: 'missing' },
+      { step: 'Oracle integration', stage: 'Advanced', page: 'onchain-finance/oracles/index.mdx', eval: null },
       { step: 'DeepBook event indexing', stage: 'Advanced', page: 'onchain-finance/deepbook/deepbookv3/deepbookv3-indexer.mdx', eval: null },
       { step: 'Margin event indexing', stage: 'Advanced', page: 'onchain-finance/deepbook/deepbook-margin/deepbook-margin-indexer.mdx', eval: null },
       { step: 'Event querying', stage: 'Advanced', page: 'develop/accessing-data/using-events.mdx', eval: null },

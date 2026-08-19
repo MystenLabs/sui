@@ -12,7 +12,7 @@ export async function createManager(signer: Ed25519Keypair): Promise<string> {
 	const tx = new Transaction();
 	tx.moveCall({ target: `${PREDICT.packageId}::predict::create_manager` });
 
-	const result = await client.core.signAndExecuteTransaction({
+	const result = await client.signAndExecuteTransaction({
 		transaction: tx,
 		signer,
 		include: { effects: true, objectTypes: true },
