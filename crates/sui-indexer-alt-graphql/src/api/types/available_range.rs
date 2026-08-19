@@ -345,6 +345,9 @@ collect_pipelines! {
             pipelines.insert("obj_versions".to_string());
         }
     };
+    Query.[multiGetBalances] |pipelines, _filters| {
+        pipelines.insert("consistent".to_string());
+    };
     Query.[checkpoints] |pipelines, _filters| {
         pipelines.insert("cp_sequence_numbers".to_string());
     };

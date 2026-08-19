@@ -94,14 +94,15 @@ type Address implements Node & IAddressable {
 	"""
 	asTransactionObject(transactionDigest: String): TransactionObject
 	"""
-	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	Fetch the balance for `coinType` (e.g. `0x2::sui::SUI`) owned by this address.
 	
-	Returns `None` when no checkpoint is set in scope (e.g. execution scope).
-	If the address does not own any coins of that type, a balance of zero is returned.
+	The result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of that type, all three values are zero.
 	"""
 	balance(coinType: String!): Balance
 	"""
-	Total balance across coins owned by this address, grouped by coin type.
+	Balances held by this address, grouped by coin type.
+	
+	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator.
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
@@ -131,10 +132,9 @@ type Address implements Node & IAddressable {
 	"""
 	id: ID!
 	"""
-	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	Fetch balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
 	
-	Returns `None` when no checkpoint is set in scope (e.g. execution scope).
-	If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.
 	"""
 	multiGetBalances(keys: [String!]!): [Balance!]
 	"""
@@ -279,15 +279,17 @@ type AvailableRange {
 }
 
 """
-The total balance for a particular coin type.
+The balance of a particular coin type held by an address.
+
+Balances can be held in coin objects, in the address's balance accumulator, or both.
 """
 type Balance {
 	"""
-	The balance as tracked by the accumulator object for the address.
+	The balance held in the address's balance accumulator.
 	"""
 	addressBalance: BigInt
 	"""
-	Total balance across all owned coin objects of the coin type.
+	The balance held in coin objects owned by the address.
 	"""
 	coinBalance: BigInt
 	"""
@@ -295,7 +297,7 @@ type Balance {
 	"""
 	coinType: MoveType
 	"""
-	The sum total of the accumulator balance and individual coin balances owned by the address.
+	The sum of `coinBalance` and `addressBalance`.
 	"""
 	totalBalance: BigInt
 }
@@ -374,6 +376,20 @@ type BalanceEdge {
 	The item at the end of the edge
 	"""
 	node: Balance!
+}
+
+"""
+Identifies the balance for one coin type owned by an address.
+"""
+input BalanceKey {
+	"""
+	The address that owns the balance.
+	"""
+	address: SuiAddress!
+	"""
+	The coin type of the balance.
+	"""
+	coinType: String!
 }
 
 """
@@ -637,13 +653,15 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	asTransactionObject(transactionDigest: String): TransactionObject
 	"""
-	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	Fetch the balance for `coinType` (e.g. `0x2::sui::SUI`) owned by this address.
 	
-	If the address does not own any coins of that type, a balance of zero is returned.
+	The result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. If this address has no balance of that type, all three values are zero.
 	"""
 	balance(coinType: String!): Balance
 	"""
-	Total balance across coins owned by this address, grouped by coin type.
+	Balances held by this address, grouped by coin type.
+	
+	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator.
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
@@ -703,9 +721,9 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	moveObjectBcs: Base64
 	"""
-	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	Fetch balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
 	
-	If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.
 	"""
 	multiGetBalances(keys: [String!]!): [Balance!]
 	"""
@@ -1016,13 +1034,15 @@ type DynamicField implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	asTransactionObject(transactionDigest: String): TransactionObject
 	"""
-	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	Fetch the balance for `coinType` (e.g. `0x2::sui::SUI`) owned by this address.
 	
-	If the address does not own any coins of that type, a balance of zero is returned.
+	The result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. If this address has no balance of that type, all three values are zero.
 	"""
 	balance(coinType: String!): Balance
 	"""
-	Total balance across coins owned by this address, grouped by coin type.
+	Balances held by this address, grouped by coin type.
+	
+	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator.
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
@@ -1070,9 +1090,9 @@ type DynamicField implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	moveObjectBcs: Base64
 	"""
-	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	Fetch balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
 	
-	If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.
 	"""
 	multiGetBalances(keys: [String!]!): [Balance!]
 	"""
@@ -1691,13 +1711,15 @@ interface IAddressable {
 	"""
 	asTransactionObject(transactionDigest: String): TransactionObject
 	"""
-	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	Fetch the balance for `coinType` (e.g. `0x2::sui::SUI`) owned by this address.
 	
-	If the address does not own any coins of that type, a balance of zero is returned.
+	The result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of that type, all three values are zero.
 	"""
 	balance(coinType: String!): Balance
 	"""
-	Total balance across coins owned by this address, grouped by coin type.
+	Balances held by this address, grouped by coin type.
+	
+	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator.
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
@@ -1705,9 +1727,9 @@ interface IAddressable {
 	"""
 	defaultNameRecord: NameRecord
 	"""
-	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	Fetch balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
 	
-	Returns `null` when no checkpoint is set in scope (e.g. execution scope). If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.
 	"""
 	multiGetBalances(keys: [String!]!): [Balance!]
 	"""
@@ -2335,13 +2357,15 @@ type MoveObject implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	asTransactionObject(transactionDigest: String): TransactionObject
 	"""
-	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	Fetch the balance for `coinType` (e.g. `0x2::sui::SUI`) owned by this address.
 	
-	If the address does not own any coins of that type, a balance of zero is returned.
+	The result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. If this address has no balance of that type, all three values are zero.
 	"""
 	balance(coinType: String!): Balance
 	"""
-	Total balance across coins owned by this address, grouped by coin type.
+	Balances held by this address, grouped by coin type.
+	
+	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator.
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
@@ -2389,9 +2413,9 @@ type MoveObject implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	moveObjectBcs: Base64
 	"""
-	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	Fetch balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
 	
-	If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.
 	"""
 	multiGetBalances(keys: [String!]!): [Balance!]
 	"""
@@ -2504,13 +2528,15 @@ type MovePackage implements Node & IAddressable & IObject {
 	"""
 	asTransactionObject(transactionDigest: String): TransactionObject
 	"""
-	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	Fetch the balance for `coinType` (e.g. `0x2::sui::SUI`) owned by this address.
 	
-	If the address does not own any coins of that type, a balance of zero is returned.
+	The result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. If this address has no balance of that type, all three values are zero.
 	"""
 	balance(coinType: String!): Balance
 	"""
-	Total balance across coins owned by this address, grouped by coin type.
+	Balances held by this address, grouped by coin type.
+	
+	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator.
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
@@ -2542,9 +2568,9 @@ type MovePackage implements Node & IAddressable & IObject {
 	"""
 	modules(first: Int, after: String, last: Int, before: String): MoveModuleConnection
 	"""
-	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	Fetch balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
 	
-	If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.
 	"""
 	multiGetBalances(keys: [String!]!): [Balance!]
 	"""
@@ -3035,13 +3061,15 @@ type Object implements Node & IAddressable & IObject {
 	"""
 	asTransactionObject(transactionDigest: String): TransactionObject
 	"""
-	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	Fetch the balance for `coinType` (e.g. `0x2::sui::SUI`) owned by this address.
 	
-	If the address does not own any coins of that type, a balance of zero is returned.
+	The result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. If this address has no balance of that type, all three values are zero.
 	"""
 	balance(coinType: String!): Balance
 	"""
-	Total balance across coins owned by this address, grouped by coin type.
+	Balances held by this address, grouped by coin type.
+	
+	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator.
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
@@ -3073,10 +3101,9 @@ type Object implements Node & IAddressable & IObject {
 	"""
 	id: ID!
 	"""
-	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	Fetch balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
 	
-	Returns `None` when no checkpoint is set in scope (e.g. execution scope).
-	If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.
 	"""
 	multiGetBalances(keys: [String!]!): [Balance!]
 	"""
@@ -3617,6 +3644,12 @@ type Query {
 	Returns a list of addresses that is guaranteed to be the same length as `keys`. If an address in `keys` is fetched by name and the name does not resolve to an address, its corresponding entry in the result will be `null`.
 	"""
 	multiGetAddresses(keys: [AddressKey!]!): [Address]!
+	"""
+	Fetch balances by their addresses and coin types.
+	
+	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns a list that is guaranteed to be the same length as `keys`. If an address has no balance of a given type, all three values are zero for that key.
+	"""
+	multiGetBalances(keys: [BalanceKey!]!): [Balance!]!
 	"""
 	Fetch checkpoints by their sequence numbers.
 	
