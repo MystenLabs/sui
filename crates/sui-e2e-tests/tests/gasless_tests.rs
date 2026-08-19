@@ -120,6 +120,64 @@ async fn test_gasless_transfer_success() {
 
 #[cfg_attr(not(msim), ignore)]
 #[sim_test]
+async fn test_gasless_below_minimum_rejected_at_admission() {
+    let mut test_env = setup_gasless_env().await;
+    let sender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
+
+    let initial_funding = 10_000u64;
+    let min_transfer = 5_000u64;
+
+    let coin_type = setup_custom_coin(&mut test_env, &[(initial_funding, sender)]).await;
+    // Require a non-zero minimum transfer for this token type (overrides the 0 set by
+    // setup_custom_coin).
+    transaction::add_gasless_token_for_testing(coin_type.to_canonical_string(true), min_transfer);
+
+    // A transfer below the minimum must be rejected up-front at admission/voting (returns an
+    // error from submission), not merely fail at execution.
+    let tx = test_env.create_gasless_transaction(
+        min_transfer - 1,
+        coin_type.clone(),
+        sender,
+        recipient,
+        0,
+        0,
+    );
+    let result = test_env.exec_tx_directly(tx).await;
+    assert!(
+        result.is_err(),
+        "below-minimum gasless transfer should be rejected at admission, got effects: {:?}",
+        result.map(|(_, e)| e.status().clone())
+    );
+    // Sender balance is untouched because the transaction never executed.
+    assert_eq!(
+        test_env.get_balance_ab(sender, coin_type.clone()),
+        initial_funding
+    );
+
+    // A transfer at the minimum is admitted and succeeds.
+    let tx = test_env.create_gasless_transaction(
+        min_transfer,
+        coin_type.clone(),
+        sender,
+        recipient,
+        1,
+        0,
+    );
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(
+        effects.status().is_ok(),
+        "at-minimum gasless transfer should succeed: {:?}",
+        effects.status()
+    );
+    assert_zero_gas(effects.gas_cost_summary());
+    assert_eq!(test_env.get_balance_ab(recipient, coin_type), min_transfer);
+
+    test_env.trigger_reconfiguration().await;
+}
+
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
 async fn test_gasless_dryrun() {
     let mut test_env = setup_gasless_env().await;
     let sender = test_env.get_sender(1);
@@ -354,13 +412,14 @@ async fn test_gasless_computation_cap() {
     assert_eq!(test_env.get_sui_balance_ab(sender), 0);
 
     let tx = test_env.create_gasless_transaction(100, coin_type, sender, recipient, 0, 0);
-    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
-
+    // The signing-time dry-run rejects gasless transactions that would fail execution (here,
+    // exceeding the computation cap), so submission is rejected up front rather than executing.
+    let result = test_env.exec_tx_directly(tx).await;
     assert!(
-        effects.status().is_err(),
-        "Gasless should fail when computation exceeds cap"
+        result.is_err(),
+        "Gasless exceeding the computation cap should be rejected at admission, got: {:?}",
+        result.map(|(_, e)| e.status().clone())
     );
-    assert_zero_gas(effects.gas_cost_summary());
 
     test_env.trigger_reconfiguration().await;
 }
@@ -499,12 +558,13 @@ async fn test_gasless_split_coins_leftover_fails() {
     );
     let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
     let tx = test_env.gasless_transaction_data(tx_kind, sender, 0, 0);
-    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
-
+    // The leftover split coin makes execution fail, so the signing-time dry-run rejects the
+    // transaction at admission rather than executing it.
+    let result = test_env.exec_tx_directly(tx).await;
     assert!(
-        effects.status().is_err(),
-        "Gasless SplitCoins with leftover coin should fail, got: {:?}",
-        effects.status()
+        result.is_err(),
+        "Gasless SplitCoins with leftover coin should be rejected at admission, got: {:?}",
+        result.map(|(_, e)| e.status().clone())
     );
 
     test_env.trigger_reconfiguration().await;
