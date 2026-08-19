@@ -196,6 +196,9 @@ pub enum RunSpec {
         // relative weight of composite transactions in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         composite: Vec<u32>,
+        // relative weight of transactions that race distinct transactions over the same gas object
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        gas_double_spend: Vec<u32>,
         // Target address(es) for deposit load test. When set, runs the
         // addr_bal_deposit workload exclusively: every transaction withdraws
         // from the sender's address balance and deposits to these addresses.
@@ -246,6 +249,13 @@ pub enum RunSpec {
         // Each contested object will have PAYLOADS_PER_CONTESTED_OBJECT payloads contending for it.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [2])]
         num_contested_objects: Vec<u64>,
+        // Number of distinct transactions to submit concurrently with the same gas object.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [2])]
+        gas_double_spend_copies: Vec<usize>,
+        // How the conflicting copies are submitted: "direct" submits each copy independently,
+        // "soft-bundle" packs all copies into a single soft bundle.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [String::from("direct")])]
+        gas_double_spend_submission: Vec<String>,
 
         // --- generic options ---
         // Target qps
