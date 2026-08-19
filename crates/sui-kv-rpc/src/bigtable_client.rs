@@ -416,7 +416,7 @@ impl BigTableClient {
             let client = client.clone();
             Box::pin(async move {
                 let lookup_tx_seq = if direction.is_ascending() {
-                    if position.event_index > 0 {
+                    if position.index > 0 {
                         position.tx_seq
                     } else {
                         match position.tx_seq.checked_sub(1) {

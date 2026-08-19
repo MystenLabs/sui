@@ -159,7 +159,7 @@ pub(super) fn event_frontier_checkpoint(
     ascending: bool,
 ) -> Result<Option<u64>, RpcError> {
     let lookup_tx = if ascending {
-        if frontier.event_index > 0 {
+        if frontier.index > 0 {
             frontier.tx_seq
         } else {
             match frontier.tx_seq.checked_sub(1) {
@@ -186,10 +186,10 @@ fn push_event_refs_for_row_until_limit(
 
     let mut next_bounds = None;
     if ascending {
-        for event_index in 0..row.event_count {
+        for index in 0..row.event_count {
             let position = IntraTxCoordinate {
                 tx_seq: row.tx_sequence_number,
-                event_index,
+                index,
             };
             if !bounds.contains(position) {
                 continue;
@@ -204,10 +204,10 @@ fn push_event_refs_for_row_until_limit(
             }
         }
     } else {
-        for event_index in (0..row.event_count).rev() {
+        for index in (0..row.event_count).rev() {
             let position = IntraTxCoordinate {
                 tx_seq: row.tx_sequence_number,
-                event_index,
+                index,
             };
             if !bounds.contains(position) {
                 continue;

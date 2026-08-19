@@ -124,7 +124,7 @@ pub(crate) async fn list_events(
         let terminal_position = Position::Events {
             checkpoint: range_end_checkpoint,
             tx_seq: range_end_position.tx_seq,
-            event_index: range_end_position.event_index,
+            event_index: range_end_position.index,
         };
         let response = range_end_response(&options, exhaustion, terminal_position, None, true).0;
         return Ok(async_stream::try_stream! {
@@ -275,7 +275,7 @@ pub(crate) async fn list_events(
                 let terminal_position = Position::Events {
                     checkpoint: range_end_checkpoint,
                     tx_seq: range_end_position.tx_seq,
-                    event_index: range_end_position.event_index,
+                    event_index: range_end_position.index,
                 };
                 let (response, reason) = range_end_response(
                     &options,
@@ -306,7 +306,7 @@ pub(crate) async fn list_events(
                         Position::Events {
                             checkpoint: item_checkpoint,
                             tx_seq: rendered.position.tx_seq,
-                            event_index: rendered.position.event_index,
+                            event_index: rendered.position.index,
                         },
                         covered_checkpoint_bound,
                     );
@@ -478,7 +478,7 @@ async fn fetch_txs_for_refs(
             anyhow::anyhow!(
                 "list_events: selected event {}/{} is missing transaction digest",
                 p.position.tx_seq,
-                p.position.event_index
+                p.position.index
             )
         })?;
         if seen_digests.insert(row.digest) {
@@ -542,19 +542,19 @@ async fn render_event(
             tonic::Code::Internal,
             format!(
                 "list_events: selected event {}/{} transaction {} has no events column",
-                event_ref.position.tx_seq, event_ref.position.event_index, tx.digest
+                event_ref.position.tx_seq, event_ref.position.index, tx.digest
             ),
         )
     })?;
     let event = tx_events
         .data
-        .get(event_ref.position.event_index as usize)
+        .get(event_ref.position.index as usize)
         .ok_or_else(|| {
             RpcError::new(
                 tonic::Code::Internal,
                 format!(
                     "list_events: selected event {}/{} index out of range for transaction {}",
-                    event_ref.position.tx_seq, event_ref.position.event_index, tx.digest
+                    event_ref.position.tx_seq, event_ref.position.index, tx.digest
                 ),
             )
         })?;
@@ -580,7 +580,7 @@ async fn render_event(
         proto_event.transaction_index = event_ref.tx_seq_digest.map(|row| row.tx_offset as u64);
     }
     if read_mask.contains(ProtoEvent::EVENT_INDEX_FIELD.name) {
-        proto_event.event_index = Some(event_ref.position.event_index);
+        proto_event.event_index = Some(event_ref.position.index);
     }
 
     Ok(RenderedEvent {
@@ -644,7 +644,7 @@ fn event_frontier_watermark(
                     tonic::Code::Internal,
                     format!(
                         "event scan frontier {}/{} has no checkpoint mapping",
-                        position.tx_seq, position.event_index
+                        position.tx_seq, position.index
                     ),
                 )
             },
@@ -653,7 +653,7 @@ fn event_frontier_watermark(
         Position::Events {
             checkpoint: cursor_checkpoint,
             tx_seq: position.tx_seq,
-            event_index: position.event_index,
+            event_index: position.index,
         },
         *covered_checkpoint_bound,
     ))
@@ -763,12 +763,12 @@ fn expand_event_refs(
 
     let mut refs = Vec::with_capacity(row.event_count as usize);
     if options.is_ascending() {
-        for event_index in 0..row.event_count {
-            push_event_ref_if_in_bounds(&mut refs, row, event_index, bounds);
+        for index in 0..row.event_count {
+            push_event_ref_if_in_bounds(&mut refs, row, index, bounds);
         }
     } else {
-        for event_index in (0..row.event_count).rev() {
-            push_event_ref_if_in_bounds(&mut refs, row, event_index, bounds);
+        for index in (0..row.event_count).rev() {
+            push_event_ref_if_in_bounds(&mut refs, row, index, bounds);
         }
     }
     refs
@@ -777,12 +777,12 @@ fn expand_event_refs(
 fn push_event_ref_if_in_bounds(
     refs: &mut Vec<EventRef>,
     row: TxSeqDigestData,
-    event_index: u32,
+    index: u32,
     bounds: IntraTxScanBounds,
 ) {
     let position = IntraTxCoordinate {
         tx_seq: row.tx_sequence_number,
-        event_index,
+        index,
     };
     if !bounds.contains(position) {
         return;
@@ -1089,8 +1089,8 @@ mod tests {
             .map(|r| {
                 let row = r.tx_seq_digest.expect("unfiltered refs carry digest row");
                 assert_eq!(row.tx_sequence_number, r.position.tx_seq);
-                assert!(row.event_count > r.position.event_index);
-                (r.position.tx_seq, r.position.event_index)
+                assert!(row.event_count > r.position.index);
+                (r.position.tx_seq, r.position.index)
             })
             .collect()
     }
@@ -1114,11 +1114,11 @@ mod tests {
             IntraTxScanBounds {
                 lo: Bound::Included(IntraTxCoordinate {
                     tx_seq: 10,
-                    event_index: 1,
+                    index: 1,
                 }),
                 hi: Bound::Excluded(IntraTxCoordinate {
                     tx_seq: 10,
-                    event_index: 3,
+                    index: 3,
                 }),
             },
             &options(Ordering::Ascending),
@@ -1129,11 +1129,11 @@ mod tests {
             vec![
                 IntraTxCoordinate {
                     tx_seq: 10,
-                    event_index: 1
+                    index: 1
                 },
                 IntraTxCoordinate {
                     tx_seq: 10,
-                    event_index: 2
+                    index: 2
                 },
             ]
         );
@@ -1147,11 +1147,11 @@ mod tests {
             IntraTxScanBounds {
                 lo: Bound::Included(IntraTxCoordinate {
                     tx_seq: 10,
-                    event_index: 1,
+                    index: 1,
                 }),
                 hi: Bound::Excluded(IntraTxCoordinate {
                     tx_seq: 10,
-                    event_index: 4,
+                    index: 4,
                 }),
             },
             &options(Ordering::Descending),

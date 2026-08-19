@@ -298,7 +298,7 @@ fn next_event_chunk(
             let terminal_position = Position::Events {
                 checkpoint: event_range.end_checkpoint,
                 tx_seq: event_range.end_position.tx_seq,
-                event_index: event_range.end_position.event_index,
+                event_index: event_range.end_position.index,
             };
             let terminal = ScanTerminal::from_range_exhaustion(
                 event_range.exhaustion,
@@ -416,7 +416,7 @@ fn next_event_chunk(
             let terminal_position = Position::Events {
                 checkpoint: end_checkpoint,
                 tx_seq: end_position.tx_seq,
-                event_index: end_position.event_index,
+                event_index: end_position.index,
             };
             let terminal = scan_limit_or_range(
                 request_scan_limit_reached,
@@ -521,7 +521,7 @@ fn next_event_chunk(
             let terminal_position = Position::Events {
                 checkpoint: end_checkpoint,
                 tx_seq: end_position.tx_seq,
-                event_index: end_position.event_index,
+                event_index: end_position.index,
             };
             let terminal = scan_limit_or_range(
                 request_scan_limit_reached,
@@ -599,7 +599,7 @@ fn event_frontier_watermark(
                 tonic::Code::Internal,
                 format!(
                     "event scan frontier {}/{} has no checkpoint mapping",
-                    frontier.tx_seq, frontier.event_index
+                    frontier.tx_seq, frontier.index
                 ),
             )
         })?;
@@ -607,7 +607,7 @@ fn event_frontier_watermark(
         Position::Events {
             checkpoint: cursor_cp,
             tx_seq: frontier.tx_seq,
-            event_index: frontier.event_index,
+            event_index: frontier.index,
         },
         boundary,
     ))
@@ -656,19 +656,19 @@ fn render_event_chunk(
                     tonic::Code::Internal,
                     format!(
                         "selected event {}/{} transaction {} has no events",
-                        event_ref.position.tx_seq, event_ref.position.event_index, row.digest
+                        event_ref.position.tx_seq, event_ref.position.index, row.digest
                     ),
                 )
             })?;
         let event = tx_events
             .data
-            .get(event_ref.position.event_index as usize)
+            .get(event_ref.position.index as usize)
             .ok_or_else(|| {
                 RpcError::new(
                     tonic::Code::Internal,
                     format!(
                         "selected event {}/{} index out of range for transaction {}",
-                        event_ref.position.tx_seq, event_ref.position.event_index, row.digest
+                        event_ref.position.tx_seq, event_ref.position.index, row.digest
                     ),
                 )
             })?;
@@ -696,7 +696,7 @@ fn render_event_chunk(
             proto_event.transaction_index = Some(row.tx_offset as u64);
         }
         if read_mask.contains(ProtoEvent::EVENT_INDEX_FIELD.name) {
-            proto_event.event_index = Some(event_ref.position.event_index);
+            proto_event.event_index = Some(event_ref.position.index);
         }
         checkpoint_boundary = advance_covered_bound_before_checkpoint(
             checkpoint_boundary,
@@ -708,7 +708,7 @@ fn render_event_chunk(
             Position::Events {
                 checkpoint: row.checkpoint_number,
                 tx_seq: event_ref.position.tx_seq,
-                event_index: event_ref.position.event_index,
+                event_index: event_ref.position.index,
             },
             checkpoint_boundary,
         );

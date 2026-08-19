@@ -30,7 +30,7 @@ pub enum Ordering {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct IntraTxCoordinate {
     pub tx_seq: u64,
-    pub event_index: u32,
+    pub index: u32,
 }
 
 /// Why a resolved scan interval is exhausted. Fixed at range-resolution time,
@@ -123,7 +123,7 @@ pub struct IntraTxScanBounds {
 }
 
 /// [`ResolvedRange`]'s analogue for event scans: the scan domain is
-/// `(tx_seq, event_index)` coordinates, and the same two endpoint
+/// `(tx_seq, index)` coordinates, and the same two endpoint
 /// checkpoints annotate it for watermark rendering (see [`ResolvedRange`]
 /// for why they are not a `Range`).
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -157,10 +157,7 @@ impl IntraTxCoordinate {
     /// Fencepost at the first event slot of `tx_seq`; valid as a boundary even
     /// if the transaction has no events.
     pub fn start_of_tx(tx_seq: u64) -> Self {
-        Self {
-            tx_seq,
-            event_index: 0,
-        }
+        Self { tx_seq, index: 0 }
     }
 }
 
@@ -630,7 +627,7 @@ impl IntraTxScanBounds {
             Bound::Unbounded => 0,
         };
         let end_tx = match self.hi {
-            Bound::Excluded(position) if position.event_index == 0 => position.tx_seq,
+            Bound::Excluded(position) if position.index == 0 => position.tx_seq,
             Bound::Included(position) | Bound::Excluded(position) => {
                 position.tx_seq.saturating_add(1)
             }
@@ -797,16 +794,13 @@ impl CheckpointRange {
 
 impl From<IntraTxCoordinate> for (u64, u32) {
     fn from(position: IntraTxCoordinate) -> Self {
-        (position.tx_seq, position.event_index)
+        (position.tx_seq, position.index)
     }
 }
 
 impl From<(u64, u32)> for IntraTxCoordinate {
-    fn from((tx_seq, event_index): (u64, u32)) -> Self {
-        Self {
-            tx_seq,
-            event_index,
-        }
+    fn from((tx_seq, index): (u64, u32)) -> Self {
+        Self { tx_seq, index }
     }
 }
 
@@ -826,7 +820,7 @@ fn intra_tx_cursor_coordinate(cursor: &CursorToken) -> IntraTxCoordinate {
             ..
         } => IntraTxCoordinate {
             tx_seq,
-            event_index,
+            index: event_index,
         },
         _ => unreachable!("validated at decode"),
     }
@@ -1087,7 +1081,7 @@ mod tests {
         let bounds = IntraTxScanBounds {
             lo: Bound::Included(IntraTxCoordinate {
                 tx_seq: 10,
-                event_index: 2,
+                index: 2,
             }),
             hi: Bound::Excluded(IntraTxCoordinate::start_of_tx(13)),
         };
@@ -1101,7 +1095,7 @@ mod tests {
             lo: Bound::Unbounded,
             hi: Bound::Excluded(IntraTxCoordinate {
                 tx_seq: 13,
-                event_index: 1,
+                index: 1,
             }),
         };
 
@@ -1364,7 +1358,7 @@ mod tests {
             item_bounded.end_position,
             IntraTxCoordinate {
                 tx_seq: 3,
-                event_index: 0,
+                index: 0,
             }
         );
         assert_eq!(
@@ -1383,7 +1377,7 @@ mod tests {
             boundary_bounded.end_position,
             IntraTxCoordinate {
                 tx_seq: 3,
-                event_index: 0,
+                index: 0,
             }
         );
         assert_eq!(
