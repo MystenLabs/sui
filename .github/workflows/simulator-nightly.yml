@@ -130,16 +130,26 @@ jobs:
         id: protocol
         # This step determines which protocol config override to use.
         # It checks if the trigger was a manual dispatch or a specific schedule.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PROTOCOL_CONFIG_OVERRIDE: ${{ github.event.inputs.protocol_config_override }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
         run: |
           message=""
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            if [[ -n "${{ github.event.inputs.protocol_config_override }}" ]]; then
-              echo "Testing with protocol config override: ${{ github.event.inputs.protocol_config_override }}"
-              echo "SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${{ github.event.inputs.protocol_config_override }}" >> $GITHUB_ENV
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ -n "$PROTOCOL_CONFIG_OVERRIDE" ]]; then
+              echo "Testing with protocol config override: $PROTOCOL_CONFIG_OVERRIDE"
+              # Multiline-safe: use a delimiter so a newline in the input
+              # cannot smuggle extra entries into $GITHUB_ENV.
+              {
+                echo 'SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE<<EOF_SUI_OVERRIDE'
+                echo "${PROTOCOL_CONFIG_OVERRIDE}"
+                echo 'EOF_SUI_OVERRIDE'
+              } >> "$GITHUB_ENV"
             else
               echo "Testing latest protocol config for dispatched run"
             fi
-          elif [[ "${{ github.event.schedule }}" == "0 21 * * *" ]]; then
+          elif [[ "$EVENT_SCHEDULE" == "0 21 * * *" ]]; then
             echo "Testing mainnet protocol config"
             echo "SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=mainnet" >> $GITHUB_ENV
             message="(mainnet config) "
