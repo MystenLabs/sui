@@ -11,7 +11,7 @@ use crate::{
     CommitConsumerArgs, CommittedSubDag,
     block::{BlockAPI, VerifiedBlock},
     commit::{CommitAPI, load_committed_subdag_from_store},
-    commit_finalizer::{CommitFinalizer, CommitFinalizerHandle},
+    commit_finalizer::CommitFinalizerHandle,
     context::Context,
     dag_state::DagState,
     error::ConsensusResult,
@@ -54,7 +54,7 @@ impl CommitObserver {
     ) -> Self {
         let store = dag_state.read().store();
         let commit_interpreter = Linearizer::new(context.clone(), dag_state.clone());
-        let commit_finalizer_handle = CommitFinalizer::start(
+        let commit_finalizer_handle = CommitFinalizerHandle::start(
             context.clone(),
             dag_state.clone(),
             transaction_vote_tracker.clone(),
