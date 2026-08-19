@@ -507,7 +507,7 @@ theorem retained_bundle_persists
   (source.durable holder earlier later ordered).retained_bundle_persists retained
 
 /-- All stored votes have arrived by this common time. -/
-def certificateDeadline
+def certificateDeadline {readyAt : Time}
     (nextBlocks : NextPersistedBlockProduction timed.execution readyAt) : Time :=
   nextBlocks.deadline + timed.localActionBound + network.delta + 3
 

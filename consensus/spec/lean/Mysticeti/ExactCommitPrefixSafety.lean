@@ -1406,7 +1406,8 @@ inductive ExactCommitPath {Reference : Type}
     (successor : Reference → Reference → Prop)
     (genesis : Reference) : Nat → Reference → Prop where
   | genesis : ExactCommitPath successor genesis 0 genesis
-  | next : ExactCommitPath successor genesis length prior →
+  | next {length : Nat} {prior reference : Reference} :
+      ExactCommitPath successor genesis length prior →
       successor prior reference →
       ExactCommitPath successor genesis (length + 1) reference
 

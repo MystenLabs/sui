@@ -46,7 +46,9 @@ inductive ReplayedState
     Nat -> ValidatorCommitHead CommitId -> ReplayState -> Prop where
   | genesis : ReplayedState replay successor genesis 0 genesis
       replay.initialState
-  | next : ReplayedState replay successor genesis length prior state ->
+  | next {length : Nat} {prior head : ValidatorCommitHead CommitId}
+      {state : ReplayState} :
+      ReplayedState replay successor genesis length prior state ->
       successor prior head ->
       ReplayedState replay successor genesis (length + 1) head
         (replay.addCommit state (replay.performanceFor head))

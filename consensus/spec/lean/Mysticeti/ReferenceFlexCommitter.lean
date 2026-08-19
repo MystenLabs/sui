@@ -102,16 +102,20 @@ def CrossViewExactSlotAgreement {Digest : Type}
 inductive ExactListAgreement {Left Right : Type}
     (relation : Left → Right → Prop) : List Left → List Right → Prop where
   | nil : ExactListAgreement relation [] []
-  | cons : relation left right → ExactListAgreement relation leftTail rightTail →
+  | cons {left : Left} {right : Right} {leftTail : List Left}
+      {rightTail : List Right} :
+      relation left right → ExactListAgreement relation leftTail rightTail →
       ExactListAgreement relation (left :: leftTail) (right :: rightTail)
 
 /-- Pointwise agreement for a common list prefix. Either local view can contain
 more later entries. -/
 inductive ExactPrefixAgreement {Left Right : Type}
     (relation : Left → Right → Prop) : List Left → List Right → Prop where
-  | leftNil : ExactPrefixAgreement relation [] right
-  | rightNil : ExactPrefixAgreement relation left []
-  | cons : relation left right →
+  | leftNil {right : List Right} : ExactPrefixAgreement relation [] right
+  | rightNil {left : List Left} : ExactPrefixAgreement relation left []
+  | cons {left : Left} {right : Right} {leftTail : List Left}
+      {rightTail : List Right} :
+      relation left right →
       ExactPrefixAgreement relation leftTail rightTail →
       ExactPrefixAgreement relation (left :: leftTail) (right :: rightTail)
 

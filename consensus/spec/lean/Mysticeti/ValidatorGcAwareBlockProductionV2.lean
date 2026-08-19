@@ -1077,6 +1077,9 @@ variable {recoveryWait : Time}
 variable {needs : ValidatorRecoveryParentNeedExecution pins arms recoveryWait}
 variable {supports : ValidatorRecoverySelectedSupportExecution needs}
 variable {obligations : ValidatorProposalObligationExecution timed}
+variable {thresholds : ValidatorBlockProgressRecoveryThresholds}
+variable {mode : ValidatorBlockProgressRecoveryModeExecution timed thresholds}
+variable {recursive : ValidatorRecoveryRecursiveParentNeedExecution syncRules}
 
 omit [DecidableEq BlockId] in
 /-- Every active parent need already has a V2 phase. An unready need has its

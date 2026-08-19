@@ -783,6 +783,8 @@ variable {timerSource : ValidatorRecoveryTimerSourceMap faults protocolPacket
 variable {pins : ValidatorRecoverySourcePinExecution syncRules}
 variable {arms : ValidatorRecoveryTimerArmExecution timerSource}
 variable {recoveryWait : Time}
+variable {time : Time}
+variable {validator : Nat}
 
 /-- An accumulator need extends itself. -/
 theorem accumulator_extends_refl

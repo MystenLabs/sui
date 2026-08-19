@@ -109,7 +109,7 @@ theorem refresh_validator_flex_pending_cache_same_schedule
   simp [refreshValidatorFlexPendingCache, indexChanged, scheduleSame]
 
 /-- Create one new round with the exact selected-slot order and no decision. -/
-def undecidedReferenceFlexRound (round : Nat)
+def undecidedReferenceFlexRound {BlockId : Type} (round : Nat)
     (slots : List ExactSelectedLeaderSlot) :
     ReferenceFlexRoundView BlockId :=
   { round

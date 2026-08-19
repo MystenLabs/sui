@@ -13,3 +13,5 @@ srcDir = "."
 # Build every module in the directory, not only the import closure of the root.
 # Without this, a module that nothing imports is never compiled.
 globs = ["Mysticeti", "Mysticeti.+"]
+# An unbound identifier must be an error, not a silently auto-bound implicit.
+leanOptions = { autoImplicit = false, relaxedAutoImplicit = false }
