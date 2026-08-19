@@ -3018,7 +3018,11 @@ async fn build_http_servers(
         rpc_service.with_subscription_service(subscription_service_handle);
 
         if let Some(transaction_orchestrator) = transaction_orchestrator {
-            rpc_service.with_executor(transaction_orchestrator.clone())
+            rpc_service.with_executor(transaction_orchestrator.clone());
+            // The driver knows which validators this node has been submitting to successfully,
+            // which is what simulate names as a transaction's allowed proposers.
+            rpc_service
+                .with_proposer_selector(transaction_orchestrator.transaction_driver().clone());
         }
 
         rpc_service.into_router().await

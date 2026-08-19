@@ -17,7 +17,7 @@ use crate::{
 };
 
 /// Select validators with latencies within 2% of the lowest latency.
-const SELECT_LATENCY_DELTA: f64 = 0.02;
+pub(crate) const SELECT_LATENCY_DELTA: f64 = 0.02;
 
 /// Provides the next target validator to retry operations,
 /// and gathers the errors along with the operations.
