@@ -683,16 +683,12 @@ where
             match &self.subscriber {
                 SubscriberType::Validator(s) => s.subscribe(peer),
                 SubscriberType::Observer(s) => {
-                    // Re-subscribe with the full configured peer list, rotated so the updated
-                    // peer is tried first. A peer outside the configured list cannot be
-                    // streamed from anyway (connections to unconfigured peers are rejected),
-                    // so leave the current subscription undisturbed.
-                    let mut peer_ids = observer_peer_ids(&self.context);
-                    if let Some(position) = peer_ids
-                        .iter()
-                        .position(|peer_id| *peer_id == PeerId::Validator(peer))
-                    {
-                        peer_ids.rotate_left(position);
+                    // Re-subscribe with the configured peer list so any live stream to the
+                    // updated peer's old address is dropped. A peer outside the configured
+                    // list cannot be streamed from anyway (connections to unconfigured peers
+                    // are rejected), so leave the current subscription undisturbed.
+                    let peer_ids = observer_peer_ids(&self.context);
+                    if peer_ids.contains(&PeerId::Validator(peer)) {
                         s.subscribe(peer_ids);
                     } else {
                         info!(
