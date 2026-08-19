@@ -125,7 +125,7 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let values = BitmapIndexHandler::new(EventBitmapProcessor, u64::MAX)
+        let values = BitmapIndexHandler::new(EventBitmapProcessor)
             .process(&Arc::new(checkpoint))
             .await
             .unwrap();
@@ -150,7 +150,7 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let values = BitmapIndexHandler::new(EventBitmapProcessor, u64::MAX)
+        let values = BitmapIndexHandler::new(EventBitmapProcessor)
             .process(&Arc::new(checkpoint))
             .await
             .unwrap();
@@ -175,7 +175,7 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let values = BitmapIndexHandler::new(EventBitmapProcessor, u64::MAX)
+        let values = BitmapIndexHandler::new(EventBitmapProcessor)
             .process(&Arc::new(checkpoint))
             .await
             .unwrap();
@@ -213,7 +213,7 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let values = BitmapIndexHandler::new(EventBitmapProcessor, u64::MAX)
+        let values = BitmapIndexHandler::new(EventBitmapProcessor)
             .process(&Arc::new(checkpoint))
             .await
             .unwrap();

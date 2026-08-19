@@ -20,10 +20,16 @@ use serde::Serialize;
 use sui_futures::service::Service;
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::IndexerArgs;
+use sui_indexer_alt_framework::ingestion::ArcStreamingClient;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::ingestion::IngestionConfig as FrameworkIngestionConfig;
+use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
+use sui_indexer_alt_framework::ingestion::streaming_client::GrpcStreamingClient;
+use sui_indexer_alt_framework::metrics::IngestionMetrics;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 
+pub use crate::bigtable::client::CheckpointSpan;
 use crate::rate_limiter::CompositeRateLimiter;
 use crate::rate_limiter::RateLimiter;
 use sui_protocol_config::Chain;
@@ -379,7 +385,7 @@ pub trait KeyValueStoreReader {
 
 impl BigTableIndexer {
     pub async fn new(
-        store: BigTableStore,
+        client: BigTableClient,
         indexer_args: IndexerArgs,
         client_args: ClientArgs,
         ingestion_config: IngestionConfig,
@@ -389,16 +395,28 @@ impl BigTableIndexer {
         chain: Chain,
         registry: &Registry,
     ) -> Result<Self> {
-        let mut indexer = Indexer::new(
+        let ingestion_config: FrameworkIngestionConfig = ingestion_config.into();
+        let ingestion_metrics = IngestionMetrics::new(Some("kvstore_alt_indexer"), registry);
+        let ingestion_client = IngestionClient::new(client_args.ingestion, ingestion_metrics)?;
+        let streaming_client = client_args.streaming.streaming_url.map(|uri| {
+            Arc::new(GrpcStreamingClient::new(
+                uri,
+                ingestion_config.streaming_connection_timeout(),
+                ingestion_config.streaming_statement_timeout(),
+            )) as ArcStreamingClient
+        });
+        let latest_checkpoint_at_startup = ingestion_client.latest_checkpoint_number().await?;
+        let store = BigTableStore::new(client, latest_checkpoint_at_startup);
+        let mut indexer = Indexer::with_ingestion_clients(
             store.clone(),
             indexer_args,
-            client_args,
-            ingestion_config.into(),
+            ingestion_client,
+            streaming_client,
+            ingestion_config,
             Some("kvstore_alt_indexer"),
             registry,
         )
         .await?;
-        let latest_checkpoint_at_startup = indexer.latest_checkpoint_at_startup();
 
         let global = config.total_max_rows_per_second.map(RateLimiter::new);
         let base_rps = config.max_rows_per_second;
@@ -440,8 +458,7 @@ impl BigTableIndexer {
                 tx_bitmap_rate_limiter,
                 Some(registry),
             );
-        let tx_bitmap_handler =
-            BitmapIndexHandler::new(TransactionBitmapProcessor, latest_checkpoint_at_startup);
+        let tx_bitmap_handler = BitmapIndexHandler::new(TransactionBitmapProcessor);
         indexer
             .sequential_pipeline(
                 tx_bitmap_handler,
@@ -457,7 +474,6 @@ impl BigTableIndexer {
                     CheckpointsPipeline,
                     &pipeline.checkpoints,
                     build_rate_limiter(pipeline.checkpoints.max_rows_per_second, base_rps, &global),
-                    latest_checkpoint_at_startup,
                 ),
                 pipeline.checkpoints.finish(base.clone()),
             )
@@ -472,7 +488,6 @@ impl BigTableIndexer {
                         base_rps,
                         &global,
                     ),
-                    latest_checkpoint_at_startup,
                 ),
                 pipeline.checkpoints_by_digest.finish(base.clone()),
             )
@@ -487,7 +502,6 @@ impl BigTableIndexer {
                         base_rps,
                         &global,
                     ),
-                    latest_checkpoint_at_startup,
                 ),
                 pipeline.transactions.finish(base.clone()),
             )
@@ -498,7 +512,6 @@ impl BigTableIndexer {
                     ObjectsPipeline,
                     &pipeline.objects,
                     build_rate_limiter(pipeline.objects.max_rows_per_second, base_rps, &global),
-                    latest_checkpoint_at_startup,
                 ),
                 pipeline.objects.finish(base.clone()),
             )
@@ -509,7 +522,6 @@ impl BigTableIndexer {
                     EpochStartPipeline,
                     &pipeline.epoch_start,
                     build_rate_limiter(pipeline.epoch_start.max_rows_per_second, base_rps, &global),
-                    latest_checkpoint_at_startup,
                 ),
                 pipeline.epoch_start.finish(base.clone()),
             )
@@ -520,7 +532,6 @@ impl BigTableIndexer {
                     EpochEndPipeline,
                     &pipeline.epoch_end,
                     build_rate_limiter(pipeline.epoch_end.max_rows_per_second, base_rps, &global),
-                    latest_checkpoint_at_startup,
                 ),
                 pipeline.epoch_end.finish(base.clone()),
             )
@@ -535,7 +546,6 @@ impl BigTableIndexer {
                         base_rps,
                         &global,
                     ),
-                    latest_checkpoint_at_startup,
                 ),
                 pipeline.protocol_configs.finish(base.clone()),
             )
@@ -546,7 +556,6 @@ impl BigTableIndexer {
                     PackagesPipeline,
                     &pipeline.packages,
                     build_rate_limiter(pipeline.packages.max_rows_per_second, base_rps, &global),
-                    latest_checkpoint_at_startup,
                 ),
                 pipeline.packages.finish(base.clone()),
             )
@@ -561,7 +570,6 @@ impl BigTableIndexer {
                         base_rps,
                         &global,
                     ),
-                    latest_checkpoint_at_startup,
                 ),
                 pipeline.packages_by_id.finish(base.clone()),
             )
@@ -576,7 +584,6 @@ impl BigTableIndexer {
                         base_rps,
                         &global,
                     ),
-                    latest_checkpoint_at_startup,
                 ),
                 pipeline.packages_by_checkpoint.finish(base.clone()),
             )
@@ -591,7 +598,6 @@ impl BigTableIndexer {
                         base_rps,
                         &global,
                     ),
-                    latest_checkpoint_at_startup,
                 ),
                 pipeline.system_packages.finish(base.clone()),
             )
@@ -606,7 +612,6 @@ impl BigTableIndexer {
                         base_rps,
                         &global,
                     ),
-                    latest_checkpoint_at_startup,
                 ),
                 pipeline.tx_seq_digest.finish(base.clone()),
             )
@@ -626,8 +631,7 @@ impl BigTableIndexer {
                 ev_bitmap_rate_limiter,
                 Some(registry),
             );
-        let ev_bitmap_handler =
-            BitmapIndexHandler::new(EventBitmapProcessor, latest_checkpoint_at_startup);
+        let ev_bitmap_handler = BitmapIndexHandler::new(EventBitmapProcessor);
         indexer
             .sequential_pipeline(
                 ev_bitmap_handler,

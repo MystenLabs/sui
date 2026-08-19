@@ -87,9 +87,9 @@ use tokio::sync::mpsc;
 use tracing::warn;
 
 use crate::bigtable::client::BigTableClient;
+use crate::bigtable::client::CheckpointSpan;
 use crate::handlers::BitmapIndexValue;
 use crate::rate_limiter::CompositeRateLimiter;
-use crate::store::BigTableBatchWriter;
 use crate::store::BitmapInitialWatermarks;
 
 pub(crate) use metrics::BitmapIndexMetrics;
@@ -164,7 +164,7 @@ impl Handle {
         &self,
         batch: Vec<Arc<Vec<BitmapIndexValue>>>,
         watermark: CommitterWatermark,
-        use_batch_write_flow_control: bool,
+        checkpoint_span: Option<CheckpointSpan>,
     ) -> Result<(), ()> {
         debug_assert_eq!(
             batch.len(),
@@ -173,7 +173,7 @@ impl Handle {
         );
 
         let framework_commit_time = Instant::now();
-        let checkpoint = watermark.checkpoint_hi_inclusive;
+        let generation_checkpoint = watermark.checkpoint_hi_inclusive;
         // This must precede shard fanout: generation state observes commits in
         // the same cp order as the sequential framework calls `commit()`.
         if self
@@ -198,8 +198,8 @@ impl Handle {
             .enumerate()
             .map(|(shard_id, (tx, values))| async move {
                 let merge = shard::Merge {
-                    checkpoint,
-                    use_batch_write_flow_control,
+                    generation_checkpoint,
+                    checkpoint_span,
                     values,
                 };
                 tx.send(merge).await.map_err(|_| shard_id)
@@ -226,7 +226,6 @@ pub(crate) struct BitmapCommitter {
     pub is_sealed: fn(u64, CommitterWatermark) -> bool,
     pub initial_watermarks: BitmapInitialWatermarks,
     pub client: BigTableClient,
-    pub batch_writer: BigTableBatchWriter,
     pub rate_limiter: Arc<CompositeRateLimiter>,
     pub write_chunk_size: usize,
     pub write_concurrency: usize,
@@ -251,7 +250,6 @@ impl BitmapCommitter {
             is_sealed,
             initial_watermarks,
             client,
-            batch_writer,
             rate_limiter,
             write_chunk_size,
             write_concurrency,
@@ -327,7 +325,7 @@ impl BitmapCommitter {
         drop(write_tx);
 
         service = service.spawn({
-            let batch_writer = batch_writer.clone();
+            let client = client.clone();
             let generation_tx = generation_tx.clone();
             let metrics = metrics.clone();
             let rows_written = rows_written.clone();
@@ -335,7 +333,7 @@ impl BitmapCommitter {
                 pipeline,
                 table,
                 column,
-                batch_writer,
+                client,
                 rate_limiter,
                 write_rx,
                 generation_tx,

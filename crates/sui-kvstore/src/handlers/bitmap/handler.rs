@@ -14,6 +14,7 @@ use bytes::Bytes;
 use roaring::RoaringBitmap;
 use rustc_hash::FxHashMap;
 
+use crate::bigtable::client::CheckpointSpan;
 use crate::handlers::bitmap::BitmapIndexProcessor;
 use crate::handlers::bitmap::BitmapIndexValue;
 use crate::store::BigTableStore;
@@ -27,21 +28,20 @@ use sui_types::full_checkpoint_content::Checkpoint;
 
 pub struct BitmapIndexHandler<P> {
     processor: P,
-    latest_checkpoint_at_startup: u64,
 }
 
 /// Per-shard `Arc<Vec<BitmapIndexValue>>` slots, one per shard (indexed by
-/// `shard_id`), plus the batch's BigTable flow-control classification.
+/// `shard_id`), plus the checkpoints that produced the batch's values.
 pub struct BitmapBatch {
     shards: Vec<Arc<Vec<BitmapIndexValue>>>,
-    use_batch_write_flow_control: bool,
+    checkpoints: Option<CheckpointSpan>,
 }
 
 impl Default for BitmapBatch {
     fn default() -> Self {
         Self {
             shards: (0..NUM_SHARDS).map(|_| Arc::new(Vec::new())).collect(),
-            use_batch_write_flow_control: false,
+            checkpoints: None,
         }
     }
 }
@@ -51,8 +51,8 @@ impl BitmapBatch {
         self.shards.clone()
     }
 
-    pub(crate) fn requires_batch_write_flow_control(&self) -> bool {
-        self.use_batch_write_flow_control
+    pub(crate) fn checkpoints(&self) -> Option<CheckpointSpan> {
+        self.checkpoints
     }
 }
 
@@ -60,11 +60,8 @@ impl<P> BitmapIndexHandler<P>
 where
     P: BitmapIndexProcessor,
 {
-    pub(crate) fn new(processor: P, latest_checkpoint_at_startup: u64) -> Self {
-        Self {
-            processor,
-            latest_checkpoint_at_startup,
-        }
+    pub(crate) fn new(processor: P) -> Self {
+        Self { processor }
     }
 }
 
@@ -128,7 +125,10 @@ where
 
     fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
         for v in values {
-            batch.use_batch_write_flow_control |= v.max_cp <= self.latest_checkpoint_at_startup;
+            match &mut batch.checkpoints {
+                Some(checkpoints) => checkpoints.include(v.max_cp),
+                None => batch.checkpoints = Some(CheckpointSpan::single(v.max_cp)),
+            }
             Arc::get_mut(&mut batch.shards[v.shard_id as usize])
                 .expect("batch held exclusively during batch()")
                 .push(v);

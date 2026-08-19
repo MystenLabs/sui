@@ -22,6 +22,7 @@ use super::NUM_SHARDS;
 use super::shard_for;
 use crate::WatermarkV1;
 use crate::bigtable::client::BigTableClient;
+use crate::bigtable::client::CheckpointSpan;
 use crate::bigtable::mock_server::ExpectedCall;
 use crate::bigtable::mock_server::MockBigtableServer;
 use crate::config::SequentialLayer;
@@ -93,7 +94,7 @@ async fn setup_without_init_watermark() -> (MockBigtableServer, BigTableStore, B
     let client = BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
         .await
         .unwrap();
-    let store = BigTableStore::new(client.clone());
+    let store = BigTableStore::new(client.clone(), u64::MAX);
     (mock, store, client)
 }
 
@@ -139,7 +140,7 @@ async fn setup_with_committer(
         .init_watermark(PIPELINE, None)
         .await
         .unwrap();
-    let handler = BitmapIndexHandler::new(TestProcessor, u64::MAX);
+    let handler = BitmapIndexHandler::new(TestProcessor);
     let service = register_test_committer_with(&store, write_chunk_size, write_concurrency);
     (mock, store, handler, service)
 }
@@ -164,7 +165,7 @@ async fn setup() -> (
     // `service` carries the pipeline's `JoinHandle`s; callers must keep
     // it alive for the duration of the test because dropping a Service
     // aborts all its tasks.
-    let handler = BitmapIndexHandler::new(TestProcessor, u64::MAX);
+    let handler = BitmapIndexHandler::new(TestProcessor);
     let service = register_test_committer(&store);
     (mock, store, handler, service)
 }
@@ -202,7 +203,7 @@ async fn create_watermark_v1(
 }
 
 fn make_batch(values: Vec<BitmapIndexValue>) -> BitmapBatch {
-    let handler = BitmapIndexHandler::new(TestProcessor, u64::MAX);
+    let handler = BitmapIndexHandler::new(TestProcessor);
     let mut batch = BitmapBatch::default();
     handler.batch(&mut batch, values.into_iter());
     batch
@@ -262,6 +263,7 @@ async fn write_seed_bitmap(
     client: &mut BigTableClient,
     row_key: &[u8],
     bits: &[u32],
+    checkpoint: u64,
     timestamp_ms: u64,
 ) {
     let mut bitmap = RoaringBitmap::new();
@@ -278,6 +280,7 @@ async fn write_seed_bitmap(
                 [(COL, Bytes::from(buf))],
                 Some(timestamp_ms),
             )],
+            CheckpointSpan::single(checkpoint),
         )
         .await
         .unwrap();
@@ -315,26 +318,21 @@ async fn wait_for_bitmap(mock: &MockBigtableServer, row_key: &[u8]) -> RoaringBi
 }
 
 #[test]
-fn bitmap_batch_requires_flow_control_if_any_value_is_backfill() {
-    let handler = BitmapIndexHandler::new(TestProcessor, 10);
-    let mut live_batch = BitmapBatch::default();
-    handler.batch(
-        &mut live_batch,
-        vec![value(b"live", 0, &[1], 11, 11_000)].into_iter(),
-    );
-    assert!(!live_batch.requires_batch_write_flow_control());
-
+fn bitmap_batch_accumulates_checkpoint_span() {
+    let handler = BitmapIndexHandler::new(TestProcessor);
     let mut batch = BitmapBatch::default();
     handler.batch(
         &mut batch,
         vec![
-            value(b"live", 0, &[1], 11, 11_000),
-            value(b"backfill", 0, &[2], 10, 10_000),
+            value(b"later", 0, &[1], 11, 11_000),
+            value(b"earlier", 0, &[2], 10, 10_000),
         ]
         .into_iter(),
     );
 
-    assert!(batch.requires_batch_write_flow_control());
+    let mut expected = CheckpointSpan::single(11);
+    expected.include(10);
+    assert_eq!(batch.checkpoints(), Some(expected));
 }
 
 #[tokio::test]
@@ -1082,7 +1080,7 @@ async fn bucket_start_cp_seeded_from_column_on_restart() {
     // Fresh committer; first commit stays inside bucket 0 so no transition
     // fires. The re-persisted column must still be the seeded value — evidence
     // the generation task initialized from it rather than resetting to 0.
-    let handler = BitmapIndexHandler::new(TestProcessor, u64::MAX);
+    let handler = BitmapIndexHandler::new(TestProcessor);
     let _service = register_test_committer(&store);
     let handler = Arc::new(handler);
 
@@ -1130,7 +1128,7 @@ async fn mid_bucket_restart_without_replay_loses_pre_restart_bits() {
     let w_seed = watermark(pre_cp, pre_tx_hi, 500);
     create_watermark_v1(seed_conn.client(), w_seed, Some(bucket_start_cp)).await;
 
-    write_seed_bitmap(seed_conn.client(), row_key, &[pre_bit], 500).await;
+    write_seed_bitmap(seed_conn.client(), row_key, &[pre_bit], pre_cp, 500).await;
 
     let init = seed_conn
         .init_watermark(PIPELINE, None)
@@ -1148,7 +1146,7 @@ async fn mid_bucket_restart_without_replay_loses_pre_restart_bits() {
     // re-stream cp=1..=5) and commit only the post-restart bit. The in-memory
     // bitmap holds exactly {new_bit}; under maxversions=1 the higher-ts write
     // wins, so the persisted cell ends up at {new_bit} only.
-    let handler = BitmapIndexHandler::new(TestProcessor, u64::MAX);
+    let handler = BitmapIndexHandler::new(TestProcessor);
     let _service = register_test_committer(&store);
     let handler = Arc::new(handler);
 
@@ -1196,7 +1194,7 @@ async fn mid_bucket_restart_with_replay_preserves_pre_restart_bits() {
     let mut seed_conn = store.connect().await.unwrap();
     let w_seed = watermark(pre_cp, pre_tx_hi, 500);
     create_watermark_v1(seed_conn.client(), w_seed, Some(bucket_start_cp)).await;
-    write_seed_bitmap(seed_conn.client(), row_key, &[pre_bit], 500).await;
+    write_seed_bitmap(seed_conn.client(), row_key, &[pre_bit], pre_cp, 500).await;
 
     let init = seed_conn
         .init_watermark(PIPELINE, None)
@@ -1210,7 +1208,7 @@ async fn mid_bucket_restart_with_replay_preserves_pre_restart_bits() {
     );
     drop(seed_conn);
 
-    let handler = BitmapIndexHandler::new(TestProcessor, u64::MAX);
+    let handler = BitmapIndexHandler::new(TestProcessor);
     let _service = register_test_committer(&store);
     let handler = Arc::new(handler);
 
@@ -1271,7 +1269,7 @@ async fn restart_replay_skips_buckets_sealed_before_startup() {
     let w_seed = watermark(startup_cp, startup_tx_hi, 7_000);
     create_watermark_v1(seed_conn.client(), w_seed, Some(bucket_start_cp)).await;
 
-    write_seed_bitmap(seed_conn.client(), &sealed_row, &[0, 1], 7_000).await;
+    write_seed_bitmap(seed_conn.client(), &sealed_row, &[0, 1], startup_cp, 7_000).await;
 
     let init = seed_conn
         .init_watermark(PIPELINE, None)
@@ -1285,7 +1283,7 @@ async fn restart_replay_skips_buckets_sealed_before_startup() {
     );
     drop(seed_conn);
 
-    let handler = BitmapIndexHandler::new(TestProcessor, u64::MAX);
+    let handler = BitmapIndexHandler::new(TestProcessor);
     let _service = register_test_committer(&store);
     let handler = Arc::new(handler);
 
@@ -1443,7 +1441,7 @@ async fn commit_bitmap_batch_panics_when_committer_not_registered() {
         .await
         .unwrap();
 
-    let unregistered_handler = Arc::new(BitmapIndexHandler::new(UnregisteredProcessor, u64::MAX));
+    let unregistered_handler = Arc::new(BitmapIndexHandler::new(UnregisteredProcessor));
     let batch = make_batch(vec![]);
     let h = unregistered_handler.clone();
     let _ = store

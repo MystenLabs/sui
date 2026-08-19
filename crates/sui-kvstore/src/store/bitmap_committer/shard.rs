@@ -34,6 +34,7 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
+use crate::bigtable::client::CheckpointSpan;
 use crate::handlers::BitmapIndexValue;
 use crate::store::BitmapInitialWatermarks;
 
@@ -66,8 +67,8 @@ thread_local! {
 /// row-write batches for changed rows, then marks flush scheduling complete
 /// for this shard.
 pub(super) struct Merge {
-    pub(super) checkpoint: u64,
-    pub(super) use_batch_write_flow_control: bool,
+    pub(super) generation_checkpoint: u64,
+    pub(super) checkpoint_span: Option<CheckpointSpan>,
     /// This shard's slice of the commit's values. Pre-partitioned in
     /// `Handler::batch`, so the shard can iterate directly — no per-value
     /// shard check, no cross-shard indirection. `Arc` keeps the outer
@@ -127,7 +128,7 @@ impl ShardWorker {
     }
 
     async fn handle_shard_merge(&mut self, merge: Merge) -> Result<()> {
-        let checkpoint = merge.checkpoint;
+        let generation_checkpoint = merge.generation_checkpoint;
         let min_bucket_to_accumulate = self.min_bucket_to_accumulate()?;
         let mut rows_scheduled = 0u64;
         {
@@ -156,7 +157,7 @@ impl ShardWorker {
                 }
             }
         }
-        self.send_shard_flushes_scheduled(checkpoint, rows_scheduled)
+        self.send_shard_flushes_scheduled(generation_checkpoint, rows_scheduled)
             .await;
         Ok(())
     }
@@ -176,11 +177,11 @@ impl ShardWorker {
         self.shard.evict_buckets_before(seal.bucket_id_exclusive);
     }
 
-    async fn send_shard_flushes_scheduled(&self, checkpoint: u64, rows_scheduled: u64) {
+    async fn send_shard_flushes_scheduled(&self, generation_checkpoint: u64, rows_scheduled: u64) {
         if self
             .generation_tx
             .send(generation::Event::ShardFlushesScheduled {
-                checkpoint,
+                checkpoint: generation_checkpoint,
                 rows_scheduled,
             })
             .await
@@ -229,8 +230,8 @@ impl AccumulatedRow {
     fn make_row_write(
         &mut self,
         row_key: Bytes,
-        generation_cp: u64,
-        use_batch_write_flow_control: bool,
+        generation_checkpoint: u64,
+        checkpoint_span: CheckpointSpan,
     ) -> writer::Row {
         self.bitmap.optimize();
         let needed = self.bitmap.serialized_size();
@@ -247,8 +248,8 @@ impl AccumulatedRow {
             row_key,
             serialized,
             max_ts_ms: self.max_ts_ms,
-            generation_cp,
-            use_batch_write_flow_control,
+            generation_checkpoint,
+            checkpoint_span,
         }
     }
 }
@@ -280,8 +281,8 @@ impl Shard {
         min_bucket_to_accumulate: BucketId,
     ) -> impl Iterator<Item = writer::Row> + 'a {
         let Merge {
-            checkpoint,
-            use_batch_write_flow_control,
+            generation_checkpoint,
+            checkpoint_span,
             values,
         } = merge;
         let mut changed_rows = FxHashSet::default();
@@ -314,7 +315,9 @@ impl Shard {
                     .get_mut(&bucket_id)
                     .and_then(|rows| rows.get_mut(&key))?;
 
-                Some(row.make_row_write(key, checkpoint, use_batch_write_flow_control))
+                let checkpoint_span =
+                    checkpoint_span.expect("bitmap row write must have checkpoint provenance");
+                Some(row.make_row_write(key, generation_checkpoint, checkpoint_span))
             })
     }
 
@@ -377,8 +380,8 @@ mod tests {
     ) -> writer::Row {
         let mut rows = shard.merge_in_bitmaps(
             Merge {
-                checkpoint,
-                use_batch_write_flow_control: true,
+                generation_checkpoint: checkpoint,
+                checkpoint_span: Some(CheckpointSpan::single(checkpoint)),
                 values: Arc::new(values),
             },
             0,
@@ -398,8 +401,8 @@ mod tests {
         shard
             .merge_in_bitmaps(
                 Merge {
-                    checkpoint,
-                    use_batch_write_flow_control: true,
+                    generation_checkpoint: checkpoint,
+                    checkpoint_span: Some(CheckpointSpan::single(checkpoint)),
                     values: Arc::new(values),
                 },
                 min_bucket_to_accumulate,
@@ -415,14 +418,14 @@ mod tests {
         let commit1 = merge_and_next_row_write(&mut shard, vec![value(row_key, 0, &[1], 1)], 1);
 
         assert_eq!(row_count(&shard), 1, "active bucket row stays resident");
-        assert_eq!(commit1.generation_cp, 1);
+        assert_eq!(commit1.generation_checkpoint, 1);
 
         let commit2 = merge_and_next_row_write(&mut shard, vec![value(row_key, 0, &[2], 2)], 2);
 
         let row = shard.rows.get(&0).unwrap().get(row_key.as_slice()).unwrap();
         assert!(row.bitmap.contains(1));
         assert!(row.bitmap.contains(2));
-        assert_eq!(commit2.generation_cp, 2);
+        assert_eq!(commit2.generation_checkpoint, 2);
     }
 
     #[tokio::test]
@@ -439,7 +442,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn crossing_batch_preserves_flow_control_classification() {
+    async fn crossing_batch_preserves_checkpoint_span() {
         let mut shard = shard();
         let values = vec![
             value(b"mixed-row", 0, &[1], 10),
@@ -447,11 +450,13 @@ mod tests {
             value(b"live-row", 0, &[3], 11),
         ];
 
+        let mut checkpoint_span = CheckpointSpan::single(11);
+        checkpoint_span.include(10);
         let writes: Vec<_> = shard
             .merge_in_bitmaps(
                 Merge {
-                    checkpoint: 11,
-                    use_batch_write_flow_control: true,
+                    generation_checkpoint: 11,
+                    checkpoint_span: Some(checkpoint_span),
                     values: Arc::new(values),
                 },
                 0,
@@ -459,11 +464,9 @@ mod tests {
             .collect();
 
         assert_eq!(writes.len(), 2);
-        assert!(
-            writes
-                .iter()
-                .all(|row| { row.use_batch_write_flow_control && row.generation_cp == 11 })
-        );
+        assert!(writes.iter().all(|row| {
+            row.checkpoint_span == checkpoint_span && row.generation_checkpoint == 11
+        }));
     }
 
     #[tokio::test]

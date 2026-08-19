@@ -31,7 +31,6 @@ gcp_auth.workspace = true
 integer-encoding.workspace = true
 mysten-common.workspace = true
 num_cpus.workspace = true
-parking_lot.workspace = true
 prometheus.workspace = true
 rand.workspace = true
 prost.workspace = true

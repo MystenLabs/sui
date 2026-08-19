@@ -336,13 +336,6 @@ impl<S: Store> Indexer<S> {
         self.ingestion_factory.ingestion_client()
     }
 
-    /// The latest checkpoint reported by the ingestion source when this indexer was created.
-    ///
-    /// This value is sampled once during initialization and does not advance with the chain.
-    pub fn latest_checkpoint_at_startup(&self) -> u64 {
-        self.latest_checkpoint
-    }
-
     /// The indexer's metrics.
     pub fn indexer_metrics(&self) -> &Arc<IndexerMetrics> {
         &self.metrics
@@ -1238,7 +1231,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(indexer.latest_checkpoint_at_startup(), 30);
+        assert_eq!(indexer.latest_checkpoint, 30);
     }
 
     /// No watermark, no first_checkpoint, pruner with retention:

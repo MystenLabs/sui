@@ -18,10 +18,11 @@ use tokio::sync::mpsc;
 use tracing::info;
 use tracing::warn;
 
+use crate::bigtable::client::BigTableClient;
+use crate::bigtable::client::CheckpointSpan;
 use crate::bigtable::client::PartialWriteError;
 use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
 use crate::rate_limiter::CompositeRateLimiter;
-use crate::store::BigTableBatchWriter;
 use crate::tables;
 
 use super::BitmapIndexMetrics;
@@ -36,12 +37,10 @@ pub(super) struct Row {
     pub(super) row_key: Bytes,
     pub(super) serialized: Bytes,
     pub(super) max_ts_ms: u64,
-    /// Checkpoint generation that scheduled this row write. The writer
-    /// reports durable rows by this value, so generation accounting is a simple
-    /// counter.
-    pub(super) generation_cp: u64,
-    /// Whether this row write was produced by a startup backfill batch.
-    pub(super) use_batch_write_flow_control: bool,
+    /// Framework commit whose generation accounting includes this row.
+    pub(super) generation_checkpoint: u64,
+    /// Checkpoints that produced the source batch for this row.
+    pub(super) checkpoint_span: CheckpointSpan,
 }
 
 /// Bounded unit sent from shards to the writer. Shards serialize rows
@@ -55,7 +54,7 @@ pub(super) struct Writer {
     pub(super) pipeline: &'static str,
     pub(super) table: &'static str,
     pub(super) column: &'static str,
-    pub(super) batch_writer: BigTableBatchWriter,
+    pub(super) client: BigTableClient,
     pub(super) rate_limiter: Arc<CompositeRateLimiter>,
     pub(super) write_rx: mpsc::Receiver<Batch>,
     pub(super) generation_tx: mpsc::Sender<generation::Event>,
@@ -79,7 +78,7 @@ struct WriteContext {
     pipeline: &'static str,
     table: &'static str,
     column: &'static str,
-    batch_writer: BigTableBatchWriter,
+    client: BigTableClient,
     rate_limiter: Arc<CompositeRateLimiter>,
     generation_tx: mpsc::Sender<generation::Event>,
     rows_written: Arc<AtomicU64>,
@@ -92,7 +91,7 @@ impl Writer {
             pipeline,
             table,
             column,
-            batch_writer,
+            client,
             rate_limiter,
             write_rx,
             generation_tx,
@@ -110,7 +109,7 @@ impl Writer {
             pipeline,
             table,
             column,
-            batch_writer,
+            client,
             rate_limiter,
             generation_tx,
             rows_written,
@@ -176,9 +175,7 @@ impl WriteContext {
 
             let failed = result.failed.len();
             self.metrics.retry_rows.inc_by(failed as u64);
-            chunk = Chunk {
-                rows: result.failed,
-            };
+            chunk = Chunk::new(result.failed);
             let delay = backoff
                 .next_backoff()
                 .unwrap_or(MAX_ROW_WRITE_RETRY_BACKOFF);
@@ -192,17 +189,13 @@ impl WriteContext {
     }
 
     async fn attempt_write_chunk(&self, chunk: Chunk) -> Attempt {
-        let use_batch_write_flow_control = chunk
-            .rows
-            .iter()
-            .any(|row| row.use_batch_write_flow_control);
+        let mut client = self.client.clone();
         self.rate_limiter.acquire(chunk.rows.len()).await;
-        let entries = make_entries(&chunk.rows, self.column);
+        let (entries, checkpoint_span) = make_entries(&chunk.rows, self.column);
 
         let write_start = Instant::now();
-        let result = self
-            .batch_writer
-            .write_entries(self.table, entries, use_batch_write_flow_control)
+        let result = client
+            .write_entries(self.table, entries, checkpoint_span)
             .await;
         self.metrics
             .write_chunk_latency
@@ -214,6 +207,7 @@ impl WriteContext {
 
 impl Chunk {
     fn new(rows: Vec<Row>) -> Self {
+        debug_assert!(!rows.is_empty(), "bitmap write chunk must not be empty");
         Self { rows }
     }
 }
@@ -238,14 +232,16 @@ fn split_write_result(result: anyhow::Result<()>, chunk: Chunk) -> Attempt {
             if let Some(partial) = e.downcast_ref::<PartialWriteError>() {
                 let failed_keys: FxHashSet<&Bytes> =
                     partial.failed_keys.iter().map(|f| &f.key).collect();
-                let Chunk { rows } = chunk;
+                let Chunk { rows, .. } = chunk;
                 let mut flushed_by_checkpoint = BTreeMap::<u64, u64>::new();
                 let mut failed = Vec::new();
                 for row in rows {
                     if failed_keys.contains(&row.row_key) {
                         failed.push(row);
                     } else {
-                        *flushed_by_checkpoint.entry(row.generation_cp).or_default() += 1;
+                        *flushed_by_checkpoint
+                            .entry(row.generation_checkpoint)
+                            .or_default() += 1;
                     }
                 }
                 Attempt {
@@ -268,7 +264,9 @@ fn split_write_result(result: anyhow::Result<()>, chunk: Chunk) -> Attempt {
 fn rows_flushed_by_generation(rows: Vec<Row>) -> Vec<generation::RowsFlushed> {
     let mut flushed_by_checkpoint = BTreeMap::<u64, u64>::new();
     for row in rows {
-        *flushed_by_checkpoint.entry(row.generation_cp).or_default() += 1;
+        *flushed_by_checkpoint
+            .entry(row.generation_checkpoint)
+            .or_default() += 1;
     }
     flushed_by_checkpoint
         .into_iter()
@@ -276,16 +274,23 @@ fn rows_flushed_by_generation(rows: Vec<Row>) -> Vec<generation::RowsFlushed> {
         .collect()
 }
 
-fn make_entries(rows: &[Row], column: &'static str) -> Vec<Entry> {
-    rows.iter()
-        .map(|r| {
+fn make_entries(rows: &[Row], column: &'static str) -> (Vec<Entry>, CheckpointSpan) {
+    let mut checkpoint_span = rows
+        .first()
+        .expect("bitmap write chunk must not be empty")
+        .checkpoint_span;
+    let entries = rows
+        .iter()
+        .map(|row| {
+            checkpoint_span.include_span(row.checkpoint_span);
             tables::make_entry(
-                r.row_key.clone(),
-                [(column, r.serialized.clone())],
-                Some(r.max_ts_ms),
+                row.row_key.clone(),
+                [(column, row.serialized.clone())],
+                Some(row.max_ts_ms),
             )
         })
-        .collect()
+        .collect();
+    (entries, checkpoint_span)
 }
 
 #[cfg(test)]
@@ -298,20 +303,30 @@ mod tests {
 
     use super::*;
 
-    fn row(key: &'static [u8], generation_cp: u64) -> Row {
+    fn row(key: &'static [u8], generation_checkpoint: u64) -> Row {
         Row {
             row_key: Bytes::from_static(key),
             serialized: Bytes::from_static(b"bitmap"),
-            max_ts_ms: generation_cp * 1_000,
-            generation_cp,
-            use_batch_write_flow_control: true,
+            max_ts_ms: generation_checkpoint * 1_000,
+            generation_checkpoint,
+            checkpoint_span: CheckpointSpan::single(generation_checkpoint),
         }
     }
 
     #[test]
-    fn rows_flushed_are_grouped_by_generation() {
-        let flushed = rows_flushed_by_generation(vec![row(b"a", 2), row(b"b", 1), row(b"c", 2)]);
+    fn chunk_unions_checkpoint_spans_and_preserves_generation_accounting() {
+        let mut crossing_span = CheckpointSpan::single(2);
+        crossing_span.include(10);
+        let mut first = row(b"a", 2);
+        first.checkpoint_span = crossing_span;
+        let chunk = Chunk::new(vec![first, row(b"b", 1), row(b"c", 2)]);
 
+        let mut expected_span = CheckpointSpan::single(1);
+        expected_span.include(10);
+        let (_, checkpoint_span) = make_entries(&chunk.rows, "bitmap");
+        assert_eq!(checkpoint_span, expected_span);
+
+        let flushed = rows_flushed_by_generation(chunk.rows);
         let counts: Vec<_> = flushed
             .into_iter()
             .map(|r| (r.checkpoint, r.count))
@@ -359,11 +374,11 @@ mod tests {
             row_key: Bytes::from_static(b"a"),
             serialized: Bytes::from_static(b"bitmap"),
             max_ts_ms: 123,
-            generation_cp: 1,
-            use_batch_write_flow_control: true,
+            generation_checkpoint: 1,
+            checkpoint_span: CheckpointSpan::single(1),
         }];
 
-        let entries = make_entries(&rows, "bitmap");
+        let (entries, checkpoint_span) = make_entries(&rows, "bitmap");
 
         let cell = match &entries[0].mutations[0].mutation {
             Some(mutation::Mutation::SetCell(cell)) => cell,
@@ -371,5 +386,6 @@ mod tests {
         };
         assert_eq!(cell.timestamp_micros, 123_000);
         assert_eq!(cell.value, Bytes::from_static(b"bitmap"));
+        assert_eq!(checkpoint_span, CheckpointSpan::single(1));
     }
 }
