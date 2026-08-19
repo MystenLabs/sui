@@ -5,7 +5,9 @@ use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 
 use crate::{
-    diagnostics::codes::{DiagnosticInfo, DiagnosticOrigin, Severity, custom},
+    diagnostics::codes::{
+        DiagnosticDescription, DiagnosticInfo, DiagnosticOrigin, Severity, custom,
+    },
     shared::stdlib_definitions,
 };
 
@@ -184,6 +186,19 @@ pub const INTERNAL_PERMIT_CALL_DIAG: DiagnosticInfo = custom(
     /* code */ 11,
     "invalid internal permit call",
 );
+
+pub(crate) const SUI_COMPILER_DIAGNOSTICS: &[DiagnosticDescription] = &[
+    DiagnosticDescription::new(ID_LEAK_DIAG, None, None),
+    DiagnosticDescription::new(INIT_FUN_DIAG, None, None),
+    DiagnosticDescription::new(OTW_DECL_DIAG, None, None),
+    DiagnosticDescription::new(OTW_USAGE_DIAG, None, None),
+    DiagnosticDescription::new(INIT_CALL_DIAG, None, None),
+    DiagnosticDescription::new(OBJECT_DECL_DIAG, None, None),
+    DiagnosticDescription::new(EVENT_EMIT_CALL_DIAG, None, None),
+    DiagnosticDescription::new(PRIVATE_TRANSFER_CALL_DIAG, None, None),
+    DiagnosticDescription::new(DYNAMIC_COIN_CREATION_CALL_DIAG, None, None),
+    DiagnosticDescription::new(INTERNAL_PERMIT_CALL_DIAG, None, None),
+];
 
 // Bridge supported asset
 pub const BRIDGE_SUPPORTED_ASSET: &[&str] = &["btc", "eth", "usdc", "usdt"];
