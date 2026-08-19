@@ -166,7 +166,7 @@ pub mod random {
 
     /// Given a value, produce a random probability using the value as a seed, with
     /// an additional seed that is constant only for the current test thread.
-    pub fn deterministic_probability<T: Hash>(value: T, chance: f32) -> bool {
+    fn deterministic_probability<T: Hash>(value: T, chance: f32) -> bool {
         // a random seed that is shared by the whole test process, so that equal `value`
         // inputs produce different outputs when the test seed changes
         static SEED: OnceLock<u64> = OnceLock::new();
