@@ -812,6 +812,22 @@ pub trait RpcIndexes: Send + Sync {
         cursor: Option<u64>,
     ) -> Result<PackageVersionsIterator<'_>>;
 
+    /// Resolve the storage id holding the exact `version` of the package
+    /// originally published at `original_id`.
+    fn get_package_version_storage_id(
+        &self,
+        original_id: ObjectID,
+        version: u64,
+    ) -> Result<Option<ObjectID>>;
+
+    /// Resolve the `(version, storage_id)` of the latest package in
+    /// `original_id`'s upgrade lineage that existed at or before `checkpoint`.
+    fn get_package_at_checkpoint(
+        &self,
+        original_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Option<(u64, ObjectID)>>;
+
     fn get_highest_indexed_checkpoint_seq_number(&self)
     -> Result<Option<CheckpointSequenceNumber>>;
 
