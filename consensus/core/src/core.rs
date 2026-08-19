@@ -1385,9 +1385,11 @@ mod test {
     use super::*;
     use crate::{
         CommitConsumerArgs, CommitIndex,
-        block::{TestBlock, genesis_blocks},
+        block::{TestBlock, genesis_blocks, max_transaction_vote_targets},
         block_verifier::NoopBlockVerifier,
         commit::CommitAPI,
+        leader_schedule::LeaderSwapTable,
+        leader_schedule_v3::NextCommitLeaderSchedule,
         leader_scoring::ReputationScores,
         storage::{Store, WriteBatch, mem_store::MemStore},
         test_dag_builder::DagBuilder,
@@ -1727,6 +1729,125 @@ mod test {
         let last_commit = fixture.store.read_last_commit().unwrap();
         assert!(last_commit.is_none());
         assert_eq!(fixture.dag_state.read().last_commit_index(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_core_proposes_v3_block_with_gc_cutoff() {
+        telemetry_subscribers::init_for_testing();
+        const GC_DEPTH: u32 = 3;
+        let (mut context, _) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        context.protocol_config.set_gc_depth_for_testing(GC_DEPTH);
+
+        let mut fixture = CoreTestFixture::new(
+            context,
+            vec![1, 1, 1, 1],
+            AuthorityIndex::new_for_test(0),
+            false,
+        )
+        .await;
+        let first_proposal = fixture
+            .block_receiver
+            .recv()
+            .await
+            .expect("Recovery should propose the first v3 block");
+        assert_eq!(
+            first_proposal.block.transaction_votes_cutoff_round(),
+            GENESIS_ROUND,
+            "Nothing is committed yet, so the cutoff must be the genesis round"
+        );
+
+        // Commit enough rounds to move the GC round above the genesis round.
+        // Core proposes the blocks of its own authority, so the builder must skip them.
+        let mut builder = DagBuilder::new(fixture.core.context.clone());
+        builder
+            .layers(1..=10)
+            .authorities(vec![fixture.core.context.own_index])
+            .skip_block()
+            .build();
+        assert!(
+            fixture
+                .add_blocks(builder.blocks.values().cloned().collect())
+                .unwrap()
+                .is_empty()
+        );
+        let gc_round = fixture.dag_state.read().gc_round();
+        assert!(gc_round > GENESIS_ROUND, "GC round should have advanced");
+
+        fixture.core.try_propose(true).unwrap();
+        let proposed = fixture.core.last_proposed_block();
+        assert!(proposed.round() > first_proposal.block.round());
+        assert_eq!(proposed.transaction_votes_cutoff_round(), gc_round);
+    }
+
+    // Adds 3 rounds of peer blocks. The local authority rejects transaction 0 in each block.
+    // Then proposes a block.
+    // Returns the fixture, the proposed block and the peer blocks.
+    async fn propose_after_peer_blocks_with_reject_votes(
+        context: Context,
+    ) -> (CoreTestFixture, VerifiedBlock, Vec<VerifiedBlock>) {
+        let mut fixture = CoreTestFixture::new(
+            context,
+            vec![1, 1, 1, 1],
+            AuthorityIndex::new_for_test(0),
+            false,
+        )
+        .await;
+        let mut builder = DagBuilder::new(fixture.core.context.clone());
+        builder
+            .layers(1..=3)
+            .authorities(vec![fixture.core.context.own_index])
+            .skip_block()
+            .build();
+        let blocks = builder.blocks.values().cloned().collect::<Vec<_>>();
+        fixture
+            .transaction_vote_tracker
+            .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![0])).collect());
+        assert!(fixture.core.add_blocks(blocks.clone()).unwrap().is_empty());
+
+        fixture.core.try_propose(true).unwrap();
+        let proposed = fixture.core.last_proposed_block();
+        (fixture, proposed, blocks)
+    }
+
+    #[tokio::test]
+    async fn test_core_v2_proposal_keeps_all_transaction_vote_targets() {
+        telemetry_subscribers::init_for_testing();
+        let (mut context, _) = Context::new_for_test(4);
+        context.protocol_config.set_gc_depth_for_testing(1);
+        let vote_target_limit = max_transaction_vote_targets(&context);
+
+        let (_fixture, proposed, blocks) =
+            propose_after_peer_blocks_with_reject_votes(context).await;
+
+        // V2 blocks have no signed cutoff round, so the V3 limit must not remove their targets.
+        assert!(blocks.len() > vote_target_limit);
+        assert_eq!(proposed.transaction_votes().len(), blocks.len());
+    }
+
+    #[tokio::test]
+    async fn test_core_v3_proposal_limits_transaction_vote_targets() {
+        telemetry_subscribers::init_for_testing();
+        let (mut context, _) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        context.protocol_config.set_gc_depth_for_testing(1);
+        let vote_target_limit = max_transaction_vote_targets(&context);
+
+        let (fixture, proposed, blocks) =
+            propose_after_peer_blocks_with_reject_votes(context).await;
+
+        assert!(blocks.len() > vote_target_limit);
+        assert!(!proposed.transaction_votes().is_empty());
+        assert!(proposed.transaction_votes().len() <= vote_target_limit);
+        // The signed cutoff moves above the GC round and covers every removed target. Only the
+        // targets above the cutoff stay in the block.
+        let cutoff_round = proposed.transaction_votes_cutoff_round();
+        assert!(cutoff_round > fixture.dag_state.read().gc_round());
+        let expected_targets = blocks
+            .iter()
+            .filter(|block| block.round() > cutoff_round)
+            .count();
+        assert_eq!(proposed.transaction_votes().len(), expected_targets);
     }
 
     #[tokio::test]
@@ -2663,6 +2784,163 @@ mod test {
         assert_eq!(extended_block.block.ancestors().len(), 7);
         assert_eq!(extended_block.block.ancestors(), included_block_references);
         assert_eq!(extended_block.excluded_ancestors.len(), 0);
+    }
+
+    // Builds a core of 7 authorities and adds blocks up to round 14, with no block from
+    // authority 1. The core proposed its last block at round 13. The first proposal of the
+    // caller gives authority 1 the EXCLUDE state.
+    async fn fixture_with_excluded_authority(
+        enable_v3: bool,
+    ) -> (CoreTestFixture, DagBuilder, AuthorityIndex) {
+        let (mut context, _) = Context::new_for_test(7);
+        context.protocol_config.set_enable_v3_for_testing(enable_v3);
+        let context = context.with_parameters(Parameters {
+            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
+            ..Default::default()
+        });
+        let mut fixture =
+            CoreTestFixture::new(context, vec![1; 7], AuthorityIndex::new_for_test(0), true).await;
+        let excluded = AuthorityIndex::new_for_test(1);
+
+        // The DAG holds no block from this authority, so its propagation score stays zero and
+        // the proposer moves it to the EXCLUDE state. The state lock keeps that state for the
+        // next rounds.
+        let mut builder = DagBuilder::new(fixture.core.context.clone());
+        builder
+            .layers(1..=12)
+            .authorities(vec![excluded])
+            .skip_block()
+            .build();
+        assert!(
+            fixture
+                .add_blocks(builder.blocks(1..=12))
+                .unwrap()
+                .is_empty()
+        );
+        fixture.core.set_last_known_proposed_round(12);
+        let mut quorum_rounds = vec![vec![12; 7]; 7];
+        quorum_rounds[excluded] = vec![0; 7];
+        fixture
+            .core
+            .round_tracker_for_tests()
+            .write()
+            .update_from_probe(quorum_rounds.clone(), quorum_rounds);
+        assert_eq!(
+            fixture
+                .core
+                .try_propose(true)
+                .expect("No error")
+                .unwrap()
+                .round(),
+            13
+        );
+
+        builder
+            .layers(13..=14)
+            .authorities(vec![AuthorityIndex::new_for_test(0)])
+            .skip_block()
+            .build();
+        assert!(
+            fixture
+                .add_blocks(builder.blocks(13..=14))
+                .unwrap()
+                .is_empty()
+        );
+        (fixture, builder, excluded)
+    }
+
+    // A v3 proposal must keep a leader ancestor which has the EXCLUDE state.
+    #[tokio::test]
+    async fn test_smart_ancestor_selection_keeps_v3_leader() {
+        telemetry_subscribers::init_for_testing();
+        let (mut fixture, mut builder, excluded) = fixture_with_excluded_authority(true).await;
+        // Each commit sets the leader schedule of the proposer, so the schedule below must be set
+        // after the last add_blocks() and before the proposal which reads it.
+        let set_leader = |fixture: &mut CoreTestFixture, leader: AuthorityIndex, round: Round| {
+            fixture
+                .core
+                .proposer
+                .as_mut()
+                .unwrap()
+                .set_next_commit_leader_schedule(NextCommitLeaderSchedule {
+                    next_commit_index: 1,
+                    min_next_leader_round: round,
+                    allowed_leaders: vec![leader],
+                });
+        };
+
+        // Another authority is the leader of round 14, so the proposal excludes authority 1.
+        set_leader(&mut fixture, AuthorityIndex::new_for_test(2), 14);
+        let block = fixture.core.try_propose(true).expect("No error").unwrap();
+        assert_eq!(block.round(), 15);
+        assert!(
+            block.ancestors().iter().all(|a| a.author != excluded),
+            "The EXCLUDE authority is not a leader, so the proposal must not include it"
+        );
+
+        builder
+            .layer(15)
+            .authorities(vec![AuthorityIndex::new_for_test(0)])
+            .skip_block()
+            .build();
+        assert!(
+            fixture
+                .add_blocks(builder.blocks(15..=15))
+                .unwrap()
+                .is_empty()
+        );
+        // The minimum round delay stops a proposal inside add_blocks(), so the leader schedule
+        // below is the schedule of the round 16 proposal.
+        assert_eq!(fixture.core.last_proposed_block().round(), 15);
+
+        // Make the EXCLUDE authority the only allowed leader of round 15.
+        set_leader(&mut fixture, excluded, 15);
+        let proposed = fixture.core.try_propose(true).expect("No error").unwrap();
+        assert_eq!(proposed.round(), 16);
+        assert!(
+            proposed.ancestors().iter().any(|a| a.author == excluded),
+            "The proposal must include the leader block, even with its EXCLUDE state"
+        );
+    }
+
+    // A v2 proposal must not keep a leader ancestor which has the EXCLUDE state.
+    #[tokio::test]
+    async fn test_smart_ancestor_selection_excludes_v2_leader() {
+        telemetry_subscribers::init_for_testing();
+        let (mut fixture, mut builder, excluded) = fixture_with_excluded_authority(false).await;
+
+        let block = fixture.core.try_propose(true).expect("No error").unwrap();
+        assert_eq!(block.round(), 15);
+
+        builder
+            .layer(15)
+            .authorities(vec![AuthorityIndex::new_for_test(0)])
+            .skip_block()
+            .build();
+        assert!(
+            fixture
+                .add_blocks(builder.blocks(15..=15))
+                .unwrap()
+                .is_empty()
+        );
+
+        // The minimum round delay stops a proposal inside add_blocks(), so the swap table below
+        // is the table of the round 16 proposal.
+        assert_eq!(fixture.core.last_proposed_block().round(), 15);
+
+        // The leader schedule removes a bad node from the leader slots, so the default swap
+        // table is necessary to make the EXCLUDE authority the leader of round 15. Test leader
+        // election is `round % committee size`, which selects authority 1 for round 15. A commit
+        // can update the swap table, so the table must be set after the last add_blocks().
+        *fixture.core.leader_schedule.leader_swap_table.write() = LeaderSwapTable::default();
+        assert_eq!(fixture.core.committer.get_leaders(15), vec![excluded]);
+
+        let proposed = fixture.core.try_propose(true).expect("No error").unwrap();
+        assert_eq!(proposed.round(), 16);
+        assert!(
+            proposed.ancestors().iter().all(|a| a.author != excluded),
+            "V2 must not keep the EXCLUDE ancestor, even when it is the leader"
+        );
     }
 
     #[tokio::test]

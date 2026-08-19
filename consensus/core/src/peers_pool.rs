@@ -90,8 +90,9 @@ impl PeersPool {
     ) -> ConsensusResult<()> {
         if !self.context.committee.is_valid_index(authority_index) {
             return Err(ConsensusError::InvalidAuthorityIndex {
+                loc: "registering validator".to_string(),
                 index: authority_index,
-                max: self.context.committee.size(),
+                max: self.context.committee.size() - 1,
             });
         }
 
