@@ -1,0 +1,257 @@
+name: Merge with Clean Commit Message
+
+on:
+  # Trigger: Manual /merge comment
+  issue_comment:
+    types: [created]
+  # Trigger: PR approved
+  pull_request_review:
+    types: [submitted]
+  # Trigger: Manual workflow dispatch
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to merge'
+        required: true
+        type: number
+
+jobs:
+  clean-merge:
+    # Only run for: /merge comments from members, PR approvals, or manual dispatch
+    if: |
+      (github.event_name == 'issue_comment' && 
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, '/merge') &&
+       (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER')) ||
+      (github.event_name == 'pull_request_review' &&
+       github.event.review.state == 'approved') ||
+      (github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      
+    steps:
+    - name: Add reaction (for comment trigger only)
+      if: github.event_name == 'issue_comment'
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh api \
+          --method POST \
+          /repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+          -f content='eyes' \
+          || echo "Failed to add reaction, continuing..."
+
+    - name: Determine PR Number
+      id: context
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -e
+        
+        case "${{ github.event_name }}" in
+          issue_comment)
+            echo "pr_number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+            echo "mode=manual" >> $GITHUB_OUTPUT
+            ;;
+          pull_request_review)
+            echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+            echo "mode=auto" >> $GITHUB_OUTPUT
+            ;;
+          workflow_dispatch)
+            # Validate PR number is numeric
+            PR_INPUT="${{ github.event.inputs.pr_number }}"
+            if ! [[ "$PR_INPUT" =~ ^[0-9]+$ ]]; then
+              echo "❌ Invalid PR number: $PR_INPUT (must be numeric)"
+              exit 1
+            fi
+          
+            echo "pr_number=$PR_INPUT" >> $GITHUB_OUTPUT
+            echo "mode=dispatch" >> $GITHUB_OUTPUT
+            
+            # Check if user has write/admin access
+            USER_ROLE=$(gh api "/repos/${{ github.repository }}/collaborators/${{ github.actor }}" --jq '.role_name' 2>/dev/null || echo "none")
+            if [ "$USER_ROLE" != "admin" ] && [ "$USER_ROLE" != "write" ]; then
+              echo "❌ User ${{ github.actor }} is not authorized (need write/admin access)"
+              exit 1
+            fi
+            ;;
+        esac
+
+    - name: Check Merge Eligibility
+      id: eligibility
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -e
+        PR_NUMBER="${{ steps.context.outputs.pr_number }}"
+        
+        echo "Checking PR #${PR_NUMBER} eligibility..."
+        
+        # Get minimal PR data needed for eligibility check
+        if ! PR_JSON=$(gh api /repos/${{ github.repository }}/pulls/${PR_NUMBER} 2>&1); then
+          echo "❌ Failed to fetch PR details: $PR_JSON"
+          exit 1
+        fi
+        
+        # Check merge status
+        MERGED=$(echo "$PR_JSON" | jq -r '.merged // false')
+        MERGEABLE=$(echo "$PR_JSON" | jq -r '.mergeable // false')
+        [ "$MERGED" = "true" ] && { echo "❌ PR #${PR_NUMBER} is already merged"; exit 1; }
+        [ "$MERGEABLE" != "true" ] && { echo "❌ PR #${PR_NUMBER} is not mergeable (conflicts or checks failing)"; exit 1; }
+        
+        # Check for PR approvals (only count valid approvals for current commit SHA)
+        HEAD_SHA=$(echo "$PR_JSON" | jq -r '.head.sha')
+        REVIEWS_JSON=$(gh api /repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews)
+        # Get latest review per user, count APPROVED ones for current SHA
+        REVIEWS=$(echo "$REVIEWS_JSON" | jq --arg sha "$HEAD_SHA" '
+          sort_by(.submitted_at) | unique_by(.user.login) | [.[] | select(.state == "APPROVED" and .commit_id == $sha)] | length
+        ')
+        if [ "$REVIEWS" -eq 0 ]; then
+          echo "❌ PR #${PR_NUMBER} has no valid approvals for the latest commit. At least one approval is required to merge."
+          exit 1
+        fi
+        
+        echo "✅ PR #${PR_NUMBER} is eligible for merge"
+        
+        # Pass the PR JSON to next step to avoid duplicate API call
+        echo "$PR_JSON" > /tmp/pr_json.txt
+
+    - name: Get PR Details
+      id: pr
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -e
+        PR_NUMBER="${{ steps.context.outputs.pr_number }}"
+        
+        echo "Extracting PR #${PR_NUMBER} details..."
+        
+        # Read PR JSON from previous step (or re-fetch if needed)
+        PR_JSON=$(cat /tmp/pr_json.txt 2>/dev/null || gh api /repos/${{ github.repository }}/pulls/${PR_NUMBER})
+        
+        # Extract PR information
+        LABELS=$(echo "$PR_JSON" | jq -r '[.labels[].name] | join(" ") // ""')
+        AUTO_MERGE=$(echo "$PR_JSON" | jq -r '.auto_merge // null')
+        TITLE=$(echo "$PR_JSON" | jq -r '.title // "No title"')
+        SHA=$(echo "$PR_JSON" | jq -r '.head.sha // empty')
+        PR_BODY=$(echo "$PR_JSON" | jq -r '.body // ""')
+        
+        [ -z "$SHA" ] && { echo "❌ Could not get PR head SHA"; exit 1; }
+        
+        # Output all PR details
+        echo "labels=$LABELS" >> $GITHUB_OUTPUT
+        echo "auto_merge=$AUTO_MERGE" >> $GITHUB_OUTPUT
+        echo "title<<TITLE_EOF" >> $GITHUB_OUTPUT
+        echo "$TITLE" >> $GITHUB_OUTPUT
+        echo "TITLE_EOF" >> $GITHUB_OUTPUT
+        echo "sha=$SHA" >> $GITHUB_OUTPUT
+        
+        # Save PR body to a file to avoid issues with special characters
+        echo "$PR_BODY" > /tmp/pr_body.txt
+        
+        echo "✅ Retrieved PR #${PR_NUMBER} details"
+
+    - name: Check Auto-Merge Conditions
+      id: auto_check
+      if: steps.context.outputs.mode == 'auto'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -e
+        PR_NUMBER="${{ steps.context.outputs.pr_number }}"
+        AUTO_MERGE="${{ steps.pr.outputs.auto_merge }}"
+        LABELS="${{ steps.pr.outputs.labels }}"
+        
+        # Check auto-merge conditions
+        [ "$AUTO_MERGE" != "null" ] && { echo "ℹ️ Skipping: GitHub auto-merge already enabled"; echo "should_merge=false" >> $GITHUB_OUTPUT; exit 0; }
+        
+        # Check for ready-to-merge label (space-padded to prevent partial matches)
+        if ! echo " $LABELS " | grep -q " ready-to-merge "; then
+          echo "ℹ️ Skipping: needs 'ready-to-merge' label"
+          echo "should_merge=false" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+        
+        echo "✅ Will auto-merge PR #${PR_NUMBER} (has ready-to-merge label and was just approved)"
+        echo "should_merge=true" >> $GITHUB_OUTPUT
+
+    - name: Checkout repository (for script access)
+      if: steps.context.outputs.mode != 'auto' || steps.auto_check.outputs.should_merge == 'true'
+      uses: actions/checkout@v4
+      with:
+        sparse-checkout: |
+          .github/scripts
+        sparse-checkout-cone-mode: false
+
+    - name: Process PR Description for Clean Commit Message
+      if: steps.context.outputs.mode != 'auto' || steps.auto_check.outputs.should_merge == 'true'
+      id: message
+      run: |
+        # Export variables for the script
+        export PR_TITLE="${{ steps.pr.outputs.title }}"
+        export PR_NUMBER="${{ steps.context.outputs.pr_number }}"
+        export PR_BODY=$(cat /tmp/pr_body.txt 2>/dev/null || echo "")
+        
+        # Run the script to process the PR body and generate the commit message
+        bash .github/scripts/clean-commit-message.sh
+        
+        # Output for GitHub Actions
+        echo "has_message=true" >> $GITHUB_OUTPUT
+        echo "✅ Commit message prepared"
+
+    - name: Perform Squash Merge
+      if: steps.message.outputs.has_message == 'true' && (steps.context.outputs.mode != 'auto' || steps.auto_check.outputs.should_merge == 'true')
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -e
+        
+        [ ! -f /tmp/commit_message.txt ] && { echo "❌ Commit message file not found"; exit 1; }
+        
+        FULL_MESSAGE=$(cat /tmp/commit_message.txt)
+        COMMIT_TITLE=$(echo "$FULL_MESSAGE" | head -n 1)
+        COMMIT_BODY=$(echo "$FULL_MESSAGE" | tail -n +3)
+        
+        # Perform the merge
+        gh api \
+          --method PUT \
+          /repos/${{ github.repository }}/pulls/${{ steps.context.outputs.pr_number }}/merge \
+          --field merge_method='squash' \
+          --field commit_title="$COMMIT_TITLE" \
+          --field commit_message="$COMMIT_BODY" \
+          --field sha="${{ steps.pr.outputs.sha }}" || \
+          { echo "❌ Failed to merge PR #${{ steps.context.outputs.pr_number }}"; exit 1; }
+        
+        echo "✅ PR #${{ steps.context.outputs.pr_number }} merged successfully"
+
+    - name: Add success reaction (comment trigger only)
+      if: success() && github.event_name == 'issue_comment' && steps.message.outputs.has_message == 'true'
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh api \
+          --method POST \
+          /repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+          -f content='rocket' \
+          || echo "Failed to add success reaction"
+
+    - name: Add failure reaction (comment trigger only)
+      if: failure() && github.event_name == 'issue_comment'
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh pr comment ${{ steps.context.outputs.pr_number }} \
+          --body "❌ Merge failed. Please check the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})." \
+          || echo "Failed to add comment"
+        
+        gh api \
+          --method POST \
+          /repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+          -f content='confused' \
+          || echo "Failed to add failure reaction"
