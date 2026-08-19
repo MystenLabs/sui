@@ -240,7 +240,76 @@ async fn run_scenario(
     );
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+/// Ramp subscribers up to `target` at ~`per_tick` per sample tick (a paced connect, not a burst),
+/// then keep sampling for the rest of `dur`. Shows whether N connect and stay reliably served.
+async fn run_ramp(
+    cluster: &mut SubscriptionTestCluster,
+    name: &str,
+    target: usize,
+    per_tick: usize,
+    dur: Duration,
+    out_dir: &str,
+) {
+    let stop = Arc::new(AtomicBool::new(false));
+    let delivered = Arc::new(AtomicU64::new(0));
+    let mut handles = Vec::with_capacity(target);
+
+    let path = format!("{out_dir}/{name}.csv");
+    let mut f = std::fs::File::create(&path).expect("create csv");
+    writeln!(
+        f,
+        "t_ms,active,opened,delivered,lag_sum,lag_count,term_lagged,term_client_closed,term_error,upstream_processed,client_delivered,rss_kb"
+    )
+    .unwrap();
+
+    let start = Instant::now();
+    while start.elapsed() < dur {
+        for _ in 0..per_tick {
+            if handles.len() >= target {
+                break;
+            }
+            handles.push(tokio::spawn(run_subscriber(
+                cluster.subscription_url.clone(),
+                LIVE_QUERY.to_string(),
+                delivered.clone(),
+                stop.clone(),
+                None,
+            )));
+        }
+        let _ = transfer_coins(&mut cluster.validator, &[1_000_000; 4]).await;
+        let s = extract(&cluster.gather_metrics());
+        writeln!(
+            f,
+            "{},{},{},{},{},{},{},{},{},{},{},{}",
+            start.elapsed().as_millis(),
+            s.active,
+            s.opened,
+            s.delivered,
+            s.lag_sum,
+            s.lag_count,
+            s.term_lagged,
+            s.term_client_closed,
+            s.term_error,
+            s.upstream_processed,
+            delivered.load(Ordering::Relaxed),
+            rss_kb(),
+        )
+        .unwrap();
+        f.flush().ok();
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+    }
+    stop.store(true, Ordering::Relaxed);
+    for h in handles {
+        let _ = h.await;
+    }
+    eprintln!(
+        "[bench] {name}: spawned={} client_delivered={}",
+        target,
+        delivered.load(Ordering::Relaxed)
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 12)]
 #[ignore = "benchmark; run explicitly with --run-ignored"]
 async fn bench_subscription_scaling() {
     let out_dir = std::env::var("BENCH_OUT").unwrap_or_else(|_| "/tmp/subbench".to_string());
@@ -267,6 +336,10 @@ async fn bench_subscription_scaling() {
         }
         "stress" => {
             run_scenario(&mut cluster, "stress_500", vec![None; 500], dur, &out_dir).await;
+        }
+        "ramp" => {
+            // Paced connect: ~30 new subscribers per second up to 1000, then hold.
+            run_ramp(&mut cluster, "ramp_1000", 1000, 30, dur, &out_dir).await;
         }
         "mixed" => {
             for _ in 0..40 {
