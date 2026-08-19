@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::{Bound, ControlFlow, Range};
+use std::ops::{Bound, Range};
 
 use bytes::Bytes;
 use sui_inverted_index::ScanDirection;
@@ -327,10 +327,7 @@ impl ResolvedRange {
             return self;
         }
 
-        let mut cursor_terminal = match self.apply_after_cursor(options) {
-            ControlFlow::Break(()) => return self,
-            ControlFlow::Continue(claim) => claim,
-        };
+        let mut cursor_terminal = self.apply_after_cursor(options);
 
         if let Some(claim) = self.apply_before_cursor(options) {
             cursor_terminal = Some(claim);
@@ -355,13 +352,8 @@ impl ResolvedRange {
         self.exhaustion = exhaustion;
     }
 
-    fn apply_after_cursor(
-        &mut self,
-        options: &QueryOptions,
-    ) -> ControlFlow<(), Option<(u64, u64)>> {
-        let Some(cursor) = options.after.as_ref() else {
-            return ControlFlow::Continue(None);
-        };
+    fn apply_after_cursor(&mut self, options: &QueryOptions) -> Option<(u64, u64)> {
+        let cursor = options.after.as_ref()?;
         let checkpoint = cursor.position.checkpoint();
         let position = u64_cursor_position(cursor);
 
@@ -371,30 +363,16 @@ impl ResolvedRange {
 
         // `u64::MAX` is the unoccupiable exclusive sentinel of these packed
         // ranges (a real item at MAX could not be represented by the required
-        // exclusive end). An Item cursor there has no in-range successor:
-        // resolution short-circuits to the emptied interval — a `before`
-        // cursor, if present, never participates — and the terminal reports
-        // a Boundary at MAX, which cannot re-deliver an item.
+        // exclusive end), so an Item cursor there saturates instead of
+        // overflowing: the admission empties the interval and the terminal
+        // reports a Boundary at MAX, which cannot re-deliver an item.
         let after = match cursor.kind {
-            sui_rpc_cursor::CursorKind::Item => match position.checked_add(1) {
-                Some(after) => after,
-                None => {
-                    self.set_terminal_record(
-                        checkpoint,
-                        position,
-                        RangeExhaustion::CursorBound {
-                            kind: sui_rpc_cursor::CursorKind::Boundary,
-                        },
-                    );
-                    self.range = self.end_position..self.end_position;
-                    return ControlFlow::Break(());
-                }
-            },
+            sui_rpc_cursor::CursorKind::Item => position.saturating_add(1),
             sui_rpc_cursor::CursorKind::Boundary => position,
         };
 
         if after < self.range.start {
-            return ControlFlow::Continue(None);
+            return None;
         }
 
         if !options.is_ascending() {
@@ -409,11 +387,11 @@ impl ResolvedRange {
 
         self.range.start = after;
 
-        ControlFlow::Continue(if self.range.is_empty() {
+        if self.range.is_empty() {
             Some((checkpoint, after))
         } else {
             None
-        })
+        }
     }
 
     fn apply_before_cursor(&mut self, options: &QueryOptions) -> Option<(u64, u64)> {
@@ -2436,11 +2414,10 @@ mod tests {
     }
 
     #[test]
-    fn tx_after_item_at_max_short_circuits_before_cursor() {
-        // An after-Item at u64::MAX has no representable successor:
-        // resolution short-circuits to the emptied interval, terminal at the
-        // after cursor's own coordinate, and a crossed before-cursor never
-        // participates.
+    fn tx_after_item_at_max_lets_before_cursor_win() {
+        // An after-Item at u64::MAX is an ordinary emptying admission (the
+        // saturated successor), not a short-circuit: a crossed before-cursor
+        // still participates and wins the attribution at the min position.
         let options = QueryOptions {
             limit_items: 100,
             ordering: Ordering::Ascending,
@@ -2450,17 +2427,17 @@ mod tests {
         assert_eq!(
             resolved_range(10..20).apply_cursor_bounds(&options),
             ResolvedRange {
-                range: u64::MAX..u64::MAX,
+                range: 15..15,
                 entry_checkpoint: 5,
-                end_checkpoint: 5,
-                end_position: u64::MAX,
+                end_checkpoint: 3,
+                end_position: 15,
                 exhaustion: RangeExhaustion::CursorBound {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
             }
         );
 
-        // Descending: the before-cursor's entry fold is skipped too.
+        // Descending: the before-cursor's entry fold also runs now.
         let seed = ResolvedRange {
             entry_checkpoint: 7,
             ..resolved_range(10..20)
@@ -2474,10 +2451,10 @@ mod tests {
         assert_eq!(
             seed.apply_cursor_bounds(&options),
             ResolvedRange {
-                range: u64::MAX..u64::MAX,
-                entry_checkpoint: 7,
-                end_checkpoint: 5,
-                end_position: u64::MAX,
+                range: 15..15,
+                entry_checkpoint: 3,
+                end_checkpoint: 3,
+                end_position: 15,
                 exhaustion: RangeExhaustion::CursorBound {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
