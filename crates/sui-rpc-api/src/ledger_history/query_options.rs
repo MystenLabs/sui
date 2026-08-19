@@ -2558,4 +2558,30 @@ mod tests {
             10..11
         );
     }
+
+    /// Resume-equivalence witness for the raw cursor echo: an after-Item at n
+    /// admits exactly what the successor-form echo it replaced (Boundary at
+    /// n + 1) admits, so feeding either token back scans the same interval.
+    /// The terminals differ by design (each echoes its own raw coordinate);
+    /// the descending pair is pinned by
+    /// [`tx_descending_after_cursor_sets_terminal_and_tightens`].
+    #[test]
+    fn raw_after_item_echo_resumes_like_successor_boundary() {
+        let item = after_options(Ordering::Ascending, tx_item(3, 24));
+        let successor = after_options(Ordering::Ascending, tx_boundary(3, 25));
+
+        // Non-empty remainder: identical scan range either way.
+        assert_eq!(
+            resolved_range(10..30).apply_cursor_bounds(&item).range,
+            resolved_range(10..30).apply_cursor_bounds(&successor).range,
+        );
+
+        // Drained window: both resumptions admit nothing.
+        assert!(resolved_range(10..20).apply_cursor_bounds(&item).is_empty());
+        assert!(
+            resolved_range(10..20)
+                .apply_cursor_bounds(&successor)
+                .is_empty()
+        );
+    }
 }
