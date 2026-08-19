@@ -346,6 +346,11 @@ impl FlexCommitter {
         // frontier is empty.
         for leader in &committed_leaders {
             assert!(
+                leader.round() > gc_round,
+                "Leader block {:?} at or below gc_round {gc_round} should not be committed",
+                leader.reference()
+            );
+            assert!(
                 dag_state.set_committed(&leader.reference()),
                 "Leader block {:?} attempted to be committed twice",
                 leader.reference()
@@ -355,23 +360,13 @@ impl FlexCommitter {
         let mut to_commit: Vec<VerifiedBlock> = Vec::new();
         while let Some(block) = to_visit.pop() {
             to_commit.push(block.clone());
-            let uncommitted_ancestor_refs: Vec<BlockRef> = block
-                .ancestors()
-                .iter()
-                .copied()
-                .filter(|a| a.round > gc_round && !dag_state.is_committed(a))
-                .collect();
-            for ancestor_ref in uncommitted_ancestor_refs {
-                if !dag_state.set_committed(&ancestor_ref) {
+            for ancestor_ref in block.ancestors().iter().copied() {
+                if ancestor_ref.round <= gc_round || !dag_state.set_committed(&ancestor_ref) {
                     continue;
                 }
                 to_visit.push(dag_state.get_block(&ancestor_ref).unwrap());
             }
         }
-        assert!(
-            to_commit.iter().all(|b| b.round() > gc_round),
-            "No blocks at or below gc_round {gc_round} should be committed"
-        );
         drop(dag_state);
 
         // Sort the committed blocks deterministically, first by round ascending,
