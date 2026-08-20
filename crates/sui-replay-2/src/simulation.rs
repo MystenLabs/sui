@@ -99,7 +99,6 @@ pub fn trace_simulated_transaction(
     let expected_digest = *effects.transaction_digest();
     let (transaction, mock_gas_object) =
         reconstruct_fullnode_transaction(transaction, expected_digest)?;
-    ensure_supported_transaction(&transaction)?;
     let digest = transaction.digest();
     let network = node.network_name();
     let artifact_path = output_root.join(digest.to_string());
@@ -236,32 +235,36 @@ fn ensure_supported_transaction(transaction: &TransactionData) -> Result<()> {
     Ok(())
 }
 
-/// Reconstruct the exact transaction executed by the fullnode.
+/// Reconstruct and validate the exact transaction executed by the fullnode.
 ///
 /// For a request without gas payment, the fullnode executes with a deterministic synthetic gas
 /// coin while returning the original payment-free transaction data. Insert the same coin locally
-/// and require the resulting digest to match the effects; any other mismatch is rejected.
+/// and require the resulting digest to match the effects; any other mismatch is rejected. The
+/// reconstructed transaction must also have a shape supported by replay.
 fn reconstruct_fullnode_transaction(
     mut transaction: TransactionData,
     expected_digest: TransactionDigest,
 ) -> Result<(TransactionData, Option<Object>)> {
     // A matching digest proves that the fullnode executed the returned transaction unchanged;
-    // only a mismatch can indicate the need formock-gas insertion.
-    if transaction.digest() == expected_digest {
-        return Ok((transaction, None));
-    }
+    // only a mismatch can indicate the need for mock-gas insertion.
+    let mock_gas = if transaction.digest() == expected_digest {
+        None
+    } else {
+        ensure!(
+            transaction.gas().is_empty(),
+            "fullnode effects digest does not match the returned transaction with explicit gas payment",
+        );
+        let mock_gas = new_mock_gas_object(transaction.gas_owner());
+        transaction.gas_data_mut().payment = vec![mock_gas.compute_object_reference()];
+        ensure!(
+            transaction.digest() == expected_digest,
+            "could not reconstruct the transaction executed by fullnode simulation",
+        );
+        Some(mock_gas)
+    };
 
-    ensure!(
-        transaction.gas().is_empty(),
-        "fullnode effects digest does not match the returned transaction with explicit gas payment",
-    );
-    let mock_gas = new_mock_gas_object(transaction.gas_owner());
-    transaction.gas_data_mut().payment = vec![mock_gas.compute_object_reference()];
-    ensure!(
-        transaction.digest() == expected_digest,
-        "could not reconstruct the transaction executed by fullnode simulation",
-    );
-    Ok((transaction, Some(mock_gas)))
+    ensure_supported_transaction(&transaction)?;
+    Ok((transaction, mock_gas))
 }
 
 /// Construct the synthetic gas coin used by fullnode simulation.
@@ -348,8 +351,9 @@ mod tests {
         let mut transaction = transaction(vec![]);
         transaction.gas_data_mut().budget = 0;
         transaction.gas_data_mut().price = 0;
+        let expected_digest = transaction.digest();
 
-        let error = ensure_supported_transaction(&transaction).unwrap_err();
+        let error = reconstruct_fullnode_transaction(transaction, expected_digest).unwrap_err();
 
         assert!(error.to_string().contains("does not support gasless"));
     }
@@ -364,8 +368,9 @@ mod tests {
             vec![],
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(reservation))],
         );
+        let expected_digest = transaction.digest();
 
-        let error = ensure_supported_transaction(&transaction).unwrap_err();
+        let error = reconstruct_fullnode_transaction(transaction, expected_digest).unwrap_err();
 
         assert!(
             error
@@ -381,8 +386,9 @@ mod tests {
         let reservation = ParsedObjectRefWithdrawal::new(ObjectID::random(), 3, 100)
             .encode(SequenceNumber::from_u64(2), ChainIdentifier::default());
         let transaction = transaction(vec![reservation]);
+        let expected_digest = transaction.digest();
 
-        let error = ensure_supported_transaction(&transaction).unwrap_err();
+        let error = reconstruct_fullnode_transaction(transaction, expected_digest).unwrap_err();
 
         assert!(
             error
