@@ -48,6 +48,7 @@ pub(crate) struct VMTracer<'a> {
     type_stack: Vec<StackType>,
     loaded_data: BTreeMap<TraceIndex, GlobalValue>,
     effects: Vec<EF>,
+    vector_borrow_index: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -1017,27 +1018,32 @@ impl VMTracer<'_> {
         );
 
         let instruction_filter = self.trace.instruction_filter(instruction, pc);
+        // Vector borrows need their runtime index after execution to track the borrowed element's
+        // Indexed location. Keep it outside any selectively filtered effects.
+        self.vector_borrow_index = None;
+        if matches!(instruction, B::VecImmBorrow(_) | B::VecMutBorrow(_)) {
+            let TraceValue::RuntimeValue {
+                value: SerializableMoveValue::U64(i),
+            } = self.resolve_stack_value(vtables, machine, 0)?
+            else {
+                self.report_error(
+                    "Expected a u64 literal for the index in VecImmBorrow/VecMutBorrow",
+                );
+                return None;
+            };
+            self.vector_borrow_index = Some(i);
+        }
 
         if instruction_filter.is_none() {
-            match &machine.call_stack.current_frame.function.to_ref().code()[pc as usize] {
-                // StLoc: still need store_global and insert_local side effects.
-                B::StLoc(lidx) => {
-                    let ty = self.type_stack.last()?.clone();
-                    let frame_identifier = self.current_frame_identifier()?;
-                    self.remove_global_locations_for_local(frame_identifier, *lidx as usize);
-                    self.store_global(machine, frame_identifier, 0, *lidx as usize)?;
-                    self.insert_local(*lidx as usize, ty)?;
-                }
-                // VecImmBorrow/VecMutBorrow: capture just the u64 index (trivially cheap) since
-                // end_instruction_no_effects_impl needs it for the type_stack Indexed location.
-                B::VecImmBorrow(_) | B::VecMutBorrow(_) => {
-                    let v = self.resolve_stack_value(vtables, machine, 0)?;
-                    self.register_effect(EF::Pop(v));
-                    return Some(());
-                }
-                // VecPushBack: no special handling needed. The reference location is available
-                // from the type_stack in end_instruction_no_effects_impl.
-                _ => {}
+            // StLoc: still need store_global and insert_local side effects.
+            if let B::StLoc(lidx) =
+                &machine.call_stack.current_frame.function.to_ref().code()[pc as usize]
+            {
+                let ty = self.type_stack.last()?.clone();
+                let frame_identifier = self.current_frame_identifier()?;
+                self.remove_global_locations_for_local(frame_identifier, *lidx as usize);
+                self.store_global(machine, frame_identifier, 0, *lidx as usize)?;
+                self.insert_local(*lidx as usize, ty)?;
             }
             self.effects.clear();
             return Some(());
@@ -1619,21 +1625,7 @@ impl VMTracer<'_> {
                     self.report_error(&format!("Expected vector, got {:#?}", ref_ty.layout));
                     return None;
                 };
-                // The u64 index is always captured in self.effects[0] (cheaply, even when
-                // !wants_effects) since we need it for the type_stack Indexed location.
-                let EF::Pop(TraceValue::RuntimeValue {
-                    value: SerializableMoveValue::U64(i),
-                }) = &self.effects[0]
-                else {
-                    self.report_error(
-                        "Expected a u64 literal for the index in VecImmBorrow/VecMutBorrow",
-                    );
-                    return None;
-                };
-                let i = *i;
-                if instruction_filter.is_none() {
-                    self.effects.remove(0);
-                }
+                let i = self.vector_borrow_index.take()?;
                 let location =
                     RuntimeLocation::Indexed(Box::new(ref_ty.ref_type?.1.clone()), i as usize);
                 self.type_stack.push(StackType {
@@ -1854,6 +1846,7 @@ impl<'a> VMTracer<'a> {
             type_stack: vec![],
             loaded_data: BTreeMap::new(),
             effects: vec![],
+            vector_borrow_index: None,
         }
     }
 
