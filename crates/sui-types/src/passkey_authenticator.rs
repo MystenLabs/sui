@@ -149,10 +149,7 @@ impl Serialize for PasskeyAuthenticator {
     where
         S: serde::ser::Serializer,
     {
-        let mut bytes = Vec::with_capacity(Secp256r1SuiSignature::LENGTH);
-        bytes.push(SignatureScheme::Secp256r1.flag());
-        bytes.extend_from_slice(self.signature.as_ref());
-        bytes.extend_from_slice(self.pk.as_ref());
+        let bytes = encode_secp256r1_sui_signature(&self.signature, &self.pk);
 
         let raw = RawPasskeyAuthenticator {
             authenticator_data: self.authenticator_data.clone(),
@@ -195,10 +192,7 @@ impl PasskeyAuthenticator {
     }
 
     pub fn signature(&self) -> Signature {
-        let mut bytes = Vec::with_capacity(Secp256r1SuiSignature::LENGTH);
-        bytes.push(SignatureScheme::Secp256r1.flag());
-        bytes.extend_from_slice(self.signature.as_ref());
-        bytes.extend_from_slice(self.pk.as_ref());
+        let bytes = encode_secp256r1_sui_signature(&self.signature, &self.pk);
 
         // Safe to unwrap because signature and pk are serialized from valid struct.
         Signature::Secp256r1SuiSignature(Secp256r1SuiSignature::from_bytes(&bytes).unwrap())
@@ -308,4 +302,19 @@ pub fn to_signing_message<T: Serialize>(
     let mut hasher = DefaultHash::default();
     bcs::serialize_into(&mut hasher, intent_msg).expect("Message serialization should not fail");
     hasher.finalize().digest
+}
+
+/// Encode a passkey's Secp256r1 signature and public key as the raw bytes of a
+/// [`Secp256r1SuiSignature`]: a flag byte followed by the signature and public key.
+fn encode_secp256r1_sui_signature(
+    signature: &Secp256r1Signature,
+    pk: &Secp256r1PublicKey,
+) -> [u8; Secp256r1SuiSignature::LENGTH] {
+    let mut bytes = [0u8; Secp256r1SuiSignature::LENGTH];
+    let sig = signature.as_ref();
+    let pk_bytes = pk.as_ref();
+    bytes[0] = SignatureScheme::Secp256r1.flag();
+    bytes[1..1 + sig.len()].copy_from_slice(sig);
+    bytes[1 + sig.len()..].copy_from_slice(pk_bytes);
+    bytes
 }

@@ -56,9 +56,9 @@ mod checked {
 
     // define the bucket table for computation charging
     // If versioning defines multiple functions and
-    fn computation_bucket(max_bucket_cost: u64) -> Vec<ComputationBucket> {
+    fn computation_bucket(max_bucket_cost: u64) -> [ComputationBucket; 8] {
         assert!(max_bucket_cost >= 5_000_000);
-        vec![
+        [
             ComputationBucket::simple(0, 1_000),
             ComputationBucket::simple(1_000, 5_000),
             ComputationBucket::simple(5_000, 10_000),
@@ -102,7 +102,7 @@ mod checked {
         /// Execution cost table to be used.
         pub execution_cost_table: CostTable,
         /// Computation buckets to cost transaction in price groups
-        computation_bucket: Vec<ComputationBucket>,
+        computation_bucket: [ComputationBucket; 8],
         /// Max gas price for aborted transactions.
         max_gas_price_rgp_factor_for_aborted_transactions: Option<u64>,
     }
