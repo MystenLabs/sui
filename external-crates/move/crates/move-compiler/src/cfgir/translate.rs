@@ -27,7 +27,7 @@ use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use rayon::prelude::*;
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     sync::Arc,
 };
 
@@ -144,7 +144,7 @@ impl<'env> Context<'env> {
             .1
     }
 
-    pub(super) fn clear_block_state(&mut self) {
+    fn clear_block_state(&mut self) {
         assert!(self.named_blocks.is_empty());
         self.label_count = 0;
         self.loop_bounds = BTreeMap::new();
@@ -289,9 +289,7 @@ fn module(
 // Values
 //**************************************************************************************************
 
-/// Lowers a folded `H::Value` into a `MoveValue` for a compiled constant. The inverse direction
-/// -- pre-compiled `MoveValue`s back into `H::Value` for constant folding -- is
-/// `value_from_move_value` in `hlir::translate::precompiled_constants`
+/// Lowers a folded `H::Value` into a `MoveValue` for a compiled constant.
 pub(crate) fn move_value_from_value(sp!(_, v_): Value) -> MoveValue {
     move_value_from_value_(v_)
 }
@@ -377,60 +375,41 @@ fn function_body(
         HB::Defined { locals, body } => {
             // cross-module constant uses are rewritten to module-local copies after translation,
             // by the constant selection pass (see `cfgir::constants`)
-            let blocks = block(context, body);
-            let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
-            context.clear_block_state();
-            let binfo = block_info.iter().map(destructure_tuple);
-            if context.debug.print_blocks {
-                for (lbl, block) in &blocks {
-                    println!("{lbl}:");
-                    for cmd in block {
-                        print!("    ");
-                        cmd.print_verbose();
+            let (start, blocks, block_info) = lower_body_to_cfg(
+                context,
+                body,
+                |context, cfg, infinite_loop_starts, diags| {
+                    context.add_diags(diags);
+                    let function_context = super::CFGContext {
+                        env: context.env,
+                        pre_compiled_program: None,
+                        reporter: &context.reporter,
+                        info: context.info,
+                        package: context.current_package,
+                        module,
+                        member: cfgir::MemberName::Function(name.0),
+                        attributes,
+                        entry,
+                        visibility,
+                        signature,
+                        locals: &locals,
+                        infinite_loop_starts,
+                    };
+                    cfgir::refine_inference_and_verify(&function_context, cfg);
+                    // do not optimize if there are errors, warnings are okay
+                    if !context.env.has_errors() {
+                        cfgir::optimize(
+                            context.env,
+                            &context.reporter,
+                            context.current_package,
+                            signature,
+                            &locals,
+                            &BTreeMap::new(),
+                            cfg,
+                        );
                     }
-                }
-            }
-            let (mut cfg, infinite_loop_starts, diags) =
-                MutForwardCFG::new(start, &mut blocks, binfo);
-            context.add_diags(diags);
-
-            let function_context = super::CFGContext {
-                env: context.env,
-                pre_compiled_program: None,
-                reporter: &context.reporter,
-                info: context.info,
-                package: context.current_package,
-                module,
-                member: cfgir::MemberName::Function(name.0),
-                attributes,
-                entry,
-                visibility,
-                signature,
-                locals: &locals,
-                infinite_loop_starts: &infinite_loop_starts,
-            };
-            cfgir::refine_inference_and_verify(&function_context, &mut cfg);
-            // do not optimize if there are errors, warnings are okay
-            if !context.env.has_errors() {
-                cfgir::optimize(
-                    context.env,
-                    &context.reporter,
-                    context.current_package,
-                    signature,
-                    &locals,
-                    &BTreeMap::new(),
-                    &mut cfg,
-                );
-                if context.debug.print_optimized_blocks {
-                    for (lbl, block) in &blocks {
-                        println!("{lbl}:");
-                        for cmd in block {
-                            print!("    ");
-                            cmd.print_verbose();
-                        }
-                    }
-                }
-            }
+                },
+            );
             let block_info = block_info
                 .into_iter()
                 .filter(|(lbl, _info)| blocks.contains_key(lbl))
@@ -446,6 +425,39 @@ fn function_body(
     sp(loc, b_)
 }
 
+/// Lowers a body through the shared statement-lowering pipeline -- block generation, label
+/// resolution, and CFG construction -- and hands the CFG to `with_cfg` for verification and
+/// optimization. Returns the start label, the final blocks, and their block info
+pub(super) fn lower_body_to_cfg(
+    context: &mut Context,
+    body: H::Block,
+    with_cfg: impl FnOnce(&mut Context, &mut MutForwardCFG, &BTreeSet<Label>, Diagnostics),
+) -> (Label, BasicBlocks, Vec<(Label, BlockInfo)>) {
+    let blocks = block(context, body);
+    let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
+    context.clear_block_state();
+    let binfo = block_info.iter().map(destructure_tuple);
+    if context.debug.print_blocks {
+        print_blocks(&blocks);
+    }
+    let (mut cfg, infinite_loop_starts, diags) = MutForwardCFG::new(start, &mut blocks, binfo);
+    with_cfg(context, &mut cfg, &infinite_loop_starts, diags);
+    if context.debug.print_optimized_blocks {
+        print_blocks(&blocks);
+    }
+    (start, blocks, block_info)
+}
+
+fn print_blocks(blocks: &BasicBlocks) {
+    for (lbl, block) in blocks {
+        println!("{lbl}:");
+        for cmd in block {
+            print!("    ");
+            cmd.print_verbose();
+        }
+    }
+}
+
 //**************************************************************************************************
 // Statements
 //**************************************************************************************************
@@ -453,7 +465,7 @@ fn function_body(
 type BlockList = Vec<(Label, BasicBlock)>;
 
 #[growing_stack]
-pub(super) fn block(context: &mut Context, stmts: H::Block) -> BlockList {
+fn block(context: &mut Context, stmts: H::Block) -> BlockList {
     let (start_block, blocks) = block_(context, stmts);
     [(context.new_label(), start_block)]
         .into_iter()
@@ -474,7 +486,7 @@ fn block_(context: &mut Context, stmts: H::Block) -> (BasicBlock, BlockList) {
     (current_block, blocks)
 }
 
-pub(super) fn finalize_blocks(
+fn finalize_blocks(
     context: &mut Context,
     blocks: BlockList,
 ) -> (Label, BasicBlocks, Vec<(Label, BlockInfo)>) {
@@ -733,7 +745,7 @@ fn make_jump(loc: Loc, target: Label, from_user: bool) -> H::Command {
 }
 
 // Added to dodge a clippy complaint
-pub(super) fn destructure_tuple<T, U>((fst, snd): &(T, U)) -> (&T, &U) {
+fn destructure_tuple<T, U>((fst, snd): &(T, U)) -> (&T, &U) {
     (fst, snd)
 }
 
