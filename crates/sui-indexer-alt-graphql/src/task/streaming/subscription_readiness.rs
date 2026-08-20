@@ -44,6 +44,16 @@ impl SubscriptionReadiness {
         self.first_live_checkpoint.get().copied()
     }
 
+    /// Wait only until the first live checkpoint has been streamed, without requiring `kv_packages`
+    /// to catch up. For DB-less deployments (no `pg_pipelines` configured) that accept unresolved
+    /// pre-stream packages, e.g. local benchmarks against a remote ledger gRPC.
+    pub(crate) async fn wait_for_first_checkpoint(&self) -> anyhow::Result<()> {
+        while self.first_live_checkpoint.get().is_none() {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        Ok(())
+    }
+
     /// Wait until the service is ready to serve subscriptions: the first live checkpoint has
     /// been streamed AND `kv_packages` has indexed everything before it.
     pub(crate) async fn wait_for_ready(&self) -> anyhow::Result<()> {

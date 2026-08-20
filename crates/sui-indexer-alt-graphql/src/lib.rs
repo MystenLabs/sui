@@ -391,6 +391,11 @@ pub async fn start_rpc(
         config.watermark.watermark_polling_interval,
     );
 
+    // With no pipelines configured (e.g. a DB-less deployment reading only from a ledger gRPC),
+    // there is no `kv_packages` to gate subscription readiness on, so serve as soon as the stream
+    // delivers its first checkpoint.
+    let db_less = pg_pipelines.is_empty();
+
     let watermark_task = WatermarkTask::new(
         config.watermark,
         pg_pipelines,
@@ -513,7 +518,11 @@ pub async fn start_rpc(
         rpc = rpc.data(caches).data(config.subscription);
         let s_stream = stream_task.run();
         let s_eviction = eviction_task.run();
-        readiness.wait_for_ready().await?;
+        if db_less {
+            readiness.wait_for_first_checkpoint().await?;
+        } else {
+            readiness.wait_for_ready().await?;
+        }
         // The broadcast handle is only consumed by the (staging-gated) subscription resolvers.
         #[cfg(feature = "staging")]
         {
