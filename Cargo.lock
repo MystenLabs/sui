@@ -16616,7 +16616,6 @@ dependencies = [
  "serde_json",
  "similar",
  "sui-config",
- "sui-core",
  "sui-data-store",
  "sui-execution",
  "sui-json-rpc-types",
