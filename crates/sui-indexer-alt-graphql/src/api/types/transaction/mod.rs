@@ -89,6 +89,12 @@ pub struct TransactionToken {
 /// Compatibility dispatch over the on-wire cursor format.
 pub type CTransaction = OpaqueCursor<TransactionToken>;
 
+impl CTransaction {
+    /// The checkpoint this cursor points at.
+    pub(crate) fn checkpoint(&self) -> u64 {
+        self.checkpoint
+    }
+}
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
 impl Transaction {

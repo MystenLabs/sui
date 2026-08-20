@@ -41,6 +41,9 @@ use scan_then_live::subscribe;
 pub(crate) enum Error {
     #[error("Filtering by `atCheckpoint` or `beforeCheckpoint` is not supported for subscriptions")]
     CheckpointBoundsUnsupported,
+
+    #[error("Cannot start a subscription more than {max} checkpoints ahead of the current tip")]
+    TooFarAheadOfTip { max: u64 },
 }
 
 #[derive(Default)]
@@ -60,7 +63,7 @@ impl Subscription {
         after_checkpoint: Option<UInt53>,
     ) -> Result<
         impl futures::Stream<Item = Result<Edge<String, Checkpoint, EmptyFields>, RpcError>>,
-        RpcError,
+        RpcError<Error>,
     > {
         let package_store: &Arc<StreamingPackageStore> = ctx.data()?;
         let limits: &Limits = ctx.data()?;
@@ -68,19 +71,21 @@ impl Subscription {
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
         let fetcher: &LedgerGrpcReader = ctx.data()?;
 
-        let resume_from: Option<u64> = match (
+        let start_from: Option<u64> = match (
             after.map(|c| c.sequence_number()),
             after_checkpoint.map(u64::from),
         ) {
             (Some(a), Some(b)) => Some(a.max(b)),
             (a, b) => a.or(b),
         };
+        reject_if_start_too_far_ahead(start_from, broadcast, config)?;
+
         let package_store = package_store.clone();
         let resolver_limits = limits.package_resolver();
 
         let stream = broadcast
             .clone()
-            .subscribe(resume_from, fetcher.clone(), config);
+            .subscribe(start_from, fetcher.clone(), config);
 
         Ok(stream.map(move |item| {
             item.map(|processed| {
@@ -136,6 +141,14 @@ impl Subscription {
 
         let after_checkpoint = filter.after_checkpoint.map(u64::from);
 
+        // Start from whichever of the cursor and `afterCheckpoint` is later, then reject a start
+        // that sits too far past the tip.
+        let start_from = match (after.as_ref().map(|c| c.checkpoint()), after_checkpoint) {
+            (Some(a), Some(b)) => Some(a.max(b)),
+            (a, b) => a.or(b),
+        };
+        reject_if_start_too_far_ahead(start_from, broadcast, config)?;
+
         Ok(subscribe::<Transaction>(
             reader.clone(),
             broadcast.clone(),
@@ -182,6 +195,14 @@ impl Subscription {
 
         let after_checkpoint = filter.after_checkpoint.map(u64::from);
 
+        // Start from whichever of the cursor and `afterCheckpoint` is later, then reject a start
+        // that sits too far past the tip.
+        let start_from = match (after.as_ref().map(|c| c.checkpoint()), after_checkpoint) {
+            (Some(a), Some(b)) => Some(a.max(b)),
+            (a, b) => a.or(b),
+        };
+        reject_if_start_too_far_ahead(start_from, broadcast, config)?;
+
         Ok(subscribe::<Event>(
             reader.clone(),
             broadcast.clone(),
@@ -194,4 +215,21 @@ impl Subscription {
             config.clone(),
         ))
     }
+}
+
+/// Reject a start point sitting more than `max_ahead` checkpoints past the chain tip. There is
+/// nothing to backfill ahead of the tip, so such a request would only wait for the chain to reach
+/// it, and a far-future one would hold the connection open indefinitely.
+fn reject_if_start_too_far_ahead(
+    start_from: Option<u64>,
+    broadcast: &SubscriptionBroadcast,
+    config: &SubscriptionConfig,
+) -> Result<(), RpcError<Error>> {
+    let max_ahead = config.max_start_checkpoints_ahead_of_tip;
+    if let Some(start) = start_from
+        && start > broadcast.network_tip().saturating_add(max_ahead)
+    {
+        return Err(bad_user_input(Error::TooFarAheadOfTip { max: max_ahead }));
+    }
+    Ok(())
 }

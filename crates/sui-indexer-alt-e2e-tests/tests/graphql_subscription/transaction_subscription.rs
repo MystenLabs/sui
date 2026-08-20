@@ -825,6 +825,30 @@ async fn test_transaction_subscription_checkpoint_filter_errors() {
     );
 }
 
+/// A start far beyond the tip is rejected rather than parked: nothing exists to backfill ahead of
+/// the tip, so waiting for it could hold a connection open indefinitely.
+#[tokio::test]
+async fn test_transaction_subscription_start_too_far_ahead_errors() {
+    let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+
+    // Well past the default window allowed ahead of the tip (~300 checkpoints, about a minute).
+    let far_ahead = cluster.validator_checkpoint_tip() + 1_000;
+    let mut stream = cluster
+        .subscribe_with_variables(
+            &tx_query("sentAddress: $sender", Some(far_ahead)),
+            sender_var(sender),
+        )
+        .await;
+
+    let item = stream.next().await.unwrap();
+    let message = item["errors"][0]["message"].as_str().unwrap_or_default();
+    assert_eq!(
+        message,
+        "Cannot start a subscription more than 300 checkpoints ahead of the current tip"
+    );
+}
+
 /// Backfill/live parity for the `affectedAddress` predicate: the same transactions must resolve
 /// identically whether matched by the gRPC filter (backfill) or in memory (live). Guards against the
 /// two filter translations diverging, which would gap or duplicate at the seam.
