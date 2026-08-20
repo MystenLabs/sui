@@ -10,7 +10,7 @@ use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::transaction::GasData;
 use sui_types::{
-    accumulator_root::UnsettledObjectFundsRead,
+    accumulator_root::{EmptyUnsettledObjectFunds, UnsettledObjectFundsRead},
     base_types::{SuiAddress, SystemObjectVersions, TxContext},
     committee::EpochId,
     digests::TransactionDigest,
@@ -75,7 +75,7 @@ impl executor::Executor for Executor {
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
         system_object_versions: SystemObjectVersions,
-        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
+        unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -133,7 +133,7 @@ impl executor::Executor for Executor {
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
         system_object_versions: SystemObjectVersions,
-        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
+        unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -217,7 +217,9 @@ impl executor::Executor for Executor {
                 store,
                 input_objects,
                 system_object_versions,
-                None,
+                // Dev-inspect and dry-run results are never committed, so they do not need to
+                // account for unsettled withdrawals from other transactions.
+                &EmptyUnsettledObjectFunds,
                 gas,
                 gas_status,
                 transaction_kind,
@@ -245,7 +247,9 @@ impl executor::Executor for Executor {
                 store,
                 input_objects,
                 system_object_versions,
-                None,
+                // Dev-inspect and dry-run results are never committed, so they do not need to
+                // account for unsettled withdrawals from other transactions.
+                &EmptyUnsettledObjectFunds,
                 gas,
                 gas_status,
                 transaction_kind,
