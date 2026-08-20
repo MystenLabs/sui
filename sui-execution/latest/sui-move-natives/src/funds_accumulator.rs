@@ -173,14 +173,17 @@ pub fn reserve_object_funds_for_withdrawal(
     let owner: SuiAddress =
         safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>()).into();
 
-    // Before check_object_funds_withdraw_in_execution is enabled, object funds withdrawals are not
-    // checked in execution. They are checked post-execution, and potentially retried if insufficient.
+    // We want to charge extra gas if we need to read the object available funds from storage.
+    // This should only need to be done once per account.
+    // Check here so that we can charge gas before reading from storage.
     let needs_cold_read = {
         let obj_runtime: &ObjectRuntime = context.extensions().get()?;
         if !obj_runtime
             .protocol_config
             .check_object_funds_withdraw_in_execution()
         {
+            // Before check_object_funds_withdraw_in_execution is enabled, object funds withdrawals are not
+            // checked in execution. They are checked post-execution, and potentially retried if insufficient.
             return Ok(NativeResult::ok(context.gas_used(), smallvec![]));
         }
         obj_runtime.object_funds_sufficiency_needs_store_read(owner, &ty_tag, limit)
@@ -207,6 +210,7 @@ pub fn reserve_object_funds_for_withdrawal(
             context.gas_used(),
             E_OBJECT_FUNDS_INSUFFICIENT,
         )),
+        ObjectFundsSufficiency::Overflow => Ok(NativeResult::err(context.gas_used(), E_OVERFLOW)),
         ObjectFundsSufficiency::LoadError(msg) => Err(PartialVMError::new(
             StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
         )
