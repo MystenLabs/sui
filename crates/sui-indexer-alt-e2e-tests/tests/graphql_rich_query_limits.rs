@@ -3,33 +3,18 @@
 
 use reqwest::Client;
 use serde_json::json;
-use simulacrum::Simulacrum;
 use sui_indexer_alt_graphql::config::Limits;
-use sui_kv_rpc::KvRpcConfig;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::Argument;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 
 use sui_indexer_alt_e2e_tests::FullCluster;
-use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
 
-/// Set up a cluster whose mock kv-rpc archival server also serves the ledger gRPC list APIs,
-/// since `Transaction::paginate` always requires them (no Postgres fallback).
+/// Set up a cluster, since `Transaction::paginate` always requires the ledger gRPC list APIs
+/// (no Postgres fallback).
 async fn cluster_with_list_apis() -> FullCluster {
-    FullCluster::new_with_configs(
-        Simulacrum::new(),
-        OffchainClusterConfig {
-            kv_rpc_config: KvRpcConfig {
-                enable_list_apis: Some(true),
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        &prometheus::Registry::new(),
-    )
-    .await
-    .expect("Failed to create cluster")
+    FullCluster::new().await.expect("Failed to create cluster")
 }
 
 /// Gas budget for transactions

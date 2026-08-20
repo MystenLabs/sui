@@ -266,11 +266,6 @@ pub struct KvRpcServer {
     pub(crate) ledger_history: LedgerHistoryConfig,
     pub(crate) request_bigtable_concurrency: usize,
     pub(crate) stages: StagesConfig,
-    // The list RPCs are part of the stable v2 LedgerService, but serving them
-    // needs the pipelines in [`LIST_API_SERVICE_INFO_WATERMARK_PIPELINES`].
-    // Instances that do not index them reject list requests with
-    // `Unimplemented`.
-    list_apis_enabled: bool,
 }
 
 /// Optional configuration for the gRPC server (TLS, metrics, reflection, and
@@ -365,7 +360,6 @@ impl KvRpcServer {
         ledger_history: LedgerHistoryConfig,
         request_bigtable_concurrency: usize,
         stages: StagesConfig,
-        enable_list_apis: bool,
     ) -> anyhow::Result<Self> {
         ledger_history.validate()?;
         let mut client = BigTableClient::new_remote_with_credentials(
@@ -394,7 +388,6 @@ impl KvRpcServer {
             client,
             chain_id,
             server_version,
-            enable_list_apis,
             metrics,
             ledger_history,
             request_bigtable_concurrency,
@@ -415,7 +408,6 @@ impl KvRpcServer {
             LedgerHistoryConfig::default(),
             KvRpcConfig::default().request_bigtable_concurrency(),
             StagesConfig::default(),
-            false,
         )
         .await
     }
@@ -431,7 +423,6 @@ impl KvRpcServer {
         ledger_history: LedgerHistoryConfig,
         request_bigtable_concurrency: usize,
         stages: StagesConfig,
-        enable_list_apis: bool,
     ) -> anyhow::Result<Self> {
         let client = BigTableClient::new_local(host, instance_id).await?;
         // Emulator/test path: metrics are inert (no scrape endpoint), but the
@@ -441,7 +432,6 @@ impl KvRpcServer {
             client,
             ChainIdentifier::from(sui_types::digests::CheckpointDigest::default()),
             server_version,
-            enable_list_apis,
             metrics,
             ledger_history,
             request_bigtable_concurrency,
@@ -453,7 +443,6 @@ impl KvRpcServer {
         client: BigTableClient,
         chain_id: ChainIdentifier,
         server_version: Option<ServerVersion>,
-        enable_list_apis: bool,
         metrics: Arc<KvRpcMetrics>,
         ledger_history: LedgerHistoryConfig,
         request_bigtable_concurrency: usize,
@@ -472,14 +461,13 @@ impl KvRpcServer {
             chain_id,
             client,
             server_version,
-            service_info_watermark_pipelines: service_info_watermark_pipelines(enable_list_apis),
+            service_info_watermark_pipelines: service_info_watermark_pipelines(),
             cache,
             package_resolver,
             metrics,
             ledger_history,
             request_bigtable_concurrency,
             stages,
-            list_apis_enabled: enable_list_apis,
         };
 
         let server_clone = server.clone();
@@ -504,16 +492,6 @@ impl KvRpcServer {
         });
 
         Ok(server)
-    }
-
-    pub(crate) fn check_list_apis_enabled(&self) -> Result<(), tonic::Status> {
-        if self.list_apis_enabled {
-            Ok(())
-        } else {
-            Err(tonic::Status::unimplemented(
-                "the List APIs are not enabled on this instance",
-            ))
-        }
     }
 
     /// Start this server as a tonic gRPC service on the given address.
@@ -594,12 +572,9 @@ impl KvRpcServer {
 }
 
 /// Pipelines whose watermarks bound the checkpoint height reported by
-/// `GetServiceInfo`: the always-served set, plus the List API pipelines when
-/// those APIs are enabled.
-pub fn service_info_watermark_pipelines(enable_list_apis: bool) -> Vec<&'static str> {
+/// `GetServiceInfo`: the always-served set, plus the List API pipelines.
+pub fn service_info_watermark_pipelines() -> Vec<&'static str> {
     let mut pipelines = DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.to_vec();
-    if enable_list_apis {
-        pipelines.extend_from_slice(&LIST_API_SERVICE_INFO_WATERMARK_PIPELINES);
-    }
+    pipelines.extend_from_slice(&LIST_API_SERVICE_INFO_WATERMARK_PIPELINES);
     pipelines
 }
