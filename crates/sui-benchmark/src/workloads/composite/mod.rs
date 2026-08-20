@@ -407,6 +407,22 @@ pub struct OperationPool {
 }
 
 impl OperationPool {
+    /// Whether init resolved the resource an operation is asking for.
+    pub fn provides(&self, request: &ResourceRequest) -> bool {
+        match request {
+            ResourceRequest::SharedCounter => !self.shared_counters.is_empty(),
+            ResourceRequest::ObjectBalance => self.balance_pool.is_some(),
+            ResourceRequest::TestCoinCap => {
+                self.test_coin_cap.is_some() && self.test_coin_type.is_some()
+            }
+            ResourceRequest::ImmutableObject => self.immutable_object.is_some(),
+            ResourceRequest::Randomness
+            | ResourceRequest::AddressBalance
+            | ResourceRequest::AccumulatorRoot
+            | ResourceRequest::CoinReservation => true,
+        }
+    }
+
     pub fn select_counter(&self) -> (ObjectID, SequenceNumber) {
         let mut rng = get_rng();
         if self.shared_counters.is_empty() {
@@ -584,6 +600,10 @@ impl CompositePayload {
 
         loop {
             let mut ops = self.config.sample_operations();
+            // An init step can be skipped without failing the workload - a package may not
+            // export a TreasuryCap, for example. Operations that need what init did not
+            // resolve would otherwise be sampled and panic when applied.
+            ops.retain(|op| op.resource_requests().iter().all(|r| self.pool.provides(r)));
             if filter_address_balance {
                 ops.retain(|op| {
                     !op.resource_requests().iter().any(|r| {

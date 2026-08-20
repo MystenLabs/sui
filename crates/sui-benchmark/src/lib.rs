@@ -998,15 +998,76 @@ impl FullNodeProxy {
             td,
         })
     }
+
+    /// Wait for the effects of a transaction that may already have executed.
+    ///
+    /// A transaction can commit while the client is unable to observe the response - the
+    /// checkpoint wait times out, or the connection drops after submission. Resubmitting then
+    /// fails input checks against objects the transaction itself consumed, which is reported as
+    /// a non-retriable error even though the transaction succeeded.
+    ///
+    /// GetTransaction only serves transactions that have been checkpointed, so one that
+    /// committed moments ago reads as not found. Poll until it lands or the budget expires.
+    async fn await_executed_effects(
+        &self,
+        digest: &TransactionDigest,
+        budget: Duration,
+    ) -> Option<ExecutionEffects> {
+        let start = Instant::now();
+        loop {
+            match self.sui_client.clone().get_transaction(digest).await {
+                Ok(txn) => return Some(ExecutionEffects::ExecutedTransaction(txn)),
+                Err(status) => {
+                    if start.elapsed() >= budget {
+                        debug!(
+                            ?digest,
+                            "transaction not observed within {:?}: {:?}", budget, status
+                        );
+                        return None;
+                    }
+                    sleep(retry_delay()).await;
+                }
+            }
+        }
+    }
 }
+
+/// A non-retriable error reporting the transaction's own inputs as consumed is the signature of
+/// a resubmission: the transaction committed, but the client never saw the result.
+fn indicates_already_executed(err: &impl std::fmt::Debug) -> bool {
+    let err_str = format!("{:?}", err);
+    err_str.contains("Error checking transaction input objects")
+        || err_str.contains("is unavailable for consumption")
+}
+
+/// How long to wait for a checkpoint after the retry budget is already spent.
+const POST_GIVE_UP_LOOKUP_BUDGET: Duration = Duration::from_secs(30);
 
 fn is_retryable_sdk_error(err: &impl std::fmt::Debug) -> bool {
     let err_str = format!("{:?}", err);
     !(err_str.contains("Error checking transaction input objects")
         || err_str.contains("Transaction Expired")
         || err_str.contains("already locked by a different transaction")
-        || err_str.contains("is not available for consumption"))
+        || err_str.contains("is unavailable for consumption"))
         || err_str.contains("Transaction executed but checkpoint wait timed out")
+}
+
+fn max_rpc_retries() -> usize {
+    if in_antithesis() { 20 } else { 10 }
+}
+
+/// Antithesis stops and partitions nodes for stretches that routinely outlast the default
+/// budget, so the client gives up while the fault is still in effect.
+fn rpc_retry_budget() -> Duration {
+    if in_antithesis() {
+        Duration::from_secs(300)
+    } else {
+        Duration::from_secs(60)
+    }
+}
+
+fn retry_delay() -> Duration {
+    Duration::from_millis(get_rng().gen_range(100..1000))
 }
 
 #[async_trait]
@@ -1018,11 +1079,34 @@ impl ValidatorProxy for FullNodeProxy {
     }
 
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
-        self.sui_client
-            .clone()
-            .get_object(object_id)
-            .await
-            .map_err(Into::into)
+        // Workload init reads objects before it can generate any load, and an unretried
+        // transport failure here aborts the process. Give reads the same budget as writes.
+        let start = Instant::now();
+        let mut retry_cnt = 0;
+        let mut last_err = None;
+        while retry_cnt < max_rpc_retries() || start.elapsed() < rpc_retry_budget() {
+            match self.sui_client.clone().get_object(object_id).await {
+                Ok(object) => return Ok(object),
+                Err(err) => {
+                    let delay = retry_delay();
+                    warn!(
+                        ?object_id,
+                        retry_cnt,
+                        "get_object failed with err: {:?}. Sleeping for {:?} ...",
+                        err,
+                        delay,
+                    );
+                    last_err = Some(err);
+                    retry_cnt += 1;
+                    sleep(delay).await;
+                }
+            }
+        }
+        Err(anyhow::anyhow!(
+            "get_object {:?} failed for {retry_cnt} times, last error: {:?}",
+            object_id,
+            last_err
+        ))
     }
 
     async fn get_owned_objects(
@@ -1053,8 +1137,8 @@ impl ValidatorProxy for FullNodeProxy {
         let tx_digest = *tx.digest();
         let start = Instant::now();
         let mut retry_cnt = 0;
-        let max_retries = if in_antithesis() { 20 } else { 10 };
-        while retry_cnt < max_retries || start.elapsed() < Duration::from_secs(60) {
+        let max_retries = max_rpc_retries();
+        while retry_cnt < max_retries || start.elapsed() < rpc_retry_budget() {
             // Fullnode could time out after WAIT_FOR_FINALITY_TIMEOUT (30s) in TransactionOrchestrator
             // SuiClient times out after 60s
             match self
@@ -1068,13 +1152,20 @@ impl ValidatorProxy for FullNodeProxy {
                 }
                 Err(err) => {
                     if !is_retryable_sdk_error(&err) {
+                        if indicates_already_executed(&err)
+                            && let Some(effects) = self
+                                .await_executed_effects(&tx_digest, rpc_retry_budget())
+                                .await
+                        {
+                            return Ok(effects);
+                        }
                         return Err(anyhow::anyhow!(
                             "Transaction {:?} failed with non-retriable error: {:?}",
                             tx_digest,
                             err
                         ));
                     }
-                    let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
+                    let delay = retry_delay();
                     warn!(
                         ?tx_digest,
                         retry_cnt,
@@ -1086,6 +1177,14 @@ impl ValidatorProxy for FullNodeProxy {
                     sleep(delay).await;
                 }
             }
+        }
+        // The retry budget can expire just as the network recovers, with the transaction
+        // committed but not yet checkpointed.
+        if let Some(effects) = self
+            .await_executed_effects(&tx_digest, POST_GIVE_UP_LOOKUP_BUDGET)
+            .await
+        {
+            return Ok(effects);
         }
         Err(anyhow::anyhow!(
             "Transaction {:?} failed for {retry_cnt} times",
@@ -1271,4 +1370,37 @@ pub fn convert_move_call_args(
                 .unwrap(),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{indicates_already_executed, is_retryable_sdk_error};
+
+    // Verbatim fullnode responses. Both predicates match on the debug formatting of an error,
+    // so a wording change upstream disables them without failing to compile.
+    const CONSUMED_INPUT: &str = "Status { code: InvalidArgument, message: \"Error checking \
+        transaction input objects: Transaction needs to be rebuilt because object \
+        0x965d0650f81b48626eb55664a807263647c6608cee97a182a514aefa056ea62a version 0x5 \
+        (93YkNurHWmQ1Z4KDpCa3qd8rxN57WUnys9nKenwXKUTG) is unavailable for consumption, current \
+        version: 0x6\" }";
+    const CHECKPOINT_TIMEOUT: &str =
+        "Status { code: Unknown, message: \"Transaction executed but checkpoint wait timed out\" }";
+    const CONNECT_ERROR: &str = "Status { code: Unavailable, message: \"tcp connect error\" }";
+
+    #[test]
+    fn consumed_inputs_are_not_retried_but_are_recoverable() {
+        assert!(!is_retryable_sdk_error(&CONSUMED_INPUT));
+        assert!(indicates_already_executed(&CONSUMED_INPUT));
+    }
+
+    #[test]
+    fn checkpoint_timeout_is_retryable() {
+        assert!(is_retryable_sdk_error(&CHECKPOINT_TIMEOUT));
+    }
+
+    #[test]
+    fn transport_errors_are_retried_and_not_mistaken_for_execution() {
+        assert!(is_retryable_sdk_error(&CONNECT_ERROR));
+        assert!(!indicates_already_executed(&CONNECT_ERROR));
+    }
 }
