@@ -299,7 +299,8 @@ fn verify_txn_and_save_effects(
     // If replayed and expected effects are the same, save the replayed effects
     // and try removing the forked effects (if any) so that the output just shows
     // the replayed effects rather than (now spurious) effects diff.
-    if effects != expected_effects {
+    let tx_forked = effects != expected_effects;
+    if tx_forked {
         error!(
             tx_digest = %effects.transaction_digest(),
             "Transaction effects do not match expected effects for transaction {}; saving forked effects",
@@ -325,7 +326,7 @@ fn verify_txn_and_save_effects(
             .member(Artifact::ForkedTransactionEffects)
             .try_remove_artifact()?;
     }
-    Ok(effects == expected_effects)
+    Ok(!tx_forked)
 }
 
 impl ReplayTransaction {
