@@ -13,7 +13,8 @@ use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::{
-    AccumulatorObjId, AccumulatorValue as AccumulatorRootValue, UnsettledObjectFundsRead,
+    AccumulatorObjId, AccumulatorValue as AccumulatorRootValue, EmptyUnsettledObjectFunds,
+    UnsettledObjectFundsRead,
 };
 use sui_types::base_types::{SystemObjectVersions, VersionDigest};
 use sui_types::coin_reservation::ParsedDigest;
@@ -145,7 +146,7 @@ pub struct TemporaryStore<'backing> {
     /// Interior-mutable because reads happen behind `&self` (`RuntimeObjectResolver`).
     loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
 
-    unsettled_object_funds: Option<&'backing dyn UnsettledObjectFundsRead>,
+    unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -161,7 +162,7 @@ impl<'backing> TemporaryStore<'backing> {
         cur_epoch: EpochId,
         system_object_versions: SystemObjectVersions,
         transaction: (&TransactionKind, &GasData, SuiAddress),
-        unsettled_object_funds: Option<&'backing dyn UnsettledObjectFundsRead>,
+        unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
     ) -> Self {
         let post_execution_check_inputs =
             PostExecutionCheckInputs::new(transaction, protocol_config.enable_gasless());
@@ -195,7 +196,9 @@ impl<'backing> TemporaryStore<'backing> {
                 is_genesis: true,
                 ..Default::default()
             },
-            None,
+            // The genesis transaction cannot withdraw object funds, so there are never
+            // unsettled withdrawals for it to account for.
+            &EmptyUnsettledObjectFunds,
         )
     }
 
@@ -208,7 +211,7 @@ impl<'backing> TemporaryStore<'backing> {
         cur_epoch: EpochId,
         system_object_versions: SystemObjectVersions,
         post_execution_check_inputs: PostExecutionCheckInputs,
-        unsettled_object_funds: Option<&'backing dyn UnsettledObjectFundsRead>,
+        unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
@@ -285,7 +288,7 @@ impl<'backing> TemporaryStore<'backing> {
         Some(object)
     }
 
-    pub fn unsettled_object_funds(&self) -> Option<&dyn UnsettledObjectFundsRead> {
+    pub fn unsettled_object_funds(&self) -> &dyn UnsettledObjectFundsRead {
         self.unsettled_object_funds
     }
 
@@ -1212,13 +1215,10 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
             .and_then(|value| value.as_u128())
             .unwrap_or(0);
 
-        let unsettled = match self.unsettled_object_funds {
-            Some(reader) => reader.get_unsettled_object_withdraw(
-                &AccumulatorRootValue::get_field_id(owner, type_)?,
-                required_version,
-            ),
-            None => 0,
-        };
+        let unsettled = self.unsettled_object_funds.get_unsettled_object_withdraw(
+            &AccumulatorRootValue::get_field_id(owner, type_)?,
+            required_version,
+        );
         settled
             .checked_sub(unsettled)
             .ok_or_else(|| SuiErrorKind::ExecutionInvariantViolation.into())

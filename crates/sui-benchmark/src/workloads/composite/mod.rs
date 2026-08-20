@@ -1116,6 +1116,8 @@ impl Payload for CompositePayload {
                     if effects.is_cancelled() {
                         metrics.record_cancellation(tx_info.op_set.clone());
                     } else if effects.is_insufficient_funds() {
+                        // TODO: Split insufficient address funds and insufficient object funds
+                        // cases to make sure we have a good coverage for both of them.
                         metrics.record_insufficient_funds(tx_info.op_set.clone());
                     } else if effects.is_ok() {
                         metrics.record_success(tx_info.op_set.clone());

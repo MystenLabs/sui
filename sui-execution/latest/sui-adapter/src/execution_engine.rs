@@ -223,7 +223,7 @@ pub(crate) mod checked {
         store: &dyn BackingStore,
         input_objects: CheckedInputObjects,
         system_object_versions: SystemObjectVersions,
-        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
+        unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         mut gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
