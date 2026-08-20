@@ -123,7 +123,7 @@ pub struct TemporaryStore<'backing> {
     /// Interior-mutable because reads happen behind `&self` (`RuntimeObjectResolver`).
     loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
 
-    unsettled_object_funds: Option<&'backing dyn UnsettledObjectFundsRead>,
+    unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -137,7 +137,7 @@ impl<'backing> TemporaryStore<'backing> {
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
         system_object_versions: SystemObjectVersionRequirements,
-        unsettled_object_funds: Option<&'backing dyn UnsettledObjectFundsRead>,
+        unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
@@ -214,7 +214,7 @@ impl<'backing> TemporaryStore<'backing> {
         }
     }
 
-    pub fn unsettled_object_funds(&self) -> Option<&dyn UnsettledObjectFundsRead> {
+    pub fn unsettled_object_funds(&self) -> &dyn UnsettledObjectFundsRead {
         self.unsettled_object_funds
     }
 
@@ -1090,13 +1090,10 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
             .and_then(|value| value.as_u128())
             .unwrap_or(0);
 
-        let unsettled = match self.unsettled_object_funds {
-            Some(reader) => reader.get_unsettled_object_withdraw(
-                &AccumulatorRootValue::get_field_id(owner, type_)?,
-                required_version,
-            ),
-            None => 0,
-        };
+        let unsettled = self.unsettled_object_funds.get_unsettled_object_withdraw(
+            &AccumulatorRootValue::get_field_id(owner, type_)?,
+            required_version,
+        );
         settled
             .checked_sub(unsettled)
             .ok_or_else(|| SuiErrorKind::ExecutionInvariantViolation.into())

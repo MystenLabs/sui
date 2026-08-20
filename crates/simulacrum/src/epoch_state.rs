@@ -176,7 +176,7 @@ impl EpochState {
                 self.epoch_start_state.epoch_start_timestamp_ms(),
                 checked_input_objects,
                 system_object_versions,
-                Some(self.unsettled_object_withdrawals.as_ref() as &dyn UnsettledObjectFundsRead),
+                self.unsettled_object_withdrawals.as_ref() as &dyn UnsettledObjectFundsRead,
                 gas_data,
                 gas_status,
                 kind,

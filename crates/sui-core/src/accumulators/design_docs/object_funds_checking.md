@@ -35,9 +35,10 @@ must be re-executed in a way that produces a deterministic failure.
 
 ```
   ┌───────────────┐     ┌───────────────────┐     ┌────────────────────┐
-  │ Execute       │     │ ObjectFundsCheckerDEPRECATED │     │ Commit Effects     │
-  │ adapter       │ ──> │ (post-execution    │ ──> │                    │
-  │               │     │  sufficiency check)│     │                    │
+  │ Execute       │     │ ObjectFundsChecker│     │ Commit Effects     │
+  │ adapter       │ ──> │ DEPRECATED        │ ──> │                    │
+  │               │     │ (post-execution   │     │                    │
+  │               │     │ sufficiency check)│     │                    │
   └───────────────┘     └────────┬──────────┘     └────────────────────┘
                                  │
                     ┌────────────┼────────────┐

@@ -483,7 +483,7 @@ fn run_execution(
             system_object_versions,
             // TODO: When backtesting object funds withdraws, we will need unsettled balance
             // information to reproduce the original execution.
-            None,
+            &sui_types::accumulator_root::EmptyUnsettledObjectFunds,
             gas_data,
             gas_status,
             txn_kind,

@@ -930,7 +930,9 @@ fn create_genesis_transaction(
                 epoch_data.epoch_start_timestamp(),
                 input_objects,
                 sui_types::base_types::SystemObjectVersions::default(),
-                None,
+                // The genesis transaction cannot withdraw object funds, so there are never
+                // unsettled withdrawals for it to account for.
+                &sui_types::accumulator_root::EmptyUnsettledObjectFunds,
                 gas_data,
                 SuiGasStatus::new_unmetered(),
                 kind,

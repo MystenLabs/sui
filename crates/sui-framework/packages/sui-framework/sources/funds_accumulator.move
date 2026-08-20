@@ -88,6 +88,7 @@ public(package) fun redeem<T: store>(withdrawal: Withdrawal<T>, _: internal::Per
 // this happens dynamically at runtime and applies to object balances.
 // The current available balance is checked against the `limit`, which is also deducted from the
 // available balance.
+// Aborts if `limit` exceeds the funds currently available to the object balance.
 // Note: If deposits are made to the object during the same transaction, those deposits will increase
 // the available balance. However, deposits made in earlier transactions are not guaranteed to be
 // immediately reflected in the available balance. They settle only at checkpoint boundaries.

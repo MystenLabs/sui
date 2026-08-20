@@ -1965,7 +1965,7 @@ impl AuthorityState {
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
         system_object_versions: SystemObjectVersions,
-        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
+        unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         kind: TransactionKind,
@@ -2092,7 +2092,7 @@ impl AuthorityState {
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
         let unsettled_object_funds =
-            Some(self.unsettled_object_withdrawals.as_ref() as &dyn UnsettledObjectFundsRead);
+            self.unsettled_object_withdrawals.as_ref() as &dyn UnsettledObjectFundsRead;
 
         #[allow(unused_mut)]
         let (inner_temp_store, _, mut effects, timings, execution_error_opt) = self

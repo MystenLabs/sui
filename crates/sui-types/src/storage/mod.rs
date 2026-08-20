@@ -192,6 +192,7 @@ impl<T: Storage + ParentSync + RuntimeObjectResolver> StorageView for T {}
 pub enum ObjectFundsSufficiency {
     Sufficient,
     Insufficient,
+    Overflow,
     LoadError(String),
 }
 

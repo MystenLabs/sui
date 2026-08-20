@@ -4,6 +4,8 @@
 pub(crate) mod accumulator;
 mod fingerprint;
 pub(crate) mod object_store;
+#[cfg(test)]
+mod unit_tests;
 
 use crate::object_runtime::object_store::{CacheMetadata, ChildObjectEffect};
 
@@ -93,6 +95,18 @@ pub struct RuntimeResults {
     pub settlement_output_sui: u64,
 }
 
+#[derive(Clone, Copy, Default)]
+struct ObjectFundsAvailable {
+    /// Current known available balance for this object balance account: a single running
+    /// amount that deposits increase and reservations decrease.
+    /// We lazily query the store the first time when the available balance is not sufficient
+    /// to serve a reservation. In case where we first deposit into an object, and then reserve
+    /// a smaller amount, we will not need to query the store at all.
+    available: U256,
+    /// Whether a query to the store has been made.
+    queried: bool,
+}
+
 #[derive(Default)]
 pub(crate) struct ObjectRuntimeState {
     pub(crate) input_objects: BTreeMap<ObjectID, Owner>,
@@ -121,50 +135,6 @@ pub(crate) struct ObjectRuntimeState {
     accumulator_merge_totals: BTreeMap<(AccountAddress, TypeTag), u128>,
     accumulator_split_totals: BTreeMap<(AccountAddress, TypeTag), u128>,
     object_funds_available: BTreeMap<(AccountAddress, TypeTag), ObjectFundsAvailable>,
-}
-
-#[derive(Clone, Copy, Default)]
-struct ObjectFundsAvailable {
-    /// Current known available balance for this object balance account: a single running
-    /// amount that deposits increase and reservations decrease.
-    /// We lazily query the store the first time when the available balance is not sufficient
-    /// to serve a reservation. In case where we first deposit into an object, and then reserve
-    /// a smaller amount, we will not need to query the store at all.
-    available: U256,
-    /// Whether a query to the store has been made.
-    queried: bool,
-}
-
-impl ObjectFundsAvailable {
-    fn needs_store_read(&self, amount: U256) -> bool {
-        self.available < amount && !self.queried
-    }
-}
-
-#[cfg(test)]
-mod object_funds_available_tests {
-    use super::ObjectFundsAvailable;
-    use move_core_types::u256::U256;
-
-    #[test]
-    fn store_read_is_needed_only_when_uncached_balance_is_insufficient() {
-        let empty = ObjectFundsAvailable::default();
-        assert!(!empty.needs_store_read(U256::from(0u64)));
-        assert!(empty.needs_store_read(U256::from(1u64)));
-
-        let deposited = ObjectFundsAvailable {
-            available: U256::from(500u64),
-            queried: false,
-        };
-        assert!(!deposited.needs_store_read(U256::from(500u64)));
-        assert!(deposited.needs_store_read(U256::from(501u64)));
-
-        let queried = ObjectFundsAvailable {
-            available: U256::from(0u64),
-            queried: true,
-        };
-        assert!(!queried.needs_store_read(U256::from(1u64)));
-    }
 }
 
 #[derive(Tid)]
@@ -198,6 +168,12 @@ pub struct InputObject {
 impl TestInventories {
     fn new() -> Self {
         Self::default()
+    }
+}
+
+impl ObjectFundsAvailable {
+    fn needs_store_read(&self, amount: U256) -> bool {
+        self.available < amount && !self.queried
     }
 }
 
@@ -287,9 +263,7 @@ impl<'a> ObjectRuntime<'a> {
                 }
             };
             let Some(available) = entry.available.checked_add(U256::from(settled_available)) else {
-                return ObjectFundsSufficiency::LoadError(
-                    "object funds available balance overflow".to_string(),
-                );
+                return ObjectFundsSufficiency::Overflow;
             };
             entry.available = available;
             entry.queried = true;

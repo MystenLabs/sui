@@ -146,8 +146,8 @@ pub fn execute_transaction_to_effects(
             // withdrawals that earlier transactions in the same consensus commit had accumulated
             // at execution time. Reconstruct them by walking the containing checkpoint and folding
             // the object-funds withdrawals of the transactions that precede this one at the same
-            // accumulator version, then pass that here instead of None.
-            None,
+            // accumulator version, then pass that here instead of the empty reader.
+            &sui_types::accumulator_root::EmptyUnsettledObjectFunds,
             txn_data.gas_data().clone(),
             gas_status,
             txn_data.kind().clone(),

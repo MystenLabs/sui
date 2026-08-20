@@ -17,7 +17,8 @@ pub(crate) mod checked {
     use std::collections::{BTreeMap, BTreeSet};
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{
-        ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE, UnsettledObjectFundsRead,
+        ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE, EmptyUnsettledObjectFunds,
+        UnsettledObjectFundsRead,
     };
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
@@ -156,7 +157,7 @@ pub(crate) mod checked {
         store: &dyn BackingStore,
         input_objects: CheckedInputObjects,
         system_object_versions: SystemObjectVersionRequirements,
-        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
+        unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -294,7 +295,9 @@ pub(crate) mod checked {
             protocol_config,
             0,
             SystemObjectVersionRequirements::Exact(SystemObjectVersions::default()),
-            None,
+            // The genesis transaction cannot withdraw object funds, so there are never
+            // unsettled withdrawals for it to account for.
+            &EmptyUnsettledObjectFunds,
         );
         let mut gas_charger = GasCharger::new_unmetered(tx_context.borrow().digest());
         SPT::execute::<execution_mode::Genesis>(

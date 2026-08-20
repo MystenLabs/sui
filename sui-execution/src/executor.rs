@@ -41,7 +41,7 @@ pub trait Executor {
         input_objects: CheckedInputObjects,
         // Versions of system objects this transaction may read, keyed by object ID.
         system_object_versions: SystemObjectVersions,
-        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
+        unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         // Gas related
         gas: GasData,
         gas_status: SuiGasStatus,
@@ -72,7 +72,7 @@ pub trait Executor {
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
         system_object_versions: SystemObjectVersions,
-        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
+        unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
