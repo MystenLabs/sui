@@ -10,9 +10,9 @@
 //! - `ReadRows`: explicit row-key lookups with an optional row limit. Supports
 //!   the column filters this crate builds (`None`, `CellsPerColumnLimitFilter(1)`,
 //!   `ColumnQualifierRegexFilter`, and `Chain`s of those plus an optional
-//!   `FamilyNameRegexFilter`), records each call for assertions, and can emit
-//!   rows in reverse request order and ascending row-range scans.
-//!   Reverse scans are unsupported.
+//!   `FamilyNameRegexFilter`), records each call for assertions, can emit
+//!   rows in reverse request order, and serves row-range scans in either
+//!   direction (reversed scans are range-only).
 //! - `CheckAndMutateRow`: `PassAllFilter(true)` and the CAS helper shape used
 //!   by this crate (`Chain` of family regex, column qualifier regex, optional
 //!   value range, and optional cells-per-column limit).
@@ -645,11 +645,6 @@ impl Bigtable for MockBigtableServer {
             .map(|(_, t)| t.to_string())
             .unwrap_or_default();
 
-        if req.reversed {
-            return Err(Status::unimplemented(
-                "mock ReadRows does not support reversed scans",
-            ));
-        }
         if req.rows_limit < 0 {
             return Err(Status::unimplemented(
                 "mock ReadRows does not support negative rows_limit",
@@ -674,6 +669,11 @@ impl Bigtable for MockBigtableServer {
                 "mock ReadRows does not support mixing row_keys and row_ranges",
             ));
         }
+        if req.reversed && !row_set.row_keys.is_empty() {
+            return Err(Status::unimplemented(
+                "mock ReadRows supports reversed scans only for row ranges",
+            ));
+        }
 
         let ranges = &row_set.row_ranges;
         let mut requested_keys = row_set.row_keys;
@@ -687,6 +687,9 @@ impl Bigtable for MockBigtableServer {
                 .map(|(_, row_key)| row_key.clone())
                 .collect();
             requested_keys.sort_unstable();
+            if req.reversed {
+                requested_keys.reverse();
+            }
         }
         if req.rows_limit != 0 {
             requested_keys.truncate(req.rows_limit as usize);
