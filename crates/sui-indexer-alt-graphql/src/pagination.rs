@@ -15,7 +15,7 @@ use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
 use async_graphql::connection::PageInfo;
 use async_graphql::registry::MetaField;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
+use sui_indexer_alt_reader::ledger_grpc_reader::StreamPage;
 use sui_rpc_cursor::CursorToken;
 
 use crate::api::scalars::cursor::JsonCursor;
