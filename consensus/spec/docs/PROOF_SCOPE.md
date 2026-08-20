@@ -340,6 +340,49 @@ The results depend on these groups of conditions:
 The public network-DAG theorem does not use `ASM-LIVE-ROUND-CATCHUP`. The final
 fixed-reference commit theorem does use it for its finite internal window.
 
+## What this specification can and cannot establish
+
+Read this before you plan work that tries to connect the model to the source.
+
+The specification is a conditional model. Its theorems have the shape "given
+these modeled facts, safety holds". The modeled facts are the fields of the
+source-map structures, such as the 17 fields of `AuthenticatedFlexVoteSourceMap`
+and the 5 fields of `ExactCommitInstallProvenance`. A theorem applies to the
+product only when each field is true of the running code.
+
+**Do not try to prove that the Rust equals the Lean model.** No proof assistant
+can close that step from the source alone. It needs one of these instead:
+
+- extraction of the Lean from the Rust;
+- generation of the Rust from the Lean; or
+- translation validation between the two.
+
+None of these exists for this codebase, and none is planned. A comparable
+formalization, `lean-dag`, does not attempt the step either: it names no Rust at
+all. A plan that starts with "prove the Rust matches" will not finish.
+
+What is achievable, in order of value:
+
+1. Construct a source-map value from a model of one Rust function. This turns a
+   field from an assumption into a stated obligation with a named call site. It
+   also exposes a field that the code cannot satisfy.
+2. Keep the assumption ledger honest. A status of `Known mismatch` is more
+   useful than an unexamined abstraction.
+3. Add conformance tests that run the same vectors against the model and the
+   product, and record counterexamples. This is the practical substitute for the
+   step that cannot be proved.
+4. Report which obligations a source change puts at risk. See the
+   [spec obligation check](../design/spec_obligation_check.md).
+
+One example shows what a field-level obligation finds. `ASM-SAFE-EVIDENCE-REFINEMENT`
+needs the deciding anchor of an indirect result. Rust stores
+`Decision::Indirect`, which is one value of a three-value enumeration. It records
+that the indirect rule decided the slot. It does not record which anchor decided
+it, and `FlexCommitter::try_indirect_decide` only logs the anchor reference. A
+restart or a leader-schedule reset then rebuilds the pending state without that
+provenance. The field cannot be filled from the current code, and the ledger says
+so.
+
 ## Current product status
 
 Source review and focused tests support the current leader-decision mapping,
