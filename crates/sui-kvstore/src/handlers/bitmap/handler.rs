@@ -14,6 +14,7 @@ use bytes::Bytes;
 use roaring::RoaringBitmap;
 use rustc_hash::FxHashMap;
 
+use crate::bigtable::client::CheckpointSpan;
 use crate::handlers::bitmap::BitmapIndexProcessor;
 use crate::handlers::bitmap::BitmapIndexValue;
 use crate::store::BigTableStore;
@@ -30,19 +31,28 @@ pub struct BitmapIndexHandler<P> {
 }
 
 /// Per-shard `Arc<Vec<BitmapIndexValue>>` slots, one per shard (indexed by
-/// `shard_id`). Default pre-allocates `NUM_SHARDS` empty slots so
-/// `Handler::batch` can push into any shard without a length check.
-pub struct BitmapBatch(Vec<Arc<Vec<BitmapIndexValue>>>);
+/// `shard_id`), plus the checkpoints that produced the batch's values.
+pub struct BitmapBatch {
+    shards: Vec<Arc<Vec<BitmapIndexValue>>>,
+    checkpoints: Option<CheckpointSpan>,
+}
 
 impl Default for BitmapBatch {
     fn default() -> Self {
-        Self((0..NUM_SHARDS).map(|_| Arc::new(Vec::new())).collect())
+        Self {
+            shards: (0..NUM_SHARDS).map(|_| Arc::new(Vec::new())).collect(),
+            checkpoints: None,
+        }
     }
 }
 
 impl BitmapBatch {
     pub(crate) fn clone_shards(&self) -> Vec<Arc<Vec<BitmapIndexValue>>> {
-        self.0.clone()
+        self.shards.clone()
+    }
+
+    pub(crate) fn checkpoints(&self) -> Option<CheckpointSpan> {
+        self.checkpoints
     }
 }
 
@@ -115,7 +125,11 @@ where
 
     fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
         for v in values {
-            Arc::get_mut(&mut batch.0[v.shard_id as usize])
+            match &mut batch.checkpoints {
+                Some(checkpoints) => checkpoints.include(v.max_cp),
+                None => batch.checkpoints = Some(CheckpointSpan::single(v.max_cp)),
+            }
+            Arc::get_mut(&mut batch.shards[v.shard_id as usize])
                 .expect("batch held exclusively during batch()")
                 .push(v);
         }
