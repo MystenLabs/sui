@@ -11,7 +11,7 @@ use std::{
 };
 use sui_types::{base_types::ObjectID, effects::TransactionEffects, gas::GasUsageReport};
 
-pub(crate) const BCODE_DIR: &str = "bytecode";
+pub(crate) const BYTECODE_DIR: &str = "bytecode";
 
 pub const ARTIFACTS_ENCODING_EXT: &str = "json";
 pub const ARTIFACTS_ENCODING_COMPRESSION_EXT: &str = "json.zst";
@@ -159,7 +159,7 @@ impl<'b> ArtifactManager<'b> {
                 continue;
             }
 
-            let bytecode_path = entry.path().join(BCODE_DIR);
+            let bytecode_path = entry.path().join(BYTECODE_DIR);
             match fs::remove_dir_all(&bytecode_path) {
                 Ok(()) => {}
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -450,15 +450,15 @@ mod tests {
         let artifact_path = temp.path().join("digest");
         let artifact_manager = ArtifactManager::new(&artifact_path, true).unwrap();
         let package_path = artifact_path.join(format!("{:?}", ObjectID::random()));
-        let bytecode_path = package_path.join(BCODE_DIR);
+        let bytecode_path = package_path.join(BYTECODE_DIR);
         let source_path = package_path.join("source");
         let user_path = artifact_path.join("notes");
         fs::create_dir_all(&bytecode_path).unwrap();
         fs::create_dir_all(&source_path).unwrap();
-        fs::create_dir_all(user_path.join(BCODE_DIR)).unwrap();
+        fs::create_dir_all(user_path.join(BYTECODE_DIR)).unwrap();
         fs::write(bytecode_path.join("stale.mv"), b"stale").unwrap();
         fs::write(source_path.join("package.move"), b"source").unwrap();
-        fs::write(user_path.join(BCODE_DIR).join("notes.txt"), b"notes").unwrap();
+        fs::write(user_path.join(BYTECODE_DIR).join("notes.txt"), b"notes").unwrap();
         for artifact in ARTIFACTS {
             fs::write(artifact_path.join(artifact.as_file()), b"stale").unwrap();
         }
@@ -472,7 +472,7 @@ mod tests {
             b"source"
         );
         assert_eq!(
-            fs::read(user_path.join(BCODE_DIR).join("notes.txt")).unwrap(),
+            fs::read(user_path.join(BYTECODE_DIR).join("notes.txt")).unwrap(),
             b"notes"
         );
         for artifact in ARTIFACTS {
