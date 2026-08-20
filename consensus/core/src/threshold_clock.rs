@@ -43,6 +43,12 @@ impl ThresholdClock {
                     self.aggregator.clear();
                     // We have seen 2f+1 blocks for current round, advance
                     self.round = block.round + 1;
+                    if let Some(cap) = &self.context.adaptive_block_cap {
+                        cap.observe_round(
+                            now.duration_since(self.quorum_ts),
+                            &self.context.metrics.node_metrics,
+                        );
+                    }
                     // Record the time of last quorum and new round start.
                     self.quorum_ts = now;
                     debug!(
@@ -103,10 +109,46 @@ impl ThresholdClock {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use consensus_types::block::BlockDigest;
 
     use super::*;
     use consensus_config::AuthorityIndex;
+
+    /// The damper is fed from here, and nothing else calls `observe_round`. Without this test,
+    /// cutting the call site leaves every other test passing while the controller never runs.
+    #[tokio::test(start_paused = true)]
+    async fn quorum_advance_feeds_the_adaptive_block_cap() {
+        let context = Arc::new(Context::new_for_test(4).0);
+        let cap = context
+            .adaptive_block_cap
+            .clone()
+            .expect("damper should be enabled by default");
+        let starting_budget = cap.budget_bytes();
+
+        let mut clock = ThresholdClock::new(0, context);
+
+        // A round period far above the target, so the observation must shrink the budget.
+        tokio::time::advance(Duration::from_secs(30)).await;
+        for i in 0..3 {
+            clock.add_block(BlockRef::new(
+                0,
+                AuthorityIndex::new_for_test(i),
+                BlockDigest::default(),
+            ));
+        }
+        assert_eq!(
+            clock.get_round(),
+            1,
+            "quorum should have advanced the round"
+        );
+
+        assert!(
+            cap.budget_bytes() < starting_budget,
+            "round advance did not reach the damper: budget still {starting_budget}"
+        );
+    }
 
     #[tokio::test]
     async fn test_threshold_clock_add_block() {
