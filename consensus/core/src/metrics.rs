@@ -132,6 +132,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) subscribe_stream_form_failures: IntCounterVec,
     pub(crate) slim_blocks_received: IntCounterVec,
     pub(crate) slim_block_decode_failures: IntCounterVec,
+    pub(crate) slim_blocks_sent: IntCounterVec,
+    pub(crate) slim_block_gate_transitions: IntCounterVec,
     pub(crate) proposed_block_commit_latency: Histogram,
     pub(crate) proposed_block_finalization_latency: Histogram,
     pub(crate) proposed_block_size: Histogram,
@@ -292,6 +294,18 @@ impl NodeMetrics {
                 "slim_block_decode_failures",
                 "Slim blocks that could not be decoded from local state, per peer and reason",
                 &["authority", "reason"],
+                registry,
+            ).unwrap(),
+            slim_blocks_sent: register_int_counter_vec_with_registry!(
+                "slim_blocks_sent",
+                "Blocks emitted in slim form on the subscription stream, per subscriber",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            slim_block_gate_transitions: register_int_counter_vec_with_registry!(
+                "slim_block_gate_transitions",
+                "Subscriptions switching between slim and full emission, by the form switched to",
+                &["form"],
                 registry,
             ).unwrap(),
             subscribe_blocks_response_bytes: register_int_counter_vec_with_registry!(
