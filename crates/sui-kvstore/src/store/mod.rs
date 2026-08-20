@@ -65,6 +65,8 @@ pub(crate) use bitmap_committer::shard_for;
 
 use crate::WatermarkV1;
 use crate::bigtable::client::BigTableClient;
+use crate::bigtable::client::CheckpointSpan;
+use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
 use crate::handlers::BitmapBatch;
 use crate::handlers::BitmapIndexProcessor;
 use crate::rate_limiter::CompositeRateLimiter;
@@ -155,18 +157,12 @@ struct PipelineInitResult {
 }
 
 impl BigTableStore {
-    pub fn new(client: BigTableClient) -> Self {
+    pub fn new(client: BigTableClient, backfill_through: u64) -> Self {
         Self {
-            client,
+            client: client.with_backfill_through(backfill_through),
             init_results: Arc::new(Mutex::new(HashMap::new())),
             bitmap_committers: Arc::new(Mutex::new(HashMap::new())),
         }
-    }
-
-    /// Cloned handle to the underlying client. Cheap: `BigTableClient` is
-    /// a thin `Clone` wrapper over shared gRPC channels.
-    pub fn client(&self) -> BigTableClient {
-        self.client.clone()
     }
 
     pub(crate) fn bitmap_initial_watermarks(&self) -> BitmapInitialWatermarks {
@@ -185,8 +181,18 @@ impl BigTableStore {
 
 impl BigTableConnection<'_> {
     /// Returns a mutable reference to the underlying BigTable client.
-    pub fn client(&mut self) -> &mut BigTableClient {
+    #[cfg(test)]
+    pub(crate) fn client(&mut self) -> &mut BigTableClient {
         &mut self.client
+    }
+
+    pub(crate) async fn write_entries(
+        &mut self,
+        table: &str,
+        entries: impl IntoIterator<Item = Entry>,
+        checkpoints: CheckpointSpan,
+    ) -> Result<()> {
+        self.client.write_entries(table, entries, checkpoints).await
     }
 
     /// Enqueue a bitmap batch into the store-owned committer and suppress the
@@ -205,6 +211,7 @@ impl BigTableConnection<'_> {
             );
         }
         let watermark = *watermark;
+        let checkpoints = batch.checkpoints();
 
         // Always suppress the framework's deferred-watermark write. Even
         // empty-batch commits must flow through the async bitmap pipeline so
@@ -215,13 +222,13 @@ impl BigTableConnection<'_> {
         let committer = self
             .bitmap_committers
             .lock()
-            .unwrap()
+            .expect("bitmap committer registry mutex poisoned")
             .get(P::NAME)
             .cloned()
             .unwrap_or_else(|| panic!("bitmap committer for `{}` is not registered", P::NAME));
 
         if committer
-            .commit(batch.clone_shards(), watermark)
+            .commit(batch.clone_shards(), watermark, checkpoints)
             .await
             .is_err()
         {
@@ -241,16 +248,19 @@ impl BigTableConnection<'_> {
         watermark: CommitterWatermark,
         bucket_start_cp: u64,
     ) {
-        self.init_results.lock().unwrap().insert(
-            pipeline_task.to_string(),
-            PipelineInitResult {
-                init,
-                bitmap: BitmapInitialWatermark {
-                    watermark,
-                    bucket_start_cp,
+        self.init_results
+            .lock()
+            .expect("bitmap initial watermark mutex poisoned")
+            .insert(
+                pipeline_task.to_string(),
+                PipelineInitResult {
+                    init,
+                    bitmap: BitmapInitialWatermark {
+                        watermark,
+                        bucket_start_cp,
+                    },
                 },
-            },
-        );
+            );
     }
 
     /// Read a watermark for read-side methods. Enforces the "hide if `checkpoint < reader_lo`
@@ -308,7 +318,7 @@ impl BigTableStoreRuntimeBuilder {
             self.store
                 .bitmap_committers
                 .lock()
-                .unwrap()
+                .expect("bitmap committer registry mutex poisoned")
                 .insert(P::NAME.to_string(), handle)
                 .is_none(),
             "bitmap committer for pipeline `{}` registered more than once",
@@ -331,7 +341,7 @@ impl BitmapInitialWatermarks {
     pub(crate) fn get(&self, pipeline_task: &str) -> Result<BitmapInitialWatermark> {
         self.init_results
             .lock()
-            .unwrap()
+            .expect("bitmap initial watermark mutex poisoned")
             .get(pipeline_task)
             .map(|result| result.bitmap)
             .ok_or_else(|| {
@@ -404,7 +414,12 @@ impl Connection for BigTableConnection<'_> {
         // Re-entry for the same `pipeline_task` returns the previously computed
         // answer without a BigTable round-trip. Also lets callers with a legitimate
         // need for bitmap fields pre-seed via an explicit bootstrap call.
-        if let Some(existing) = self.init_results.lock().unwrap().get(pipeline_task) {
+        if let Some(existing) = self
+            .init_results
+            .lock()
+            .expect("bitmap initial watermark mutex poisoned")
+            .get(pipeline_task)
+        {
             return Ok(existing.init);
         }
 
@@ -660,7 +675,7 @@ mod tests {
         let client = BigTableClient::new_local(emulator.host().to_string(), INSTANCE_ID.into())
             .await
             .unwrap();
-        (emulator, BigTableStore::new(client))
+        (emulator, BigTableStore::new(client, u64::MAX))
     }
 
     #[test]
