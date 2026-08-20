@@ -86,6 +86,11 @@ impl AncestorStateManager {
 
         // Note: this value cannot be greater than the threshold used in leader
         // schedule to identify bad nodes.
+        #[cfg(not(test))]
+        let excluded_nodes_stake_threshold_percentage = 1;
+        // Tests exercise EXCLUDE transitions, which require a threshold that allows
+        // excluding at least one authority in small equal-stake committees.
+        #[cfg(test)]
         let excluded_nodes_stake_threshold_percentage =
             2 * context.protocol_config.bad_nodes_stake_threshold() / 3;
 
