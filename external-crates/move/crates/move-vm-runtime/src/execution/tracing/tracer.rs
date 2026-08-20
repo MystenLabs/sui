@@ -1658,19 +1658,12 @@ impl VMTracer<'_> {
             }
             B::VecPushBack(_) => {
                 self.type_stack.pop()?;
-                self.type_stack.pop()?;
+                let v_ref = self.type_stack.pop()?;
                 emit_effect! {
-                    let EF::Pop(reference_val) = &self.effects[1] else {
-                        self.report_error(
-                            "Expected a reference value for the vector in VecPushBack",
-                        );
-                        return None;
-                    };
-                    let location = reference_val.location()?.clone();
-                    let runtime_location = RuntimeLocation::as_runtime_location(location.clone());
-                    let snap = self.resolve_location(vtables, machine, &runtime_location)?;
+                    let location = v_ref.ref_type.as_ref()?.1.clone();
+                    let snap = self.resolve_location(vtables, machine, &location)?;
                     EF::Write(Write {
-                        location,
+                        location: location.as_trace_location()?,
                         root_value_after_write: snap,
                     })
                 };
