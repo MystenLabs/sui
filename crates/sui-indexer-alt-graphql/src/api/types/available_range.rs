@@ -148,7 +148,6 @@ pub(crate) fn pipeline_unavailable(pipeline: &str) -> RpcError {
             feature_unavailable("filtering transactions by affected address")
         }
         "tx_affected_objects" => feature_unavailable("filtering transactions by affected object"),
-        "tx_balance_changes" => feature_unavailable("querying transaction balance changes"),
         "tx_calls" => feature_unavailable("filtering transactions by function calls"),
         "tx_digests" => feature_unavailable("querying transactions"),
         "tx_kinds" => feature_unavailable("filtering transactions by kind"),
@@ -391,16 +390,6 @@ collect_pipelines! {
         } else if filters.contains("kind") {
             pipelines.insert("tx_kinds".to_string());
         }
-    };
-
-    TransactionEffects.[balanceChanges] |pipelines, _filters| {
-        pipelines.insert("tx_balance_changes".to_string());
-        pipelines.insert("tx_digests".to_string());
-    };
-
-    TransactionEffects.[balanceChangesJson] |pipelines, _filters| {
-        pipelines.insert("tx_balance_changes".to_string());
-        pipelines.insert("tx_digests".to_string());
     };
 }
 

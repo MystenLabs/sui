@@ -8,7 +8,6 @@ use anyhow::Context;
 use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
 use sui_rpc::proto::sui::rpc::v2 as grpc;
-use sui_types::balance_change::BalanceChange as NativeBalanceChange;
 use sui_types::base_types::ObjectID;
 use sui_types::crypto::AuthorityQuorumSignInfo;
 use sui_types::digests::CheckpointDigest;
@@ -95,13 +94,6 @@ pub struct ExecutedTransactionData {
     pub timestamp_ms: Option<u64>,
     /// Checkpoint sequence number. Set for streamed/checkpointed transactions, None for mutations.
     pub cp_sequence_number: Option<u64>,
-}
-
-// A wrapper for a single balance change, either from gRPC or from native type.
-#[derive(Clone)]
-pub enum BalanceChangeContents {
-    Grpc(grpc::BalanceChange),
-    Native(NativeBalanceChange),
 }
 
 impl KvArgs {
@@ -380,20 +372,10 @@ impl TransactionContents {
         }
     }
 
-    pub fn balance_changes(&self) -> Option<Vec<BalanceChangeContents>> {
+    pub fn balance_changes(&self) -> Vec<grpc::BalanceChange> {
         match self {
-            Self::ExecutedTransaction(tx) => Some(
-                tx.balance_changes
-                    .iter()
-                    .map(|c| BalanceChangeContents::Grpc(c.clone()))
-                    .collect(),
-            ),
-            Self::LedgerGrpc(txn) => Some(
-                txn.balance_changes
-                    .iter()
-                    .map(|c| BalanceChangeContents::Grpc(c.clone()))
-                    .collect(),
-            ),
+            Self::ExecutedTransaction(tx) => tx.balance_changes.clone(),
+            Self::LedgerGrpc(txn) => txn.balance_changes.clone(),
         }
     }
 
