@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::Bound;
+use std::ops::RangeBounds;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -283,6 +285,21 @@ impl Event {
             return Ok(StreamConnection::empty());
         };
 
+        let result = Self::scan_grpc(reader, cp_bounds, &page, &filter).await?;
+
+        build_grpc_connection(scope, &page, result)
+    }
+
+    /// Scan a page of events over the checkpoint range `cp_bounds` via the streaming gRPC List API.
+    /// Computing checkpoint bounds is the caller's responsibility; an unbounded end scans forward to
+    /// whatever is indexed. Items are returned in scan order (descending when paginating from the
+    /// back).
+    pub(crate) async fn scan_grpc(
+        reader: &AlphaLedgerGrpcReader,
+        cp_bounds: impl RangeBounds<u64>,
+        page: &Page<CEvent>,
+        filter: &EventFilter,
+    ) -> Result<StreamPage<v2::Event>, RpcError> {
         // Extract the cursor and pass through to grpc.
         let after = page.after().map(|c| CursorToken::from(&c.token()).encode());
         // Pg-minted cursors set checkpoint as 0 (as do legacy JSON cursors, which carry no
@@ -318,18 +335,23 @@ impl Event {
             "transaction_digest",
             "event_index",
         ]));
-        request.start_checkpoint = Some(*cp_bounds.start());
-        // `cp_bounds` end is inclusive; the request bound is exclusive.
-        request.end_checkpoint = Some(cp_bounds.end().saturating_add(1));
+        request.start_checkpoint = match cp_bounds.start_bound() {
+            Bound::Included(&s) => Some(s),
+            Bound::Excluded(&s) => Some(s.saturating_add(1)),
+            Bound::Unbounded => None,
+        };
+        request.end_checkpoint = match cp_bounds.end_bound() {
+            Bound::Included(&e) => Some(e.saturating_add(1)),
+            Bound::Excluded(&e) => Some(e),
+            Bound::Unbounded => None,
+        };
         request.filter = filter.to_grpc_filter()?;
         request.options = Some(options);
 
-        let result = reader
+        Ok(reader
             .list_events(request)
             .await
-            .context("Failed to list events")?;
-
-        build_grpc_connection(scope, &page, result)
+            .context("Failed to list events")?)
     }
 }
 
@@ -443,7 +465,7 @@ impl TxBoundsCursor for CEvent {
 /// Hydrate an `Event` node from a `ListEvents` stream item. The read mask requests everything the
 /// node needs — the event envelope and its position — so no KV lookup is required (the timestamp
 /// resolves lazily); a missing field is an internal inconsistency.
-fn event_from_stream_item(scope: Scope, payload: &v2::Event) -> Result<Event, RpcError> {
+pub(crate) fn event_from_stream_item(scope: Scope, payload: &v2::Event) -> Result<Event, RpcError> {
     // TODO: can we consolidate to using sui_sdk type? To explore, captured in DVX-2189
     let transaction_digest: TransactionDigest = payload
         .transaction_digest
