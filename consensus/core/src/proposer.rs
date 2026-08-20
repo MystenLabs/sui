@@ -19,6 +19,7 @@ use crate::{
     dag_state::DagState,
     leader_schedule_v3::NextCommitLeaderSchedule,
     round_tracker::RoundTracker,
+    slim_block::SlimBlockCodec,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction::TransactionPool,
     transaction_vote_tracker::TransactionVoteTracker,
@@ -79,6 +80,7 @@ pub(crate) struct ValidatorProposer {
     round_tracker: Arc<RwLock<RoundTracker>>,
     dag_state: Arc<RwLock<DagState>>,
     leader_waiter: ProposalLeaderWaiter,
+    slim_block_codec: SlimBlockCodec,
 }
 
 impl ValidatorProposer {
@@ -94,6 +96,7 @@ impl ValidatorProposer {
         leader_waiter: ProposalLeaderWaiter,
     ) -> Self {
         let last_included_ancestors = vec![None; context.committee.size()];
+        let slim_block_codec = SlimBlockCodec::new(context.clone());
         Self {
             context,
             transaction_pool,
@@ -106,6 +109,7 @@ impl ValidatorProposer {
             round_tracker,
             dag_state,
             leader_waiter,
+            slim_block_codec,
         }
     }
 
@@ -700,9 +704,22 @@ impl Proposer for ValidatorProposer {
             .with_label_values(&[&force.to_string()])
             .inc();
 
+        // Encode the slim form once, here, where every ancestor is already
+        // accepted.
+        let slim = self
+            .context
+            .protocol_config
+            .slim_block_propagation_enabled()
+            .then(|| {
+                self.slim_block_codec
+                    .encode(&verified_block, &self.dag_state)
+                    .ok()
+            })
+            .flatten();
         let extended_block = ExtendedBlock {
             block: verified_block,
             excluded_ancestors,
+            slim,
         };
 
         // Update round tracker with our own highest accepted blocks

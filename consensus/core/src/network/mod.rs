@@ -417,7 +417,10 @@ impl SerializedBlockEnvelope {
 impl From<ExtendedBlock> for ExtendedSerializedBlock {
     fn from(extended_block: ExtendedBlock) -> Self {
         Self {
-            block: SerializedBlockForm::Full(extended_block.block.serialized().clone()),
+            block: match extended_block.slim {
+                Some(slim) => SerializedBlockForm::Slim(slim),
+                None => SerializedBlockForm::Full(extended_block.block.serialized().clone()),
+            },
             excluded_ancestors: extended_block
                 .excluded_ancestors
                 .iter()

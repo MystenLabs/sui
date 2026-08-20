@@ -130,6 +130,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) proposed_blocks: IntCounterVec,
     pub(crate) subscribe_blocks_response_bytes: IntCounterVec,
     pub(crate) subscribe_stream_form_failures: IntCounterVec,
+    pub(crate) slim_blocks_received: IntCounterVec,
+    pub(crate) slim_block_decode_failures: IntCounterVec,
     pub(crate) proposed_block_commit_latency: Histogram,
     pub(crate) proposed_block_finalization_latency: Histogram,
     pub(crate) proposed_block_size: Histogram,
@@ -278,6 +280,18 @@ impl NodeMetrics {
                 "block_commit_latency",
                 "The time taken between block creation and block commit.",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            slim_blocks_received: register_int_counter_vec_with_registry!(
+                "slim_blocks_received",
+                "Slim blocks received on the subscription stream, per peer",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            slim_block_decode_failures: register_int_counter_vec_with_registry!(
+                "slim_block_decode_failures",
+                "Slim blocks that could not be decoded from local state, per peer and reason",
+                &["authority", "reason"],
                 registry,
             ).unwrap(),
             subscribe_blocks_response_bytes: register_int_counter_vec_with_registry!(

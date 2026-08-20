@@ -71,6 +71,27 @@ pub enum Block {
     V3(BlockV3),
 }
 
+/// What local state holds at a slot. Callers of the ancestor resolver need only tell
+/// these three apart, so nothing materialises the full candidate list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SlotDigest {
+    Absent,
+    Unique(BlockDigest),
+    Equivocated,
+}
+
+impl Block {
+    /// Returns this block with its ancestors replaced.
+    pub(crate) fn with_ancestors(mut self, ancestors: Vec<BlockRef>) -> Self {
+        match &mut self {
+            Block::V1(block) => block.ancestors = ancestors,
+            Block::V2(block) => block.ancestors = ancestors,
+            Block::V3(block) => block.ancestors = ancestors,
+        }
+        self
+    }
+}
+
 #[allow(private_interfaces)]
 #[enum_dispatch]
 pub trait BlockAPI {
@@ -459,6 +480,12 @@ pub(crate) struct SignedBlock {
 }
 
 impl SignedBlock {
+    /// Reassembles a block and an existing signature. The result is unverified:
+    /// the signature is not checked against the block until verification.
+    pub(crate) fn from_parts(inner: Block, signature: Bytes) -> Self {
+        Self { inner, signature }
+    }
+
     /// Should only be used when constructing the genesis blocks
     pub(crate) fn new_genesis(block: Block) -> Self {
         Self {
@@ -577,6 +604,10 @@ pub struct VerifiedBlock {
 }
 
 impl VerifiedBlock {
+    pub(crate) fn signed_block(&self) -> &SignedBlock {
+        &self.block
+    }
+
     /// Creates VerifiedBlock from a verified SignedBlock and its serialized bytes.
     pub(crate) fn new_verified(signed_block: SignedBlock, serialized: Bytes) -> Self {
         let digest = Self::compute_digest(&serialized);
@@ -674,6 +705,8 @@ impl fmt::Debug for VerifiedBlock {
 pub(crate) struct ExtendedBlock {
     pub block: VerifiedBlock,
     pub excluded_ancestors: Vec<BlockRef>,
+    /// The block's slim encoding, if one was produced for it.
+    pub slim: Option<Bytes>,
 }
 
 /// Generates the genesis blocks for the current Committee.
