@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Under --enable-feature-flags allow_references_in_ptbs, two `&mut Y` results from two calls that each take
-// `&mut TxContext` can coexist and both be written through. TxContext borrows root per
-// borrowing command, so the two results extend distinct TxContext roots; with a single
-// shared root the second `borrow_mut` (and every use after it) would be rejected.
+// Two `&mut Y` results from two ctx-taking calls coexist and can both be written through.
 
 //# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
 

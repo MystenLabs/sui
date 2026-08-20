@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Per-command TxContext rooting must not weaken borrow tracking for the other arguments: a
-// `&mut Y` returned from `borrow_mut(&mut X, &mut TxContext)` still roots in the object,
-// so mutably using the object while the result is live is rejected.
+// Only TxContext is stripped: the result still borrows the object, so mutably using the
+// object while the result is live is rejected.
 
 //# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
 

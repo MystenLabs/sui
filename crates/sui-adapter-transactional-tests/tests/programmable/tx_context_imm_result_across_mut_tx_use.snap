@@ -3,13 +3,13 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
-task 1, lines 11-41:
+task 1, lines 9-39:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6148400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 43-48:
+task 2, lines 41-46:
 //# programmable --inputs 42
 //> 0: test::m::new();
 //> 1: test::m::borrow(Result(0));

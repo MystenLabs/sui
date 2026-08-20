@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Under --enable-feature-flags allow_references_in_ptbs, a purely TxContext-derived reference
-// (`digest(&TxContext): &vector<u8>`) and an object-rooted `&mut Y` coexist across
-// interleaved mutable TxContext uses, and both remain usable at the end.
+// A purely TxContext-derived reference (digest) and an object-rooted `&mut Y` coexist
+// across mutable TxContext uses.
 
 //# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
 

@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Under --enable-feature-flags allow_references_in_ptbs, a `&mut Y` returned from
-// `borrow_mut(&mut X, &mut TxContext)` roots only in the object, not in the injected
-// TxContext. The result stays valid across a later command that mutably uses the
-// TxContext, and is then written through alongside a fresh `&mut TxContext` injection.
+// The motivating case: a `&mut Y` from `borrow_mut(&mut X, &mut TxContext)` roots only in
+// the object, so it survives a later TxContext use and can still be written through.
 
 //# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
 

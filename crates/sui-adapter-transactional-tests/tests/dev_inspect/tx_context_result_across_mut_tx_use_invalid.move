@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Flag-off twin of tx_context_result_across_mut_tx_use. Dev-inspect permits reference
-// return values even without --enable-feature-flags allow_references_in_ptbs, but without the flag every
-// injected TxContext shares a single borrow root, so the `&mut Y` result (which extends
-// that root) conflicts with the later `&mut TxContext` injection in `mut_tx`.
+// Flag-off twin of tx_context_result_across_mut_tx_use: without the flag every TxContext
+// injection shares one borrow root, so the held `&mut Y` conflicts with the later use.
 
 //# init --addresses test=0x0 --accounts A
 

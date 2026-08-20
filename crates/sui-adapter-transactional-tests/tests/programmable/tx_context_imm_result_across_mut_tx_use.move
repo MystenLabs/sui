@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Under --enable-feature-flags allow_references_in_ptbs, a `&Y` returned from `borrow(&X, &TxContext)` roots
-// only in the object, not in the injected TxContext. The immutable result stays valid
-// across a later command that mutably uses the TxContext, and is then read alongside a
-// fresh `&TxContext` injection.
+// A `&Y` from a ctx-taking call roots only in the object, so it survives later
+// TxContext uses.
 
 //# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
 

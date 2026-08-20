@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Under --enable-feature-flags allow_references_in_ptbs, a call taking multiple `&TxContext` parameters
-// alongside an object is accepted (immutable TxContext borrows may share a root), and
-// its returned reference stays valid across a later mutable TxContext use.
+// Multiple `&TxContext` parameters in one call are allowed, and the call's result
+// survives a later mutable TxContext use.
 
 //# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
 

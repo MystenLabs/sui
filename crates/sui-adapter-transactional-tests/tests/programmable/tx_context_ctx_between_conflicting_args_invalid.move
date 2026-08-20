@@ -1,12 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Per-command TxContext rooting must not weaken same-call conflict detection when the
-// TxContext parameter sits between two conflicting user arguments: passing the same
-// object as both `&mut X` and `&X` around an injected `&mut TxContext` is rejected.
-// This also pins the reported argument index: the checker reports positions over the
-// runtime argument list (which includes the injected TxContext), not the user's
-// argument list.
+// Conflicting user arguments around an injected `&mut TxContext` are still rejected, and
+// reported argument indices count the injected TxContext.
 
 //# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
 
