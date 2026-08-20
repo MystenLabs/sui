@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[WC09003]: unused assignment
+   ┌─ tests/move_2024/matching/match_type_param_binders.move:20:28
+   │
+20 │         Inner { asset: mut a, state: State::On } => {
+   │                            ^ Unused assignment for variable 'a'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_a')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[WC09002]: unused variable
+   ┌─ tests/move_2024/matching/match_type_param_binders.move:37:24
+   │
+37 │         Inner { asset: unused, state: State::On } => true,
+   │                        ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

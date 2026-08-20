@@ -570,7 +570,14 @@ fn find_counterexample_impl(
             {
                 counterexample_datatype(context, matrix, arity, ndx, mident, datatype_name)
             } else {
-                // This can only be a binding or wildcard, so we act accordingly.
+                // The type has no structure to inspect (e.g., a type parameter), so the column
+                // can only hold binders and wildcards; default-specialization is lossless.
+                ice_assert!(
+                    context,
+                    matrix.first_column_binders_only() || context.env().has_errors(),
+                    matrix.loc,
+                    "Constructor pattern against a subject with no inspectable structure"
+                );
                 let (_, default) = matrix.specialize_default(context);
                 if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
                     let result = [CounterExample::Wildcard]

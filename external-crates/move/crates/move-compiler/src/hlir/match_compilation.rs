@@ -34,6 +34,13 @@ enum StructUnpack<T> {
 enum MatchTree {
     Leaf(Vec<ArmResult>),
     Failure,
+    // Binds a subject no row discriminates on, then continues with the rest of the fringe. The
+    // only valid tree for a subject with no inspectable structure (e.g., a type parameter).
+    Bind {
+        subject: FringeEntry,
+        subject_binders: Vec<(Mutability, Var)>,
+        next: Box<MatchTree>,
+    },
     LiteralSwitch {
         subject: FringeEntry,
         subject_binders: Vec<(Mutability, Var)>,
@@ -179,7 +186,18 @@ fn build_match_tree(
         return MatchTree::Failure;
     };
 
-    if subject.ty.value.unfold_to_builtin_type_name().is_some() {
+    if matrix.first_column_binders_only() {
+        // No row discriminates on this subject, so bind it and continue. Mandatory when the
+        // subject type has no structure to inspect (e.g., a type parameter); for structured
+        // subjects it avoids a switch whose every arm repeats the default tree.
+        let (subject_binders, default) = matrix.specialize_default(context);
+        let next = build_match_tree(context, fringe, default);
+        MatchTree::Bind {
+            subject,
+            subject_binders,
+            next: Box::new(next),
+        }
+    } else if subject.ty.value.unfold_to_builtin_type_name().is_some() {
         compile_match_literal(context, subject, fringe, matrix)
     } else if let Some(tyargs) = subject.ty.value.type_arguments() {
         let tyargs = tyargs.clone();
@@ -217,7 +235,7 @@ fn build_match_tree(
             context.reporter,
             context.env.has_errors(),
             subject.var.loc,
-            "Non-datatype and non-builtin type reached match compilation without a prior error"
+            "Constructor pattern against a subject with no inspectable structure"
         );
         MatchTree::Failure
     }
@@ -232,6 +250,13 @@ fn compile_match_literal(
 ) -> MatchTree {
     let mut subject_binders = vec![];
     let lits = matrix.first_lits();
+    // Binder-only columns become `Bind` upstream, so no literals means error patterns.
+    ice_assert!(
+        context.reporter,
+        !lits.is_empty() || context.env.has_errors(),
+        subject.var.loc,
+        "Literal switch column with no literal patterns"
+    );
     let mut arms = BTreeMap::new();
 
     for lit in lits {
@@ -292,6 +317,13 @@ fn compile_match_struct(
         );
         (subject_binders, unpack)
     } else {
+        // Binder-only columns become `Bind` upstream, so a missing ctor means error patterns.
+        ice_assert!(
+            context.reporter,
+            context.env.has_errors(),
+            subject.var.loc,
+            "Struct match column with no struct pattern"
+        );
         let (subject_binders, default_matrix) = matrix.specialize_default(context);
         let unpack =
             StructUnpack::Default(Box::new(build_match_tree(context, fringe, default_matrix)));
@@ -324,6 +356,13 @@ fn compile_variant_switch(
         .collect::<BTreeSet<_>>();
 
     let ctors = matrix.first_variant_ctors();
+    // Binder-only columns become `Bind` upstream, so no variants means error patterns.
+    ice_assert!(
+        context.reporter,
+        !ctors.is_empty() || context.env.has_errors(),
+        subject.var.loc,
+        "Variant switch column with no variant patterns"
+    );
     let mut arms = BTreeMap::new();
 
     for (ctor, (ploc, arg_types)) in ctors {
@@ -428,6 +467,14 @@ fn match_tree_to_exp(
                 sp(context.arms_loc, T::UnannotatedExp_::UnresolvedError),
             )
         }
+        MatchTree::Bind {
+            subject,
+            subject_binders,
+            next,
+        } => {
+            let next_exp = match_tree_to_exp(context, init_subject, *next);
+            bind_subject_binders(context, subject_binders, &subject, next_exp)
+        }
         MatchTree::VariantSwitch {
             subject,
             subject_binders,
@@ -441,11 +488,6 @@ fn match_tree_to_exp(
                 .unfold_to_type_name()
                 .and_then(|sp!(_, name)| name.datatype_name())
                 .unwrap();
-            // Bindings in the arm are always immutable
-            let bindings = subject_binders
-                .into_iter()
-                .map(|(_mut, binder)| (binder, (Mutability::Imm, subject.clone())))
-                .collect();
 
             let sorted_variants: Vec<VariantName> = context.hlir_context.info.enum_variants(&m, &e);
             let mut blocks = vec![];
@@ -469,9 +511,10 @@ fn match_tree_to_exp(
                     blocks.push((v, rest_result));
                 }
             }
-            let out_exp = T::UnannotatedExp_::VariantMatch(make_var_ref(subject), (m, e), blocks);
+            let out_exp =
+                T::UnannotatedExp_::VariantMatch(make_var_ref(subject.clone()), (m, e), blocks);
             let body_exp = T::exp(context.output_type(), sp(context.arms_loc(), out_exp));
-            make_copy_bindings(context, bindings, body_exp)
+            bind_subject_binders(context, subject_binders, &subject, body_exp)
         }
         MatchTree::StructUnpack {
             subject,
@@ -485,11 +528,6 @@ fn match_tree_to_exp(
                 .unfold_to_type_name()
                 .and_then(|sp!(_, name)| name.datatype_name())
                 .unwrap();
-            // Bindings in the arm are always immutable
-            let bindings = subject_binders
-                .into_iter()
-                .map(|(_mut, binder)| (binder, (Mutability::Imm, subject.clone())))
-                .collect();
             let unpack_exp = match unpack {
                 StructUnpack::Default(next) => match_tree_to_exp(context, init_subject, *next),
                 StructUnpack::Unpack(unpack_fields, next) => {
@@ -505,7 +543,7 @@ fn match_tree_to_exp(
                     )
                 }
             };
-            make_copy_bindings(context, bindings, unpack_exp)
+            bind_subject_binders(context, subject_binders, &subject, unpack_exp)
         }
         MatchTree::LiteralSwitch {
             subject,
@@ -517,11 +555,6 @@ fn match_tree_to_exp(
             Some(sp!(_, BuiltinTypeName_::Bool))
         ) && arms.len() == 2 =>
         {
-            // Bindings in the arm are always immutable
-            let bindings = subject_binders
-                .into_iter()
-                .map(|(_mut, binder)| (binder, (Mutability::Imm, subject.clone())))
-                .collect();
             // If the literal switch for a boolean is saturated, no default case.
             let lit_subject = make_match_lit(subject.clone());
             let true_arm = arms
@@ -534,11 +567,8 @@ fn match_tree_to_exp(
             let true_arm = match_tree_to_exp(context, init_subject, *true_arm);
             let false_arm = match_tree_to_exp(context, init_subject, *false_arm);
 
-            make_copy_bindings(
-                context,
-                bindings,
-                make_if_else_arm(context, lit_subject, true_arm, false_arm),
-            )
+            let body_exp = make_if_else_arm(context, lit_subject, true_arm, false_arm);
+            bind_subject_binders(context, subject_binders, &subject, body_exp)
         }
         MatchTree::LiteralSwitch {
             subject,
@@ -546,11 +576,6 @@ fn match_tree_to_exp(
             arms: map,
             default,
         } => {
-            // Bindings in the arm are always immutable
-            let bindings = subject_binders
-                .into_iter()
-                .map(|(_mut, binder)| (binder, (Mutability::Imm, subject.clone())))
-                .collect();
             let lit_subject = make_match_lit(subject.clone());
 
             let mut entries = map.into_iter().collect::<Vec<_>>();
@@ -564,9 +589,29 @@ fn match_tree_to_exp(
                 let test_exp = make_lit_test(lit_subject.clone(), key);
                 out_exp = make_if_else_arm(context, test_exp, match_arm, out_exp);
             }
-            make_copy_bindings(context, bindings, out_exp)
+            bind_subject_binders(context, subject_binders, &subject, out_exp)
         }
     }
+}
+
+/// Binds the subject binders as immutable copies of the subject around `next`. Fringe subjects
+/// are always imm-refs (`make_initial_fringe`, `make_imm_ref_match_binders`), so the copies are
+/// legal for any subject type; by-value arm bindings happen at the leaves via `make_arm_unpack`.
+fn bind_subject_binders(
+    context: &ResolutionContext,
+    subject_binders: Vec<(Mutability, Var)>,
+    subject: &FringeEntry,
+    next: T::Exp,
+) -> T::Exp {
+    debug_assert!(matches!(
+        subject.ty.value.inner(),
+        N::TypeInner::Ref(false, _)
+    ));
+    let bindings = subject_binders
+        .into_iter()
+        .map(|(_mut, binder)| (binder, (Mutability::Imm, subject.clone())))
+        .collect();
+    make_copy_bindings(context, bindings, next)
 }
 
 fn make_leaf(
