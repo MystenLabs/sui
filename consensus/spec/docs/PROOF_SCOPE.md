@@ -374,14 +374,28 @@ What is achievable, in order of value:
 4. Report which obligations a source change puts at risk. See the
    [spec obligation check](../design/spec_obligation_check.md).
 
-One example shows what a field-level obligation finds. `ASM-SAFE-EVIDENCE-REFINEMENT`
-needs the deciding anchor of an indirect result. Rust stores
-`Decision::Indirect`, which is one value of a three-value enumeration. It records
-that the indirect rule decided the slot. It does not record which anchor decided
-it, and `FlexCommitter::try_indirect_decide` only logs the anchor reference. A
-restart or a leader-schedule reset then rebuilds the pending state without that
-provenance. The field cannot be filled from the current code, and the ledger says
-so.
+The size of the gap is measurable. Safety is
+`correct_validators_agree_on_commit_at_index`. Its hypotheses are two
+structures with 22 fields in total: 17 in `AuthenticatedFlexVoteSourceMap` and
+5 in `ExactCommitInstallProvenance`. No module constructs either one. Every
+mention is a consumer, or a field of the `EndToEndLivenessInputs` bundle, which
+is itself assumed. The theorem is therefore real, machine checked, and never
+instantiated.
+
+Some fields are already known to be false of the code, and that is the useful
+kind of finding. `ASM-SAFE-PARAMETERS` needs one authenticated threshold set for
+every correct validator in an epoch. Some v3 inputs can come from local process
+settings, so two correct validators can derive different thresholds. Quorum
+intersection then fails, and the per-slot exclusion that the whole safety
+argument rests on is void.
+
+Check the store before you record a durability hazard. `PendingCommitState` is
+in-memory and never reaches the store. `WriteBatch` carries accepted blocks,
+commits, commit info, and finalized commits with their rejected transaction
+indices, and no slot status or decision origin. A restart recomputes every
+verdict from recovered blocks and commits. An earlier version of this section
+claimed that a restart loses indirect decision provenance. It does not, because
+nothing preserves that provenance to lose.
 
 ## Current product status
 

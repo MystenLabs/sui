@@ -306,13 +306,22 @@ finalizer work is not evidence for this result.
 - **Status:** Partially verified.
 - **Effect if false:** Safety.
 - **Lean use:** The first-decision relation keeps direct evidence for direct results. For an indirect result, it keeps the historical anchor, history, result, and ordered scan prefix. It proves that later direct and indirect passes preserve the first result. Safety compares the reconstructed direct bases. It does not treat a cached indirect result as direct.
-- **Rust evidence:** `RoundState::update_slot_decision` changes only an undecided slot, records the first direct or indirect origin, and asserts equality on a later update. A fully decided round can skip another indirect run. `Decision::Indirect` does not keep the deciding anchor reference or history. A restart or leader-schedule reset constructs new pending state; it must also construct new provenance. The modeled v3 transaction path is incomplete.
+- **Rust evidence:** `RoundState::update_slot_decision` changes only an undecided slot, records the first direct or indirect origin, and asserts equality on a later update. A fully decided round can skip another indirect run. No decision is durable. `PendingCommitState` is in-memory, starts from its default value, and never reaches the store. `WriteBatch` carries accepted blocks, commits, commit info, and finalized commits with their rejected transaction indices. It carries no slot status and no decision origin. A restart therefore recomputes every verdict from recovered blocks and commits, and `maybe_refresh_pending_commit_state` discards the pending rounds on a schedule change. No stale indirect result survives either event, so there is nothing to misclassify across them. The open part is within one pending-state lifetime: `Decision::Indirect` records that the indirect rule decided the slot, and `FlexCommitter::try_indirect_decide` only logs the deciding anchor, so the anchor and the ordered scan are not readable from the stored state. The modeled v3 transaction path is incomplete.
 - **Evidence record:** [EV-CACHED-INDIRECT-ORIGIN](ASSUMPTION_EVIDENCE.md#ev-cached-indirect-origin).
-- **Discharge:** Retain or reconstruct the exact indirect anchor, immutable history, and scan origin; map reset and restart reconstruction; add the transaction path; and add shared conformance vectors.
+- **Discharge:** Retain the exact indirect anchor and scan origin inside one pending-state lifetime, or show that the Lean field does not need them once no decision is durable. Restart and reset reconstruction need no separate mapping, because both discard the pending state. Add the transaction path and shared conformance vectors.
 
 ## ASM-SAFE-COMMIT-CHAIN
 
 - **Claim:** Correct validators process one common, continuous index-and-digest commit chain in order.
+- **Store note:** The model has one durable notion, `installedCommitAt`, which
+  maps a commit index to a commit identifier. Rust has two commit tables. The
+  `commits` table holds the commit record. The `finalized_commits` table holds
+  the same `CommitRef` with the rejected transaction indices, and
+  `CommitFinalizer` writes it only after every transaction in the commit is
+  finalized or rejected. Both tables key on the same index and digest, so the
+  single modeled notion is adequate for agreement on which commit sits at an
+  index. Transaction outcomes are a separate durable fact that the commit-safety
+  statement does not cover.
 - **Type:** Derived protocol and Rust refinement theorem.
 - **Status:** Partially verified.
 - **Effect if false:** Safety.
