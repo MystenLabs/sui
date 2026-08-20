@@ -864,6 +864,8 @@ impl From<crate::execution_status::CommandArgumentError> for CommandArgumentErro
                 Self::CannotWriteToExtendedReference,
             crate::execution_status::CommandArgumentError::InvalidReferenceArgument =>
                 Self::InvalidReferenceArgument,
+            crate::execution_status::CommandArgumentError::InvalidTxContext =>
+                Self::InvalidTxContext,
         }
     }
 }

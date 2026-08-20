@@ -1479,6 +1479,7 @@ impl From<crate::execution_status::CommandArgumentError> for CommandArgumentErro
                 CommandArgumentErrorKind::CannotWriteToExtendedReference
             }
             E::InvalidReferenceArgument => CommandArgumentErrorKind::InvalidReferenceArgument,
+            E::InvalidTxContext => CommandArgumentErrorKind::InvalidTxContext,
         };
 
         message.set_kind(kind);
