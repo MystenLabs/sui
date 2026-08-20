@@ -30,7 +30,9 @@ use move_core_types::{
     u256::U256,
     vm_status::StatusCode,
 };
-use move_trace_format::tracers::instruction_only::InstructionOnlyTracer;
+use move_trace_format::tracers::{
+    effects_only::EffectsOnlyTracer, instruction_only::InstructionOnlyTracer,
+};
 use move_trace_format::{
     format::{MoveTraceBuilder, TRACE_FILE_EXTENSION},
     tracers::function_only::FunctionOnlyTracer,
@@ -336,6 +338,12 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
                     }
                     TraceType::FunctionOnly => {
                         MoveTraceBuilder::new_with_tracer(Box::new(FunctionOnlyTracer))
+                    }
+                    TraceType::PreEffectsOnly => {
+                        MoveTraceBuilder::new_with_tracer(Box::new(EffectsOnlyTracer::pre()))
+                    }
+                    TraceType::PostEffectsOnly => {
+                        MoveTraceBuilder::new_with_tracer(Box::new(EffectsOnlyTracer::post()))
                     }
                     TraceType::Full => MoveTraceBuilder::new(),
                 });
