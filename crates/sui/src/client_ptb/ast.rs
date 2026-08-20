@@ -123,7 +123,6 @@ pub struct ProgramMetadata {
     pub json_set: bool,
     pub tx_digest_set: bool,
     pub dry_run_set: bool,
-    /// Whether best-effort local tracing was requested for the fullnode dry-run.
     pub trace_set: bool,
     pub dev_inspect_set: bool,
     pub gas_budget: Option<Spanned<u64>>,
