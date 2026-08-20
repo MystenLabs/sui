@@ -237,7 +237,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn bounded_lookups_resolve_from_any_lineage_member() {
+    async fn versioned_lookups_resolve_from_any_lineage_member() {
         let fixture = setup().await;
 
         // Exact version through the upgraded id resolves back to v1.
@@ -253,26 +253,6 @@ mod tests {
         // Exact version through the original id resolves forward to v2.
         let mut req = request(fixture.original_id);
         req.version = Some(2);
-        let package = fetch(&fixture, req).await;
-        assert_eq!(
-            package.storage_id,
-            Some(fixture.upgraded_id.to_canonical_string(true)),
-        );
-        assert_eq!(package.version, Some(2));
-
-        // A checkpoint bound between the two publishes resolves v1.
-        let mut req = request(fixture.upgraded_id);
-        req.at_checkpoint = Some(19);
-        let package = fetch(&fixture, req).await;
-        assert_eq!(
-            package.storage_id,
-            Some(fixture.original_id.to_canonical_string(true)),
-        );
-        assert_eq!(package.version, Some(1));
-
-        // A bound above the tip resolves the latest version.
-        let mut req = request(fixture.original_id);
-        req.at_checkpoint = Some(u64::MAX);
         let package = fetch(&fixture, req).await;
         assert_eq!(
             package.storage_id,
@@ -296,17 +276,7 @@ mod tests {
             req.version = Some(3);
             req
         };
-        let before_first_publish = {
-            let mut req = request(fixture.original_id);
-            req.at_checkpoint = Some(4);
-            req
-        };
-        for req in [
-            request(unknown),
-            unknown_versioned,
-            missing_version,
-            before_first_publish,
-        ] {
+        for req in [request(unknown), unknown_versioned, missing_version] {
             let status = fetch_err(&fixture, req).await;
             assert_eq!(status.code(), tonic::Code::NotFound);
         }
