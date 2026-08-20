@@ -17,12 +17,6 @@ pub(crate) struct BalanceChange {
     pub(crate) content: GrpcBalanceChange,
 }
 
-impl BalanceChange {
-    pub(crate) fn from_grpc(scope: Scope, content: GrpcBalanceChange) -> Self {
-        Self { scope, content }
-    }
-}
-
 /// Effects to the balance (sum of coin values per coin type) of addresses and objects.
 #[Object]
 impl BalanceChange {

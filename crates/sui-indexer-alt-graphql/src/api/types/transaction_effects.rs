@@ -256,10 +256,10 @@ impl EffectsContents {
 
                 let balance_changes = content.balance_changes();
                 page.paginate_indices(balance_changes.len(), |i| {
-                    Ok(BalanceChange::from_grpc(
-                        self.scope.clone(),
-                        balance_changes[i].clone(),
-                    ))
+                    Ok(BalanceChange {
+                        scope: self.scope.clone(),
+                        content: balance_changes[i].clone(),
+                    })
                 })
             }
             .await,

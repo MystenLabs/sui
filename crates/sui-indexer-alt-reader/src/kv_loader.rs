@@ -372,10 +372,10 @@ impl TransactionContents {
         }
     }
 
-    pub fn balance_changes(&self) -> Vec<grpc::BalanceChange> {
+    pub fn balance_changes(&self) -> &[grpc::BalanceChange] {
         match self {
-            Self::ExecutedTransaction(tx) => tx.balance_changes.clone(),
-            Self::LedgerGrpc(txn) => txn.balance_changes.clone(),
+            Self::ExecutedTransaction(tx) => &tx.balance_changes,
+            Self::LedgerGrpc(txn) => &txn.balance_changes,
         }
     }
 
