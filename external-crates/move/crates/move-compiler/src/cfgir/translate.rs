@@ -8,10 +8,7 @@ use crate::{
         self,
         ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
         cfg::{ImmForwardCFG, MutForwardCFG},
-        constants::{
-            ConstantContext, ConstantValues, folded_constants, generate_cross_module_constants,
-            seed_precompiled_constants,
-        },
+        constants::{self, ConstantContext, ConstantValues},
         visitor::{CFGIRVisitor, CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
     diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
@@ -201,7 +198,7 @@ fn modules(
     let mut hmodules = hmodules.into_iter().collect::<Vec<_>>();
     let mut constant_context = ConstantContext::new();
     let mut constant_values = ConstantValues::new();
-    seed_precompiled_constants(
+    constants::seed_precompiled_constants(
         context,
         &mut constant_context,
         &hmodules,
@@ -209,7 +206,7 @@ fn modules(
     );
     // All constants are folded up front, in the order of their own dependency graph; module
     // order is irrelevant
-    let mut folded_constants = folded_constants(
+    let mut folded_constants = constants::compute_folded_constants(
         context,
         &mut constant_context,
         &mut hmodules,
@@ -258,7 +255,7 @@ fn module(
     context.current_package = package_name;
     context.push_warning_filter_scope(warning_filter.clone());
     let mut functions = hfunctions.map(|name, f| function(context, module_ident, name, f));
-    generate_cross_module_constants(
+    constants::generate_cross_module_constants(
         context,
         constant_context,
         constant_values,
