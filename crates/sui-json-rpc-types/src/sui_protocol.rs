@@ -42,12 +42,17 @@ pub enum SuiProtocolConfigValue {
     ),
 }
 
+// Guards the `usize as u64` cast below.
+const _: () = assert!(std::mem::size_of::<usize>() <= std::mem::size_of::<u64>());
+
 impl From<ProtocolConfigValue> for SuiProtocolConfigValue {
     fn from(value: ProtocolConfigValue) -> Self {
         match value {
             ProtocolConfigValue::u16(y) => SuiProtocolConfigValue::U16(y),
             ProtocolConfigValue::u32(y) => SuiProtocolConfigValue::U32(y),
             ProtocolConfigValue::u64(x) => SuiProtocolConfigValue::U64(x),
+            // usize widens to u64 losslessly; reuse U64 rather than add a platform-dependent variant.
+            ProtocolConfigValue::usize(x) => SuiProtocolConfigValue::U64(x as u64),
             ProtocolConfigValue::bool(z) => SuiProtocolConfigValue::Bool(z),
         }
     }
