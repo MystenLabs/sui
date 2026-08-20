@@ -271,8 +271,8 @@ impl DataStore {
     }
 
     /// Return the latest checkpoint sequence number indexed by the configured GraphQL endpoint.
-    pub fn latest_checkpoint_sequence_number(&self) -> Result<u64, Error> {
-        block_on!(gql_queries::checkpoint_query::query(self))
+    pub async fn latest_checkpoint_sequence_number(&self) -> Result<u64, Error> {
+        gql_queries::checkpoint_query::query(self).await
     }
 
     pub fn chain(&self) -> Chain {

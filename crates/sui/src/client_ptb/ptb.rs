@@ -19,7 +19,7 @@ use crate::{
 };
 
 use super::{ast::ProgramMetadata, lexer::Lexer, parser::ProgramParser};
-use anyhow::{Context, Error, anyhow, ensure};
+use anyhow::{Error, anyhow, ensure};
 use clap::{Args, ValueHint, arg};
 use move_core_types::account_address::AccountAddress;
 use serde::Serialize;
@@ -371,10 +371,6 @@ impl PTB {
 }
 
 /// Replay a completed fullnode simulation locally with Move tracing.
-///
-/// Replay performs synchronous GraphQL reads and Move execution, so it runs on a blocking worker.
-/// Any failure is returned separately and the caller still prints the authoritative fullnode
-/// result.
 async fn replay_dry_run_with_trace(
     context: &WalletContext,
     response: &SimulateTransactionResponse,
@@ -384,11 +380,7 @@ async fn replay_dry_run_with_trace(
     let effects = response.transaction.effects.clone();
     let output_root = std::env::current_dir()?.join(".dry-run");
 
-    tokio::task::spawn_blocking(move || {
-        trace_simulated_transaction(transaction, effects, node, USER_AGENT, &output_root)
-    })
-    .await
-    .context("traced dry-run worker failed")?
+    trace_simulated_transaction(transaction, effects, node, USER_AGENT, &output_root).await
 }
 
 /// Print trace provenance and warn when the traced execution diverges or produces no trace.

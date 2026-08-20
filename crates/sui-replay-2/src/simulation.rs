@@ -17,7 +17,7 @@ use crate::{
     artifacts::ArtifactManager,
     replay_txn::{ExecutorProvider, replay_transaction_from_store},
 };
-use anyhow::{Error, Result, ensure};
+use anyhow::{Context, Error, Result, ensure};
 use std::path::{Path, PathBuf};
 use sui_core::authority::DEV_INSPECT_GAS_COIN_VALUE;
 use sui_data_store::{
@@ -87,7 +87,7 @@ struct SimulationReplayStore {
 /// When local effects diverge, `transaction_effects.json` retains the fullnode effects and
 /// `forked_transaction_effects.json` records the local result. The caller is expected to warn that
 /// the trace came from that different local result.
-pub fn trace_simulated_transaction(
+pub async fn trace_simulated_transaction(
     transaction: TransactionData,
     effects: TransactionEffects,
     node: Node,
@@ -102,48 +102,53 @@ pub fn trace_simulated_transaction(
     let digest = transaction.digest();
     let network = node.network_name();
     let artifact_path = output_root.join(digest.to_string());
-    let artifact_manager = ArtifactManager::new(&artifact_path, true)?;
-
-    // A rerun must not expose generated artifacts left by an earlier attempt with the same digest.
-    artifact_manager.clear_generated_artifacts()?;
 
     // This checkpoint bounds only reads for which transaction execution provides no version.
-    let source = DataStore::new(node.clone(), user_agent)?;
-    let read_checkpoint = source.latest_checkpoint_sequence_number()?;
+    let source = DataStore::new(node, user_agent)?;
+    let read_checkpoint = source.latest_checkpoint_sequence_number().await?;
     let transaction_digest = digest.to_string();
     let mock_gas_id = mock_gas_object.as_ref().map(|object| object.id());
 
-    // Keep the uncommitted transaction and mock gas local; on-chain state uses GraphQL.
-    let store = SimulationReplayStore {
-        source,
-        transaction_digest: transaction_digest.clone(),
-        transaction: TransactionInfo {
-            data: transaction,
-            effects,
-            checkpoint: read_checkpoint,
-        },
-        mock_gas_object,
-    };
+    tokio::task::spawn_blocking(move || {
+        let artifact_manager = ArtifactManager::new(&artifact_path, true)?;
+        // A rerun must not expose generated artifacts left by an earlier attempt with the same
+        // digest.
+        artifact_manager.clear_generated_artifacts()?;
 
-    let mut executor_provider = ExecutorProvider::new(false);
-    // Reuse historical replay with tracing enabled and its standard artifact behavior.
-    let outcome = replay_transaction_from_store(
-        &artifact_manager,
-        &transaction_digest,
-        &store,
-        network,
-        true,
-        &mut executor_provider,
-    )?;
+        // Keep the uncommitted transaction and mock gas local; on-chain state uses GraphQL.
+        let store = SimulationReplayStore {
+            source,
+            transaction_digest: transaction_digest.clone(),
+            transaction: TransactionInfo {
+                data: transaction,
+                effects,
+                checkpoint: read_checkpoint,
+            },
+            mock_gas_object,
+        };
 
-    Ok(SimulatedTransactionTrace {
-        digest,
-        artifact_path,
-        read_checkpoint,
-        effects_match: outcome.effects_match,
-        trace_generated: outcome.trace_generated,
-        mock_gas_id,
+        let mut executor_provider = ExecutorProvider::new(false);
+        // Reuse historical replay with tracing enabled and its standard artifact behavior.
+        let outcome = replay_transaction_from_store(
+            &artifact_manager,
+            &transaction_digest,
+            &store,
+            network,
+            true,
+            &mut executor_provider,
+        )?;
+
+        Ok(SimulatedTransactionTrace {
+            digest,
+            artifact_path,
+            read_checkpoint,
+            effects_match: outcome.effects_match,
+            trace_generated: outcome.trace_generated,
+            mock_gas_id,
+        })
     })
+    .await
+    .context("traced dry-run worker failed")?
 }
 
 impl TransactionStore for SimulationReplayStore {
