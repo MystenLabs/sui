@@ -698,14 +698,18 @@ impl fmt::Debug for VerifiedBlock {
     }
 }
 
-/// Block with extended additional information, such as
-/// local blocks that are excluded from the block's ancestors.
-/// The extended information do not need to be certified or forwarded to other authorities.
+/// A verified block plus locally derived extras: ancestors excluded from the proposal,
+/// and the slim encoding when slim propagation is on. None of it is certified --
+/// receivers verify what they need for themselves.
+///
+/// This is the pre-fan-out value shared by every subscriber, so it carries the slim
+/// encoding alongside the block rather than instead of it: the per-subscriber gate
+/// chooses a form from it, and a subscriber served the full form still needs the block.
 #[derive(Clone, Debug)]
 pub(crate) struct ExtendedBlock {
     pub block: VerifiedBlock,
     pub excluded_ancestors: Vec<BlockRef>,
-    /// The block's slim encoding, if one was produced for it.
+    /// Present only when slim propagation is on and encoding succeeded.
     pub slim: Option<Bytes>,
 }
 

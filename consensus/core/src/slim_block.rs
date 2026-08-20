@@ -25,7 +25,7 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
-use consensus_config::{AuthorityIndex, Committee};
+use consensus_config::{AuthorityIndex, Committee, DIGEST_LENGTH};
 use consensus_types::block::{BlockDigest, BlockRef, Round};
 use parking_lot::RwLock;
 use prost::Message as _;
@@ -53,7 +53,7 @@ pub(crate) trait AncestorDigestResolver {
 struct SlimBlock {
     /// bcs(Block) built with ancestors = [].
     #[prost(bytes = "bytes", tag = "1")]
-    block_sans_ancestors: Bytes,
+    block: Bytes,
     /// Ancestor authors in exact proposal order (membership + order).
     #[prost(uint32, repeated, tag = "2")]
     ancestor_authors: Vec<u32>,
@@ -62,7 +62,7 @@ struct SlimBlock {
     overrides: Vec<AncestorOverride>,
     #[prost(bytes = "bytes", tag = "4")]
     signature: Bytes,
-    /// 32 B digest of the full serialized SignedBlock: rebuild proof + error distinction.
+    /// Digest of the full serialized SignedBlock: rebuild proof + error distinction.
     #[prost(bytes = "bytes", tag = "5")]
     claimed_block_digest: Bytes,
 }
@@ -127,37 +127,47 @@ impl DecodeError {
     }
 }
 
-/// Encodes a verified block into its slim wire form.
-///
-/// Digests are omitted only for slots the receiver can resolve safely: unique in the
-/// local DAG and either genesis or above `min_omittable_round` (the recent-cache
-/// horizon). Everything else gets an explicit digest override.
-pub(crate) fn serialize_slim(
+/// The explicit digest to put on the wire for `ancestor`, or `None` when the receiver is
+/// guaranteed to resolve the slot to this exact digest on its own.
+fn digest_override(
+    block: &VerifiedBlock,
+    ancestor: &BlockRef,
+    resolver: &impl AncestorDigestResolver,
+    min_omittable_round: Round,
+) -> Option<Bytes> {
+    let explicit = || Some(Bytes::copy_from_slice(&ancestor.digest.0));
+
+    // The author's own parent always carries an explicit digest. It is the only
+    // ancestor edge that chains within one author: a missing parent leaves every later
+    // block from that author undecodable too, since each needs the one before it.
+    // Explicit here, the block still decodes and reaches `block_manager`, whose
+    // suspension drives the normal missing-ancestor sync.
+    if ancestor.author == block.author() {
+        return explicit();
+    }
+    // Below the horizon the receiver may have collected the slot already; genesis is
+    // exempt because it resolves from the committee rather than the DAG.
+    if ancestor.round != GENESIS_ROUND && ancestor.round <= min_omittable_round {
+        return explicit();
+    }
+    // Safe to omit only where local state resolves the slot uniquely to this digest.
+    match resolver.digest_at_slot(Slot::from(*ancestor)) {
+        SlotDigest::Unique(digest) if digest == ancestor.digest => None,
+        _ => explicit(),
+    }
+}
+
+/// The override list for `block`, the only part of encoding that reads local state.
+fn ancestor_overrides(
     block: &VerifiedBlock,
     resolver: &impl AncestorDigestResolver,
     min_omittable_round: Round,
-) -> Result<Bytes, bcs::Error> {
-    let default_round = block.round().saturating_sub(1);
-    let mut ancestor_authors = Vec::with_capacity(block.ancestors().len());
+) -> Vec<AncestorOverride> {
+    let parent_round = block.round().saturating_sub(1);
     let mut overrides = vec![];
     for ancestor in block.ancestors() {
-        ancestor_authors.push(ancestor.author.value() as u32);
-
-        let round = (ancestor.round != default_round).then_some(ancestor.round);
-        // The author's own parent always carries an explicit digest. It is the only
-        // ancestor edge that chains within one author: a missing parent leaves every
-        // later block from that author undecodable too, since each needs the one before
-        // it. Explicit here, the block still decodes and reaches `block_manager`, whose
-        // suspension drives the normal missing-ancestor sync.
-        let is_own_parent = ancestor.author == block.author();
-        let can_omit_digest = !is_own_parent
-            && (ancestor.round == GENESIS_ROUND || ancestor.round > min_omittable_round);
-        let uniquely_resolvable = can_omit_digest
-            && matches!(
-                resolver.digest_at_slot(Slot::from(*ancestor)),
-                SlotDigest::Unique(digest) if digest == ancestor.digest
-            );
-        let digest = (!uniquely_resolvable).then(|| Bytes::copy_from_slice(&ancestor.digest.0));
+        let round = (ancestor.round != parent_round).then_some(ancestor.round);
+        let digest = digest_override(block, ancestor, resolver, min_omittable_round);
 
         if round.is_some() || digest.is_some() {
             overrides.push(AncestorOverride {
@@ -167,10 +177,25 @@ pub(crate) fn serialize_slim(
             });
         }
     }
+    overrides
+}
+
+/// Encodes a verified block into its slim wire form: the block with an empty ancestor
+/// vector, the ancestor authors in proposal order, and `overrides` for the slots the
+/// receiver cannot infer.
+fn serialize_slim(
+    block: &VerifiedBlock,
+    overrides: Vec<AncestorOverride>,
+) -> Result<Bytes, bcs::Error> {
+    let ancestor_authors = block
+        .ancestors()
+        .iter()
+        .map(|ancestor| ancestor.author.value() as u32)
+        .collect();
 
     let stripped = (**block).clone().with_ancestors(vec![]);
     let slim = SlimBlock {
-        block_sans_ancestors: bcs::to_bytes(&stripped)?.into(),
+        block: bcs::to_bytes(&stripped)?.into(),
         ancestor_authors,
         overrides,
         signature: block.signed_block().signature().clone(),
@@ -181,10 +206,14 @@ pub(crate) fn serialize_slim(
 
 /// A structurally validated envelope: everything checkable without reading local state.
 /// Fields stay private so no caller can assemble a `SignedBlock` that skipped the digest
-/// gate in [`rebuild_slim`].
+/// gate in [`rebuild_from_slim`].
 pub(crate) struct ParsedEnvelope {
-    slim: SlimBlock,
-    skeleton: Block,
+    /// The author's block with an empty ancestor vector, decoded once here so the
+    /// resolve and rebuild phases share the work.
+    stripped_block: Block,
+    ancestor_authors: Vec<u32>,
+    overrides: Vec<AncestorOverride>,
+    signature: Bytes,
     block_ref: BlockRef,
     claimed_digest: BlockDigest,
 }
@@ -199,33 +228,34 @@ pub(crate) fn parse_slim(
     let slim = <SlimBlock as prost::Message>::decode(serialized)
         .map_err(|e| DecodeError::Malformed(format!("prost decode: {e}")))?;
 
-    let claimed_digest: [u8; 32] = slim
-        .claimed_block_digest
-        .as_ref()
-        .try_into()
-        .map_err(|_| DecodeError::Malformed("claimed_block_digest must be 32 bytes".into()))?;
+    let claimed_digest: [u8; DIGEST_LENGTH] =
+        slim.claimed_block_digest.as_ref().try_into().map_err(|_| {
+            DecodeError::Malformed(format!(
+                "claimed_block_digest must be {DIGEST_LENGTH} bytes"
+            ))
+        })?;
     let claimed_digest = BlockDigest(claimed_digest);
 
-    let skeleton: Block = bcs::from_bytes(&slim.block_sans_ancestors)
+    let stripped_block: Block = bcs::from_bytes(&slim.block)
         .map_err(|e| DecodeError::Malformed(format!("bcs decode: {e}")))?;
-    if !skeleton.ancestors().is_empty() {
+    if !stripped_block.ancestors().is_empty() {
         return Err(DecodeError::Malformed(
-            "block_sans_ancestors must have empty ancestors".into(),
+            "block must have empty ancestors".into(),
         ));
     }
     // Cheap identity checks before any DAG access: the subscription stream carries only
     // the serving peer's own proposals, so a foreign author or epoch is a peer fault and
     // must not cost slot scans or a fallback fetch.
-    if skeleton.author() != expected_author {
+    if stripped_block.author() != expected_author {
         return Err(DecodeError::Malformed(format!(
             "block author {} does not match the sending peer {expected_author}",
-            skeleton.author()
+            stripped_block.author()
         )));
     }
-    if skeleton.epoch() != committee.epoch() {
+    if stripped_block.epoch() != committee.epoch() {
         return Err(DecodeError::Malformed(format!(
             "block epoch {} does not match the committee epoch {}",
-            skeleton.epoch(),
+            stripped_block.epoch(),
             committee.epoch()
         )));
     }
@@ -259,7 +289,7 @@ pub(crate) fn parse_slim(
         }
     }
     if let Some(&first) = authors.first()
-        && first as usize != skeleton.author().value()
+        && first as usize != stripped_block.author().value()
     {
         return Err(DecodeError::Malformed(
             "first ancestor must be the block author".into(),
@@ -280,25 +310,33 @@ pub(crate) fn parse_slim(
             )));
         }
         if let Some(round) = o.round
-            && round >= skeleton.round()
+            && round >= stripped_block.round()
         {
             return Err(DecodeError::Malformed(format!(
                 "override round {round} not below block round"
             )));
         }
         if let Some(digest) = &o.digest
-            && digest.len() != 32
+            && digest.len() != DIGEST_LENGTH
         {
-            return Err(DecodeError::Malformed(
-                "override digest must be 32 bytes".into(),
-            ));
+            return Err(DecodeError::Malformed(format!(
+                "override digest must be {DIGEST_LENGTH} bytes"
+            )));
         }
     }
 
-    let block_ref = BlockRef::new(skeleton.round(), skeleton.author(), claimed_digest);
+    let block_ref = BlockRef::new(
+        stripped_block.round(),
+        stripped_block.author(),
+        claimed_digest,
+    );
+    // Only what the later phases read: the encoded payload is superseded by the decoded
+    // block, and the claimed digest is already extracted above.
     Ok(ParsedEnvelope {
-        slim,
-        skeleton,
+        stripped_block,
+        ancestor_authors: slim.ancestor_authors,
+        overrides: slim.overrides,
+        signature: slim.signature,
         block_ref,
         claimed_digest,
     })
@@ -313,14 +351,15 @@ pub(crate) fn resolve_ancestors(
     resolver: &impl AncestorDigestResolver,
 ) -> Result<Vec<BlockRef>, DecodeError> {
     let ParsedEnvelope {
-        slim,
-        skeleton,
+        stripped_block,
+        ancestor_authors,
+        overrides,
         block_ref,
         ..
     } = parsed;
     let block_ref = *block_ref;
-    let authors = &slim.ancestor_authors;
-    let default_round = skeleton.round().saturating_sub(1);
+    let authors = ancestor_authors;
+    let parent_round = stripped_block.round().saturating_sub(1);
 
     // Each ancestor must resolve to exactly one digest. A slot the sender wrote
     // explicitly already has one; an omitted slot must be unique in local state.
@@ -337,10 +376,12 @@ pub(crate) fn resolve_ancestors(
         let authority = committee
             .to_authority_index(author as usize)
             .expect("validated above");
-        let o = slim.overrides.iter().find(|o| o.author == author);
-        let round = o.and_then(|o| o.round).unwrap_or(default_round);
+        let ancestor_override = overrides.iter().find(|o| o.author == author);
+        let round = ancestor_override
+            .and_then(|o| o.round)
+            .unwrap_or(parent_round);
         let slot = Slot::new(round, authority);
-        match o.and_then(|o| o.digest.as_ref()) {
+        match ancestor_override.and_then(|o| o.digest.as_ref()) {
             Some(digest) => ancestors.push(BlockRef::new(
                 round,
                 authority,
@@ -373,18 +414,19 @@ pub(crate) fn resolve_ancestors(
 
 /// Reassembles the author's exact serialization from the resolved ancestors and accepts
 /// it only if it hashes to the digest the sender claimed. Touches no local state.
-pub(crate) fn rebuild_slim(
+pub(crate) fn rebuild_from_slim(
     parsed: ParsedEnvelope,
     ancestors: Vec<BlockRef>,
 ) -> Result<(SignedBlock, Bytes), DecodeError> {
     let ParsedEnvelope {
-        slim,
-        skeleton,
+        stripped_block,
+        signature,
         block_ref,
         claimed_digest,
+        ..
     } = parsed;
 
-    let signed_block = SignedBlock::from_parts(skeleton.with_ancestors(ancestors), slim.signature);
+    let signed_block = SignedBlock::from_parts(stripped_block.with_ancestors(ancestors), signature);
     let serialized_block = signed_block
         .serialize()
         .map_err(|e| DecodeError::Malformed(format!("bcs encode: {e}")))?;
@@ -441,15 +483,21 @@ impl SlimBlockCodec {
         block: &VerifiedBlock,
         dag_state: &RwLock<DagState>,
     ) -> Result<Bytes, bcs::Error> {
-        let dag_state = dag_state.read();
-        let resolver = LocalStateResolver {
-            genesis_digests: &self.genesis_digests,
-            dag_state: &dag_state,
-        };
         let min_omittable_round = block
             .round()
             .saturating_sub(self.context.protocol_config.gc_depth());
-        serialize_slim(block, &resolver, min_omittable_round)
+        // The guard covers only the ancestor lookups: cloning the block and serializing
+        // it are a full pass over the payload, and holding the DAG lock across them
+        // would put block size on the critical path of every accept and commit.
+        let overrides = {
+            let dag_state = dag_state.read();
+            let resolver = LocalStateResolver {
+                genesis_digests: &self.genesis_digests,
+                dag_state: &dag_state,
+            };
+            ancestor_overrides(block, &resolver, min_omittable_round)
+        };
+        serialize_slim(block, overrides)
     }
 
     /// Rebuilds a slim block into the author's exact serialization, in one
@@ -473,7 +521,7 @@ impl SlimBlockCodec {
             };
             resolve_ancestors(&parsed, &self.context.committee, &resolver)?
         };
-        rebuild_slim(parsed, ancestors)
+        rebuild_from_slim(parsed, ancestors)
     }
 }
 
@@ -500,7 +548,7 @@ mod tests {
     ) -> Result<(SignedBlock, Bytes), DecodeError> {
         let parsed = parse_slim(serialized, committee, expected_author)?;
         let ancestors = resolve_ancestors(&parsed, committee, resolver)?;
-        rebuild_slim(parsed, ancestors)
+        rebuild_from_slim(parsed, ancestors)
     }
 
     #[derive(Default, Clone)]
@@ -550,6 +598,19 @@ mod tests {
                 block_ref
             })
             .collect()
+    }
+
+    /// Both encoding halves in one call, as production drives them from
+    /// `SlimBlockCodec::encode` (which scopes its state lock to the first).
+    fn serialize_slim(
+        block: &VerifiedBlock,
+        resolver: &impl AncestorDigestResolver,
+        min_omittable_round: Round,
+    ) -> Result<Bytes, bcs::Error> {
+        super::serialize_slim(
+            block,
+            super::ancestor_overrides(block, resolver, min_omittable_round),
+        )
     }
 
     fn sign(
@@ -1007,9 +1068,9 @@ mod tests {
         // Skeleton with non-empty ancestors (would double-count on splice).
         assert!(matches!(
             tamper(&|m| {
-                let skeleton: Block = bcs::from_bytes(&m.block_sans_ancestors).unwrap();
-                let skeleton = skeleton.with_ancestors(vec![BlockRef::MIN]);
-                m.block_sans_ancestors = bcs::to_bytes(&skeleton).unwrap().into();
+                let stripped_block: Block = bcs::from_bytes(&m.block).unwrap();
+                let stripped = stripped_block.with_ancestors(vec![BlockRef::MIN]);
+                m.block = bcs::to_bytes(&stripped).unwrap().into();
             }),
             Err(DecodeError::Malformed(_))
         ));
