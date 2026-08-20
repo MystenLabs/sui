@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // 'public(package)' constants cannot be mixed with 'friend' declarations
 
 module 0x42::a {

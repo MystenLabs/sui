@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // A constant without 'public(package)' visibility cannot be used from another module
 
 module 0x42::a {

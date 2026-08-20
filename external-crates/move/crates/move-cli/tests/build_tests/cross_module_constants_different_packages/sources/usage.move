@@ -2,6 +2,7 @@ module Usage::usage {
     use Defn::defn;
 
     // constants cannot be used from another package, in constant definitions...
+    #[allow(unused_const)]
     const DOUBLE: u64 = defn::MAX * 2;
 
     // ...nor in function bodies

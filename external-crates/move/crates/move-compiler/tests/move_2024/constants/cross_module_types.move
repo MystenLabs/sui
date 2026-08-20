@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Cross-module constants of every constant type, in constant definitions and function bodies
 
 module 0x42::a {

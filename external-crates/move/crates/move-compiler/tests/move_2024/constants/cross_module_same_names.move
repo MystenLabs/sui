@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Same-named constants from different modules are keyed independently, in constant
 // definitions and in function bodies
 

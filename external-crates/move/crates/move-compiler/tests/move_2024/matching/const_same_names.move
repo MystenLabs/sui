@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Same-named constants from different modules as match arms and in or-patterns: no false
 // unreachable arms, each compares its own module's value
 

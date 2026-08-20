@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Borrows of cross-module constants compile, and the implicit-copy warning still fires
 
 module 0x42::a {

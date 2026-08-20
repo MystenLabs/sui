@@ -1,14 +1,6 @@
 Command `build -v`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING A
-warning[W09011]: unused constant
-  ┌─ ./sources/defn.move:5:27
-  │
-5 │     public(package) const TEST_USED: u64 = 9;
-  │                           ^^^^^^^^^ The constant 'TEST_USED' is never used. Consider removing it.
-  │
-  = This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 Command `test`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING A

@@ -3081,7 +3081,9 @@ pub(crate) fn precompiled_constants(
     packages: &BTreeSet<Option<Symbol>>,
 ) -> BTreeMap<(ModuleIdent, ConstantName), (Loc, H::BaseType, Option<H::Value>)> {
     // Precompiled constants arrive as MoveValues, but we need them as H::Value to include them.
-    // This should only matter for partial compilation, such as for the IDE.
+    // This should only matter for partial compilation, such as for the IDE. The inverse
+    // direction -- folded `H::Value`s into `MoveValue`s for compiled constants -- is
+    // `move_value_from_value` in `cfgir::translate`.
     #[growing_stack]
     fn value_from_move_value(mv: &MoveValue, ty: &H::BaseType) -> Option<H::Value> {
         use H::TypeName_ as TN;

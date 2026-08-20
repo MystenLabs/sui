@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Constants defined in terms of other modules' constants are folded at compile time, across
 // module boundaries, including chains through multiple modules. No copies are synthesized for
 // constants only used in other constant definitions.

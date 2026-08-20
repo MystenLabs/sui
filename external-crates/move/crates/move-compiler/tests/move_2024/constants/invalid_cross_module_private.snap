@@ -6,19 +6,19 @@ info:
   lint: false
 ---
 error[EC04001]: restricted visibility
-   ┌─ tests/move_2024/constants/invalid_cross_module_private.move:18:21
+   ┌─ tests/move_2024/constants/invalid_cross_module_private.move:15:21
    │
- 8 │ const MAX: u64 = 100;
+ 5 │ const MAX: u64 = 100;
    │       --- This constant is internal to its module. Only 'public(package)' constants can be accessed outside of their module
    ·
-18 │ const DOUBLE: u64 = a::MAX * 2;
+15 │ const DOUBLE: u64 = a::MAX * 2;
    │                     ^^^^^^ Invalid access of internal constant '0x42::a::MAX'
 
 error[EC04001]: restricted visibility
-   ┌─ tests/move_2024/constants/invalid_cross_module_private.move:21:5
+   ┌─ tests/move_2024/constants/invalid_cross_module_private.move:18:5
    │
- 8 │ const MAX: u64 = 100;
+ 5 │ const MAX: u64 = 100;
    │       --- This constant is internal to its module. Only 'public(package)' constants can be accessed outside of their module
    ·
-21 │     a::MAX
+18 │     a::MAX
    │     ^^^^^^ Invalid access of internal constant '0x42::a::MAX'

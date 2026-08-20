@@ -1,9 +1,6 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
-// Constants from modules whose names would collide under module-name-only mangling
-// (`x::A_B` and `x_A::B` would both be `_x_A_B`) get distinct copy names, since the mangling
-// leads with the defining module's dependency order
+// Constants from modules whose names would collide under identifier-only mangling
+// (`x::A_B` and `x_A::B` would both render as `_x_A_B`) get distinct copy names, since the
+// copy names use the `#` generated-name delimiter (`const#x_A#B`)
 
 module 0x42::x {
 

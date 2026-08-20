@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // A 'public(package)' constant used nowhere in the package still warns as unused; one used
 // only from another module does not
 
