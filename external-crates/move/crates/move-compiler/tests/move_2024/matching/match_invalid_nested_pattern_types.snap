@@ -97,3 +97,33 @@ error[EC04007]: incompatible types
    │                 ^  ----------- Given: '0x42::m::Mode'
    │                 │   
    │                 Invalid pattern field type
+
+error[EC04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:77:12
+   │
+77 │     match (s) {
+   │            ^ Pattern 'SWrap { s: State::On { 0: _0 } }' not covered
+   │
+   = When '_0' is not 5
+
+error[EC04007]: incompatible types
+   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:78:17
+   │
+12 │ public struct SWrap has drop { s: State }
+   │                                   ----- Expected: '0x42::m::State'
+   ·
+78 │         SWrap { s: Mode::On(5) } => 0,
+   │                 ^  ----------- Given: '0x42::m::Mode'
+   │                 │   
+   │                 Invalid pattern field type
+
+error[EC04007]: incompatible types
+   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:87:17
+   │
+12 │ public struct SWrap has drop { s: State }
+   │                                   ----- Expected: '0x42::m::State'
+   ·
+87 │         SWrap { s: Mode::On(_) } => 0,
+   │                 ^  ----------- Given: '0x42::m::Mode'
+   │                 │   
+   │                 Invalid pattern field type
