@@ -725,8 +725,8 @@ mod tests {
         )
     }
 
-    #[test]
-    fn direct_accepts_and_rejects_with_next_round_quorums() {
+    #[tokio::test]
+    async fn direct_accepts_and_rejects_with_next_round_quorums() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(2);
         let voters: Vec<_> = (0..5)
@@ -765,8 +765,8 @@ mod tests {
         assert!(fixture.finalizer.is_empty());
     }
 
-    #[test]
-    fn direct_keeps_transactions_pending_at_the_voter_cutoff() {
+    #[tokio::test]
+    async fn direct_keeps_transactions_pending_at_the_voter_cutoff() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(2);
         let voters: Vec<_> = (0..5)
@@ -798,8 +798,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn direct_keeps_transactions_pending_when_next_round_blocks_do_not_link() {
+    #[tokio::test]
+    async fn direct_keeps_transactions_pending_when_next_round_blocks_do_not_link() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let voters: Vec<_> = (1..6)
@@ -831,8 +831,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn direct_does_not_double_count_an_equivocating_accept_voter() {
+    #[tokio::test]
+    async fn direct_does_not_double_count_an_equivocating_accept_voter() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let mut voters: Vec<_> = (0..4)
@@ -867,8 +867,8 @@ mod tests {
         assert!(finalized.is_empty());
     }
 
-    #[test]
-    fn direct_accepts_when_explicit_reject_votes_are_below_quorum() {
+    #[tokio::test]
+    async fn direct_accepts_when_explicit_reject_votes_are_below_quorum() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let mut voters: Vec<_> = (0..5)
@@ -923,9 +923,9 @@ mod tests {
         );
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic(expected = "cannot have both accept and reject quorums")]
-    fn direct_detects_more_than_f_equivocating_stake() {
+    async fn direct_detects_more_than_f_equivocating_stake() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let mut voters: Vec<_> = (0..5)
@@ -1060,8 +1060,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn direct_and_indirect_finalize_different_blocks_in_one_commit() {
+    #[tokio::test]
+    async fn direct_and_indirect_finalize_different_blocks_in_one_commit() {
         let mut fixture = Fixture::new();
         let round_one_blocks = fixture.make_round_one_blocks(&[1, 1]);
         let round_one_refs: Vec<_> = round_one_blocks
@@ -1137,8 +1137,8 @@ mod tests {
         assert!(finalized[0].rejected_transactions_by_block.is_empty());
     }
 
-    #[test]
-    fn indirect_accepts_certificate_without_full_voting_quorum_in_prefix() {
+    #[tokio::test]
+    async fn indirect_accepts_certificate_without_full_voting_quorum_in_prefix() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let accept_voters: Vec<_> = (0..3)
@@ -1204,8 +1204,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn indirect_uses_committed_votes_without_cached_voting_blocks() {
+    #[tokio::test]
+    async fn indirect_uses_committed_votes_without_cached_voting_blocks() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let accept_voters: Vec<_> = (0..3)
@@ -1276,8 +1276,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn indirect_accepts_at_depth_two_with_one_equivocating_voter() {
+    #[tokio::test]
+    async fn indirect_accepts_at_depth_two_with_one_equivocating_voter() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let accept_0 = fixture.make_voter(
@@ -1378,8 +1378,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn indirect_uses_votes_from_all_committed_leaders() {
+    #[tokio::test]
+    async fn indirect_uses_votes_from_all_committed_leaders() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let accept_0 = fixture.make_voter(
@@ -1505,8 +1505,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn indirect_rejects_without_an_accept_certificate() {
+    #[tokio::test]
+    async fn indirect_rejects_without_an_accept_certificate() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let mut voters = vec![];
