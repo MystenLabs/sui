@@ -168,17 +168,12 @@ impl ChunkedLoader<PackageKey> for LedgerGrpcReader {
             let object = match obj_result.result {
                 Some(proto::get_object_result::Result::Object(object)) => object,
 
-                // A per-object NOT_FOUND is a genuine miss: leave the key unmapped so the
-                // store reports `PackageNotFound`.
                 Some(proto::get_object_result::Result::Error(status))
                     if status.code == tonic::Code::NotFound as i32 =>
                 {
                     continue;
                 }
 
-                // Any other per-object status (INTERNAL, UNAVAILABLE, ...) is a backend
-                // problem, not a miss — fail the chunk so it surfaces as a store error
-                // rather than a phantom `PackageNotFound`.
                 Some(proto::get_object_result::Result::Error(status)) => {
                     return Err(store_err(
                         GRPC_STORE,
