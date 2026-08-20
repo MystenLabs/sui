@@ -13,6 +13,7 @@ import Mysticeti.Leader
 import Mysticeti.Liveness
 import Mysticeti.PartialSynchrony
 import Mysticeti.Safety
+import Mysticeti.MysticetiSafetyCapstone
 import Mysticeti.Thresholds
 import Mysticeti.ThresholdTightness
 import Mysticeti.ValidatorProcess

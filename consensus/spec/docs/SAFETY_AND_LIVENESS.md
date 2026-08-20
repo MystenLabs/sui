@@ -38,6 +38,18 @@ rejects it.
 This result covers direct and indirect transaction decisions. It also includes
 the signed cleanup cutoff that controls old transaction votes.
 
+### Correct validators agree on the commit at each index
+
+Two correct, available validators that have installed a commit at one index have
+installed the same commit. The commit head carries the index, the commit
+identifier, and the leader round, so this is exact agreement on the digest.
+
+`ExactCommitInstallProvenance.correct_validators_agree_on_commit_at_index`
+states it. Safety has two parts, and the specification proves both: per-slot
+exclusion in `mysticeti_v3_safety`, and this same-index agreement.
+`MysticetiSafetyCapstone` names them together and lists what the second one
+assumes.
+
 ### Exact commit references form one prefix
 
 An exact commit reference is the pair `(commit index, commit digest)`. Correct
