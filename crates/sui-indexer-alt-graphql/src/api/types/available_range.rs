@@ -364,6 +364,9 @@ collect_pipelines! {
         pipelines.insert("consistent".to_string());
         pipelines.insert("obj_versions".to_string());
     };
+    Query.[multiGetDerivedObjects, multiGetDynamicFields, multiGetDynamicObjectFields] |pipelines, _filters| {
+        pipelines.insert("obj_versions".to_string());
+    };
     Query.[events] |pipelines, filters| {
         pipelines.insert("tx_digests".to_string());
         if filters.contains("module") {
