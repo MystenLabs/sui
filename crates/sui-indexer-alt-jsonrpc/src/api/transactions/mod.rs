@@ -118,11 +118,8 @@ impl QueryTransactionsApiServer for QueryTransactions {
                 let mut retries = 0;
                 for _ in 0..config.tx_retry_count {
                     // Retry only if the error is an invalid params error, which can only be due to
-                    // the transaction not being found in the kv store or tx balance changes table.
-                    if let Err(RpcError::InvalidParams(
-                        _e @ (Error::BalanceChangesNotFound(_) | Error::NotFound(_)),
-                    )) = tx
-                    {
+                    // the transaction not being found in the kv store.
+                    if let Err(RpcError::InvalidParams(_e @ Error::NotFound(_))) = tx {
                         interval.tick().await;
                         retries += 1;
                         tx = response::transaction(ctx, *d, &options).await;
