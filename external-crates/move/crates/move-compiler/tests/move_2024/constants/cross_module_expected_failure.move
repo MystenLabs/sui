@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Pins the '#[expected_failure(abort_code = ...)]' attribute path for constants: attribute
 // references do not go through constant visibility checks, so a cross-module reference to a
 // constant without 'public(package)' is accepted there (as it was before cross-module

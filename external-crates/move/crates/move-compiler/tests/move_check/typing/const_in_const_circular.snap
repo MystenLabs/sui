@@ -18,18 +18,6 @@ error[EC08001]: cannot compute constant value
   │           -- Cyclic constant defined here
 
 error[EC08001]: cannot compute constant value
-  ┌─ tests/move_check/typing/const_in_const_circular.move:9:11
-  │
-9 │     const C3: u64 = C1 + 1;
-  │           ^^ Constant uses constant 0x42::circular::C1, which has a circular dependency
-
-error[EC08001]: cannot compute constant value
-   ┌─ tests/move_check/typing/const_in_const_circular.move:13:11
-   │
-13 │     const C5: u64 = C1 + C4;
-   │           ^^ Constant uses constant 0x42::circular::C1, which has a circular dependency
-
-error[EC08001]: cannot compute constant value
    ┌─ tests/move_check/typing/const_in_const_circular.move:15:11
    │
 15 │     const C6: u64 = C7 + 1;
@@ -40,9 +28,3 @@ error[EC08001]: cannot compute constant value
    ·
 21 │     const C9: u64 = C6 + C6;
    │           -- Cyclic constant defined here
-
-error[EC08001]: cannot compute constant value
-   ┌─ tests/move_check/typing/const_in_const_circular.move:23:11
-   │
-23 │     const C10: u64 = C0 + C6;
-   │           ^^^ Constant uses constant 0x42::circular::C0, which has a circular dependency

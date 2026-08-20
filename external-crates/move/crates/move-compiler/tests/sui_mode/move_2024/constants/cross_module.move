@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Cross-module constants under the Sui flavor: the synthesized constant copies do not trip
 // sui-mode checks
 

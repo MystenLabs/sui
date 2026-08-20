@@ -6,7 +6,7 @@ info:
   lint: false
 ---
 error[EC03022]: invalid usage position
-   ┌─ tests/move_2024/constants/invalid_cross_module_call_forms.move:18:32
+   ┌─ tests/move_2024/constants/invalid_cross_module_call_forms.move:15:32
    │
-18 │ public fun call_const(): u64 { a::MAX() }
+15 │ public fun call_const(): u64 { a::MAX() }
    │                                ^^^^^^ Invalid module access. Expected a function, but found constant 'MAX' in module '0x42::a'

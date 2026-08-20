@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // An internal '#[error]' constant used in an abort position inside a macro is rejected when the
 // macro expands in another module: visibility is resolved in the scope of the caller, which
 // cannot access the internal constant

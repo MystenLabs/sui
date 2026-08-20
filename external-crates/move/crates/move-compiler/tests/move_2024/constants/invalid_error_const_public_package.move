@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // '#[error]' + 'public(package)' is rejected at the definition, even if the constant is never
 // used
 

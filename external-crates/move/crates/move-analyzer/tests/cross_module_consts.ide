@@ -1,0 +1,38 @@
+// Tests a module extension of a pre-compiled dependency package: extending `ConstDeps::m`
+// forces it to recompile from source, so its (and the extension's) references to the package's
+// `public(package)` constants fold against the dependency's pre-compiled constant values. The
+// Diagnostics suite asserts the project compiles cleanly -- a broken constant seed surfaces
+// here as CFGIR errors. The use-def assertions cover the extension function and the recompiled
+// module; the extension body's own uses are not indexed (dependency-module bodies are skipped)
+[
+  {
+    "Diagnostics": {
+      "project": "tests/cross-module-consts"
+    }
+  },
+  {
+    "UseDef": {
+      "project": "tests/cross-module-consts",
+      "file_tests": {
+        "user.move": [
+          {
+            "use_line": 4,
+            "use_ndx": 0
+          },
+          {
+            "use_line": 4,
+            "use_ndx": 1
+          },
+          {
+            "use_line": 5,
+            "use_ndx": 1
+          },
+          {
+            "use_line": 14,
+            "use_ndx": 0
+          }
+        ]
+      }
+    }
+  }
+]

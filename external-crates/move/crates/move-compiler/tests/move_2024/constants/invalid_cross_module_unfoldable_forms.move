@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Unfoldable cross-module constants are reported at their uses in all forms: under
 // short-circuiting operators (in constant definitions and function bodies) and in match patterns
 

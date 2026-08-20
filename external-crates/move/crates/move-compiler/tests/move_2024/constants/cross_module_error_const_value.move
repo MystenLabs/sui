@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // '#[error]' constants cannot be 'public(package)', but a local '#[error]' constant may fold
 // cross-module constants into its value and be used in a local abort
 

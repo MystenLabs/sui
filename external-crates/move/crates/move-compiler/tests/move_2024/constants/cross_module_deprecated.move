@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Deprecation warnings fire on cross-module constant uses
 
 module 0x42::a {

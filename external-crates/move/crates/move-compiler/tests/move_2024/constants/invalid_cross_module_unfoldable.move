@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Constants without values (failed evaluation, or removed as part of an in-module cycle)
 // observed cross-module: the definitions error, each cross-module use reports it, and no ICE
 

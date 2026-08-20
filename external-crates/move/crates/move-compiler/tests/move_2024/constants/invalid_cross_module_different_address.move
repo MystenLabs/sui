@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // 'public(package)' constants can only be accessed from the same address and package
 
 module 0x42::a {

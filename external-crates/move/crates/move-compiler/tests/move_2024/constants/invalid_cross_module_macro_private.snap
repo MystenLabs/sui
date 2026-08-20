@@ -6,15 +6,15 @@ info:
   lint: false
 ---
 error[EC04001]: restricted visibility
-   ┌─ tests/move_2024/constants/invalid_cross_module_macro_private.move:12:5
+   ┌─ tests/move_2024/constants/invalid_cross_module_macro_private.move:9:5
    │
- 9 │ const SECRET: u64 = 42;
+ 6 │ const SECRET: u64 = 42;
    │       ------ This constant is internal to its module. Only 'public(package)' constants can be accessed outside of their module
    ·
-12 │     SECRET
+ 9 │     SECRET
    │     ^^^^^^ Invalid access of internal constant '0x42::a::SECRET'
    ·
-21 │ public fun steal(): u64 { a::get_secret!() }
+18 │ public fun steal(): u64 { a::get_secret!() }
    │                           ---------------- While expanding this macro
    │
    = This visibility error occurs in a macro body while expanding the macro '0x42::a::get_secret'

@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // A module "cycle" that exists only through constant references is legal: constants are erased
 // at compile time (folded into definitions and copied into using modules), so they create no
 // module dependency. This holds for function-body uses (c <-> d) and for constant definitions

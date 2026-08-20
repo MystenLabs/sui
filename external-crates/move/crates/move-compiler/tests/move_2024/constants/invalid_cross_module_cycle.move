@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // A genuine constant dependency cycle across modules is reported directly at the constants
 // involved
 

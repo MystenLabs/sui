@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // A private constant defined from a cross-module constant is still private; a
 // 'public(package)' constant may be defined from a same-module private one
 

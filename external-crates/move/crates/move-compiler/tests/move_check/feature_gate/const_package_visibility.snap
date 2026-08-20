@@ -6,9 +6,9 @@ info:
   lint: false
 ---
 error[EC13001]: feature is not supported in specified edition
-  ┌─ tests/move_check/feature_gate/const_package_visibility.move:7:5
+  ┌─ tests/move_check/feature_gate/const_package_visibility.move:4:5
   │
-7 │     public(package) const MAX: u64 = 100;
+4 │     public(package) const MAX: u64 = 100;
   │     ^^^^^^^^^^^^^^^ cross-module constant accesses are not supported by current edition 'legacy'; the '2024.alpha' edition supports this feature
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.

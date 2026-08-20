@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // A macro body referencing its module's private constant errors when expanded in another
 // module: visibility is resolved in the scope of the caller
 

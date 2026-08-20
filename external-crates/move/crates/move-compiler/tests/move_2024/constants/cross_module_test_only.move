@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // '#[test_only]' package constants work from other modules' tests. Note the '.unused' mode
 // compiles with test code included, so a constant used only from cross-module test code counts
 // as used there (a plain 'move build' does warn; see the move-cli cross_module_constants test)
