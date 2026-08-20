@@ -1,7 +1,7 @@
 module Defn::defn {
     public(package) const MAX: u64 = 100;
 
-    // the constant reference expands at each call site, where visibility is resolved
+    // expands to a constant ref at each call site
     public macro fun get(): u64 {
         MAX
     }

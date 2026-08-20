@@ -481,7 +481,7 @@ fn ignorable_exp(e: &Exp) -> bool {
 /// `0xFFFFu16 as u8`.
 pub fn report_always_erroring_operations(
     reporter: &DiagnosticReporter,
-    constants: &UniqueMap<ConstantName, Value>,
+    constants: &BTreeMap<(ModuleIdent, ConstantName), Value>,
     cfg: &MutForwardCFG,
 ) {
     let context = Context {
