@@ -388,6 +388,12 @@ pub async fn metadata(
         vec![]
     };
 
+    let nonce = if gas_coins.is_empty() {
+        Some(rand::random::<u32>())
+    } else {
+        None
+    };
+
     // Fetch epoch and chain_id for address-balance gas transactions.
     //
     // Prefer `bind_epoch` (atomic with the rate snapshot from
@@ -424,6 +430,7 @@ pub async fn metadata(
             address_balance_withdrawal,
             epoch,
             chain_id,
+            nonce,
             fss_object_count,
             redeem_token_amount,
             redeem_plan,
