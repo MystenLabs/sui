@@ -7,6 +7,7 @@ use std::sync::Arc;
 use reader::StateReader;
 use subscription::SubscriptionServiceHandle;
 use sui_http::middleware::callback::CallbackLayer;
+use sui_types::local_execution::LocalEffectsWaiter;
 use sui_types::storage::RpcStateReader;
 use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
@@ -61,6 +62,7 @@ impl std::fmt::Display for ServerVersion {
 pub struct RpcService {
     reader: StateReader,
     executor: Option<Arc<dyn TransactionExecutor>>,
+    local_effects_waiter: Option<Arc<dyn LocalEffectsWaiter>>,
     subscription_service_handle: Option<SubscriptionServiceHandle>,
     chain_id: sui_types::digests::ChainIdentifier,
     server_version: Option<ServerVersion>,
@@ -78,6 +80,7 @@ impl RpcService {
         Self {
             reader: StateReader::new(reader),
             executor: None,
+            local_effects_waiter: None,
             subscription_service_handle: None,
             chain_id,
             server_version: None,
@@ -101,6 +104,10 @@ impl RpcService {
 
     pub fn with_executor(&mut self, executor: Arc<dyn TransactionExecutor + Send + Sync>) {
         self.executor = Some(executor);
+    }
+
+    pub fn with_local_effects_waiter(&mut self, waiter: Arc<dyn LocalEffectsWaiter + Send + Sync>) {
+        self.local_effects_waiter = Some(waiter);
     }
 
     pub fn with_subscription_service(
@@ -279,6 +286,19 @@ sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionServiceSe
                     .await;
 
                 services = services.add_service(subscription_service);
+            }
+
+            if self.local_effects_waiter.is_some() {
+                let local_execution_service =
+                    grpc::local_execution::LocalExecutionServiceServer::new(self.clone());
+                health_reporter
+                    .set_service_status(
+                        service_name(&local_execution_service),
+                        tonic_health::ServingStatus::Serving,
+                    )
+                    .await;
+
+                services = services.add_service(local_execution_service);
             }
 
             for name in &extra_service_names {
