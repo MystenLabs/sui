@@ -58,26 +58,7 @@ fn init_jemalloc_profiling() {
     );
 
     if !opt_prof {
-        // DIAGNOSTIC (temporary): opt.prof is a read-only reflection of whether `prof:true` was
-        // honored at boot, but --enable-prof was confirmed compiled in. Try to force profiling on
-        // via the read-write `prof.active` mallctl anyway, and immediately attempt a calibration
-        // dump, to determine empirically whether jemalloc's profiling infrastructure was actually
-        // booted (in which case this works) or not (in which case both calls fail/no-op).
-        let activate: Result<(), _> = unsafe { raw::write::<bool>(b"prof.active\0", true) };
-        let calibration_dump: Option<Result<(), _>> = if activate.is_ok() {
-            let dump_path: *const std::os::raw::c_char = std::ptr::null();
-            Some(unsafe { raw::write::<*const std::os::raw::c_char>(b"prof.dump\0", dump_path) })
-        } else {
-            None
-        };
-        tracing::warn!(
-            ?activate,
-            ?calibration_dump,
-            "opt.prof is false; attempted to force-enable via prof.active as a diagnostic",
-        );
-        if !matches!(calibration_dump, Some(Ok(()))) {
-            return;
-        }
+        return;
     }
 
     tokio::spawn(async {
