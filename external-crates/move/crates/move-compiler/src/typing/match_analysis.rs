@@ -845,7 +845,10 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
     {
         report_datatype(context, loc, matrix, mident, datatype_name)
     } else {
-        if !context.env().has_errors() {
+        // A type parameter subject is legal and has no constructors to suggest; only a
+        // wildcard or binder arm can cover it. Any other type here is unexpected.
+        let is_type_param = matches!(ty.value.base_type_().inner(), TypeInner::Param(_));
+        if !is_type_param && !context.env().has_errors() {
             // It's unclear how we got here, so report an ICE and suggest a wildcard.
             context.add_diag(ice!((
                 loc,
