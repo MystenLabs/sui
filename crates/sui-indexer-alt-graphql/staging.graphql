@@ -110,6 +110,14 @@ type Address implements Node & IAddressable {
 	"""
 	defaultNameRecord: NameRecord
 	"""
+	Access a derived object using its key.
+	
+	The object can be bounded by at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`.
+	
+	Returns `null` if the derived object has not been claimed, has been deleted, or is not available in the store.
+	"""
+	derivedObject(name: DynamicFieldName!, version: UInt53, rootVersion: UInt53, atCheckpoint: UInt53): MoveObject
+	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
 	
 	Returns `null` if a dynamic field with that name could not be found attached to the object with this address.
@@ -137,6 +145,12 @@ type Address implements Node & IAddressable {
 	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.
 	"""
 	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Access derived objects using their keys and optional version bounds.
+	
+	Each key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a derived object has not been claimed, has been deleted, or is not available in the store, its corresponding entry is `null`.
+	"""
+	multiGetDerivedObjects(keys: [DerivedObjectKey!]!): [MoveObject]!
 	"""
 	Access dynamic fields on an object using their types and BCS-encoded names.
 	
@@ -681,6 +695,14 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	denyCap: MoveObject
 	"""
+	Access a derived object using its key.
+	
+	The object can be bounded by at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`.
+	
+	Returns `null` if the derived object has not been claimed, has been deleted, or is not available in the store.
+	"""
+	derivedObject(name: DynamicFieldName!, version: UInt53, rootVersion: UInt53, atCheckpoint: UInt53): MoveObject
+	"""
 	Description of the coin.
 	"""
 	description: String
@@ -726,6 +748,12 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.
 	"""
 	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Access derived objects using their keys and optional version bounds.
+	
+	Each key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a derived object has not been claimed, has been deleted, or is not available in the store, its corresponding entry is `null`.
+	"""
+	multiGetDerivedObjects(keys: [DerivedObjectKey!]!): [MoveObject]!
 	"""
 	Access dynamic fields on an object using their types and BCS-encoded names.
 	
@@ -981,6 +1009,30 @@ ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ. No
 scalar DateTime
 
 """
+Identifies a derived object under one parent object.
+
+At most one of `version`, `rootVersion`, or `atCheckpoint` may be specified.
+"""
+input DerivedObjectKey {
+	"""
+	If specified, fetch the latest version of the derived object as of this checkpoint.
+	"""
+	atCheckpoint: UInt53
+	"""
+	The derived object's key.
+	"""
+	name: DynamicFieldName!
+	"""
+	If specified, fetch the latest version of the derived object at or before this root version.
+	"""
+	rootVersion: UInt53
+	"""
+	If specified, fetch the derived object at this exact version.
+	"""
+	version: UInt53
+}
+
+"""
 A rendered JSON blob based on an on-chain template.
 """
 type Display {
@@ -1005,12 +1057,12 @@ type DisplayRegistryCreateTransaction {
 }
 
 """
-Dynamic fields are heterogenous fields that can be added or removed from an object at runtime. Their names are arbitrary Move values that have `copy`, `drop`, and `store`.
+Dynamic fields are heterogeneous fields that can be added to or removed from an object at runtime. Their names are arbitrary Move values that have `copy`, `drop`, and `store`.
 
-There are two sub-types of dynamic fields:
+There are two kinds of dynamic fields:
 
-- Dynamic fields can store any value that has `store`. Objects stored in this kind of field will be considered wrapped (not accessible via its ID by external tools like explorers, wallets, etc. accessing storage).
-- Dynamic object fields can only store objects (values that have the `key` ability, and an `id: UID` as its first field) that have `store`, but they will still be directly accessible off-chain via their ID after being attached as a field.
+- Dynamic fields can store any value that has `store`. Objects stored in this kind of field are wrapped and cannot be accessed directly by their ID.
+- Dynamic object fields can store only objects that have `key` and `store`. Their values remain accessible directly by their ID while attached.
 """
 type DynamicField implements Node & IAddressable & IMoveObject & IObject {
 	"""
@@ -1054,6 +1106,14 @@ type DynamicField implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	defaultNameRecord: NameRecord
 	"""
+	Access a derived object using its key.
+	
+	The object can be bounded by at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`.
+	
+	Returns `null` if the derived object has not been claimed, has been deleted, or is not available in the store.
+	"""
+	derivedObject(name: DynamicFieldName!, version: UInt53, rootVersion: UInt53, atCheckpoint: UInt53): MoveObject
+	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
 	digest: String
@@ -1095,6 +1155,12 @@ type DynamicField implements Node & IAddressable & IMoveObject & IObject {
 	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.
 	"""
 	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Access derived objects using their keys and optional version bounds.
+	
+	Each key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a derived object has not been claimed, has been deleted, or is not available in the store, its corresponding entry is `null`.
+	"""
+	multiGetDerivedObjects(keys: [DerivedObjectKey!]!): [MoveObject]!
 	"""
 	Access dynamic fields on an object using their types and BCS-encoded names.
 	
@@ -1727,11 +1793,25 @@ interface IAddressable {
 	"""
 	defaultNameRecord: NameRecord
 	"""
+	Access a derived object using its key.
+	
+	The object can be bounded by at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`.
+	
+	Returns `null` if the derived object has not been claimed, has been deleted, or is not available in the store.
+	"""
+	derivedObject(name: DynamicFieldName!, version: UInt53, rootVersion: UInt53, atCheckpoint: UInt53): MoveObject
+	"""
 	Fetch balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
 	
 	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.
 	"""
 	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Access derived objects using their keys and optional version bounds.
+	
+	Each key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a derived object has not been claimed, has been deleted, or is not available in the store, its corresponding entry is `null`.
+	"""
+	multiGetDerivedObjects(keys: [DerivedObjectKey!]!): [MoveObject]!
 	"""
 	Objects owned by this address, optionally filtered by type.
 	"""
@@ -2377,6 +2457,14 @@ type MoveObject implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	defaultNameRecord: NameRecord
 	"""
+	Access a derived object using its key.
+	
+	The object can be bounded by at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`.
+	
+	Returns `null` if the derived object has not been claimed, has been deleted, or is not available in the store.
+	"""
+	derivedObject(name: DynamicFieldName!, version: UInt53, rootVersion: UInt53, atCheckpoint: UInt53): MoveObject
+	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
 	digest: String
@@ -2418,6 +2506,12 @@ type MoveObject implements Node & IAddressable & IMoveObject & IObject {
 	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.
 	"""
 	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Access derived objects using their keys and optional version bounds.
+	
+	Each key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a derived object has not been claimed, has been deleted, or is not available in the store, its corresponding entry is `null`.
+	"""
+	multiGetDerivedObjects(keys: [DerivedObjectKey!]!): [MoveObject]!
 	"""
 	Access dynamic fields on an object using their types and BCS-encoded names.
 	
@@ -2544,6 +2638,14 @@ type MovePackage implements Node & IAddressable & IObject {
 	"""
 	defaultNameRecord: NameRecord
 	"""
+	Access a derived object using its key.
+	
+	The object can be bounded by at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`.
+	
+	Returns `null` if the derived object has not been claimed, has been deleted, or is not available in the store.
+	"""
+	derivedObject(name: DynamicFieldName!, version: UInt53, rootVersion: UInt53, atCheckpoint: UInt53): MoveObject
+	"""
 	32-byte hash that identifies the package's contents, encoded in Base58.
 	"""
 	digest: String
@@ -2573,6 +2675,12 @@ type MovePackage implements Node & IAddressable & IObject {
 	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.
 	"""
 	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Access derived objects using their keys and optional version bounds.
+	
+	Each key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a derived object has not been claimed, has been deleted, or is not available in the store, its corresponding entry is `null`.
+	"""
+	multiGetDerivedObjects(keys: [DerivedObjectKey!]!): [MoveObject]!
 	"""
 	Fetch the package as an object with the same ID, at a different version, root version bound, or checkpoint.
 	
@@ -3077,6 +3185,14 @@ type Object implements Node & IAddressable & IObject {
 	"""
 	defaultNameRecord: NameRecord
 	"""
+	Access a derived object using its key.
+	
+	The object can be bounded by at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`.
+	
+	Returns `null` if the derived object has not been claimed, has been deleted, or is not available in the store.
+	"""
+	derivedObject(name: DynamicFieldName!, version: UInt53, rootVersion: UInt53, atCheckpoint: UInt53): MoveObject
+	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
 	digest: String
@@ -3106,6 +3222,12 @@ type Object implements Node & IAddressable & IObject {
 	Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.
 	"""
 	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Access derived objects using their keys and optional version bounds.
+	
+	Each key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a derived object has not been claimed, has been deleted, or is not available in the store, its corresponding entry is `null`.
+	"""
+	multiGetDerivedObjects(keys: [DerivedObjectKey!]!): [MoveObject]!
 	"""
 	Access dynamic fields on an object using their types and BCS-encoded names.
 	
