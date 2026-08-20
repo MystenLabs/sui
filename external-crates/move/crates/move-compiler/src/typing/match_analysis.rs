@@ -4,9 +4,9 @@
 use crate::{
     diag,
     diagnostics::filter::FilterScope,
-    expansion::ast::{ModuleIdent, Value_},
+    expansion::ast::{Fields, ModuleIdent, Value, Value_},
     ice, ice_assert,
-    naming::ast::{BuiltinTypeName_, TypeInner},
+    naming::ast::{BuiltinTypeName_, Type, TypeInner},
     parser::ast::{DatatypeName, VariantName},
     shared::{
         Identifier,
@@ -23,7 +23,7 @@ use crate::{
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use std::{
-    collections::{BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     fmt::Display,
 };
 
@@ -238,6 +238,50 @@ impl Display for CounterExample {
     }
 }
 
+/// Filters an enum column's head constructors down to the subject enum's variants. Ill-typed
+/// variant patterns survive typing in nested (field) positions, so a foreign variant name must
+/// come with a prior error.
+fn subject_enum_ctors(
+    context: &mut Context,
+    mident: &ModuleIdent,
+    datatype_name: &DatatypeName,
+    ctors: BTreeMap<VariantName, (Loc, Fields<Type>)>,
+) -> BTreeMap<VariantName, (Loc, Fields<Type>)> {
+    let (valid, foreign): (BTreeMap<_, _>, BTreeMap<_, _>) =
+        ctors.into_iter().partition(|(ctor, _)| {
+            context
+                .info()
+                .enum_variant_fields(mident, datatype_name, ctor)
+                .is_some()
+        });
+    for (ctor, (ploc, _)) in &foreign {
+        ice_assert!(
+            context,
+            context.env().has_errors(),
+            *ploc,
+            "Variant '{}' is not part of the matched enum '{}'",
+            ctor,
+            datatype_name
+        );
+    }
+    valid
+}
+
+/// Filters a bool column's literals down to the bool values. Ill-typed literal patterns survive
+/// typing in nested (field) positions, so anything else must come with a prior error.
+fn bool_lits(context: &mut Context, lits: BTreeSet<Value>, loc: Loc) -> BTreeSet<Value> {
+    let (bools, non_bools): (BTreeSet<Value>, BTreeSet<Value>) = lits
+        .into_iter()
+        .partition(|lit| matches!(lit.value, Value_::Bool(_)));
+    ice_assert!(
+        context,
+        non_bools.is_empty() || context.env().has_errors(),
+        loc,
+        "Non-bool literal pattern in a bool match column"
+    );
+    bools
+}
+
 /// Returns true if it found a counter-example. Assumes all arms with guards have been removed from
 /// the provided matrix.
 fn find_counterexample(
@@ -274,8 +318,9 @@ fn find_counterexample_impl(
         arity: u32,
         ndx: &mut u32,
     ) -> Option<Vec<CounterExample>> {
-        let literals = matrix.first_lits();
-        assert!(literals.len() <= 2, "ICE match exhaustiveness failure");
+        // Ill-typed literal patterns survive typing in nested (field) positions, so non-bool
+        // values can appear here alongside a prior error; consider only the bool ones.
+        let literals = bool_lits(context, matrix.first_lits(), matrix.loc);
         if literals.len() == 2 {
             // Saturated
             for lit in literals {
@@ -454,7 +499,12 @@ fn find_counterexample_impl(
                 .into_iter()
                 .collect::<BTreeSet<_>>();
 
-            let ctors = matrix.first_variant_ctors();
+            let ctors = subject_enum_ctors(
+                context,
+                &mident,
+                &datatype_name,
+                matrix.first_variant_ctors(),
+            );
             for ctor in ctors.keys() {
                 unmatched_variants.remove(ctor);
             }
@@ -642,8 +692,7 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
     // IDE add an arm to address that missing one.
 
     fn report_bool(context: &mut Context, loc: Loc, matrix: &PatternMatrix) {
-        let literals = matrix.first_lits();
-        assert!(literals.len() <= 2, "ICE match exhaustiveness failure");
+        let literals = bool_lits(context, matrix.first_lits(), loc);
         // Figure out which are missing
         let mut unused = BTreeSet::from([Value_::Bool(true), Value_::Bool(false)]);
         for lit in literals {
