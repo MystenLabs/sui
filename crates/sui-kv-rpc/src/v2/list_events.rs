@@ -29,11 +29,11 @@ use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::CheckpointRange;
-use sui_rpc_api::ledger_history::query_options::EventPosition;
-use sui_rpc_api::ledger_history::query_options::EventScanBounds;
+use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
+use sui_rpc_api::ledger_history::query_options::IntraTxScanBounds;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
-use sui_rpc_api::ledger_history::query_options::ResolvedEventRange;
+use sui_rpc_api::ledger_history::query_options::ResolvedIntraTxRange;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
@@ -124,7 +124,7 @@ pub(crate) async fn list_events(
         let terminal_position = Position::Events {
             checkpoint: range_end_checkpoint,
             tx_seq: range_end_position.tx_seq,
-            event_index: range_end_position.event_index,
+            event_index: range_end_position.index,
         };
         let response = range_end_response(&options, exhaustion, terminal_position, None, true).0;
         return Ok(async_stream::try_stream! {
@@ -138,10 +138,10 @@ pub(crate) async fn list_events(
     }
 
     let scan_budget = ctx.scan_budget(BitmapIndexSpec::event());
-    let frontier_to_position: fn(u64) -> EventPosition = if filtered {
-        |seq| EventPosition::from(event_seq::decode_event_seq(seq))
+    let frontier_to_position: fn(u64) -> IntraTxCoordinate = if filtered {
+        |seq| IntraTxCoordinate::from(event_seq::decode_event_seq(seq))
     } else {
-        EventPosition::start_of_tx
+        IntraTxCoordinate::start_of_tx
     };
 
     // Stage A: stream of EventRefs. Filtered requests discover event positions
@@ -149,7 +149,7 @@ pub(crate) async fn list_events(
     // expand each row's event_count into concrete EventRefs.
     let event_ref_stream: BoxStream<
         'static,
-        Result<Watermarked<EventRef, EventPosition>, ScanStop>,
+        Result<Watermarked<EventRef, IntraTxCoordinate>, ScanStop>,
     > = if let Some(filter) = &request.filter {
         let query = ctx.event_filter_query(filter)?;
         client
@@ -164,10 +164,10 @@ pub(crate) async fn list_events(
             )
             .map_ok(|m| {
                 m.map_item(|seq| EventRef {
-                    position: EventPosition::from(event_seq::decode_event_seq(seq)),
+                    position: IntraTxCoordinate::from(event_seq::decode_event_seq(seq)),
                     tx_seq_digest: None,
                 })
-                .map_watermark(|seq| EventPosition::from(event_seq::decode_event_seq(seq)))
+                .map_watermark(|seq| IntraTxCoordinate::from(event_seq::decode_event_seq(seq)))
             })
             .boxed()
     } else {
@@ -185,7 +185,7 @@ pub(crate) async fn list_events(
     // so we skip this stage there.
     let ref_with_digest_stream: BoxStream<
         'static,
-        Result<Watermarked<EventRef, EventPosition>, ScanStop>,
+        Result<Watermarked<EventRef, IntraTxCoordinate>, ScanStop>,
     > = if filtered {
         pipelined_chunks(
             ref_stream,
@@ -275,7 +275,7 @@ pub(crate) async fn list_events(
                 let terminal_position = Position::Events {
                     checkpoint: range_end_checkpoint,
                     tx_seq: range_end_position.tx_seq,
-                    event_index: range_end_position.event_index,
+                    event_index: range_end_position.index,
                 };
                 let (response, reason) = range_end_response(
                     &options,
@@ -306,7 +306,7 @@ pub(crate) async fn list_events(
                         Position::Events {
                             checkpoint: item_checkpoint,
                             tx_seq: rendered.position.tx_seq,
-                            event_index: rendered.position.event_index,
+                            event_index: rendered.position.index,
                         },
                         covered_checkpoint_bound,
                     );
@@ -478,7 +478,7 @@ async fn fetch_txs_for_refs(
             anyhow::anyhow!(
                 "list_events: selected event {}/{} is missing transaction digest",
                 p.position.tx_seq,
-                p.position.event_index
+                p.position.index
             )
         })?;
         if seen_digests.insert(row.digest) {
@@ -527,7 +527,7 @@ async fn fetch_txs_for_refs(
 struct RenderedEvent {
     event: ProtoEvent,
     checkpoint_number: u64,
-    position: EventPosition,
+    position: IntraTxCoordinate,
 }
 
 async fn render_event(
@@ -542,19 +542,19 @@ async fn render_event(
             tonic::Code::Internal,
             format!(
                 "list_events: selected event {}/{} transaction {} has no events column",
-                event_ref.position.tx_seq, event_ref.position.event_index, tx.digest
+                event_ref.position.tx_seq, event_ref.position.index, tx.digest
             ),
         )
     })?;
     let event = tx_events
         .data
-        .get(event_ref.position.event_index as usize)
+        .get(event_ref.position.index as usize)
         .ok_or_else(|| {
             RpcError::new(
                 tonic::Code::Internal,
                 format!(
                     "list_events: selected event {}/{} index out of range for transaction {}",
-                    event_ref.position.tx_seq, event_ref.position.event_index, tx.digest
+                    event_ref.position.tx_seq, event_ref.position.index, tx.digest
                 ),
             )
         })?;
@@ -580,7 +580,7 @@ async fn render_event(
         proto_event.transaction_index = event_ref.tx_seq_digest.map(|row| row.tx_offset as u64);
     }
     if read_mask.contains(ProtoEvent::EVENT_INDEX_FIELD.name) {
-        proto_event.event_index = Some(event_ref.position.event_index);
+        proto_event.event_index = Some(event_ref.position.index);
     }
 
     Ok(RenderedEvent {
@@ -626,7 +626,7 @@ fn event_frontier_watermark(
     direction: ScanDirection,
     entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
-    position: EventPosition,
+    position: IntraTxCoordinate,
     checkpoint_at_frontier: Option<u64>,
 ) -> Result<Watermark, RpcError> {
     if let Some(checkpoint) = checkpoint_at_frontier {
@@ -644,7 +644,7 @@ fn event_frontier_watermark(
                     tonic::Code::Internal,
                     format!(
                         "event scan frontier {}/{} has no checkpoint mapping",
-                        position.tx_seq, position.event_index
+                        position.tx_seq, position.index
                     ),
                 )
             },
@@ -653,14 +653,14 @@ fn event_frontier_watermark(
         Position::Events {
             checkpoint: cursor_checkpoint,
             tx_seq: position.tx_seq,
-            event_index: position.event_index,
+            event_index: position.index,
         },
         *covered_checkpoint_bound,
     ))
 }
 
 fn terminal_response_from_scan_stop(
-    stop: ResolvedScanStop<EventPosition>,
+    stop: ResolvedScanStop<IntraTxCoordinate>,
     options: &QueryOptions,
     direction: ScanDirection,
     entry_checkpoint: u64,
@@ -690,7 +690,7 @@ fn terminal_response_from_scan_stop(
 /// events, so those rows are carried forward instead of being fetched again.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct EventRef {
-    position: EventPosition,
+    position: IntraTxCoordinate,
     tx_seq_digest: Option<TxSeqDigestData>,
 }
 
@@ -700,10 +700,10 @@ struct EventRef {
 /// [`ScanStop`] type because it is its own single-source merge.
 fn unfiltered_event_refs(
     client: BigTableClient,
-    bounds: EventScanBounds,
+    bounds: IntraTxScanBounds,
     options: QueryOptions,
     source_limit: usize,
-) -> BoxStream<'static, Result<Watermarked<EventRef, EventPosition>, ScanStop>> {
+) -> BoxStream<'static, Result<Watermarked<EventRef, IntraTxCoordinate>, ScanStop>> {
     async_stream::try_stream! {
         let Some(tx_range) = bounds.tx_range() else {
             return;
@@ -754,7 +754,7 @@ fn clamp_tx_scan_range(
 
 fn expand_event_refs(
     row: TxSeqDigestData,
-    bounds: EventScanBounds,
+    bounds: IntraTxScanBounds,
     options: &QueryOptions,
 ) -> Vec<EventRef> {
     if row.event_count == 0 {
@@ -763,12 +763,12 @@ fn expand_event_refs(
 
     let mut refs = Vec::with_capacity(row.event_count as usize);
     if options.is_ascending() {
-        for event_index in 0..row.event_count {
-            push_event_ref_if_in_bounds(&mut refs, row, event_index, bounds);
+        for index in 0..row.event_count {
+            push_event_ref_if_in_bounds(&mut refs, row, index, bounds);
         }
     } else {
-        for event_index in (0..row.event_count).rev() {
-            push_event_ref_if_in_bounds(&mut refs, row, event_index, bounds);
+        for index in (0..row.event_count).rev() {
+            push_event_ref_if_in_bounds(&mut refs, row, index, bounds);
         }
     }
     refs
@@ -777,12 +777,12 @@ fn expand_event_refs(
 fn push_event_ref_if_in_bounds(
     refs: &mut Vec<EventRef>,
     row: TxSeqDigestData,
-    event_index: u32,
-    bounds: EventScanBounds,
+    index: u32,
+    bounds: IntraTxScanBounds,
 ) {
-    let position = EventPosition {
+    let position = IntraTxCoordinate {
         tx_seq: row.tx_sequence_number,
-        event_index,
+        index,
     };
     if !bounds.contains(position) {
         return;
@@ -811,15 +811,15 @@ async fn resolve_event_range(
     client: &BigTableClient,
     checkpoint_range: CheckpointRange,
     options: &QueryOptions,
-) -> Result<ResolvedEventRange, RpcError> {
+) -> Result<ResolvedIntraTxRange, RpcError> {
     let cp_range = checkpoint_range.resolve(options);
     if cp_range.is_empty() {
         let tx_boundary =
             checkpoint_to_tx_boundary(client, cp_range.terminal_checkpoint(options.ordering))
                 .await?;
-        return Ok(ResolvedEventRange::empty_at(
+        return Ok(ResolvedIntraTxRange::empty_at(
             cp_range.terminal_checkpoint(options.ordering),
-            EventPosition::start_of_tx(tx_boundary),
+            IntraTxCoordinate::start_of_tx(tx_boundary),
             cp_range.exhaustion,
         ));
     }
@@ -827,8 +827,8 @@ async fn resolve_event_range(
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
-    Ok(options.apply_event_cursor_bounds(ResolvedEventRange {
-        bounds: EventScanBounds::tx_span(tx_range.start, tx_range.end),
+    Ok(options.apply_intra_tx_cursor_bounds(ResolvedIntraTxRange {
+        bounds: IntraTxScanBounds::tx_span(tx_range.start, tx_range.end),
         entry_checkpoint: if options.is_ascending() {
             cp_range.range.start
         } else {
@@ -837,10 +837,10 @@ async fn resolve_event_range(
         end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
         end_position: match options.ordering {
             sui_rpc_api::ledger_history::query_options::Ordering::Ascending => {
-                EventPosition::start_of_tx(tx_range.end)
+                IntraTxCoordinate::start_of_tx(tx_range.end)
             }
             sui_rpc_api::ledger_history::query_options::Ordering::Descending => {
-                EventPosition::start_of_tx(tx_range.start)
+                IntraTxCoordinate::start_of_tx(tx_range.start)
             }
         },
         exhaustion: cp_range.exhaustion,
@@ -1089,8 +1089,8 @@ mod tests {
             .map(|r| {
                 let row = r.tx_seq_digest.expect("unfiltered refs carry digest row");
                 assert_eq!(row.tx_sequence_number, r.position.tx_seq);
-                assert!(row.event_count > r.position.event_index);
-                (r.position.tx_seq, r.position.event_index)
+                assert!(row.event_count > r.position.index);
+                (r.position.tx_seq, r.position.index)
             })
             .collect()
     }
@@ -1100,7 +1100,7 @@ mod tests {
         let row = tx_row(10, 0);
         let refs = expand_event_refs(
             row,
-            EventScanBounds::tx_span(10, 11),
+            IntraTxScanBounds::tx_span(10, 11),
             &options(Ordering::Ascending),
         );
         assert!(refs.is_empty());
@@ -1111,14 +1111,14 @@ mod tests {
         let row = tx_row(10, 4);
         let refs = expand_event_refs(
             row,
-            EventScanBounds {
-                lo: Bound::Included(EventPosition {
+            IntraTxScanBounds {
+                lo: Bound::Included(IntraTxCoordinate {
                     tx_seq: 10,
-                    event_index: 1,
+                    index: 1,
                 }),
-                hi: Bound::Excluded(EventPosition {
+                hi: Bound::Excluded(IntraTxCoordinate {
                     tx_seq: 10,
-                    event_index: 3,
+                    index: 3,
                 }),
             },
             &options(Ordering::Ascending),
@@ -1127,13 +1127,13 @@ mod tests {
         assert_eq!(
             refs.iter().map(|r| r.position).collect::<Vec<_>>(),
             vec![
-                EventPosition {
+                IntraTxCoordinate {
                     tx_seq: 10,
-                    event_index: 1
+                    index: 1
                 },
-                EventPosition {
+                IntraTxCoordinate {
                     tx_seq: 10,
-                    event_index: 2
+                    index: 2
                 },
             ]
         );
@@ -1144,14 +1144,14 @@ mod tests {
         let row = tx_row(10, 4);
         let refs = expand_event_refs(
             row,
-            EventScanBounds {
-                lo: Bound::Included(EventPosition {
+            IntraTxScanBounds {
+                lo: Bound::Included(IntraTxCoordinate {
                     tx_seq: 10,
-                    event_index: 1,
+                    index: 1,
                 }),
-                hi: Bound::Excluded(EventPosition {
+                hi: Bound::Excluded(IntraTxCoordinate {
                     tx_seq: 10,
-                    event_index: 4,
+                    index: 4,
                 }),
             },
             &options(Ordering::Descending),
