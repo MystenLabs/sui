@@ -23,10 +23,11 @@ use sui_rpc::proto::sui::rpc::v2::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::RpcError;
-use sui_rpc_api::ledger_history::query_options::CheckpointRange;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
+use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
 use sui_rpc_api::ledger_history::query_options::ResolvedRange;
+use sui_rpc_api::ledger_history::query_options::validate_checkpoint_bounds;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
@@ -92,11 +93,7 @@ pub(crate) async fn list_transactions(
     let transactions_stage = ctx.stage(PipelineStage::Transactions);
     let objects_stage = ctx.stage(PipelineStage::Objects);
 
-    let checkpoint_range = CheckpointRange::from_request(
-        request.start_checkpoint,
-        request.end_checkpoint,
-        checkpoint_hi_exclusive,
-    )?;
+    validate_checkpoint_bounds(request.start_checkpoint, request.end_checkpoint)?;
     let read_mask = validate_read_mask(request.read_mask)?;
     let needs_objects = needs_transaction_objects(&read_mask);
     let render_transaction_contents = should_render_transaction_contents(&read_mask);
@@ -105,6 +102,12 @@ pub(crate) async fn list_transactions(
         request.options.as_ref(),
         endpoint.default_limit_items,
         endpoint.max_limit_items,
+    )?;
+    let checkpoint_range = ResolvedCheckpointRange::from_request(
+        request.start_checkpoint,
+        request.end_checkpoint,
+        checkpoint_hi_exclusive,
+        &options,
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
@@ -619,49 +622,18 @@ fn transaction_response_from_tx_seq_digest(
 /// up-front cp-range clamp.
 async fn resolve_tx_range(
     client: &BigTableClient,
-    checkpoint_range: CheckpointRange,
+    cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
 ) -> Result<ResolvedRange, RpcError> {
-    let cp_range = checkpoint_range.resolve(options);
+    let tx_range = client
+        .checkpoint_to_tx_range(cp_range.range.clone())
+        .await?;
     if cp_range.is_empty() {
-        let tx_boundary =
-            checkpoint_to_tx_boundary(client, cp_range.terminal_checkpoint(options.ordering))
-                .await?;
-        return Ok(cp_range.with_range(tx_boundary..tx_boundary, options.ordering));
+        return Ok(cp_range.with_range(tx_range, options.ordering));
     }
-
-    let start_fut = {
-        let client = client.clone();
-        let start_cp = cp_range.range.start;
-        async move {
-            if start_cp == 0 {
-                return Ok(0);
-            }
-            Ok(client
-                .checkpoint_to_tx_range(start_cp..start_cp + 1)
-                .await?
-                .start)
-        }
-    };
-
-    let end_fut = {
-        let client = client.clone();
-        let end_cp = cp_range.range.end;
-        async move { Ok::<u64, RpcError>(client.checkpoint_to_tx_range(0..end_cp).await?.end) }
-    };
-
-    let (start_tx, end_tx) = tokio::try_join!(start_fut, end_fut)?;
-    Ok(options.apply_cursor_bounds(cp_range.with_range(start_tx..end_tx, options.ordering)))
-}
-
-async fn checkpoint_to_tx_boundary(
-    client: &BigTableClient,
-    checkpoint: u64,
-) -> Result<u64, RpcError> {
-    if checkpoint == 0 {
-        return Ok(0);
-    }
-    Ok(client.checkpoint_to_tx_range(0..checkpoint).await?.end)
+    Ok(cp_range
+        .with_range(tx_range, options.ordering)
+        .apply_cursor_bounds(options))
 }
 
 fn transaction_item_response(

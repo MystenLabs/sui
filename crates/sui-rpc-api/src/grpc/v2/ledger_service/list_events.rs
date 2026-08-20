@@ -28,10 +28,11 @@ use tracing::info;
 use crate::RpcError;
 use crate::RpcService;
 use crate::ledger_history::filter::event_filter_to_query;
-use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::IntraTxScanBounds;
 use crate::ledger_history::query_options::QueryOptions;
+use crate::ledger_history::query_options::ResolvedCheckpointRange;
 use crate::ledger_history::query_options::ResolvedIntraTxRange;
+use crate::ledger_history::query_options::validate_checkpoint_bounds;
 use crate::metrics::ListRequestMetrics;
 use crate::metrics::ListStreamMetrics;
 use crate::read_mask_defaults;
@@ -48,11 +49,9 @@ use super::event_scan::drain_event_bitmap_hits;
 use super::event_scan::event_frontier_checkpoint;
 use super::event_scan::next_unfiltered_event_refs;
 use super::ledger_read::checkpoint_hi_exclusive;
-use super::ledger_read::checkpoint_to_tx_boundary;
 use super::ledger_read::checkpoint_to_tx_range;
 use super::ledger_read::clamp_to_serving_floor;
 use super::ledger_read::get_tx_seq_digest_multi;
-use super::ledger_read::validate_checkpoint_bounds;
 use crate::ledger_history::watermark::ScanTerminal;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
@@ -285,10 +284,11 @@ fn next_event_chunk(
             end_checkpoint,
             filter_query,
         } => {
-            let checkpoint_range = CheckpointRange::from_request(
+            let checkpoint_range = ResolvedCheckpointRange::from_request(
                 start_checkpoint,
                 end_checkpoint,
                 checkpoint_hi_exclusive(&service)?,
+                &options,
             )?;
             let event_range =
                 resolve_event_range(&service, start_checkpoint, checkpoint_range, &options)?;
@@ -751,40 +751,12 @@ fn tx_seq_digest_rows_for_event_refs(
 fn resolve_event_range(
     service: &RpcService,
     start_checkpoint: Option<u64>,
-    checkpoint_range: CheckpointRange,
+    cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
 ) -> Result<ResolvedIntraTxRange, RpcError> {
-    let cp_range = checkpoint_range.resolve(options);
-    if cp_range.is_empty() {
-        let tx_boundary =
-            checkpoint_to_tx_boundary(service, cp_range.terminal_checkpoint(options.ordering))?;
-        return Ok(ResolvedIntraTxRange::empty_at(
-            cp_range.terminal_checkpoint(options.ordering),
-            IntraTxCoordinate::start_of_tx(tx_boundary),
-            cp_range.exhaustion,
-        ));
-    }
-
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
-    let mut resolved = ResolvedIntraTxRange {
-        bounds: IntraTxScanBounds::tx_span(tx_range.start, tx_range.end),
-        entry_checkpoint: if options.is_ascending() {
-            cp_range.range.start
-        } else {
-            cp_range.range.end.saturating_sub(1)
-        },
-        end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
-        end_position: match options.ordering {
-            crate::ledger_history::query_options::Ordering::Ascending => {
-                IntraTxCoordinate::start_of_tx(tx_range.end)
-            }
-            crate::ledger_history::query_options::Ordering::Descending => {
-                IntraTxCoordinate::start_of_tx(tx_range.start)
-            }
-        },
-        exhaustion: cp_range.exhaustion,
-    };
-    resolved = options.apply_intra_tx_cursor_bounds(resolved);
+    let mut resolved =
+        ResolvedIntraTxRange::resolve(cp_range, tx_range, options).apply_cursor_bounds(options);
     if !resolved.is_empty() {
         let start_tx = match resolved.bounds.lo {
             Bound::Included(position) | Bound::Excluded(position) => position.tx_seq,

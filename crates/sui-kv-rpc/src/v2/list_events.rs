@@ -28,12 +28,13 @@ use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
-use sui_rpc_api::ledger_history::query_options::CheckpointRange;
 use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
 use sui_rpc_api::ledger_history::query_options::IntraTxScanBounds;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
+use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
 use sui_rpc_api::ledger_history::query_options::ResolvedIntraTxRange;
+use sui_rpc_api::ledger_history::query_options::validate_checkpoint_bounds;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
@@ -83,16 +84,18 @@ pub(crate) async fn list_events(
     let tx_seq_digest_stage = ctx.stage(PipelineStage::TxSeqDigest);
     let transactions_stage = ctx.stage(PipelineStage::Transactions);
 
-    let checkpoint_range = CheckpointRange::from_request(
-        request.start_checkpoint,
-        request.end_checkpoint,
-        checkpoint_hi_exclusive,
-    )?;
+    validate_checkpoint_bounds(request.start_checkpoint, request.end_checkpoint)?;
     let read_mask = Arc::new(validate_event_read_mask(request.read_mask)?);
     let options = QueryOptions::events_from_proto(
         request.options.as_ref(),
         endpoint.default_limit_items,
         endpoint.max_limit_items,
+    )?;
+    let checkpoint_range = ResolvedCheckpointRange::from_request(
+        request.start_checkpoint,
+        request.end_checkpoint,
+        checkpoint_hi_exclusive,
+        &options,
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
@@ -809,52 +812,13 @@ fn validate_event_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTre
 /// cp-range clamp.
 async fn resolve_event_range(
     client: &BigTableClient,
-    checkpoint_range: CheckpointRange,
+    cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
 ) -> Result<ResolvedIntraTxRange, RpcError> {
-    let cp_range = checkpoint_range.resolve(options);
-    if cp_range.is_empty() {
-        let tx_boundary =
-            checkpoint_to_tx_boundary(client, cp_range.terminal_checkpoint(options.ordering))
-                .await?;
-        return Ok(ResolvedIntraTxRange::empty_at(
-            cp_range.terminal_checkpoint(options.ordering),
-            IntraTxCoordinate::start_of_tx(tx_boundary),
-            cp_range.exhaustion,
-        ));
-    }
-
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
-    Ok(options.apply_intra_tx_cursor_bounds(ResolvedIntraTxRange {
-        bounds: IntraTxScanBounds::tx_span(tx_range.start, tx_range.end),
-        entry_checkpoint: if options.is_ascending() {
-            cp_range.range.start
-        } else {
-            cp_range.range.end.saturating_sub(1)
-        },
-        end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
-        end_position: match options.ordering {
-            sui_rpc_api::ledger_history::query_options::Ordering::Ascending => {
-                IntraTxCoordinate::start_of_tx(tx_range.end)
-            }
-            sui_rpc_api::ledger_history::query_options::Ordering::Descending => {
-                IntraTxCoordinate::start_of_tx(tx_range.start)
-            }
-        },
-        exhaustion: cp_range.exhaustion,
-    }))
-}
-
-async fn checkpoint_to_tx_boundary(
-    client: &BigTableClient,
-    checkpoint: u64,
-) -> Result<u64, RpcError> {
-    if checkpoint == 0 {
-        return Ok(0);
-    }
-    Ok(client.checkpoint_to_tx_range(0..checkpoint).await?.end)
+    Ok(ResolvedIntraTxRange::resolve(cp_range, tx_range, options).apply_cursor_bounds(options))
 }
 
 #[cfg(test)]

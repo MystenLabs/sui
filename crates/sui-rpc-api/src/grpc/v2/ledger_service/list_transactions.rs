@@ -26,10 +26,11 @@ use crate::RpcError;
 use crate::RpcService;
 use crate::grpc::v2::ledger_service::get_transaction::render_executed_transaction;
 use crate::ledger_history::filter::transaction_filter_to_query;
-use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::RangeExhaustion;
+use crate::ledger_history::query_options::ResolvedCheckpointRange;
 use crate::ledger_history::query_options::ResolvedRange;
+use crate::ledger_history::query_options::validate_checkpoint_bounds;
 use crate::ledger_history::watermark::ScanTerminal;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
@@ -50,14 +51,12 @@ use super::chunked_scan::cancelled;
 use super::chunked_scan::scan_limit_or_range;
 use super::chunked_scan::spawn_list_chunk;
 use super::ledger_read::checkpoint_hi_exclusive;
-use super::ledger_read::checkpoint_to_tx_boundary;
 use super::ledger_read::checkpoint_to_tx_range;
 use super::ledger_read::clamp_to_serving_floor;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::get_tx_seq_digest_rows;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::sequence_frontier_checkpoint;
-use super::ledger_read::validate_checkpoint_bounds;
 use super::object_set::fetch_object_sets_for_chunk;
 use super::object_set::mask_requests_object_set;
 
@@ -287,10 +286,11 @@ fn next_transaction_chunk(
                 end_checkpoint,
                 filter_query,
             } => {
-                let checkpoint_range = CheckpointRange::from_request(
+                let checkpoint_range = ResolvedCheckpointRange::from_request(
                     start_checkpoint,
                     end_checkpoint,
                     checkpoint_hi_exclusive(&service)?,
+                    &options,
                 )?;
                 let tx_range =
                     resolve_tx_range(&service, start_checkpoint, checkpoint_range, &options)?;
@@ -628,19 +628,17 @@ fn should_render_transaction_contents(read_mask: &FieldMaskTree) -> bool {
 fn resolve_tx_range(
     service: &RpcService,
     start_checkpoint: Option<u64>,
-    checkpoint_range: CheckpointRange,
+    cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
 ) -> Result<ResolvedRange, RpcError> {
-    let cp_range = checkpoint_range.resolve(options);
+    let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
     if cp_range.is_empty() {
-        let tx_boundary =
-            checkpoint_to_tx_boundary(service, cp_range.terminal_checkpoint(options.ordering))?;
-        return Ok(cp_range.with_range(tx_boundary..tx_boundary, options.ordering));
+        return Ok(cp_range.with_range(tx_range, options.ordering));
     }
 
-    let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
-    let resolved = cp_range.with_range(tx_range, options.ordering);
-    let mut resolved = options.apply_cursor_bounds(resolved);
+    let mut resolved = cp_range
+        .with_range(tx_range, options.ordering)
+        .apply_cursor_bounds(options);
     if !resolved.range.is_empty()
         && let Some(floor) =
             clamp_to_serving_floor(service, resolved.range.start, start_checkpoint, options)?

@@ -1558,46 +1558,42 @@ impl BigTableClient {
         })
     }
 
-    /// Resolve inclusive checkpoint bounds to a tx_sequence_number range.
-    ///
-    /// Returns `[start_tx, end_tx)` where `start_tx` is the first tx in
-    /// `start_checkpoint` and `end_tx` is one past the last tx in `end_checkpoint`.
-    /// Reads checkpoint summaries from the checkpoints table.
+    /// Resolve a half-open checkpoint range to the tx_sequence_number range it spans. Checkpoint 0
+    /// resolves to tx_sequence_number 0. An empty checkpoint range can only be of the form [x, x)
+    /// and maps to an empty transaction range [t, t).
     pub async fn checkpoint_to_tx_range(
         &mut self,
         checkpoint_range: Range<u64>,
     ) -> Result<Range<u64>> {
         use crate::tables::checkpoints;
 
-        let start_checkpoint = checkpoint_range.start;
-        let end_checkpoint = checkpoint_range.end.saturating_sub(1);
+        let mut keys: Vec<u64> = [checkpoint_range.start, checkpoint_range.end]
+            .into_iter()
+            .filter(|&cp| cp > 0)
+            .map(|cp| cp - 1)
+            .collect();
+        keys.dedup();
 
-        let start_tx = if start_checkpoint == 0 {
-            0u64
+        let rows = if keys.is_empty() {
+            vec![]
         } else {
-            let prev = self
-                .get_checkpoints_filtered(
-                    &[start_checkpoint - 1],
-                    Some(&[checkpoints::col::SUMMARY]),
-                )
-                .await?;
-            let summary = prev
-                .first()
-                .and_then(|cp| cp.summary.as_ref())
-                .context("checkpoint summary not found for start bound")?;
-            summary.network_total_transactions
+            self.get_checkpoints_filtered(&keys, Some(&[checkpoints::col::SUMMARY]))
+                .await?
         };
 
-        let end_cps = self
-            .get_checkpoints_filtered(&[end_checkpoint], Some(&[checkpoints::col::SUMMARY]))
-            .await?;
-        let end_summary = end_cps
-            .first()
-            .and_then(|cp| cp.summary.as_ref())
-            .context("checkpoint summary not found for end bound")?;
-        let end_tx = end_summary.network_total_transactions;
+        let boundary = |cp: u64| -> Result<u64> {
+            if cp == 0 {
+                return Ok(0);
+            }
+            let lookup_cp = cp - 1;
+            rows.iter()
+                .filter_map(|row| row.summary.as_ref())
+                .find(|summary| summary.sequence_number == lookup_cp)
+                .map(|summary| summary.network_total_transactions)
+                .with_context(|| format!("checkpoint summary {} not found", lookup_cp))
+        };
 
-        Ok(start_tx..end_tx)
+        Ok(boundary(checkpoint_range.start)?..boundary(checkpoint_range.end)?)
     }
 
     /// Resolve `tx_sequence_number`s to fully-populated transaction rows in

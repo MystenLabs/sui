@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::{Bound, Range};
+use std::ops::{Bound, ControlFlow, Range};
 
 use bytes::Bytes;
 use sui_inverted_index::ScanDirection;
@@ -145,14 +145,6 @@ pub struct ResolvedIntraTxRange {
     pub exhaustion: RangeExhaustion,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct CheckpointRange {
-    start: u64,
-    end: u64,
-    high_exhaustion: RangeExhaustion,
-    indexed_tip: u64,
-}
-
 impl IntraTxCoordinate {
     /// Fencepost at the first event slot of `tx_seq`; valid as a boundary even
     /// if the transaction has no events.
@@ -275,219 +267,6 @@ impl QueryOptions {
     pub fn has_after_cursor(&self) -> bool {
         self.after.is_some()
     }
-
-    pub fn apply_cursor_bounds(&self, resolved: ResolvedRange) -> ResolvedRange {
-        if resolved.is_empty() {
-            return resolved;
-        }
-
-        let mut start = resolved.range.start;
-        let mut end = resolved.range.end;
-        let mut end_checkpoint = resolved.end_checkpoint;
-        let mut end_position = resolved.end_position;
-        let mut exhaustion = resolved.exhaustion;
-        let mut entry_checkpoint = resolved.entry_checkpoint;
-        let mut cursor_terminal = None;
-
-        if let Some(cursor) = &self.after {
-            let position = u64_cursor_position(cursor);
-            if matches!(self.ordering, Ordering::Ascending) {
-                entry_checkpoint = entry_checkpoint.max(cursor.position.checkpoint());
-            }
-            let Some(after) = (match cursor.kind {
-                sui_rpc_cursor::CursorKind::Item => position.checked_add(1),
-                sui_rpc_cursor::CursorKind::Boundary => Some(position),
-            }) else {
-                // `u64::MAX` is the unoccupiable exclusive sentinel of these
-                // packed ranges (a real item at MAX could not be represented by
-                // the required exclusive end). A Boundary cursor at MAX is
-                // therefore equivalent to the overflowing Item successor and
-                // cannot re-deliver an item.
-                return ResolvedRange {
-                    entry_checkpoint,
-                    ..ResolvedRange::empty_at(
-                        cursor.position.checkpoint(),
-                        position,
-                        RangeExhaustion::CursorBound {
-                            kind: sui_rpc_cursor::CursorKind::Boundary,
-                        },
-                    )
-                };
-            };
-            if after >= start {
-                start = after;
-                if matches!(self.ordering, Ordering::Descending) || after >= end {
-                    cursor_terminal = Some((cursor.position.checkpoint(), after));
-                }
-                if matches!(self.ordering, Ordering::Descending) {
-                    end_checkpoint = cursor.position.checkpoint();
-                    end_position = after;
-                    exhaustion = RangeExhaustion::CursorBound {
-                        kind: sui_rpc_cursor::CursorKind::Boundary,
-                    };
-                }
-            }
-        }
-
-        if let Some(cursor) = &self.before {
-            let position = u64_cursor_position(cursor);
-            if matches!(self.ordering, Ordering::Descending) {
-                entry_checkpoint = entry_checkpoint.min(cursor.position.checkpoint());
-            }
-            if position <= end {
-                end = position;
-                if matches!(self.ordering, Ordering::Ascending) || position <= start {
-                    cursor_terminal = Some((cursor.position.checkpoint(), position));
-                }
-                if matches!(self.ordering, Ordering::Ascending) {
-                    end_checkpoint = cursor.position.checkpoint();
-                    end_position = position;
-                    exhaustion = RangeExhaustion::CursorBound {
-                        kind: sui_rpc_cursor::CursorKind::Boundary,
-                    };
-                }
-            }
-        }
-
-        if start >= end {
-            if let Some((checkpoint, position)) = cursor_terminal {
-                end_checkpoint = checkpoint;
-                end_position = position;
-            }
-            if self.after.is_some() || self.before.is_some() {
-                exhaustion = RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
-                };
-            }
-            ResolvedRange {
-                range: end_position..end_position,
-                end_checkpoint,
-                end_position,
-                exhaustion,
-                entry_checkpoint,
-            }
-        } else {
-            ResolvedRange {
-                range: start..end,
-                end_checkpoint,
-                end_position,
-                exhaustion,
-                entry_checkpoint,
-            }
-        }
-    }
-
-    pub fn apply_intra_tx_cursor_bounds(
-        &self,
-        resolved: ResolvedIntraTxRange,
-    ) -> ResolvedIntraTxRange {
-        if resolved.is_empty() {
-            return resolved;
-        }
-
-        let mut bounds = resolved.bounds;
-        let mut end_checkpoint = resolved.end_checkpoint;
-        let mut end_position = resolved.end_position;
-        let mut exhaustion = resolved.exhaustion;
-        let mut entry_checkpoint = resolved.entry_checkpoint;
-        let mut cursor_terminal = None;
-
-        if let Some(cursor) = &self.after {
-            let position = intra_tx_cursor_coordinate(cursor);
-            if matches!(self.ordering, Ordering::Ascending) {
-                entry_checkpoint = entry_checkpoint.max(cursor.position.checkpoint());
-            }
-            let candidate = match cursor.kind {
-                sui_rpc_cursor::CursorKind::Item => Bound::Excluded(position),
-                sui_rpc_cursor::CursorKind::Boundary => Bound::Included(position),
-            };
-            if lower_bound_gte(candidate, bounds.lo) {
-                let candidate_bounds = IntraTxScanBounds {
-                    lo: candidate,
-                    hi: bounds.hi,
-                };
-                bounds.lo = candidate;
-                if matches!(self.ordering, Ordering::Descending) || candidate_bounds.is_empty() {
-                    let kind = if matches!(self.ordering, Ordering::Ascending) {
-                        cursor.kind
-                    } else {
-                        sui_rpc_cursor::CursorKind::Boundary
-                    };
-                    cursor_terminal = Some((cursor.position.checkpoint(), position, kind));
-                }
-                if matches!(self.ordering, Ordering::Descending) {
-                    end_checkpoint = cursor.position.checkpoint();
-                    end_position = position;
-                    exhaustion = RangeExhaustion::CursorBound {
-                        kind: sui_rpc_cursor::CursorKind::Boundary,
-                    };
-                }
-            }
-        }
-
-        if let Some(cursor) = &self.before {
-            let position = intra_tx_cursor_coordinate(cursor);
-            if matches!(self.ordering, Ordering::Descending) {
-                entry_checkpoint = entry_checkpoint.min(cursor.position.checkpoint());
-            }
-            if hi_admits_upper_bound(bounds.hi, position) {
-                let candidate = Bound::Excluded(position);
-                let candidate_bounds = IntraTxScanBounds {
-                    lo: bounds.lo,
-                    hi: candidate,
-                };
-                bounds.hi = candidate;
-                if matches!(self.ordering, Ordering::Ascending) || candidate_bounds.is_empty() {
-                    cursor_terminal = Some((
-                        cursor.position.checkpoint(),
-                        position,
-                        sui_rpc_cursor::CursorKind::Boundary,
-                    ));
-                }
-                if matches!(self.ordering, Ordering::Ascending) {
-                    end_checkpoint = cursor.position.checkpoint();
-                    end_position = position;
-                    exhaustion = RangeExhaustion::CursorBound {
-                        kind: sui_rpc_cursor::CursorKind::Boundary,
-                    };
-                }
-            }
-        }
-
-        // CursorBound bookkeeping records the exact event coordinate at which
-        // the resolved interval terminates. Nonempty intervals terminate at the
-        // ordering-side cursor boundary. An ascending interval made empty by an
-        // `after` Item cursor must retain Item kind: converting that raw
-        // coordinate to Boundary would re-include the item on resume. This also
-        // avoids inventing a lexicographic successor when the event coordinate
-        // is already maximal.
-        if bounds.is_empty() {
-            if let Some((checkpoint, position, kind)) = cursor_terminal {
-                end_checkpoint = checkpoint;
-                end_position = position;
-                exhaustion = RangeExhaustion::CursorBound { kind };
-            } else if self.after.is_some() || self.before.is_some() {
-                exhaustion = RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
-                };
-            }
-            ResolvedIntraTxRange {
-                bounds: IntraTxScanBounds::empty_at(end_position),
-                end_checkpoint,
-                end_position,
-                exhaustion,
-                entry_checkpoint,
-            }
-        } else {
-            ResolvedIntraTxRange {
-                bounds,
-                end_checkpoint,
-                end_position,
-                exhaustion,
-                entry_checkpoint,
-            }
-        }
-    }
 }
 
 impl ResolvedCheckpointRange {
@@ -541,6 +320,132 @@ impl ResolvedRange {
 
     pub fn is_empty(&self) -> bool {
         self.range.is_empty()
+    }
+
+    pub fn apply_cursor_bounds(mut self, options: &QueryOptions) -> Self {
+        if self.is_empty() {
+            return self;
+        }
+
+        let mut cursor_terminal = match self.apply_after_cursor(options) {
+            ControlFlow::Break(()) => return self,
+            ControlFlow::Continue(claim) => claim,
+        };
+
+        if let Some(claim) = self.apply_before_cursor(options) {
+            cursor_terminal = Some(claim);
+        }
+
+        if let Some((checkpoint, position)) = cursor_terminal {
+            self.set_terminal_record(
+                checkpoint,
+                position,
+                RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            );
+            self.range = self.end_position..self.end_position;
+        }
+        self
+    }
+
+    fn set_terminal_record(&mut self, checkpoint: u64, position: u64, exhaustion: RangeExhaustion) {
+        self.end_checkpoint = checkpoint;
+        self.end_position = position;
+        self.exhaustion = exhaustion;
+    }
+
+    fn apply_after_cursor(
+        &mut self,
+        options: &QueryOptions,
+    ) -> ControlFlow<(), Option<(u64, u64)>> {
+        let Some(cursor) = options.after.as_ref() else {
+            return ControlFlow::Continue(None);
+        };
+        let checkpoint = cursor.position.checkpoint();
+        let position = u64_cursor_position(cursor);
+
+        if options.is_ascending() {
+            self.entry_checkpoint = self.entry_checkpoint.max(checkpoint);
+        }
+
+        // `u64::MAX` is the unoccupiable exclusive sentinel of these packed
+        // ranges (a real item at MAX could not be represented by the required
+        // exclusive end). An Item cursor there has no in-range successor:
+        // resolution short-circuits to the emptied interval — a `before`
+        // cursor, if present, never participates — and the terminal reports
+        // a Boundary at MAX, which cannot re-deliver an item.
+        let after = match cursor.kind {
+            sui_rpc_cursor::CursorKind::Item => match position.checked_add(1) {
+                Some(after) => after,
+                None => {
+                    self.set_terminal_record(
+                        checkpoint,
+                        position,
+                        RangeExhaustion::CursorBound {
+                            kind: sui_rpc_cursor::CursorKind::Boundary,
+                        },
+                    );
+                    self.range = self.end_position..self.end_position;
+                    return ControlFlow::Break(());
+                }
+            },
+            sui_rpc_cursor::CursorKind::Boundary => position,
+        };
+
+        if after < self.range.start {
+            return ControlFlow::Continue(None);
+        }
+
+        if !options.is_ascending() {
+            self.set_terminal_record(
+                checkpoint,
+                after,
+                RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            );
+        }
+
+        self.range.start = after;
+
+        ControlFlow::Continue(if self.range.is_empty() {
+            Some((checkpoint, after))
+        } else {
+            None
+        })
+    }
+
+    fn apply_before_cursor(&mut self, options: &QueryOptions) -> Option<(u64, u64)> {
+        let cursor = options.before.as_ref()?;
+        let checkpoint = cursor.position.checkpoint();
+        let position = u64_cursor_position(cursor);
+
+        if !options.is_ascending() {
+            self.entry_checkpoint = self.entry_checkpoint.min(checkpoint);
+        }
+
+        if position > self.range.end {
+            return None;
+        }
+
+        if options.is_ascending() {
+            self.set_terminal_record(
+                checkpoint,
+                position,
+                RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            );
+        }
+
+        self.range.end = position;
+
+        if !self.range.is_empty() {
+            return None;
+        }
+
+        Some((checkpoint, position))
     }
 
     /// Reconcile the interval and its watermark metadata after the backend
@@ -638,22 +543,155 @@ impl IntraTxScanBounds {
 }
 
 impl ResolvedIntraTxRange {
-    pub fn empty_at(
-        end_checkpoint: u64,
-        end_position: IntraTxCoordinate,
-        exhaustion: RangeExhaustion,
+    pub fn resolve(
+        cp_range: ResolvedCheckpointRange,
+        tx_range: Range<u64>,
+        options: &QueryOptions,
     ) -> Self {
+        let entry_checkpoint = if cp_range.is_empty() {
+            // No checkpoint entered, pin entry to terminal boundary
+            cp_range.range.end
+        } else if options.is_ascending() {
+            cp_range.range.start
+        } else {
+            cp_range.range.end.saturating_sub(1)
+        };
+
         Self {
-            bounds: IntraTxScanBounds::empty_at(end_position),
-            end_checkpoint,
-            end_position,
-            exhaustion,
-            entry_checkpoint: end_checkpoint,
+            bounds: IntraTxScanBounds::tx_span(tx_range.start, tx_range.end),
+            entry_checkpoint,
+            end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
+            end_position: match options.ordering {
+                Ordering::Ascending => IntraTxCoordinate::start_of_tx(tx_range.end),
+                Ordering::Descending => IntraTxCoordinate::start_of_tx(tx_range.start),
+            },
+            exhaustion: cp_range.exhaustion,
         }
     }
 
     pub fn is_empty(&self) -> bool {
         self.bounds.is_empty()
+    }
+
+    pub fn apply_cursor_bounds(mut self, options: &QueryOptions) -> Self {
+        if self.is_empty() {
+            return self;
+        }
+
+        let mut cursor_terminal = self.apply_after_cursor(options);
+
+        // Either zero, one, or two cursors emptied the bounds. If the bound is empty, before's
+        // position is provably the lower coordinate. Report this minimum of the crossed positions,
+        // otherwise we will skip an interval in the ascending case, or rollback scan progress in
+        // the descending case.
+        if let Some(recording) = self.apply_before_cursor(options) {
+            cursor_terminal = Some(recording);
+        }
+
+        if let Some((checkpoint, position, kind)) = cursor_terminal {
+            self.set_terminal_record(checkpoint, position, RangeExhaustion::CursorBound { kind });
+
+            self.bounds = IntraTxScanBounds::empty_at(self.end_position);
+        }
+
+        self
+    }
+
+    fn set_terminal_record(
+        &mut self,
+        checkpoint: u64,
+        position: IntraTxCoordinate,
+        exhaustion: RangeExhaustion,
+    ) {
+        self.end_checkpoint = checkpoint;
+        self.end_position = position;
+        self.exhaustion = exhaustion;
+    }
+
+    /// Tightens the low bound, and returns the terminal record if the cursor empties the interval.
+    fn apply_after_cursor(
+        &mut self,
+        options: &QueryOptions,
+    ) -> Option<(u64, IntraTxCoordinate, sui_rpc_cursor::CursorKind)> {
+        let cursor = options.after.as_ref()?;
+        let checkpoint = cursor.position.checkpoint();
+        let position = intra_tx_cursor_coordinate(cursor);
+
+        if options.is_ascending() {
+            self.entry_checkpoint = self.entry_checkpoint.max(checkpoint);
+        }
+
+        let candidate = match cursor.kind {
+            sui_rpc_cursor::CursorKind::Item => Bound::Excluded(position),
+            sui_rpc_cursor::CursorKind::Boundary => Bound::Included(position),
+        };
+
+        if !lower_bound_gte(candidate, self.bounds.lo) {
+            return None;
+        }
+
+        // The after cursor is the terminal bound for a descending scan.
+        if !options.is_ascending() {
+            self.set_terminal_record(
+                checkpoint,
+                position,
+                RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            );
+        }
+
+        self.bounds.lo = candidate;
+
+        if !self.bounds.is_empty() {
+            return None;
+        }
+
+        // Report the cursor that emptied the bound.
+        //
+        // An ascending interval made empty by an `after` Item cursor must retain Item kind.
+        let kind = if options.is_ascending() {
+            cursor.kind
+        } else {
+            sui_rpc_cursor::CursorKind::Boundary
+        };
+        Some((checkpoint, position, kind))
+    }
+
+    /// Tightens the high bound, and returns the terminal record if the cursor empties the interval.
+    fn apply_before_cursor(
+        &mut self,
+        options: &QueryOptions,
+    ) -> Option<(u64, IntraTxCoordinate, sui_rpc_cursor::CursorKind)> {
+        let cursor = options.before.as_ref()?;
+        let checkpoint = cursor.position.checkpoint();
+        let position = intra_tx_cursor_coordinate(cursor);
+
+        if !options.is_ascending() {
+            self.entry_checkpoint = self.entry_checkpoint.min(checkpoint);
+        }
+
+        if !hi_admits_upper_bound(self.bounds.hi, position) {
+            return None;
+        }
+
+        if options.is_ascending() {
+            self.set_terminal_record(
+                checkpoint,
+                position,
+                RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            );
+        }
+
+        self.bounds.hi = Bound::Excluded(position);
+
+        if !self.bounds.is_empty() {
+            return None;
+        }
+
+        Some((checkpoint, position, sui_rpc_cursor::CursorKind::Boundary))
     }
 
     /// [`ResolvedRange::apply_serving_floor`]'s analogue for event scans: a
@@ -689,46 +727,50 @@ impl ResolvedIntraTxRange {
     }
 }
 
-impl CheckpointRange {
+/// The requested checkpoint window's validity check, standalone so backends
+/// can sequence it independently of options parsing (kv validates bounds
+/// before the read mask and options; the fused resolution re-runs it
+/// harmlessly).
+pub fn validate_checkpoint_bounds(
+    start_checkpoint: Option<u64>,
+    end_checkpoint: Option<u64>,
+) -> Result<(), RpcError> {
+    let start = start_checkpoint.unwrap_or(0);
+    if let Some(end) = end_checkpoint
+        && end < start
+    {
+        return Err(FieldViolation::new("end_checkpoint")
+            .with_description("end_checkpoint must be greater than or equal to start_checkpoint")
+            .with_reason(ErrorReason::FieldInvalid)
+            .into());
+    }
+    Ok(())
+}
+
+impl ResolvedCheckpointRange {
+    /// Validate the requested checkpoint window, clamp it to the indexed tip,
+    /// tighten it by the request's cursors, and attribute the exhaustion
+    /// reason the scan will report once it drains it — request to resolved
+    /// window in one call.
     pub fn from_request(
         start_checkpoint: Option<u64>,
         end_checkpoint: Option<u64>,
         checkpoint_hi_exclusive: u64,
+        options: &QueryOptions,
     ) -> Result<Self, RpcError> {
+        validate_checkpoint_bounds(start_checkpoint, end_checkpoint)?;
         let start = start_checkpoint.unwrap_or(0);
-        if let Some(end) = end_checkpoint
-            && end < start
-        {
-            return Err(FieldViolation::new("end_checkpoint")
-                .with_description(
-                    "end_checkpoint must be greater than or equal to start_checkpoint",
-                )
-                .with_reason(ErrorReason::FieldInvalid)
-                .into());
-        }
 
         let requested_end = end_checkpoint.unwrap_or(checkpoint_hi_exclusive);
-        let high_exhaustion = if end_checkpoint.is_none() || requested_end > checkpoint_hi_exclusive
-        {
-            RangeExhaustion::LedgerTip
-        } else {
-            RangeExhaustion::CheckpointBound
-        };
-        let end = requested_end.min(checkpoint_hi_exclusive);
-
-        Ok(Self {
-            start,
-            end,
-            high_exhaustion,
-            indexed_tip: checkpoint_hi_exclusive,
-        })
-    }
-
-    pub fn resolve(self, options: &QueryOptions) -> ResolvedCheckpointRange {
-        let mut start = self.start;
-        let mut end = self.end;
+        let mut high_exhaustion =
+            if end_checkpoint.is_none() || requested_end > checkpoint_hi_exclusive {
+                RangeExhaustion::LedgerTip
+            } else {
+                RangeExhaustion::CheckpointBound
+            };
+        let mut start = start;
+        let mut end = requested_end.min(checkpoint_hi_exclusive);
         let mut low_exhaustion = RangeExhaustion::CheckpointBound;
-        let mut high_exhaustion = self.high_exhaustion;
         let mut cursor_bound = false;
 
         if let Some(cursor) = &options.after
@@ -759,8 +801,11 @@ impl CheckpointRange {
             }
         }
 
-        if start >= self.indexed_tip {
-            return ResolvedCheckpointRange::empty_at(self.indexed_tip, RangeExhaustion::LedgerTip);
+        if start >= checkpoint_hi_exclusive {
+            return Ok(Self::empty_at(
+                checkpoint_hi_exclusive,
+                RangeExhaustion::LedgerTip,
+            ));
         }
 
         if start >= end {
@@ -778,17 +823,17 @@ impl CheckpointRange {
                 Ordering::Ascending => end,
                 Ordering::Descending => start,
             };
-            return ResolvedCheckpointRange::empty_at(checkpoint, exhaustion);
+            return Ok(Self::empty_at(checkpoint, exhaustion));
         }
 
         let exhaustion = match options.ordering {
             Ordering::Ascending => high_exhaustion,
             Ordering::Descending => low_exhaustion,
         };
-        ResolvedCheckpointRange {
+        Ok(Self {
             range: start..end,
             exhaustion,
-        }
+        })
     }
 }
 
@@ -808,7 +853,9 @@ fn u64_cursor_position(cursor: &CursorToken) -> u64 {
     match cursor.position {
         Position::Checkpoints { checkpoint } => checkpoint,
         Position::Transactions { tx_seq, .. } => tx_seq,
-        Position::Events { .. } => panic!("event queries must use apply_intra_tx_cursor_bounds"),
+        Position::Events { .. } => {
+            panic!("intra-tx queries must use ResolvedIntraTxRange::apply_cursor_bounds")
+        }
     }
 }
 
@@ -908,6 +955,50 @@ mod tests {
 
     fn cp_item(checkpoint: u64) -> CursorToken {
         CursorToken::item(Position::Checkpoints { checkpoint })
+    }
+
+    fn ev_item(checkpoint: u64, tx_seq: u64, index: u32) -> CursorToken {
+        CursorToken::item(Position::Events {
+            checkpoint,
+            tx_seq,
+            event_index: index,
+        })
+    }
+
+    fn ev_boundary(checkpoint: u64, tx_seq: u64, index: u32) -> CursorToken {
+        CursorToken::boundary(Position::Events {
+            checkpoint,
+            tx_seq,
+            event_index: index,
+        })
+    }
+
+    fn resolved_intra_tx() -> ResolvedIntraTxRange {
+        ResolvedIntraTxRange {
+            bounds: IntraTxScanBounds::tx_span(0, 10),
+            entry_checkpoint: 2,
+            end_checkpoint: 9,
+            end_position: IntraTxCoordinate::start_of_tx(10),
+            exhaustion: RangeExhaustion::CheckpointBound,
+        }
+    }
+
+    fn after_options(ordering: Ordering, cursor: CursorToken) -> QueryOptions {
+        QueryOptions {
+            limit_items: 100,
+            ordering,
+            after: Some(cursor),
+            before: None,
+        }
+    }
+
+    fn before_options(ordering: Ordering, cursor: CursorToken) -> QueryOptions {
+        QueryOptions {
+            limit_items: 100,
+            ordering,
+            after: None,
+            before: Some(cursor),
+        }
     }
 
     fn directional_options(ascending: bool) -> QueryOptions {
@@ -1124,7 +1215,7 @@ mod tests {
         assert_eq!(options.ordering, Ordering::Descending);
         assert_eq!(options.scan_direction(), ScanDirection::Descending);
         assert_eq!(
-            options.apply_cursor_bounds(resolved_range(0..100)).range,
+            resolved_range(0..100).apply_cursor_bounds(&options).range,
             21..30
         );
     }
@@ -1205,9 +1296,11 @@ mod tests {
         request.ordering = Some(ProtoOrdering::Descending as i32);
 
         let options = query_options_from_proto(Some(&request)).unwrap();
-        let range = CheckpointRange::from_request(Some(1_000), Some(1_100), 2_000).unwrap();
+        let range =
+            ResolvedCheckpointRange::from_request(Some(1_000), Some(1_100), 2_000, &options)
+                .unwrap();
 
-        assert_eq!(range.resolve(&options).range, 1_000..1_100);
+        assert_eq!(range.range, 1_000..1_100);
     }
 
     #[test]
@@ -1219,7 +1312,7 @@ mod tests {
             before: None,
         };
         assert_eq!(
-            options.apply_cursor_bounds(resolved_range(10..20)).range,
+            resolved_range(10..20).apply_cursor_bounds(&options).range,
             12..20
         );
 
@@ -1228,7 +1321,7 @@ mod tests {
             ..options
         };
         assert_eq!(
-            options.apply_cursor_bounds(resolved_range(10..20)),
+            resolved_range(10..20).apply_cursor_bounds(&options),
             ResolvedRange::empty_at(
                 1,
                 u64::MAX,
@@ -1244,7 +1337,7 @@ mod tests {
             before: Some(tx_item(1, 19)),
             ..options
         };
-        let bounded = options.apply_cursor_bounds(resolved_range(10..20));
+        let bounded = resolved_range(10..20).apply_cursor_bounds(&options);
         assert_eq!(bounded.range, 12..19);
         assert_eq!(
             bounded.exhaustion,
@@ -1259,7 +1352,7 @@ mod tests {
             ..options
         };
         assert_eq!(
-            options.apply_cursor_bounds(resolved_range(10..20)),
+            resolved_range(10..20).apply_cursor_bounds(&options),
             ResolvedRange {
                 entry_checkpoint: 0,
                 ..ResolvedRange::empty_at(
@@ -1282,7 +1375,7 @@ mod tests {
             before: None,
         };
         assert_eq!(
-            options.apply_cursor_bounds(resolved_range(10..30)).range,
+            resolved_range(10..30).apply_cursor_bounds(&options).range,
             20..30
         );
 
@@ -1293,30 +1386,28 @@ mod tests {
             ..options
         };
         assert_eq!(
-            options.apply_cursor_bounds(resolved_range(10..30)).range,
+            resolved_range(10..30).apply_cursor_bounds(&options).range,
             10..20
         );
     }
 
     #[test]
     fn resolves_checkpoint_range_with_terminal_reason() {
+        let options = query_options_from_proto(None).unwrap();
         assert_eq!(
-            CheckpointRange::from_request(None, None, 20)
+            ResolvedCheckpointRange::from_request(None, None, 20, &options)
                 .unwrap()
-                .resolve(&query_options_from_proto(None).unwrap())
                 .exhaustion,
             RangeExhaustion::LedgerTip
         );
-        assert!(CheckpointRange::from_request(Some(10), Some(9), 20).is_err());
+        assert!(ResolvedCheckpointRange::from_request(Some(10), Some(9), 20, &options).is_err());
 
-        let range = CheckpointRange::from_request(Some(10), None, 20).unwrap();
-        let resolved = range.resolve(&query_options_from_proto(None).unwrap());
+        let resolved = ResolvedCheckpointRange::from_request(Some(10), None, 20, &options).unwrap();
         assert_eq!(resolved.range, 10..20);
         assert_eq!(resolved.exhaustion, RangeExhaustion::LedgerTip);
 
-        let range = CheckpointRange::from_request(Some(30), None, 20).unwrap();
         assert_eq!(
-            range.resolve(&query_options_from_proto(None).unwrap()),
+            ResolvedCheckpointRange::from_request(Some(30), None, 20, &options).unwrap(),
             ResolvedCheckpointRange::empty_at(20, RangeExhaustion::LedgerTip)
         );
     }
@@ -1327,12 +1418,114 @@ mod tests {
     #[test]
     fn resolves_checkpoint_range_no_longer_clamped_by_width() {
         let options = query_options_from_proto(None).unwrap();
-        let range = CheckpointRange::from_request(Some(10), Some(10_000_000), 10_000_000).unwrap();
-        let resolved = range.resolve(&options);
+        let resolved =
+            ResolvedCheckpointRange::from_request(Some(10), Some(10_000_000), 10_000_000, &options)
+                .unwrap();
         assert_eq!(resolved.range, 10..10_000_000);
         assert_eq!(resolved.exhaustion, RangeExhaustion::CheckpointBound);
     }
 
+    /// (start_checkpoint = 30, tip = 20, both orderings): resolves empty at the tip —
+    /// entry and terminal checkpoints 20, LedgerTip.
+    #[test]
+    fn resolve_window_past_tip_empties_with_ledger_tip() {
+        for ascending in [true, false] {
+            let mut request = ProtoQueryOptions::default();
+            if !ascending {
+                request.ordering = Some(ProtoOrdering::Descending as i32);
+            }
+            let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
+            let cp_range =
+                ResolvedCheckpointRange::from_request(Some(30), None, 20, &options).unwrap();
+            assert!(cp_range.is_empty());
+            assert_eq!(
+                ResolvedIntraTxRange::resolve(cp_range, 100..100, &options),
+                ResolvedIntraTxRange {
+                    // Bounds are based on the requested checkpoint range and
+                    // checkpoint_hi_exclusive or end_checkpoint
+                    bounds: IntraTxScanBounds::empty_at(IntraTxCoordinate::start_of_tx(100)),
+                    // Entry and end checkpoint take on the terminal checkpoint
+                    entry_checkpoint: 20,
+                    end_checkpoint: 20,
+                    end_position: IntraTxCoordinate::start_of_tx(100),
+                    exhaustion: RangeExhaustion::LedgerTip,
+                }
+            );
+        }
+    }
+
+    /// When the resolved checkpoint range is below checkpoint_hi_exclusive and empties, the
+    /// exhaustion reason is CheckpointBound, not LedgerTip.
+    #[test]
+    fn resolve_zero_width_window_empties_with_checkpoint_bound() {
+        for ascending in [true, false] {
+            let mut request = ProtoQueryOptions::default();
+            if !ascending {
+                request.ordering = Some(ProtoOrdering::Descending as i32);
+            }
+            let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
+            let cp_range =
+                ResolvedCheckpointRange::from_request(Some(10), Some(10), 20, &options).unwrap();
+            assert!(cp_range.is_empty());
+            assert_eq!(
+                ResolvedIntraTxRange::resolve(cp_range, 100..100, &options),
+                ResolvedIntraTxRange {
+                    bounds: IntraTxScanBounds::empty_at(IntraTxCoordinate::start_of_tx(100)),
+                    entry_checkpoint: 10,
+                    end_checkpoint: 10,
+                    end_position: IntraTxCoordinate::start_of_tx(100),
+                    exhaustion: RangeExhaustion::CheckpointBound,
+                }
+            );
+        }
+    }
+
+    /// If the bounds are already empty, cursors do not apply.
+    #[test]
+    fn cursor_bounds_pass_empty_resolution_through_unchanged() {
+        let position = Position::Events {
+            checkpoint: 4,
+            tx_seq: 50,
+            event_index: 2,
+        };
+        for ascending in [true, false] {
+            let mut request = ProtoQueryOptions::default();
+            if !ascending {
+                request.ordering = Some(ProtoOrdering::Descending as i32);
+            }
+            request.after = Some(CursorToken::item(position).encode());
+            let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
+            let cp_range =
+                ResolvedCheckpointRange::from_request(Some(30), None, 20, &options).unwrap();
+            let resolved = ResolvedIntraTxRange::resolve(cp_range, 100..100, &options);
+            assert_eq!(resolved.clone().apply_cursor_bounds(&options), resolved);
+        }
+    }
+
+    /// resolve sets entry_checkpoint to the scan's first checkpoint and the terminal
+    /// (end_checkpoint, end_position) to its last, per ordering.
+    #[test]
+    fn resolve_orients_entry_and_terminal_by_ordering() {
+        let options = directional_options(true);
+        let cp_range =
+            ResolvedCheckpointRange::from_request(Some(3), Some(10), 20, &options).unwrap();
+        assert_eq!(cp_range.range, 3..10);
+        let resolved = ResolvedIntraTxRange::resolve(cp_range.clone(), 100..200, &options);
+        assert_eq!(resolved.bounds, IntraTxScanBounds::tx_span(100, 200));
+        assert_eq!(resolved.entry_checkpoint, 3);
+        assert_eq!(resolved.end_checkpoint, 10);
+        assert_eq!(resolved.end_position, IntraTxCoordinate::start_of_tx(200));
+
+        let options = directional_options(false);
+        let resolved = ResolvedIntraTxRange::resolve(cp_range, 100..200, &options);
+        assert_eq!(resolved.entry_checkpoint, 9);
+        assert_eq!(resolved.end_checkpoint, 3);
+        assert_eq!(resolved.end_position, IntraTxCoordinate::start_of_tx(100));
+    }
+
+    /// (ascending, after at the window's end coordinate): empties the bounds at the
+    /// cursor, and the terminal keeps the cursor's kind — an after-Item echo must stay
+    /// Item so resume doesn't re-serve it.
     #[test]
     fn event_after_item_empty_interval_retains_item_kind() {
         let position = Position::Events {
@@ -1351,7 +1544,7 @@ mod tests {
         let mut request = ProtoQueryOptions::default();
         request.after = Some(CursorToken::item(position).encode());
         let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
-        let item_bounded = options.apply_intra_tx_cursor_bounds(resolved.clone());
+        let item_bounded = resolved.clone().apply_cursor_bounds(&options);
 
         assert!(item_bounded.is_empty());
         assert_eq!(
@@ -1370,7 +1563,7 @@ mod tests {
 
         request.after = Some(CursorToken::boundary(position).encode());
         let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
-        let boundary_bounded = options.apply_intra_tx_cursor_bounds(resolved);
+        let boundary_bounded = resolved.apply_cursor_bounds(&options);
 
         assert!(boundary_bounded.is_empty());
         assert_eq!(
@@ -1384,6 +1577,910 @@ mod tests {
             boundary_bounded.exhaustion,
             RangeExhaustion::CursorBound {
                 kind: sui_rpc_cursor::CursorKind::Boundary,
+            }
+        );
+    }
+
+    /// `before` cursor that empties the interval sets end_position, and exhaustion to CursorBound.
+    #[test]
+    fn event_before_cursor_empties_descending_interval() {
+        // Start descending over tx_span(100, 200) with entry at checkpoint 9 terminating at checkpoint 3
+        let resolved = ResolvedIntraTxRange {
+            // always in ascending order
+            bounds: IntraTxScanBounds::tx_span(100, 200),
+            // checkpoints reflect ordering
+            entry_checkpoint: 9,
+            end_checkpoint: 3,
+            end_position: IntraTxCoordinate::start_of_tx(100),
+            exhaustion: RangeExhaustion::CheckpointBound,
+        };
+
+        // This cursor will empty the interval as it will pull entry_checkpoint to 2
+        let cursor = Position::Events {
+            checkpoint: 2,
+            tx_seq: 90,
+            event_index: 0,
+        };
+
+        for token in [CursorToken::item(cursor), CursorToken::boundary(cursor)] {
+            let mut request = ProtoQueryOptions::default();
+            request.ordering = Some(ProtoOrdering::Descending as i32);
+            request.before = Some(token.encode());
+            let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
+
+            let new_coordinate = IntraTxCoordinate::start_of_tx(90);
+            assert_eq!(
+                resolved.clone().apply_cursor_bounds(&options),
+                ResolvedIntraTxRange {
+                    bounds: IntraTxScanBounds::empty_at(new_coordinate),
+                    entry_checkpoint: 2,
+                    end_checkpoint: 2,
+                    // takes on the cursor position that emptied the range
+                    end_position: new_coordinate,
+                    exhaustion: RangeExhaustion::CursorBound {
+                        kind: sui_rpc_cursor::CursorKind::Boundary,
+                    },
+                }
+            );
+        }
+    }
+
+    /// (ascending, after inside the window): Item admits strictly after its
+    /// coordinate, Boundary from it; entry checkpoint rises; terminal untouched.
+    #[test]
+    fn after_cursor_tightens_ascending_lower_bound() {
+        let options = after_options(Ordering::Ascending, ev_item(3, 5, 1));
+        assert_eq!(
+            resolved_intra_tx().apply_cursor_bounds(&options),
+            ResolvedIntraTxRange {
+                bounds: IntraTxScanBounds {
+                    lo: Bound::Excluded(IntraTxCoordinate {
+                        tx_seq: 5,
+                        index: 1,
+                    }),
+                    hi: Bound::Excluded(IntraTxCoordinate::start_of_tx(10)),
+                },
+                entry_checkpoint: 3,
+                ..resolved_intra_tx()
+            }
+        );
+
+        let options = after_options(Ordering::Ascending, ev_boundary(3, 5, 1));
+        assert_eq!(
+            resolved_intra_tx().apply_cursor_bounds(&options),
+            ResolvedIntraTxRange {
+                bounds: IntraTxScanBounds {
+                    lo: Bound::Included(IntraTxCoordinate {
+                        tx_seq: 5,
+                        index: 1,
+                    }),
+                    hi: Bound::Excluded(IntraTxCoordinate::start_of_tx(10)),
+                },
+                entry_checkpoint: 3,
+                ..resolved_intra_tx()
+            }
+        );
+    }
+
+    #[test]
+    fn after_cursor_below_lower_bound_only_affects_entry_checkpoint() {
+        let seed = ResolvedIntraTxRange {
+            bounds: IntraTxScanBounds {
+                lo: Bound::Included(IntraTxCoordinate::start_of_tx(5)),
+                hi: Bound::Excluded(IntraTxCoordinate::start_of_tx(10)),
+            },
+            ..resolved_intra_tx()
+        };
+        let expected = ResolvedIntraTxRange {
+            entry_checkpoint: 4,
+            ..seed.clone()
+        };
+        let options = after_options(Ordering::Ascending, ev_boundary(4, 2, 0));
+        assert_eq!(seed.clone().apply_cursor_bounds(&options), expected);
+        let options = after_options(Ordering::Ascending, ev_item(4, 2, 0));
+        assert_eq!(seed.apply_cursor_bounds(&options), expected);
+    }
+
+    /// Tightens the lower bound, and the terminal becomes the cursor's, because
+    /// the after cursor is where a descending scan stops.
+    #[test]
+    fn descending_after_cursor_sets_terminal_and_tightens() {
+        let options = after_options(Ordering::Descending, ev_item(3, 5, 1));
+        assert_eq!(
+            resolved_intra_tx().apply_cursor_bounds(&options),
+            ResolvedIntraTxRange {
+                bounds: IntraTxScanBounds {
+                    lo: Bound::Excluded(IntraTxCoordinate {
+                        tx_seq: 5,
+                        index: 1,
+                    }),
+                    hi: Bound::Excluded(IntraTxCoordinate::start_of_tx(10)),
+                },
+                end_checkpoint: 3,
+                end_position: IntraTxCoordinate {
+                    tx_seq: 5,
+                    index: 1,
+                },
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+                ..resolved_intra_tx()
+            }
+        );
+
+        let options = after_options(Ordering::Descending, ev_boundary(3, 5, 1));
+        assert_eq!(
+            resolved_intra_tx().apply_cursor_bounds(&options),
+            ResolvedIntraTxRange {
+                bounds: IntraTxScanBounds {
+                    lo: Bound::Included(IntraTxCoordinate {
+                        tx_seq: 5,
+                        index: 1,
+                    }),
+                    hi: Bound::Excluded(IntraTxCoordinate::start_of_tx(10)),
+                },
+                end_checkpoint: 3,
+                end_position: IntraTxCoordinate {
+                    tx_seq: 5,
+                    index: 1,
+                },
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+                ..resolved_intra_tx()
+            }
+        );
+    }
+
+    /// When the after cursor empties the window, the record empties at the
+    /// cursor's coordinate and checkpoint; either cursor kind (Item or Boundary)
+    /// normalizes to Boundary.
+    #[test]
+    fn after_cursor_empties_descending_interval() {
+        let seed = ResolvedIntraTxRange {
+            bounds: IntraTxScanBounds::tx_span(3, 9),
+            entry_checkpoint: 9,
+            end_checkpoint: 3,
+            end_position: IntraTxCoordinate::start_of_tx(3),
+            exhaustion: RangeExhaustion::CheckpointBound,
+        };
+
+        // Either cursor kind in: the descending recording must normalize the
+        // terminal kind to Boundary.
+        let expected_coordinate = IntraTxCoordinate {
+            tx_seq: 100,
+            index: 10,
+        };
+        let expected = ResolvedIntraTxRange {
+            bounds: IntraTxScanBounds::empty_at(expected_coordinate),
+            entry_checkpoint: 9,
+            end_checkpoint: 100,
+            end_position: expected_coordinate,
+            exhaustion: RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Boundary,
+            },
+        };
+
+        let options = after_options(Ordering::Descending, ev_item(100, 100, 10));
+        assert_eq!(seed.clone().apply_cursor_bounds(&options), expected);
+        let options = after_options(Ordering::Descending, ev_boundary(100, 100, 10));
+        assert_eq!(seed.apply_cursor_bounds(&options), expected);
+    }
+
+    /// (descending, before inside the window, either cursor kind (Item or
+    /// Boundary)): hi becomes exclusive at the cursor; entry checkpoint folds
+    /// down; terminal untouched.
+    #[test]
+    fn before_cursor_tightens_descending_upper_bound() {
+        let seed = ResolvedIntraTxRange {
+            entry_checkpoint: 8,
+            ..resolved_intra_tx()
+        };
+        // The before-arm is kind-agnostic: Item and Boundary cursors produce
+        // identical records.
+        let expected = ResolvedIntraTxRange {
+            bounds: IntraTxScanBounds {
+                lo: Bound::Included(IntraTxCoordinate::start_of_tx(0)),
+                hi: Bound::Excluded(IntraTxCoordinate {
+                    tx_seq: 5,
+                    index: 1,
+                }),
+            },
+            entry_checkpoint: 6,
+            ..seed.clone()
+        };
+        let options = before_options(Ordering::Descending, ev_item(6, 5, 1));
+        assert_eq!(seed.clone().apply_cursor_bounds(&options), expected);
+        let options = before_options(Ordering::Descending, ev_boundary(6, 5, 1));
+        assert_eq!(seed.apply_cursor_bounds(&options), expected);
+    }
+
+    #[test]
+    fn before_cursor_above_window_never_tightens() {
+        let expected = ResolvedIntraTxRange {
+            entry_checkpoint: 1,
+            ..resolved_intra_tx()
+        };
+        for cursor in [ev_boundary(1, 12, 0), ev_item(1, 12, 0)] {
+            let options = before_options(Ordering::Descending, cursor.clone());
+            assert_eq!(resolved_intra_tx().apply_cursor_bounds(&options), expected);
+
+            let options = before_options(Ordering::Ascending, cursor);
+            assert_eq!(
+                resolved_intra_tx().apply_cursor_bounds(&options),
+                resolved_intra_tx()
+            );
+        }
+    }
+
+    #[test]
+    fn ascending_before_cursor_sets_terminal_and_tightens() {
+        let expected = ResolvedIntraTxRange {
+            bounds: IntraTxScanBounds {
+                lo: Bound::Included(IntraTxCoordinate::start_of_tx(0)),
+                hi: Bound::Excluded(IntraTxCoordinate {
+                    tx_seq: 5,
+                    index: 1,
+                }),
+            },
+            entry_checkpoint: 2,
+            end_checkpoint: 6,
+            end_position: IntraTxCoordinate {
+                tx_seq: 5,
+                index: 1,
+            },
+            exhaustion: RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Boundary,
+            },
+        };
+        let options = before_options(Ordering::Ascending, ev_boundary(6, 5, 1));
+        assert_eq!(resolved_intra_tx().apply_cursor_bounds(&options), expected);
+        let options = before_options(Ordering::Ascending, ev_item(6, 5, 1));
+        assert_eq!(resolved_intra_tx().apply_cursor_bounds(&options), expected);
+    }
+
+    /// When a before cursor empties an ascending interval, the bounds are emptied at the cursor,
+    /// and end_position and end_checkpoint are set to the cursor's.
+    #[test]
+    fn before_cursor_empties_ascending_interval() {
+        let seed = ResolvedIntraTxRange {
+            bounds: IntraTxScanBounds::tx_span(3, 10),
+            entry_checkpoint: 2,
+            end_checkpoint: 9,
+            ..resolved_intra_tx()
+        };
+        let expected = ResolvedIntraTxRange {
+            bounds: IntraTxScanBounds::empty_at(IntraTxCoordinate::start_of_tx(3)),
+            end_checkpoint: 1,
+            end_position: IntraTxCoordinate::start_of_tx(3),
+            exhaustion: RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Boundary,
+            },
+            ..seed.clone()
+        };
+        let options = before_options(Ordering::Ascending, ev_boundary(1, 3, 0));
+        assert_eq!(seed.clone().apply_cursor_bounds(&options), expected);
+        let options = before_options(Ordering::Ascending, ev_item(1, 3, 0));
+        assert_eq!(seed.apply_cursor_bounds(&options), expected);
+    }
+
+    /// (ascending, after and before both present): if only the after files, its
+    /// frame stands (Item kind retained); if both file, the before wins at the min
+    /// position.
+    #[test]
+    fn ascending_with_both_cursors_picks_the_terminal_owner() {
+        // The before cursor falls out of the range so it is rejected. The after cursor empties the
+        // range, and is attributed to the exhaustion reason.
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Ascending,
+            after: Some(ev_item(12, 12, 0)),
+            before: Some(ev_boundary(14, 14, 0)),
+        };
+        assert_eq!(
+            resolved_intra_tx().apply_cursor_bounds(&options),
+            ResolvedIntraTxRange {
+                bounds: IntraTxScanBounds::empty_at(IntraTxCoordinate::start_of_tx(12)),
+                entry_checkpoint: 12,
+                end_checkpoint: 12,
+                end_position: IntraTxCoordinate::start_of_tx(12),
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Item,
+                },
+            }
+        );
+
+        // When both cursors would empty, `before` cursor attribution remains.
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Ascending,
+            after: Some(ev_boundary(12, 12, 0)),
+            before: Some(ev_boundary(3, 3, 0)),
+        };
+        assert_eq!(
+            resolved_intra_tx().apply_cursor_bounds(&options),
+            ResolvedIntraTxRange {
+                bounds: IntraTxScanBounds::empty_at(IntraTxCoordinate::start_of_tx(3)),
+                entry_checkpoint: 12,
+                end_checkpoint: 3,
+                end_position: IntraTxCoordinate::start_of_tx(3),
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            }
+        );
+    }
+
+    /// (descending, after and before both present): the after's frame stands when
+    /// only it files; when both file, the min position wins; a before that empties
+    /// overrides the after's earlier terminal.
+    #[test]
+    fn descending_with_both_cursors_picks_the_terminal_owner() {
+        // After empties, before rejected: the after-claim survives, and the
+        // rejected before-cursor still folds entry down.
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Descending,
+            after: Some(ev_boundary(9, 12, 0)),
+            before: Some(ev_boundary(1, 15, 0)),
+        };
+        assert_eq!(
+            resolved_intra_tx().apply_cursor_bounds(&options),
+            ResolvedIntraTxRange {
+                bounds: IntraTxScanBounds::empty_at(IntraTxCoordinate::start_of_tx(12)),
+                entry_checkpoint: 1,
+                end_checkpoint: 9,
+                end_position: IntraTxCoordinate::start_of_tx(12),
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            }
+        );
+
+        // After empties, before also files: before wins at the min position.
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Descending,
+            after: Some(ev_boundary(9, 12, 0)),
+            before: Some(ev_item(1, 5, 2)),
+        };
+        assert_eq!(
+            resolved_intra_tx().apply_cursor_bounds(&options),
+            ResolvedIntraTxRange {
+                bounds: IntraTxScanBounds::empty_at(IntraTxCoordinate {
+                    tx_seq: 5,
+                    index: 2,
+                }),
+                entry_checkpoint: 1,
+                end_checkpoint: 1,
+                end_position: IntraTxCoordinate {
+                    tx_seq: 5,
+                    index: 2,
+                },
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            }
+        );
+    }
+
+    /// (descending, after below the window): complete noop — even entry_checkpoint
+    /// is untouched, since a descending scan doesn't enter from the after side.
+    #[test]
+    fn after_cursor_rejected_descending_is_noop() {
+        let seed = ResolvedIntraTxRange {
+            bounds: IntraTxScanBounds {
+                lo: Bound::Included(IntraTxCoordinate::start_of_tx(5)),
+                hi: Bound::Excluded(IntraTxCoordinate::start_of_tx(10)),
+            },
+            ..resolved_intra_tx()
+        };
+        let options = after_options(Ordering::Descending, ev_boundary(4, 2, 0));
+        assert_eq!(seed.clone().apply_cursor_bounds(&options), seed);
+    }
+
+    /// A cursor whose bound coincides with the window's own is a no-op tighten, but
+    /// the terminal still becomes the cursor's — CursorBound on an unchanged,
+    /// non-empty record.
+    #[test]
+    fn cursor_at_the_window_bound_still_takes_the_terminal() {
+        // Admission at the exact bound is a no-op tighten, but the stop-side
+        // cursor still takes over the terminal: exhaustion flips to
+        // CursorBound on a non-empty result whose bounds did not change.
+        let options = before_options(Ordering::Ascending, ev_boundary(6, 10, 0));
+        assert_eq!(
+            resolved_intra_tx().apply_cursor_bounds(&options),
+            ResolvedIntraTxRange {
+                bounds: IntraTxScanBounds::tx_span(0, 10),
+                entry_checkpoint: 2,
+                end_checkpoint: 6,
+                end_position: IntraTxCoordinate::start_of_tx(10),
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            }
+        );
+
+        let options = after_options(Ordering::Descending, ev_boundary(6, 0, 0));
+        assert_eq!(
+            resolved_intra_tx().apply_cursor_bounds(&options),
+            ResolvedIntraTxRange {
+                bounds: IntraTxScanBounds::tx_span(0, 10),
+                entry_checkpoint: 2,
+                end_checkpoint: 6,
+                end_position: IntraTxCoordinate::start_of_tx(0),
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            }
+        );
+    }
+
+    /// (ascending, after inside the window): Item admits strictly after its
+    /// coordinate, Boundary from it; entry checkpoint rises; terminal untouched.
+    #[test]
+    fn tx_after_cursor_tightens_ascending_lower_bound() {
+        // Item at n resumes at n + 1; Boundary at n resumes at n.
+        let options = after_options(Ordering::Ascending, tx_item(3, 12));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            ResolvedRange {
+                range: 13..20,
+                entry_checkpoint: 3,
+                ..resolved_range(10..20)
+            }
+        );
+
+        let options = after_options(Ordering::Ascending, tx_boundary(3, 12));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            ResolvedRange {
+                range: 12..20,
+                entry_checkpoint: 3,
+                ..resolved_range(10..20)
+            }
+        );
+    }
+
+    #[test]
+    fn tx_after_cursor_below_lower_bound_only_folds_entry() {
+        let expected = ResolvedRange {
+            entry_checkpoint: 4,
+            ..resolved_range(10..20)
+        };
+        let options = after_options(Ordering::Ascending, tx_boundary(4, 5));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+        let options = after_options(Ordering::Ascending, tx_item(4, 5));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+    }
+
+    /// Tightens the lower bound, and the terminal becomes the cursor's, because
+    /// the after cursor is where a descending scan stops.
+    #[test]
+    fn tx_descending_after_cursor_sets_terminal_and_tightens() {
+        // Item at 12 and Boundary at 13 are the same exclusive edge.
+        let expected = ResolvedRange {
+            range: 13..20,
+            entry_checkpoint: 0,
+            end_checkpoint: 3,
+            end_position: 13,
+            exhaustion: RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Boundary,
+            },
+        };
+        let options = after_options(Ordering::Descending, tx_item(3, 12));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+        let options = after_options(Ordering::Descending, tx_boundary(3, 13));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+    }
+
+    /// When the after cursor empties the window, the record empties at the
+    /// cursor's coordinate and checkpoint; either cursor kind (Item or Boundary)
+    /// normalizes to Boundary.
+    #[test]
+    fn tx_after_cursor_empties_descending_interval() {
+        // Item at 24 and Boundary at 25 are the same exclusive edge.
+        let expected = ResolvedRange {
+            range: 25..25,
+            entry_checkpoint: 0,
+            end_checkpoint: 9,
+            end_position: 25,
+            exhaustion: RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Boundary,
+            },
+        };
+        let options = after_options(Ordering::Descending, tx_boundary(9, 25));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+        let options = after_options(Ordering::Descending, tx_item(9, 24));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+    }
+
+    /// (descending, before inside the window, either cursor kind (Item or
+    /// Boundary)): hi becomes exclusive at the cursor; entry checkpoint folds
+    /// down; terminal untouched.
+    #[test]
+    fn tx_before_cursor_tightens_descending_upper_bound() {
+        let seed = ResolvedRange {
+            entry_checkpoint: 8,
+            ..resolved_range(10..20)
+        };
+        // The before-arm is kind-agnostic: Item and Boundary cursors produce
+        // identical records.
+        let expected = ResolvedRange {
+            range: 10..15,
+            entry_checkpoint: 6,
+            ..seed.clone()
+        };
+        let options = before_options(Ordering::Descending, tx_item(6, 15));
+        assert_eq!(seed.clone().apply_cursor_bounds(&options), expected);
+        let options = before_options(Ordering::Descending, tx_boundary(6, 15));
+        assert_eq!(seed.apply_cursor_bounds(&options), expected);
+    }
+
+    #[test]
+    fn tx_before_cursor_above_window_never_tightens() {
+        let seed = ResolvedRange {
+            entry_checkpoint: 5,
+            ..resolved_range(10..20)
+        };
+        let expected = ResolvedRange {
+            entry_checkpoint: 1,
+            ..seed.clone()
+        };
+        let options = before_options(Ordering::Descending, tx_boundary(1, 25));
+        assert_eq!(seed.clone().apply_cursor_bounds(&options), expected);
+        let options = before_options(Ordering::Descending, tx_item(1, 25));
+        assert_eq!(seed.clone().apply_cursor_bounds(&options), expected);
+
+        let options = before_options(Ordering::Ascending, tx_boundary(1, 25));
+        assert_eq!(seed.clone().apply_cursor_bounds(&options), seed);
+        let options = before_options(Ordering::Ascending, tx_item(1, 25));
+        assert_eq!(seed.clone().apply_cursor_bounds(&options), seed);
+    }
+
+    #[test]
+    fn tx_ascending_before_cursor_sets_terminal_and_tightens() {
+        let expected = ResolvedRange {
+            range: 10..15,
+            entry_checkpoint: 0,
+            end_checkpoint: 6,
+            end_position: 15,
+            exhaustion: RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Boundary,
+            },
+        };
+        let options = before_options(Ordering::Ascending, tx_boundary(6, 15));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+        let options = before_options(Ordering::Ascending, tx_item(6, 15));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+    }
+
+    #[test]
+    fn tx_before_cursor_empties_ascending_interval() {
+        // The before-arm is kind-agnostic: Item and Boundary cursors produce
+        // identical records.
+        let expected = ResolvedRange {
+            range: 5..5,
+            entry_checkpoint: 0,
+            end_checkpoint: 1,
+            end_position: 5,
+            exhaustion: RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Boundary,
+            },
+        };
+        let options = before_options(Ordering::Ascending, tx_item(1, 5));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+        let options = before_options(Ordering::Ascending, tx_boundary(1, 5));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+    }
+
+    /// (ascending, after and before both present): if only the after files, its
+    /// frame stands (Item kind retained); if both file, the before wins at the min
+    /// position.
+    #[test]
+    fn tx_ascending_with_both_cursors_picks_the_terminal_owner() {
+        // Rejected before-cursor must not clobber the after-cursor's recorded
+        // terminal.
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Ascending,
+            after: Some(tx_boundary(5, 25)),
+            before: Some(tx_boundary(8, 30)),
+        };
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            ResolvedRange {
+                range: 25..25,
+                entry_checkpoint: 5,
+                end_checkpoint: 5,
+                end_position: 25,
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            }
+        );
+
+        // When the before-cursor records too, it wins the attribution.
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Ascending,
+            after: Some(tx_boundary(5, 25)),
+            before: Some(tx_item(3, 15)),
+        };
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            ResolvedRange {
+                range: 15..15,
+                entry_checkpoint: 5,
+                end_checkpoint: 3,
+                end_position: 15,
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            }
+        );
+    }
+
+    /// (descending, after and before both present): the after's frame stands when
+    /// only it files; when both file, the min position wins; a before that empties
+    /// overrides the after's earlier terminal.
+    #[test]
+    fn tx_descending_with_both_cursors_picks_the_terminal_owner() {
+        // After empties, before rejected: the after-claim survives, and the
+        // rejected before-cursor still folds entry down.
+        let seed = ResolvedRange {
+            entry_checkpoint: 5,
+            ..resolved_range(10..20)
+        };
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Descending,
+            after: Some(tx_boundary(9, 25)),
+            before: Some(tx_boundary(2, 30)),
+        };
+        assert_eq!(
+            seed.clone().apply_cursor_bounds(&options),
+            ResolvedRange {
+                range: 25..25,
+                entry_checkpoint: 2,
+                end_checkpoint: 9,
+                end_position: 25,
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            }
+        );
+
+        // After empties, before also files: before wins at the min position.
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Descending,
+            after: Some(tx_boundary(9, 25)),
+            before: Some(tx_item(2, 15)),
+        };
+        assert_eq!(
+            seed.clone().apply_cursor_bounds(&options),
+            ResolvedRange {
+                range: 15..15,
+                entry_checkpoint: 2,
+                end_checkpoint: 2,
+                end_position: 15,
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            }
+        );
+
+        // After tightens without emptying, before empties: the before-claim
+        // overrides the after-cursor's eagerly written terminal.
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Descending,
+            after: Some(tx_item(8, 11)),
+            before: Some(tx_item(2, 11)),
+        };
+        assert_eq!(
+            seed.apply_cursor_bounds(&options),
+            ResolvedRange {
+                range: 11..11,
+                entry_checkpoint: 2,
+                end_checkpoint: 2,
+                end_position: 11,
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            }
+        );
+    }
+
+    /// after-Item at n and after-Boundary at n + 1 are the same exclusive edge:
+    /// identical records either way (here both empty the window).
+    #[test]
+    fn tx_after_item_and_successor_boundary_produce_identical_records() {
+        // Item at 24 and Boundary at 25 are the same exclusive edge.
+        let expected = ResolvedRange {
+            range: 25..25,
+            entry_checkpoint: 5,
+            end_checkpoint: 5,
+            end_position: 25,
+            exhaustion: RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Boundary,
+            },
+        };
+        let options = after_options(Ordering::Ascending, tx_item(5, 24));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+        let options = after_options(Ordering::Ascending, tx_boundary(5, 25));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            expected
+        );
+    }
+
+    /// (descending, after below the window): complete noop — even entry_checkpoint
+    /// is untouched, since a descending scan doesn't enter from the after side.
+    #[test]
+    fn tx_after_cursor_rejected_descending_is_noop() {
+        let options = after_options(Ordering::Descending, tx_boundary(4, 5));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            resolved_range(10..20)
+        );
+    }
+
+    /// A cursor whose bound coincides with the window's own is a no-op tighten, but
+    /// the terminal still becomes the cursor's — CursorBound on an unchanged,
+    /// non-empty record.
+    #[test]
+    fn tx_cursor_at_the_window_bound_still_takes_the_terminal() {
+        // Admission at the exact bound is a no-op tighten, but the stop-side
+        // cursor still takes over the terminal: exhaustion flips to
+        // CursorBound on a non-empty result whose range did not change.
+        let options = before_options(Ordering::Ascending, tx_boundary(6, 20));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            ResolvedRange {
+                range: 10..20,
+                entry_checkpoint: 0,
+                end_checkpoint: 6,
+                end_position: 20,
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            }
+        );
+
+        let options = after_options(Ordering::Descending, tx_boundary(6, 10));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            ResolvedRange {
+                range: 10..20,
+                entry_checkpoint: 0,
+                end_checkpoint: 6,
+                end_position: 10,
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            }
+        );
+    }
+
+    /// (ascending, after-Boundary at u64::MAX): nothing can lie at MAX; empties at
+    /// (cursor checkpoint, MAX), Boundary.
+    #[test]
+    fn tx_after_boundary_at_max_empties_interval() {
+        let options = after_options(Ordering::Ascending, tx_boundary(5, u64::MAX));
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            ResolvedRange::empty_at(
+                5,
+                u64::MAX,
+                RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            )
+        );
+    }
+
+    /// If the bounds are already empty, cursors do not apply.
+    #[test]
+    fn tx_cursor_bounds_pass_empty_resolution_through_unchanged() {
+        let seed = ResolvedRange {
+            range: 7..7,
+            end_checkpoint: 4,
+            end_position: 7,
+            exhaustion: RangeExhaustion::LedgerTip,
+            entry_checkpoint: 4,
+        };
+        for ordering in [Ordering::Ascending, Ordering::Descending] {
+            let options = QueryOptions {
+                limit_items: 100,
+                ordering,
+                after: Some(tx_item(2, 5)),
+                before: Some(tx_boundary(3, 6)),
+            };
+            assert_eq!(seed.clone().apply_cursor_bounds(&options), seed);
+        }
+    }
+
+    #[test]
+    fn tx_after_item_at_max_short_circuits_before_cursor() {
+        // An after-Item at u64::MAX has no representable successor:
+        // resolution short-circuits to the emptied interval, terminal at the
+        // after cursor's own coordinate, and a crossed before-cursor never
+        // participates.
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Ascending,
+            after: Some(tx_item(5, u64::MAX)),
+            before: Some(tx_boundary(3, 15)),
+        };
+        assert_eq!(
+            resolved_range(10..20).apply_cursor_bounds(&options),
+            ResolvedRange {
+                range: u64::MAX..u64::MAX,
+                entry_checkpoint: 5,
+                end_checkpoint: 5,
+                end_position: u64::MAX,
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
+            }
+        );
+
+        // Descending: the before-cursor's entry fold is skipped too.
+        let seed = ResolvedRange {
+            entry_checkpoint: 7,
+            ..resolved_range(10..20)
+        };
+        let options = QueryOptions {
+            limit_items: 100,
+            ordering: Ordering::Descending,
+            after: Some(tx_item(5, u64::MAX)),
+            before: Some(tx_boundary(3, 15)),
+        };
+        assert_eq!(
+            seed.apply_cursor_bounds(&options),
+            ResolvedRange {
+                range: u64::MAX..u64::MAX,
+                entry_checkpoint: 7,
+                end_checkpoint: 5,
+                end_position: u64::MAX,
+                exhaustion: RangeExhaustion::CursorBound {
+                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                },
             }
         );
     }
@@ -1404,8 +2501,9 @@ mod tests {
             entry_checkpoint: 5,
         };
         assert_eq!(
-            ascending
-                .apply_cursor_bounds(resolved.clone())
+            resolved
+                .clone()
+                .apply_cursor_bounds(&ascending)
                 .entry_checkpoint,
             7
         );
@@ -1420,7 +2518,10 @@ mod tests {
             entry_checkpoint: 9,
             ..resolved
         };
-        assert_eq!(descending.apply_cursor_bounds(resolved).entry_checkpoint, 7);
+        assert_eq!(
+            resolved.apply_cursor_bounds(&descending).entry_checkpoint,
+            7
+        );
     }
 
     #[test]
@@ -1435,7 +2536,7 @@ mod tests {
         request.after = Some(token.clone());
         let options = query_options_from_proto(Some(&request)).unwrap();
         assert_eq!(
-            options.apply_cursor_bounds(resolved_range(10..20)).range,
+            resolved_range(10..20).apply_cursor_bounds(&options).range,
             12..20
         );
 
@@ -1443,7 +2544,7 @@ mod tests {
         request.before = Some(token);
         let options = query_options_from_proto(Some(&request)).unwrap();
         assert_eq!(
-            options.apply_cursor_bounds(resolved_range(10..20)).range,
+            resolved_range(10..20).apply_cursor_bounds(&options).range,
             10..11
         );
     }
