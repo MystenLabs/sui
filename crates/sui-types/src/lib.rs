@@ -67,6 +67,7 @@ pub mod id;
 pub mod in_memory_storage;
 pub mod inner_temporary_store;
 pub mod layout_resolver;
+pub mod local_execution;
 pub mod message_envelope;
 pub mod messages_checkpoint;
 pub mod messages_consensus;

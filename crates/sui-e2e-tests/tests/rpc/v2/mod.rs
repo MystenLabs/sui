@@ -17,6 +17,7 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{TransactionData, TransactionKind};
 
 mod ledger_service;
+mod local_execution_service;
 mod move_package_service;
 mod signature_verification_service;
 mod state_service;

@@ -3021,6 +3021,10 @@ async fn build_http_servers(
             rpc_service.with_executor(transaction_orchestrator.clone())
         }
 
+        // Expose the node-local "wait for executed effects" endpoint, backed by this node's
+        // execution cache, so clients can time local execution independent of checkpointing.
+        rpc_service.with_local_effects_waiter(state.clone());
+
         rpc_service.into_router().await
     };
 

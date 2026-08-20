@@ -9,6 +9,7 @@ use tower::Service;
 use tower::layer::layer_fn;
 
 pub mod deadline;
+pub mod local_execution;
 pub mod v2;
 pub mod v2alpha;
 

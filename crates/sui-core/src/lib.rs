@@ -22,6 +22,7 @@ pub mod consensus_validator;
 pub mod db_checkpoint_handler;
 pub mod epoch;
 pub mod execution_cache;
+pub mod local_effects_waiter;
 mod execution_driver;
 pub mod execution_scheduler;
 mod fallback_fetch;
