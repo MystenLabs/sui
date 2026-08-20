@@ -75,7 +75,7 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
     while cursor <= hi_inclusive {
         let chunk_hi_inclusive = (cursor + chunk_size - 1).min(hi_inclusive);
 
-        wait_for_ledger_grpc_catching_up_at(chunk_hi_inclusive, &mut watermarks_rx).await?;
+        wait_for_pipelines_catching_up_at(chunk_hi_inclusive, &mut watermarks_rx).await?;
 
         let processed = fetch_and_process(fetcher, &mask, cursor..=chunk_hi_inclusive).await?;
         for cp in processed {

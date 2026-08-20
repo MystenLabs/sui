@@ -67,7 +67,7 @@ pub(crate) use checkpoint_stream_task::broadcast_error;
 #[cfg(feature = "staging")]
 pub(crate) use checkpoint_stream_task::reconnect_error;
 #[cfg(feature = "staging")]
-pub(crate) use gap_recovery::wait_for_ledger_grpc_catching_up_at;
+pub(crate) use gap_recovery::wait_for_pipelines_catching_up_at;
 pub(crate) use package_eviction_task::PackageEvictionTask;
 pub(crate) use processed_checkpoint::ProcessedCheckpoint;
 pub(crate) use processed_checkpoint::ProcessedTransaction;
