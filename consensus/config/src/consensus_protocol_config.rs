@@ -23,9 +23,7 @@ pub struct ConsensusProtocolConfig {
     max_num_transactions_in_block: u64,
     gc_depth: u32,
     /// Whether validators emit slim (ancestor-compressed) blocks on the block
-    /// subscription stream, framed in a block envelope. Gates the wire framing on
-    /// both ends: sender and receiver interpret the stream by their own config,
-    /// which they share through the epoch's protocol version.
+    /// subscription stream.
     slim_block_propagation_enabled: bool,
     transaction_voting_enabled: bool,
     num_leaders_per_round: Option<usize>,

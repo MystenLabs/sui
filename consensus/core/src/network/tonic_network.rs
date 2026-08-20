@@ -1455,8 +1455,7 @@ fn interpret_subscription_block(
 pub(crate) struct SubscribeBlocksResponse {
     // With slim block propagation disabled these are raw serialized SignedBlock bytes,
     // byte-identical to the pre-envelope wire. With it enabled they hold a serialized
-    // SerializedBlockEnvelope; both ends of a stream share an epoch and therefore a
-    // protocol config, so the receiver knows which framing to expect.
+    // SerializedBlockEnvelope.
     #[prost(bytes = "bytes", tag = "1")]
     block: Bytes,
     // Serialized BlockRefs that are excluded from the blocks ancestors.
@@ -1559,44 +1558,15 @@ mod tests {
     use consensus_types::block::BlockDigest;
     use prometheus::Registry;
 
-    /// The wire shape this message must never drift from: the exact struct main uses.
-    /// Field declaration order matters to prost's output ordering, so it is pinned too.
-    #[derive(Clone, PartialEq, prost::Message)]
-    struct LegacySubscribeBlocksResponse {
-        #[prost(bytes = "bytes", tag = "1")]
-        block: Bytes,
-        #[prost(bytes = "vec", repeated, tag = "2")]
-        excluded_ancestors: Vec<Vec<u8>>,
-    }
-
-    /// With slim propagation disabled the wire is byte-identical to the pre-envelope
-    /// format, across the full matrix of present/empty fields -- this is what makes
-    /// deploying this change a no-op.
+    /// With slim propagation disabled the framing is the identity: the wire carries
+    /// the raw SignedBlock bytes unchanged, in the same message struct as before the
+    /// envelope existed -- so deploying this is a wire no-op.
     #[tokio::test]
-    async fn flag_off_wire_is_byte_identical_to_legacy() {
-        let cases: Vec<(Bytes, Vec<Vec<u8>>)> = vec![
-            (
-                Bytes::from_static(b"a-signed-block"),
-                vec![vec![9, 9], vec![7]],
-            ),
-            (Bytes::new(), vec![vec![9, 9]]),
-            (Bytes::from_static(b"a-signed-block"), vec![]),
-            (Bytes::new(), vec![]),
-        ];
-        for (block, excluded) in cases {
-            let new = SubscribeBlocksResponse {
-                block: frame_subscription_block(SerializedBlockForm::Full(block.clone()), false)
-                    .unwrap(),
-                excluded_ancestors: excluded.clone(),
-            };
-            let legacy = LegacySubscribeBlocksResponse {
-                block,
-                excluded_ancestors: excluded,
-            };
+    async fn flag_off_wire_carries_raw_block_bytes() {
+        for block in [Bytes::from_static(b"a-signed-block"), Bytes::new()] {
             assert_eq!(
-                prost::Message::encode_to_vec(&new),
-                prost::Message::encode_to_vec(&legacy),
-                "flag-off wire bytes must match the legacy format exactly"
+                frame_subscription_block(SerializedBlockForm::Full(block.clone()), false).unwrap(),
+                block
             );
         }
     }

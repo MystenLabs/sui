@@ -281,7 +281,7 @@ impl NodeMetrics {
             ).unwrap(),
             subscribe_blocks_response_bytes: register_int_counter_vec_with_registry!(
                 "subscribe_blocks_response_bytes",
-                "Encoded protobuf length of subscription responses, by subscriber and block form. Measured at message construction -- upstream of the stream throttle, the gRPC length prefix and framing, and zstd -- so it tracks payload form, not bytes on the socket. Includes the block envelope framing only while slim propagation is enabled",
+                "Encoded protobuf length of subscription responses, by subscriber and block form. Measured at message construction -- upstream of the stream throttle, the gRPC length prefix and framing, and zstd -- so it tracks payload form, not bytes on the socket.",
                 &["authority", "form"],
                 registry,
             ).unwrap(),

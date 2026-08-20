@@ -31,6 +31,7 @@ use consensus_types::block::{BlockRef, Round};
 use fastcrypto::encoding::{Encoding, Hex};
 use futures::Stream;
 use mysten_network::{Multiaddr, multiaddr::Protocol};
+use prost::Message as _;
 
 use crate::{
     block::{ExtendedBlock, VerifiedBlock},
@@ -376,12 +377,8 @@ pub(crate) struct ExtendedSerializedBlock {
     pub(crate) excluded_ancestors: Vec<Vec<u8>>,
 }
 
-/// The wire framing for one block on live subscription streams, shared so the observer
-/// batch stream can adopt the same framing later (its `blocks` field is `repeated`, and
-/// protobuf has no repeated oneof, so the envelope must ride inside the bytes). Only
-/// live subscription streams use this: fetch, commit sync, latest-block, and the
-/// test-only unicast stay raw full `SignedBlock` bytes -- they are the recovery paths
-/// slim reconstruction falls back to.
+/// Wire framing for one block on live subscription streams, carried inside a bytes
+/// field so batch streams can reuse it.
 #[derive(Clone, PartialEq, prost::Message)]
 pub(crate) struct SerializedBlockEnvelope {
     #[prost(oneof = "SerializedBlockForm", tags = "1, 2")]
@@ -402,12 +399,10 @@ pub(crate) enum SerializedBlockForm {
 
 impl SerializedBlockEnvelope {
     pub(crate) fn encode_form(form: SerializedBlockForm) -> Bytes {
-        use prost::Message as _;
         Self { block: Some(form) }.encode_to_vec().into()
     }
 
     pub(crate) fn decode_form(bytes: &[u8]) -> Result<SerializedBlockForm, prost::DecodeError> {
-        use prost::Message as _;
         Self::decode(bytes)?
             .block
             .ok_or_else(|| prost::DecodeError::new("empty block envelope"))
