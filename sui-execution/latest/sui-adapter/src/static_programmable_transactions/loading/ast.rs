@@ -245,6 +245,7 @@ impl Type {
     pub fn is_tx_context_by_value(&self) -> bool {
         matches!(self, Type::Datatype(dt) if dt.qualified_ident() == RESOLVED_TX_CONTEXT)
     }
+
     pub fn all_addresses(&self) -> IndexSet<AccountAddress> {
         match self {
             Type::Bool

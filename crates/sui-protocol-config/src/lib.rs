@@ -377,10 +377,10 @@ const MAINNET_USDB: &str =
 //              Bound type nodes in accumulators.
 // Version 134: Add `package::original_package_id` and its native costs.
 //              Reduce the consensus block transaction count and payload limits.
-//              Enable ptb_tx_context_restrictions: `TxContext` may appear in a
+// Version 135: Enable ptb_tx_context_restrictions: `TxContext` may appear in a
 //              PTB Move call signature at most once mutably or any number of
 //              times immutably (never by value), and never in return position.
-// Version 135: Enable allowed_proposers on devnet.
+//              Enable allowed_proposers on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4603,10 +4603,10 @@ impl ProtocolConfig {
 
                     cfg.consensus_max_transactions_in_block_bytes = Some(288 * 1024);
                     cfg.consensus_max_num_transactions_in_block = Some(128);
-
-                    cfg.feature_flags.ptb_tx_context_restrictions = true;
                 }
                 135 => {
+                    cfg.feature_flags.ptb_tx_context_restrictions = true;
+
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.allowed_proposers = true;
                     }
