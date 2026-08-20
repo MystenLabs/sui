@@ -11,7 +11,8 @@ namespace Mysticeti
 /-! One aggregate safety theorem for the modeled Mysticeti v3 decision rules.
 
 Applying this theorem to Rust requires the assumption ledger. Key obligations are
-`ASM-SAFE-EVIDENCE-REFINEMENT`, `ASM-SAFE-COMMIT-CHAIN`, and
+`ASM-SAFE-EVIDENCE-REFINEMENT`, `ASM-SAFE-DIGEST-IDENTITY`,
+`ASM-SAFE-COMMIT-STORE`, `ASM-SAFE-INSTALL-PROVENANCE`,
 `ASM-SAFE-FIRST-TRIGGER`, `ASM-SAFE-COMMITTED-PREFIX`, and `ASM-SAFE-GC`.
 -/
 

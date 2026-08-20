@@ -89,10 +89,11 @@ theorem adaptive_run_unique (rule : V3AdaptiveScheduleRule Verdict)
 
 Everything a host derives from its run therefore agrees: the ordered committed
 leaders, the installed sequence, the ledger, and the schedule at every round.
-The common commit chain of `ASM-SAFE-COMMIT-CHAIN` is a consequence of the
-stratified rule and the per-slot decision result. It is not a separate
-condition. What remains for that assumption is the refinement obligation that
-each correct host's actual behavior is a consistent run of one common rule. -/
+A common commit chain across hosts is a consequence of the stratified rule and
+the per-slot decision result. It is not a separate condition, and no assumption
+states it. What remains is the one-host refinement obligation of
+`ASM-SAFE-INSTALL-PROVENANCE`: each correct host's actual behavior is a
+consistent run of one common rule. -/
 theorem consistent_runs_are_equal (rule : V3AdaptiveScheduleRule Verdict)
     {left right : Nat → Verdict}
     (leftConsistent : rule.ConsistentRun left)

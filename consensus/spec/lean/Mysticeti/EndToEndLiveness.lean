@@ -221,7 +221,8 @@ end EndToEndInternal
 /-- Static genesis facts for the correct, available validators.
 
 The genesis commit is configuration data. This structure does not constrain a
-Byzantine validator and does not state a future progress result. -/
+Byzantine validator and does not state a future progress result.
+`ASM-LIVE-COMMON-GENESIS`. -/
 structure ValidatorGenesisInput
     {BlockId CommitId PacketId : Type}
     (config : ValidatorEpochConfig CommitId)
@@ -365,13 +366,6 @@ structure EndToEndLivenessInputs
     (flexCommitterContext 0
       ((timedExecution.execution.trace 0).validatorState 0)).depth =
         leaderSchedule.indirectDepth
-  flexCausalView : Type
-  exactAnchorCausalData :
-    ExactAnchorCausalDataMap flexCausalView BlockId
-  localGcCutoffCausal : ValidatorLocalGcCutoffCausalSourceMap
-    (PacketId := PacketId) (faults := faults)
-    (protocolPacket := protocolPacket) (network := network)
-    (timed := timedExecution) flexCommitterSource exactAnchorCausalData
   exactPendingIngestion : ValidatorExactPendingIngestionRules
     flexCommitterSource
   exactDirectRule : ValidatorExactDirectRuleSourceMap (PacketId := PacketId)

@@ -294,7 +294,7 @@ theorem validator_unresolved_history_items_le_between_rounds
 `maxAdmittedRefsPerRound` is a protocol admission cap on the exact recoverable
 closure of one correct block. Current Rust limits immediate parents, but it
 does not yet enforce this transitive per-round cap in the presence of merged
-equivocating branches. -/
+equivocating branches. `ASM-LIVE-CAPSULE-PROJECTION`. -/
 structure ValidatorPersistedCausalCapsuleRoundAdmissionSourceMap
     {BlockId CommitId PacketId : Type}
     {config : ValidatorEpochConfig CommitId}

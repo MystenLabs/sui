@@ -20,7 +20,6 @@ import Mysticeti.ValidatorProcess
 import Mysticeti.ValidatorRecoveryMode
 import Mysticeti.ValidatorRecoveryParentNeedExecution
 import Mysticeti.ValidatorRecoveryParentNeedSync
-import Mysticeti.ValidatorRecoveryQueueExecution
 import Mysticeti.ValidatorRecoverySourcePinExecution
 import Mysticeti.ValidatorCurrentTipSubscriptionExecution
 import Mysticeti.ValidatorRecoveryTipRebroadcastExecution
@@ -35,7 +34,6 @@ import Mysticeti.ValidatorGcHorizonAgreement
 import Mysticeti.ValidatorV3AdaptiveScheduleSafety
 import Mysticeti.ValidatorV3AdaptiveScheduleFixpoint
 import Mysticeti.ValidatorV3AdaptiveScheduleExistence
-import Mysticeti.KnownReferencePropagation
 import Mysticeti.ValidatorReferenceFlexTrace
 import Mysticeti.ValidatorStrictRecoveryDirectQuorum
 import Mysticeti.ValidatorAdjacentRecoveryPropagation

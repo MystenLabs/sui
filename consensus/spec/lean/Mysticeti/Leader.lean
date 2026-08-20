@@ -19,7 +19,8 @@ structure LeaderEvidence (authorityCount : Nat) (stake : Nat → Nat)
   coreGc : CoreGcState
   /-- The anchor used by the indirect rule. -/
   anchorRound : Nat
-  /-- The anchor is at least two rounds above the decision slot. -/
+  /-- The anchor is at least two rounds above the decision slot.
+  `ASM-SAFE-GC`. -/
   anchorDepth :
     coreGc.decisionRound + indirectCommitDepth <= anchorRound
   faulty : VoterSet
@@ -30,11 +31,11 @@ structure LeaderEvidence (authorityCount : Nat) (stake : Nat → Nat)
   /-- `ASM-SAFE-FAULT-BOUND`. -/
   faultBounded : FaultBounded thresholds faulty
   /-- A correct authority does not both link and omit the same leader block.
-  `ASM-SAFE-NON-EQUIVOCATION`. -/
+  `ASM-SAFE-VOTE-SET-OVERLAP`. -/
   commitSkipOverlap :
     OnlyFaultyOverlap authorityCount faulty commitVotes skipVotes
   /-- A correct skip voter does not occur in a certificate for the same block.
-  `ASM-SAFE-NON-EQUIVOCATION`. -/
+  `ASM-SAFE-VOTE-SET-OVERLAP` and `ASM-SAFE-PARENT-QUORUM`. -/
   skipCertificateOverlap :
     OnlyFaultyOverlap authorityCount faulty skipVotes certificateVotes
   /-- When the decision-to-anchor window is above GC, correct direct voters in

@@ -20,6 +20,10 @@ structure ValidatorCommitHead (CommitId : Type) where
   index : Nat
   id : CommitId
   round : Nat
+  /-- Identifier of the commit at the index before this one, and `none` at
+  genesis. Rust `CommitV1.previous_digest` holds the same link, and the commit
+  digest hashes the complete body, so the digest covers it. -/
+  previousId : Option CommitId := none
 
 /-- The only two actions that can install a commit at a correct validator. -/
 inductive CommitInstallSource where

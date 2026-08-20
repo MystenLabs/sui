@@ -698,7 +698,7 @@ structure AuthenticatedFlexVoteSourceMap
     skipVotes observer state block author = true ↔
       authenticatedSkipVote observer state author block
   /-- Map the implementation's immutable causal history to the exact anchor
-  history used by the vote proof. -/
+  history used by the vote proof. `ASM-SAFE-INDIRECT-ORIGIN`. -/
   exactAnchorHistory : History → LeaderAnchorHistory BlockId
     config.authorityCount config.stake config.thresholds
   /-- Static classification for exact anchors that pass the verifier and have
@@ -1437,7 +1437,10 @@ theorem exact_commit_path_unique
 
 The main validator state stores only `(index, digest)`. Rust also retains the
 commit body, whose named leader supplies the round. `exactInstalledHead` is the
-source mapping for that body. It states no cross-validator equality. -/
+source mapping for that body. It states no cross-validator equality.
+
+The store fields are `ASM-SAFE-COMMIT-STORE`. `validBodyDigestBinding` is
+`ASM-SAFE-DIGEST-IDENTITY`. -/
 structure ExactCommitDurablePrefixSourceMap
     {BlockId CommitId PacketId : Type}
     {config : ValidatorEpochConfig CommitId}
@@ -1447,7 +1450,9 @@ structure ExactCommitDurablePrefixSourceMap
   exactInstalledHead : Time → Nat → ValidatorCommitHead CommitId → Prop
   /-- A valid commit body has one full head for one signed `(index, digest)`.
   This is the source and cryptographic binding needed because a commit vote
-  does not sign the named leader round as a separate field. -/
+  does not sign the named leader round as a separate field. Rust binds it
+  anyway: `CommitV1.leader` sits inside the body that the commit digest
+  hashes. -/
   validCommitBody : ValidatorCommitHead CommitId → Prop
   validBodyDigestBinding : ∀ left right,
     validCommitBody left → validCommitBody right →
@@ -1478,6 +1483,103 @@ structure ExactCommitDurablePrefixSourceMap
     ∃ commitId,
       ((trace time).validatorState validator).installedCommitAt index =
         some commitId
+  /-- The durable prefix of one host is itself a digest chain. Each installed
+  head above genesis names the identifier of the head one index below it. Rust
+  writes `CommitV1.previous_digest` into every stored commit body, so this is a
+  one-host storage rule and not a cross-host claim. -/
+  installedHeadLinksToPredecessor : ∀ time validator reference,
+    validator < config.authorityCount →
+    faults.correctAvailable validator = true →
+    exactInstalledHead time validator reference →
+    0 < reference.index →
+    ∃ predecessor,
+      exactInstalledHead time validator predecessor ∧
+        predecessor.index = reference.index - 1 ∧
+        reference.previousId = some predecessor.id
+
+namespace ExactCommitDurablePrefixSourceMap
+
+/-- Walking down a checked digest chain from an installed tip stays inside the
+host's own durable prefix.
+
+This was an assumed field of `ExactCommitInstallProvenance`. It is now derived
+from one-host facts only. The chain links each entry to the one before it, and
+one index with one identifier names one body: both are
+`ASM-SAFE-DIGEST-IDENTITY`. The host's own prefix links the same way and keeps
+the predecessor: that is `ASM-SAFE-COMMIT-STORE`. No step compares two hosts. -/
+theorem digest_chain_entry_matches_installed_prefix
+    {BlockId CommitId PacketId : Type}
+    {config : ValidatorEpochConfig CommitId}
+    {faults : FixedFaultInterval config}
+    {trace : Trace (ValidatorWorldState BlockId CommitId PacketId)}
+    {genesis : ValidatorCommitHead CommitId}
+    (durable : ExactCommitDurablePrefixSourceMap faults trace genesis)
+    {time author : Nat}
+    (authorInRange : author < config.authorityCount)
+    (authorCorrect : faults.correctAvailable author = true) :
+    ∀ commits : List (CommonCommitRef CommitId),
+      ConsecutiveCommitIndices commits →
+      DigestLinkedCommits durable.validCommitBody commits →
+      ∀ tip, commits.getLast? = some tip →
+      ∀ tipHead, durable.exactInstalledHead time author tipHead →
+      tipHead.index = tip.index →
+      tipHead.id = tip.id →
+      ∀ entry ∈ commits,
+        ∃ installedEntry,
+          durable.exactInstalledHead time author installedEntry ∧
+            installedEntry.index = entry.index ∧
+            installedEntry.id = entry.id := by
+  intro commits
+  induction commits with
+  | nil =>
+    intro _ _ tip lastTip
+    simp at lastTip
+  | cons first rest ih =>
+    cases rest with
+    | nil =>
+      intro _ _ tip lastTip tipHead installed indexEq idEq entry member
+      simp at lastTip member
+      subst lastTip
+      subst member
+      exact ⟨tipHead, installed, indexEq, idEq⟩
+    | cons second rest' =>
+      intro consecutive linked tip lastTip tipHead installed indexEq idEq entry
+        member
+      simp only [ConsecutiveCommitIndices] at consecutive
+      simp only [DigestLinkedCommits] at linked
+      have tailLast : (second :: rest').getLast? = some tip := by
+        simpa using lastTip
+      have tailInstalled := ih consecutive.2 linked.2.2 tip tailLast tipHead
+        installed indexEq idEq
+      rcases List.mem_cons.mp member with entryIsFirst | entryInTail
+      · subst entryIsFirst
+        rcases tailInstalled second List.mem_cons_self with
+          ⟨secondHead, secondInstalled, secondIndex, secondId⟩
+        have secondHeadIsSecond : secondHead = second :=
+          durable.validBodyDigestBinding secondHead second
+            (durable.exactInstalledHeadIsValid time author secondHead
+              secondInstalled)
+            linked.2.2.head_valid secondIndex secondId
+        have secondIndexStep : second.index = entry.index + 1 := consecutive.1
+        have secondHeadPositive : 0 < secondHead.index := by
+          rw [secondIndex, secondIndexStep]
+          exact Nat.succ_pos _
+        rcases durable.installedHeadLinksToPredecessor time author secondHead
+            authorInRange authorCorrect secondInstalled secondHeadPositive with
+          ⟨predecessor, predecessorInstalled, predecessorIndex, linkToPredecessor⟩
+        have linkIsEntry : secondHead.previousId = some entry.id := by
+          rw [secondHeadIsSecond]
+          exact linked.2.1
+        have predecessorId : predecessor.id = entry.id :=
+          Option.some.inj (linkToPredecessor.symm.trans linkIsEntry)
+        have predecessorIsEntryIndex : predecessor.index = entry.index := by
+          rw [predecessorIndex, secondIndex, secondIndexStep]
+          omega
+        exact ⟨predecessor, predecessorInstalled, predecessorIsEntryIndex,
+          predecessorId⟩
+      · exact tailInstalled entry entryInTail
+
+end ExactCommitDurablePrefixSourceMap
 
 /-- A quorum voter set contains one correct, available validator.
 
@@ -1662,9 +1764,13 @@ structure VerifiedSyncInstalledExactOrigin
 
 The local field is the reverse link from `recordCommit` to its protected exact
 run result. The sync field exposes the verified bundle and actual carrier
-persistence origins. The final field is a single-host ordering rule. The
-theorem below derives the local run for a synchronized reference. Neither field
-states that two installed references are equal. -/
+persistence origins. One field is a single-host ordering rule. One field says
+what the synchronization chain check means. The theorem below derives the local
+run for a synchronized reference. Neither field states that two installed
+references are equal.
+
+The three origin and ordering fields are `ASM-SAFE-INSTALL-PROVENANCE`.
+`validChainIsDigestChain` is `ASM-SAFE-DIGEST-IDENTITY`. -/
 structure ExactCommitInstallProvenance
     {BlockId CommitId History Encoding PacketId : Type}
     {config : ValidatorEpochConfig CommitId}
@@ -1687,23 +1793,18 @@ structure ExactCommitInstallProvenance
     (validBlocks : CommitSyncBundle BlockId CommitId → Prop) where
   blockCarriesCommitVote : ValidatorBlock BlockId →
     CommonCommitRef CommitId → Prop
-  /-- If one correct host installed the tip `(index, digest)` of a checked
-  consecutive digest chain, its durable prefix has the same `(index, digest)`
-  for every entry in that chain. This is a one-host storage and hash-chain
-  source rule. -/
-  verifiedChainEntryMatchesInstalledPrefix : ∀ time author afterIndex tipHead
-      tip commits entry,
-    author < config.authorityCount →
-    faults.correctAvailable author = true →
-    durable.exactInstalledHead time author tipHead →
-    ConsecutiveCommitIndices commits →
+  /-- The synchronization chain check is the digest-link check. Rust checks
+  indexes, digest links, and block references over a returned range, and each
+  commit body holds `previous_digest`. This field maps one code path to one
+  definition and states nothing about storage.
+
+  The chain-to-prefix rule that used to sit here is now the theorem
+  `ExactCommitDurablePrefixSourceMap.digest_chain_entry_matches_installed_prefix`,
+  and `verifiedChainEntryMatchesInstalledPrefix` below re-exposes it with the
+  same signature. -/
+  validChainIsDigestChain : ∀ afterIndex commits,
     validChain afterIndex commits →
-    commits.getLast? = some tip →
-    tipHead.index = tip.index → tipHead.id = tip.id →
-    entry ∈ commits →
-    ∃ installedEntry,
-      durable.exactInstalledHead time author installedEntry ∧
-        installedEntry.index = entry.index ∧ installedEntry.id = entry.id
+    DigestLinkedCommits durable.validCommitBody commits
   localInstallOrigin : ∀ time validator reference,
     validator < config.authorityCount →
     faults.correctAvailable validator = true →
@@ -1757,6 +1858,34 @@ variable {durable : ExactCommitDurablePrefixSourceMap faults
   timed.execution.trace genesis}
 variable {validChain : Nat → List (CommonCommitRef CommitId) → Prop}
 variable {validBlocks : CommitSyncBundle BlockId CommitId → Prop}
+
+/-- The chain-to-prefix rule, now derived instead of assumed.
+
+The signature is the one the removed field had, so call sites do not change.
+The proof is
+`ExactCommitDurablePrefixSourceMap.digest_chain_entry_matches_installed_prefix`
+applied to the digest meaning of the synchronization chain check. -/
+theorem verifiedChainEntryMatchesInstalledPrefix
+    (provenance : ExactCommitInstallProvenance runtime durable validChain
+      validBlocks) :
+    ∀ time author afterIndex tipHead tip commits entry,
+      author < config.authorityCount →
+      faults.correctAvailable author = true →
+      durable.exactInstalledHead time author tipHead →
+      ConsecutiveCommitIndices commits →
+      validChain afterIndex commits →
+      commits.getLast? = some tip →
+      tipHead.index = tip.index → tipHead.id = tip.id →
+      entry ∈ commits →
+      ∃ installedEntry,
+        durable.exactInstalledHead time author installedEntry ∧
+          installedEntry.index = entry.index ∧ installedEntry.id = entry.id := by
+  intro time author afterIndex tipHead tip commits entry authorInRange
+    authorCorrect tipInstalled consecutive chain lastTip tipIndex tipId member
+  exact durable.digest_chain_entry_matches_installed_prefix authorInRange
+    authorCorrect commits consecutive
+    (provenance.validChainIsDigestChain afterIndex commits chain)
+    tip lastTip tipHead tipInstalled tipIndex tipId entry member
 
 /-- Follow local install provenance or strictly earlier certified carrier
 installs until a same-host local full-run origin is found. The origin install

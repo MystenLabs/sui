@@ -83,6 +83,32 @@ def ConsecutiveCommitIndices {CommitId : Type} :
       second.index = first.index + 1 ∧
         ConsecutiveCommitIndices (second :: rest)
 
+/-- Adjacent commit entries link by identifier, and every entry is a valid body.
+
+This is the modeled digest-link check. Rust `CommitV1.previous_digest` names the
+commit before it, and `TrustedCommit::compute_digest` hashes the complete
+serialized commit, so a checked digest fixes that link. -/
+def DigestLinkedCommits {CommitId : Type}
+    (validBody : CommonCommitRef CommitId → Prop) :
+    List (CommonCommitRef CommitId) → Prop
+  | [] => True
+  | [only] => validBody only
+  | first :: second :: rest =>
+      validBody first ∧
+        second.previousId = some first.id ∧
+        DigestLinkedCommits validBody (second :: rest)
+
+/-- The first entry of a linked chain is a valid body. -/
+theorem DigestLinkedCommits.head_valid {CommitId : Type}
+    {validBody : CommonCommitRef CommitId → Prop}
+    {first : CommonCommitRef CommitId}
+    {rest : List (CommonCommitRef CommitId)}
+    (linked : DigestLinkedCommits validBody (first :: rest)) :
+    validBody first := by
+  cases rest with
+  | nil => exact linked
+  | cons _ _ => exact linked.1
+
 /-- A returned bundle contains one exact certified chain. `validChain` models
 the digest-link checks. `validBlocks` models block-reference and signature
 checks. -/

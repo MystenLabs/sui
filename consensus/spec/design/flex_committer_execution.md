@@ -133,9 +133,9 @@ attempt before return. Protected proposal work must remain fairly scheduled
 across handlers. Proposal, persistence, send, delivery, and acceptance rules
 then prove DAG growth.
 
-`ValidatorFlexScanEvidence.lean` and
-`ValidatorFlexRemoteCommitTraffic.lean` remain useful local audit results for
-commit evidence. They are not the source of network DAG liveness.
+`ValidatorFlexScanEvidence.lean` is the Lean evidence for the exact selected
+anchor and history of `ASM-SAFE-INDIRECT-ORIGIN`. It is not a source of
+network DAG liveness.
 
 The second stage now uses the literal post-refresh Flex input through the
 fixed-reference ordinary-DAG capstone. V2 current no-idle production and

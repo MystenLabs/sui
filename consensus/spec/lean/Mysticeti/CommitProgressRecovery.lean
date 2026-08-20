@@ -14,7 +14,8 @@ The local FlexCommitter scan is executable and proved. The current top theorem
 composes abstract distributed recovery contracts. It does not yet derive them
 from validator-addressed messages and single-validator actions. It does not prove
 liveness for old leader blocks or transaction inclusion. See
-`ASM-LIVE-COMMIT-PROGRESS-RECOVERY`, `ASM-LIVE-LEADER`,
+`ASM-LIVE-COMMIT-PROGRESS-RECOVERY`, `ASM-LIVE-LEADER-STAKE`,
+`ASM-LIVE-LEADER-SCHEDULE`,
 `ASM-LIVE-FIRST-SLOT-SAMPLING`, and `ASM-LIVE-LOCAL-RESPONSE`.
 -/
 

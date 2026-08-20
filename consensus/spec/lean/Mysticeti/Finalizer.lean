@@ -143,11 +143,11 @@ structure TransactionEvidence (authorityCount : Nat) (stake : Nat → Nat)
   /-- `ASM-SAFE-FAULT-BOUND`. -/
   faultBounded : FaultBounded thresholds faulty
   /-- A correct authority has one transaction vote. Byzantine equivocation can count
-  once on each side. `ASM-SAFE-NON-EQUIVOCATION`. -/
+  once on each side. `ASM-SAFE-VOTE-SET-OVERLAP`. -/
   acceptRejectOverlap :
     OnlyFaultyOverlap authorityCount faulty directAcceptVotes directRejectVotes
   /-- A correct reject voter cannot be in an accept certificate for this transaction.
-  `ASM-SAFE-NON-EQUIVOCATION`. -/
+  `ASM-SAFE-VOTE-SET-OVERLAP`. -/
   rejectCertificateOverlap :
     OnlyFaultyOverlap authorityCount faulty directRejectVotes committedAcceptVotes
   /-- When the selected sub-DAG boundary retains the voting round, the anchor

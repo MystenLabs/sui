@@ -101,6 +101,38 @@ the GC boundary, where the walk stops. The third case is a boundary result, not 
 durability claim. The result also applies to the sorted committed vector that
 `build_commit` puts in the sub-DAG and in the serialized commit body.
 
+A commit body names the commit before it. `CommitV1.previous_digest` holds that
+identifier, and `TrustedCommit::compute_digest` hashes the complete serialized
+commit, so a checked digest fixes the link. The model carries the same link in
+`ValidatorCommitHead.previousId`, and `DigestLinkedCommits` states the
+digest-link check that commit synchronization performs on a returned range.
+
+From those two facts the specification derives, rather than assumes, that a
+checked chain ending at a commit one host installed agrees with that host's own
+durable prefix at every earlier entry. The theorem is
+`ExactCommitDurablePrefixSourceMap.digest_chain_entry_matches_installed_prefix`.
+It uses three one-host inputs: the chain links by identifier, one index with one
+identifier names one body, and the host's own prefix keeps the predecessor of
+each stored commit. No step compares two hosts. This result was an input field
+of `ASM-SAFE-INSTALL-PROVENANCE` and is now a proved consequence of
+`ASM-SAFE-DIGEST-IDENTITY` and `ASM-SAFE-COMMIT-STORE`.
+
+Two durable-before-exposure rules hold in the current product, and neither is an
+open condition. A local proposal is written before it is broadcast. A finalized
+commit and its committed blocks are flushed before the commit goes to the commit
+handler: `CommitFinalizer` calls `dag_state.flush()` and only then sends on
+`commit_sender`. See `REF-DURABLE-PROPOSAL` and `REF-DURABLE-COMMIT-OUTPUT` in
+the [assumption ledger](ASSUMPTIONS.md#verified-current-rust-behavior).
+
+Restart needs no separate treatment in the model. The durable prefix is a
+predicate over time, so a restart is one later time in the same trace. What the
+model needs across that step is that the store keeps what it held, which is
+`ASM-SAFE-COMMIT-STORE`. The product supports it: one durable commit supplies the
+local index, reference, and protocol timestamp after restart
+(`REF-COMMIT-STATE`), and a normal restart restores the own-round floor
+(`REF-OWN-PROPOSAL-ROUND`). Empty-store recovery is a separate case that
+`REF-OWN-PROPOSAL-ROUND` and `REF-AMNESIA-SIGNER-GUARD` cover.
+
 ### Adaptive leader schedule
 
 The model contains the `LeaderScheduleV3` replay bookkeeping: the three-deep
@@ -177,12 +209,6 @@ turns receiver-local progress into network commit progress and pointwise
 catch-up. A local commit-head change does not split this proof into separate
 no-ahead and already-ahead routes.
 
-Lean also has a separate exact-replay proof experiment for the ahead case. It
-saves the exact material from a past successful Flex run, sends a reference
-manifest, fetches the bodies parent-first, and replays Flex on only that
-material. It is proposed behavior, not current Rust subscription replay, and
-not an adopted liveness design.
-
 The target strong result starts after both network stabilization and catch-up
 activation. It uses safe intermediate proposals after round jumps, a live-leader
 rule, and continued task execution. This result is intended to cover old leader
@@ -192,9 +218,11 @@ The model includes a local counterexample in which a direct jump omits one requi
 proposal. It does not claim that the complete published attack applies unchanged
 to v3. The local result is `direct_jump_can_violate_safe_catchup`.
 
-For one favorable leader window, the current stage-composition model gives a
-`10 * delta` bound. This is a sum of supplied stage bounds, not a derived product
-latency.
+The specification gives no latency bound for one favorable leader window. An
+earlier stage-composition model gave a `10 * delta` figure, but that figure was
+a sum of supplied stage bounds, not a derived product latency. The derived
+commit-liveness route replaced that model, so the model and its assumption were
+removed.
 
 ### Transfer budget
 
@@ -242,8 +270,7 @@ circular favorable-window choice.
 
 The exact persisted capsule projection, proposal origin, timer-spread source,
 and accepted retention rules are current or past refinements. They do not state
-future progress. The separate exact-replay experiment does not contribute to
-the final theorem.
+future progress.
 
 The network-DAG result has no commit alternative. At every requested round,
 it requires a later positive total-stake quorum layer held by one correct,
@@ -273,10 +300,13 @@ every transaction commits. See the
 
 ### Transaction progress
 
-The current transaction theorem composes supplied commit-stream, trigger,
-decision, storage, and consumer stages. It does not yet derive transaction
-progress from fundamental inputs. The theorem is
-`transaction_liveness_stage_composition`. The epoch-tail case also remains open.
+The current transaction theorem is `transaction_liveness_stage_composition`. It
+takes commit liveness as one input, and composes it with the supplied trigger,
+decision, and durable-output stages. Commit liveness is derived in
+`ValidatorFixedReferenceCurrentPacing`, but that result is stated over the
+end-to-end execution model. A trace refinement must still connect the two
+models, so transaction progress is not yet derived from fundamental inputs. The
+epoch-tail case also remains open.
 
 Transaction payload retention is not required. A validator or user can submit a
 transaction again.
@@ -319,20 +349,22 @@ The results depend on these groups of conditions:
 - **Safety:** `ASM-MATH-THRESHOLDS`, `ASM-SAFE-PARAMETERS`,
   `ASM-SAFE-FAULT-BOUND`, `ASM-SAFE-AUTHENTICATION`,
   `ASM-SAFE-NON-EQUIVOCATION`, `ASM-SAFE-PARENT-QUORUM`,
-  `ASM-SAFE-EVIDENCE-REFINEMENT`, `ASM-SAFE-COMMIT-CHAIN`,
+  `ASM-SAFE-EVIDENCE-REFINEMENT`, `ASM-SAFE-DIGEST-IDENTITY`,
+  `ASM-SAFE-COMMIT-STORE`, `ASM-SAFE-INSTALL-PROVENANCE`,
   `ASM-SAFE-FIRST-TRIGGER`, `ASM-SAFE-COMMITTED-PREFIX`, and `ASM-SAFE-GC`.
 - **Configuration:** `ASM-CONFIG-V3-ACTIVATION`, `ASM-CONFIG-VOTING`, and
   `ASM-REFINE-INTEGERS`.
 - **Network and runtime:** `ASM-LIVE-PARTIAL-SYNCHRONY`,
   `ASM-LIVE-TRANSFER-BUDGET`,
-  `ASM-LIVE-PEER-FAIRNESS`, `ASM-LIVE-TASK-FAIRNESS`,
-  `ASM-LIVE-LOCAL-RESPONSE`, `ASM-LIVE-PIPELINE-BOUNDS`, and
-  `ASM-LIVE-COMMIT-SYNC`. The commit-sync condition is resource isolation for
-  the ordinary path. It is not a commit-sync success assumption.
+  `ASM-LIVE-PEER-FAIRNESS`, `ASM-LIVE-TASK-FAIRNESS`, and
+  `ASM-LIVE-LOCAL-RESPONSE`. Commit-sync resource isolation is part of
+  `ASM-LIVE-TASK-FAIRNESS`; no commit-sync success is assumed.
 - **Consensus progress:** `ASM-LIVE-FINITE-REFERENCE-SPACE`,
+  `ASM-LIVE-CAPSULE-PROJECTION`, `ASM-LIVE-GC-FRONTIER`,
   `ASM-LIVE-ROUND-CATCHUP`,
   `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`, `ASM-LIVE-LOCAL-PROPOSAL`,
-  `ASM-LIVE-LEADER`, `ASM-LIVE-FIRST-SLOT-SAMPLING`,
+  `ASM-LIVE-LEADER-STAKE`, `ASM-LIVE-LEADER-SCHEDULE`,
+  `ASM-LIVE-FIRST-SLOT-SAMPLING`,
   `ASM-LIVE-POST-GST-CAUSAL-SERVICE`, and `ASM-LIVE-BLOCK-SYNC`.
 - **Transaction progress:** `ASM-LIVE-FINALIZER-TRIGGER` and
   `ASM-LIVE-DURABILITY`.

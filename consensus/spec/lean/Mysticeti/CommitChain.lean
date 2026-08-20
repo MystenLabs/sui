@@ -10,8 +10,8 @@ namespace Mysticeti
 
 /-! The continuous common commit chain used by indirect decisions.
 
-The Rust refinement obligations are `ASM-SAFE-COMMIT-CHAIN`,
-`ASM-SAFE-FIRST-TRIGGER`, and `ASM-LIVE-COMMIT-SYNC`.
+The Rust refinement obligations are `ASM-SAFE-COMMIT-STORE` and
+`ASM-SAFE-FIRST-TRIGGER`.
 
 `CommitStream` models commits produced by the local commit rule and commits
 installed through commit sync. It does not depend on how Core obtained each commit.
@@ -26,8 +26,8 @@ structure Commit where
 
 abbrev CommitStream := Nat → Commit
 
-/-- Commit indices have no gap. This models only the index part of
-`ASM-SAFE-COMMIT-CHAIN`. -/
+/-- Commit indices have no gap. This is the gap-free delivery rule of
+`ASM-SAFE-COMMIT-STORE`. -/
 def Continuous (stream : CommitStream) : Prop :=
   ∀ position, (stream (position + 1)).index = (stream position).index + 1
 
@@ -37,7 +37,12 @@ def DepthTwoEligible (pendingLeaderRound : Nat) (commit : Commit) : Prop :=
   pendingLeaderRound + indirectCommitDepth ≤ commit.leaderRound
 
 /-- `position` is the first eligible commit after `start`.
-`ASM-SAFE-FIRST-TRIGGER` maps this choice to the Rust finalizer. -/
+
+`ASM-SAFE-FIRST-TRIGGER` maps this choice to the Rust finalizer queue. That
+queue holds unfinalized commits by index. It releases the earliest commit when
+the newest commit in the queue is at least `indirectCommitDepth` leader rounds
+ahead of it. Because commit leader rounds increase along the stream, the first
+commit deep enough is the one whose arrival releases the earliest commit. -/
 def FirstEligible (stream : CommitStream)
     (pendingLeaderRound start position : Nat) : Prop :=
   start ≤ position ∧

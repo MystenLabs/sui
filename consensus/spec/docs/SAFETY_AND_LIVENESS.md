@@ -346,6 +346,19 @@ dependencies at or below GC and releases their children. For the next progress
 step, the exact no-skip recovery target still needs the existing no-idle and
 safe-resume refinement. GC cleanup alone does not prove that scheduler rule.
 
+### 4. Transaction liveness
+
+A transaction that is pending in the v3 finalizer eventually gets a durable
+output. `transaction_liveness_stage_composition` states this result. It takes
+commit liveness as one input, and it composes that input with the trigger,
+decision, and durable-output stages of `FinalizerLivenessStageObligations`.
+
+This result is weaker than the three results above. Commit liveness is derived,
+but the derived theorem is stated over the end-to-end execution model, and the
+finalizer stages are stated over a separate trace. A trace refinement must still
+connect the two models. The trigger stage is also a known mismatch; see
+`ASM-LIVE-FINALIZER-TRIGGER`.
+
 ## Properties that are not core liveness requirements
 
 The end-to-end theorem does not require these stronger properties:

@@ -30,12 +30,12 @@ The [liveness proof plan](liveness_proof_plan.md) defines the final theorem
 boundary for block production and commit progress. The theorem
 `current_sources_give_end_to_end_liveness_probability_one` meets this boundary
 in Lean under the proposed source rules. It uses ordinary DAG behavior and
-does not split the proof into no-ahead and already-ahead routes. A proved
-exact-replay alternative remains a non-adopted proof experiment.
+does not split the proof into no-ahead and already-ahead routes.
 
 The main related conditions are
 [`ASM-LIVE-COMMIT-PROGRESS-RECOVERY`](../docs/ASSUMPTIONS.md#asm-live-commit-progress-recovery),
-[`ASM-LIVE-LEADER`](../docs/ASSUMPTIONS.md#asm-live-leader), and
+[`ASM-LIVE-LEADER-STAKE`](../docs/ASSUMPTIONS.md#asm-live-leader-stake),
+[`ASM-LIVE-LEADER-SCHEDULE`](../docs/ASSUMPTIONS.md#asm-live-leader-schedule), and
 [`ASM-LIVE-FIRST-SLOT-SAMPLING`](../docs/ASSUMPTIONS.md#asm-live-first-slot-sampling).
 The stronger
 [`ASM-LIVE-ROUND-CATCHUP`](../docs/ASSUMPTIONS.md#asm-live-round-catchup)
@@ -427,8 +427,7 @@ proposal-persistence action.
 
 The fixed-reference ordinary-DAG route is composed from fundamental environment
 inputs and proposed local source maps. The final conditional theorem is
-`current_sources_give_end_to_end_liveness_probability_one`. A separate
-conditional exact-replay proof experiment remains non-adopted. The
+`current_sources_give_end_to_end_liveness_probability_one`. The
 [liveness proof plan](liveness_proof_plan.md) gives the composition order and
 the remaining product mappings.
 The [assumption ledger](../docs/ASSUMPTIONS.md) records the product mappings.

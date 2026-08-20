@@ -47,8 +47,9 @@ has an exact commit path from genesis. `ExactFlexSuccessor.unique` proves the
 successor relation is functional, so two paths of the same length from one
 genesis end at the same head.
 
-`ASM-SAFE-COMMIT-CHAIN` records what remains: the source refinement that
-instantiates these inputs from the running Rust.
+`ASM-SAFE-COMMIT-STORE` and `ASM-SAFE-INSTALL-PROVENANCE` record what remains:
+the one-host source refinement that instantiates these inputs from the running
+Rust. `ASM-SAFE-DIGEST-IDENTITY` supplies the digest binding they rest on.
 -/
 
 namespace ExactCommitInstallProvenance

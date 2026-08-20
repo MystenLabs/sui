@@ -133,9 +133,7 @@ path needs. These scheduler and refinement rules are proposed behavior. They
 are not derived from current Rust.
 
 The network-DAG stage and the adopted commit route do not use commit
-synchronization, commit votes in blocks, or replay manifests. A separate
-non-adopted proof experiment uses a proposed exact replay manifest. This
-manifest is not current subscription replay. Optional commit
+synchronization, commit votes in blocks, or replay manifests. Optional commit
 synchronization stays in the model only so that the safety proof can restrict a
 synchronized install to verified data.
 
@@ -214,8 +212,7 @@ the event through V2 round catch-up, pinned sync, receiver-local direct ranges,
 local Flex execution, and finite exact-index induction. It already uses the
 proved network DAG result. The independent uniform shuffle law is an accepted
 pseudorandomness model of the round-seeded Rust outputs. Lean uses only its
-first-slot consequence. It is not a fresh-entropy claim. The separate
-exact-replay experiment does not contribute to this route.
+first-slot consequence. It is not a fresh-entropy claim.
 
 The repeated-first rule is a separate deterministic option.
 `DeterministicLeaderCoverageInput.first_slot_path_coverage` proves its complete
@@ -323,16 +320,6 @@ simple local behavior to the same `ValidatorExecution`:
   install. None can be a future-result source field. The local production rule
   can skip own rounds. Its post-GST fetch and acceptance service must outpace
   the maximum required work created by advancing rounds.
-- Non-adopted exact successful-Flex replay experiment: save the exact source input, snapshot,
-  output, decision-DAG bodies, roots, and parent-first order from each actual
-  successful local run. Retain and protect the material. Send an authenticated manifest
-  that names its exact prior, next head, and references. Let a receiver with the
-  exact prior create durable reference needs, fetch and accept the exact bodies
-  parent-first, and run Flex only on the manifest material. Current subscription
-  replay sends cached or latest own tips. It does not implement this protocol.
-  The source mapping must use only current state and past origin. It must not
-  assert a future send, delivery, fetch completion, replay output, or install.
-  This is a proved experiment and is not part of the adopted route.
 - Optional commit synchronization: constrain an actual synchronized install to
   a verified exact chain. This mapping is safety-only. The liveness proof does
   not use synchronization service, certificate production, or commit votes.
@@ -372,9 +359,7 @@ It uses the handler's proposal-attempt invocation, then derives proposal success
 from the separate proposal guards and fair-work rules. The downstream commit
 theorem can use an already-advanced verified local head as an internal race
 case. Neither theorem can take a produced layer, future successful Flex run,
-future block, later install, or catch-up result as an input. The non-adopted
-replay experiment can inspect retained material from a past successful run, but
-that interface is not part of the adopted theorem.
+future block, later install, or catch-up result as an input.
 
 The repeated-first deterministic theorem must have this public shape after all
 local source maps are in the input record:
@@ -429,8 +414,7 @@ path, block layer, anchor, commit result, or propagation result.
 
 The current theorem also takes the proposed fixed-reference pacing, V2
 round-catch-up, V2 current production, pinned-sync, retention, local Flex, and
-exact-prefix source maps for each sampled execution. It does not take an
-exact-replay source package.
+exact-prefix source maps for each sampled execution.
 
 `leaderPath` is the deterministic repeated-first alternative. It gives the
 head-specific path only when one commit step needs it. It is a static property

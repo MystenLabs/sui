@@ -223,7 +223,7 @@ def FaultBounded {authorityCount : Nat} {stake : Nat → Nat}
   weight authorityCount stake faulty ≤ thresholds.fault
 
 /-- A correct authority cannot occur in both incompatible voter sets. The Rust
-refinement obligation is `ASM-SAFE-NON-EQUIVOCATION`. -/
+refinement obligation is `ASM-SAFE-VOTE-SET-OVERLAP`. -/
 def OnlyFaultyOverlap (authorityCount : Nat)
     (faulty left right : VoterSet) : Prop :=
   VoterSet.SubsetAt authorityCount (VoterSet.inter left right) faulty

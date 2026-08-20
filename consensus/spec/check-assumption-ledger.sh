@@ -47,13 +47,24 @@ for field in "${required_fields[@]}"; do
     fi
 done
 
+bad_types="$(
+    awk '/^## ASM-/{id=$2}
+         /^- \*\*Type:\*\*/{
+             if ($0 !~ /environment|refinement|model|Mathematical|Cryptographic/) print id
+         }' "$ledger"
+)"
+if [ -n "$bad_types" ]; then
+    echo "These assumptions have a type that is not environment, refinement, model, Mathematical, or Cryptographic:" >&2
+    echo "$bad_types" >&2
+    exit 1
+fi
+
 status_values=(
     "Discharged in Lean"
     "Enforced in Rust"
     "Partially verified"
     "Environmental assumption"
     "Open proof obligation"
-    "Abstraction gap"
     "Accepted modeling assumption"
     "Known mismatch"
 )

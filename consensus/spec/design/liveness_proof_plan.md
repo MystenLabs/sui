@@ -10,9 +10,7 @@ SPDX-License-Identifier: Apache-2.0
 This document defines the required boundary for the Mysticeti v3 liveness proof.
 Both the network-DAG stage and the ordinary-DAG commit stage meet this boundary
 in Lean under proposed local source rules. The final theorem is
-`current_sources_give_end_to_end_liveness_probability_one`. Lean also has a
-separate conditional exact-replay experiment. That experiment is not the final
-design.
+`current_sources_give_end_to_end_liveness_probability_one`.
 
 The target model is standard **partial synchrony**. Message delay is unrestricted
 before an unknown stabilization time. After stabilization, messages between
@@ -517,12 +515,6 @@ starve ordinary synchronization, proposal callbacks, or recovery timers. No
 future synchronized result is an input: an actual local index advance closes
 the receiver step, and the no-advance branch uses only the ordinary path.
 
-Lean also proves an exact-replay alternative. It saves exact material from a
-past successful Flex run, sends a reference manifest, fetches the named bodies
-parent-first, and runs a material-scoped replay action. This is a non-adopted
-proof experiment. Current Rust does not implement it, and the adopted proof
-must not depend on it.
-
 ## Recommended single-node changes
 
 The following changes give the clearest proof path:
@@ -641,8 +633,6 @@ Implement the proof in this order:
 The full conditional composition is green in Lean. Steps 15 through 17 are
 proved by the strict fixed-reference current-pacing theorem. The action-local
 promptness rule and other current-source mappings remain product obligations.
-A separate exact-replay experiment is proved, but it is not an adopted
-liveness design.
 
 The final review rule is simple:
 

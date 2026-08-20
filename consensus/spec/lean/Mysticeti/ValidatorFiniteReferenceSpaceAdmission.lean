@@ -28,7 +28,8 @@ variable {protocolPacket :
 variable {network : AddressedPartialSynchrony config faults protocolPacket}
 variable {program : ValidatorExecutionProgram BlockId CommitId}
 
-/-- A finite block-ID witness without a global `Fintype` dependency. -/
+/-- A finite block-ID witness without a global `Fintype` dependency.
+`ASM-LIVE-FINITE-REFERENCE-SPACE`. -/
 structure ValidatorFiniteBlockIdEncoding
     (BlockId : Type) (blockIdCount : Nat) where
   encode : BlockId → Fin blockIdCount
@@ -151,7 +152,8 @@ theorem validator_causal_history_items_at_round_le_finite_reference_space
 
 Reference uniqueness is already a field of `CausalRecoveryCapsule`. Author
 range is already a field of `CausalRecoveryCapsuleExecutionSource`. This map
-keeps only the actual persisted projection and the target-round upper bound. -/
+keeps only the actual persisted projection and the target-round upper bound.
+`ASM-LIVE-CAPSULE-PROJECTION`. -/
 structure ValidatorPersistedCausalCapsuleFiniteReferenceSourceMap
     {timed : ValidatorBoundedExecution (PacketId := PacketId) config faults
       protocolPacket network program}

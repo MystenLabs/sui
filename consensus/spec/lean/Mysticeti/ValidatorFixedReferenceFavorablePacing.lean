@@ -147,7 +147,7 @@ the new local GC round. This is the narrow storage rule needed by the
 head-independent proposal gate. A block at or below GC is allowed to disappear.
 
 The rule does not preserve a fetch, pin, timer, or proposal across a commit. It
-only describes the current accepted-block store. -/
+only describes the current accepted-block store. `ASM-LIVE-GC-FRONTIER`. -/
 structure ValidatorCommitOrthogonalAcceptedRetentionRules
     {BlockId CommitId PacketId : Type}
     {config : ValidatorEpochConfig CommitId}

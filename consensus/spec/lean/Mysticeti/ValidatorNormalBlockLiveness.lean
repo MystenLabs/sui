@@ -50,7 +50,8 @@ theorem validator_other_receiver_is_different
 /-- Fixed round-zero parent data at every correct, available validator.
 
 The list and its stake are static epoch data. Acceptance starts in local
-storage, and round-zero bodies are never removed by GC. -/
+storage, and round-zero bodies are never removed by GC.
+`ASM-LIVE-COMMON-GENESIS`. -/
 structure ValidatorCanonicalGenesisParentRules
     {BlockId CommitId PacketId : Type}
     {config : ValidatorEpochConfig CommitId}

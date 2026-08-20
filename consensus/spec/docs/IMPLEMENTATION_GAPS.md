@@ -18,7 +18,8 @@ and Lean evidence, its limits, and the files that require a focused recheck.
 ### P0: implement commit progress recovery
 
 Related assumptions: `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`,
-`ASM-LIVE-LOCAL-PROPOSAL`, `ASM-LIVE-LOCAL-RESPONSE`, `ASM-LIVE-LEADER`, and
+`ASM-LIVE-LOCAL-PROPOSAL`, `ASM-LIVE-LOCAL-RESPONSE`, `ASM-LIVE-LEADER-STAKE`,
+`ASM-LIVE-LEADER-SCHEDULE`, and
 `ASM-LIVE-FIRST-SLOT-SAMPLING`.
 
 The product can move to a future round without filling its own proposal sequence.
@@ -280,9 +281,9 @@ fixed-reference timer-paced window applies to the product.
 
 ### P1: map the completed fixed-reference commit capstone to Rust
 
-Related assumptions: `ASM-LIVE-LEADER`, `ASM-LIVE-FIRST-SLOT-SAMPLING`,
+Related assumptions: `ASM-LIVE-LEADER-STAKE`, `ASM-LIVE-FIRST-SLOT-SAMPLING`,
 `ASM-LIVE-LOCAL-RESPONSE`, `ASM-LIVE-BLOCK-SYNC`,
-`ASM-LIVE-POST-GST-CAUSAL-SERVICE`, and `ASM-SAFE-COMMIT-CHAIN`.
+`ASM-LIVE-POST-GST-CAUSAL-SERVICE`, and `ASM-SAFE-COMMIT-STORE`.
 
 The Lean theorem
 `current_sources_give_end_to_end_liveness_probability_one` completes the
@@ -303,13 +304,11 @@ broadcasts and pinned sync.
 
 The proof derives each later block, finite intermediate family, delivery,
 accepted direct range, local Flex run, and exact install. None is a future
-input. A separate exact-replay proof experiment uses saved successful-Flex
-material and a replay manifest. Current Rust does not implement it. It is not
-an adopted liveness route or a required product change.
+input.
 
 ### P1: include the exact first Flex leader in proposal parents
 
-Related assumptions: `ASM-LIVE-LEADER`, `ASM-LIVE-LOCAL-PROPOSAL`, and
+Related assumptions: `ASM-LIVE-LEADER-SCHEDULE`, `ASM-LIVE-LOCAL-PROPOSAL`, and
 `ASM-LIVE-FIRST-SLOT-SAMPLING`.
 
 For an actual non-forced round `R + 1` proposal, bind parent selection to the
@@ -377,7 +376,7 @@ the lost store, disable the epoch signing key, or count the validator as faulty.
 
 ### P1: enforce leader viability
 
-Related assumptions: `ASM-LIVE-LEADER` and
+Related assumptions: `ASM-LIVE-LEADER-STAKE` and
 `ASM-LIVE-FIRST-SLOT-SAMPLING`.
 
 Epoch configuration must ensure `f + c < S` and `A <= P_r` from actual stake.
@@ -443,7 +442,7 @@ submitted again.
 
 ### P1: isolate optional commit sync from ordinary recovery
 
-Related assumption: `ASM-LIVE-COMMIT-SYNC`.
+Related assumption: `ASM-LIVE-TASK-FAIRNESS`.
 
 Current Rust has the required control transitions:
 
@@ -472,7 +471,7 @@ does not create the proof's exact no-skip recovery target.
 
 ### P1: import commit blocks before GC advances
 
-Related assumptions: `ASM-SAFE-GC` and
+Related assumptions: `ASM-SAFE-GC`, `ASM-LIVE-GC-FRONTIER`, and
 `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`.
 
 Before a local or synchronized commit install changes the local GC round, the
@@ -499,9 +498,10 @@ A finalizer can hold a transaction that needs a later trigger. Draining its inpu
 does not settle this state. Keep consensus active until the trigger occurs, store
 and replay pending state, or define another safe epoch-tail result.
 
-### P1: close the common commit-chain proof
+### P1: close the one-host commit install rules
 
-Related assumptions: `ASM-SAFE-COMMIT-CHAIN` and `ASM-SAFE-FIRST-TRIGGER`.
+Related assumptions: `ASM-SAFE-COMMIT-STORE`, `ASM-SAFE-INSTALL-PROVENANCE`,
+`ASM-SAFE-DIGEST-IDENTITY`, and `ASM-SAFE-FIRST-TRIGGER`.
 
 Lean already proves exact same-prior commit output, unique exact successors,
 finite exact paths from genesis, and equal installed references at the same
@@ -515,13 +515,16 @@ existing theorem result. Do not add one shared chain as an E2E input. Connect
 that exact installed chain separately to the transaction finalizer stream and
 the least eligible trigger.
 
+The chain-to-prefix step is done, and it needed no Rust work. See the commit
+chain paragraph in [PROOF_SCOPE.md](PROOF_SCOPE.md#committed-material).
+
 Evidence:
 [EV-EXACT-COMMIT-PREFIX](ASSUMPTION_EVIDENCE.md#ev-exact-commit-prefix) and
 [EV-DURABLE-COMMIT-PREFIX](ASSUMPTION_EVIDENCE.md#ev-durable-commit-prefix).
 
 ### P1: preserve cached decision origin
 
-Related assumption: `ASM-SAFE-EVIDENCE-REFINEMENT`.
+Related assumption: `ASM-SAFE-INDIRECT-ORIGIN`.
 
 Rust keeps `LeaderSlot.decision` as direct or indirect. The Lean source map now
 uses that first origin. A direct result needs exact direct-quorum evidence. An
@@ -542,7 +545,7 @@ Evidence:
 
 ### P1: bind the commit materializer and the v3 scorer to Rust
 
-Related assumptions: `ASM-SAFE-GC`, `ASM-SAFE-COMMIT-CHAIN`,
+Related assumptions: `ASM-SAFE-GC`, `ASM-SAFE-COMMIT-STORE`,
 `ASM-SAFE-COMMITTED-PREFIX`, and `ASM-REFINE-INTEGERS`.
 
 Lean now models the v3 `FlexCommitter::build_commit` walk and the

@@ -34,7 +34,7 @@ FlexCommitter execution, and exact-prefix induction. The theorem
 in Lean under the listed proposed source rules. The strict proof derives timer
 spread from actual prior broadcasts, pinned sync, and one action-local
 exact-next timer-promptness rule. Its fields are static, local, current, or
-past. A separate exact-replay proof experiment is not an adopted liveness route.
+past.
 
 ## Shared proof model
 
@@ -47,7 +47,7 @@ past. A separate exact-replay proof experiment is not an adopted liveness route.
   `delta`.
 - Required local work finishes within a finite bound `epsilon`.
 - Correct local clocks continue to advance. Timers do not expire early, and each
-  finite timer expires. Accepted commit timestamps have a bounded future offset.
+  finite timer expires.
 - Continuously enabled tasks at correct validators eventually run.
 - Commit-sync requests, responses, verification, and installation do not starve
   ordinary block fetch, subscription retry, Core proposal callbacks, or recovery
@@ -96,6 +96,32 @@ no-skip rule to recover only the finite intermediate window that the favorable
 path needs. The ledger keeps these results as proof goals, not final-theorem
 inputs.
 
+## Type values
+
+An assumption must be one of five kinds. Nothing else belongs in this ledger.
+
+- **Environment** means that the operating environment supplies the fact:
+  message delay, clocks, fault sets, task scheduling, transfer budget, or a
+  probability law.
+- **Refinement** means that one Rust code path behaves as one model field says.
+  A reviewer can check it by reading that path. This is a basic implementation
+  abstraction.
+- **Model** means a deliberate simplification of product behavior, kept because
+  the exact behavior is not needed or not tractable.
+- **Mathematical** means a fact about the numbers alone.
+- **Cryptographic** means a standard property of a hash or a signature. No
+  code review can establish it; a reviewer can only check that the product
+  uses the primitive over the complete body.
+
+A protocol result is not an assumption. A quorum entering recovery, a sequence
+of block layers, a usable anchor, a new commit, or agreement between two
+validators must be derived. If a row states such a result, the row is in the
+wrong place: move the result to a theorem and keep only the local facts that the
+theorem consumes.
+
+Each `Type` field must contain the word `environment`, `refinement`, `model`,
+`Mathematical`, or `Cryptographic`. The ledger check enforces this.
+
 ## Status values
 
 - **Discharged in Lean** means that the formal model proves the claim.
@@ -104,7 +130,6 @@ inputs.
 - **Environmental assumption** means that the operating environment supplies the
   claim.
 - **Open proof obligation** means that a required result is not yet established.
-- **Abstraction gap** means that model events lack a complete product mapping.
 - **Accepted modeling assumption** means that the proof intentionally uses the
   stated model.
 - **Known mismatch** means that the current product contradicts or lacks the rule.
@@ -115,15 +140,121 @@ inputs.
 |---|---:|
 | Discharged in Lean | 1 |
 | Enforced in Rust | 2 |
-| Partially verified | 9 |
+| Partially verified | 11 |
 | Environmental assumption | 5 |
-| Open proof obligation | 4 |
-| Abstraction gap | 1 |
+| Open proof obligation | 8 |
 | Accepted modeling assumption | 3 |
-| Known mismatch | 7 |
+| Known mismatch | 8 |
 
 A known mismatch blocks the affected product claim. Other open statuses identify
 a condition; they do not indicate a failed proof inside the model.
+
+## Assumption roles
+
+Every assumption in this ledger must be a **source**. A source supplies at least
+one named input field of a goal theorem. The four goal theorems are:
+
+| Tag | Goal theorem | Module |
+|---|---|---|
+| `CS` | `mysticeti_v3_safety` (leader half) and `ExactCommitInstallProvenance.correct_validators_agree_on_commit_at_index` | `Safety`, `MysticetiSafetyCapstone` |
+| `TS` | `mysticeti_v3_safety` (transaction half) | `Safety` |
+| `CL` | `current_sources_give_end_to_end_liveness_probability_one` | `ValidatorFixedReferenceCurrentPacing` |
+| `TL` | `transaction_liveness_stage_composition` | `Liveness` |
+
+An assumption that supplies no such field is not a source. It is only an
+interesting property, and it must be deleted. Do not keep it as a note, and do
+not open proof work for it.
+
+To apply this rule to new work, name the input field first. If you cannot name
+one, the result is not needed for the goals.
+
+### Source map
+
+| Assumption | Goal | Input field it supplies |
+|---|---|---|
+| `ASM-MATH-THRESHOLDS` | CS, TS | `Thresholds.quorum_certificate_intersection`, `Thresholds.quorum_preserves_certificate` |
+| `ASM-SAFE-PARAMETERS` | CS, TS, CL | The shared `config`, `thresholds`, and `faults` binders of every goal theorem, and `EndToEndLivenessInputs.authorityCountAtLeastTwo` |
+| `ASM-SAFE-FAULT-BOUND` | CS, TS, CL | `FixedFaultInterval.byzantineStakeBounded`, `.unavailableStakeBounded`, `.faultBudgetsFit`, `LeaderEvidence.faultBounded`, `TransactionEvidence.faultBounded`, `UniformRankingEndToEndExecutionFamily.correctAvailableMatches` |
+| `ASM-SAFE-AUTHENTICATION` | CS | `AuthenticatedFlexVoteSourceMap.authenticatedCommitVote`, `.authenticatedSkipVote` |
+| `ASM-SAFE-NON-EQUIVOCATION` | CS, TS | `AuthenticatedFlexVoteSourceMap.correctCommitVoteIsUnique`, `.correctCommitSkipIsExcluded`, `TransactionEvidence.correctAcceptVoteStable` |
+| `ASM-SAFE-VOTE-SET-OVERLAP` | CS, TS | `LeaderEvidence.commitSkipOverlap`, `.skipCertificateOverlap`, `TransactionEvidence.acceptRejectOverlap`, `.rejectCertificateOverlap` |
+| `ASM-SAFE-PARENT-QUORUM` | CS | `LeaderEvidence.anchorVotes`, `.skipCertificateOverlap`, `AuthenticatedFlexVoteSourceMap.admissibleAnchorEvidence` |
+| `ASM-SAFE-EVIDENCE-REFINEMENT` | CS, TS, CL | `AuthenticatedFlexVoteSourceMap.admissibleAnchor`, `.firstDecisionBase`, `.firstDecisionProvenance`, `.admissibleIndirectStatusValid`, `.commitVoteMembership`, `.skipVoteMembership`, `.firstPendingRoundMatchesHead`, `.indirectCommitAnchorIsAdmissible`, `TransactionEvidence.directAcceptVoteEvidence`, `.committedAcceptVotesComplete`, and the `EndToEndLivenessInputs` Flex execution maps: `.flexCommitterSource`, `.flexCommitterRuntime`, `.exactPendingIngestion`, `.exactDirectRule`, `.successfulFlexScanWork`, `.anchorRules`, `.commitMaterialCausalClosure` |
+| `ASM-SAFE-INDIRECT-ORIGIN` | CS | `AuthenticatedFlexVoteSourceMap.exactAnchorHistory` |
+| `ASM-SAFE-DIGEST-IDENTITY` | CS, CL | `ExactCommitDurablePrefixSourceMap.validBodyDigestBinding`, `ExactCommitInstallProvenance.validChainIsDigestChain`, and the injective encoding of `ValidatorFiniteBlockIdEncoding` |
+| `ASM-SAFE-COMMIT-STORE` | CS, TS, TL, CL | `ExactCommitDurablePrefixSourceMap.zeroHeadIsGenesis`, `.installedAtOrBelowHead`, `.installedHeadLinksToPredecessor`, `.exactInstalledHeadIsValid`, `.exactHeadHasStoredId`, `.storedIdHasExactHead`, `EndToEndLivenessInputs.commitPrefix`, `FinalizerLivenessStageObligations.continuousCommitStream`, and the prefix-length half of the `VisibleFirst` binder |
+| `ASM-SAFE-INSTALL-PROVENANCE` | CS | The 3 origin and ordering fields of `ExactCommitInstallProvenance`: `.localInstallOrigin`, `.verifiedSyncInstallOrigin`, `.correctCarrierFollowsInstalledCommit` |
+| `ASM-SAFE-FIRST-TRIGGER` | TS | The `FirstEligible` half of the `VisibleFirst` binder of `mysticeti_v3_safety` |
+| `ASM-SAFE-COMMITTED-PREFIX` | CS, TS | `TransactionEvidence.anchorInCommittedPrefix` and `LeaderEvidence.correctCommitAnchorInCertificate`. Both fields are shared with `ASM-SAFE-GC`, which supplies the retained-window hypothesis each one needs |
+| `ASM-SAFE-GC` | TS, CS, CL | `TransactionEvidence.gcWindow`, `.blockEvidence`, `LeaderEvidence.coreGc`, `.anchorDepth`, `EndToEndLivenessInputs.installedCommitParents`, `.installedHeadBootstrap` |
+| `ASM-LIVE-GC-FRONTIER` | CL | The `retention` binder of the CL goal: `ValidatorCommitOrthogonalAcceptedRetentionRules.acceptedAboveGcIsRetained` |
+| `ASM-CONFIG-V3-ACTIVATION` | CS, TS, CL | Global. The source maps model v3 code, so every field is void when v3 is off |
+| `ASM-CONFIG-VOTING` | TS | `TransactionEvidence.directAcceptVote`, `.committedVote` |
+| `ASM-REFINE-INTEGERS` | CS, TS, CL | Global. Lean uses unbounded naturals for every numeric field |
+| `ASM-LIVE-PARTIAL-SYNCHRONY` | CL | `AddressedPartialSynchrony.postGstDelivery` under `EndToEndLivenessInputs.timedExecution` |
+| `ASM-LIVE-COMMON-GENESIS` | CL | `EndToEndLivenessInputs.initial` and `.genesisParents` |
+| `ASM-LIVE-FINITE-REFERENCE-SPACE` | CL | `ValidatorFiniteBlockIdEncoding`, one component of the `admission` input through `ValidatorPersistedCausalCapsuleFiniteReferenceSourceMap.toRoundAdmission` |
+| `ASM-LIVE-CAPSULE-PROJECTION` | CL | `ValidatorPersistedCausalCapsuleFiniteReferenceSourceMap`, the `maxAdmittedRefsPerRound` binder, and the `admission` input `ValidatorPersistedCausalCapsuleRoundAdmissionSourceMap` |
+| `ASM-LIVE-ROUND-CATCHUP` | CL | `ValidatorV2RoundCatchupSourceMap` |
+| `ASM-LIVE-COMMIT-PROGRESS-RECOVERY` | CL | `ValidatorFixedReferenceStrictCurrentSourceMaps`, the `parameters` binder `ValidatorQuadraticGapWaitParameters`, the `syncSources` binder `ValidatorFreshRoundPinnedSyncSourceRules`, and the `EndToEndLivenessInputs` recovery fields: `.recoveryMode`, `.recoveryProposalRounds`, `.blockProgressRecoveryThresholds`, `.blockProgressRecoveryMode`, `.blockProgressProposalOrigin`, `.blockProgressRecoveryWaitMatches`, `.recoveryWait`, `.recoveryTimerSource`, `.recoveryProposalPacing`, `.recoveryProposalActionTiming`, `.recoveryTimerArms`, `.recoveryParentNeeds`, `.recoveryParentAcceptance`, `.readyNormalProposalProtection`, `.blockProgressRecoveryNeedRules`, `.recoverySourcePins`, `.recoveryCapsuleSync`, `.recoveryCapsuleGenesisExact`, `.currentTipSubscription`, `.recoveryTipRebroadcast`, `.acceptedRepresentatives` |
+| `ASM-LIVE-LOCAL-PROPOSAL` | CL | `EndToEndLivenessInputs.normalFrontierPacemaker`, `.proposalObligations`, `.proposalLatch` |
+| `ASM-LIVE-CORE-HANDLER` | CL | `EndToEndLivenessInputs.coreHandlerRefinement`, `.coreProposalContinuation`, `.authorLocalCommitContinuation`, `.commitProposalNonInterference` |
+| `ASM-LIVE-LEADER-STAKE` | CL | `EndToEndLivenessInputs.leaderSchedule.scheduleViable` |
+| `ASM-LIVE-LEADER-SCHEDULE` | CL | `EndToEndLivenessInputs.leaderSchedule.indirectDepth`, `.indirectDepthPositive`, `EndToEndLivenessInputs.flexCommitterDepthMatchesLeaderSchedule`, and the `family` binder fields `UniformRankingEndToEndExecutionFamily.leaderScheduleMatches` and `.indirectDepthMatches` |
+| `ASM-LIVE-FIRST-SLOT-SAMPLING` | CL | `IndependentUniformRoundRankingLaw`, `UniformRankingEndToEndExecutionFamily.firstSelectedLeaderMatchesRanking`, and the `rankingSource` binder `UniformRankingExecutionSourceMap` |
+| `ASM-LIVE-POST-GST-CAUSAL-SERVICE` | CL | `ValidatorPostGstCausalQueueServiceRules.cAdd`, `.cService`, `.serviceMargin`, `.highBacklogService`, `.lowBacklogClearsOld`, `.workAddedBound`, and the `blockSources` binder `ValidatorV2BlockProductionCurrentSourceMaps` |
+| `ASM-LIVE-TRANSFER-BUDGET` | CL | The same fields, through `ValidatorCausalQueueTransferBudget.toServiceRules` |
+| `ASM-LIVE-BLOCK-SYNC` | CL | `EndToEndLivenessInputs.blockSync` and `.operationalQuorumFrontier` |
+| `ASM-LIVE-PEER-FAIRNESS` | CL | `ValidatorBlockSyncExecutionRules.deliveredRequestEnablesServe`, `.serveActionCreatesPacket`, `.peerRotationBound` |
+| `ASM-LIVE-TASK-FAIRNESS` | CL, TL | `ValidatorActionContinuouslyEnabled`, `ValidatorActionCompletion.enabled`, and `FinalizerLivenessStageObligations.triggerEventually`, shared with `ASM-LIVE-FINALIZER-TRIGGER` |
+| `ASM-LIVE-LOCAL-RESPONSE` | CL, TL | `ValidatorActionCompletion.completesWithinBound`, `FinalizerLivenessStageObligations.triggerToDecision`, `.decisionToDurableOutput` |
+| `ASM-LIVE-FINALIZER-TRIGGER` | TL | `FinalizerLivenessStageObligations.triggerEventually` |
+| `ASM-LIVE-DURABILITY` | TL | `FinalizerLivenessStageObligations.triggerToDecision` and `.decisionToDurableOutput`, both shared with `ASM-LIVE-LOCAL-RESPONSE`, and the `commitEntersFinalizer` binder of `transaction_liveness_stage_composition` |
+
+### Structural fields
+
+The goal theorems also take fields that define the modeled execution itself.
+These are not separate claims, so they have no row. They are the data fields of
+`EndToEndLivenessInputs` (`genesis`, `program`, `commitReferenceFunctions`,
+`flexCommitterHistory`, `flexCommitterContext`, `validCommitChain`,
+`validCommitBlocks`), the base
+execution and action-semantics maps (`timedExecution`, `executionEffects`), the
+abstract predicate parameters of the safety route (`blockCarriesCommitVote` and
+the vote and head predicates of the two safety source maps), and the sampling
+family's data fields (`UniformRankingEndToEndExecutionFamily.depth`,
+`.correctAvailable`, `.execution`, `.authorityCountMatches`). Their meaning is
+the boundary stated in "Source-to-model and local product conditions", and
+`ASM-CONFIG-V3-ACTIVATION` gates them globally. The `commitLiveness` binder of
+`transaction_liveness_stage_composition` is the CL conclusion, not an
+assumption. With these named, every rule-bearing input field of a goal theorem
+has an owner row in the table above.
+
+### Deleted assumptions
+
+`ASM-LIVE-PIPELINE-BOUNDS` was deleted on 2026-08-19. It supplied no input field
+of a goal theorem. It supplied only the per-stage bounds of the consensus stage
+ladder in `Liveness`, which gave a `10 * delta` figure. The derived commit-liveness
+route in `ValidatorFixedReferenceCurrentPacing` replaced that ladder, so the
+ladder and the assumption were removed together.
+
+`ASM-LIVE-COMMIT-SYNC` was folded into `ASM-LIVE-TASK-FAIRNESS` on 2026-08-19.
+Its sync-install safety content was already `ASM-SAFE-INSTALL-PROVENANCE`, its
+gap-free stream content was already `ASM-SAFE-COMMIT-STORE`, and no goal theorem
+takes commit-sync success as an input. Only its non-starvation content was an
+assumption, and that is a fairness claim.
+
+`ASM-SAFE-COMMIT-CHAIN` was split into `ASM-SAFE-DIGEST-IDENTITY`,
+`ASM-SAFE-COMMIT-STORE`, and `ASM-SAFE-INSTALL-PROVENANCE`.
+`ASM-SAFE-NON-EQUIVOCATION` kept the signing rule and its counting rule moved to
+`ASM-SAFE-VOTE-SET-OVERLAP`. `ASM-LIVE-LEADER` was split into
+`ASM-LIVE-LEADER-STAKE` and `ASM-LIVE-LEADER-SCHEDULE`.
+`ASM-SAFE-EVIDENCE-REFINEMENT` kept the shared rule set and its cached-anchor
+half moved to `ASM-SAFE-INDIRECT-ORIGIN`. `ASM-SAFE-GC` kept the safety
+retention rules and its frontier half moved to `ASM-LIVE-GC-FRONTIER`.
+`ASM-LIVE-FINITE-REFERENCE-SPACE` kept the finite block-identifier encoding and
+its capsule half moved to `ASM-LIVE-CAPSULE-PROJECTION`. `ASM-LIVE-GC-FRONTIER`
+moved from the dead field `localGcCutoffCausal`, which was deleted, to the CL
+`retention` binder on 2026-08-19.
 
 ## Maintenance rules
 
@@ -134,6 +265,14 @@ a condition; they do not indicate a failed proof inside the model.
 5. Keep missing behavior separate from verified current behavior.
 6. Keep detailed source evidence and revalidation triggers in the assumption
    evidence ledger.
+7. Give each assumption a row in the source map. Delete an assumption that
+   supplies no input field of a goal theorem.
+8. Write each claim as what one host does, or as what the environment supplies.
+   Do not write a claim that states a result which the specification proves. A
+   claim that quantifies over two validators is almost always such a result.
+   `ASM-SAFE-COMMIT-CHAIN` had this defect, and was split into
+   `ASM-SAFE-DIGEST-IDENTITY`, `ASM-SAFE-COMMIT-STORE`, and
+   `ASM-SAFE-INSTALL-PROVENANCE`. `ASM-SAFE-FIRST-TRIGGER` had it too.
 
 ## Periodic Lean-to-Rust refinement review
 
@@ -202,7 +341,9 @@ See [EV-COMMIT-SYNC-COVERAGE](ASSUMPTION_EVIDENCE.md#ev-commit-sync-coverage).
 | `REF-COMMIT-STATE` | One durable commit supplies the local index, reference, and protocol timestamp after restart. |
 | `REF-OWN-PROPOSAL-ROUND` | Normal restart restores the own-round floor. Peer-assisted empty-store recovery sets a verified floor. Complete amnesia remains open. |
 | `REF-DURABLE-PROPOSAL` | A local proposal is durable before broadcast. |
+| `REF-DURABLE-COMMIT-OUTPUT` | Finalized commits and their committed blocks are flushed to storage before they are sent to the commit handler. `CommitFinalizer` calls `dag_state.flush()` and only then sends each commit on `commit_sender`. |
 | `REF-PARENT-QUORUM` | An ordinary accepted non-genesis block has immediate parents from distinct validators with quorum stake. |
+| `REF-DIGEST-CHAIN` | Every digest is taken over the complete serialized body. A commit body holds `previous_digest`, so commits form a hash chain. A block body holds each ancestor as a `BlockRef` with a digest, the proposer always places its own last proposed block first, and the verifier rejects a block whose first ancestor is not its own author, whose later ancestors repeat an author, or whose ancestor round is not below the block round. So each author's own blocks form a hash chain and the block DAG is hash-linked. |
 | `REF-BLOCK-PARENT-ACCEPTANCE` | The ordinary live path accepts required above-boundary parents before their child. Certified commits use a separate checked path. |
 | `REF-BLOCK-SYNC-MECHANISMS` | Direct, periodic, history, and stall-recovery block-fetch paths exist. When commit lag suppresses periodic sync, a commit-index stall starts the periodic failover path. Their existence and this transition do not by themselves prove peer service or scheduling progress. |
 | `REF-COMMIT-SYNC-CHECKS` | Synchronized ranges are checked for indexes, digest links, block references, gaps, order, and quorum support on the range tip. Each commit does not have a separate certificate. |
@@ -251,11 +392,13 @@ finalizer work is not evidence for this result.
 
 ## ASM-SAFE-PARAMETERS
 
-- **Claim:** All correct validators in one epoch use one authenticated validator set, threshold set, cleanup depth, leader schedule, and feature set.
+- **Claim:** All correct validators in one epoch use one authenticated validator set, threshold set, cleanup depth, leader schedule, and feature set. The epoch validator set has at least two validators.
 - **Type:** Configuration refinement.
 - **Status:** Known mismatch.
 - **Effect if false:** Safety.
 - **Lean use:** Every weighted decision uses one common configuration.
+  `EndToEndLivenessInputs.authorityCountAtLeastTwo` records the minimum
+  validator count.
 - **Rust evidence:** Some v3 inputs can come from local process settings.
 - **Discharge:** Move all proof-relevant inputs into authenticated epoch state.
 
@@ -281,13 +424,55 @@ finalizer work is not evidence for this result.
 
 ## ASM-SAFE-NON-EQUIVOCATION
 
-- **Claim:** A correct validator does not sign conflicting blocks. A validator identity counts no more than once on each side of a decision.
-- **Type:** Protocol and Rust refinement.
+- **Claim:** One non-Byzantine identity does not authenticate two different
+  commit votes for the same selected leader slot, and does not authenticate both
+  a commit and a skip for the same leader block. The same identity also does not
+  authenticate two different votes for the same transaction target: its signed
+  vote block and the committed-prefix copy of that block are one signed
+  statement.
+- **Type:** Single-validator Rust refinement.
 - **Status:** Partially verified.
 - **Effect if false:** Safety.
-- **Lean use:** Conflicting evidence can overlap only in Byzantine stake.
-- **Rust evidence:** Vote sets deduplicate identities, and durable restart preserves the signed-round floor.
-- **Discharge:** Add a signer guard for complete local-state loss or count that validator as faulty.
+- **Lean use:** `AuthenticatedFlexVoteSourceMap.correctCommitVoteIsUnique` and
+  `.correctCommitSkipIsExcluded`, and
+  `TransactionEvidence.correctAcceptVoteStable`.
+- **Rust evidence:** A durable restart keeps the signed-round floor, and the
+  proposer signs one block for each round it proposes.
+- **Derivation candidate:** This may follow from how proposal works rather than
+  stay an assumption. `highestSignedRound` is a durable floor, and
+  `try_new_block` refuses a round at or below the last proposed round, so one
+  correct host produces at most one block for each round. The model does not
+  connect that rule to `authenticatedCommitVote`, so the link is not made.
+- **Discharge:** Derive the rule from one-block-per-round, or add a signer guard
+  for complete local-state loss and count that validator as faulty.
+
+## ASM-SAFE-VOTE-SET-OVERLAP
+
+- **Claim:** Two opposite sides of one decision share no correct identity. A
+  commit-vote set and a skip-vote set overlap only in Byzantine stake, and the
+  same holds for skip against certificate, and for accept against reject.
+- **Type:** Single-validator Rust refinement.
+- **Status:** Open proof obligation.
+- **Effect if false:** Safety.
+- **Lean use:** `LeaderEvidence.commitSkipOverlap` and `.skipCertificateOverlap`,
+  and `TransactionEvidence.acceptRejectOverlap` and `.rejectCertificateOverlap`.
+  Each is `OnlyFaultyOverlap`, so the two sides intersect inside the faulty set.
+- **Derived elsewhere, in part:** The overlap shape is a result, not a source.
+  `AuthenticatedFlexVoteSourceMap.twoViewEvidence` proves the
+  commit-against-commit and commit-against-skip overlaps from
+  `correctCommitVoteIsUnique`, `correctCommitSkipIsExcluded`, and the two
+  membership fields; see `ExactCommitPrefixSafety.lean` at `twoViewEvidence`.
+  The certificate overlaps and the transaction overlaps are not derived
+  anywhere: the model has no per-validator certificate or transaction-vote
+  source yet. The row survives because nothing builds `LeaderEvidence` or
+  `TransactionEvidence` from the vote source map, so both bundles still take
+  all four overlap fields as input.
+- **Rust evidence:** Vote sets deduplicate identities, so one identity is
+  counted once for each side.
+- **Discharge:** Build `LeaderEvidence` and `TransactionEvidence` from
+  `AuthenticatedFlexVoteSourceMap` so the existing derivation supplies the
+  commit and skip overlaps. Add per-validator certificate and transaction-vote
+  sources for the other fields. Then delete this row.
 
 ## ASM-SAFE-PARENT-QUORUM
 
@@ -301,18 +486,110 @@ finalizer work is not evidence for this result.
 
 ## ASM-SAFE-EVIDENCE-REFINEMENT
 
-- **Claim:** Product leader and transaction decisions use the same evidence, voter accounting, result rules, and cached decision origin as the model. A cached indirect result retains its exact deciding anchor and ordered history. Once a slot is committed or skipped, later direct and indirect rule runs preserve that result. The signed cutoff is the maximum of the block-cleanup and vote-cleanup rounds.
+- **Claim:** Product leader and transaction decisions use the same evidence,
+  voter accounting, and result rules as the model. Once a slot is committed or
+  skipped, later direct and indirect rule runs preserve that result. The signed
+  cutoff is the maximum of the block-cleanup and vote-cleanup rounds.
 - **Type:** Rust refinement.
 - **Status:** Partially verified.
 - **Effect if false:** Safety.
-- **Lean use:** The first-decision relation keeps direct evidence for direct results. For an indirect result, it keeps the historical anchor, history, result, and ordered scan prefix. It proves that later direct and indirect passes preserve the first result. Safety compares the reconstructed direct bases. It does not treat a cached indirect result as direct.
-- **Rust evidence:** `RoundState::update_slot_decision` changes only an undecided slot, records the first direct or indirect origin, and asserts equality on a later update. A fully decided round can skip another indirect run. No decision is durable. `PendingCommitState` is in-memory, starts from its default value, and never reaches the store. `WriteBatch` carries accepted blocks, commits, commit info, and finalized commits with their rejected transaction indices. It carries no slot status and no decision origin. A restart therefore recomputes every verdict from recovered blocks and commits, and `maybe_refresh_pending_commit_state` discards the pending rounds on a schedule change. No stale indirect result survives either event, so there is nothing to misclassify across them. The open part is within one pending-state lifetime: `Decision::Indirect` records that the indirect rule decided the slot, and `FlexCommitter::try_indirect_decide` only logs the deciding anchor, so the anchor and the ordered scan are not readable from the stored state. The modeled v3 transaction path is incomplete.
+- **Lean use:** The first-decision relation keeps direct evidence for direct
+  results and proves that later direct and indirect passes preserve the first
+  result. Safety compares the reconstructed direct bases. It does not treat a
+  cached indirect result as direct. The cached-anchor half of the old claim is
+  now `ASM-SAFE-INDIRECT-ORIGIN`. The counted vote sets are exactly the
+  authenticated votes (`commitVoteMembership`, `skipVoteMembership`), the
+  pending window starts at a deterministic function of the commit head
+  (`firstPendingRoundMatchesHead`), and an indirect commit from an admissible
+  anchor stays admissible (`indirectCommitAnchorIsAdmissible`). On the liveness
+  route the same claim covers the local Flex execution maps:
+  `EndToEndLivenessInputs.flexCommitterSource`, `.flexCommitterRuntime`,
+  `.exactPendingIngestion`, `.exactDirectRule`, `.successfulFlexScanWork`,
+  `.anchorRules`, and `.commitMaterialCausalClosure`.
+- **Rust evidence:** `RoundState::update_slot_decision` changes only an
+  undecided slot, records the first direct or indirect origin, and asserts
+  equality on a later update. A fully decided round can skip another indirect
+  run. The modeled v3 transaction path is incomplete.
 - **Evidence record:** [EV-CACHED-INDIRECT-ORIGIN](ASSUMPTION_EVIDENCE.md#ev-cached-indirect-origin).
-- **Discharge:** Retain the exact indirect anchor and scan origin inside one pending-state lifetime, or show that the Lean field does not need them once no decision is durable. Restart and reset reconstruction need no separate mapping, because both discard the pending state. Add the transaction path and shared conformance vectors.
+- **Discharge:** Add the transaction path and shared conformance vectors.
 
-## ASM-SAFE-COMMIT-CHAIN
+## ASM-SAFE-INDIRECT-ORIGIN
 
-- **Claim:** Correct validators process one common, continuous index-and-digest commit chain in order.
+- **Claim:** A cached indirect result retains its exact deciding anchor and
+  ordered history for as long as the result itself is retained.
+- **Type:** Single-validator Rust refinement.
+- **Status:** Known mismatch.
+- **Effect if false:** Safety.
+- **Lean use:** `AuthenticatedFlexVoteSourceMap.exactAnchorHistory` maps the
+  implementation's immutable causal history to the exact anchor history that
+  the vote proof reads. Safety reconstructs an indirect decision from that
+  anchor and history.
+- **Rust evidence:** No decision is durable. `PendingCommitState` is in-memory,
+  starts from its default value, and never reaches the store. `WriteBatch`
+  carries no slot status and no decision origin. A restart therefore recomputes
+  every verdict from recovered blocks and commits, and
+  `maybe_refresh_pending_commit_state` discards the pending rounds on a
+  schedule change, so no stale indirect result survives either event. The
+  mismatch is inside one pending-state lifetime: `Decision::Indirect` records
+  that the indirect rule decided the slot, and
+  `FlexCommitter::try_indirect_decide` only logs the deciding anchor, so the
+  anchor and the ordered scan are not readable from the stored state.
+- **Evidence record:** [EV-CACHED-INDIRECT-ORIGIN](ASSUMPTION_EVIDENCE.md#ev-cached-indirect-origin).
+- **Discharge:** Retain the exact indirect anchor and scan origin inside one
+  pending-state lifetime, or show that the Lean field does not need them once
+  no decision is durable. Restart and reset need no separate mapping, because
+  both discard the pending state.
+
+## ASM-SAFE-DIGEST-IDENTITY
+
+- **Claim:** A digest names exactly one body. Two bodies have the same digest if
+  and only if they are the same body. This holds for block digests and for
+  commit digests.
+- **Chain note:** Rust holds the back-links, and the model now carries them, so
+  the chain rule is **derived and no longer assumed**. A commit body carries
+  `previous_digest` (`consensus/core/src/commit.rs:106`), and the commit digest
+  hashes the complete serialized commit (`consensus/core/src/commit.rs:194`), so
+  the digest covers the index, the previous digest, the timestamp, the leader
+  reference, and the committed blocks. A block carries every ancestor as a
+  `BlockRef` with a digest (`consensus/types/src/block.rs:32`), and the block
+  digest hashes the complete serialized block with its signature
+  (`consensus/core/src/block.rs:621`). `ValidatorCommitHead` now has
+  `previousId`, `DigestLinkedCommits` defines the chain, and
+  `ExactCommitDurablePrefixSourceMap.digest_chain_entry_matches_installed_prefix`
+  proves that walking down a checked chain from an installed tip stays inside
+  the same host's durable prefix. That result was a field of
+  `ASM-SAFE-INSTALL-PROVENANCE` and is now a theorem.
+- **Type:** Cryptographic.
+- **Status:** Partially verified.
+- **Effect if false:** Safety.
+- **Lean use:** `ExactCommitDurablePrefixSourceMap.validBodyDigestBinding` is
+  the commit half: two valid commit bodies with the same index and the same
+  digest are equal. Safety needs this because a commit vote signs
+  `(index, digest)` and does not sign the named leader round as a separate
+  field. Rust still binds that round, because `CommitV1.leader` is inside the
+  hashed body. `ExactCommitInstallProvenance.validChainIsDigestChain` is the
+  other field: the synchronization chain check is the digest-link check
+  `DigestLinkedCommits`. The block half supports the injective encoding of
+  `ASM-LIVE-FINITE-REFERENCE-SPACE`.
+- **Rust evidence:** Both digests are fixed byte arrays taken over the complete
+  serialized body, so each digest covers every field of its body. This is now
+  reviewed; see [REF-DIGEST-CHAIN](#verified-current-rust-behavior). What
+  remains is the standard hash property, plus the fact that the serialization
+  sends different bodies to different bytes.
+- **Discharge:** Confirm that the serialization is injective for a fixed schema,
+  and map the synchronization range check onto `DigestLinkedCommits`. The hash
+  half stays a cryptographic assumption. Carrying the link into the model is
+  done.
+
+## ASM-SAFE-COMMIT-STORE
+
+- **Claim:** The durable commit store of one host is well formed. Index 0 holds
+  genesis. If the head is at index `n`, the store holds a commit at every index
+  from 0 to `n`, with no gap. The store keeps two forms of each commit, the
+  short `(index, digest)` and the full body, and the two forms always agree in
+  both directions. Each stored commit above genesis names the identifier of the
+  commit one index below it. The host delivers each stored commit to its
+  finalizer in index order with no gap.
 - **Store note:** The model has one durable notion, `installedCommitAt`, which
   maps a commit index to a commit identifier. Rust has two commit tables. The
   `commits` table holds the commit record. The `finalized_commits` table holds
@@ -322,24 +599,83 @@ finalizer work is not evidence for this result.
   single modeled notion is adequate for agreement on which commit sits at an
   index. Transaction outcomes are a separate durable fact that the commit-safety
   statement does not cover.
-- **Type:** Derived protocol and Rust refinement theorem.
+- **Type:** Single-host storage refinement.
 - **Status:** Partially verified.
 - **Effect if false:** Safety.
-- **Lean use:** `ExactCommitInstallProvenance.correct_validators_agree_on_commit_at_index` proves the safety statement directly: two correct, available validators that installed a commit at one index installed the same commit. Its inputs contain no cross-host equality. Every field of `AuthenticatedFlexVoteSourceMap` and of `ExactCommitInstallProvenance` is a one-host rule. The schedule dependence sits in the head-indexed signature `firstPendingRoundForHead`, which makes the first pending round a function of the commit head. `V3AdaptiveScheduleRule.adaptive_run_exists_unique` justifies that signature: the schedule recursion is stratified by the Rust gate, so exactly one run of decisions is consistent with the rule and the schedule is determined by the commit prefix. A second route through a common per-host model was removed. It needed cross-host agreement of the commit material and the post-scan slots, and it did not add a safety result.
-- **Rust evidence:** Local and synchronized inputs have chain checks, but no cross-validator proof exists.
-- **Evidence records:** [EV-EXACT-COMMIT-PREFIX](ASSUMPTION_EVIDENCE.md#ev-exact-commit-prefix) and [EV-DURABLE-COMMIT-PREFIX](ASSUMPTION_EVIDENCE.md#ev-durable-commit-prefix).
-- **Discharge:** Prove the common-chain result across local production, synchronization, and restart.
+- **Lean use:** Supplies `zeroHeadIsGenesis`, `installedAtOrBelowHead`,
+  `installedHeadLinksToPredecessor`, `exactInstalledHeadIsValid`,
+  `exactHeadHasStoredId`, and `storedIdHasExactHead` of
+  `ExactCommitDurablePrefixSourceMap`. The same gap-free rule supplies
+  `Continuous` on the commit stream,
+  `FinalizerLivenessStageObligations.continuousCommitStream`, and the
+  long-enough visible prefix that the `VisibleFirst` binder of
+  `mysticeti_v3_safety` needs. `EndToEndLivenessInputs.commitPrefix` restates
+  the same head-contains-every-earlier-index and stored-form agreement facts
+  for the liveness route.
+- **Rust evidence:** Commit installs are ordered, and both commit tables key on
+  index and digest. `CommitV1.index` starts at 1 after genesis and increases by
+  one for each commit, and `CommitV1.previous_digest` links each commit to the
+  one before it, so a produced commit sequence has no gap by construction. No
+  review covers restart, or the case of a store that keeps the short form
+  without the full body.
+- **Evidence record:** [EV-DURABLE-COMMIT-PREFIX](ASSUMPTION_EVIDENCE.md#ev-durable-commit-prefix).
+- **Discharge:** Read the commit write path and the restart path. Show that no
+  index below the head is ever missing, and that the two stored forms cannot
+  disagree.
+
+## ASM-SAFE-INSTALL-PROVENANCE
+
+- **Claim:** Every commit that a correct host installed has a real origin. A
+  commit installed by local execution came from a committer run on that same
+  host. A commit installed by sync came from a verified, certified bundle. A
+  host signs and stores a commit vote only after that same host installed the
+  commit.
+- **Type:** Single-host Rust refinement.
+- **Status:** Open proof obligation.
+- **Effect if false:** Safety.
+- **Lean use:** Supplies `localInstallOrigin`, `verifiedSyncInstallOrigin`, and
+  `correctCarrierFollowsInstalledCommit` of `ExactCommitInstallProvenance`.
+  These three fields are what
+  `correct_validators_agree_on_commit_at_index` consumes to reach two-host
+  agreement. No field compares two hosts. The chain-to-prefix rule was a fourth
+  field of this row. It is now the theorem
+  `ExactCommitDurablePrefixSourceMap.digest_chain_entry_matches_installed_prefix`,
+  and `ExactCommitInstallProvenance.verifiedChainEntryMatchesInstalledPrefix`
+  re-exposes it with the signature the field had.
+- **Rust evidence:** None recorded. `CommitObserver` and `CommitSyncer` are the
+  two install paths, and no source review maps either one to its origin rule.
+- **Evidence record:** [EV-EXACT-COMMIT-PREFIX](ASSUMPTION_EVIDENCE.md#ev-exact-commit-prefix).
+- **Discharge:** Read `CommitObserver` and `CommitSyncer`. Show that each
+  install records the origin the rule names, and that no commit vote leaves the
+  host before the install.
 
 ## ASM-SAFE-FIRST-TRIGGER
 
-- **Claim:** Correct validators use the same first eligible depth-two commit as the transaction trigger.
-- **Type:** Protocol and Rust refinement.
+- **Claim:** The Rust finalizer keeps a queue of unfinalized commits ordered by
+  index. It compares the leader round of the newest commit in the queue with the
+  leader round of the earliest one. When the newest is at least
+  `indirectCommitDepth` rounds ahead, the finalizer runs the indirect rule on
+  every pending transaction of the earliest commit, removes that commit, and
+  repeats. This row assumes that this queue behavior is the modeled
+  `FirstEligible` choice. Use of the *same* trigger by two hosts is the
+  conclusion, not the claim.
+- **Type:** Single-host Rust refinement.
 - **Status:** Partially verified.
 - **Effect if false:** Safety.
-- **Lean use:** Indirect transaction agreement depends on one first trigger.
-- **Rust evidence:** Ordered processing supports this rule when the common-chain claim holds.
+- **Lean use:** Supplies the `FirstEligible` half of the `VisibleFirst` binder
+  of `mysticeti_v3_safety`. `first_trigger_agreement` then derives trigger
+  equality from `firstEligible_unique` and the one commit stream.
+  `mysticeti_v3_safety` returns that equality as part of its conclusion. The
+  other half of the binder, that the host has the stream up to the trigger
+  position, is gap-free delivery and belongs to `ASM-SAFE-COMMIT-STORE`.
+- **Rust evidence:** The described queue matches the model. Commit leader rounds
+  increase along the stream, so the first commit that is deep enough is the one
+  whose arrival releases the earliest commit. No source review records this
+  mapping with file and line.
 - **Evidence record:** [EV-FINALIZER-TRIGGER-OUTPUT](ASSUMPTION_EVIDENCE.md#ev-finalizer-trigger-output).
-- **Discharge:** Derive trigger equality from the common chain and verify all input paths.
+- **Discharge:** Map the queue code to `FirstEligible`. Confirm that the
+  comparison uses the earliest commit's leader round as the pending round, and
+  the newest commit's leader round as the test value.
 
 ## ASM-SAFE-COMMITTED-PREFIX
 
@@ -354,19 +690,56 @@ finalizer work is not evidence for this result.
 
 ## ASM-SAFE-GC
 
-- **Claim:** Old-block cleanup uses the preceding commit boundary. Before a commit install moves GC, the host accepts and catalogues every exact commit-body block. After the move, it retains the accumulated closed DAG frontier above the new GC round. It retains decision evidence until the rule no longer needs it or copies the evidence into the committed prefix.
+- **Claim:** Old-block cleanup uses the preceding commit boundary. Before a
+  commit install moves GC, the host accepts and catalogues every exact
+  commit-body block. It retains decision evidence until the rule no longer
+  needs it or copies the evidence into the committed prefix.
 - **Type:** Rust refinement.
 - **Status:** Partially verified.
 - **Effect if false:** Safety.
-- **Lean use:** Leader and transaction safety use retained anchor and vote evidence. Post-GC liveness uses the accepted and retained above-GC frontier as legal proposal parents.
-- **Rust evidence:** The v3 certified-commit path accepts each commit's blocks before it handles and records the commit. Local ownership is verified. Atomic persistence, restart, accumulated-prefix retention, and the complete evidence path still need a full refinement check.
+- **Lean use:** Leader and transaction safety use retained anchor and vote
+  evidence through `TransactionEvidence.gcWindow` and `LeaderEvidence.coreGc`.
+  `LeaderEvidence.anchorDepth` keeps the anchor inside the retained window, and
+  `TransactionEvidence.blockEvidence` keeps the live DAG and the buffered
+  committed prefix as separate stores, so later block GC changes only the live
+  store. On the liveness route,
+  `EndToEndLivenessInputs.installedCommitParents` and `.installedHeadBootstrap`
+  are the install-time catalogue of commit material above GC. The liveness half
+  of the old claim, the retained above-GC frontier, is now
+  `ASM-LIVE-GC-FRONTIER`.
+- **Rust evidence:** The v3 certified-commit path accepts each commit's blocks
+  before it handles and records the commit. Local ownership is verified. Atomic
+  persistence, restart, and the complete evidence path still need a full
+  refinement check.
 - **Evidence records:** [EV-DURABLE-COMMIT-PREFIX](ASSUMPTION_EVIDENCE.md#ev-durable-commit-prefix) and [EV-FINALIZER-TRIGGER-OUTPUT](ASSUMPTION_EVIDENCE.md#ev-finalizer-trigger-output).
-- **Discharge:** Enforce the required depth, test accept-before-GC ordering for local and synchronized installs, and close the complete evidence and post-GC frontier mappings.
+- **Discharge:** Enforce the required depth, test accept-before-GC ordering for
+  local and synchronized installs, and close the complete evidence mapping.
+
+## ASM-LIVE-GC-FRONTIER
+
+- **Claim:** A commit install does not remove an accepted block that stays
+  above the new local GC round. The block stays retained, so a later proposal
+  can use it as a parent.
+- **Type:** Single-validator storage refinement.
+- **Status:** Open proof obligation.
+- **Effect if false:** Liveness.
+- **Lean use:** The `retention` binder of
+  `current_sources_give_end_to_end_liveness_probability_one`:
+  `ValidatorCommitOrthogonalAcceptedRetentionRules.acceptedAboveGcIsRetained`.
+  The head-independent proposal gate uses the retained above-GC block as a
+  legal parent. This row used to point at
+  `EndToEndLivenessInputs.localGcCutoffCausal`; that field had no consumer and
+  stated Flex-scan cutoff rules instead of this retention rule, so the field
+  was deleted.
+- **Rust evidence:** Accumulated-prefix retention across a GC move has no
+  refinement check.
+- **Discharge:** Map the post-GC frontier retention across local and
+  synchronized installs.
 
 ## ASM-CONFIG-V3-ACTIVATION
 
 - **Claim:** Authenticated epoch state enables the analyzed v3 leader and transaction paths.
-- **Type:** Configuration applicability.
+- **Type:** Configuration applicability refinement.
 - **Status:** Known mismatch.
 - **Effect if false:** Applicability.
 - **Lean use:** The model describes the v3 protocol path.
@@ -403,29 +776,81 @@ finalizer work is not evidence for this result.
 - **Rust evidence:** The product can retry and measure delays but cannot enforce the network bound.
 - **Discharge:** Keep this condition in the deployment model.
 
+## ASM-LIVE-COMMON-GENESIS
+
+- **Claim:** Every correct, available validator starts from one common genesis.
+  The genesis commit has index zero and round zero. At trace time zero the
+  validator has that commit installed at index zero and holds it as its commit
+  head. The validator also starts with one common round-zero parent list, one
+  block for each author in a set with quorum stake. These round-zero blocks
+  start accepted in local storage and stay accepted at every trace time.
+- **Type:** Startup boundary model.
+- **Status:** Accepted modeling assumption.
+- **Effect if false:** Liveness.
+- **Lean use:** `EndToEndLivenessInputs.initial` gives the installed genesis
+  commit and the time-zero head at every correct, available validator.
+  `.genesisParents` gives the common parent list, its quorum stake, initial
+  acceptance, and permanent retention. Round-zero proposal and
+  `.operationalQuorumFrontier` build on these blocks. The trace-start bullet in
+  "Source-to-model and local product conditions" states the same time-zero
+  boundary.
+- **Rust evidence:** Each validator derives the same genesis blocks and the
+  same virtual genesis commit reference, `GENESIS_COMMIT_INDEX` with
+  `CommitDigest::MIN`, from the epoch committee. `DagState` keeps genesis
+  bodies in a dedicated map that GC eviction does not touch. A validator that
+  restarts inside the epoch starts its trace with a higher commit head, so the
+  time-zero head condition selects epoch-start executions. That is a scope
+  choice, not a Rust rule.
+- **Discharge:** Keep the deterministic genesis derivation and the dedicated
+  genesis storage in Rust. To remove the epoch-start scope choice, extend the
+  liveness analysis to a trace that starts at a later installed head.
+
 ## ASM-LIVE-FINITE-REFERENCE-SPACE
 
-- **Claim:** `BlockId` has one fixed finite injective encoding. A persisted
-  causal capsule has unique block references, each author is in the finite
-  authority set, and each history round is at or below the target block round.
-  Therefore, one capsule has at most
-  `authorityCount * blockIdCount` references at one round. The pinned capsule
-  created by proposal persistence is exactly the capsule used by this bound.
-- **Type:** Data and source refinement.
+- **Claim:** `BlockId` has one fixed finite injective encoding.
+- **Type:** Data refinement.
 - **Status:** Partially verified.
 - **Effect if false:** Commit liveness.
-- **Lean use:** `ValidatorFiniteBlockIdEncoding` derives the static per-round
-  cap. The receiver's GC round then gives a linear bound on unresolved history.
-  The adopted proof combines pointwise visibility bounds with one
-  fixed-reference quadratic wait. The wait does not change when a local commit
-  head changes.
+- **Lean use:** `ValidatorFiniteBlockIdEncoding`. With the capsule facts of
+  `ASM-LIVE-CAPSULE-PROJECTION`,
+  `ValidatorPersistedCausalCapsuleFiniteReferenceSourceMap.toRoundAdmission`
+  turns the encoding into the `admission` input of the CL goal at the static
+  per-round cap `authorityCount * blockIdCount`. The cap is a conclusion, not a
+  claim.
 - **Rust evidence:** `BlockDigest` is a fixed byte array, and the committee has
-  a finite authority count. The exact persisted-capsule pin projection and all
-  capsule source fields still need a complete Rust-to-Lean map.
+  a finite authority count. Injectivity for a fixed schema is the block half of
+  `ASM-SAFE-DIGEST-IDENTITY`.
 - **Evidence record:** [EV-FINITE-REFERENCE-SPACE-TIMING](ASSUMPTION_EVIDENCE.md#ev-finite-reference-space-timing).
-- **Discharge:** Map the exact finite digest encoding, capsule uniqueness,
-  author range, target-round upper bound, and persisted pin-projection equality.
-  Check all modeled arithmetic against product integer limits.
+- **Discharge:** Complete
+  [REF-FINITE-BLOCK-ID-SPACE](#missing-rust-behavior-and-open-source-refinements),
+  and check all modeled arithmetic against product integer limits.
+
+## ASM-LIVE-CAPSULE-PROJECTION
+
+- **Claim:** When a correct validator persists a proposal, it also persists one
+  causal recovery capsule for that block, and that capsule is the one the
+  backlog projection reads. Its block references are unique, each author is in
+  the finite authority set, and each history round is at or below the target
+  block round.
+- **Type:** Single-validator source refinement.
+- **Status:** Open proof obligation.
+- **Effect if false:** Commit liveness.
+- **Lean use:** `ValidatorPersistedCausalCapsuleFiniteReferenceSourceMap` and
+  the `maxAdmittedRefsPerRound` binder with
+  `ValidatorPersistedCausalCapsuleRoundAdmissionSourceMap`, the `admission`
+  input of the CL goal. The receiver's GC round then gives a linear bound on
+  unresolved history. The adopted proof combines pointwise visibility bounds
+  with one fixed-reference quadratic wait. The wait does not change when a
+  local commit head changes.
+- **Rust evidence:** The exact persisted-capsule pin projection and all capsule
+  source fields still need a complete Rust-to-Lean map. Current Rust limits
+  immediate parents, and it does not enforce the transitive per-round cap when
+  equivocating branches merge.
+- **Evidence record:** [EV-FINITE-REFERENCE-SPACE-TIMING](ASSUMPTION_EVIDENCE.md#ev-finite-reference-space-timing).
+- **Discharge:** Complete
+  [REF-CAUSAL-CAPSULE-PROJECTION](#missing-rust-behavior-and-open-source-refinements):
+  capsule uniqueness, author range, target-round upper bound, and persisted
+  pin-projection equality.
 
 ## ASM-LIVE-ROUND-CATCHUP
 
@@ -433,17 +858,18 @@ finalizer work is not evidence for this result.
   correct validator persists only round `highestSignedRound + 1`. Each actual
   fresh intermediate persistence used by the final path has an earlier
   commit-progress-recovery timer generation, exact `proposeNext` action, and
-  refreshed parent snapshot for the same block. Thus, one actual later own
-  block can prove each required intermediate persistence. The source rules
-  classify current or past actions. They do not supply a future block or
-  window. A generic normal-proposal origin is not a final input.
+  refreshed parent snapshot for the same block. The source rules classify
+  current or past actions. They do not supply a future block or window.
 - **Type:** Rust refinement.
 - **Status:** Known mismatch.
 - **Effect if false:** The completed conditional theorem does not apply to the
   product. Lean cannot reconstruct its finite exact timer-paced window from
   later unbounded own-block production.
 - **Lean use:** `ValidatorV2RoundCatchupSourceMap` gives the two past-only
-  source rules. `actual_high_own_block_gives_fresh_timer_paced_intermediate`
+  source rules. From them the proof derives, rather than assumes, that one
+  actual later own block proves each required intermediate persistence; a
+  generic normal-proposal origin is not an input.
+  `actual_high_own_block_gives_fresh_timer_paced_intermediate`
   uses the first signer-floor crossing to recover one exact target.
   `block_production_liveness_gives_backfilled_timer_paced_window` applies this
   result to every required author and offset. It returns only actual
@@ -469,25 +895,34 @@ finalizer work is not evidence for this result.
   requests missing parents and proposes only after it accepts an
   immediate-parent quorum. Parent selection includes every current accepted and
   retained representative, one per author, without schedule prediction or
-  score exclusion. Exact-next recovery uses the round after its highest durable
-  own round. Cleanup safe resume durably records the canonical target
+  score exclusion. A correct receiver with a broken or idle tip stream retries
+  its subscription, and a successful subscription replays the current signed
+  tip or a newer own tip. A validator in recovery also sends its current
+  signed tip to every other validator again. Exact-next recovery uses the
+  round after its highest durable own round. Cleanup safe resume durably records the canonical target
   `max(P + 1, G + 2)` and its parent need before proposal selection. It does not
   require an accepted future block at the target. While recovery is active
   above GC, stale normal ready work cannot persist. Persistence must use the
   current recovery proposal and the unique timer for the same validator and
-  target round. The adopted commit proof uses one fixed reference round `R_c`
-  and the wait
-  `W(R) = b + l * (R - R_c) + q * (R - R_c)^2`. The final source boundary
-  derives timer spread from actual prior broadcasts and sync plus one
-  action-local exact-next timer-promptness rule.
+  target round. Recovery pacing uses one fixed reference round `R_c` and the
+  wait `W(R) = b + l * (R - R_c) + q * (R - R_c)^2`, and the exact-next timer
+  is prompt as an action-local rule. Timer spread is not claimed; the proof
+  derives it from actual prior broadcasts and sync.
+- **Split note:** This row is one proposed feature that is one known mismatch
+  today. When implementation starts, split it along the `REF-RECOVERY-*` rows,
+  one row per mapped behavior.
 - **Type:** Protocol and Rust refinement.
 - **Status:** Known mismatch.
 - **Effect if false:** Liveness.
 - **Lean use:** `ValidatorFixedReferenceStrictCurrentSourceMaps` supplies the
   fixed wait, one action-local exact-next timer-promptness rule, authenticated
   correct-body ownership, past recovery-timer origins, and the checked
-  quadratic coefficient. The proof derives timer spread from actual prior
-  broadcasts and pinned sync. V2 round catch-up supplies the finite exact
+  quadratic coefficient. The `parameters` binder carries the wait coefficients.
+  The `syncSources` binder, `ValidatorFreshRoundPinnedSyncSourceRules`, gives
+  pinned sync over `EndToEndLivenessInputs.recoverySourcePins`, and the
+  capsule-sync, genesis, tip-subscription, and rebroadcast fields supply
+  recovery parent acquisition and replay. The proof derives timer spread from
+  actual prior broadcasts and pinned sync. V2 round catch-up supplies the finite exact
   production family. Commit-orthogonal retention makes each selected leader
   usable before the next proposal snapshot. Local Flex execution and
   exact-prefix induction then derive commit progress and pointwise catch-up. The theorem
@@ -505,7 +940,12 @@ finalizer work is not evidence for this result.
 
 ## ASM-LIVE-LOCAL-PROPOSAL
 
-- **Claim:** While the epoch is active, a correct, available validator with a valid current frontier target eventually stores and sends an own block, already has that round, or observes a higher threshold frontier. The one-shot forced timeout and the last-known-own-round and propagation-delay watchers supply the attempts. A local or synchronized commit cannot interrupt an active Core callback.
+- **Claim:** While the epoch is active, a correct, available validator with a
+  valid current frontier target eventually stores and sends an own block,
+  already has that round, or observes a higher threshold frontier. The one-shot
+  forced timeout and the last-known-own-round and propagation-delay watchers
+  supply the attempts. Non-interruption of an active Core callback is
+  `ASM-LIVE-CORE-HANDLER`, not part of this row.
 - **Type:** Single-validator Rust refinement.
 - **Status:** Open proof obligation.
 - **Effect if false:** Block-production and commit liveness.
@@ -524,35 +964,85 @@ finalizer work is not evidence for this result.
 - **Type:** Single-validator Rust refinement.
 - **Status:** Partially verified.
 - **Effect if false:** Block-production and commit liveness.
-- **Lean use:** Trace time zero is the post-recovery running state; startup recovery is not an action source in this trace. `ValidatorPacketDrivenBlockAcceptanceAt` records exact past packet delivery and block acceptance. `packetDrivenAcceptanceHasInputOrigin` maps it to a qualifying `ValidatorCoreHandlerInputObservation`. `ValidatorCoreHandlerRefinementRules` then returns a `ValidatorFiniteCoreHandlerEpisode`. `qualifying_core_handler_input_has_terminal_scan_and_normal_proposal_attempt` exposes the terminal scan and later normal proposal attempt before return. `ValidatorFiniteCoreHandlerEpisode.proposal_attempt_input_and_suffix` connects the attempt input to the handler-exit state and the remaining finite event suffix. `qualifying_core_handler_input_has_current_proposal_continuation` then returns a same-batch proposal action or a `ValidatorCoreProposalContinuationAt` current-state witness. `ValidatorAuthorLocalPreAttemptScheduleAt` narrows commit interference to a protected normal callback, an armed exact recovery timer, or an occupied protected timer-arm goal, each before proposal latch. Raw parent readiness is not a schedule. The first-install rule returns exact past persistence or one protected post-install normal callback. These results do not return proposal success as an input, a common DAG layer, or a commit result.
+- **Lean use:** Trace time zero is the post-recovery running state; startup recovery is not an action source in this trace. `ValidatorPacketDrivenBlockAcceptanceAt` records exact past packet delivery and block acceptance. `packetDrivenAcceptanceHasInputOrigin` maps it to a qualifying `ValidatorCoreHandlerInputObservation`. `ValidatorCoreHandlerRefinementRules` then returns a `ValidatorFiniteCoreHandlerEpisode`. `qualifying_core_handler_input_has_terminal_scan_and_normal_proposal_attempt` exposes the terminal scan and later normal proposal attempt before return. `ValidatorFiniteCoreHandlerEpisode.proposal_attempt_input_and_suffix` connects the attempt input to the handler-exit state and the remaining finite event suffix. `qualifying_core_handler_input_has_current_proposal_continuation` then returns a same-batch proposal action or a `ValidatorCoreProposalContinuationAt` current-state witness. `ValidatorAuthorLocalPreAttemptScheduleAt` narrows commit interference to a protected normal callback, an armed exact recovery timer, or an occupied protected timer-arm goal, each before proposal latch. Raw parent readiness is not a schedule. The first-install rule returns exact past persistence or one protected post-install normal callback. `EndToEndLivenessInputs.commitProposalNonInterference` is the same serial rule as the last claim sentence: one local commit handler preserves the threshold-clock proposal round. These results do not return proposal success as an input, a common DAG layer, or a commit result.
 - **Rust evidence:** On the v3 path, `try_commit_v3` loops until `FlexCommitter::try_commit` returns `None`. Each successful iteration calls `post_commit`, which can unsuspend blocks after GC changes. `Core::add_blocks` calls this loop and then `try_propose(false)` when the input accepts at least one block. The current action origin does not yet distinguish direct `add_blocks` input acceptance from later GC-unsuspension.
 - **Discharge:** Map `ValidatorPacketDrivenBlockAcceptanceAt`, `packetDrivenAcceptanceHasInputOrigin`, `handlerInputOccurs`, `qualifyingInputHasFiniteHandler`, and `ValidatorCoreProposalAttemptContinuationRules` to the guarded ordinary `add_blocks` path. Add an exact direct-input acceptance origin. A GC-unsuspended block must use its enclosing handler continuation, not start another handler. Prove that finite input and finite GC-unsuspension give finite local commit work. Test the terminal no-more-commits result, the following proposal-attempt invocation, and its exact past or current continuation. Do not require that the attempt succeeds. Model certified-commit processing separately; do not use it as positive DAG progress.
 
-## ASM-LIVE-LEADER
+## ASM-LIVE-LEADER-STAKE
 
-- **Claim:** The leader schedule and round leader selection satisfy `P_r <= S <= N`, `f + c < S`, and `A <= P_r`. For the same authenticated configuration, exact commit head, and effective schedule key, correct validators derive the same selected leader slot order. After a commit install, the proof checks the refreshed key. It keeps compatible facts when the allowed-leader list is unchanged and restarts schedule-dependent reasoning when the list changes.
-- **Type:** Protocol and configuration refinement.
+- **Claim:** The epoch stake numbers satisfy `P_r <= S <= N`, `f + c < S`, and
+  `A <= P_r`. The selected leader set of every commit head carries more stake
+  than the faulty plus unavailable budget.
+- **Type:** Configuration refinement.
 - **Status:** Open proof obligation.
 - **Effect if false:** Liveness.
-- **Lean use:** Progress derives correct available scheduled stake and quorum coverage from these bounds. It compares proposal and Flex state only at one effective schedule key. A separate order rule derives a favorable leader window, and an action-scoped parent rule must include the exact first Flex leader.
-- **Rust evidence:** Current v3 has `P_r = S`. Within one Core, the proposer and FlexCommitter receive the current `NextCommitLeaderSchedule`. Off-boundary commits retain `allowed_leaders`; a boundary commit can change it. FlexCommitter retains a compatible suffix or resets on a changed list. Startup does not enforce all stake bounds or the exact first-leader parent rule.
+- **Lean use:** `EndToEndLivenessInputs.leaderSchedule.scheduleViable`.
+  Progress derives correct available scheduled stake and quorum coverage from
+  the stake bounds.
+- **Rust evidence:** Current v3 has `P_r = S`. Startup does not check the stake
+  bounds against actual epoch stake.
+- **Discharge:** Check the bounds against actual epoch stake at startup.
+
+## ASM-LIVE-LEADER-SCHEDULE
+
+- **Claim:** The schedule Rust computes behaves as the modeled `config`
+  functions. One commit head determines one selected leader set
+  `config.leaderSchedule` and one selected slot order
+  `config.selectedLeaderOrder`. The proposer and the FlexCommitter use one
+  shared indirect depth.
+- **Not claimed here:** The row this came from also said that correct validators
+  derive the same selected leader slot order. That is not an assumption. The
+  model gives every validator one shared `ValidatorEpochConfig`, so
+  `config.leaderSchedule` is one function by construction, and agreement is
+  built in rather than supplied. The old row also described what the proof
+  checks after a commit install. A claim states what the system does, not what
+  the proof does.
+- **Type:** Single-validator Rust refinement.
+- **Status:** Partially verified.
+- **Effect if false:** Liveness.
+- **Lean use:** `EndToEndLivenessInputs.leaderSchedule.indirectDepth`,
+  `.indirectDepthPositive`, and
+  `EndToEndLivenessInputs.flexCommitterDepthMatchesLeaderSchedule`. The CL goal
+  reads the schedule through its `family` binder:
+  `UniformRankingEndToEndExecutionFamily.leaderScheduleMatches` keeps one fixed
+  selected set for each commit head, and `.indirectDepthMatches` keeps one
+  fixed depth. The deterministic repeated-first structure
+  (`DeterministicLeaderCoverageInput` with `.schedule`, `.selectedSetMatches`,
+  and `.firstSelectedSlotMatches`) is the alternative route and is not an input
+  of the CL goal. A separate order rule derives a favorable leader window, and
+  an action-scoped parent rule must include the exact first Flex leader.
+- **Rust evidence:** Within one Core, the proposer and the FlexCommitter receive
+  the current `NextCommitLeaderSchedule`. Off-boundary commits keep
+  `allowed_leaders`; a boundary commit can change it, and the FlexCommitter then
+  keeps a compatible suffix or resets. No review maps the schedule algorithm
+  itself onto the modeled `DeterministicLeaderSchedule`.
 - **Evidence records:** [EV-SCHEDULE-HEAD-LOCAL](ASSUMPTION_EVIDENCE.md#ev-schedule-head-local) and [EV-FIRST-FLEX-LEADER-PARENT](ASSUMPTION_EVIDENCE.md#ev-first-flex-leader-parent).
-- **Discharge:** Enforce actual-stake bounds, add the action-scoped proposal schedule read, prevent score exclusion of the accepted and retained exact first leader, and prove or accept the leader-order rule.
+- **Discharge:** Map the schedule algorithm to the modeled one, add the
+  action-scoped proposal schedule read, and stop score exclusion from dropping
+  the accepted and retained exact first leader.
 
 ## ASM-LIVE-FIRST-SLOT-SAMPLING
 
 - **Claim:** For each round, the round-seeded shuffle is modeled as an
   independent uniform permutation of the current allowed-leader list. The list
-  is chosen before that round's shuffle. All correct validators use the same
-  result for a round. The Byzantine and unavailable sets stay fixed during the
-  proof interval.
+  is chosen before that round's shuffle.
+- **Not claimed here:** Cross-validator agreement on the shuffle result is
+  built in: the model computes the order from one shared
+  `ValidatorEpochConfig`, so agreement is not supplied as an assumption. The
+  fixed Byzantine and unavailable sets are `ASM-SAFE-FAULT-BOUND`, not part of
+  this row.
 - **Type:** Accepted probabilistic protocol model.
 - **Status:** Accepted modeling assumption.
 - **Effect if false:** Liveness.
 - **Lean use:** Lean derives the probability-one causal-head favorable-window
   event from the abstract independent-uniform law. The conditional commit
   capstone then uses that event. The final entry theorem is
-  `current_sources_give_end_to_end_liveness_probability_one`.
+  `current_sources_give_end_to_end_liveness_probability_one`. Its `law` binder
+  is `IndependentUniformRoundRankingLaw`, its `family` binder connects the
+  sampled ranking to the configuration through
+  `UniformRankingEndToEndExecutionFamily.firstSelectedLeaderMatchesRanking`,
+  and its `rankingSource` binder, `UniformRankingExecutionSourceMap`, keeps the
+  execution before a round dependent only on earlier rankings.
 - **Rust evidence:** The product seeds the same deterministic shuffle from the
   round number. This gives validator agreement and crash-recovery
   reproducibility. The assumption treats the shuffle results for distinct round
@@ -577,14 +1067,13 @@ finalizer work is not evidence for this result.
   acceptance remove at least `C_service` items in that interval. If fewer items
   are pending, all pending items finish or become obsolete because GC moved.
   One finite removal cap bounds `workRemoved` in every interval.
-  Thus, each fixed known above-GC causal history eventually becomes accepted
-  while rounds can continue. The validator can skip authoring rounds, but it
-  eventually stores and sends own blocks at later unbounded rounds. It does not
-  have to author every intermediate round. The margin `C_add < C_service` is no
-  longer assumed on its own. `ValidatorCausalQueueTransferBudget` derives it from
-  a coarse block-transfer budget and a block-production bound; see
-  `ASM-LIVE-TRANSFER-BUDGET`.
-- **Type:** Single-validator performance model, with a derived service margin.
+- **Derived, not claimed:** Two results used to sit in the claim above. That
+  each fixed known above-GC causal history eventually becomes accepted is the
+  conclusion these rates give, not an input. The margin `C_add < C_service` is
+  not assumed on its own either; `ValidatorCausalQueueTransferBudget` derives it
+  from a coarse block-transfer budget and a block-production bound, so the
+  margin belongs to `ASM-LIVE-TRANSFER-BUDGET`.
+- **Type:** Single-validator performance model.
 - **Status:** Partially verified.
 - **Effect if false:** The completed conditional commit theorem does not apply
   to the product.
@@ -643,53 +1132,16 @@ finalizer work is not evidence for this result.
 - **Effect if false:** Liveness.
 - **Lean use:** Recursive direct-parent needs plus partial synchrony derive the
   finite above-cleanup causal closure of one received block. Parent-ready
-  buffering then accepts it from parents to children. The finite reference-space
-  theorem and the receiver's current GC cutoff give the pointwise visibility
-  bound. The adopted final proof uses pinned sync and
+  buffering then accepts it from parents to children.
+  `EndToEndLivenessInputs.operationalQuorumFrontier` records the resulting
+  current causal closure above the local GC boundary. The finite
+  reference-space theorem and the receiver's current GC cutoff give the
+  pointwise visibility bound. The adopted final proof uses pinned sync and
   commit-orthogonal retention with fixed-reference pacing. It does not use
   commit synchronization as positive progress.
 - **Rust evidence:** Several fetch mechanisms exist. The proof currently accepts their best-effort above-cleanup behavior. A complete source check is deferred.
 - **Evidence record:** [EV-NETWORK-ROUND-PROGRESS](ASSUMPTION_EVIDENCE.md#ev-network-round-progress).
 - **Discharge:** Later check peer choice, retries, buffering, restart recovery, cleanup handling, and exact-reference reads against Rust. Do not add a below-cleanup recovery path.
-
-## ASM-LIVE-COMMIT-SYNC
-
-- **Claim:** Commit sync is an optional acceleration path. Its traffic and local
-  work do not starve ordinary block fetch, subscription retry, proposal work, or
-  recovery timers. The final proof does not require commit-sync success. If an
-  actual verified synchronized install advances the receiver's commit index,
-  that install satisfies the receiver-progress branch. Otherwise, ordinary DAG
-  synchronization, recovery proposals, local FlexCommitter execution, and the
-  existing queue-service rules continue.
-- **Type:** Accepted single-validator scheduling and resource-isolation model.
-- **Status:** Accepted modeling assumption.
-- **Effect if false:** Commit sync could prevent the ordinary path used by the
-  liveness proof from running. Invalid synchronized installation would instead
-  violate safety.
-- **Lean use:** No commit-sync availability or result is a liveness input.
-  `ValidatorReceiverCommitAdvance` is source-independent: a synchronized local
-  advance closes the current receiver step, while its negation excludes every
-  local commit-index advance on the analyzed suffix. Exact sync-install
-  provenance restricts actual synchronized actions in the safety proof.
-- **Rust evidence:** Subscription suspension uses a catch-up hysteresis band and
-  checks local progress once per second. Subscription connection attempts retry
-  with bounded exponential backoff. When commit lag suppresses periodic block
-  sync, ten seconds without local commit-index movement enables periodic
-  failover until one commit-sync batch of local progress occurs. Core verifies
-  certified ranges, installs only a consecutive extension, accepts the exact
-  commit blocks before GC moves, attempts a proposal, and signals a newer round.
-  GC removes obsolete missing dependencies and unsuspends their children.
-- **Limit:** Rust does not enforce a resource reservation that proves the
-  accepted non-starvation claim. The failover and suspension loops also need the
-  existing partial-synchrony, peer-fairness, task-fairness, block-sync, and
-  queue-service assumptions to derive eventual progress. GC cleanup does not by
-  itself prove the exact no-skip recovery target is re-armed; that is covered by
-  the existing recovery no-idle and safe-resume refinements.
-- **Evidence record:** [EV-COMMIT-SYNC-COVERAGE](ASSUMPTION_EVIDENCE.md#ev-commit-sync-coverage).
-- **Discharge:** Keep verified sync installation mapped for safety. Keep the
-  non-starvation rule explicit until scheduling and resource isolation enforce
-  it. Do not add future sync availability, certification, vote carriage, or a
-  synchronized commit result to liveness inputs.
 
 ## ASM-LIVE-PEER-FAIRNESS
 
@@ -704,16 +1156,31 @@ finalizer work is not evidence for this result.
 ## ASM-LIVE-TASK-FAIRNESS
 
 - **Claim:** A continuously enabled protocol task at a correct validator eventually runs.
+- **Commit-sync note:** The main known starvation risk is optional commit
+  synchronization, whose traffic and local work share the host with ordinary
+  block fetch, subscription retry, proposal work, and recovery timers. This
+  used to be its own row, `ASM-LIVE-COMMIT-SYNC`. That row supplied no field of
+  its own: sync-install safety is `ASM-SAFE-INSTALL-PROVENANCE`, a gap-free
+  installed stream is `ASM-SAFE-COMMIT-STORE`, and no goal theorem takes
+  commit-sync success as an input. What remains is this fairness claim.
 - **Type:** Runtime environment.
 - **Status:** Environmental assumption.
 - **Effect if false:** Liveness.
 - **Lean use:** Every temporal progress chain needs enabled work to continue.
-- **Rust evidence:** Tasks and queues implement the work but cannot guarantee scheduler fairness.
-- **Discharge:** Define allowed shutdown and failure states in the runtime model.
+- **Rust evidence:** Tasks and queues implement the work but cannot guarantee
+  scheduler fairness, and no resource reservation isolates commit sync from the
+  ordinary path. The control transitions exist: a suspended subscription checks
+  local commit progress once per second, connection attempts retry with bounded
+  backoff, and ten seconds without local commit-index movement enables periodic
+  block-sync failover until one batch of progress occurs.
+- **Evidence record:** [EV-COMMIT-SYNC-COVERAGE](ASSUMPTION_EVIDENCE.md#ev-commit-sync-coverage).
+- **Discharge:** Define allowed shutdown and failure states in the runtime
+  model, and keep the commit-sync control transitions until scheduling or
+  resource isolation enforces non-starvation.
 
 ## ASM-LIVE-LOCAL-RESPONSE
 
-- **Claim:** Correct local clocks advance. A correct timer does not expire early, and every finite timer expires. Each covered local consensus action completes within a finite bound `epsilon`. An accepted commit timestamp has a bounded future offset.
+- **Claim:** Correct local clocks advance. A correct timer does not expire early, and every finite timer expires. Each covered local consensus action completes within a finite bound `epsilon`.
 - **Type:** Runtime environment.
 - **Status:** Environmental assumption.
 - **Effect if false:** Timely-vote liveness.
@@ -721,34 +1188,49 @@ finalizer work is not evidence for this result.
 - **Rust evidence:** The product has no end-to-end deadline for all covered local work.
 - **Discharge:** Validate a deployment bound or weaken the timed result.
 
-## ASM-LIVE-PIPELINE-BOUNDS
-
-- **Claim:** Each timed protocol phase has a bound that includes its network, queue, storage, retry, and local processing delays.
-- **Type:** Derived timing refinement.
-- **Status:** Abstraction gap.
-- **Effect if false:** Liveness bound.
-- **Lean use:** Current stage composition accepts these bounds. The target proof derives each needed bound from messages and protected local actions.
-- **Rust evidence:** Separate timers exist, but no complete event-to-bound mapping exists.
-- **Discharge:** Define concrete phase events and derive or measure each complete bound.
-
 ## ASM-LIVE-FINALIZER-TRIGGER
 
-- **Claim:** Every pending transaction eventually gets an eligible later trigger or a defined safe epoch-tail result.
-- **Type:** Derived protocol and lifecycle theorem.
+- **Claim:** Every pending transaction eventually reaches a later commit that
+  is deep enough to trigger it.
+- **Not claimed here:** The row used to end with "or a defined safe epoch-tail
+  result". That clause supplies no field. `triggerEventually` says the trigger
+  happens, with no alternative branch. What an epoch end should do with still
+  pending transactions is product work, tracked as
+  [REF-FINALIZER-TAIL](#missing-rust-behavior-and-open-source-refinements).
+- **Type:** Missing product-path refinement.
 - **Status:** Known mismatch.
 - **Effect if false:** Liveness.
 - **Lean use:** Transaction progress needs a trigger after the target commit.
-- **Rust evidence:** The modeled trigger path is absent, and shutdown can leave pending state.
+- **Rust evidence:** The modeled trigger path is absent.
 - **Evidence record:** [EV-FINALIZER-TRIGGER-OUTPUT](ASSUMPTION_EVIDENCE.md#ev-finalizer-trigger-output).
-- **Discharge:** Implement the path and define the epoch-tail rule.
+- **Discharge:** Implement the trigger path.
 
 ## ASM-LIVE-DURABILITY
 
-- **Claim:** A decision becomes durable before exposure, survives restart, and eventually reaches its consumer.
-- **Type:** Derived Rust and timing theorem.
+- **Claim:** After the stable start, a produced commit enters the finalizer
+  within one message delay, a transaction that reached a deep enough trigger is
+  decided within one message delay, and a decided transaction reaches durable
+  output within one more message delay.
+- **Moved out:** This row used to claim two more things: that a decision is
+  durable before it is exposed, and that it survives restart. Neither supplies a
+  field of a goal theorem, and both are current product behavior rather than
+  open conditions. They are now
+  [REF-DURABLE-PROPOSAL](#verified-current-rust-behavior) and
+  [REF-DURABLE-COMMIT-OUTPUT](#verified-current-rust-behavior), and restart is
+  described in [PROOF_SCOPE.md](PROOF_SCOPE.md#committed-material). Dropping
+  them is why `Effect if false` is now liveness alone.
+- **Type:** Single-validator timing model.
 - **Status:** Partially verified.
-- **Effect if false:** Safety and liveness.
-- **Lean use:** Transaction progress ends at durable output, not only an in-memory decision.
-- **Rust evidence:** Durable-before-output patterns exist, but the modeled v3 path and complete restart result are open.
+- **Effect if false:** Liveness.
+- **Lean use:** `FinalizerLivenessStageObligations.triggerToDecision` and
+  `.decisionToDurableOutput`. Both are `WithinAfter` bounds of one
+  `network.delta`. The `commitEntersFinalizer` binder of
+  `transaction_liveness_stage_composition` is the same kind of stage bound:
+  commit production to finalizer entry within one `network.delta`. Transaction
+  progress ends at durable output, not at an in-memory decision.
+- **Rust evidence:** On both paths the write happens before the send, so what
+  this row assumes is how long each stage takes, not whether the two are
+  ordered. No measurement bounds either stage.
 - **Evidence records:** [EV-DURABLE-COMMIT-PREFIX](ASSUMPTION_EVIDENCE.md#ev-durable-commit-prefix) and [EV-FINALIZER-TRIGGER-OUTPUT](ASSUMPTION_EVIDENCE.md#ev-finalizer-trigger-output).
-- **Discharge:** Define the durable event, crash boundary, replay rule, and consumer-progress condition.
+- **Discharge:** Bound the time from a finalizer decision to the flushed write,
+  and from the flushed write to the consumer.

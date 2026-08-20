@@ -26,8 +26,8 @@ one exact commit chain, transaction decisions, and durable output.
 - **Scope:** network round progress, fixed-reference pacing, V2 round catch-up,
   V2 current no-idle block production, pinned sync, commit-orthogonal
   retention, local Flex execution, exact-prefix induction, commit-sync safety
-  and ordinary-sync failover, the non-adopted exact-replay proof experiment,
-  leader schedule and probability evidence, cached decision origin, commit
+  and ordinary-sync failover, leader schedule and probability evidence,
+  cached decision origin, commit
   storage and restart, and transaction finalizer durability.
 
 ## Entry format
@@ -331,7 +331,7 @@ Audit date and source revision
 ## EV-FINITE-REFERENCE-SPACE-TIMING
 
 - **Related assumptions and review IDs:**
-  `ASM-LIVE-FINITE-REFERENCE-SPACE`,
+  `ASM-LIVE-FINITE-REFERENCE-SPACE`, `ASM-LIVE-CAPSULE-PROJECTION`,
   `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`, `ASM-LIVE-BLOCK-SYNC`,
   `REF-FINITE-BLOCK-ID-SPACE`, `REF-CAUSAL-CAPSULE-PROJECTION`,
   `REF-RECOVERY-PACING`, `REF-RECOVERY-TIMER-ORIGIN`,
@@ -426,7 +426,7 @@ Audit date and source revision
 
 ## EV-SCHEDULE-HEAD-LOCAL
 
-- **Related assumptions and review IDs:** `ASM-LIVE-LEADER`,
+- **Related assumptions and review IDs:** `ASM-LIVE-LEADER-SCHEDULE`,
   `REF-LEADER-SCHEDULE`, `REF-ROUND-LEADER-SELECTION`, and
   `REF-LEADER-ORDER-COMPATIBILITY`.
 - **Exact claim:** Within one running Core, the proposer waiter and each
@@ -492,7 +492,7 @@ Audit date and source revision
 
 ## EV-FIRST-FLEX-LEADER-PARENT
 
-- **Related assumptions and review IDs:** `ASM-LIVE-LEADER`,
+- **Related assumptions and review IDs:** `ASM-LIVE-LEADER-SCHEDULE`,
   `ASM-LIVE-LOCAL-PROPOSAL`, and `REF-RECOVERY-PARENTS`.
 - **Exact claim required by the proof:** For an actual non-forced round
   `R + 1` proposal, use the action's exact pre-state and effective schedule. If
@@ -535,7 +535,7 @@ Audit date and source revision
 ## EV-FIRST-SLOT-PROBABILITY
 
 - **Related assumptions and review IDs:** `ASM-LIVE-FIRST-SLOT-SAMPLING`,
-  `ASM-LIVE-LEADER`, and `REF-LEADER-ORDER-COMPATIBILITY`.
+  `ASM-LIVE-LEADER-SCHEDULE`, and `REF-LEADER-ORDER-COMPATIBILITY`.
 - **Exact claim:** For each round, after the allowed-leader list is fixed, the
   round-seeded shuffle is modeled as an independent uniform permutation of that
   list. This gives a fixed positive conditional probability of the required
@@ -571,7 +571,8 @@ Audit date and source revision
 
 ## EV-COMMIT-SYNC-COVERAGE
 
-- **Related assumptions and review IDs:** `ASM-LIVE-COMMIT-SYNC`,
+- **Related assumptions and review IDs:** `ASM-LIVE-TASK-FAIRNESS`,
+  `ASM-SAFE-INSTALL-PROVENANCE`,
   `ASM-LIVE-BLOCK-SYNC`, `ASM-LIVE-POST-GST-CAUSAL-SERVICE`,
   `REF-COMMIT-SYNC-CHECKS`, `REF-COMMIT-SYNC-PROGRESS`,
   `REF-BLOCK-SYNC-MECHANISMS`, `REF-LOCAL-PROPOSAL-PROGRESS`, and
@@ -654,8 +655,9 @@ Audit date and source revision
 
 ## EV-EXACT-COMMIT-PREFIX
 
-- **Related assumptions and review IDs:** `ASM-SAFE-COMMIT-CHAIN`,
-  `REF-COMMON-COMMIT-CHAIN`, and `REF-COMMIT-SYNC-CHECKS`.
+- **Related assumptions and review IDs:** `ASM-SAFE-INSTALL-PROVENANCE`,
+  `ASM-SAFE-DIGEST-IDENTITY`, `REF-COMMON-COMMIT-CHAIN`, and
+  `REF-COMMIT-SYNC-CHECKS`.
 - **Exact claim:** Given exact authenticated decision evidence, canonical commit
   materialization, a complete local durable prefix, and exact local or verified
   synchronized install provenance, Lean derives one unique exact successor from
@@ -692,8 +694,8 @@ Audit date and source revision
 
 ## EV-CACHED-INDIRECT-ORIGIN
 
-- **Related assumptions and review IDs:**
-  `ASM-SAFE-EVIDENCE-REFINEMENT` and `REF-DECISION-ORIGIN`.
+- **Related assumptions and review IDs:** `ASM-SAFE-EVIDENCE-REFINEMENT`,
+  `ASM-SAFE-INDIRECT-ORIGIN`, and `REF-DECISION-ORIGIN`.
 - **Exact claim:** The first direct or indirect result for one slot is sticky.
   For an indirect result, the model also needs the exact deciding anchor, the
   ordered scan position, the historical result, and the immutable anchor
@@ -727,7 +729,7 @@ Audit date and source revision
 
 ## EV-DURABLE-COMMIT-PREFIX
 
-- **Related assumptions and review IDs:** `ASM-SAFE-COMMIT-CHAIN`,
+- **Related assumptions and review IDs:** `ASM-SAFE-COMMIT-STORE`,
   `ASM-SAFE-GC`, `ASM-SAFE-NON-EQUIVOCATION`, `REF-COMMON-COMMIT-CHAIN`,
   `REF-COMMIT-STATE`, `REF-COMMIT-INSTALL-DAG`, and
   `REF-AMNESIA-SIGNER-GUARD`.
