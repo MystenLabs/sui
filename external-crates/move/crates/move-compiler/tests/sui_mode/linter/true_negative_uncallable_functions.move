@@ -20,6 +20,16 @@ module a::m {
     entry fun two_imm_mixed(_ctx1: &TxContext, _x: u64, _ctx2: &TxContext) {
     }
 
+    // no warning: private functions are not callable from a transaction
+    fun private_ret_ctx(ctx: &mut TxContext): &mut TxContext {
+        ctx
+    }
+
+    // no warning: no TxContext in return position
+    public fun ret_no_ctx(_ctx: &mut TxContext): u64 {
+        0
+    }
+
 }
 
 
