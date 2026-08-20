@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Range;
-
-use anyhow::Context as _;
 use async_graphql::InputObject;
-use sui_pg_db::query::Query;
 use sui_rpc::proto::sui::rpc::v2::EmitModuleFilter;
 use sui_rpc::proto::sui::rpc::v2::EventFilter as GrpcEventFilter;
 use sui_rpc::proto::sui::rpc::v2::EventLiteral;
@@ -13,19 +9,15 @@ use sui_rpc::proto::sui::rpc::v2::EventTerm;
 use sui_rpc::proto::sui::rpc::v2::EventTypeFilter;
 use sui_rpc::proto::sui::rpc::v2::SenderFilter;
 use sui_rpc::proto::sui::rpc::v2::event_literal::Predicate;
-use sui_sql_macro::query;
 use sui_types::event::Event as NativeEvent;
 
 use crate::api::scalars::module_filter::ModuleFilter;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::scalars::type_filter::TypeFilter;
 use crate::api::scalars::uint53::UInt53;
-use crate::api::types::event::CEvent;
 use crate::api::types::lookups::CheckpointBounds;
-use crate::api::types::lookups::TxBoundsCursor;
 use crate::error::RpcError;
 use crate::error::feature_unavailable;
-use crate::pagination::Page;
 
 #[derive(InputObject, Debug, Default, Clone)]
 pub(crate) struct EventFilter {
@@ -55,67 +47,11 @@ pub(crate) struct EventFilter {
 }
 
 impl EventFilter {
-    /// Builds a SQL query to select and filter events based on sender, module, and type filters.
-    /// Uses the provided transaction bounds subquery to limit results to a specific transaction range
-    pub(crate) fn query<'q>(&self) -> Result<Query<'q>, RpcError> {
-        let table = match (&self.module, &self.type_) {
-            (Some(_), Some(_)) => {
-                return Err(feature_unavailable(
-                    "Filtering by both emitting module and event type is not supported",
-                ));
-            }
-            (Some(_), None) => query!("ev_emit_mod"),
-            (None, _) => query!("ev_struct_inst"),
-        };
-
-        let mut query = query!(
-            r#"
-            SELECT
-                tx_sequence_number
-            FROM
-                {}
-            WHERE
-                tx_sequence_number >= (SELECT tx_lo FROM tx_lo)
-                AND tx_sequence_number < (SELECT tx_hi FROM tx_hi)
-            "#,
-            table,
-        );
-
-        if let Some(sender) = self.sender {
-            query += query!(" AND sender = {Bytea}", sender.into_vec());
-        }
-
-        if let Some(package) = self.module.as_ref().map(|m| m.package()) {
-            query += query!(" AND package = {Bytea}", package.into_vec());
-        }
-
-        if let Some(module) = self.module.as_ref().and_then(|m| m.module()) {
-            query += query!(" AND module = {Text}", module.to_string());
-        }
-
-        if let Some(package) = self.type_.as_ref().map(|t| t.package()) {
-            query += query!(" AND package = {Bytea}", package.into_vec());
-        }
-
-        if let Some(module) = self.type_.as_ref().and_then(|t| t.module()) {
-            query += query!(" AND module = {Text}", module.to_string());
-        }
-
-        if let Some(name) = self.type_.as_ref().and_then(|t| t.type_name()) {
-            query += query!(" AND name = {Text}", name.to_string());
-        }
-
-        if let Some(type_params) = self.type_.as_ref().and_then(|t| t.type_params()) {
-            query += query!(
-                " AND instantiation = {Bytea}",
-                bcs::to_bytes(type_params).context("Failed to serialize type parameters")?
-            );
-        }
-
-        Ok(query)
-    }
-
-    // Check if the Event matches sender, module, or type filters in EventFilter if they are provided.
+    /// Check if the Event matches sender, module, or type filters in EventFilter if they are
+    /// provided. Used by the `staging`-gated subscription backfill, which filters events
+    /// client-side rather than through the ledger gRPC list API — unused (and so
+    /// `#[allow(dead_code)]`'d) otherwise.
+    #[cfg_attr(not(feature = "staging"), allow(dead_code))]
     pub(crate) fn matches(&self, event: &NativeEvent) -> bool {
         if let Some(sender) = &self.sender
             && sender != &SuiAddress::from(event.sender)
@@ -167,9 +103,8 @@ impl EventFilter {
     /// to the request's checkpoint range. Returns `None` when no predicate field is set (an absent
     /// filter matches everything in range).
     ///
-    /// Errors when both `module` and `type_` are set, for parity with the Postgres path — the
-    /// bitmap engine supports the conjunction, but lifting the restriction is deferred so behavior
-    /// does not diverge by backend.
+    /// Errors when both `module` and `type_` are set — the bitmap engine supports the conjunction,
+    /// but lifting the restriction is deferred to a future change.
     pub(crate) fn to_grpc_filter(&self) -> Result<Option<GrpcEventFilter>, RpcError> {
         if self.module.is_some() && self.type_.is_some() {
             return Err(feature_unavailable(
@@ -198,21 +133,6 @@ impl EventFilter {
 
         Ok(Some(filter))
     }
-
-    /// The active filters in EventFilter. Used to find the pipelines that are available to serve queries with these filters applied.
-    pub(crate) fn active_filters(&self) -> Vec<String> {
-        let mut filters = vec![];
-        if self.sender.is_some() {
-            filters.push("sender".to_string());
-        }
-        if self.module.is_some() {
-            filters.push("module".to_string());
-        }
-        if self.type_.is_some() {
-            filters.push("type".to_string());
-        }
-        filters
-    }
 }
 
 impl CheckpointBounds for EventFilter {
@@ -227,33 +147,6 @@ impl CheckpointBounds for EventFilter {
     fn before_checkpoint(&self) -> Option<UInt53> {
         self.before_checkpoint
     }
-}
-
-/// The event indices (sequence_number) in a transaction's events array that are within the cursor bounds, inclusively.
-/// Event transaction numbers are always returned in ascending order.
-pub(super) fn tx_ev_bounds(
-    page: &Page<CEvent>,
-    tx_sequence_number: u64,
-    event_count: usize,
-) -> Range<usize> {
-    // Find start index from 'after' cursor, defaults to 0
-    let ev_lo = page
-        .after()
-        .filter(|c| c.tx_sequence_number() == tx_sequence_number)
-        .map(|c| c.ev_sequence_number() as usize)
-        .unwrap_or(0)
-        .min(event_count);
-
-    // Find exclusive end index from 'before' cursor, default to event_count
-    let ev_hi = page
-        .before()
-        .filter(|c| c.tx_sequence_number() == tx_sequence_number)
-        .map(|c| (c.ev_sequence_number() as usize).saturating_add(1))
-        .unwrap_or(event_count)
-        .max(ev_lo)
-        .min(event_count);
-
-    ev_lo..ev_hi
 }
 
 fn include_literal(predicate: Predicate) -> EventLiteral {

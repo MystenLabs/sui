@@ -48,8 +48,8 @@ Response: {
   "data": {
     "allEvents": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAIYAA==",
-        "endCursor": "KAFCBggAEAQYCQ==",
+        "startCursor": "KAFCBggBEAIYAA==",
+        "endCursor": "KAJCBggCEAcYAA==",
         "hasNextPage": false,
         "hasPreviousPage": false
       },
@@ -149,8 +149,8 @@ Response: {
     },
     "eventsHasNext": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAIYAA==",
-        "endCursor": "KAFCBggAEAMYAA==",
+        "startCursor": "KAFCBggBEAIYAA==",
+        "endCursor": "KAFCBggBEAMYAA==",
         "hasNextPage": true,
         "hasPreviousPage": false
       },
@@ -173,8 +173,8 @@ Response: {
     },
     "eventsHasPrevious": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAQYCA==",
-        "endCursor": "KAFCBggAEAQYCQ==",
+        "startCursor": "KAFCBggBEAQYCA==",
+        "endCursor": "KAFCBggBEAQYCQ==",
         "hasNextPage": false,
         "hasPreviousPage": true
       },
@@ -262,8 +262,8 @@ Response: {
   "data": {
     "eventsAfterTransaction2AndEvent0": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAMYAA==",
-        "endCursor": "KAFCBggAEAMYAA==",
+        "startCursor": "KAFCBggBEAMYAA==",
+        "endCursor": "KAFCBggBEAMYAA==",
         "hasNextPage": true,
         "hasPreviousPage": true
       },
@@ -286,8 +286,8 @@ Response: {
   "data": {
     "eventsBeforeTransaction3AndEvent0": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAIYAA==",
-        "endCursor": "KAFCBggAEAIYAA==",
+        "startCursor": "KAFCBggBEAIYAA==",
+        "endCursor": "KAFCBggBEAIYAA==",
         "hasNextPage": true,
         "hasPreviousPage": false
       },
@@ -310,10 +310,10 @@ Response: {
   "data": {
     "eventsBeforeTransaction3AndEvent1FromBack": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAIYAA==",
-        "endCursor": "KAFCBggAEAMYAA==",
+        "startCursor": "KAFCBggBEAIYAA==",
+        "endCursor": "KAFCBggBEAMYAA==",
         "hasNextPage": true,
-        "hasPreviousPage": false
+        "hasPreviousPage": true
       },
       "nodes": [
         {

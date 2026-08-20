@@ -51,11 +51,6 @@ pub struct KvArgs {
     #[arg(long)]
     pub ledger_grpc_url: Option<Uri>,
 
-    /// Whether the configured ledger gRPC service serves the List APIs (e.g. bitmap-backed
-    /// transaction pagination). When unset, treated as `false`.
-    #[arg(long, alias = "experimental-query-apis")]
-    pub enable_list_apis: Option<bool>,
-
     /// Time spent waiting for a request to the kv store to complete, in milliseconds.
     #[arg(long)]
     pub kv_statement_timeout_ms: Option<u64>,
@@ -138,17 +133,13 @@ impl KvArgs {
         ))
     }
 
-    /// Construct a streaming list reader when the operator has opted in via
-    /// `enable_list_apis` AND a ledger gRPC URL is configured. Returns `None`
+    /// Construct a streaming list reader when a ledger gRPC URL is configured. Returns `None`
     /// otherwise. Reuses the same channel settings as the v2 `ledger_grpc_reader`.
     pub async fn alpha_ledger_grpc_reader(
         &self,
         prefix: Option<&str>,
         registry: &Registry,
     ) -> anyhow::Result<Option<AlphaLedgerGrpcReader>> {
-        if !self.enable_list_apis.unwrap_or(false) {
-            return Ok(None);
-        }
         let Some(ledger_grpc_url) = self.ledger_grpc_url.as_ref() else {
             return Ok(None);
         };

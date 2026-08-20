@@ -192,9 +192,6 @@ impl SubscriptionTestCluster {
         // directly so `disconnect_all()` cannot interfere with gap-recovery reads.
         let kv_args = KvArgs {
             ledger_grpc_url: Some(rpc_url.parse().unwrap()),
-            // Enables the v2alpha `list_transactions` reader the transaction subscription
-            // backfill scans through (paired with ledger-history indexing on the validator).
-            enable_list_apis: Some(ledger_history),
             ..Default::default()
         };
 

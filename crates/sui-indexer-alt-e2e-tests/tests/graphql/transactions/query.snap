@@ -71,7 +71,7 @@ Response: {
     "transactions": {
       "pageInfo": {
         "startCursor": "KAE6BAgAEAA=",
-        "endCursor": "KAE6BAgAEAk=",
+        "endCursor": "KAE6BAgFEAk=",
         "hasPreviousPage": false,
         "hasNextPage": true
       },
@@ -89,7 +89,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgAEAE=",
+          "cursor": "KAE6BAgBEAE=",
           "node": {
             "digest": "Behwp65YPJaMaHg9qgpz5aReNug7U3YEhkLW4ukcZjfc",
             "effects": {
@@ -101,7 +101,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgAEAI=",
+          "cursor": "KAE6BAgBEAI=",
           "node": {
             "digest": "H9Up8TXVvbtdLpCB5QzUGwbQG6kMk3z3n1HZsc4ZMa5o",
             "effects": {
@@ -113,7 +113,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgAEAM=",
+          "cursor": "KAE6BAgBEAM=",
           "node": {
             "digest": "FnRLaJFCiQDLmx8HEJsaNfLAnGX1TULDnuLWBhDrLACm",
             "effects": {
@@ -125,7 +125,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgAEAQ=",
+          "cursor": "KAE6BAgCEAQ=",
           "node": {
             "digest": "4SyyecAZacr3hX5fB5eeTZrUsPjbgf4cFi1E2azPMoQN",
             "effects": {
@@ -137,7 +137,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgAEAU=",
+          "cursor": "KAE6BAgDEAU=",
           "node": {
             "digest": "DJZzBdgo7HSUrtdE8k41y43WPHTw3gDDXUc2V4EdNi1m",
             "effects": {
@@ -149,7 +149,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgAEAY=",
+          "cursor": "KAE6BAgDEAY=",
           "node": {
             "digest": "DKkZzc9QZeYigRNaEofwDKTuuZ5KeSkyWq6gWjyojZSV",
             "effects": {
@@ -161,7 +161,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgAEAc=",
+          "cursor": "KAE6BAgEEAc=",
           "node": {
             "digest": "BLWiR4XPz5tRWXHQRUba5FK15DgseQkPM8ZnvSBZEN3s",
             "effects": {
@@ -173,7 +173,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgAEAg=",
+          "cursor": "KAE6BAgFEAg=",
           "node": {
             "digest": "9KqKTy3nFQLpzfJyTks7MrrKi5xXZ3ejctEmjvnisaF9",
             "effects": {
@@ -185,7 +185,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgAEAk=",
+          "cursor": "KAE6BAgFEAk=",
           "node": {
             "digest": "DyvEoKxh9cgtdtNTBRPEUbq8XzDBnEr5PePbZMeVHgun",
             "effects": {

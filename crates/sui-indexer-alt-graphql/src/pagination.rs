@@ -16,9 +16,7 @@ use async_graphql::connection::EmptyFields;
 use async_graphql::connection::PageInfo;
 use async_graphql::registry::MetaField;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
-use sui_pg_db::query::Query;
 use sui_rpc_cursor::CursorToken;
-use sui_sql_macro::query;
 
 use crate::api::scalars::cursor::JsonCursor;
 use crate::error::RpcError;
@@ -182,15 +180,6 @@ impl<C> Page<C> {
 
     pub(crate) fn is_from_front(&self) -> bool {
         matches!(self.end, End::Front)
-    }
-
-    /// Direction for sorting SQL queries.
-    pub(crate) fn order_by_direction(&self) -> Query<'_> {
-        if self.is_from_front() {
-            query!("ASC")
-        } else {
-            query!("DESC")
-        }
     }
 }
 

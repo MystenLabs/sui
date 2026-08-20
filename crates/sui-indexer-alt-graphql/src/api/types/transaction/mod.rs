@@ -9,25 +9,17 @@ use anyhow::Context as _;
 use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::connection::Connection;
-use async_graphql::dataloader::DataLoader;
-use diesel::QueryableByName;
-use diesel::sql_types::BigInt;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
-use futures::future::try_join_all;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
 use sui_indexer_alt_reader::ledger_grpc_reader::CheckpointedTransaction;
-use sui_indexer_alt_reader::pg_reader::PgReader;
-use sui_indexer_alt_reader::tx_digests::TxDigestKey;
-use sui_pg_db::query::Query;
 use sui_rpc::proto::sui::rpc::v2;
 use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
-use sui_sql_macro::query;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::digests::TransactionDigest;
 use sui_types::transaction::TransactionDataAPI;
@@ -37,19 +29,15 @@ use crate::api::scalars::base64::Base64;
 use crate::api::scalars::cursor::ByteCursor;
 use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::digest::Digest;
-use crate::api::scalars::fq_name_filter::FqNameFilter;
 use crate::api::scalars::id::Id;
 use crate::api::scalars::json::Json;
-use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::types::address::Address;
-use crate::api::types::available_range::AvailableRangeKey;
 use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::gas_input::GasInput;
 use crate::api::types::lookups::CheckpointBounds;
 use crate::api::types::lookups::TxBoundsCursor;
 use crate::api::types::transaction::filter::TransactionFilter;
-use crate::api::types::transaction::filter::TransactionKindInput;
 use crate::api::types::transaction_effects::EffectsContents;
 use crate::api::types::transaction_effects::TransactionEffects;
 use crate::api::types::transaction_kind::TransactionKind;
@@ -61,7 +49,6 @@ use crate::pagination::Page;
 use crate::pagination::StreamConnection;
 use crate::scope::Scope;
 use crate::task::streaming::ProcessedTransaction;
-use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
 
@@ -336,54 +323,9 @@ impl Transaction {
         page: Page<CTransaction>,
         filter: TransactionFilter,
     ) -> Result<StreamConnection<Transaction>, RpcError> {
-        if let Some(reader) = ctx.data_opt::<AlphaLedgerGrpcReader>() {
-            query_limits::rich::debit(ctx)?;
-            return Self::paginate_grpc(reader, scope, page, filter).await;
-        }
-
-        let watermarks: &Arc<Watermarks> = ctx.data()?;
-        let available_range_key = AvailableRangeKey {
-            type_: "Query".to_string(),
-            field: Some("transactions".to_string()),
-            filters: Some(filter.active_filters()),
-        };
-        let reader_lo = available_range_key.reader_lo(watermarks)?;
-
-        let Some(query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
-            return Ok(StreamConnection::empty());
-        };
-
-        let TransactionFilter {
-            after_checkpoint: _,
-            at_checkpoint: _,
-            before_checkpoint: _,
-            function,
-            kind,
-            affected_address,
-            affected_object,
-            sent_address,
-        } = filter;
-
-        let tx_sequence_numbers = if let Some(function) = function {
-            tx_call(ctx, query, &page, function, sent_address).await?
-        } else if let Some(kind) = kind {
-            tx_kind(ctx, query, &page, kind, sent_address).await?
-        } else if let Some(affected_object) = affected_object {
-            tx_affected_object(ctx, query, &page, affected_object, sent_address).await?
-        } else if let Some(address) = affected_address {
-            tx_affected_address(ctx, query, &page, address, sent_address).await?
-        } else if let Some(address) = sent_address {
-            tx_affected_address(ctx, query, &page, address, sent_address).await?
-        } else {
-            tx_unfiltered(ctx, query, &page).await?
-        };
-
-        page.paginate_results(
-            tx_digests(ctx, &tx_sequence_numbers).await?,
-            |(s, _)| TransactionToken::cursor(0, *s),
-            |(_, d)| Ok(Self::with_digest(scope.clone(), d)),
-        )
-        .map(Into::into)
+        query_limits::rich::debit(ctx)?;
+        let reader: &AlphaLedgerGrpcReader = ctx.data()?;
+        Self::paginate_grpc(reader, scope, page, filter).await
     }
 
     /// Serve transaction pagination by streaming gRPC. Returns pages that may
@@ -645,254 +587,6 @@ pub(crate) fn build_grpc_connection(
     page.paginate_stream_results(result, |payload| {
         transaction_from_stream_item(scope.clone(), payload)
     })
-}
-
-pub(crate) async fn tx_digests(
-    ctx: &Context<'_>,
-    tx_sequence_numbers: &[u64],
-) -> Result<Vec<(u64, TransactionDigest)>, RpcError> {
-    let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
-
-    try_join_all(tx_sequence_numbers.iter().map(|&tx| async move {
-        let stored = pg_loader
-            .load_one(TxDigestKey(tx))
-            .await
-            .context("Failed to load transaction digest")?
-            .context("Failed to find transaction digest")?;
-
-        let digest = TransactionDigest::try_from(stored.tx_digest)
-            .context("Failed to deserialize transaction digest")?;
-
-        Ok((tx, digest))
-    }))
-    .await
-}
-
-async fn tx_affected_address(
-    ctx: &Context<'_>,
-    mut query: Query<'_>,
-    page: &Page<CTransaction>,
-    affected_address: SuiAddress,
-    sent_address: Option<SuiAddress>,
-) -> Result<Vec<u64>, RpcError> {
-    query += query!(
-        r#"
-        SELECT
-            tx_sequence_number
-        FROM
-            tx_affected_addresses
-        WHERE
-            affected = {Bytea}
-        "#,
-        affected_address.into_vec(),
-    );
-
-    if let Some(address) = sent_address {
-        query += query!(" AND sender = {Bytea}", address.into_vec());
-    }
-
-    tx_sequence_numbers(ctx, query, page).await
-}
-
-async fn tx_affected_object(
-    ctx: &Context<'_>,
-    mut query: Query<'_>,
-    page: &Page<CTransaction>,
-    affected_object: SuiAddress,
-    sent_address: Option<SuiAddress>,
-) -> Result<Vec<u64>, RpcError> {
-    query += query!(
-        r#"
-        SELECT
-            tx_sequence_number
-        FROM
-            tx_affected_objects
-        WHERE
-            affected = {Bytea}
-        "#,
-        affected_object.into_vec(),
-    );
-
-    if let Some(address) = sent_address {
-        query += query!(" AND sender = {Bytea}", address.into_vec());
-    }
-
-    tx_sequence_numbers(ctx, query, page).await
-}
-
-async fn tx_call(
-    ctx: &Context<'_>,
-    mut query: Query<'_>,
-    page: &Page<CTransaction>,
-    function: FqNameFilter,
-    sent_address: Option<SuiAddress>,
-) -> Result<Vec<u64>, RpcError> {
-    query += query!(
-        r#"
-        SELECT
-            tx_sequence_number
-        FROM
-            tx_calls
-        WHERE
-            package = {Bytea}
-        "#,
-        function.package().into_vec(),
-    );
-
-    if let Some(module) = function.module() {
-        query += query!(" AND module = {Text}", module.to_string());
-    }
-
-    if let Some(name) = function.name() {
-        query += query!(" AND function = {Text}", name.to_string());
-    }
-
-    if let Some(address) = sent_address {
-        query += query!(" AND sender = {Bytea}", address.into_vec());
-    }
-
-    tx_sequence_numbers(ctx, query, page).await
-}
-
-async fn tx_kind(
-    ctx: &Context<'_>,
-    mut query: Query<'_>,
-    page: &Page<CTransaction>,
-    kind: TransactionKindInput,
-    sent_address: Option<SuiAddress>,
-) -> Result<Vec<u64>, RpcError> {
-    match (kind, sent_address) {
-        // We can simplify the query to just the `tx_affected_addresses` table if ProgrammableTX
-        // and sender are specified.
-        (TransactionKindInput::ProgrammableTx, Some(address)) => {
-            tx_affected_address(ctx, query, page, address, Some(address)).await
-        }
-
-        (TransactionKindInput::SystemTx, Some(_)) => Ok(vec![]),
-
-        // Otherwise, we can ignore the sender always, and just query the `tx_kinds` table.
-        (_, None) => {
-            query += query!(
-                r#"
-                SELECT
-                    tx_sequence_number
-                FROM
-                    tx_kinds
-                WHERE
-                    tx_kind = {BigInt}
-                "#,
-                kind as i64,
-            );
-
-            tx_sequence_numbers(ctx, query, page).await
-        }
-    }
-}
-
-async fn tx_sequence_numbers(
-    ctx: &Context<'_>,
-    mut query: Query<'_>,
-    page: &Page<CTransaction>,
-) -> Result<Vec<u64>, RpcError> {
-    query_limits::rich::debit(ctx)?;
-    let pg_reader: &PgReader = ctx.data()?;
-
-    query += query!(
-        r#"
-            AND (SELECT tx_lo FROM tx_lo) <= tx_sequence_number
-            AND tx_sequence_number < (SELECT tx_hi FROM tx_hi)
-        ORDER BY
-            tx_sequence_number {} /* order_by_direction */
-        LIMIT
-            {BigInt} /* limit_with_overhead */
-        "#,
-        page.order_by_direction(),
-        page.limit_with_overhead() as i64,
-    );
-
-    #[derive(QueryableByName)]
-    struct TxSequenceNumber {
-        #[diesel(sql_type = BigInt)]
-        tx_sequence_number: i64,
-    }
-
-    let mut conn = pg_reader
-        .connect()
-        .await
-        .context("Failed to connect to database")?;
-
-    let wrapped_tx_sequence_numbers: Vec<TxSequenceNumber> = conn
-        .results(query)
-        .await
-        .context("Failed to execute query")?;
-
-    let tx_sequence_numbers = if page.is_from_front() {
-        wrapped_tx_sequence_numbers
-            .iter()
-            .map(|t| t.tx_sequence_number as u64)
-            .collect()
-    } else {
-        wrapped_tx_sequence_numbers
-            .iter()
-            .rev()
-            .map(|t| t.tx_sequence_number as u64)
-            .collect()
-    };
-
-    Ok(tx_sequence_numbers)
-}
-
-/// The tx_sequence_numbers with cursors applied inclusively.
-/// Results are limited to `page.limit() + 2` to allow has_previous_page and has_next_page calculations.
-async fn tx_unfiltered(
-    ctx: &Context<'_>,
-    mut query: Query<'_>,
-    page: &Page<CTransaction>,
-) -> Result<Vec<u64>, RpcError> {
-    query_limits::rich::debit(ctx)?;
-    let pg_reader: &PgReader = ctx.data()?;
-
-    query += query!(
-        r#"
-        SELECT
-            (SELECT tx_lo FROM tx_lo),
-            (SELECT tx_hi FROM tx_hi)
-        "#
-    );
-
-    #[derive(QueryableByName)]
-    struct TxBounds {
-        #[diesel(sql_type = BigInt)]
-        tx_hi: i64,
-
-        #[diesel(sql_type = BigInt)]
-        tx_lo: i64,
-    }
-
-    let mut conn = pg_reader
-        .connect()
-        .await
-        .context("Failed to connect to database")?;
-
-    let results: Vec<TxBounds> = conn
-        .results(query)
-        .await
-        .context("Failed to execute query")?;
-
-    let (mut tx_lo, mut tx_hi) = results
-        .first()
-        .context("No valid checkpoints found")
-        .map(|bounds| (bounds.tx_lo as u64, bounds.tx_hi as u64))?;
-
-    let limit = page.limit_with_overhead() as u64;
-    if page.is_from_front() {
-        tx_hi = tx_hi.min(tx_lo.saturating_add(limit));
-    } else {
-        tx_lo = tx_lo.max(tx_hi.saturating_sub(limit));
-    }
-
-    let tx_sequence_numbers = (tx_lo..tx_hi).collect();
-    Ok(tx_sequence_numbers)
 }
 
 #[cfg(test)]

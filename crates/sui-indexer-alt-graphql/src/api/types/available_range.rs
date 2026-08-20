@@ -141,17 +141,11 @@ pub(crate) fn pipeline_unavailable(pipeline: &str) -> RpcError {
     match pipeline {
         "consistent" => feature_unavailable("consistent queries across objects and balances"),
         "cp_sequence_numbers" => feature_unavailable("querying checkpoints"),
-        "ev_emit_mod" => feature_unavailable("querying events by emitting module"),
-        "ev_struct_inst" => feature_unavailable("querying events by type"),
+        "ledger_grpc" => feature_unavailable("listing transactions and events"),
         "obj_versions" => feature_unavailable("querying object versions"),
-        "tx_affected_addresses" => {
-            feature_unavailable("filtering transactions by affected address")
+        "tx_balance_changes" | "tx_digests" => {
+            feature_unavailable("querying transaction balance changes")
         }
-        "tx_affected_objects" => feature_unavailable("filtering transactions by affected object"),
-        "tx_balance_changes" => feature_unavailable("querying transaction balance changes"),
-        "tx_calls" => feature_unavailable("filtering transactions by function calls"),
-        "tx_digests" => feature_unavailable("querying transactions"),
-        "tx_kinds" => feature_unavailable("filtering transactions by kind"),
         _ => anyhow!("unrecognized pipeline name: {}", pipeline).into(),
     }
 }
@@ -167,6 +161,7 @@ macro_rules! collect_pipelines {
     )*) => {
         /// Populates `pipelines` with pipeline names by matching the type, field, and filters to their dependent pipelines where data is available.
         /// The mapping is defined in the collect_pipelines! macro innvocation.
+        #[allow(unused_mut)]
         fn collect_pipelines(
             type_: &str,
             field: Option<&str>,
@@ -235,12 +230,12 @@ macro_rules! delegate {
 collect_pipelines! {
     Address.[address, addressAt, asTransactionObject] => IAddressable.*;
     Address.[asObject] => IObject.objectAt();
-    Address.[transactions] => Query.transactions(.., "affectedAddress");
+    Address.[transactions] => Query.*;
     Address.[balance, balances, multiGetBalances, objects] => IAddressable.*;
     Address.[defaultNameRecord] => IAddressable.defaultNameRecord;
     Address.[dynamicField, dynamicFields, dynamicObjectField, multiGetDynamicFields, multiGetDynamicObjectFields] => IMoveObject.*;
 
-    Checkpoint.[transactions] => Query.transactions(.., "atCheckpoint");
+    Checkpoint.[transactions] => Query.*;
 
     CoinMetadata.[address, addressAt, asTransactionObject] => IAddressable.*;
     CoinMetadata.[balance, balances, multiGetBalances, objects] => IAddressable.*;
@@ -271,7 +266,7 @@ collect_pipelines! {
     Epoch.[coinDenyList] |pipelines, _filters| {
         pipelines.insert("obj_versions".to_string());
     };
-    Epoch.[transactions] => Query.transactions(.., "atCheckpoint");
+    Epoch.[transactions] => Query.*;
 
     IAddressable.[balance, balances, multiGetBalances, objects] |pipelines, _filters| {
         pipelines.insert("consistent".to_string());
@@ -291,7 +286,7 @@ collect_pipelines! {
         pipelines.insert("obj_versions".to_string());
     };
 
-    IObject.[receivedTransactions] => Query.transactions(.., "affectedAddress");
+    IObject.[receivedTransactions] => Query.transactions();
     IObject.[objectAt, objectVersionsAfter, objectVersionsBefore] |pipelines, _filters| {
         pipelines.insert("obj_versions".to_string());
     };
@@ -355,13 +350,8 @@ collect_pipelines! {
         pipelines.insert("consistent".to_string());
         pipelines.insert("obj_versions".to_string());
     };
-    Query.[events] |pipelines, filters| {
-        pipelines.insert("tx_digests".to_string());
-        if filters.contains("module") {
-            pipelines.insert("ev_emit_mod".to_string());
-        } else {
-            pipelines.insert("ev_struct_inst".to_string());
-        }
+    Query.[events] |pipelines, _filters| {
+        pipelines.insert("ledger_grpc".to_string());
     };
     Query.[nameRecord] |pipelines, _filters| {
         pipelines.insert("obj_versions".to_string());
@@ -377,20 +367,8 @@ collect_pipelines! {
     Query.[objectVersions] |pipelines, _filters| {
         pipelines.insert("obj_versions".to_string());
     };
-    Query.[transactions] |pipelines, filters| {
-        pipelines.insert("cp_sequence_numbers".to_string());
-        pipelines.insert("tx_digests".to_string());
-        if filters.contains("affectedAddress") {
-            pipelines.insert("tx_affected_addresses".to_string());
-        } else if filters.contains("function") {
-            pipelines.insert("tx_calls".to_string());
-        } else if filters.contains("affectedObject") {
-            pipelines.insert("tx_affected_objects".to_string());
-        } else if filters.contains("sentAddress") {
-            pipelines.insert("tx_affected_addresses".to_string());
-        } else if filters.contains("kind") {
-            pipelines.insert("tx_kinds".to_string());
-        }
+    Query.[transactions] |pipelines, _filters| {
+        pipelines.insert("ledger_grpc".to_string());
     };
 
     TransactionEffects.[balanceChanges] |pipelines, _filters| {

@@ -17,6 +17,7 @@ use sui_indexer_alt::config::IndexerConfig;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
 use sui_indexer_alt_jsonrpc::NodeArgs;
+use sui_kv_rpc::KvRpcConfig;
 use sui_transactional_test_runner::create_adapter;
 use sui_transactional_test_runner::offchain_state::OffchainStateReader;
 use sui_transactional_test_runner::offchain_state::TestResponse;
@@ -151,6 +152,10 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
                 // TODO: dummy value until simulacrum exposes grpc
                 jsonrpc_node_args: NodeArgs {
                     fullnode_grpc_url: Some("http://127.0.0.1:1".into()),
+                },
+                kv_rpc_config: KvRpcConfig {
+                    enable_list_apis: Some(true),
+                    ..Default::default()
                 },
                 ..Default::default()
             },
