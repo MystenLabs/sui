@@ -6,7 +6,7 @@
 //! - `folded_constants` computes the folded constant values in dependency order
 //! - `generate_cross_module_constants` copies per-module constants to discharge
 //!   cross-module references
-// TODO(cross-module-constants): `compute_dependent_constants` and the selection walker below
+// TODO(cross-module-constants): `compute_dependent_constants` and the generation walker below
 // are hand-rolled HLIR walkers; there is no mutable HLIR visitor today. Consider a shared
 // walker if another one appears.
 
@@ -240,7 +240,7 @@ pub(super) fn seed_precompiled_constants(
 /// Folds every constant in the program up front, in the order of the constants' own global
 /// dependency graph. Constant definition cycles are also reported here.
 /// Returns the constants grouped by defining module.
-pub(super) fn folded_constants(
+pub(super) fn compute_folded_constants(
     context: &mut Context,
     constant_context: &mut ConstantContext,
     hmodules: &mut [(ModuleIdent, H::ModuleDefinition)],
@@ -291,7 +291,7 @@ pub(super) fn folded_constants(
             .expect("ICE constant from module outside the compilation");
         context.current_package = *package;
         context.push_warning_filter_scope(filter.clone());
-        let new_cdef = constant(
+        let new_cdef = fold_constant(
             context,
             constant_context,
             constant_values,
@@ -351,44 +351,7 @@ fn constant_dependencies(
         .collect()
 }
 
-/// Report cyclic constant definition
-fn report_cycle(
-    context: &mut Context,
-    consts: &BTreeMap<ConstantId, H::Constant>,
-    scc: &[ConstantId],
-) {
-    fn display((m, c): &ConstantId) -> String {
-        format!("{}::{}", m, c)
-    }
-    fn defined_loc(consts: &BTreeMap<ConstantId, H::Constant>, node: &ConstantId) -> Loc {
-        consts.get_key_value(node).unwrap().0.1.0.loc
-    }
-
-    if let [node] = scc {
-        context.add_diag(diag!(
-            CodeGeneration::UnfoldableConstant,
-            (
-                defined_loc(consts, node),
-                format!("Constant '{}' references itself", display(node)),
-            )
-        ));
-        return;
-    }
-    let names = scc.iter().map(display).collect::<Vec<_>>().join(", ");
-    let mut diag = diag!(
-        CodeGeneration::UnfoldableConstant,
-        (
-            defined_loc(consts, &scc[0]),
-            format!("Constant definitions form a circular dependency: {}", names),
-        )
-    );
-    for node in scc.iter().skip(1) {
-        diag.add_secondary_label((defined_loc(consts, node), "Cyclic constant defined here"));
-    }
-    context.add_diag(diag);
-}
-
-fn constant(
+fn fold_constant(
     context: &mut Context,
     constant_context: &mut ConstantContext,
     constant_values: &mut ConstantValues,
@@ -406,7 +369,7 @@ fn constant(
     } = c;
 
     context.push_warning_filter_scope(warning_filter.clone());
-    let final_value = constant_(
+    let final_value = fold_constant_impl(
         context,
         constant_context,
         constant_values,
@@ -456,11 +419,7 @@ fn constant(
     }
 }
 
-/// Error message for unfoldable constants
-const CANNOT_FOLD: &str =
-    "Invalid expression in 'const'. This expression could not be evaluated to a value";
-
-fn constant_(
+fn fold_constant_impl(
     context: &mut Context,
     constant_context: &ConstantContext,
     constant_values: &ConstantValues,
@@ -586,60 +545,6 @@ fn command_exps(cmd_: &H::Command_) -> impl Iterator<Item = &H::Exp> {
     exps.into_iter()
 }
 
-/// Reports a constant that could not be folded into a value.
-fn report_cannot_fold<'a>(
-    context: &mut Context,
-    constant_context: &ConstantContext,
-    module: ModuleIdent,
-    loc: Loc,
-    exps: impl Iterator<Item = &'a H::Exp>,
-) {
-    let mut unresolved = vec![];
-    for e in exps {
-        unresolved_cross_module_constants(constant_context, module, e, &mut unresolved);
-    }
-    if unresolved.is_empty() {
-        context.add_diag(diag!(
-            CodeGeneration::UnfoldableConstant,
-            (loc, CANNOT_FOLD)
-        ));
-        return;
-    }
-    for (m, c, use_loc) in unresolved {
-        match constant_context.defs.get_key_value(&(m, c)) {
-            Some(((_, defined), ConstantEntry::PrecompiledFailed)) => {
-                let defined_loc = defined.0.loc;
-                context.add_diag(unfoldable_constant_use_error(&m, &c, use_loc, defined_loc));
-            }
-            // an error was already reported at the definition in this compilation
-            Some((_, ConstantEntry::Failed)) => (),
-            // A missing entry here means typing already errored on this use (due to visibility
-            // or similar).
-            None => (),
-            Some((_, ConstantEntry::Defined { .. })) => {
-                context.add_diag(ice!((use_loc, "defined constant reported as unresolved")));
-            }
-        }
-    }
-}
-
-/// The error reported at each use of a pre-compiled constant whose own compilation could not
-/// evaluate it to a value; the use site is the only place this compilation can put the error
-fn unfoldable_constant_use_error(
-    m: &ModuleIdent,
-    c: &ConstantName,
-    use_loc: Loc,
-    defined_loc: Loc,
-) -> Diagnostic {
-    let msg = format!(
-        "Invalid use of constant '{}::{}'. Its value could not be computed",
-        m, c
-    );
-    let mut diag = diag!(CodeGeneration::UnfoldableConstant, (use_loc, msg));
-    diag.add_secondary_label((defined_loc, format!("'{}' is defined here", c)));
-    diag
-}
-
 /// Collects cross-module constant references that failed to fold or are outside the current
 /// compilation
 #[growing_stack]
@@ -682,7 +587,7 @@ fn unresolved_cross_module_constants(
 }
 
 //**************************************************************************************************
-// Constant selection
+// Cross-module Constant Generation
 //**************************************************************************************************
 
 pub(super) fn generate_cross_module_constants(
@@ -978,4 +883,103 @@ fn compute_dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantId> {
     let (_, block) = &constant.value;
     dep_block(&mut output, block);
     output
+}
+
+//**************************************************************************************************
+// Constant dependencies
+//**************************************************************************************************
+
+/// Error message for unfoldable constants
+const INVALID_CONST_EXP: &str =
+    "Invalid expression in 'const'. This expression could not be evaluated to a value";
+
+/// Report cyclic constant definition
+fn report_cycle(
+    context: &mut Context,
+    consts: &BTreeMap<ConstantId, H::Constant>,
+    scc: &[ConstantId],
+) {
+    fn display((m, c): &ConstantId) -> String {
+        format!("{}::{}", m, c)
+    }
+    fn defined_loc(consts: &BTreeMap<ConstantId, H::Constant>, node: &ConstantId) -> Loc {
+        consts.get_key_value(node).unwrap().0.1.0.loc
+    }
+
+    if let [node] = scc {
+        context.add_diag(diag!(
+            CodeGeneration::UnfoldableConstant,
+            (
+                defined_loc(consts, node),
+                format!("Constant '{}' references itself", display(node)),
+            )
+        ));
+        return;
+    }
+    let names = scc.iter().map(display).collect::<Vec<_>>().join(", ");
+    let mut diag = diag!(
+        CodeGeneration::UnfoldableConstant,
+        (
+            defined_loc(consts, &scc[0]),
+            format!("Constant definitions form a circular dependency: {}", names),
+        )
+    );
+    for node in scc.iter().skip(1) {
+        diag.add_secondary_label((defined_loc(consts, node), "Cyclic constant defined here"));
+    }
+    context.add_diag(diag);
+}
+
+/// Reports a constant that could not be folded into a value.
+fn report_cannot_fold<'a>(
+    context: &mut Context,
+    constant_context: &ConstantContext,
+    module: ModuleIdent,
+    loc: Loc,
+    exps: impl Iterator<Item = &'a H::Exp>,
+) {
+    let mut unresolved = vec![];
+    for e in exps {
+        unresolved_cross_module_constants(constant_context, module, e, &mut unresolved);
+    }
+    if unresolved.is_empty() {
+        context.add_diag(diag!(
+            CodeGeneration::UnfoldableConstant,
+            (loc, INVALID_CONST_EXP)
+        ));
+        return;
+    }
+    for (m, c, use_loc) in unresolved {
+        match constant_context.defs.get_key_value(&(m, c)) {
+            Some(((_, defined), ConstantEntry::PrecompiledFailed)) => {
+                let defined_loc = defined.0.loc;
+                context.add_diag(unfoldable_constant_use_error(&m, &c, use_loc, defined_loc));
+            }
+            // an error was already reported at the definition in this compilation
+            Some((_, ConstantEntry::Failed)) => (),
+            // A missing entry here means typing already errored on this use (due to visibility
+            // or similar).
+            None => (),
+            Some((_, ConstantEntry::Defined { .. })) => {
+                context.add_diag(ice!((use_loc, "defined constant reported as unresolved")));
+            }
+        }
+    }
+}
+
+/// The error reported at each use of a pre-compiled constant whose own compilation could not
+/// evaluate it to a value; the use site is the only place this compilation can put the error
+fn unfoldable_constant_use_error(
+    m: &ModuleIdent,
+    c: &ConstantName,
+    use_loc: Loc,
+    defined_loc: Loc,
+) -> Diagnostic {
+    let msg = format!(
+        "Invalid use of constant '{}::{}'. Its value could not be computed",
+        m, c
+    );
+    let mut diag = diag!(CodeGeneration::UnfoldableConstant, (use_loc, msg));
+    diag.add_secondary_label((defined_loc, format!("'{}' is defined here", c)));
+    diag
 }

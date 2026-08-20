@@ -523,7 +523,7 @@ fn check_cmd(context: &Context, sp!(_, cmd_): &Command) {
 fn check_exp<'a>(context: &Context, e: &'a Exp) -> Option<Cow<'a, Value_>> {
     use UnannotatedExp_ as E;
     match &e.exp.value {
-        E::Value(_) | E::Constant(_) => foldable_exp(e).map(Cow::Borrowed),
+        E::Value(_) | E::Constant(_, _) => foldable_exp(e).map(Cow::Borrowed),
 
         E::Unit { .. }
         | E::UnresolvedError
