@@ -89,31 +89,17 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
     Ok(())
 }
 
-<<<<<<< HEAD
 /// Block until every indexer pipeline has caught up to `target`. A delivered item's nested
 /// queries can read any data source, so waiting on all pipelines avoids tracking a specific set
 /// that would drift from the schema.
 pub(crate) async fn wait_for_pipelines_catching_up_at(
-=======
-/// Block until the `ledger_grpc` pipeline (kv-rpc) has caught up to `target`. It serves
-/// both checkpoint contents and package resolution, so once it has indexed `target`,
-/// recovered checkpoints can be fetched and their packages resolved — even though they
-/// don't go through `index_and_broadcast`.
-pub(crate) async fn wait_for_ledger_grpc_catching_up_at(
->>>>>>> 90fe6c0dbd4 ([indexer-alt] Gate subscription readiness and gap recovery on ledger_grpc)
     target: u64,
     watermarks_rx: &mut watch::Receiver<Arc<Watermarks>>,
 ) -> anyhow::Result<()> {
     watermarks_rx
         .wait_for(|w| {
-<<<<<<< HEAD
             let pipelines = w.per_pipeline();
             !pipelines.is_empty() && pipelines.values().all(|p| p.hi().checkpoint() >= target)
-=======
-            w.per_pipeline()
-                .get(LEDGER_GRPC_PIPELINE)
-                .is_some_and(|p| p.hi().checkpoint() >= target)
->>>>>>> 90fe6c0dbd4 ([indexer-alt] Gate subscription readiness and gap recovery on ledger_grpc)
         })
         .await
         .ok()
