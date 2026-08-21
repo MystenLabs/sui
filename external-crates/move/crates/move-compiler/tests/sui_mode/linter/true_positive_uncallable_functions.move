@@ -27,6 +27,24 @@ module a::m {
         abort ERR
     }
 
+    // TxContext cannot appear in return position of a public or entry function
+    public fun ret_ctx_val(): TxContext {
+        abort ERR
+    }
+    #[allow(lint(prefer_mut_tx_context))]
+    public fun ret_ctx_imm(ctx: &TxContext): &TxContext {
+        ctx
+    }
+    public fun ret_ctx_mut(ctx: &mut TxContext): &mut TxContext {
+        ctx
+    }
+    public fun ret_ctx_tuple(ctx: &mut TxContext): (u64, &mut TxContext) {
+        (0, ctx)
+    }
+    entry fun ret_ctx_entry(): TxContext {
+        abort ERR
+    }
+
 }
 
 module sui::clock {
