@@ -114,6 +114,17 @@ async fn main() -> anyhow::Result<()> {
     eprintln!("[serve] upstream stream: {TESTNET}");
     eprintln!("[serve] upstream ledger: {ledger_url}");
 
+    // BENCH: override the backfill scan page size (= max_concurrent_resolutions) to measure whether
+    // bigger pages amortize the ledger round-trip and lift backfill throughput.
+    let mut rpc_config = RpcConfig::default();
+    if let Some(p) = std::env::var("SCAN_PAGE")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+    {
+        rpc_config.subscription.max_concurrent_resolutions = p;
+        eprintln!("[serve] BENCH: scan page (max_concurrent_resolutions) = {p}");
+    }
+
     let service = start_rpc(
         None, // DB-less
         FullnodeArgs::new(TESTNET.parse().unwrap()),
@@ -129,7 +140,7 @@ async fn main() -> anyhow::Result<()> {
             checkpoint_stream_url: Some(TESTNET.parse().unwrap()),
         },
         "0.0.0",
-        RpcConfig::default(),
+        rpc_config,
         vec![], // no pg pipelines
         metrics.registry(),
     )
