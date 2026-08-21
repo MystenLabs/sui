@@ -79,18 +79,13 @@ impl AncestorStateManager {
     const STATE_LOCK_CLOCK_ROUNDS: u32 = 5;
 
     // Exclusion threshold is based on propagation (reputation) scores
-    const SCORE_EXCLUSION_THRESHOLD_PERCENTAGE: u64 = 0;
+    const SCORE_EXCLUSION_THRESHOLD_PERCENTAGE: u64 = 20;
 
     pub(crate) fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
         let state_map = vec![AncestorInfo::new(); context.committee.size()];
 
         // Note: this value cannot be greater than the threshold used in leader
         // schedule to identify bad nodes.
-        #[cfg(not(test))]
-        let excluded_nodes_stake_threshold_percentage = 0;
-        // Tests exercise EXCLUDE transitions, which require a threshold that allows
-        // excluding at least one authority in small equal-stake committees.
-        #[cfg(test)]
         let excluded_nodes_stake_threshold_percentage =
             2 * context.protocol_config.bad_nodes_stake_threshold() / 3;
 
@@ -119,11 +114,6 @@ impl AncestorStateManager {
 
     /// Updates the state of all ancestors based on the latest scores and quorum rounds
     pub(crate) fn update_all_ancestors_state(&mut self, accepted_quorum_rounds: &[QuorumRound]) {
-        // A zero exclusion budget disables ancestor selection and keeps all ancestors included.
-        if self.excluded_nodes_stake_threshold == 0 {
-            return;
-        }
-
         // If round prober has not run yet and we don't have network quorum round,
         // it is okay because network_high_quorum_round will be zero and we will
         // include all ancestors until we get more information.
@@ -376,23 +366,26 @@ mod test {
             vec![(225, 229), (225, 229), (229, 300), (229, 300), (229, 300)];
         ancestor_state_manager.update_all_ancestors_state(&accepted_quorum_rounds);
 
-        // Score threshold for exclude is (4 * 0) / 100 = 0
-        // No ancestors should be excluded with this threshold
+        // Score threshold for exclude is (4 * 10) / 100 = 0
+        // No ancestors should be excluded in with this threshold
         let state_map = ancestor_state_manager.get_ancestor_states();
         for state in state_map.iter() {
             assert_eq!(*state, AncestorState::Include);
         }
 
-        let scores = ReputationScores::new((1..=300).into(), vec![1, 0, 100, 100, 100]);
+        let scores = ReputationScores::new((1..=300).into(), vec![10, 9, 100, 100, 100]);
         ancestor_state_manager.set_propagation_scores(scores);
         ancestor_state_manager.update_all_ancestors_state(&accepted_quorum_rounds);
 
-        // Score threshold for exclude is (100 * 0) / 100 = 0
+        // Score threshold for exclude is (100 * 10) / 100 = 10
         // Authority 1 with the lowest score will move to the EXCLUDE state
+        // Authority 0 with the next lowest score is eligible to move to the EXCLUDE
+        // state based on the score threshold but it would exceed the total excluded
+        // stake threshold so it remains in the INCLUDE state.
         let state_map = ancestor_state_manager.get_ancestor_states();
         for (authority, state) in state_map.iter().enumerate() {
             if authority == 1 {
-                assert_eq!(*state, AncestorState::Exclude(0));
+                assert_eq!(*state, AncestorState::Exclude(9));
             } else {
                 assert_eq!(*state, AncestorState::Include);
             }
@@ -405,7 +398,7 @@ mod test {
         let state_map = ancestor_state_manager.get_ancestor_states();
         for (authority, state) in state_map.iter().enumerate() {
             if authority == 1 {
-                assert_eq!(*state, AncestorState::Exclude(0));
+                assert_eq!(*state, AncestorState::Exclude(9));
             } else {
                 assert_eq!(*state, AncestorState::Include);
             }
@@ -419,8 +412,6 @@ mod test {
 
         let accepted_quorum_rounds =
             vec![(225, 229), (229, 300), (229, 300), (229, 300), (229, 300)];
-        let scores = ReputationScores::new((1..=300).into(), vec![0, 0, 100, 100, 100]);
-        ancestor_state_manager.set_propagation_scores(scores);
         ancestor_state_manager.update_all_ancestors_state(&accepted_quorum_rounds);
 
         // Authority 1 should now be included again because high quorum round is
@@ -429,7 +420,7 @@ mod test {
         let state_map = ancestor_state_manager.get_ancestor_states();
         for (authority, state) in state_map.iter().enumerate() {
             if authority == 0 {
-                assert_eq!(*state, AncestorState::Exclude(0));
+                assert_eq!(*state, AncestorState::Exclude(10));
             } else {
                 assert_eq!(*state, AncestorState::Include);
             }
@@ -446,7 +437,7 @@ mod test {
 
         for (authority, state) in state_map.iter().enumerate() {
             if authority == 0 {
-                assert_eq!(*state, AncestorState::Exclude(0));
+                assert_eq!(*state, AncestorState::Exclude(10));
             } else {
                 assert_eq!(*state, AncestorState::Include);
             }
@@ -457,7 +448,7 @@ mod test {
         let blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
         dag_state.write().accept_blocks(blocks);
 
-        let scores = ReputationScores::new((1..=300).into(), vec![1, 100, 100, 100, 100]);
+        let scores = ReputationScores::new((1..=300).into(), vec![10, 100, 100, 100, 100]);
         ancestor_state_manager.set_propagation_scores(scores);
         ancestor_state_manager.update_all_ancestors_state(&accepted_quorum_rounds);
 
