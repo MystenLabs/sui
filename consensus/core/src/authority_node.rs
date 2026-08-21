@@ -462,6 +462,7 @@ where
                 validator_client.clone(),
                 authority_service.clone(),
                 dag_state.clone(),
+                synchronizer.clone(),
                 signals_receivers.accepted_block_broadcast_receiver(),
             );
             for (peer, _) in context.committee.authorities() {

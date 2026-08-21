@@ -183,6 +183,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) synchronizer_fetched_blocks_by_authority: IntCounterVec,
     pub(crate) synchronizer_fetch_failures: IntCounterVec,
     pub(crate) synchronizer_skipped_fetch_requests: IntCounterVec,
+    pub(crate) synchronizer_exact_lane_occupancy: IntGauge,
+    pub(crate) synchronizer_exact_lane_refusals: IntCounterVec,
     pub(crate) synchronizer_process_fetched_failures: IntCounterVec,
     pub(crate) synchronizer_periodic_sync_decision: IntCounterVec,
     pub(crate) network_received_excluded_ancestors_from_authority: IntCounterVec,
@@ -611,6 +613,17 @@ impl NodeMetrics {
                 "synchronizer_skipped_fetch_requests",
                 "Number of fetch requests skipped against each peer, because the peer is saturated",
                 &["peer"],
+                registry,
+            ).unwrap(),
+            synchronizer_exact_lane_occupancy: register_int_gauge_with_registry!(
+                "synchronizer_exact_lane_occupancy",
+                "Refs resident on the exact-fetch lane",
+                registry,
+            ).unwrap(),
+            synchronizer_exact_lane_refusals: register_int_counter_vec_with_registry!(
+                "synchronizer_exact_lane_refusals",
+                "Registrations the exact-fetch lane refused, by predicate",
+                &["reason"],
                 registry,
             ).unwrap(),
             synchronizer_process_fetched_failures: register_int_counter_vec_with_registry!(

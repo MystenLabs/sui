@@ -25,7 +25,8 @@ use crate::{
     error::ConsensusError,
     network::{SerializedBlockForm, ValidatorNetworkClient, ValidatorNetworkService},
     pending_reconstructions::{
-        PendingReconstructions, ReadyEntry, SlimClaim, run_reconstruction_worker,
+        AdmitRefusal, MissingBlockRegistry, PendingReconstructions, ReadyEntry, SlimClaim,
+        run_reconstruction_worker,
     },
     seen_digests::SeenDigests,
     slim_block::{DecodeError, FallbackReason, SlimBlockCodec},
@@ -55,6 +56,7 @@ pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkServi
     slim_block_codec: Arc<SlimBlockCodec>,
     seen_digests: Arc<SeenDigests>,
     pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
+    registry: Arc<dyn MissingBlockRegistry>,
     reconciled_tx: tokio::sync::mpsc::UnboundedSender<Vec<ReadyEntry>>,
     reconstruction_worker: Mutex<Option<JoinHandle<()>>>,
     subscriptions: Arc<Mutex<Box<[Option<JoinHandle<()>>]>>>,
@@ -68,6 +70,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         network_client: Arc<C>,
         authority_service: Arc<S>,
         dag_state: Arc<RwLock<DagState>>,
+        registry: Arc<dyn MissingBlockRegistry>,
         accepted_blocks: broadcast::Receiver<VerifiedBlock>,
     ) -> Self {
         let slim_block_codec = Arc::new(SlimBlockCodec::new(context.clone()));
@@ -83,6 +86,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let worker_service = Arc::downgrade(&authority_service);
         let worker_pending = pending_reconstructions.clone();
         let worker_seen = seen_digests.clone();
+        let worker_registry = registry.clone();
         let reconstruction_worker = spawn_monitored_task!(run_reconstruction_worker(
             worker_context,
             worker_codec,
@@ -90,6 +94,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             worker_service,
             worker_pending,
             worker_seen,
+            worker_registry,
             accepted_blocks,
             reconciled_rx,
         ));
@@ -104,6 +109,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             slim_block_codec,
             seen_digests,
             pending_reconstructions,
+            registry,
             reconciled_tx,
             reconstruction_worker: Mutex::new(Some(reconstruction_worker)),
             subscriptions: Arc::new(Mutex::new(subscriptions.into_boxed_slice())),
@@ -125,6 +131,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let slim_block_codec = self.slim_block_codec.clone();
         let seen_digests = self.seen_digests.clone();
         let pending_reconstructions = self.pending_reconstructions.clone();
+        let registry = self.registry.clone();
         let reconciled_tx = self.reconciled_tx.clone();
 
         let mut subscriptions = self.subscriptions.lock();
@@ -137,6 +144,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             slim_block_codec,
             seen_digests,
             pending_reconstructions,
+            registry,
             reconciled_tx,
             peer,
         )));
@@ -191,6 +199,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         slim_block_codec: Arc<SlimBlockCodec>,
         seen_digests: Arc<SeenDigests>,
         pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
+        registry: Arc<dyn MissingBlockRegistry>,
         reconciled_tx: tokio::sync::mpsc::UnboundedSender<Vec<ReadyEntry>>,
         peer: AuthorityIndex,
     ) {
@@ -388,11 +397,12 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                                     missing: slots.clone(),
                                                 };
                                                 let missing = claim.missing.clone();
-                                                match pending_reconstructions.lock().try_admit(
-                                                    claim,
-                                                    gc_round,
-                                                    local_round,
-                                                ) {
+                                                // Bound first: the guard must not
+                                                // survive into the awaits below.
+                                                let admitted = pending_reconstructions
+                                                    .lock()
+                                                    .try_admit(claim, gc_round, local_round);
+                                                match admitted {
                                                     Ok(()) => {
                                                         node_metrics
                                                             .slim_block_park_outcomes
@@ -424,18 +434,36 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                                             }
                                                         }
                                                     }
-                                                    Err(refusal) => node_metrics
-                                                        .slim_block_park_refusals
-                                                        .with_label_values(
-                                                            &[refusal.metric_label()],
-                                                        )
-                                                        .inc(),
+                                                    Err(refusal) => {
+                                                        node_metrics
+                                                            .slim_block_park_refusals
+                                                            .with_label_values(&[
+                                                                refusal.metric_label()
+                                                            ])
+                                                            .inc();
+                                                        // Waiting cannot recover a dead
+                                                        // frontier; the claim named its
+                                                        // digest, so fetch it in full.
+                                                        if refusal == AdmitRefusal::DeadFrontierSlot
+                                                        {
+                                                            let _ = registry
+                                                                .register_missing_block(*block_ref)
+                                                                .await;
+                                                        }
+                                                    }
                                                 }
                                             }
-                                            DecodeError::NeedFullBlock { .. } => debug!(
-                                                "Cannot rebuild block from peer {} {}: {}",
-                                                peer, peer_hostname, error
-                                            ),
+                                            // Ambiguity and digest mismatch cannot be
+                                            // cured by waiting; fetch the block in full.
+                                            DecodeError::NeedFullBlock { block_ref, .. } => {
+                                                debug!(
+                                                    "Cannot rebuild block from peer {} {}: {}",
+                                                    peer, peer_hostname, error
+                                                );
+                                                let _ = registry
+                                                    .register_missing_block(*block_ref)
+                                                    .await;
+                                            }
                                         }
                                         false
                                     }
@@ -504,6 +532,19 @@ mod test {
         network::{BlockStream, ExtendedSerializedBlock, test_network::TestService},
         storage::mem_store::MemStore,
     };
+
+    #[derive(Default)]
+    struct FakeRegistry {
+        registered: Mutex<Vec<BlockRef>>,
+    }
+
+    #[async_trait]
+    impl MissingBlockRegistry for FakeRegistry {
+        async fn register_missing_block(&self, block_ref: BlockRef) -> ConsensusResult<()> {
+            self.registered.lock().push(block_ref);
+            Ok(())
+        }
+    }
 
     struct SubscriberTestClient {
         // Records the `last_received` round passed to each subscribe_blocks() call.
@@ -650,6 +691,7 @@ mod test {
             network_client,
             authority_service.clone(),
             dag_state.clone(),
+            Arc::new(FakeRegistry::default()),
             broadcast::channel(8).1,
         );
 
@@ -702,6 +744,7 @@ mod test {
             network_client,
             authority_service.clone(),
             dag_state.clone(),
+            Arc::new(FakeRegistry::default()),
             broadcast::channel(8).1,
         );
 
@@ -782,6 +825,7 @@ mod test {
             network_client,
             authority_service.clone(),
             dag_state.clone(),
+            Arc::new(FakeRegistry::default()),
             accepted_rx,
         );
         subscriber.subscribe(peer);
@@ -825,6 +869,76 @@ mod test {
         assert_eq!(
             context.metrics.node_metrics.slim_block_parked_bytes.get(),
             0
+        );
+    }
+
+    /// A parked block that outlives the grace window is registered on the fetch
+    /// lane by the sweep instead of waiting on its slot forever.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn parked_slim_block_escalates_to_fetch_after_grace() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let peer = context.committee.to_authority_index(1).unwrap();
+
+        let missing_ancestor = VerifiedBlock::new_for_test(TestBlock::new(1, 2).build());
+        let own_parent = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
+        let block = VerifiedBlock::new_for_test(
+            TestBlock::new(2, 1)
+                .set_ancestors(vec![own_parent.reference(), missing_ancestor.reference()])
+                .build(),
+        );
+        let slim = {
+            let sender_dag_state = Arc::new(RwLock::new(DagState::new(
+                context.clone(),
+                Arc::new(MemStore::new()),
+            )));
+            sender_dag_state.write().accept_block(own_parent.clone());
+            sender_dag_state
+                .write()
+                .accept_block(missing_ancestor.clone());
+            SlimBlockCodec::new(context.clone())
+                .encode(&block, &sender_dag_state)
+                .unwrap()
+        };
+
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let network_client = Arc::new(OneShotSlimClient {
+            slim: Mutex::new(Some(slim)),
+        });
+        let registry = Arc::new(FakeRegistry::default());
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        // Kept alive: a closed acceptance broadcast shuts the worker down.
+        let (_accepted_tx, accepted_rx) = broadcast::channel(8);
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client,
+            authority_service.clone(),
+            dag_state.clone(),
+            registry.clone(),
+            accepted_rx,
+        );
+        subscriber.subscribe(peer);
+
+        for _ in 0..10 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            if context.metrics.node_metrics.slim_block_parked_entries.get() > 0 {
+                break;
+            }
+        }
+        assert!(registry.registered.lock().is_empty());
+
+        // Past the grace window the sweep hands the parked ref to the lane.
+        for _ in 0..10 {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            if !registry.registered.lock().is_empty() {
+                break;
+            }
+        }
+        assert_eq!(
+            registry.registered.lock().as_slice(),
+            &[block.reference()],
+            "the sweep must register the parked block itself"
         );
     }
 
@@ -916,6 +1030,7 @@ mod test {
             network_client.clone(),
             authority_service,
             dag_state.clone(),
+            Arc::new(FakeRegistry::default()),
             broadcast::channel(8).1,
         );
 
@@ -945,6 +1060,7 @@ mod test {
             network_client.clone(),
             authority_service,
             dag_state.clone(),
+            Arc::new(FakeRegistry::default()),
             broadcast::channel(8).1,
         );
 
@@ -976,6 +1092,7 @@ mod test {
             network_client.clone(),
             authority_service.clone(),
             dag_state.clone(),
+            Arc::new(FakeRegistry::default()),
             broadcast::channel(8).1,
         );
 
@@ -1013,6 +1130,7 @@ mod test {
             network_client.clone(),
             authority_service,
             dag_state.clone(),
+            Arc::new(FakeRegistry::default()),
             broadcast::channel(8).1,
         );
 

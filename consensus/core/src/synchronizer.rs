@@ -56,6 +56,10 @@ const MAX_AUTHORITIES_TO_FETCH_PER_BLOCK: usize = 2;
 // Max number of peers to request missing blocks concurrently in periodic sync.
 const MAX_PERIODIC_SYNC_PEERS: usize = 3;
 
+/// Bound on refs resident on the exact-fetch lane. The lane is sent to one peer in one
+/// request, so its width is also the request size.
+const MAX_PENDING_EXACT_REQUESTS: usize = 128;
+
 /// How long commit must be stalled before periodic sync kicks in as fallback.
 const COMMIT_PROGRESS_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -170,6 +174,14 @@ enum Command {
         peer: PeerId,
         result: oneshot::Sender<Result<(), ConsensusError>>,
     },
+    /// Registers a ref for periodic fetching until it is accepted or falls below GC.
+    RegisterMissingBlock {
+        block_ref: BlockRef,
+    },
+    /// Frees exact-lane slots for refs a fetch has delivered.
+    RetireExactRefs {
+        refs: Vec<BlockRef>,
+    },
     FetchOwnLastBlock,
     KickOffScheduler,
     Shutdown {
@@ -200,6 +212,16 @@ impl SynchronizerHandle {
             .await
             .map_err(|_err| ConsensusError::Shutdown)?;
         receiver.await.map_err(|_err| ConsensusError::Shutdown)?
+    }
+
+    /// Durably registers `block_ref` for periodic fetching. Unlike `fetch_blocks`, the
+    /// registration is retried every scheduler pass and released only by acceptance or
+    /// GC; the awaited send backpressures instead of dropping when the queue is full.
+    pub(crate) async fn register_missing_block(&self, block_ref: BlockRef) -> ConsensusResult<()> {
+        self.commands_sender
+            .send(Command::RegisterMissingBlock { block_ref })
+            .await
+            .map_err(|_err| ConsensusError::Shutdown)
     }
 
     pub(crate) async fn stop(&self) {
@@ -274,6 +296,8 @@ pub(crate) struct Synchronizer<
     // When commit is not progressing, commit sync fails over to periodic sync for catchup.
     commit_sync_failover: bool,
     peers_pool: Arc<PeersPool>,
+    /// Refs registered for exact fetching, retried every scheduler pass.
+    pending_exact_requests: BTreeSet<BlockRef>,
 }
 
 impl<V, D, VC, OC> Synchronizer<V, D, VC, OC>
@@ -344,6 +368,7 @@ where
                 core_dispatcher,
                 commit_vote_monitor,
                 fetch_blocks_scheduler_task: JoinSet::new(),
+                pending_exact_requests: BTreeSet::new(),
                 fetch_own_last_block_task: JoinSet::new(),
                 network_client,
                 block_verifier,
@@ -426,6 +451,70 @@ where
                                 });
 
                             result.send(r).ok();
+                        }
+                        Command::RegisterMissingBlock { block_ref } => {
+                            // A fabricated far-future ref would never be pruned (GC
+                            // cannot reach it), and without the per-author share one
+                            // author's claims could occupy every slot. A full lane
+                            // drops the registration; commit sync or the block's
+                            // children recover it.
+                            let frontier = self.dag_state.read().highest_accepted_round();
+                            let round_ok = block_ref.round
+                                <= frontier
+                                    .saturating_add(self.context.protocol_config.gc_depth());
+                            let author_share = MAX_PENDING_EXACT_REQUESTS
+                                / self.context.committee.size().max(1)
+                                + 1;
+                            let author_count = self
+                                .pending_exact_requests
+                                .iter()
+                                .filter(|r| r.author == block_ref.author)
+                                .count();
+                            let lane_bound = MAX_PENDING_EXACT_REQUESTS
+                                .min(self.context.parameters.max_blocks_per_fetch);
+                            if !round_ok {
+                                self.context
+                                    .metrics
+                                    .node_metrics
+                                    .synchronizer_exact_lane_refusals
+                                    .with_label_values(&["round_gate"])
+                                    .inc();
+                            } else if author_count >= author_share {
+                                self.context
+                                    .metrics
+                                    .node_metrics
+                                    .synchronizer_exact_lane_refusals
+                                    .with_label_values(&["author_share"])
+                                    .inc();
+                            } else if self.pending_exact_requests.len() >= lane_bound {
+                                self.context
+                                    .metrics
+                                    .node_metrics
+                                    .synchronizer_exact_lane_refusals
+                                    .with_label_values(&["lane_full"])
+                                    .inc();
+                            } else {
+                                self.pending_exact_requests.insert(block_ref);
+                            }
+                            self.context
+                                .metrics
+                                .node_metrics
+                                .synchronizer_exact_lane_occupancy
+                                .set(self.pending_exact_requests.len() as i64);
+                        }
+                        Command::RetireExactRefs { refs } => {
+                            // Retired on delivery rather than acceptance: a fetched
+                            // block suspended for its own missing ancestors is not in
+                            // DagState, yet re-fetching it hands BlockManager a payload
+                            // it already owns.
+                            for block_ref in refs {
+                                self.pending_exact_requests.remove(&block_ref);
+                            }
+                            self.context
+                                .metrics
+                                .node_metrics
+                                .synchronizer_exact_lane_occupancy
+                                .set(self.pending_exact_requests.len() as i64);
                         }
                         Command::FetchOwnLastBlock => {
                             if self.fetch_own_last_block_task.is_empty() {
@@ -542,7 +631,8 @@ where
                                 context.clone(),
                                 commands_sender.clone(),
                                 round_tracker.clone(),
-                                "live"
+                                "live",
+                                false,
                             ).await {
                                 warn!("Error while processing fetched blocks from peer {}: {err}", peer.hostname(&context));
                                 context.metrics.node_metrics.synchronizer_process_fetched_failures.with_label_values(&[peer.labelname(&context).as_str(), "live"]).inc();
@@ -582,6 +672,7 @@ where
         commands_sender: Sender<Command>,
         round_tracker: Arc<RwLock<RoundTracker>>,
         sync_method: &str,
+        retire_exact_refs: bool,
     ) -> ConsensusResult<()> {
         if serialized_blocks.is_empty() {
             return Ok(());
@@ -644,6 +735,14 @@ where
         // Now send them to core for processing. Ignore the returned missing blocks as we don't want
         // this mechanism to keep feedback looping on fetching more blocks. The periodic synchronization
         // will take care of that.
+        // Delivered refs leave the exact lane whatever their acceptance outcome; a
+        // block suspended for its own ancestors is BlockManager's to recover.
+        if retire_exact_refs && !blocks.is_empty() {
+            let refs = blocks.iter().map(|b| b.reference()).collect();
+            let _ = commands_sender
+                .send(Command::RetireExactRefs { refs })
+                .await;
+        }
         let missing_blocks = core_dispatcher
             .add_blocks(blocks)
             .await
@@ -942,10 +1041,35 @@ where
             return Ok(());
         }
 
+        // Prune exact registrations that resolved through any path or fell below GC;
+        // what remains must be fetched this pass. These blocks are absent from
+        // BlockManager's missing set, so no other path fetches them.
+        if !self.pending_exact_requests.is_empty() {
+            let (gc_round, exists) = {
+                let dag_state = self.dag_state.read();
+                let refs: Vec<BlockRef> = self.pending_exact_requests.iter().copied().collect();
+                (dag_state.gc_round(), dag_state.contains_blocks(refs))
+            };
+            let mut index = 0;
+            self.pending_exact_requests.retain(|block_ref| {
+                let keep = block_ref.round > gc_round && !exists[index];
+                index += 1;
+                keep
+            });
+            self.context
+                .metrics
+                .node_metrics
+                .synchronizer_exact_lane_occupancy
+                .set(self.pending_exact_requests.len() as i64);
+        }
+        let pending_exact = self.pending_exact_requests.clone();
+
         // If commit is lagging and commit sync is making progress, skip periodic sync.
         // Commit syncer fetches certified commits with all necessary causal history.
         // If commit sync is not making progress, periodic sync resumes as a fallback.
-        if !self.should_run_periodic_sync() {
+        // Exact registrations are exempt: commit sync delivers committed history in
+        // commit order, which does not cover them in time.
+        if !self.should_run_periodic_sync() && pending_exact.is_empty() {
             return Ok(());
         }
 
@@ -961,17 +1085,21 @@ where
         let round_tracker = self.round_tracker.clone();
         let peers_pool = self.peers_pool.clone();
 
-        let mut missing_blocks = self
-            .core_dispatcher
-            .get_missing_blocks()
-            .await
-            .map_err(|_err| ConsensusError::Shutdown)?;
+        let mut missing_blocks = if self.should_run_periodic_sync() {
+            self.core_dispatcher
+                .get_missing_blocks()
+                .await
+                .map_err(|_err| ConsensusError::Shutdown)?
+        } else {
+            // Commit sync owns ordinary catch-up; only the exact lane runs this pass.
+            BTreeSet::new()
+        };
         if self.commit_sync_failover {
             // Keep missing blocks to those that must be included in fetch request.
             // Filtered out missing blocks that will eventually be fetched with fetch_after_rounds.
             let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
             missing_blocks.retain(|block| block.round <= fetch_after_rounds[block.author.value()]);
-        } else if missing_blocks.is_empty() {
+        } else if missing_blocks.is_empty() && pending_exact.is_empty() {
             return Ok(());
         }
 
@@ -983,7 +1111,23 @@ where
                     .node_metrics
                     .fetch_blocks_scheduler_inflight
                     .inc();
-                let total_requested = missing_blocks.len();
+                let total_requested = missing_blocks.len() + pending_exact.len();
+
+                // The exact lane rides its own refs-only request: mixing it into a
+                // request that also carries rounds serves it under the smaller
+                // live-sync response limit, truncating exactly the refs registered
+                // for recovery.
+                let exact_results = if pending_exact.is_empty() {
+                    Vec::new()
+                } else {
+                    Self::fetch_exact_refs(
+                        blocks_to_fetch.clone(),
+                        network_client.clone(),
+                        pending_exact,
+                        peers_pool.clone(),
+                    )
+                    .await
+                };
 
                 let results = if missing_blocks.is_empty() {
                     let _scope = monitored_scope("BlockSync::Periodic::HighestAcceptedRounds");
@@ -1014,7 +1158,7 @@ where
                     .node_metrics
                     .fetch_blocks_scheduler_inflight
                     .dec();
-                if results.is_empty() {
+                if results.is_empty() && exact_results.is_empty() {
                     return;
                 }
 
@@ -1022,8 +1166,12 @@ where
 
                 // Now process the returned results
                 let mut total_fetched = 0;
-                for (blocks_guard, fetched_blocks, peer) in results {
+                let exact_len = exact_results.len();
+                for (index, (blocks_guard, fetched_blocks, peer)) in
+                    exact_results.into_iter().chain(results).enumerate()
+                {
                     total_fetched += fetched_blocks.len();
+                    let retire_exact_refs = index < exact_len;
 
                     if let Err(err) = Self::process_fetched_blocks(
                         fetched_blocks,
@@ -1037,6 +1185,7 @@ where
                         commands_sender.clone(),
                         round_tracker.clone(),
                         "periodic",
+                        retire_exact_refs,
                     )
                     .await
                     {
@@ -1138,6 +1287,44 @@ where
             .with_label_values(&["false", "commit_lag"])
             .inc();
         false
+    }
+
+    /// Fetches the registered exact refs from one random peer in one refs-only
+    /// request.
+    async fn fetch_exact_refs(
+        inflight_blocks: Arc<InflightBlocksMap>,
+        network_client: Arc<SynchronizerClient<VC, OC>>,
+        refs: BTreeSet<BlockRef>,
+        peers_pool: Arc<PeersPool>,
+    ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId)> {
+        let mut peers = peers_pool.get_known_peers();
+        if peers.is_empty() {
+            return vec![];
+        }
+        if cfg!(not(test)) {
+            peers.shuffle(&mut ThreadRng::default());
+        }
+        let peer = peers.first().unwrap().clone();
+        let Some(blocks_guard) = inflight_blocks.lock_blocks(refs, peer.clone()) else {
+            return vec![];
+        };
+        let (response, blocks_guard, _retries, peer, _rounds) = Self::fetch_blocks_request(
+            network_client,
+            peer,
+            blocks_guard,
+            vec![],
+            false,
+            FETCH_REQUEST_TIMEOUT,
+            1,
+        )
+        .await;
+        match response {
+            Ok(serialized_blocks) => vec![(blocks_guard, serialized_blocks, peer)],
+            Err(err) => {
+                debug!("Failed to fetch exact refs from peer {peer}: {err}");
+                vec![]
+            }
+        }
     }
 
     /// Fetches blocks from a random peer using only fetch_after_rounds (no specific missing blocks).
@@ -2403,6 +2590,7 @@ mod tests {
             commands_sender,
             round_tracker,
             "test",
+            false,
         )
         .await;
 
