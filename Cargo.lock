@@ -9545,6 +9545,7 @@ dependencies = [
  "futures",
  "once_cell",
  "parking_lot 0.12.3",
+ "pin-project-lite",
  "prometheus",
  "prometheus-closure-metric",
  "scopeguard",
