@@ -208,6 +208,9 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
     ) -> SuiResult<Option<Object>>;
 
     fn object_available_balance(&self, _owner: SuiAddress, _type_: &TypeTag) -> SuiResult<u128> {
+        // TODO: It is dangerous to return u128::MAX as a default implementation.
+        // We will properly introduce a trait for this so that it is not too crazy to not have
+        // a default implementation.
         Ok(u128::MAX)
     }
 
