@@ -879,3 +879,122 @@ async fn test_transaction_subscription_affected_address_parity() {
         "affectedAddress: live and backfill resolved the same transactions differently",
     );
 }
+
+/// A transaction subscription query selecting `previousTransaction` (and its nested contents) on the
+/// input and output objects of each object change. Live by default; resumes (backfill) when
+/// `after_checkpoint` is set.
+fn prev_tx_query(filter: &str, after_checkpoint: Option<u64>) -> String {
+    let resume = after_checkpoint
+        .map(|c| format!("afterCheckpoint: {c},"))
+        .unwrap_or_default();
+    format!(
+        r#"subscription($sender: SuiAddress!) {{
+            transactions(filter: {{ {resume} {filter} }}) {{
+                node {{
+                    digest
+                    effects {{
+                        objectChanges {{
+                            nodes {{
+                                inputState {{ previousTransaction {{ digest sender {{ address }} kind {{ __typename }} }} }}
+                                outputState {{ previousTransaction {{ digest sender {{ address }} kind {{ __typename }} }} }}
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }}"#
+    )
+}
+
+/// The digests of the resolved `previousTransaction`s on the output object of each change in `node`.
+/// "Resolved" means the digest plus its `sender` and `kind` contents are present.
+fn output_previous_transactions(node: &Value) -> Vec<&str> {
+    previous_transactions(node, "outputState")
+}
+
+/// The digests of the resolved `previousTransaction`s on the input object of each change in `node`.
+fn input_previous_transactions(node: &Value) -> Vec<&str> {
+    previous_transactions(node, "inputState")
+}
+
+fn previous_transactions<'a>(node: &'a Value, side: &str) -> Vec<&'a str> {
+    node["effects"]["objectChanges"]["nodes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|change| {
+            let pt = &change[side]["previousTransaction"];
+            let resolved =
+                pt["sender"]["address"].is_string() && pt["kind"]["__typename"].is_string();
+            resolved.then(|| pt["digest"].as_str()).flatten()
+        })
+        .collect()
+}
+
+/// `previousTransaction` (full contents, not just the digest) resolves from a live subscription
+/// identically to the backfill path, across every object-change shape. On the live path the
+/// cross-transaction lookups are served by the in-memory streamed transaction store.
+#[tokio::test]
+async fn test_transaction_subscription_previous_transaction_parity() {
+    let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+    let package_id = publish(&mut cluster.validator).await;
+
+    // 1. Start live.
+    let mut live = cluster
+        .subscribe_with_variables(
+            &prev_tx_query("sentAddress: $sender", None),
+            sender_var(sender),
+        )
+        .await;
+
+    // 2. Walk one object through every change shape (created, mutated, wrapped, unwrapped, deleted),
+    //    each in its own checkpoint.
+    let resume_from = cluster.validator_checkpoint_tip();
+    let (d1, item) = create_item(&mut cluster.validator, package_id, 42).await;
+    let (d2, item) = update_item(&mut cluster.validator, package_id, item, 100).await;
+    let (d3, wrapper) = wrap_item(&mut cluster.validator, package_id, item).await;
+    let (d4, _) = unwrap_wrapper(&mut cluster.validator, package_id, wrapper).await;
+    let digests = vec![d1, d2, d3, d4];
+
+    // 3. Collect the live nodes, then drop the subscription.
+    let live_nodes = collect_nodes(&mut live, &digests).await;
+    drop(live);
+
+    // 4. Resume before the lifecycle so the same txs arrive via backfill.
+    tokio::time::sleep(BACKFILL_SETTLE).await;
+    let mut backfill = cluster
+        .subscribe_with_variables(
+            &prev_tx_query("sentAddress: $sender", Some(resume_from)),
+            sender_var(sender),
+        )
+        .await;
+    let backfill_nodes = collect_nodes(&mut backfill, &digests).await;
+
+    // 5. Live and backfill resolve identically.
+    assert_eq!(
+        live_nodes, backfill_nodes,
+        "live and backfill resolved previousTransaction differently",
+    );
+
+    // 6. Pin the resolved shape of every object change. Digests are redacted, so this checks shape;
+    //    identity is asserted below.
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!("transaction_subscription_previous_transaction", live_nodes);
+    });
+
+    // 7. Same transaction: the created object's previousTransaction is the create itself (digests[0]).
+    assert!(
+        output_previous_transactions(&live_nodes[0]).contains(&digests[0].as_str()),
+        "created object's previousTransaction was not the create transaction: {:#}",
+        live_nodes[0],
+    );
+
+    // 8. Earlier checkpoint: the mutation's input previousTransaction is the create (served live by
+    //    the streamed store, since the anchor is the mutation).
+    assert!(
+        input_previous_transactions(&live_nodes[1]).contains(&digests[0].as_str()),
+        "mutated object's input previousTransaction was not the earlier create transaction: {:#}",
+        live_nodes[1],
+    );
+}

@@ -45,9 +45,12 @@
 mod checkpoint_resume;
 mod checkpoint_stream_task;
 mod gap_recovery;
-mod package_eviction_task;
 mod processed_checkpoint;
+mod streamed_cache_eviction;
+mod streamed_caches;
 mod streamed_package_store;
+mod streamed_store;
+mod streamed_transaction_store;
 mod subscription_readiness;
 #[cfg(test)]
 mod test_utils;
@@ -67,10 +70,13 @@ pub(crate) use checkpoint_stream_task::broadcast_error;
 pub(crate) use checkpoint_stream_task::reconnect_error;
 #[cfg(feature = "staging")]
 pub(crate) use gap_recovery::wait_for_pipelines_catching_up_at;
-pub(crate) use package_eviction_task::PackageEvictionTask;
 pub(crate) use processed_checkpoint::ProcessedCheckpoint;
 pub(crate) use processed_checkpoint::ProcessedTransaction;
+pub(crate) use streamed_cache_eviction::EvictableCache;
+pub(crate) use streamed_cache_eviction::StreamedCacheEvictionTask;
+pub(crate) use streamed_caches::StreamedCaches;
 pub(crate) use streamed_package_store::StreamedPackageStore;
+pub(crate) use streamed_transaction_store::StreamedTransactionStore;
 pub(crate) use subscription_readiness::SubscriptionReadiness;
 
 /// The full layered package store used by streaming subscriptions:

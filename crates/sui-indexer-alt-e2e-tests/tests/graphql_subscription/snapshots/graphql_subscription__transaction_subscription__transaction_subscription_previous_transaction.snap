@@ -1,0 +1,224 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_subscription/transaction_subscription.rs
+expression: live_nodes
+---
+[
+  {
+    "digest": "[digest]",
+    "effects": {
+      "objectChanges": {
+        "nodes": [
+          {
+            "inputState": {
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": null,
+                "kind": {
+                  "__typename": "GenesisTransaction"
+                }
+              }
+            },
+            "outputState": {
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                }
+              }
+            }
+          },
+          {
+            "inputState": null,
+            "outputState": {
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "digest": "[digest]",
+    "effects": {
+      "objectChanges": {
+        "nodes": [
+          {
+            "inputState": {
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                }
+              }
+            },
+            "outputState": {
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                }
+              }
+            }
+          },
+          {
+            "inputState": {
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": null,
+                "kind": {
+                  "__typename": "GenesisTransaction"
+                }
+              }
+            },
+            "outputState": {
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "digest": "[digest]",
+    "effects": {
+      "objectChanges": {
+        "nodes": [
+          {
+            "inputState": {
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                }
+              }
+            },
+            "outputState": null
+          },
+          {
+            "inputState": {
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": null,
+                "kind": {
+                  "__typename": "GenesisTransaction"
+                }
+              }
+            },
+            "outputState": {
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                }
+              }
+            }
+          },
+          {
+            "inputState": null,
+            "outputState": {
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "digest": "[digest]",
+    "effects": {
+      "objectChanges": {
+        "nodes": [
+          {
+            "inputState": {
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                }
+              }
+            },
+            "outputState": null
+          },
+          {
+            "inputState": {
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": null,
+                "kind": {
+                  "__typename": "GenesisTransaction"
+                }
+              }
+            },
+            "outputState": {
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                }
+              }
+            }
+          },
+          {
+            "inputState": null,
+            "outputState": {
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+]
