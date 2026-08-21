@@ -909,12 +909,10 @@ pub async fn download_formal_snapshot(
             max_retries,
             num_parallel_chunks,
         )
-        .await
-        .unwrap_or_else(|err| panic!("Failed to create reader: {}", err));
+        .await?;
         reader
             .read(perpetual_db_clone.clone(), abort_registration, Some(sender))
-            .await
-            .unwrap_or_else(|err| panic!("Failed during read: {}", err));
+            .await?;
         info!("Snapshot download complete");
         Ok::<(), anyhow::Error>(())
     });
@@ -932,20 +930,19 @@ pub async fn download_formal_snapshot(
     let mut snapshot_done = false;
     let mut backfill_done = false;
 
-    // Wait for summaries (required for verification) while monitoring other tasks for early failures
-    while !summaries_done {
+    while !summaries_done || !snapshot_done || !backfill_done {
         tokio::select! {
             result = &mut summaries_handle, if !summaries_done => {
                 summaries_done = true;
-                result.expect("Summaries task panicked")?;
+                result.map_err(|error| anyhow!("Summaries task failed: {error}"))??;
             }
             result = &mut backfill_handle, if !backfill_done => {
                 backfill_done = true;
-                result.expect("Backfill task panicked")?;
+                result.map_err(|error| anyhow!("Backfill task failed: {error}"))??;
             }
             result = &mut snapshot_handle, if !snapshot_done => {
                 snapshot_done = true;
-                result.expect("Snapshot task panicked")?;
+                result.map_err(|error| anyhow!("Snapshot task failed: {error}"))??;
             }
         }
     }
@@ -1003,20 +1000,6 @@ pub async fn download_formal_snapshot(
             This is highly discouraged unless you fully trust the source of this snapshot and its contents.
             If this was unintentional, rerun with `--verify` set to `normal` or `strict`.",
         )?;
-    }
-
-    // Wait for remaining tasks to complete
-    while !snapshot_done || !backfill_done {
-        tokio::select! {
-            result = &mut backfill_handle, if !backfill_done => {
-                backfill_done = true;
-                result.expect("Backfill task panicked")?;
-            }
-            result = &mut snapshot_handle, if !snapshot_done => {
-                snapshot_done = true;
-                result.expect("Snapshot task panicked")?;
-            }
-        }
     }
 
     // TODO we should ensure this map is being updated for all end of epoch
