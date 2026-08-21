@@ -167,6 +167,7 @@ fn to_consensus_protocol_config(config: &ProtocolConfig) -> ConsensusProtocolCon
         config.max_transactions_in_block_bytes(),
         config.max_num_transactions_in_block(),
         config.gc_depth(),
+        config.consensus_slim_block_propagation(),
         /* transaction_voting_enabled */ true,
         config.mysticeti_num_leaders_per_round(),
         config.consensus_bad_nodes_stake_threshold(),

@@ -22,6 +22,9 @@ pub struct ConsensusProtocolConfig {
     max_transactions_in_block_bytes: u64,
     max_num_transactions_in_block: u64,
     gc_depth: u32,
+    /// Whether validators emit slim (ancestor-compressed) blocks on the block
+    /// subscription stream.
+    slim_block_propagation_enabled: bool,
     transaction_voting_enabled: bool,
     num_leaders_per_round: Option<usize>,
     bad_nodes_stake_threshold: u64,
@@ -42,6 +45,7 @@ impl Default for ConsensusProtocolConfig {
             max_transactions_in_block_bytes: if cfg!(msim) { 256 * 1024 } else { 512 * 1024 },
             max_num_transactions_in_block: if cfg!(msim) { 8 } else { 512 },
             gc_depth: 0,
+            slim_block_propagation_enabled: false,
             transaction_voting_enabled: false,
             num_leaders_per_round: None,
             bad_nodes_stake_threshold: 0,
@@ -60,6 +64,7 @@ impl ConsensusProtocolConfig {
         max_transactions_in_block_bytes: u64,
         max_num_transactions_in_block: u64,
         gc_depth: u32,
+        slim_block_propagation_enabled: bool,
         transaction_voting_enabled: bool,
         num_leaders_per_round: Option<usize>,
         bad_nodes_stake_threshold: u64,
@@ -74,6 +79,7 @@ impl ConsensusProtocolConfig {
             max_transactions_in_block_bytes,
             max_num_transactions_in_block,
             gc_depth,
+            slim_block_propagation_enabled,
             transaction_voting_enabled,
             num_leaders_per_round,
             bad_nodes_stake_threshold,
@@ -93,6 +99,7 @@ impl ConsensusProtocolConfig {
             max_transactions_in_block_bytes: if cfg!(msim) { 256 * 1024 } else { 512 * 1024 },
             max_num_transactions_in_block: if cfg!(msim) { 8 } else { 512 },
             gc_depth: if cfg!(msim) { 6 } else { 60 },
+            slim_block_propagation_enabled: false,
             transaction_voting_enabled: true,
             num_leaders_per_round: Some(1),
             bad_nodes_stake_threshold: 30,
@@ -128,6 +135,10 @@ impl ConsensusProtocolConfig {
         self.gc_depth
     }
 
+    pub fn slim_block_propagation_enabled(&self) -> bool {
+        self.slim_block_propagation_enabled
+    }
+
     pub fn transaction_voting_enabled(&self) -> bool {
         self.transaction_voting_enabled
     }
@@ -159,6 +170,10 @@ impl ConsensusProtocolConfig {
 
     pub fn set_gc_depth_for_testing(&mut self, val: u32) {
         self.gc_depth = val;
+    }
+
+    pub fn set_slim_block_propagation_enabled_for_testing(&mut self, val: bool) {
+        self.slim_block_propagation_enabled = val;
     }
 
     pub fn set_transaction_voting_enabled_for_testing(&mut self, val: bool) {

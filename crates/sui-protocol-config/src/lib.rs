@@ -495,6 +495,12 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     consensus_order_end_of_epoch_last: bool,
 
+    // If true, validators emit slim (ancestor-compressed) blocks on the consensus block
+    // subscription stream, framed in a block envelope. Gates the wire framing on both
+    // ends of the stream.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_slim_block_propagation: bool,
+
     // Disallow adding abilities to types during package upgrades.
     #[serde(skip_serializing_if = "is_false")]
     disallow_adding_abilities_on_upgrade: bool,

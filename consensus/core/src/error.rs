@@ -19,6 +19,12 @@ pub enum ConsensusError {
     #[error("Error deserializing block: {0}")]
     MalformedBlock(bcs::Error),
 
+    #[error("Unexpected block form on the wire")]
+    UnexpectedBlockForm,
+
+    #[error("Error decoding block envelope: {0}")]
+    MalformedBlockEnvelope(prost::DecodeError),
+
     #[error("Error deserializing commit: {0}")]
     MalformedCommit(bcs::Error),
 

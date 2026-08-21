@@ -558,12 +558,15 @@ mod tests {
 
     use crate::{
         context::Context,
-        network::{ExtendedSerializedBlock, ObserverNetworkService, test_network::TestService},
+        network::{
+            ExtendedSerializedBlock, ObserverNetworkService, SerializedBlockForm,
+            test_network::TestService,
+        },
     };
 
     fn block_for_round(round: Round) -> ExtendedSerializedBlock {
         ExtendedSerializedBlock {
-            block: Bytes::from(vec![round as u8; 16]),
+            block: SerializedBlockForm::Full(Bytes::from(vec![round as u8; 16])),
             excluded_ancestors: vec![],
         }
     }
