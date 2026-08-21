@@ -12,7 +12,7 @@ use mysten_metrics::spawn_monitored_task;
 use parking_lot::RwLock;
 use sui_macros::fail_point_async;
 use tap::TapFallible;
-use tokio::sync::broadcast;
+use tokio::{sync::broadcast, time::Instant};
 use tokio_util::sync::ReusableBoxFuture;
 use tracing::{debug, info, warn};
 
@@ -34,6 +34,54 @@ use crate::{
     task::spawn_blocking,
     transaction_vote_tracker::TransactionVoteTracker,
 };
+
+/// How often a live subscription re-checks its subscriber's lag. Bounds how often the
+/// fan-out path takes the DagState read lock.
+const GATE_REEVALUATION_INTERVAL: Duration = Duration::from_secs(1);
+
+/// Minimum time between mode switches on one subscription. Applies only to returning to
+/// slim blocks, and only once a switch has happened.
+const GATE_MIN_DWELL: Duration = Duration::from_secs(10);
+
+/// The lag at which a subscriber loses slim blocks, and the lower lag at which it
+/// earns them back.
+///
+/// Both are fractions of `gc_depth`, the horizon within which a receiver can still
+/// resolve ancestors. Slim stops short of it so a receiver keeps room before its own GC
+/// collects the slots a parked reconstruction waits on. The gap between the two keeps
+/// lag noise around a single boundary from driving the mode.
+fn gate_thresholds(gc_depth: Round) -> (Round, Round) {
+    (gc_depth - gc_depth.div_ceil(4), gc_depth / 2)
+}
+
+/// Whether a subscription should be in slim mode at `lag`, given the mode it is in.
+///
+/// Asymmetric: slim is lost at one lag and earned back only at a much lower one.
+fn gate_next_mode(emit_slim: bool, lag: Round, lag_to_full: Round, lag_to_slim: Round) -> bool {
+    if emit_slim {
+        lag <= lag_to_full
+    } else {
+        lag <= lag_to_slim
+    }
+}
+
+/// Whether a mode change should be applied now.
+///
+/// Losing slim blocks takes effect immediately; earning them back waits out the dwell.
+fn gate_should_switch(emit_slim: bool, now_slim: bool, dwell_elapsed: bool) -> bool {
+    now_slim != emit_slim && (!now_slim || dwell_elapsed)
+}
+
+/// How far `peer` trails this node's accepted frontier.
+///
+/// Measured only from the peer's own latest block in our DAG. A validator proposes at a
+/// round only after accepting a quorum below it, so its block here is evidence of where
+/// it was; the round it reports at subscribe is its own unverified claim, and taking the
+/// later of the two would let a peer talk its way out of ever being demoted.
+fn subscriber_lag(dag_state: &DagState, peer: AuthorityIndex) -> Round {
+    let frontier = dag_state.highest_accepted_round();
+    frontier.saturating_sub(dag_state.get_last_block_for_authority(peer).round())
+}
 
 /// Authority's network service implementation, agnostic to the actual networking stack used.
 pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
@@ -399,14 +447,104 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             self.subscription_counter.clone(),
         );
 
+        if !self
+            .context
+            .protocol_config
+            .slim_block_propagation_enabled()
+        {
+            return Ok(Box::pin(past_proposed_blocks.chain(
+                broadcasted_blocks.flat_map(move |items| {
+                    debug_assert!(
+                        items.len() <= MAX_BLOCKS_PER_POLL,
+                        "Too many blocks received from broadcast"
+                    );
+                    stream::iter(items.into_iter().map(ExtendedSerializedBlock::from))
+                }),
+            )));
+        }
+
+        // Slim blocks go only to subscribers close enough to rebuild them. Reconstruction
+        // is all-or-nothing across a block's ancestors -- one unresolvable slot fails the
+        // whole block -- so a receiver trailing the horizon fails most of them. Full blocks
+        // put it back on the ordinary path: verify, suspend, fetch missing ancestors.
+        //
+        // The catch-up replay above always sends full blocks: it serves rounds where the
+        // subscriber's state is unpredictable by construction.
+        let (lag_to_full, lag_to_slim) = gate_thresholds(self.context.protocol_config.gc_depth());
+        // Enter on the strict threshold: a subscriber must be demonstrably close before it
+        // is served slim blocks.
+        let mut emit_slim = subscriber_lag(&self.dag_state.read(), peer) <= lag_to_slim;
+        // The gate keeps tracking the subscriber, so one that falls behind mid-stream stops
+        // being served slim blocks rather than keeping them on the decision made at
+        // subscribe time.
+        let gate_dag_state = Arc::downgrade(&self.dag_state);
+        let gate_context = self.context.clone();
+        let peer_hostname = self.context.committee.authority(peer).hostname.clone();
+        let slim_blocks_sent = self
+            .context
+            .metrics
+            .node_metrics
+            .slim_blocks_sent
+            .with_label_values(&[peer_hostname.as_str()]);
+        let mut gate_checked_at = Instant::now();
+        let mut gate_switched_at: Option<Instant> = None;
+
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
         Ok(Box::pin(past_proposed_blocks.chain(
-            broadcasted_blocks.flat_map(|items| {
+            broadcasted_blocks.flat_map(move |items| {
                 debug_assert!(
                     items.len() <= MAX_BLOCKS_PER_POLL,
                     "Too many blocks received from broadcast"
                 );
-                stream::iter(items.into_iter().map(ExtendedSerializedBlock::from))
+                if gate_checked_at.elapsed() >= GATE_REEVALUATION_INTERVAL {
+                    gate_checked_at = Instant::now();
+                    match gate_dag_state.upgrade() {
+                        Some(dag_state) => {
+                            let lag = subscriber_lag(&dag_state.read(), peer);
+                            let now_slim =
+                                gate_next_mode(emit_slim, lag, lag_to_full, lag_to_slim);
+                            if gate_should_switch(
+                                emit_slim,
+                                now_slim,
+                                gate_switched_at
+                                    .is_none_or(|at| at.elapsed() >= GATE_MIN_DWELL),
+                            ) {
+                                gate_switched_at = Some(Instant::now());
+                                gate_context
+                                    .metrics
+                                    .node_metrics
+                                    .slim_block_gate_transitions
+                                    .with_label_values(&[if now_slim { "slim" } else { "full" }])
+                                    .inc();
+                                debug!(
+                                    "Subscriber {peer} {peer_hostname} is {lag} rounds behind; {} slim emission",
+                                    if now_slim { "resuming" } else { "suspending" }
+                                );
+                                emit_slim = now_slim;
+                            }
+                        }
+                        // Without DagState the subscriber's lag cannot be established, so
+                        // stop omitting.
+                        None => emit_slim = false,
+                    }
+                }
+                // Collected eagerly so the mapping borrows the captures instead of the
+                // stream taking ownership of a clone of each per block.
+                let blocks: Vec<ExtendedSerializedBlock> = items
+                    .into_iter()
+                    .map(|mut extended_block| {
+                        // Proposal time already produced the encoding; dropping it here
+                        // makes the conversion below pick the full form.
+                        if !emit_slim {
+                            extended_block.slim = None;
+                        }
+                        if extended_block.slim.is_some() {
+                            slim_blocks_sent.inc();
+                        }
+                        ExtendedSerializedBlock::from(extended_block)
+                    })
+                    .collect();
+                stream::iter(blocks)
             }),
         )))
     }
@@ -719,17 +857,13 @@ mod tests {
 
     use futures::StreamExt as _;
 
-    /// Every wire payload in these tests is the full form.
-    fn expect_full(form: &SerializedBlockForm) -> &[u8] {
-        match form {
-            SerializedBlockForm::Full(bytes) => bytes,
-            SerializedBlockForm::Slim(_) => panic!("expected a full block"),
-        }
-    }
-
+    use super::{
+        GATE_REEVALUATION_INTERVAL, gate_next_mode, gate_should_switch, gate_thresholds,
+        subscriber_lag,
+    };
     use crate::{
         authority_service::AuthorityService,
-        block::{BlockAPI, SignedBlock, TestBlock, VerifiedBlock},
+        block::{BlockAPI, ExtendedBlock, SignedBlock, TestBlock, VerifiedBlock},
         block_sync_service::BlockSyncService,
         commit::{CertifiedCommits, CommitRange},
         commit_vote_monitor::CommitVoteMonitor,
@@ -748,6 +882,273 @@ mod tests {
         test_dag_builder::DagBuilder,
         transaction_vote_tracker::TransactionVoteTracker,
     };
+
+    /// Every wire payload in these tests is the full form.
+    fn expect_full(form: &SerializedBlockForm) -> &[u8] {
+        match form {
+            SerializedBlockForm::Full(bytes) => bytes,
+            SerializedBlockForm::Slim(_) => panic!("expected a full block"),
+        }
+    }
+
+    /// Three quarters of the horizon to lose slim blocks, half to earn them back.
+    #[test]
+    fn gate_thresholds_are_fractions_of_the_horizon() {
+        assert_eq!(gate_thresholds(60), (45, 30));
+        assert_eq!(gate_thresholds(10), (7, 5));
+        assert_eq!(gate_thresholds(6), (4, 3));
+    }
+
+    /// The two thresholds must leave a gap, so a subscriber sitting on one boundary does
+    /// not flip on every re-evaluation, and slim must stop short of the horizon. Depths
+    /// below 3 leave no room for either and are not a configured value.
+    #[test]
+    fn gate_thresholds_leave_a_hysteresis_gap() {
+        for gc_depth in [3u32, 4, 6, 10, 60, 100, Round::MAX] {
+            let (to_full, to_slim) = gate_thresholds(gc_depth);
+            assert!(
+                to_slim < to_full,
+                "gc_depth {gc_depth}: {to_slim} must be strictly below {to_full}"
+            );
+            assert!(
+                to_full < gc_depth,
+                "gc_depth {gc_depth}: slim must stop short of the horizon, got {to_full}"
+            );
+        }
+    }
+
+    /// Inside the gap the mode is whatever it already was.
+    #[test]
+    fn gate_holds_its_mode_inside_the_gap() {
+        let (to_full, to_slim) = gate_thresholds(60);
+        for lag in (to_slim + 1)..=to_full {
+            assert!(
+                gate_next_mode(true, lag, to_full, to_slim),
+                "lag {lag} must not lose slim once it has it"
+            );
+            assert!(
+                !gate_next_mode(false, lag, to_full, to_slim),
+                "lag {lag} must not earn slim back"
+            );
+        }
+    }
+
+    /// Outside the gap the mode is forced, whichever side it is entered from.
+    #[test]
+    fn gate_switches_outside_the_gap() {
+        let (to_full, to_slim) = gate_thresholds(60);
+        for emit_slim in [true, false] {
+            assert!(
+                gate_next_mode(emit_slim, to_slim, to_full, to_slim),
+                "at or inside the strict threshold the subscriber gets slim"
+            );
+            assert!(
+                !gate_next_mode(emit_slim, to_full + 1, to_full, to_slim),
+                "past the horizon the subscriber gets full blocks"
+            );
+        }
+    }
+
+    /// Losing slim blocks is never delayed; only earning them back waits out the dwell.
+    #[test]
+    fn gate_switch_delays_only_the_return_to_slim() {
+        assert!(gate_should_switch(true, false, false));
+        assert!(gate_should_switch(true, false, true));
+
+        assert!(!gate_should_switch(false, true, false));
+        assert!(gate_should_switch(false, true, true));
+
+        assert!(!gate_should_switch(true, true, false));
+        assert!(!gate_should_switch(false, false, true));
+    }
+
+    /// Lag is the gap between the frontier and the peer's own latest block.
+    #[tokio::test]
+    async fn subscriber_lag_measures_the_peers_own_blocks() {
+        const PEER_ROUND: Round = 5;
+        const FRONTIER: Round = 12;
+
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let dag_state = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let peer = context.committee.to_authority_index(1).unwrap();
+
+        let mut builder = DagBuilder::new(context.clone());
+        builder.layers(1..=PEER_ROUND).build();
+        for block in builder.all_blocks() {
+            dag_state.write().accept_block(block);
+        }
+        // Advance everyone but `peer`, so the frontier runs ahead of what it proposed.
+        for (authority, _) in context.committee.authorities() {
+            if authority != peer {
+                dag_state.write().accept_block(VerifiedBlock::new_for_test(
+                    TestBlock::new(FRONTIER, authority.value() as u32).build(),
+                ));
+            }
+        }
+
+        assert_eq!(
+            dag_state.read().get_last_block_for_authority(peer).round(),
+            PEER_ROUND
+        );
+        assert_eq!(dag_state.read().highest_accepted_round(), FRONTIER);
+        assert_eq!(
+            subscriber_lag(&dag_state.read(), peer),
+            FRONTIER - PEER_ROUND
+        );
+
+        // A peer that reaches the frontier has no lag.
+        dag_state.write().accept_block(VerifiedBlock::new_for_test(
+            TestBlock::new(FRONTIER, peer.value() as u32).build(),
+        ));
+        assert_eq!(subscriber_lag(&dag_state.read(), peer), 0);
+    }
+
+    /// A slim-enabled service, the DagState behind it, and the proposal broadcast.
+    fn slim_gate_fixture() -> (
+        Arc<Context>,
+        Arc<AuthorityService<FakeCoreThreadDispatcher>>,
+        Arc<RwLock<DagState>>,
+        broadcast::Sender<ExtendedBlock>,
+    ) {
+        let (context, _keys) = Context::new_for_test(4);
+        let mut protocol_config = context.protocol_config.clone();
+        protocol_config.set_slim_block_propagation_enabled_for_testing(true);
+        let context = Arc::new(context.with_protocol_config(protocol_config));
+
+        let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
+        let (tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
+        let fake_client = Arc::new(FakeNetworkClient::default());
+        let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
+            Some(fake_client.clone()),
+            Some(fake_client.clone()),
+        ));
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
+        let synchronizer = Synchronizer::start(
+            network_client,
+            context.clone(),
+            core_dispatcher.clone(),
+            commit_vote_monitor.clone(),
+            block_verifier.clone(),
+            transaction_vote_tracker.clone(),
+            round_tracker.clone(),
+            dag_state.clone(),
+            peers_pool.clone(),
+            false,
+        );
+        let block_sync_service = Arc::new(BlockSyncService::new(
+            context.clone(),
+            dag_state.clone(),
+            store.clone(),
+        ));
+        let authority_service = Arc::new(AuthorityService::new(
+            context.clone(),
+            block_verifier,
+            commit_vote_monitor,
+            round_tracker,
+            synchronizer,
+            core_dispatcher,
+            rx_block_broadcast,
+            transaction_vote_tracker,
+            dag_state.clone(),
+            block_sync_service,
+        ));
+        (context, authority_service, dag_state, tx_block_broadcast)
+    }
+
+    fn accept_block_at(dag_state: &Arc<RwLock<DagState>>, round: Round, author: u32) {
+        dag_state.write().accept_block(VerifiedBlock::new_for_test(
+            TestBlock::new(round, author).build(),
+        ));
+    }
+
+    fn broadcast_proposal(tx: &broadcast::Sender<ExtendedBlock>, round: Round) {
+        tx.send(ExtendedBlock {
+            block: VerifiedBlock::new_for_test(TestBlock::new(round, 0).build()),
+            excluded_ancestors: vec![],
+            slim: Some(Bytes::from_static(b"slim")),
+        })
+        .unwrap();
+    }
+
+    fn is_slim(block: &SerializedBlockForm) -> bool {
+        matches!(block, SerializedBlockForm::Slim(_))
+    }
+
+    /// A subscriber that falls past the demote threshold mid-stream stops receiving slim
+    /// blocks. Drives the gate closure itself, which the threshold tests do not reach.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn gate_stops_slim_emission_when_the_subscriber_falls_behind() {
+        let (context, authority_service, dag_state, tx) = slim_gate_fixture();
+        let (lag_to_full, _) = gate_thresholds(context.protocol_config.gc_depth());
+        let peer = context.committee.to_authority_index(1).unwrap();
+
+        // The subscriber is at the frontier, so the gate opens on subscribe.
+        accept_block_at(&dag_state, 1, peer.value() as u32);
+        let mut stream = authority_service
+            .handle_subscribe_blocks(peer, 0)
+            .await
+            .unwrap();
+
+        broadcast_proposal(&tx, 2);
+        assert!(is_slim(&stream.next().await.unwrap().block));
+
+        // Advance the frontier past the demote threshold without the subscriber following.
+        accept_block_at(&dag_state, lag_to_full + 2, 2);
+        tokio::time::advance(GATE_REEVALUATION_INTERVAL).await;
+
+        broadcast_proposal(&tx, 3);
+        assert!(
+            !is_slim(&stream.next().await.unwrap().block),
+            "a subscriber past the demote threshold receives the full form"
+        );
+    }
+
+    /// A subscriber admitted as full is promoted on the first re-evaluation once it is
+    /// close enough; the dwell applies only after a switch has happened.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn gate_promotes_a_new_subscriber_without_waiting_out_the_dwell() {
+        let (context, authority_service, dag_state, tx) = slim_gate_fixture();
+        let (lag_to_full, lag_to_slim) = gate_thresholds(context.protocol_config.gc_depth());
+        let peer = context.committee.to_authority_index(1).unwrap();
+
+        // The subscriber starts past the demote threshold, so the gate opens closed.
+        accept_block_at(&dag_state, 1, peer.value() as u32);
+        accept_block_at(&dag_state, lag_to_full + 2, 2);
+        let mut stream = authority_service
+            .handle_subscribe_blocks(peer, 0)
+            .await
+            .unwrap();
+
+        broadcast_proposal(&tx, 2);
+        assert!(!is_slim(&stream.next().await.unwrap().block));
+
+        // Bring it inside the promote threshold and re-evaluate once.
+        accept_block_at(
+            &dag_state,
+            lag_to_full + 2 - lag_to_slim,
+            peer.value() as u32,
+        );
+        tokio::time::advance(GATE_REEVALUATION_INTERVAL).await;
+
+        broadcast_proposal(&tx, 3);
+        assert!(
+            is_slim(&stream.next().await.unwrap().block),
+            "the first promotion must not wait for the dwell"
+        );
+    }
+
     struct FakeCoreThreadDispatcher {
         blocks: Mutex<Vec<VerifiedBlock>>,
     }
