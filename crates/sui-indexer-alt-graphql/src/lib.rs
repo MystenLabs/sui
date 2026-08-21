@@ -517,7 +517,14 @@ pub async fn start_rpc(
         let max_subscribers = config.subscription.max_subscribers;
         rpc = rpc.data(caches).data(config.subscription);
         let s_stream = stream_task.run();
-        let s_eviction = eviction_task.run();
+        // BENCH-ONLY knob: skip spawning eviction so the streamed caches grow unbounded, emulating
+        // a stalled durable index. Never set in production.
+        let s_eviction = if std::env::var_os("GRAPHQL_BENCH_DISABLE_EVICTION").is_some() {
+            info!("BENCH: streamed-cache eviction DISABLED (GRAPHQL_BENCH_DISABLE_EVICTION)");
+            None
+        } else {
+            Some(eviction_task.run())
+        };
         if db_less {
             readiness.wait_for_first_checkpoint().await?;
         } else {
@@ -554,7 +561,10 @@ pub async fn start_rpc(
         .attach(s_watermark);
 
     if let Some((s_stream, s_eviction)) = streaming_handles {
-        service = service.attach(s_stream).attach(s_eviction);
+        service = service.attach(s_stream);
+        if let Some(s_eviction) = s_eviction {
+            service = service.attach(s_eviction);
+        }
     }
 
     Ok(service)

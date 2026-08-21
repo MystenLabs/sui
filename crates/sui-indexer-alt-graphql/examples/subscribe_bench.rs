@@ -70,8 +70,9 @@ fn terminations_lagged(text: &str) -> f64 {
         .sum()
 }
 
-/// RSS (KB) of the standalone server process, so memory is server-only (not this client's).
-fn server_rss_kb() -> u64 {
+/// RSS (KB) and CPU% of the standalone server process, so both are server-only (not this client's).
+/// One `ps` call returns `rss %cpu`; `(0, 0.0)` if the process isn't found.
+fn server_rss_cpu() -> (u64, f64) {
     let out = std::process::Command::new("pgrep")
         .args(["-x", "serve_testnet"])
         .output()
@@ -79,20 +80,26 @@ fn server_rss_kb() -> u64 {
     let pid = out
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .and_then(|s| s.lines().next().map(|l| l.trim().to_string()));
-    let Some(pid) = pid else { return 0 };
-    std::process::Command::new("ps")
-        .args(["-o", "rss=", "-p", &pid])
+    let Some(pid) = pid else { return (0, 0.0) };
+    let text = std::process::Command::new("ps")
+        .args(["-o", "rss=,%cpu=", "-p", &pid])
         .output()
         .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
-        .and_then(|s| s.trim().parse().ok())
-        .unwrap_or(0)
+        .unwrap_or_default();
+    let mut it = text.split_whitespace();
+    let rss = it.next().and_then(|v| v.parse().ok()).unwrap_or(0);
+    let cpu = it.next().and_then(|v| v.parse().ok()).unwrap_or(0.0);
+    (rss, cpu)
 }
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 8)]
+#[tokio::main(flavor = "multi_thread", worker_threads = 12)]
 async fn main() -> anyhow::Result<()> {
     let n: usize = std::env::var("N").ok().and_then(|s| s.parse().ok()).unwrap_or(10);
     let secs: u64 = std::env::var("SECS").ok().and_then(|s| s.parse().ok()).unwrap_or(60);
+    // Connections opened per second (0 = all at once). Paced opening avoids a thundering-herd connect
+    // burst that saturates the client runtime and starves the sampling loop at high N.
+    let ramp: usize = std::env::var("RAMP").ok().and_then(|s| s.parse().ok()).unwrap_or(0);
     let server = std::env::var("SERVER")
         .unwrap_or_else(|_| "http://127.0.0.1:8123/graphql/subscriptions".into());
     let metrics_url =
@@ -104,19 +111,23 @@ async fn main() -> anyhow::Result<()> {
     let stop = Arc::new(AtomicBool::new(false));
     let delivered = Arc::new(AtomicU64::new(0));
     let mut handles = Vec::with_capacity(n);
-    for _ in 0..n {
+    for i in 0..n {
         handles.push(tokio::spawn(subscriber(
             server.clone(),
             delivered.clone(),
             stop.clone(),
         )));
+        // Pace opening: after each batch of `ramp` spawns, wait a second.
+        if ramp > 0 && (i + 1) % ramp == 0 {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
     }
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     let client = reqwest::Client::new();
     let path = format!("{out_dir}/{name}.csv");
     let mut f = std::fs::File::create(&path)?;
-    writeln!(f, "t_ms,active,opened,delivered,lag_sum,lag_count,term_lagged,client_delivered,rss_kb")?;
+    writeln!(f, "t_ms,active,opened,delivered,lag_sum,lag_count,term_lagged,client_delivered,rss_kb,cpu_pct,processed_cp")?;
 
     eprintln!("[client] {name}: {n} subscribers -> {server} for {secs}s");
     let start = Instant::now();
@@ -131,10 +142,11 @@ async fn main() -> anyhow::Result<()> {
             Some(r) => r.text().await.unwrap_or_default(),
             None => String::new(),
         };
-        let lag = "graphql_subscription_payload_delivery_checkpoint_timestamp_lag";
+        let lag = "graphql_subscription_live_payload_delivery_checkpoint_timestamp_lag";
+        let (rss_kb, cpu_pct) = server_rss_cpu();
         writeln!(
             f,
-            "{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{}",
             start.elapsed().as_millis(),
             metric_sum(&text, "graphql_subscription_active_subscriptions") as i64,
             metric_sum(&text, "graphql_subscription_opened") as u64,
@@ -143,7 +155,9 @@ async fn main() -> anyhow::Result<()> {
             metric_sum(&text, &format!("{lag}_count")) as u64,
             terminations_lagged(&text) as u64,
             delivered.load(Ordering::Relaxed),
-            server_rss_kb(),
+            rss_kb,
+            cpu_pct,
+            metric_sum(&text, "graphql_subscription_upstream_processed_checkpoints") as u64,
         )?;
         f.flush().ok();
         tokio::time::sleep(Duration::from_millis(1000)).await;
