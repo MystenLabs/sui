@@ -110,11 +110,13 @@ use super::checkpoint_resume::scan_checkpoints;
 #[cfg(any(feature = "staging", test))]
 use super::gap_recovery::CheckpointFetcher;
 use super::gap_recovery::recover_gap;
+#[cfg(test)]
+use super::lifecycle::SubscriberLimit;
 #[cfg(any(feature = "staging", test))]
 use super::lifecycle::SubscriptionLifecycleGuard;
 #[cfg(any(feature = "staging", test))]
 use super::lifecycle::SubscriptionTerminationReason;
-#[cfg(any(feature = "staging", test))]
+#[cfg(test)]
 use super::lifecycle::SubscriptionType;
 use super::processed_checkpoint::ProcessedCheckpoint;
 use super::processed_checkpoint::ProcessedTransaction;
@@ -231,7 +233,7 @@ impl SubscriptionBroadcast {
         resume_from: Option<u64>,
         fetcher: F,
         config: &SubscriptionConfig,
-        metrics: Arc<SubscriptionMetrics>,
+        mut guard: SubscriptionLifecycleGuard,
     ) -> impl Stream<Item = Result<Arc<ProcessedCheckpoint>, RpcError>> + 'static {
         // Resubscribe and pin the handoff once the scan is within this many checkpoints of the tip.
         // Half the buffer leaves room for checkpoints arriving during the handoff, so it won't lag.
@@ -240,8 +242,6 @@ impl SubscriptionBroadcast {
         let config = config.clone();
 
         stream! {
-            let mut guard =
-                SubscriptionLifecycleGuard::new(SubscriptionType::Checkpoints, &metrics);
             let mut last_yielded: Option<u64> = resume_from;
             let mut receiver = self.broadcaster.resubscribe();
             // `resubscribe` is future-only (delivers `handoff + 1`), so Phase 1 stops exactly at
@@ -842,6 +842,15 @@ mod tests {
         tx.send(Arc::new(processed)).ok();
     }
 
+    fn test_guard() -> SubscriptionLifecycleGuard {
+        SubscriptionLifecycleGuard::new(
+            SubscriptionType::Checkpoints,
+            &SubscriptionMetrics::new_for_test(),
+            &SubscriberLimit::new(10),
+        )
+        .unwrap()
+    }
+
     #[tokio::test]
     async fn subscribe_no_resume_yields_live_only() {
         use futures::FutureExt;
@@ -850,12 +859,8 @@ mod tests {
         // Fetcher is unused since resume_from is None.
         let fetcher = MockFetcher::success_for_range(0..=0);
 
-        let stream = broadcast.subscribe(
-            None,
-            fetcher,
-            &SubscriptionConfig::default(),
-            SubscriptionMetrics::new_for_test(),
-        );
+        let stream =
+            broadcast.subscribe(None, fetcher, &SubscriptionConfig::default(), test_guard());
         tokio::pin!(stream);
 
         // Poll once so the receiver gets pinned at tail=0 before any sends.
@@ -883,7 +888,7 @@ mod tests {
             Some(2),
             fetcher,
             &SubscriptionConfig::default(),
-            SubscriptionMetrics::new_for_test(),
+            test_guard(),
         );
         tokio::pin!(stream);
 
@@ -900,12 +905,8 @@ mod tests {
     async fn subscribe_yields_error_when_channel_closes() {
         let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
         let fetcher = MockFetcher::success_for_range(0..=0);
-        let stream = broadcast.subscribe(
-            None,
-            fetcher,
-            &SubscriptionConfig::default(),
-            SubscriptionMetrics::new_for_test(),
-        );
+        let stream =
+            broadcast.subscribe(None, fetcher, &SubscriptionConfig::default(), test_guard());
         tokio::pin!(stream);
 
         // Dropping the sender closes the channel; subscriber should yield an error and end.
