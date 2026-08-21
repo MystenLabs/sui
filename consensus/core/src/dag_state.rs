@@ -381,8 +381,7 @@ impl DagState {
         if self.context.protocol_config.enable_v3() {
             // Update votes accounting in BlockInfo.
             for ancestor in block.ancestors() {
-                // Only update children info when the link is potentially a leader vote.
-                if ancestor.round + 1 != block_ref.round || ancestor.round <= self.gc_round() {
+                if ancestor.round <= self.gc_round() {
                     continue;
                 }
                 let block_info = self.recent_blocks.get_mut(ancestor).unwrap_or_else(|| {
@@ -391,10 +390,14 @@ impl DagState {
                         ancestor, block_ref
                     )
                 });
+                // The V3 transaction finalizer traverses both parent and weak links.
                 block_info.children.insert(block_ref);
-                block_info
-                    .children_stake
-                    .add_unique(block_ref.author, &self.context.committee);
+                // Only a next-round child can vote for a leader decision.
+                if ancestor.round + 1 == block_ref.round {
+                    block_info
+                        .children_stake
+                        .add_unique(block_ref.author, &self.context.committee);
+                }
             }
             self.update_round_info(block);
         }
@@ -567,7 +570,7 @@ impl DagState {
         self.get_cached_blocks_at_round(round)
     }
 
-    #[cfg(test)]
+    /// Gets all direct children of a cached block above the GC round.
     pub(crate) fn get_block_children(&self, block_ref: &BlockRef) -> Option<Vec<BlockRef>> {
         if block_ref.round <= self.gc_round() {
             return None;
@@ -1432,11 +1435,10 @@ impl DagState {
 pub(crate) struct BlockInfo {
     pub(crate) block: VerifiedBlock,
 
-    /// Used in computing commits and leader schedule in Mysticeti v3.
-    /// Next-round blocks which have this block as an ancestor.
+    /// Blocks which have this block as an ancestor. The V3 transaction finalizer uses these links
+    /// for reverse causal traversal.
     pub(crate) children: BTreeSet<BlockRef>,
-    /// Total stake from distinct authorities that have authored
-    /// one of the blocks in `children`.
+    /// Total stake from distinct authorities with a next-round block in `children`.
     pub(crate) children_stake: StakeAggregator<QuorumThreshold>,
 
     // Whether the block has been committed
@@ -2190,7 +2192,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_block_children_exclusion() {
+    async fn test_block_children_include_weak_links_without_voting_stake() {
         let (mut context, _) = Context::new_for_test(4);
         context.parameters.dag_state_cached_rounds = 10;
         context.protocol_config.set_gc_depth_for_testing(3);
@@ -2219,6 +2221,12 @@ mod test {
             .find(|b| b.round() == 1 && b.author() == AuthorityIndex::new_for_test(0))
             .expect("should have a round-1 authority-0 block")
             .reference();
+        let weak_children_authorities_before = dag_state
+            .get_block_children_authorities(&weak_ancestor)
+            .expect("weak ancestor should still be present");
+        let weak_children_stake_before = dag_state
+            .get_block_total_children_stake(&weak_ancestor)
+            .expect("weak ancestor should still be present");
 
         let mut ancestors = round_2_refs.clone();
         ancestors.push(weak_ancestor);
@@ -2257,25 +2265,18 @@ mod test {
             );
         }
 
-        // Weak ancestor (round 1): must NOT have round_3_ref as a child, and
-        // its children set should only contain the natural round-2 population.
+        // The weak ancestor keeps the round-3 block in its reverse causal links.
         let weak_children = dag_state
             .get_block_children(&weak_ancestor)
             .expect("weak ancestor should still be present");
         assert!(
-            !weak_children.contains(&round_3_ref),
-            "weak ancestor {weak_ancestor:?} must NOT have round-3 block as child",
+            weak_children.contains(&round_3_ref),
+            "weak ancestor {weak_ancestor:?} should have round-3 block as a child",
         );
-        for c in &weak_children {
-            assert_eq!(
-                c.round, 2,
-                "weak ancestor's children should all be round 2, got {c:?}"
-            );
-        }
         // Derived fields for the weak ancestor: children are the 4 natural
         // round-2 blocks authored by all 4 authorities, so authorities =
-        // {0,1,2,3} and stake = total_stake. round_3 does not contribute
-        // because the weak link was filtered out.
+        // {0,1,2,3} and stake = total_stake. The weak round-3 link does not
+        // contribute to leader voting stake.
         let weak_authorities = dag_state
             .get_block_children_authorities(&weak_ancestor)
             .expect("weak ancestor should still be present");
@@ -2285,13 +2286,16 @@ mod test {
             weak_authorities, expected_weak_authorities,
             "weak ancestor {weak_ancestor:?} children_authorities should cover all 4 round-2 authors",
         );
+        assert_eq!(weak_authorities, weak_children_authorities_before);
+        let weak_children_stake_after = dag_state
+            .get_block_total_children_stake(&weak_ancestor)
+            .expect("weak ancestor should still be present");
         assert_eq!(
-            dag_state
-                .get_block_total_children_stake(&weak_ancestor)
-                .expect("weak ancestor should still be present"),
+            weak_children_stake_after,
             context.committee.total_stake(),
             "weak ancestor {weak_ancestor:?} total_children_stake should equal total committee stake",
         );
+        assert_eq!(weak_children_stake_after, weak_children_stake_before);
     }
 
     #[tokio::test]

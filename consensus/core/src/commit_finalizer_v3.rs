@@ -20,11 +20,30 @@ use crate::{
     context::Context,
     dag_state::DagState,
     leader_slot_decider::INDIRECT_COMMIT_DEPTH,
-    stake_aggregator::{CertificationThreshold, QuorumThreshold, StakeAggregator},
+    stake_aggregator::{
+        CertificationThreshold, CommitteeThreshold, QuorumThreshold, StakeAggregator,
+    },
     transaction_vote_tracker::TransactionVoteTracker,
 };
 
-/// Finalizes transaction votes with the Mysticeti v3 one-round voting rule.
+/// Finalizes transactions in committed sub-DAGs under the Mysticeti v3 transaction voting rules.
+///
+/// Consensus sends committed sub-DAGs in commit order. Consensus has sequenced the transactions,
+/// but it has not yet decided whether each transaction is accepted or rejected. The finalizer
+/// buffers these commits and resolves each transaction from its transaction votes.
+///
+/// The finalizer uses direct and indirect finalizations:
+///
+/// - Direct finalization uses local descendants as implicit accept votes. For a target block in a
+///   commit with leader round L, the first descendant on each authority chain votes through round
+///   L + 1. It gets explicit reject votes from [`TransactionVoteTracker`]. The finalizer retries
+///   this rule for pending commits when it receives a new commit.
+/// - Indirect finalization checks pending transactions when later commits enter the queue. It uses
+///   the same voting window, but it uses only committed descendants. It accepts a transaction when
+///   the accept stake reaches the certification threshold. When a committed anchor reaches the
+///   required depth, it rejects all other pending transactions.
+///
+/// The finalizer keeps a commit in its pending queue until every transaction in the commit has a decision.
 pub(crate) struct CommitFinalizerV3 {
     context: Arc<Context>,
     dag_state: Arc<RwLock<DagState>>,
@@ -119,9 +138,21 @@ impl CommitFinalizerV3 {
         self.pending_commits
             .push_back(CommitStateV3::new(committed_sub_dag));
 
-        let voting_blocks_by_round = self.prepare_direct_voting_blocks();
+        // Direct finalization applies these steps to every pending block B in a commit whose
+        // leader is at round L:
+        //
+        // 1. The validator traverses local descendants of B through round L + 1.
+        // 2. The first block on each authority chain whose causal history includes B casts a vote.
+        //    A cutoff that covers B or an explicit reject prevents an implicit accept. Later blocks
+        //    on the same authority chain do not vote again. Each side counts an authority once.
+        // 3. It reads explicit reject stake from the transaction vote tracker.
+        // 4. It accepts the transaction when accept stake reaches quorum. It rejects the
+        //    transaction when reject stake reaches quorum. Otherwise, the transaction stays
+        //    pending.
+        //
+        // DagState keeps the direct child links for local blocks.
         for index in 0..self.pending_commits.len() {
-            self.try_direct_finalize_commit(index, &voting_blocks_by_round);
+            self.try_direct_finalize_commit(index);
         }
 
         let mut finalized_commits = self.pop_finalized_commits();
@@ -132,25 +163,44 @@ impl CommitFinalizerV3 {
             .with_label_values(&["direct"])
             .inc_by(finalized_commits.len() as u64);
 
-        while self.pending_commits.len() > 1 {
-            let first_leader_round = self.pending_commits.front().unwrap().commit.leader.round;
-            let anchor_round = self.pending_commits.back().unwrap().commit.leader.round;
-            if first_leader_round.saturating_add(INDIRECT_COMMIT_DEPTH) > anchor_round {
-                break;
-            }
+        // Indirect finalization gives a second way to resolve pending transactions. As soon as one
+        // later commit exists, the validator checks the earliest pending commit with committed
+        // evidence.
+        //
+        // For each pending transaction in block B, the validator traverses committed descendants
+        // through the round after B's commit leader. It applies the same first-vote rule as direct
+        // finalization. It accepts the transaction when this stake reaches the certification
+        // threshold. The direct pass above has already applied current explicit reject quorums.
+        //
+        // A commit must leave the queue when the newest leader round is
+        // INDIRECT_COMMIT_DEPTH rounds above its leader. At that point, any direct accept quorum
+        // must leave an accept certificate in the committed prefix. The validator rejects every
+        // transaction that is still pending after the certificate check.
+        if self.pending_commits.len() > 1 {
+            let committed_voting_graph = CommittedBlockGraph::new(
+                self.pending_commits
+                    .iter()
+                    .flat_map(|state| state.commit.blocks.iter().cloned()),
+            );
+            while self.pending_commits.len() > 1 {
+                let first_leader_round = self.pending_commits.front().unwrap().commit.leader.round;
+                let anchor_round = self.pending_commits.back().unwrap().commit.leader.round;
+                let reject_remaining =
+                    first_leader_round.saturating_add(INDIRECT_COMMIT_DEPTH) <= anchor_round;
 
-            self.try_indirect_finalize_first_commit();
-            let indirect_finalized_commits = self.pop_finalized_commits();
-            if indirect_finalized_commits.is_empty() {
-                break;
+                self.try_indirect_finalize_first_commit(&committed_voting_graph, reject_remaining);
+                let indirect_finalized_commits = self.pop_finalized_commits();
+                if indirect_finalized_commits.is_empty() {
+                    break;
+                }
+                self.context
+                    .metrics
+                    .node_metrics
+                    .finalizer_output_commits
+                    .with_label_values(&["indirect"])
+                    .inc_by(indirect_finalized_commits.len() as u64);
+                finalized_commits.extend(indirect_finalized_commits);
             }
-            self.context
-                .metrics
-                .node_metrics
-                .finalizer_output_commits
-                .with_label_values(&["indirect"])
-                .inc_by(indirect_finalized_commits.len() as u64);
-            finalized_commits.extend(indirect_finalized_commits);
         }
 
         self.report_finalization_latency(&finalized_commits);
@@ -163,41 +213,22 @@ impl CommitFinalizerV3 {
         finalized_commits
     }
 
-    fn prepare_direct_voting_blocks(&self) -> BTreeMap<Round, Vec<VotingBlock>> {
-        let voting_rounds: BTreeSet<_> = self
-            .pending_commits
-            .iter()
-            .flat_map(|state| state.pending_transactions.keys())
-            .map(|block_ref| block_ref.round.saturating_add(1))
-            .collect();
-        let dag_state = self.dag_state.read();
-        voting_rounds
-            .into_iter()
-            .map(|round| {
-                let voting_blocks = dag_state
-                    .get_cached_blocks_at_round(round)
-                    .into_iter()
-                    .map(VotingBlock::new)
-                    .collect();
-                (round, voting_blocks)
-            })
-            .collect()
-    }
-
-    fn try_direct_finalize_commit(
-        &mut self,
-        commit_index: usize,
-        voting_blocks_by_round: &BTreeMap<Round, Vec<VotingBlock>>,
-    ) {
+    fn try_direct_finalize_commit(&mut self, commit_index: usize) {
+        let last_voting_round = self.pending_commits[commit_index]
+            .commit
+            .leader
+            .round
+            .saturating_add(1);
         let pending_transactions = self.pending_commits[commit_index]
             .pending_transactions
             .clone();
         for (block_ref, transaction_indices) in pending_transactions {
-            let voting_blocks = voting_blocks_by_round
-                .get(&block_ref.round.saturating_add(1))
-                .expect("The voting round was collected from the pending transactions");
+            let first_votes = {
+                let dag_state = self.dag_state.read();
+                collect_first_votes(&*dag_state, block_ref, last_voting_round)
+            };
             let decisions =
-                self.compute_direct_decisions(block_ref, &transaction_indices, voting_blocks);
+                self.compute_direct_decisions(block_ref, &transaction_indices, &first_votes);
             self.apply_decisions(
                 commit_index,
                 block_ref,
@@ -212,7 +243,7 @@ impl CommitFinalizerV3 {
         &self,
         block_ref: BlockRef,
         transaction_indices: &BTreeSet<TransactionIndex>,
-        voting_blocks: &[VotingBlock],
+        first_votes: &[VotingBlock],
     ) -> TransactionDecisions {
         let reject_stake_by_transaction: BTreeMap<_, _> = self
             .transaction_vote_tracker
@@ -225,57 +256,13 @@ impl CommitFinalizerV3 {
             .into_iter()
             .collect();
 
-        // Most transactions have no reject votes. The first pass builds one shared accept
-        // aggregator for them and finds transactions with explicit rejects. The second pass
-        // builds transaction-specific accept aggregators for only those transactions.
-        let mut base_accept_votes = StakeAggregator::<QuorumThreshold>::new();
-        let mut transactions_with_explicit_rejects = BTreeSet::new();
-        for voting_block in voting_blocks {
-            assert_eq!(
-                voting_block.block_ref.round,
-                block_ref.round.saturating_add(1),
-                "Voting block {} is not in the next round of {}",
-                voting_block.block_ref,
-                block_ref,
-            );
-            if voting_block.votes(block_ref) {
-                base_accept_votes
-                    .add_unique(voting_block.block_ref.author, &self.context.committee);
-                if let Some(explicit_rejects) = voting_block.explicit_rejects.get(&block_ref) {
-                    transactions_with_explicit_rejects
-                        .extend(explicit_rejects.intersection(transaction_indices).copied());
-                }
-            }
-        }
-
-        // Count transaction-specific accept votes instead of subtracting reject voters from the
-        // base. An equivocating authority can reject in one block and accept in another.
-        let mut accept_votes_by_transaction: BTreeMap<_, _> = transactions_with_explicit_rejects
-            .iter()
-            .map(|transaction_index| {
-                (
-                    *transaction_index,
-                    StakeAggregator::<QuorumThreshold>::new(),
-                )
-            })
-            .collect();
-        for voting_block in voting_blocks {
-            for transaction_index in voting_block
-                .select_accepted_transactions(block_ref, &transactions_with_explicit_rejects)
-            {
-                accept_votes_by_transaction
-                    .get_mut(&transaction_index)
-                    .expect("Accept votes are collected only for explicitly rejected transactions")
-                    .add_unique(voting_block.block_ref.author, &self.context.committee);
-            }
-        }
+        let accept_votes: AcceptVotes<QuorumThreshold> =
+            self.collect_accept_votes(block_ref, transaction_indices, first_votes);
 
         let mut decisions = TransactionDecisions::default();
         for transaction_index in transaction_indices {
-            let accept_votes = accept_votes_by_transaction
-                .get(transaction_index)
-                .unwrap_or(&base_accept_votes);
-            let accepted = accept_votes.reached_threshold(&self.context.committee);
+            let transaction_accept_votes = accept_votes.for_transaction(*transaction_index);
+            let accepted = transaction_accept_votes.reached_threshold(&self.context.committee);
             let reject_stake = reject_stake_by_transaction
                 .get(transaction_index)
                 .copied()
@@ -286,7 +273,7 @@ impl CommitFinalizerV3 {
                 "Transaction {} in block {} cannot have both accept and reject quorums. Accept voters: {:?}, reject stake: {}",
                 transaction_index,
                 block_ref,
-                accept_votes.authorities(),
+                transaction_accept_votes.authorities(),
                 reject_stake,
             );
             if accepted {
@@ -298,37 +285,27 @@ impl CommitFinalizerV3 {
         decisions
     }
 
-    fn try_indirect_finalize_first_commit(&mut self) {
+    fn try_indirect_finalize_first_commit(
+        &mut self,
+        committed_voting_graph: &CommittedBlockGraph,
+        reject_remaining: bool,
+    ) {
         let pending_transactions = self.pending_commits[0].pending_transactions.clone();
-        let voting_rounds: BTreeSet<_> = pending_transactions
-            .keys()
-            .map(|block_ref| block_ref.round.saturating_add(1))
-            .collect();
-        let mut committed_voting_blocks_by_round: BTreeMap<Round, Vec<VotingBlock>> = voting_rounds
-            .into_iter()
-            .map(|round| (round, vec![]))
-            .collect();
-        for block in self
-            .pending_commits
-            .iter()
-            .flat_map(|state| &state.commit.blocks)
-        {
-            if let Some(voting_blocks) = committed_voting_blocks_by_round.get_mut(&block.round()) {
-                voting_blocks.push(VotingBlock::new(block.clone()));
-            }
-        }
+        let last_voting_round = self.pending_commits[0]
+            .commit
+            .leader
+            .round
+            .saturating_add(1);
 
         for (block_ref, transaction_indices) in pending_transactions {
-            let voting_round = block_ref.round.saturating_add(1);
-            // An accept voter references the target block. Thus, it cannot commit before the
-            // target block. The pending commit prefix contains every committed accept voter.
-            let committed_voting_blocks = committed_voting_blocks_by_round
-                .get(&voting_round)
-                .expect("The voting round was collected from the pending transactions");
+            // An accept voter is a descendant of the target block. Thus, it cannot commit before
+            // the target block. The pending commit prefix contains every committed accept voter.
             let decisions = self.compute_indirect_decisions(
                 block_ref,
                 &transaction_indices,
-                committed_voting_blocks,
+                committed_voting_graph,
+                last_voting_round,
+                reject_remaining,
             );
             self.apply_decisions(
                 0,
@@ -344,44 +321,72 @@ impl CommitFinalizerV3 {
         &self,
         block_ref: BlockRef,
         transaction_indices: &BTreeSet<TransactionIndex>,
-        committed_voting_blocks: &[VotingBlock],
+        committed_voting_graph: &CommittedBlockGraph,
+        last_voting_round: Round,
+        reject_remaining: bool,
     ) -> TransactionDecisions {
-        let mut accept_votes_by_transaction: BTreeMap<_, _> = transaction_indices
-            .iter()
-            .map(|transaction_index| {
-                (
-                    *transaction_index,
-                    StakeAggregator::<CertificationThreshold>::new(),
-                )
-            })
-            .collect();
-        for voting_block in committed_voting_blocks {
-            for transaction_index in
-                voting_block.select_accepted_transactions(block_ref, transaction_indices)
-            {
-                accept_votes_by_transaction
-                    .get_mut(&transaction_index)
-                    .expect("The selected transaction is pending")
-                    .add_unique(voting_block.block_ref.author, &self.context.committee);
-            }
-        }
+        let first_votes = collect_first_votes(committed_voting_graph, block_ref, last_voting_round);
+        let accept_votes: AcceptVotes<CertificationThreshold> =
+            self.collect_accept_votes(block_ref, transaction_indices, &first_votes);
 
         let mut decisions = TransactionDecisions::default();
         for transaction_index in transaction_indices {
-            let accept_votes = accept_votes_by_transaction
-                .get(transaction_index)
-                .expect("Accept votes are initialized for every pending transaction");
-            // Quorum intersection guarantees that a direct accept quorum leaves an accept
-            // certificate in the causal history of the anchor block, which is 2 or more rounds
-            // above. And if there is an accept certificate, the transaction cannot have been
-            // directly rejected with at most f faulty stake.
-            if accept_votes.reached_threshold(&self.context.committee) {
+            let transaction_accept_votes = accept_votes.for_transaction(*transaction_index);
+            let accepted = transaction_accept_votes.reached_threshold(&self.context.committee);
+            if accepted {
                 decisions.accepted.push(*transaction_index);
-            } else {
+            } else if reject_remaining {
+                // At depth two, any direct accept quorum must leave an accept certificate in the
+                // committed prefix. Therefore, no certificate means that rejection is safe.
                 decisions.rejected.push(*transaction_index);
             }
         }
         decisions
+    }
+
+    fn collect_accept_votes<T: CommitteeThreshold>(
+        &self,
+        block_ref: BlockRef,
+        transaction_indices: &BTreeSet<TransactionIndex>,
+        first_votes: &[VotingBlock],
+    ) -> AcceptVotes<T> {
+        // Most transactions have no explicit reject. Use one shared aggregator for them, and
+        // create transaction-specific aggregators only when a first vote contains a reject.
+        let mut shared = StakeAggregator::<T>::new();
+        let mut transactions_with_explicit_rejects = BTreeSet::new();
+        for voting_block in first_votes {
+            if !voting_block.can_accept(block_ref) {
+                continue;
+            }
+            shared.add_unique(voting_block.block_ref.author, &self.context.committee);
+            if let Some(explicit_rejects) = voting_block.explicit_rejects.get(&block_ref) {
+                transactions_with_explicit_rejects
+                    .extend(explicit_rejects.intersection(transaction_indices).copied());
+            }
+        }
+
+        // Count transaction-specific accept votes instead of subtracting reject voters from the
+        // shared aggregator. An equivocating authority can reject on one branch and accept on
+        // another branch.
+        let mut by_transaction: BTreeMap<_, _> = transactions_with_explicit_rejects
+            .iter()
+            .map(|transaction_index| (*transaction_index, StakeAggregator::<T>::new()))
+            .collect();
+        for voting_block in first_votes {
+            for transaction_index in voting_block
+                .select_accepted_transactions(block_ref, &transactions_with_explicit_rejects)
+            {
+                by_transaction
+                    .get_mut(&transaction_index)
+                    .expect("Accept votes are collected only for explicitly rejected transactions")
+                    .add_unique(voting_block.block_ref.author, &self.context.committee);
+            }
+        }
+
+        AcceptVotes {
+            shared,
+            by_transaction,
+        }
     }
 
     fn apply_decisions(
@@ -470,10 +475,126 @@ impl CommitFinalizerV3 {
     }
 }
 
+trait ReverseBlockGraph {
+    fn block(&self, block_ref: &BlockRef) -> Option<VerifiedBlock>;
+
+    fn children(&self, block_ref: &BlockRef) -> Vec<BlockRef>;
+}
+
+impl ReverseBlockGraph for DagState {
+    fn block(&self, block_ref: &BlockRef) -> Option<VerifiedBlock> {
+        self.get_block(block_ref)
+    }
+
+    fn children(&self, block_ref: &BlockRef) -> Vec<BlockRef> {
+        self.get_block_children(block_ref).unwrap_or_default()
+    }
+}
+
+struct CommittedBlockGraph {
+    blocks: BTreeMap<BlockRef, VerifiedBlock>,
+    children: BTreeMap<BlockRef, BTreeSet<BlockRef>>,
+}
+
+impl CommittedBlockGraph {
+    fn new(blocks: impl IntoIterator<Item = VerifiedBlock>) -> Self {
+        let blocks: BTreeMap<_, _> = blocks
+            .into_iter()
+            .map(|block| (block.reference(), block))
+            .collect();
+
+        let mut children: BTreeMap<BlockRef, BTreeSet<BlockRef>> = BTreeMap::new();
+        for block in blocks.values() {
+            for ancestor in block.ancestors() {
+                children
+                    .entry(*ancestor)
+                    .or_default()
+                    .insert(block.reference());
+            }
+        }
+
+        Self { blocks, children }
+    }
+}
+
+impl ReverseBlockGraph for CommittedBlockGraph {
+    fn block(&self, block_ref: &BlockRef) -> Option<VerifiedBlock> {
+        self.blocks.get(block_ref).cloned()
+    }
+
+    fn children(&self, block_ref: &BlockRef) -> Vec<BlockRef> {
+        self.children
+            .get(block_ref)
+            .map(|children| children.iter().copied().collect())
+            .unwrap_or_default()
+    }
+}
+
+fn collect_first_votes(
+    graph: &impl ReverseBlockGraph,
+    block_ref: BlockRef,
+    last_voting_round: Round,
+) -> Vec<VotingBlock> {
+    let mut to_visit: BTreeSet<_> = graph.children(&block_ref).into_iter().collect();
+    let mut visited = BTreeSet::new();
+    let mut ignored = BTreeSet::new();
+    let mut first_votes = vec![];
+
+    // BlockRef ordering visits lower rounds first. A reachable block votes unless an earlier block
+    // on its own-authority chain has voted. The traversal still follows ignored blocks because
+    // their descendants from other authorities can cast first votes.
+    while let Some(current_ref) = to_visit.pop_first() {
+        if current_ref.round > last_voting_round || !visited.insert(current_ref) {
+            continue;
+        }
+        if !ignored.contains(&current_ref) {
+            let current_block = graph
+                .block(&current_ref)
+                .unwrap_or_else(|| panic!("No block data found for voting block {current_ref}"));
+            first_votes.push(VotingBlock::new(current_block));
+            ignored.insert(current_ref);
+            ignore_origin_descendants(graph, current_ref, last_voting_round, &mut ignored);
+        }
+        to_visit.extend(
+            graph
+                .children(&current_ref)
+                .into_iter()
+                .filter(|child| !visited.contains(child)),
+        );
+    }
+
+    first_votes
+}
+
+fn ignore_origin_descendants(
+    graph: &impl ReverseBlockGraph,
+    block_ref: BlockRef,
+    last_voting_round: Round,
+    ignored: &mut BTreeSet<BlockRef>,
+) {
+    let mut to_visit: BTreeSet<_> = graph
+        .children(&block_ref)
+        .into_iter()
+        .filter(|child| child.author == block_ref.author)
+        .collect();
+    let mut visited = BTreeSet::new();
+    while let Some(current_ref) = to_visit.pop_first() {
+        if current_ref.round > last_voting_round || !visited.insert(current_ref) {
+            continue;
+        }
+        ignored.insert(current_ref);
+        to_visit.extend(
+            graph
+                .children(&current_ref)
+                .into_iter()
+                .filter(|child| child.author == block_ref.author && !visited.contains(child)),
+        );
+    }
+}
+
 struct VotingBlock {
     block_ref: BlockRef,
     cutoff_round: Round,
-    ancestors: BTreeSet<BlockRef>,
     explicit_rejects: BTreeMap<BlockRef, BTreeSet<TransactionIndex>>,
 }
 
@@ -489,15 +610,12 @@ impl VotingBlock {
         Self {
             block_ref: block.reference(),
             cutoff_round: block.transaction_votes_cutoff_round(),
-            ancestors: block.ancestors().iter().copied().collect(),
             explicit_rejects,
         }
     }
 
-    fn votes(&self, block_ref: BlockRef) -> bool {
-        block_ref.round.checked_add(1) == Some(self.block_ref.round)
-            && block_ref.round > self.cutoff_round
-            && self.ancestors.contains(&block_ref)
+    fn can_accept(&self, block_ref: BlockRef) -> bool {
+        block_ref.round > self.cutoff_round
     }
 
     fn select_accepted_transactions(
@@ -505,13 +623,26 @@ impl VotingBlock {
         block_ref: BlockRef,
         transaction_indices: &BTreeSet<TransactionIndex>,
     ) -> Vec<TransactionIndex> {
-        if !self.votes(block_ref) {
+        if !self.can_accept(block_ref) {
             return vec![];
         }
         let Some(rejects) = self.explicit_rejects.get(&block_ref) else {
             return transaction_indices.iter().copied().collect();
         };
         transaction_indices.difference(rejects).copied().collect()
+    }
+}
+
+struct AcceptVotes<T> {
+    shared: StakeAggregator<T>,
+    by_transaction: BTreeMap<TransactionIndex, StakeAggregator<T>>,
+}
+
+impl<T> AcceptVotes<T> {
+    fn for_transaction(&self, transaction_index: TransactionIndex) -> &StakeAggregator<T> {
+        self.by_transaction
+            .get(&transaction_index)
+            .unwrap_or(&self.shared)
     }
 }
 
@@ -700,6 +831,24 @@ mod tests {
             VerifiedBlock::new_for_test(TestBlock::new(3, 0).set_ancestors(ancestors).build_v3(0))
         }
 
+        fn make_graph_block(
+            &self,
+            round: Round,
+            author: u32,
+            mut ancestors: Vec<BlockRef>,
+            transaction_votes: Vec<BlockTransactionVotes>,
+            cutoff_round: Round,
+        ) -> VerifiedBlock {
+            let own_authority = AuthorityIndex::new_for_test(author);
+            ancestors.sort_by_key(|block_ref| block_ref.author != own_authority);
+            VerifiedBlock::new_for_test(
+                TestBlock::new(round, author)
+                    .set_ancestors(ancestors)
+                    .set_transaction_votes(transaction_votes)
+                    .build_v3(cutoff_round),
+            )
+        }
+
         fn add_blocks(&self, blocks: &[VerifiedBlock]) {
             self.dag_state.write().accept_blocks(blocks.to_vec());
             self.transaction_vote_tracker.add_voted_blocks(
@@ -725,8 +874,8 @@ mod tests {
         )
     }
 
-    #[test]
-    fn direct_accepts_and_rejects_with_next_round_quorums() {
+    #[tokio::test]
+    async fn direct_accepts_and_rejects_with_next_round_quorums() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(2);
         let voters: Vec<_> = (0..5)
@@ -765,8 +914,8 @@ mod tests {
         assert!(fixture.finalizer.is_empty());
     }
 
-    #[test]
-    fn direct_keeps_transactions_pending_at_the_voter_cutoff() {
+    #[tokio::test]
+    async fn direct_keeps_transactions_pending_at_the_voter_cutoff() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(2);
         let voters: Vec<_> = (0..5)
@@ -798,8 +947,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn direct_keeps_transactions_pending_when_next_round_blocks_do_not_link() {
+    #[tokio::test]
+    async fn direct_keeps_transactions_pending_when_next_round_blocks_do_not_link() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let voters: Vec<_> = (1..6)
@@ -831,8 +980,242 @@ mod tests {
         );
     }
 
-    #[test]
-    fn direct_does_not_double_count_an_equivocating_accept_voter() {
+    #[tokio::test]
+    async fn direct_uses_mixed_round_votes_for_synced_commit() {
+        let mut fixture = Fixture::new();
+        let (target, round_one_refs) = fixture.make_round_one(1);
+
+        let round_two_accept = fixture.make_voter(
+            0,
+            &round_one_refs,
+            target.reference(),
+            true,
+            vec![],
+            0,
+            None,
+        );
+        let round_two_non_voters: Vec<_> = (1..6)
+            .map(|author| {
+                fixture.make_voter(
+                    author,
+                    &round_one_refs,
+                    target.reference(),
+                    false,
+                    vec![],
+                    0,
+                    None,
+                )
+            })
+            .collect();
+        let round_two_non_voter_refs: Vec<_> = round_two_non_voters
+            .iter()
+            .map(|block| block.reference())
+            .collect();
+        fixture.add_blocks(std::slice::from_ref(&round_two_accept));
+        fixture.add_blocks(&round_two_non_voters);
+
+        // These round-three blocks first observe the target through a weak link. Their
+        // round-two parents do not include the target in their causal history.
+        let round_three_accepts: Vec<_> = (1..5)
+            .map(|author| {
+                let mut ancestors = round_two_non_voter_refs.clone();
+                ancestors.push(target.reference());
+                fixture.make_graph_block(3, author, ancestors, vec![], 0)
+            })
+            .collect();
+        fixture.add_blocks(&round_three_accepts);
+
+        let mut commit = make_commit(
+            1,
+            &round_two_accept,
+            vec![target.clone(), round_two_accept.clone()],
+        );
+        commit.decided_with_local_blocks = false;
+        let finalized = fixture.finalizer.process_commit(commit);
+
+        assert_eq!(finalized.len(), 1);
+        assert!(finalized[0].rejected_transactions_by_block.is_empty());
+    }
+
+    #[tokio::test]
+    async fn direct_retries_when_new_local_votes_arrive() {
+        let mut fixture = Fixture::new();
+        let (target, round_one_refs) = fixture.make_round_one(1);
+        let initial_accepts: Vec<_> = (0..4)
+            .map(|author| {
+                fixture.make_voter(
+                    author,
+                    &round_one_refs,
+                    target.reference(),
+                    true,
+                    vec![],
+                    0,
+                    None,
+                )
+            })
+            .collect();
+        fixture.add_blocks(&initial_accepts);
+
+        assert!(
+            fixture
+                .finalizer
+                .process_commit(make_commit(1, &target, vec![target.clone()]))
+                .is_empty()
+        );
+
+        let fifth_accept = fixture.make_voter(
+            4,
+            &round_one_refs,
+            target.reference(),
+            true,
+            vec![],
+            0,
+            None,
+        );
+        let later_leader = fixture.make_voter(
+            5,
+            &round_one_refs,
+            target.reference(),
+            false,
+            vec![],
+            0,
+            None,
+        );
+        fixture.add_blocks(&[fifth_accept, later_leader.clone()]);
+
+        // The second commit contains no accept certificate for the target. Only the retried direct
+        // rule can use the new local vote and reach quorum.
+        let finalized = fixture.finalizer.process_commit(make_commit(
+            2,
+            &later_leader,
+            vec![later_leader.clone()],
+        ));
+
+        assert_eq!(finalized.len(), 2);
+        assert!(finalized[0].rejected_transactions_by_block.is_empty());
+        assert!(fixture.finalizer.is_empty());
+    }
+
+    #[tokio::test]
+    async fn direct_ignores_first_votes_after_leader_round_plus_one() {
+        let mut fixture = Fixture::new();
+        let (target, round_one_refs) = fixture.make_round_one(1);
+
+        let round_two_accept = fixture.make_voter(
+            0,
+            &round_one_refs,
+            target.reference(),
+            true,
+            vec![],
+            0,
+            None,
+        );
+        let round_two_non_voters: Vec<_> = (1..6)
+            .map(|author| {
+                fixture.make_voter(
+                    author,
+                    &round_one_refs,
+                    target.reference(),
+                    false,
+                    vec![],
+                    0,
+                    None,
+                )
+            })
+            .collect();
+        let round_two_non_voter_refs: Vec<_> = round_two_non_voters
+            .iter()
+            .map(|block| block.reference())
+            .collect();
+        fixture.add_blocks(std::slice::from_ref(&round_two_accept));
+        fixture.add_blocks(&round_two_non_voters);
+
+        let round_three_accepts: Vec<_> = (1..4)
+            .map(|author| {
+                let mut ancestors = round_two_non_voter_refs.clone();
+                ancestors.push(target.reference());
+                fixture.make_graph_block(3, author, ancestors, vec![], 0)
+            })
+            .collect();
+        fixture.add_blocks(&round_three_accepts);
+        let round_four_accept = fixture.make_graph_block(
+            4,
+            4,
+            vec![round_two_non_voters[3].reference(), target.reference()],
+            vec![],
+            0,
+        );
+        fixture.add_blocks(std::slice::from_ref(&round_four_accept));
+
+        let finalized = fixture.finalizer.process_commit(make_commit(
+            1,
+            &round_two_accept,
+            vec![target.clone(), round_two_accept.clone()],
+        ));
+
+        assert!(finalized.is_empty());
+        assert_eq!(
+            fixture.finalizer.pending_commits[0]
+                .pending_transactions
+                .get(&target.reference()),
+            Some(&BTreeSet::from([0]))
+        );
+    }
+
+    #[tokio::test]
+    async fn direct_counts_only_the_first_vote_on_an_authority_chain() {
+        for (rejects, cutoff_round) in [(vec![], 1), (vec![0], 0)] {
+            let mut fixture = Fixture::new();
+            let (target, round_one_refs) = fixture.make_round_one(1);
+            let accept_voters: Vec<_> = (0..4)
+                .map(|author| {
+                    fixture.make_voter(
+                        author,
+                        &round_one_refs,
+                        target.reference(),
+                        true,
+                        vec![],
+                        0,
+                        None,
+                    )
+                })
+                .collect();
+            let first_vote = fixture.make_voter(
+                4,
+                &round_one_refs,
+                target.reference(),
+                true,
+                rejects,
+                cutoff_round,
+                None,
+            );
+            fixture.add_blocks(&accept_voters);
+            fixture.add_blocks(std::slice::from_ref(&first_vote));
+
+            // The later block would accept the transaction if it could vote again. Its earlier
+            // block has already consumed this authority chain's vote with a cutoff or a reject.
+            let later_origin_block =
+                fixture.make_graph_block(3, 4, vec![first_vote.reference()], vec![], 0);
+            fixture.add_blocks(std::slice::from_ref(&later_origin_block));
+
+            let finalized = fixture.finalizer.process_commit(make_commit(
+                1,
+                &accept_voters[0],
+                vec![target.clone(), accept_voters[0].clone()],
+            ));
+
+            assert!(finalized.is_empty());
+            assert_eq!(
+                fixture.finalizer.pending_commits[0]
+                    .pending_transactions
+                    .get(&target.reference()),
+                Some(&BTreeSet::from([0]))
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn direct_does_not_double_count_an_equivocating_accept_voter() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let mut voters: Vec<_> = (0..4)
@@ -867,8 +1250,8 @@ mod tests {
         assert!(finalized.is_empty());
     }
 
-    #[test]
-    fn direct_accepts_when_explicit_reject_votes_are_below_quorum() {
+    #[tokio::test]
+    async fn direct_accepts_when_explicit_reject_votes_are_below_quorum() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let mut voters: Vec<_> = (0..5)
@@ -923,9 +1306,9 @@ mod tests {
         );
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic(expected = "cannot have both accept and reject quorums")]
-    fn direct_detects_more_than_f_equivocating_stake() {
+    async fn direct_detects_more_than_f_equivocating_stake() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let mut voters: Vec<_> = (0..5)
@@ -1060,8 +1443,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn direct_and_indirect_finalize_different_blocks_in_one_commit() {
+    #[tokio::test]
+    async fn direct_and_indirect_finalize_different_blocks_in_one_commit() {
         let mut fixture = Fixture::new();
         let round_one_blocks = fixture.make_round_one_blocks(&[1, 1]);
         let round_one_refs: Vec<_> = round_one_blocks
@@ -1115,30 +1498,18 @@ mod tests {
             Some(&BTreeSet::from([0]))
         );
 
-        assert!(
-            fixture
-                .finalizer
-                .process_commit(make_commit(2, &voters[0], voters.clone()))
-                .is_empty()
-        );
-        let anchor = fixture.make_anchor(
-            voters
-                .iter()
-                .map(|voting_block| voting_block.reference())
-                .collect(),
-        );
-        fixture.add_blocks(std::slice::from_ref(&anchor));
         let finalized =
             fixture
                 .finalizer
-                .process_commit(make_commit(3, &anchor, vec![anchor.clone()]));
+                .process_commit(make_commit(2, &voters[0], voters.clone()));
 
-        assert_eq!(finalized.len(), 3);
+        assert_eq!(finalized.len(), 2);
         assert!(finalized[0].rejected_transactions_by_block.is_empty());
+        assert!(fixture.finalizer.is_empty());
     }
 
-    #[test]
-    fn indirect_accepts_certificate_without_full_voting_quorum_in_prefix() {
+    #[tokio::test]
+    async fn indirect_accepts_certificate_without_full_voting_quorum_in_prefix() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let accept_voters: Vec<_> = (0..3)
@@ -1204,69 +1575,56 @@ mod tests {
         );
     }
 
-    #[test]
-    fn indirect_uses_committed_votes_without_cached_voting_blocks() {
+    #[tokio::test]
+    async fn indirect_accepts_mixed_round_first_votes_after_one_later_commit() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
-        let accept_voters: Vec<_> = (0..3)
-            .map(|author| {
-                fixture.make_voter(
-                    author,
-                    &round_one_refs,
-                    target.reference(),
-                    true,
-                    vec![],
-                    0,
-                    None,
-                )
-            })
-            .collect();
-        let reject_voters: Vec<_> = (3..5)
-            .map(|author| {
-                fixture.make_voter(
-                    author,
-                    &round_one_refs,
-                    target.reference(),
-                    false,
-                    vec![],
-                    0,
-                    None,
-                )
-            })
-            .collect();
-        let voters: Vec<_> = accept_voters
-            .iter()
-            .chain(&reject_voters)
-            .cloned()
-            .collect();
-        let anchor = fixture.make_anchor(
-            voters
-                .iter()
-                .map(|voting_block| voting_block.reference())
-                .collect(),
+        let round_two_vote = fixture.make_voter(
+            0,
+            &round_one_refs,
+            target.reference(),
+            true,
+            vec![],
+            0,
+            None,
         );
+        let round_three_vote = fixture.make_graph_block(
+            3,
+            1,
+            vec![round_one_refs[1], round_two_vote.reference()],
+            vec![],
+            0,
+        );
+        let round_four_vote = fixture.make_graph_block(
+            4,
+            2,
+            vec![round_one_refs[2], round_three_vote.reference()],
+            vec![],
+            0,
+        );
+        fixture.add_blocks(std::slice::from_ref(&round_two_vote));
+        fixture.add_blocks(std::slice::from_ref(&round_three_vote));
+        fixture.add_blocks(std::slice::from_ref(&round_four_vote));
 
-        // Simulate commit sync. The committed sub-DAG contains the voting blocks,
-        // but the local DAG cache does not contain them.
-        assert!(
-            fixture
-                .dag_state
-                .read()
-                .get_cached_blocks_at_round(2)
-                .is_empty()
-        );
         assert!(
             fixture
                 .finalizer
-                .process_commit(make_commit(1, &target, vec![target.clone()]))
+                .process_commit(make_commit(
+                    1,
+                    &round_three_vote,
+                    vec![
+                        target.clone(),
+                        round_two_vote.clone(),
+                        round_three_vote.clone(),
+                    ],
+                ))
                 .is_empty()
         );
-        let mut anchor_commit_blocks = voters;
-        anchor_commit_blocks.push(anchor.clone());
-        let finalized =
-            fixture
-                .finalizer
-                .process_commit(make_commit(2, &anchor, anchor_commit_blocks));
+        let finalized = fixture.finalizer.process_commit(make_commit(
+            2,
+            &round_four_vote,
+            vec![round_four_vote.clone()],
+        ));
 
         assert_eq!(finalized.len(), 2);
         assert!(
@@ -1274,10 +1632,11 @@ mod tests {
                 .rejected_transactions_by_block
                 .contains_key(&target.reference())
         );
+        assert!(fixture.finalizer.is_empty());
     }
 
-    #[test]
-    fn indirect_accepts_at_depth_two_with_one_equivocating_voter() {
+    #[tokio::test]
+    async fn indirect_accepts_at_depth_two_with_one_equivocating_voter() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let accept_0 = fixture.make_voter(
@@ -1378,8 +1737,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn indirect_uses_votes_from_all_committed_leaders() {
+    #[tokio::test]
+    async fn indirect_uses_votes_from_all_committed_leaders() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let accept_0 = fixture.make_voter(
@@ -1505,8 +1864,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn indirect_rejects_without_an_accept_certificate() {
+    #[tokio::test]
+    async fn indirect_rejects_without_an_accept_certificate() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(1);
         let mut voters = vec![];
