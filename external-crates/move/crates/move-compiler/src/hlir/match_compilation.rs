@@ -10,6 +10,7 @@ use crate::{
     shared::{
         ast_debug::{AstDebug, AstWriter},
         matching::*,
+        program_info::DatatypeKind,
         string_utils::debug_print,
         unique_map::UniqueMap,
     },
@@ -32,30 +33,21 @@ enum StructUnpack<T> {
 
 #[derive(Debug, Clone)]
 enum MatchTree {
-    // A wild row matched with fringe subjects still unconsumed. Bindings live per-arm in
-    // each ArmResult, not in a MatchBinding: they span the entire remaining fringe, and
-    // guarded arms need arm-local scopes.
     Leaf(Vec<ArmResult>),
     Failure,
-    // A consumed fringe subject: its binding, and what happens at it.
-    Node(MatchBinding, MatchNode),
+    Node(MatchBindings, MatchNode),
 }
 
-/// A consumed fringe subject and the pattern variables that named it (guard binders and the
-/// like), bound as immutable copies around the node's result during resolution.
 #[derive(Debug, Clone)]
-struct MatchBinding {
-    subject: FringeEntry,
-    subject_binders: Vec<(Mutability, Var)>,
+struct MatchBindings {
+    subject: FringeEntry,                    // subject for this match node
+    subject_binders: Vec<(Mutability, Var)>, // binders for the subject, if any
 }
 
 #[derive(Debug, Clone)]
 enum MatchNode {
-    // The subject discriminates nothing -- a column of binders and wildcards, which is the
-    // only legal shape for a subject with no inspectable structure (e.g., a type parameter).
-    // Continue with the rest of the fringe.
-    Continue(Box<MatchTree>),
-    Switch(MatchSwitch),
+    Continue(Box<MatchTree>), // all binders / wildcards
+    Switch(MatchSwitch),      // a switch on a subject with structure (literal, struct, or enum)
 }
 
 #[derive(Debug, Clone)]
@@ -68,7 +60,7 @@ enum MatchSwitch {
         tyargs: Vec<Type>,
         unpack: StructUnpack<Box<MatchTree>>,
     },
-    Variant {
+    Enum {
         tyargs: Vec<Type>,
         arms: BTreeMap<VariantName, (Vec<(Field, Var, Type)>, Box<MatchTree>)>,
         default: Box<MatchTree>,
@@ -199,14 +191,13 @@ fn build_match_tree(
         return MatchTree::Failure;
     };
 
+    // If this is all just binders or wildcards, we just bind them and keep going; no need to
+    // determine the type for discrimination.
     if matrix.first_column_binders_only() {
-        // No row discriminates on this subject, so bind it and continue. Mandatory when the
-        // subject type has no structure to inspect (e.g., a type parameter); for structured
-        // subjects it avoids a switch whose every arm repeats the default tree.
         let (subject_binders, default) = matrix.specialize_default(context);
         let next = build_match_tree(context, fringe, default);
         MatchTree::Node(
-            MatchBinding {
+            MatchBindings {
                 subject,
                 subject_binders,
             },
@@ -214,18 +205,22 @@ fn build_match_tree(
         )
     } else if subject.ty.value.unfold_to_builtin_type_name().is_some() {
         compile_match_literal(context, subject, fringe, matrix)
-    } else if let Some(tyargs) = subject.ty.value.type_arguments() {
-        let tyargs = tyargs.clone();
+    } else if let Some((mident, datatype_name)) = subject
+        .ty
+        .value
+        .unfold_to_type_name()
+        .and_then(|sp!(_, name)| name.datatype_name())
+    {
+        let Some(tyargs) = subject.ty.value.type_arguments().cloned() else {
+            context.add_diag(ice!((
+                subject.var.loc,
+                "Datatype match subject missing its (possibly empty) type argument list"
+            )));
+            return MatchTree::Failure;
+        };
 
-        let (mident, datatype_name) = subject
-            .ty
-            .value
-            .unfold_to_type_name()
-            .and_then(|sp!(_, name)| name.datatype_name())
-            .expect("ICE non-datatype type in head constructor fringe position");
-
-        if context.info.is_struct(&mident, &datatype_name) {
-            compile_match_struct(
+        match context.info.datatype_kind(&mident, &datatype_name) {
+            DatatypeKind::Struct => compile_match_struct(
                 context,
                 subject,
                 tyargs,
@@ -233,9 +228,8 @@ fn build_match_tree(
                 matrix,
                 mident,
                 datatype_name,
-            )
-        } else {
-            compile_variant_switch(
+            ),
+            DatatypeKind::Enum => compile_enum_switch(
                 context,
                 subject,
                 tyargs,
@@ -243,7 +237,7 @@ fn build_match_tree(
                 matrix,
                 mident,
                 datatype_name,
-            )
+            ),
         }
     } else {
         ice_assert!(
@@ -289,7 +283,7 @@ fn compile_match_literal(
     let default_result = Box::new(build_match_tree(context, fringe, default));
 
     MatchTree::Node(
-        MatchBinding {
+        MatchBindings {
             subject,
             subject_binders,
         },
@@ -350,7 +344,7 @@ fn compile_match_struct(
     };
 
     MatchTree::Node(
-        MatchBinding {
+        MatchBindings {
             subject,
             subject_binders,
         },
@@ -359,7 +353,7 @@ fn compile_match_struct(
 }
 
 #[growing_stack]
-fn compile_variant_switch(
+fn compile_enum_switch(
     context: &mut Context,
     subject: FringeEntry,
     tyargs: Vec<Type>,
@@ -425,11 +419,11 @@ fn compile_variant_switch(
 
     let default = Box::new(build_match_tree(context, fringe, default_matrix));
     MatchTree::Node(
-        MatchBinding {
+        MatchBindings {
             subject,
             subject_binders,
         },
-        MatchNode::Switch(MatchSwitch::Variant {
+        MatchNode::Switch(MatchSwitch::Enum {
             tyargs,
             arms,
             default,
@@ -511,7 +505,7 @@ fn match_switch_to_exp(
     switch: MatchSwitch,
 ) -> T::Exp {
     match switch {
-        MatchSwitch::Variant {
+        MatchSwitch::Enum {
             tyargs,
             mut arms,
             default,
@@ -556,7 +550,7 @@ fn match_switch_to_exp(
                 .unfold_to_type_name()
                 .and_then(|sp!(_, name)| name.datatype_name())
                 .unwrap();
-            let unpack_exp = match unpack {
+            match unpack {
                 StructUnpack::Default(next) => match_tree_to_exp(context, init_subject, *next),
                 StructUnpack::Unpack(unpack_fields, next) => {
                     let rest_result = match_tree_to_exp(context, init_subject, *next);
@@ -570,8 +564,7 @@ fn match_switch_to_exp(
                         rest_result,
                     )
                 }
-            };
-            unpack_exp
+            }
         }
         MatchSwitch::Literal {
             mut arms,
@@ -619,10 +612,10 @@ fn match_switch_to_exp(
 /// legal for any subject type; by-value arm bindings happen at the leaves via `make_arm_unpack`.
 fn bind_subject_binders(
     context: &ResolutionContext,
-    binding: MatchBinding,
+    binding: MatchBindings,
     next: T::Exp,
 ) -> T::Exp {
-    let MatchBinding {
+    let MatchBindings {
         subject,
         subject_binders,
     } = binding;

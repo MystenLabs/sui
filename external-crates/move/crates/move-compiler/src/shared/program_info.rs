@@ -491,6 +491,13 @@ impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {
         &self.enum_definition(m, n).type_parameters
     }
 
+    pub fn is_enum(&self, module: &ModuleIdent, datatype_name: &DatatypeName) -> bool {
+        matches!(
+            self.datatype_kind(module, datatype_name),
+            DatatypeKind::Enum
+        )
+    }
+
     /// Returns the enum variant names in sorted order.
     pub fn enum_variants(
         &self,
