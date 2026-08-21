@@ -113,6 +113,8 @@ async fn main() -> anyhow::Result<()> {
     // Connections opened per second (0 = all at once). Paced opening avoids a thundering-herd connect
     // burst that saturates the client runtime and starves the sampling loop at high N.
     let ramp: usize = std::env::var("RAMP").ok().and_then(|s| s.parse().ok()).unwrap_or(0);
+    // Percent of subscribers that backfill (rest are live). 100 = all backfill, 0 = all live, 50 = interleaved.
+    let bf_pct: usize = std::env::var("BACKFILL_PCT").ok().and_then(|s| s.parse().ok()).unwrap_or(50);
     let server = std::env::var("SERVER")
         .unwrap_or_else(|_| "http://127.0.0.1:8123/graphql/subscriptions".into());
     let metrics_url =
@@ -127,7 +129,13 @@ async fn main() -> anyhow::Result<()> {
     let mut handles = Vec::with_capacity(n);
     for i in 0..n {
         // Interleave so a paced ramp opens backfill and live subscribers evenly over time.
-        let backfill = i % 2 == 0;
+        let backfill = if bf_pct >= 100 {
+            true
+        } else if bf_pct == 0 {
+            false
+        } else {
+            i % 2 == 0
+        };
         let (query, delivered) = if backfill {
             (BACKFILL_QUERY, delivered_backfill.clone())
         } else {
