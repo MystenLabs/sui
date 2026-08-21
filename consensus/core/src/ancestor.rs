@@ -119,6 +119,11 @@ impl AncestorStateManager {
 
     /// Updates the state of all ancestors based on the latest scores and quorum rounds
     pub(crate) fn update_all_ancestors_state(&mut self, accepted_quorum_rounds: &[QuorumRound]) {
+        // A zero exclusion budget disables ancestor selection and keeps all ancestors included.
+        if self.excluded_nodes_stake_threshold == 0 {
+            return;
+        }
+
         // If round prober has not run yet and we don't have network quorum round,
         // it is okay because network_high_quorum_round will be zero and we will
         // include all ancestors until we get more information.
