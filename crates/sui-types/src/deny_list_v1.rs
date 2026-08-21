@@ -13,7 +13,7 @@ use crate::transaction::{CheckedInputObjects, ReceivingObjects};
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use tracing::debug;
 use tracing::error;
 
@@ -48,17 +48,22 @@ pub struct PerTypeDenyList {
 }
 
 /// Checks coin denylist v1 at signing time.
-/// It checks that none of the coin types in the transaction are denied for the sender.
+/// It checks that none of the coin types in the transaction are denied for an address they are
+/// debited from: the sender, plus the funder of each withdrawal, which an allowance lets differ
+/// from the sender.
 pub fn check_coin_deny_list_v1(
     sender: SuiAddress,
     input_objects: &CheckedInputObjects,
     receiving_objects: &ReceivingObjects,
-    funds_withdraw_types: BTreeSet<String>,
+    funds_withdrawals: BTreeSet<(SuiAddress, String)>,
     object_store: &dyn ObjectStore,
 ) -> UserInputResult {
-    let mut coin_types =
-        input_object_coin_types_for_denylist_check(input_objects, receiving_objects);
-    coin_types.extend(funds_withdraw_types);
+    let addresses_by_coin_type = addresses_by_coin_type_for_denylist_check(
+        sender,
+        input_objects,
+        receiving_objects,
+        funds_withdrawals,
+    );
 
     let Some(deny_list) = get_coin_deny_list(object_store) else {
         // TODO: This is where we should fire an invariant violation metric.
@@ -68,7 +73,32 @@ pub fn check_coin_deny_list_v1(
             return Ok(());
         }
     };
-    check_deny_list_v1_impl(deny_list, sender, coin_types, object_store)
+    check_deny_list_v1_impl(deny_list, addresses_by_coin_type, object_store)
+}
+
+/// A map of (coin_type -> addresses) to be checked for deny-list.
+/// Includes objects (input, receiving) + fund withdrawals.
+/// Sender is included for all withdrawal types (sponsor / allowances).
+pub(crate) fn addresses_by_coin_type_for_denylist_check(
+    sender: SuiAddress,
+    input_objects: &CheckedInputObjects,
+    receiving_objects: &ReceivingObjects,
+    funds_withdrawals: BTreeSet<(SuiAddress, String)>,
+) -> BTreeMap<String, BTreeSet<SuiAddress>> {
+    let mut addresses_by_coin_type: BTreeMap<String, BTreeSet<SuiAddress>> = BTreeMap::new();
+    for coin_type in input_object_coin_types_for_denylist_check(input_objects, receiving_objects) {
+        addresses_by_coin_type
+            .entry(coin_type)
+            .or_default()
+            .insert(sender);
+    }
+    for (funder, coin_type) in funds_withdrawals {
+        // The funder's balance is debited and the sender directs the spend, so check both.
+        let addresses = addresses_by_coin_type.entry(coin_type).or_default();
+        addresses.insert(sender);
+        addresses.insert(funder);
+    }
+    addresses_by_coin_type
 }
 
 /// Returns all unique coin types in canonical string form from the input objects and receiving objects.
@@ -95,21 +125,25 @@ pub(crate) fn input_object_coin_types_for_denylist_check(
 
 fn check_deny_list_v1_impl(
     deny_list: PerTypeDenyList,
-    address: SuiAddress,
-    coin_types: BTreeSet<String>,
+    addresses_by_coin_type: BTreeMap<String, BTreeSet<SuiAddress>>,
     object_store: &dyn ObjectStore,
 ) -> UserInputResult {
-    let Ok(count) = get_dynamic_field_from_store::<SuiAddress, u64>(
-        object_store,
-        deny_list.denied_count.id,
-        &address,
-    ) else {
-        return Ok(());
-    };
-    if count == 0 {
+    let addresses: BTreeSet<SuiAddress> =
+        addresses_by_coin_type.values().flatten().copied().collect();
+
+    // TODO: Add a limit of addresses? Our current boundary is 10 (due to max withdrawals)
+    // but might be worth making this explicit.
+    let denied_anywhere: BTreeSet<SuiAddress> = addresses
+        .into_iter()
+        .filter(|address| denied_count(&deny_list, *address, object_store) > 0)
+        .collect();
+    if denied_anywhere.is_empty() {
         return Ok(());
     }
-    for coin_type in coin_types {
+    for (coin_type, addresses) in addresses_by_coin_type {
+        if addresses.is_disjoint(&denied_anywhere) {
+            continue;
+        }
         let Ok(denied_addresses) = get_dynamic_field_from_store::<Vec<u8>, VecSet<SuiAddress>>(
             object_store,
             deny_list.denied_addresses.id,
@@ -118,7 +152,7 @@ fn check_deny_list_v1_impl(
             continue;
         };
         let denied_addresses: BTreeSet<_> = denied_addresses.contents.into_iter().collect();
-        if denied_addresses.contains(&address) {
+        if let Some(&address) = addresses.intersection(&denied_addresses).next() {
             debug!(
                 "Address {} is denied for coin package {:?}",
                 address, coin_type
@@ -127,6 +161,15 @@ fn check_deny_list_v1_impl(
         }
     }
     Ok(())
+}
+
+/// How many coin types `address` is denied for; no entry means none.
+fn denied_count(
+    deny_list: &PerTypeDenyList,
+    address: SuiAddress,
+    object_store: &dyn ObjectStore,
+) -> u64 {
+    get_dynamic_field_from_store(object_store, deny_list.denied_count.id, &address).unwrap_or(0)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

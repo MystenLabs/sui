@@ -5,7 +5,7 @@ use crate::base_types::{EpochId, SuiAddress};
 use crate::coin::COIN_MODULE_NAME;
 use crate::config::{Config, Setting};
 use crate::deny_list_v1::{
-    DENY_LIST_COIN_TYPE_INDEX, DENY_LIST_MODULE, input_object_coin_types_for_denylist_check,
+    DENY_LIST_COIN_TYPE_INDEX, DENY_LIST_MODULE, addresses_by_coin_type_for_denylist_check,
 };
 use crate::dynamic_field::{DOFWrapper, get_dynamic_field_from_store};
 use crate::error::{ExecutionError, UserInputError, UserInputResult};
@@ -115,24 +115,28 @@ impl MoveTypeTagTrait for GlobalPauseKey {
 }
 
 pub fn check_coin_deny_list_v2_during_signing(
-    address: SuiAddress,
+    sender: SuiAddress,
     input_objects: &CheckedInputObjects,
     receiving_objects: &ReceivingObjects,
-    funds_withdraw_types: BTreeSet<String>,
+    funds_withdrawals: BTreeSet<(SuiAddress, String)>,
     object_store: &dyn ObjectStore,
 ) -> UserInputResult {
-    let mut coin_types =
-        input_object_coin_types_for_denylist_check(input_objects, receiving_objects);
-    coin_types.extend(funds_withdraw_types);
-
-    for coin_type in coin_types {
+    let addresses_by_coin_type = addresses_by_coin_type_for_denylist_check(
+        sender,
+        input_objects,
+        receiving_objects,
+        funds_withdrawals,
+    );
+    for (coin_type, addresses) in addresses_by_coin_type {
         let Some(deny_list) = get_per_type_coin_deny_list_v2(&coin_type, object_store) else {
             continue;
         };
         if check_global_pause(&deny_list, object_store, None) {
             return Err(UserInputError::CoinTypeGlobalPause { coin_type });
         }
-        if check_address_denied_by_config(&deny_list, address, object_store, None) {
+        if let Some(address) = addresses.into_iter().find(|address| {
+            check_address_denied_by_config(&deny_list, *address, object_store, None)
+        }) {
             return Err(UserInputError::AddressDeniedForCoin { address, coin_type });
         }
     }
