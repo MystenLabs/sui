@@ -1,0 +1,88 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module guarded {
+    public fun is_large () {
+        let l6 = l0;
+        return         match(&l6: Order) {
+            Order::Market => {
+false            },
+            Order::Limit { qty: reg_6, price: reg_7 } if (        *reg_6 *         *reg_7 > 1000u64) => {
+                let Order::Limit { qty: reg_17, price: reg_18 } = l6;
+true            },
+            Order::Limit { qty: reg_6, price: reg_7 } => {
+false            },
+            Order::Cancel => {
+false            },
+        }
+
+    }
+
+    public fun market_fee () {
+        let l4 = l0;
+        return         match(&l4: Order) {
+            Order::Market { qty: reg_4 } if (        *reg_4 > 100u64) => {
+                let Order::Market { qty: reg_9 } = l4;
+reg_9 * 2u64            },
+            Order::Market { qty: reg_4 } => {
+                let Order::Market { qty: reg_13 } = l4;
+reg_13            },
+            Order::Limit => {
+0u64            },
+            Order::Cancel => {
+0u64            },
+        }
+
+    }
+
+    public fun priority () {
+        let __c23, __c6, l1, reg_14, reg_4;
+        let l3 = l0;
+        let l2 = l3;
+        match(l2: Order) {
+            Order::Market { qty: reg_4 } => {
+                __c6 =         *reg_4 > 0u64;
+                assert!(__c6, Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] })
+                let Order::Market { qty: reg_11 } = &l3;
+                l1 = 3u64;
+            },
+            Order::Limit { qty: reg_14, price: reg_15 } => {
+                __c23 =         *reg_14 > 0u64;
+                assert!(__c23, Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] })
+                let Order::Limit { qty: reg_22, price: reg_23 } = &l3;
+                l1 = 2u64;
+            },
+            Order::Cancel => {
+                l1 = 1u64;
+            },
+        }
+        let Order::Market { qty: reg_4 } = &l2;
+        __c6 =         *reg_4 > 0u64;
+        let Order::Limit { qty: reg_14, price: reg_15 } = &l2;
+        __c23 =         *reg_14 > 0u64;
+        if (__match0_Cancel || __c23 && __match0_Limit || __c6 && __match0_Market) {
+            return l1
+        }
+    }
+
+    public fun tiered () {
+        let l6 = l0;
+        return         match(&l6: Order) {
+            Order::Market => {
+0u64            },
+            Order::Limit { qty: reg_6, price: reg_7 } if (        *reg_6 > 100u64) => {
+                let Order::Limit { qty: reg_14, price: reg_15 } = l6;
+3u64            },
+            Order::Limit { qty: reg_6, price: reg_7 } if (        *reg_6 > 10u64) => {
+                let Order::Limit { qty: reg_22, price: reg_23 } = l6;
+2u64            },
+            Order::Limit { qty: reg_6, price: reg_7 } => {
+                let Order::Limit { qty: reg_26, price: reg_27 } = l6;
+1u64            },
+            Order::Cancel => {
+0u64            },
+        }
+
+    }
+
+}

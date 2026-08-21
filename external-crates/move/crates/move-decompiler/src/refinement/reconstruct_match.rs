@@ -60,7 +60,12 @@ impl Refine for ReconstructMatch {
                 .into_iter()
                 .map(|(variant, mut body)| {
                     let fields = take_leading_unpack(&mut body, variant).unwrap_or_default();
-                    (variant, fields, body)
+                    crate::ast::MatchArm {
+                        variant,
+                        fields,
+                        guard: None,
+                        rhs: body,
+                    }
                 })
                 .collect();
             Exp::Match(scrutinee, enum_, arms)

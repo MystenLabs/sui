@@ -230,10 +230,11 @@ fn trivials(map: &mut BTreeMap<RegId, Out::Exp>, trivs: Vec<Trivial>) -> Vec<Out
 fn trivial(map: &mut BTreeMap<RegId, Out::Exp>, triv: Trivial) -> Out::Exp {
     match triv {
         // If it is not there, just use the register as-is: it probably came from an unpack or a
-        // call with multiple return values.
+        // call with multiple return values. Mint the bare name (`reg_N`), never the ascribed
+        // debug rendering: name comparisons across the crate assume bare names.
         Trivial::Register(reg_id) => map
             .remove(&reg_id.name)
-            .unwrap_or_else(|| Out::Exp::Variable(reg_id.to_string())),
+            .unwrap_or_else(|| Out::Exp::Variable(reg_id.name())),
         Trivial::Immediate(value) => Out::Exp::Value(value),
     }
 }
@@ -244,4 +245,26 @@ pub(crate) fn local_name(id: usize) -> String {
 
 fn local(id: usize) -> Out::Exp {
     Out::Exp::Variable(local_name(id))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use move_stackless_bytecode_2::ast::Register;
+
+    /// Unmapped register uses must mint the bare `reg_N` name, not the ascribed debug
+    /// rendering (`reg_N : ty`): name comparisons across the crate assume bare names.
+    #[test]
+    fn unmapped_register_mints_bare_name() {
+        let mut map = BTreeMap::new();
+        let reg = Register {
+            name: 7,
+            ty: std::rc::Rc::new(move_binary_format::normalized::Type::U64),
+        };
+        let exp = trivial(&mut map, Trivial::Register(reg));
+        let Out::Exp::Variable(name) = exp else {
+            panic!("expected a Variable");
+        };
+        assert_eq!(name, "reg_7");
+    }
 }

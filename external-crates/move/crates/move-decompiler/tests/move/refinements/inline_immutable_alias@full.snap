@@ -16,7 +16,7 @@ fun add_one(l0: &mut u64) {
 }
 
 public fun mut_borrow_blocks_inline(): u64 {
-    let l0 = 0u64;
+    let mut l0 = 0u64;
     let l1 = l0;
     inline_immutable_alias::add_one(&mut l0);
     return l1

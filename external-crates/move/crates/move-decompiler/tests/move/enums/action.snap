@@ -1,6 +1,5 @@
 ---
 source: crates/move-decompiler/tests/tests.rs
-assertion_line: 72
 ---
 module action {
     public fun destroy_action () {
@@ -29,7 +28,7 @@ module action {
             },
             Action::ChangeSpeed { pos0: reg_13 } => {
                 let Action::ChangeSpeed { pos0: reg_15 } = &mut l3;
-                *reg_15 : &mut u64 = l1
+                *reg_15 = l1
                 return 
             },
         }
@@ -44,11 +43,11 @@ module action {
             },
             Action::MoveTo { x: reg_7, y: reg_8 } => {
                 let Action::MoveTo { x: reg_10, y: reg_11 } = &l3;
-                l1 =         *reg_10 : &u64;
+                l1 =         *reg_10;
             },
             Action::ChangeSpeed { pos0: reg_14 } => {
                 let Action::ChangeSpeed { pos0: reg_16 } = &l3;
-                l1 =         *reg_16 : &u64;
+                l1 =         *reg_16;
             },
         }
         return l1

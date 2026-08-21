@@ -1,0 +1,36 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module guarded_unrecovered {
+    public fun fieldless_guard () {
+        let l5 = l0;
+        return         match(&l5: Order) {
+            Order::Market => {
+0u64            },
+            Order::Cancel => {
+                if (l1) {
+                    let Order::Cancel {} = l5;
+1u64                } else {
+0u64                }
+            },
+        }
+
+    }
+
+    public fun if_in_arm () {
+        let l4 = l0;
+        return         match(&l4: Order) {
+            Order::Market { qty: reg_4 } => {
+                let Order::Market { qty: reg_6 } = l4;
+                let l5 = reg_6;
+                if (l5 > 100u64) {
+l5 * 2u64                } else {
+l5                }
+            },
+            Order::Cancel => {
+0u64            },
+        }
+
+    }
+
+}

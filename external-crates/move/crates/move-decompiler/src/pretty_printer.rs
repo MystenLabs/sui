@@ -1,6 +1,9 @@
 // Copyright (c) The Move Contributors SPDX-License-Identifier: Apache-2.0
 
-use crate::ast::{self, Datatype, Enum, Exp, Function, Struct, Type, Variant};
+use crate::{
+    ast::{self, Datatype, Enum, Exp, Function, Struct, Type, Variant},
+    needs_mut::MutAnnotations,
+};
 
 use move_binary_format::{
     file_format::{AbilitySet, DatatypeTyParameter, Visibility},
@@ -18,17 +21,55 @@ use indexmap::IndexMap;
 // Render Context
 // -------------------------------------------------------------------------------------------------
 
-struct Context {
+struct ModuleContext<'a> {
     constant_table: IndexMap<*const Constant<Symbol>, String>,
+    enums: &'a IndexMap<Symbol, Enum>,
 }
 
-impl Context {
+impl ModuleContext<'_> {
     fn get_constant(&self, c: &Constant<Symbol>) -> Doc {
         let key = c as *const _;
         match self.constant_table.get(&key) {
             Some(name) => D::text(name),
             None => D::text(format!("/* unknown constant {:p} */", key)),
         }
+    }
+
+    /// Suffix for a match pattern that names no fields: fielded variants must still
+    /// acknowledge their fields (`{ .. }`), while unit variants must stay bare.
+    fn empty_pattern_suffix(&self, enum_ty: &ast::TypeRef, variant: Symbol) -> &'static str {
+        let enum_name = match enum_ty {
+            ast::TypeRef::Qualified(_, name) => *name,
+            ast::TypeRef::Aliased(name) => *name,
+        };
+        let arity = self
+            .enums
+            .get(&enum_name)
+            .and_then(|e| e.variants.iter().find(|v| v.name == variant))
+            .map(|v| v.fields.len());
+        match arity {
+            Some(0) => "",
+            Some(_) => " { .. }",
+            None => {
+                // Enum destructuring is module-local, so every head must resolve here.
+                debug_assert!(false, "unknown variant {enum_name}::{variant}");
+                ""
+            }
+        }
+    }
+}
+
+/// Module-wide [`ModuleContext`] plus the per-function `mut` inference, bundled so the
+/// expression renderers can consult both.
+#[derive(Clone, Copy)]
+struct FunctionContext<'a> {
+    module: &'a ModuleContext<'a>,
+    muts: &'a MutAnnotations,
+}
+
+impl FunctionContext<'_> {
+    fn get_constant(&self, c: &Constant<Symbol>) -> Doc {
+        self.module.get_constant(c)
     }
 }
 
@@ -63,7 +104,10 @@ pub fn module<S: SourceKind>(
             .map(|(k, (name, _))| (*k, name.clone()))
             .collect();
 
-        Context { constant_table }
+        ModuleContext {
+            constant_table,
+            enums: &module.enums,
+        }
     };
 
     let crate::ast::Module {
@@ -195,8 +239,14 @@ pub fn module<S: SourceKind>(
     Ok(doc)
 }
 
-fn function(context: &Context, fun: &Function) -> Doc {
-    let header = fun_header_doc(fun);
+fn function(context: &ModuleContext<'_>, fun: &Function) -> Doc {
+    // Keyed by node identity: `fun.code` must not change before the `exp` calls below.
+    let muts = MutAnnotations::analyze(fun);
+    let header = fun_header_doc(fun, &muts);
+    let context = FunctionContext {
+        module: context,
+        muts: &muts,
+    };
     let code = &fun.code;
 
     // Notices for structurer residue. Prepending them inside the function braces puts the
@@ -288,7 +338,7 @@ fn peek_block(exp: &Exp) -> &Exp {
 // in the same shape as `move_model_2::pretty_printer::fun_header` etc. - the difference is the
 // types they read have been through `collect_uses`.
 
-fn fun_header_doc(fun: &Function) -> Doc {
+fn fun_header_doc(fun: &Function, muts: &MutAnnotations) -> Doc {
     let Function {
         name,
         visibility,
@@ -336,7 +386,8 @@ fn fun_header_doc(fun: &Function) -> Doc {
     let params_doc = {
         // Parameter names follow the same `l{i}` scheme as `term_reconstruction::local_name`.
         let parts = parameters.iter().enumerate().map(|(i, ty)| {
-            D::text(format!("l{i}"))
+            let name = format!("l{i}");
+            mut_name_doc(&name, muts.param_needs_mut(&name))
                 .concat(D::text(":"))
                 .group()
                 .concat_space(type_doc(ty))
@@ -612,7 +663,7 @@ fn datatype_doc(dt: &Datatype) -> Doc {
     }
 }
 
-fn exp(context: &Context, exp: &Exp) -> Doc {
+fn exp(context: FunctionContext<'_>, exp: &Exp) -> Doc {
     fn braces_block(body: Doc) -> Doc {
         D::braces(D::line().concat(body.indent(4)).concat(D::line()))
     }
@@ -621,7 +672,7 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
     // `/* block N */` comment; if `body` is a `Seq`, its items are inlined as siblings (no
     // nested braces), so the comment marks the start of the block and the statements continue
     // until the next block marker or the end of the enclosing sequence.
-    fn stmts<'a, I>(context: &Context, it: I) -> Doc
+    fn stmts<'a, I>(context: FunctionContext<'_>, it: I) -> Doc
     where
         I: IntoIterator<Item = &'a Exp>,
     {
@@ -632,7 +683,7 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
         D::intersperse(docs, D::text(";").concat(D::line()))
     }
 
-    fn push_stmt(context: &Context, e: &Exp, out: &mut Vec<Doc>) {
+    fn push_stmt(context: FunctionContext<'_>, e: &Exp, out: &mut Vec<Doc>) {
         match e {
             Exp::Block(id, body) => {
                 out.push(D::text(format!("/* block {id} */")));
@@ -651,7 +702,7 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
 
     // Expression-ish printers --------------------------------------------
 
-    fn recur(context: &Context, e: &Exp) -> Doc {
+    fn recur(context: FunctionContext<'_>, e: &Exp) -> Doc {
         match e {
             Exp::Break(label) => match label {
                 Some(l) => D::text(format!("break 'loop_{}", l)),
@@ -681,30 +732,14 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
                 }
             },
             Exp::LetBind(lhs, rhs) => {
-                let lhs_doc = match &lhs[..] {
-                    [] => D::text("_"),
-                    [x] => D::text(x),
-                    _ => D::parens(D::intersperse(
-                        lhs.iter().map(D::text),
-                        D::text(",").concat(D::space()),
-                    ))
-                    .group(),
-                };
+                let lhs_doc = let_lhs_doc(lhs, |n| context.muts.needs_mut(e, n));
                 D::text("let")
                     .concat_space(lhs_doc)
                     .concat_space(D::text("="))
                     .concat_space(recur(context, rhs))
             }
             Exp::Declare(lhs) => {
-                let lhs_doc = match &lhs[..] {
-                    [] => D::text("_"),
-                    [x] => D::text(x),
-                    _ => D::parens(D::intersperse(
-                        lhs.iter().map(D::text),
-                        D::text(",").concat(D::space()),
-                    ))
-                    .group(),
-                };
+                let lhs_doc = let_lhs_doc(lhs, |n| context.muts.needs_mut(e, n));
                 D::text("let").concat_space(lhs_doc)
             }
             Exp::Call((m, f), args) => {
@@ -749,7 +784,8 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
             Exp::Switch(subject, enum_ty, arms) => {
                 let arms_doc = Doc::intersperse(
                     arms.iter().map(|(variant, body)| {
-                        D::text(format!("{enum_ty}::{variant}"))
+                        let dots = context.module.empty_pattern_suffix(enum_ty, *variant);
+                        D::text(format!("{enum_ty}::{variant}{dots}"))
                             .concat_space(D::text("=>"))
                             .concat_space(e_block(context, body))
                     }),
@@ -759,15 +795,23 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
                     .concat_space(D::parens(recur(context, subject)))
                     .concat_space(braces_block(arms_doc))
             }
-            Exp::Match(subject, _enum_ty, arms) => {
+            Exp::Match(subject, enum_ty, arms) => {
                 let arms_doc = Doc::intersperse(
-                    arms.iter().map(|(variant, fields, body)| {
-                        let mut pat = D::text(variant.as_str());
-                        if !fields.is_empty() {
+                    arms.iter().enumerate().map(|(arm_idx, arm)| {
+                        let mut pat = if arm.fields.is_empty() {
+                            let dots = context.module.empty_pattern_suffix(enum_ty, arm.variant);
+                            D::text(format!("{enum_ty}::{}{dots}", arm.variant))
+                        } else {
+                            D::text(format!("{enum_ty}::{}", arm.variant))
+                        };
+                        if !arm.fields.is_empty() {
                             let field_doc = Doc::intersperse(
-                                fields
-                                    .iter()
-                                    .map(|(sym, name)| D::text(format!("{sym}: {name}"))),
+                                arm.fields.iter().map(|(sym, name)| {
+                                    D::text(format!("{sym}:")).concat_space(mut_name_doc(
+                                        name,
+                                        context.muts.arm_needs_mut(e, arm_idx, name),
+                                    ))
+                                }),
                                 D::text(", "),
                             );
                             pat = pat
@@ -775,8 +819,13 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
                                 .concat_space(field_doc)
                                 .concat_space(D::text("}"));
                         }
+                        if let Some(guard) = &arm.guard {
+                            pat = pat
+                                .concat_space(D::text("if"))
+                                .concat_space(recur(context, guard).parens());
+                        }
                         pat.concat_space(D::text("=>"))
-                            .concat_space(e_block(context, body))
+                            .concat_space(e_block(context, &arm.rhs))
                     }),
                     D::text(",").concat(D::line()),
                 );
@@ -800,7 +849,7 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
             Exp::Primitive { op, args } => primitive_op_doc(context, op, args),
             Exp::Data { op, args } => data_op_doc(context, op, args),
             Exp::Unpack(struct_ty, items, exp) => {
-                let items_doc = fields(items);
+                let items_doc = binder_fields(items, |n| context.muts.needs_mut(e, n));
                 D::text("let")
                     .concat_space(D::text(format!("{struct_ty}")))
                     .concat_space(items_doc)
@@ -816,14 +865,11 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
                         .concat(D::text(" */"))
                 }
             }
-            Exp::UnpackVariant(unpack_kind, (enum_ty, variant), items, exp) => {
-                let items_doc = fields(items);
-                let rhs_prefix = match unpack_kind {
-                    ast::UnpackKind::Value => "",
-                    ast::UnpackKind::ImmRef => "&",
-                    ast::UnpackKind::MutRef => "&mut ",
-                };
-                let rhs = D::text(rhs_prefix).concat(recur(context, exp));
+            Exp::UnpackVariant(_unpack_kind, (enum_ty, variant), items, exp) => {
+                let items_doc = binder_fields(items, |n| context.muts.needs_mut(e, n));
+                // No `&`/`&mut` prefix: by-ref unpack operands are already references in
+                // verifier-typed bytecode.
+                let rhs = recur(context, exp);
                 D::text("let")
                     .concat_space(D::text(format!("{enum_ty}::{variant}")))
                     .concat_space(items_doc)
@@ -842,7 +888,7 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
         }
     }
 
-    fn e_block(context: &Context, e: &Exp) -> Doc {
+    fn e_block(context: FunctionContext<'_>, e: &Exp) -> Doc {
         // Peel `Block` wrappers, collecting `/* block N */` comments to lead the brace-block,
         // then delegate the inner shape (Seq -> stmts; single Exp -> statement).
         let mut headers: Vec<Doc> = Vec::new();
@@ -883,7 +929,7 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
         }
     }
 
-    fn unstructured_block(context: &Context, nodes: &[ast::UnstructuredNode]) -> Doc {
+    fn unstructured_block(context: FunctionContext<'_>, nodes: &[ast::UnstructuredNode]) -> Doc {
         let nodes_doc = D::intersperse(
             nodes.iter().map(|node| unstructured_node(context, node)),
             D::line(),
@@ -891,7 +937,7 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
         braces_block(nodes_doc)
     }
 
-    fn unstructured_node(context: &Context, node: &ast::UnstructuredNode) -> Doc {
+    fn unstructured_node(context: FunctionContext<'_>, node: &ast::UnstructuredNode) -> Doc {
         match node {
             ast::UnstructuredNode::Labeled(label, body) => {
                 D::text(format!("'label_{}:", label)).concat_space(e_block(context, body))
@@ -901,7 +947,12 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
         }
     }
 
-    fn while_doc(context: &Context, label: Option<ast::Label>, cond: &Exp, body: &Exp) -> Doc {
+    fn while_doc(
+        context: FunctionContext<'_>,
+        label: Option<ast::Label>,
+        cond: &Exp,
+        body: &Exp,
+    ) -> Doc {
         let header = match label {
             Some(l) => D::text(format!("'loop_{}: while", l)),
             None => D::text("while"),
@@ -911,7 +962,7 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
             .concat_space(e_block(context, body))
     }
 
-    fn if_doc(context: &Context, cond: &Exp, then_b: &Exp, else_b: &Option<Exp>) -> Doc {
+    fn if_doc(context: FunctionContext<'_>, cond: &Exp, then_b: &Exp, else_b: &Option<Exp>) -> Doc {
         let then_block = e_block(context, then_b);
         match else_b {
             None => D::text("if")
@@ -931,7 +982,7 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
 }
 
 /// Render a list of expressions separated by commas.
-fn exp_list<'a, I>(context: &Context, it: I) -> Doc
+fn exp_list<'a, I>(context: FunctionContext<'_>, it: I) -> Doc
 where
     I: IntoIterator<Item = &'a Exp>,
 {
@@ -941,24 +992,49 @@ where
     )
 }
 
-/// Render a list of fields (name, type) separated by commas and enclosed in braces.
-fn fields(fields: &[(Symbol, String)]) -> Doc {
+/// `name`, prefixed with `mut` when `is_mut`.
+fn mut_name_doc(name: &str, is_mut: bool) -> Doc {
+    if is_mut {
+        D::text("mut").concat_space(D::text(name))
+    } else {
+        D::text(name)
+    }
+}
+
+/// Render a `let` left-hand side (`_` when empty, a bare name, or a parenthesized tuple)
+/// with `mut` on each binding `needs_mut` selects.
+fn let_lhs_doc(lhs: &[String], needs_mut: impl Fn(&str) -> bool) -> Doc {
+    let name_doc = |n: &String| mut_name_doc(n, needs_mut(n));
+    match lhs {
+        [] => D::text("_"),
+        [x] => name_doc(x),
+        _ => D::parens(D::intersperse(
+            lhs.iter().map(name_doc),
+            D::text(",").concat(D::space()),
+        ))
+        .group(),
+    }
+}
+
+/// Render an unpack binder's field list (`{ field: name, ... }`), with `mut` on each binding
+/// `needs_mut` selects.
+fn binder_fields(fields: &[(Symbol, String)], needs_mut: impl Fn(&str) -> bool) -> Doc {
     if fields.is_empty() {
         return D::nil().braces();
     };
     let doc = D::intersperse(
-        fields.iter().map(|(name, ty)| {
-            D::text(name.as_str())
+        fields.iter().map(|(field, name)| {
+            D::text(field.as_str())
                 .concat(D::text(":"))
-                .concat_space(D::text(ty))
+                .concat_space(mut_name_doc(name, needs_mut(name)))
         }),
         D::text(",").concat(D::space()),
     );
     D::space().concat(doc).concat(D::space()).braces()
 }
 
-fn data_op_doc(context: &Context, op: &DataOp, args: &[Exp]) -> Doc {
-    fn maybe_parens(context: &Context, e: &Exp) -> Doc {
+fn data_op_doc(context: FunctionContext<'_>, op: &DataOp, args: &[Exp]) -> Doc {
+    fn maybe_parens(context: FunctionContext<'_>, e: &Exp) -> Doc {
         match e {
             Exp::Variable(_) | Exp::Value(_) | Exp::Constant(_) => exp(context, e),
             _ => exp(context, e).parens(),
@@ -968,7 +1044,7 @@ fn data_op_doc(context: &Context, op: &DataOp, args: &[Exp]) -> Doc {
     /// Receiver for method syntax (`.foo(...)`). Move's `.method` auto-borrows, so a
     /// `Borrow(_, inner)` arg means we emit `inner.method(...)` rather than `&inner.method(...)`
     /// - the latter parses as `&(inner.method())` and would give us the wrong type.
-    fn method_receiver(context: &Context, e: &Exp) -> Doc {
+    fn method_receiver(context: FunctionContext<'_>, e: &Exp) -> Doc {
         match e {
             Exp::Borrow(_, inner) => maybe_parens(context, inner),
             _ => maybe_parens(context, e),
@@ -1095,7 +1171,7 @@ fn data_op_doc(context: &Context, op: &DataOp, args: &[Exp]) -> Doc {
     }
 }
 
-fn primitive_op_doc(context: &Context, op: &PrimitiveOp, args: &[Exp]) -> Doc {
+fn primitive_op_doc(context: FunctionContext<'_>, op: &PrimitiveOp, args: &[Exp]) -> Doc {
     let bin = |lhs: &Exp, sym: &str, rhs: &Exp| {
         exp(context, lhs)
             .concat_space(D::text(sym.to_string()))

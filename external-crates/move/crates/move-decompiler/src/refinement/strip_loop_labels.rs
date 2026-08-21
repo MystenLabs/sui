@@ -70,7 +70,11 @@ fn used_inside_nested_loop(exp: &Exp, target: Label) -> bool {
                 go(cond, target, in_nested) || arms.iter().any(|(_, a)| go(a, target, in_nested))
             }
             Exp::Match(cond, _, arms) => {
-                go(cond, target, in_nested) || arms.iter().any(|(_, _, a)| go(a, target, in_nested))
+                go(cond, target, in_nested)
+                    || arms.iter().any(|arm| {
+                        arm.guard.as_ref().is_some_and(|g| go(g, target, in_nested))
+                            || go(&arm.rhs, target, in_nested)
+                    })
             }
             Exp::MatchLit(cond, arms) => {
                 go(cond, target, in_nested) || arms.iter().any(|(_, a)| go(a, target, in_nested))
@@ -117,5 +121,32 @@ impl Refine for Demote {
             Exp::Loop(_, _) | Exp::While(_, _, _) => true,
             _ => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::{MatchArm, TypeRef};
+
+    /// Match guards are expressions and the compiler accepts loop control inside them, so a
+    /// labeled break in a guard inside a nested loop must keep the outer loop's label.
+    #[test]
+    fn labeled_break_in_guard_keeps_label() {
+        let arm = MatchArm {
+            variant: move_symbol_pool::Symbol::from("V"),
+            fields: vec![(move_symbol_pool::Symbol::from("f"), "x".to_string())],
+            guard: Some(Exp::Break(Some(0))),
+            rhs: Exp::Seq(vec![]),
+        };
+        let match_exp = Exp::Match(
+            Box::new(Exp::Variable("l0".to_string())),
+            TypeRef::Aliased(move_symbol_pool::Symbol::from("E")),
+            vec![arm],
+        );
+        let inner = Exp::Loop(None, Box::new(match_exp));
+        let mut outer = Exp::Loop(Some(0), Box::new(inner));
+        assert!(!refine(&mut outer));
+        assert!(matches!(outer, Exp::Loop(Some(0), _)));
     }
 }

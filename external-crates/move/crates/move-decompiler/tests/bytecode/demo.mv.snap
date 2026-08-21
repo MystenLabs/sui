@@ -559,9 +559,9 @@ public entry fun add_collection_to_slot<T0>(l0: &mut StakingPool<T0>, l1: u8, l2
     assert!(string::length(&l2) > 0u64, C23);
     let l7 = clock::timestamp_ms(l3);
     let l12 = object::id(freeze(l0));
-    let l9 = 0u64;
+    let mut l9 = 0u64;
     let l10 = (&l0.slot_configs).length();
-    let l8 = false;
+    let mut l8 = false;
     loop {
         if (l9 < l10) {
             let l6 = &mut (&mut l0.slot_configs)[l9];
@@ -769,8 +769,8 @@ public entry fun create_and_share_enhanced_staking_pool<T0>(l0: Coin<T0>, l1: u6
 }
 
 fun create_enhanced_slot_configs(): vector<SlotConfig> {
-    let l0 = vector[];
-    let l2 = C53;
+    let mut l0 = vector[];
+    let mut l2 = C53;
     while (l2 <= C52) {
         let (reg_6, reg_7) = demo::calculate_slot_params(l2);
         l0.push_back(SlotConfig { slot_number: l2, unlock_cost: reg_6, reward_multiplier: reg_7, allowed_collections: vector[], is_open_to_all: true });
@@ -788,10 +788,10 @@ public fun create_enhanced_staking_pool<T0>(l0: Coin<T0>, l1: u64, l2: u64, l3: 
     let l12 = clock::timestamp_ms(l8);
     assert!(l7 >= 1u8 && l7 <= C52, C40);
     let l19 = demo::create_enhanced_slot_configs();
-    let l13 = StakingPool { id: l14, admin: l11, emergency_admin: l6, total_staked: 0u64, reward_balance: coin::into_balance(l0), reserved_rewards: demo::calculate_reserve(l17), default_reward_rate: l1, start_time: l2, end_time: l3, is_locked: false, is_paused: false, supported_collections: l5, reward_token_type: l18, min_staking_duration: l4, total_rewards_distributed: 0u64, total_rewards_added: l17, pool_creation_time: l12, slot_configs: l19, total_users_with_slots: 0u64 };
+    let mut l13 = StakingPool { id: l14, admin: l11, emergency_admin: l6, total_staked: 0u64, reward_balance: coin::into_balance(l0), reserved_rewards: demo::calculate_reserve(l17), default_reward_rate: l1, start_time: l2, end_time: l3, is_locked: false, is_paused: false, supported_collections: l5, reward_token_type: l18, min_staking_duration: l4, total_rewards_distributed: 0u64, total_rewards_added: l17, pool_creation_time: l12, slot_configs: l19, total_users_with_slots: 0u64 };
     let l16 = PoolSlotLimits { id: object::new(l9), default_max_slots_per_wallet: l7, absolute_max_slots: C52, total_users_with_custom_limits: 0u64 };
     dynamic_object_field::add(&mut (&mut l13).id, PoolSlotLimitsKey { dummy_field: false }, l16);
-    let l21 = PaymentTokenRegistry { id: object::new(l9), supported_tokens: table::new(l9), token_list: vector[] };
+    let mut l21 = PaymentTokenRegistry { id: object::new(l9), supported_tokens: table::new(l9), token_list: vector[] };
     let l20 = demo::get_token_type_string_sui();
     table::add(&mut (&mut l21).supported_tokens, l20, true);
     (&mut (&mut l21).token_list).push_back(l20);
@@ -903,7 +903,7 @@ public fun get_slot_allowed_collections<T0>(l0: &StakingPool<T0>, l1: u8): ( vec
 }
 
 fun get_slot_config(l0: &vector<SlotConfig>, l1: u8): &SlotConfig {
-    let l3 = 0u64;
+    let mut l3 = 0u64;
     let l4 = l0.length();
     loop {
         assert!(l3 < l4, C29);
@@ -1017,11 +1017,11 @@ fun get_token_type_string_any<T0>(): String {
     let l2 = ascii::into_bytes(type_name::into_string(type_name::get()));
     if (l2.length() > 0u64) {
         if ((&l2)[0u64] == 76u8) {
-            let l4 = vector[];
+            let mut l4 = vector[];
             l4.push_back(48u8);
             l4.push_back(120u8);
             let l3 = l2.length();
-            let l1 = 1u64;
+            let mut l1 = 1u64;
             while (l1 < l3) {
                 let l0 = (&l2)[l1];
                 l4.push_back(l0);
@@ -1057,8 +1057,8 @@ public fun get_user_total_claimed_rewards<T0>(l0: &StakingPool<T0>, l1: address)
         return 0u64
     };
     let l2 = dynamic_object_field::borrow(&l0.id, l9);
-    let l8 = 0u64;
-    let l3 = 0u64;
+    let mut l8 = 0u64;
+    let mut l3 = 0u64;
     let l4 = (&l2.unlocked_slot_numbers).length();
     while (l3 < l4) {
         let l7 = (&l2.unlocked_slot_numbers)[l3];
@@ -1078,8 +1078,8 @@ public fun get_user_total_pending_rewards<T0>(l0: &StakingPool<T0>, l1: address,
         return 0u64
     };
     let l3 = dynamic_object_field::borrow(&l0.id, l9);
-    let l8 = 0u64;
-    let l4 = 0u64;
+    let mut l8 = 0u64;
+    let mut l4 = 0u64;
     let l5 = (&l3.unlocked_slot_numbers).length();
     while (l4 < l5) {
         let l7 = (&l3.unlocked_slot_numbers)[l4];
@@ -1112,11 +1112,11 @@ public fun get_user_wallet_details<T0>(l0: &StakingPool<T0>, l1: address, l2: &C
     };
     let l37 = l4;
     let l36 = l3;
-    let l27 = vector[];
-    let l34 = 0u64;
-    let l32 = 0u64;
-    let l9 = 0u8;
-    let l18 = 0u64;
+    let mut l27 = vector[];
+    let mut l34 = 0u64;
+    let mut l32 = 0u64;
+    let mut l9 = 0u8;
+    let mut l18 = 0u64;
     let l20 = (&l11.unlocked_slot_numbers).length();
     while (l18 < l20) {
         let l30 = (&l11.unlocked_slot_numbers)[l18];
@@ -1261,9 +1261,9 @@ public entry fun remove_collection_from_slot<T0>(l0: &mut StakingPool<T0>, l1: u
     assert!(l1 >= C53 && l1 <= C52, C29);
     let l8 = clock::timestamp_ms(l3);
     let l13 = object::id(freeze(l0));
-    let l10 = 0u64;
+    let mut l10 = 0u64;
     let l11 = (&l0.slot_configs).length();
-    let l9 = false;
+    let mut l9 = false;
     loop {
         if (l10 < l11) {
             let l7 = &mut (&mut l0.slot_configs)[l10];
@@ -1313,9 +1313,9 @@ public entry fun remove_wallet_bonus_multiplier<T0>(l0: &mut StakingPool<T0>, l1
     let l6 = WalletBonusMultiplierKey { wallet: l1 };
     assert!(dynamic_object_field::exists_(&l0.id, l6), C41);
     let WalletBonusMultiplier { id: reg_27, wallet: reg_28, bonus_multiplier: reg_29, set_by: reg_30, set_time: reg_31, reason: reg_32 } = dynamic_object_field::remove(&mut l0.id, l6);
-    object::delete(reg_27 : 0x2::object::UID);
+    object::delete(reg_27);
     let l5 = clock::timestamp_ms(l2);
-    event::emit(WalletBonusMultiplierSet { pool_id: object::id(freeze(l0)), wallet: l1, old_bonus_multiplier: reg_29 : u64, new_bonus_multiplier: 0u64, reason: string::utf8(C56), set_by: tx_context::sender(freeze(l3)), set_time: l5 })
+    event::emit(WalletBonusMultiplierSet { pool_id: object::id(freeze(l0)), wallet: l1, old_bonus_multiplier: reg_29, new_bonus_multiplier: 0u64, reason: string::utf8(C56), set_by: tx_context::sender(freeze(l3)), set_time: l5 })
 }
 
 fun safe_add(l0: u64, l1: u64): u64 {
@@ -1405,7 +1405,7 @@ public entry fun set_promotional_pricing<T0>(l0: &mut StakingPool<T0>, l1: u8, l
     demo::assert_not_paused(freeze(l0));
     assert!(l1 >= C53 && l2 <= C52, C29);
     assert!(l1 <= l2, C20);
-    let l8 = l1;
+    let mut l8 = l1;
     while (l8 <= l2) {
         demo::update_slot_price(l0, l8, l4, l3, l5, l6);
         l8 = l8 + 1u8;
@@ -1418,9 +1418,9 @@ public entry fun set_slot_allowed_collections<T0>(l0: &mut StakingPool<T0>, l1: 
     assert!(l1 >= C53 && l1 <= C52, C29);
     let l8 = clock::timestamp_ms(l4);
     let l13 = object::id(freeze(l0));
-    let l10 = 0u64;
+    let mut l10 = 0u64;
     let l11 = (&l0.slot_configs).length();
-    let l9 = false;
+    let mut l9 = false;
     loop {
         if (l10 < l11) {
             let l7 = &mut (&mut l0.slot_configs)[l10];
@@ -1524,7 +1524,7 @@ public entry fun unlock_slot<T0>(l0: &mut StakingPool<T0>, l1: u8, l2: Coin<SUI>
         transfer::public_transfer(l2, l22)
     } else {
         assert!(l13 >= l15, C30);
-        let l14 = coin::into_balance(l2);
+        let mut l14 = coin::into_balance(l2);
         if (l13 > l15) {
             let l11 = demo::safe_sub(l13, l15);
             transfer::public_transfer(coin::from_balance(balance::split(&mut l14, l11), l4), l22)
@@ -1618,12 +1618,12 @@ public entry fun unstake_nft<T0: key + store, T1>(l0: &mut StakingPool<T1>, l1: 
     let l16 = StakeKey { nft_id: l9, nft_type: l10 };
     assert!(dynamic_object_field::exists_(&l0.id, l16), C2);
     let StakeInfo { id: reg_58, nft_id: reg_59, owner: reg_60, kiosk_id: reg_61, collection: reg_62, purchase_cap: reg_63, stake_time: reg_64, last_claim_time: reg_65, pending_rewards: reg_66, nft_type: reg_67, total_claimed: reg_68, slot_number: reg_69 } = dynamic_object_field::remove(&mut l0.id, l16);
-    let l17 = reg_64 : u64;
-    let l8 = reg_61 : 0x2::object::ID;
-    let l11 = reg_60 : address;
+    let l17 = reg_64;
+    let l8 = reg_61;
+    let l11 = reg_60;
     assert!(l8 == object::id(freeze(l1)), C13);
     assert!(l6 >= demo::safe_add(l17, l0.min_staking_duration), C11);
-    kiosk::return_purchase_cap(l1, reg_63 : 0x2::kiosk::PurchaseCap<T0>);
+    kiosk::return_purchase_cap(l1, reg_63);
     let l14 = SlotDataKey { owner: l11, slot_number: l15 };
     let l13 = dynamic_object_field::borrow_mut(&mut l0.id, l14);
     *(&mut l13.staked_nft) = option::none();
@@ -1632,18 +1632,18 @@ public entry fun unstake_nft<T0: key + store, T1>(l0: &mut StakingPool<T1>, l1: 
     *(&mut l13.last_claim_time) = 0u64;
     *(&mut l13.pending_rewards) = 0u64;
     *(&mut l13.nft_type) = option::none();
-    object::delete(reg_58 : 0x2::object::UID);
+    object::delete(reg_58);
     let StakeReceipt { id: reg_117, pool_id: reg_118, nft_id: reg_119, kiosk_id: reg_120, owner: reg_121, stake_time: reg_122, nft_type: reg_123, slot_number: reg_124 } = l2;
-    object::delete(reg_117 : 0x2::object::UID);
+    object::delete(reg_117);
     *(&mut l0.total_staked) = demo::safe_sub(l0.total_staked, 1u64);
     let l18 = demo::safe_sub(l6, l17);
-    event::emit(NftUnstaked { pool_id: object::id(freeze(l0)), nft_id: l9, kiosk_id: l8, owner: l11, unstake_time: l6, staking_duration: l18, nft_type: l10, slot_number: l15, final_reward_claimed: reg_68 : u64 })
+    event::emit(NftUnstaked { pool_id: object::id(freeze(l0)), nft_id: l9, kiosk_id: l8, owner: l11, unstake_time: l6, staking_duration: l18, nft_type: l10, slot_number: l15, final_reward_claimed: reg_68 })
 }
 
 public entry fun update_multiple_slot_rewards<T0>(l0: &mut StakingPool<T0>, l1: vector<address>, l2: vector<u8>, l3: &Clock, l4: &mut TxContext) {
     demo::assert_not_paused(freeze(l0));
     assert!(l1.length() == l2.length(), C20);
-    let l5 = 0u64;
+    let mut l5 = 0u64;
     let l6 = l1.length();
     while (l5 < l6) {
         let l7 = (&l1)[l5];
@@ -1659,9 +1659,9 @@ public entry fun update_slot_multiplier<T0>(l0: &mut StakingPool<T0>, l1: u8, l2
     assert!(l1 >= C53 && l1 <= C52, C29);
     assert!(l2 >= C50 && l2 <= C54, C36);
     let l8 = clock::timestamp_ms(l3);
-    let l10 = 0u64;
+    let mut l10 = 0u64;
     let l11 = (&l0.slot_configs).length();
-    let l9 = false;
+    let mut l9 = false;
     loop {
         if (l10 < l11) {
             let l7 = &mut (&mut l0.slot_configs)[l10];
@@ -1685,7 +1685,7 @@ public entry fun update_slot_price<T0>(l0: &mut StakingPool<T0>, l1: u8, l2: Str
     assert!(l1 >= C53 && l1 <= C52, C29);
     let l9 = clock::timestamp_ms(l4);
     if (l2 == demo::get_token_type_string_sui()) {
-        let l10 = 0u64;
+        let mut l10 = 0u64;
         let l11 = (&l0.slot_configs).length();
         loop {
             if (l10 < l11) {
@@ -1716,7 +1716,7 @@ public entry fun update_slot_price<T0>(l0: &mut StakingPool<T0>, l1: u8, l2: Str
         };
         event::emit(SlotPriceUpdated { pool_id: object::id(freeze(l0)), slot_number: l1, token_type: l2, old_price: l7, new_price: l3, updated_by: tx_context::sender(freeze(l5)), update_time: l9 })
     } else {
-        let l15 = SlotTokenPricing { id: object::new(l5), slot_number: l1, token_prices: table::new(l5) };
+        let mut l15 = SlotTokenPricing { id: object::new(l5), slot_number: l1, token_prices: table::new(l5) };
         table::add(&mut (&mut l15).token_prices, l2, l3);
         dynamic_object_field::add(&mut l0.id, l16, l15);
         event::emit(SlotPriceUpdated { pool_id: object::id(freeze(l0)), slot_number: l1, token_type: l2, old_price: 0u64, new_price: l3, updated_by: tx_context::sender(freeze(l5)), update_time: l9 })
@@ -1756,7 +1756,7 @@ public fun user_has_staked_nfts<T0>(l0: &StakingPool<T0>, l1: address): bool {
         return false
     };
     let l2 = dynamic_object_field::borrow(&l0.id, l6);
-    let l3 = 0u64;
+    let mut l3 = 0u64;
     let l4 = (&l2.unlocked_slot_numbers).length();
     loop {
         if (l3 >= l4) {

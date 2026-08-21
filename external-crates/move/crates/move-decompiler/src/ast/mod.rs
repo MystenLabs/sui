@@ -248,11 +248,7 @@ pub enum Exp {
     /// A Move `match` expression with patterns. Created exclusively by `reconstruct_match`
     /// from a `Switch` whose arms had liftable leading `UnpackVariant`s; each arm carries the
     /// pattern's field bindings (possibly empty for fieldless variants in the same match).
-    Match(
-        Box<Exp>,
-        /* enum */ TypeRef,
-        /* variant x pattern-fields x rhs */ Vec<(Symbol, Vec<(Symbol, String)>, Exp)>,
-    ),
+    Match(Box<Exp>, /* enum */ TypeRef, Vec<MatchArm>),
     /// Integer-literal `match` on a synthetic dispatch local.
     MatchLit(Box<Exp>, Vec<(DispatchTag, Exp)>),
     Return(Vec<Exp>),
@@ -297,6 +293,16 @@ pub enum Exp {
     Block(u64, Box<Exp>),
 }
 
+/// One arm of a `Match`: `Variant { field: binding, ... } if (guard) => rhs`. Guards read
+/// the pattern bindings by immutable reference and exist only after `recover_match_guards`.
+#[derive(Debug, Clone)]
+pub struct MatchArm {
+    pub variant: Symbol,
+    pub fields: Vec<(Symbol, String)>,
+    pub guard: Option<Exp>,
+    pub rhs: Exp,
+}
+
 // -------------------------------------------------------------------------------------------------
 // Impls
 // -------------------------------------------------------------------------------------------------
@@ -317,7 +323,9 @@ impl Exp {
                     }
             }
             Exp::Switch(_, _, cases) => cases.iter().any(|(_, e)| e.contains_break()),
-            Exp::Match(_, _, cases) => cases.iter().any(|(_, _, e)| e.contains_break()),
+            Exp::Match(_, _, cases) => cases.iter().any(|arm| {
+                arm.guard.as_ref().is_some_and(|g| g.contains_break()) || arm.rhs.contains_break()
+            }),
             Exp::MatchLit(_, arms) => arms.iter().any(|(_, e)| e.contains_break()),
             Exp::Assign(_, exp) => exp.contains_break(),
             Exp::LetBind(_, exp) => exp.contains_break(),
@@ -358,7 +366,10 @@ impl Exp {
                     }
             }
             Exp::Switch(_, _, cases) => cases.iter().any(|(_, e)| e.contains_continue()),
-            Exp::Match(_, _, cases) => cases.iter().any(|(_, _, e)| e.contains_continue()),
+            Exp::Match(_, _, cases) => cases.iter().any(|arm| {
+                arm.guard.as_ref().is_some_and(|g| g.contains_continue())
+                    || arm.rhs.contains_continue()
+            }),
             Exp::MatchLit(_, arms) => arms.iter().any(|(_, e)| e.contains_continue()),
             Exp::Assign(_, exp) => exp.contains_continue(),
             Exp::LetBind(_, exp) => exp.contains_continue(),
@@ -424,6 +435,29 @@ impl std::fmt::Display for Exp {
             Ok(())
         }
 
+        /// Render every `Match` arm (pattern, guard, `=> { body },`), with `fmt_body`
+        /// supplying the body form the caller is in.
+        fn fmt_match_arms(
+            f: &mut std::fmt::Formatter<'_>,
+            enum_ty: &TypeRef,
+            arms: &[MatchArm],
+            level: usize,
+            fmt_body: fn(&mut std::fmt::Formatter<'_>, &Exp, usize) -> std::fmt::Result,
+        ) -> std::fmt::Result {
+            for arm in arms {
+                indent(f, level + 1)?;
+                write_match_pattern(f, enum_ty, &arm.variant, &arm.fields)?;
+                if let Some(guard) = &arm.guard {
+                    write!(f, " if ({guard})")?;
+                }
+                writeln!(f, " => {{")?;
+                fmt_body(f, &arm.rhs, level + 2)?;
+                indent(f, level + 1)?;
+                writeln!(f, "}},")?;
+            }
+            Ok(())
+        }
+
         /// Print `exp` as a value on the right-hand side of an assignment/let-bind: no leading
         /// indent (the caller already wrote `lhs = `), and no trailing newline (the caller
         /// writes the closing `;`). For block-like expressions (IfElse, Switch) this keeps
@@ -456,14 +490,7 @@ impl std::fmt::Display for Exp {
                 }
                 Exp::Match(term, enum_ty, cases) => {
                     writeln!(f, "match({}: {enum_ty}) {{", term)?;
-                    for (variant, fields, case) in cases {
-                        indent(f, level + 1)?;
-                        write_match_pattern(f, enum_ty, variant, fields)?;
-                        writeln!(f, " => {{")?;
-                        fmt_block_body(f, case, level + 2)?;
-                        indent(f, level + 1)?;
-                        writeln!(f, "}},")?;
-                    }
+                    fmt_match_arms(f, enum_ty, cases, level, fmt_block_body)?;
                     indent(f, level)?;
                     write!(f, "}}")
                 }
@@ -613,14 +640,7 @@ impl std::fmt::Display for Exp {
                 Exp::Match(term, enum_ty, cases) => {
                     indent(f, level)?;
                     writeln!(f, "match({}: {enum_ty}) {{", term)?;
-                    for (variant, fields, case) in cases {
-                        indent(f, level + 1)?;
-                        write_match_pattern(f, enum_ty, variant, fields)?;
-                        writeln!(f, " => {{")?;
-                        fmt_exp(f, case, level + 2)?;
-                        indent(f, level + 1)?;
-                        writeln!(f, "}},")?;
-                    }
+                    fmt_match_arms(f, enum_ty, cases, level, fmt_exp)?;
                     indent(f, level)?;
                     writeln!(f, "}}")
                 }
