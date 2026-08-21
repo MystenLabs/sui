@@ -191,7 +191,12 @@ async fn main() -> Result<()> {
 
     let gas_price = match opts.gas_price {
         Some(p) => p,
-        None => proxy.get_latest_system_state_object().await?.reference_gas_price,
+        None => {
+            proxy
+                .get_latest_system_state_object()
+                .await?
+                .reference_gas_price
+        }
     };
 
     let gas_coins = split_gas_coins(&proxy, sender, &keypair, gas_price, opts.concurrency).await?;
@@ -222,7 +227,9 @@ async fn main() -> Result<()> {
             baseline_client: baseline_client.clone(),
             metric: metric.clone(),
         };
-        handles.push(tokio::spawn(async move { worker.run(gas, per_worker).await }));
+        handles.push(tokio::spawn(
+            async move { worker.run(gas, per_worker).await },
+        ));
     }
 
     let mut samples = Vec::new();
@@ -279,7 +286,10 @@ impl Worker {
                 Ok(effects) => {
                     self.metric.failed.inc();
                     failures += 1;
-                    tracing::warn!("transaction {digest} failed on-chain: {:?}", effects.status());
+                    tracing::warn!(
+                        "transaction {digest} failed on-chain: {:?}",
+                        effects.status()
+                    );
                     continue;
                 }
                 Err(e) => {
@@ -420,7 +430,15 @@ fn report(samples: &[Sample], failures: usize) {
     let delta: Vec<f64> = samples.iter().map(|s| s.delta_ms).collect();
 
     let mut table = Table::new();
-    table.set_header(vec!["metric (ms)", "mean", "p50", "p90", "p99", "min", "max"]);
+    table.set_header(vec![
+        "metric (ms)",
+        "mean",
+        "p50",
+        "p90",
+        "p99",
+        "min",
+        "max",
+    ]);
     for (name, series) in [
         ("primary node", primary),
         ("baseline node", baseline),
@@ -438,11 +456,7 @@ fn report(samples: &[Sample], failures: usize) {
         ]);
     }
     println!("{table}");
-    println!(
-        "samples: {} succeeded, {} failed",
-        samples.len(),
-        failures
-    );
+    println!("samples: {} succeeded, {} failed", samples.len(), failures);
 }
 
 fn fmt(v: f64) -> String {

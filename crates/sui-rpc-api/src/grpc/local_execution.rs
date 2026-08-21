@@ -15,7 +15,10 @@ use tonic::Status;
 use crate::RpcService;
 
 mod generated {
-    include!(concat!(env!("OUT_DIR"), "/sui.node.LocalExecutionService.rs"));
+    include!(concat!(
+        env!("OUT_DIR"),
+        "/sui.node.LocalExecutionService.rs"
+    ));
 }
 
 pub use generated::local_execution_service_client::LocalExecutionServiceClient;
