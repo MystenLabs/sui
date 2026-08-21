@@ -23,6 +23,7 @@ use crate::{
     dag_state::DagState,
     error::ConsensusError,
     network::{SerializedBlockForm, ValidatorNetworkClient, ValidatorNetworkService},
+    seen_digests::SeenDigests,
     slim_block::{DecodeError, SlimBlockCodec},
     task::{join_and_propagate_panic, reap_finished_task},
 };
@@ -48,6 +49,7 @@ pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkServi
     authority_service: Arc<S>,
     dag_state: Arc<RwLock<DagState>>,
     slim_block_codec: Arc<SlimBlockCodec>,
+    seen_digests: Arc<SeenDigests>,
     subscriptions: Arc<Mutex<Box<[Option<JoinHandle<()>>]>>>,
     // Retain replaced subscription tasks so stop() can await them and propagate panics.
     retired_subscriptions: Arc<Mutex<Vec<JoinHandle<()>>>>,
@@ -61,6 +63,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         dag_state: Arc<RwLock<DagState>>,
     ) -> Self {
         let slim_block_codec = Arc::new(SlimBlockCodec::new(context.clone()));
+        let seen_digests = Arc::new(SeenDigests::new(context.clone()));
         let subscriptions = (0..context.committee.size())
             .map(|_| None)
             .collect::<Vec<_>>();
@@ -70,6 +73,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             authority_service,
             dag_state,
             slim_block_codec,
+            seen_digests,
             subscriptions: Arc::new(Mutex::new(subscriptions.into_boxed_slice())),
             retired_subscriptions: Arc::new(Mutex::new(Vec::new())),
         }
@@ -87,6 +91,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let authority_service = Arc::downgrade(&self.authority_service);
         let dag_state = Arc::downgrade(&self.dag_state);
         let slim_block_codec = self.slim_block_codec.clone();
+        let seen_digests = self.seen_digests.clone();
 
         let mut subscriptions = self.subscriptions.lock();
         self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
@@ -96,6 +101,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             authority_service,
             dag_state,
             slim_block_codec,
+            seen_digests,
             peer,
         )));
     }
@@ -141,6 +147,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         authority_service: Weak<S>,
         dag_state: Weak<RwLock<DagState>>,
         slim_block_codec: Arc<SlimBlockCodec>,
+        seen_digests: Arc<SeenDigests>,
         peer: AuthorityIndex,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
@@ -281,7 +288,12 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                     .slim_blocks_received
                                     .with_label_values(&[peer_hostname])
                                     .inc();
-                                match slim_block_codec.decode(&slim, peer, &dag_state) {
+                                match slim_block_codec.decode(
+                                    &slim,
+                                    peer,
+                                    &dag_state,
+                                    &seen_digests,
+                                ) {
                                     Ok((_signed, serialized)) => {
                                         block.block = SerializedBlockForm::Full(serialized);
                                         true
@@ -294,6 +306,18 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                                 error.metric_label(),
                                             ])
                                             .inc();
+                                        // A block we could not rebuild still tells us
+                                        // its own digest, and `parse_slim` has
+                                        // already bound its author to this peer. Record
+                                        // it so blocks referencing this slot rebuild
+                                        // without waiting for us to accept it -- a
+                                        // Malformed payload carries no ref worth
+                                        // trusting, so it records nothing.
+                                        if let DecodeError::NeedFullBlock { block_ref, .. } = &error
+                                        {
+                                            let gc_round = dag_state.read().gc_round();
+                                            seen_digests.observe(*block_ref, gc_round);
+                                        }
                                         match error {
                                             DecodeError::Malformed(_) => info!(
                                                 "Malformed slim block from peer {} {}: {}",

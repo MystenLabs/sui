@@ -37,6 +37,7 @@ use crate::{
     },
     context::Context,
     dag_state::DagState,
+    seen_digests::SeenDigests,
 };
 
 /// Resolves what local state holds at a slot, so encoding can decide which digests are
@@ -453,6 +454,11 @@ pub(crate) struct SlimBlockCodec {
 struct LocalStateResolver<'a> {
     genesis_digests: &'a [BlockDigest],
     dag_state: &'a DagState,
+    /// Digests claimed on the wire but not yet accepted. Consulted only where the
+    /// accepted DAG has nothing, and only when decoding: the encoder must decide what
+    /// to omit from what it has accepted, since a hint it happens to hold says nothing
+    /// about what a receiver knows.
+    seen: Option<&'a SeenDigests>,
 }
 
 impl AncestorDigestResolver for LocalStateResolver<'_> {
@@ -460,7 +466,12 @@ impl AncestorDigestResolver for LocalStateResolver<'_> {
         if slot.round == GENESIS_ROUND {
             return SlotDigest::Unique(self.genesis_digests[slot.authority.value()]);
         }
-        self.dag_state.digest_at_slot(slot)
+        match self.dag_state.digest_at_slot(slot) {
+            SlotDigest::Absent => self
+                .seen
+                .map_or(SlotDigest::Absent, |seen| seen.digest_at_slot(slot)),
+            resolved => resolved,
+        }
     }
 }
 
@@ -494,6 +505,7 @@ impl SlimBlockCodec {
             let resolver = LocalStateResolver {
                 genesis_digests: &self.genesis_digests,
                 dag_state: &dag_state,
+                seen: None,
             };
             ancestor_overrides(block, &resolver, min_omittable_round)
         };
@@ -508,6 +520,7 @@ impl SlimBlockCodec {
         slim: &[u8],
         author: AuthorityIndex,
         dag_state: &RwLock<DagState>,
+        seen: &SeenDigests,
     ) -> Result<(SignedBlock, Bytes), DecodeError> {
         let parsed = parse_slim(slim, &self.context.committee, author)?;
         // The guard covers ancestor resolution and nothing else: the reserialize and
@@ -518,6 +531,7 @@ impl SlimBlockCodec {
             let resolver = LocalStateResolver {
                 genesis_digests: &self.genesis_digests,
                 dag_state: &dag_state,
+                seen: Some(seen),
             };
             resolve_ancestors(&parsed, &self.context.committee, &resolver)?
         };
@@ -1125,6 +1139,11 @@ mod tests {
         Arc::new(context)
     }
 
+    /// A wire map that has seen nothing, so resolution falls through to accepted state.
+    fn empty_seen(context: &Arc<Context>) -> SeenDigests {
+        SeenDigests::new(context.clone())
+    }
+
     fn empty_dag(context: &Arc<Context>) -> Arc<RwLock<DagState>> {
         Arc::new(RwLock::new(DagState::new(
             context.clone(),
@@ -1164,7 +1183,9 @@ mod tests {
 
         let codec = SlimBlockCodec::new(context.clone());
         let slim = codec.encode(&block, &dag).unwrap();
-        let (_signed, serialized) = codec.decode(&slim, block.author(), &dag).unwrap();
+        let (_signed, serialized) = codec
+            .decode(&slim, block.author(), &dag, &empty_seen(&context))
+            .unwrap();
 
         assert_eq!(&serialized, block.serialized());
     }
@@ -1186,7 +1207,9 @@ mod tests {
         let slim = codec.encode(&block, &sender_dag).unwrap();
 
         let receiver_dag = empty_dag(&context);
-        let (_signed, serialized) = codec.decode(&slim, block.author(), &receiver_dag).unwrap();
+        let (_signed, serialized) = codec
+            .decode(&slim, block.author(), &receiver_dag, &empty_seen(&context))
+            .unwrap();
 
         assert_eq!(&serialized, block.serialized());
     }
@@ -1205,7 +1228,7 @@ mod tests {
 
         let receiver_dag = empty_dag(&context);
         let result = codec
-            .decode(&slim, block.author(), &receiver_dag)
+            .decode(&slim, block.author(), &receiver_dag, &empty_seen(&context))
             .map(|_| ());
 
         match result {
@@ -1224,6 +1247,80 @@ mod tests {
         }
     }
 
+    /// The reason this map exists: an ancestor the receiver has never accepted still
+    /// resolves, because a peer claimed it on the wire earlier. Without it the block
+    /// falls back to a full fetch, and so does every later block referencing that slot
+    /// -- the cross-author cascade the own-parent rule does not cover.
+    ///
+    /// The claimed digest is only a hint. It is safe to act on because the rebuilt
+    /// bytes must still hash to the sender's claimed block digest, so a wrong hint
+    /// costs a fetch rather than admitting a bad block -- which the next test pins.
+    #[tokio::test]
+    async fn a_wire_claimed_digest_resolves_an_unaccepted_ancestor() {
+        let context = test_context();
+        let sender_dag = empty_dag(&context);
+        let block = block_over_round_one(&context, &sender_dag);
+        let codec = SlimBlockCodec::new(context.clone());
+        let slim = codec.encode(&block, &sender_dag).unwrap();
+
+        // The receiver has accepted nothing at all.
+        let receiver_dag = empty_dag(&context);
+        assert!(
+            codec
+                .decode(&slim, block.author(), &receiver_dag, &empty_seen(&context))
+                .is_err(),
+            "without the wire map this block cannot be rebuilt"
+        );
+
+        // Every ancestor was claimed on the wire by its own author.
+        let seen = SeenDigests::new(context.clone());
+        for ancestor in block.ancestors() {
+            seen.observe(*ancestor, 0);
+        }
+        let (_signed, serialized) = codec
+            .decode(&slim, block.author(), &receiver_dag, &seen)
+            .unwrap();
+        assert_eq!(&serialized, block.serialized());
+    }
+
+    /// A hint that is wrong fails closed. The rebuild succeeds against local state and
+    /// then loses to the author's claimed digest, so a lying peer costs a fetch rather
+    /// than getting bytes accepted.
+    #[tokio::test]
+    async fn a_wrong_wire_claim_fails_the_digest_gate() {
+        let context = test_context();
+        let sender_dag = empty_dag(&context);
+        let block = block_over_round_one(&context, &sender_dag);
+        let codec = SlimBlockCodec::new(context.clone());
+        let slim = codec.encode(&block, &sender_dag).unwrap();
+
+        let seen = SeenDigests::new(context.clone());
+        let mut rng = StdRng::seed_from_u64(71);
+        for (i, ancestor) in block.ancestors().iter().enumerate() {
+            if i == 1 {
+                // Same slot, wrong digest.
+                seen.observe(
+                    BlockRef::new(ancestor.round, ancestor.author, test_digest(&mut rng)),
+                    0,
+                );
+            } else {
+                seen.observe(*ancestor, 0);
+            }
+        }
+
+        let receiver_dag = empty_dag(&context);
+        match codec
+            .decode(&slim, block.author(), &receiver_dag, &seen)
+            .map(|_| ())
+        {
+            Err(DecodeError::NeedFullBlock {
+                reason: FallbackReason::DigestMismatch,
+                ..
+            }) => {}
+            other => panic!("expected DigestMismatch, got {other:?}"),
+        }
+    }
+
     /// A block claiming an author other than the peer it arrived from is rejected,
     /// so a peer cannot use the stream to introduce another authority's blocks.
     #[tokio::test]
@@ -1239,7 +1336,7 @@ mod tests {
         // reports it as such rather than as local state being behind.
         let other_peer = context.committee.to_authority_index(1).unwrap();
         assert!(matches!(
-            codec.decode(&slim, other_peer, &dag),
+            codec.decode(&slim, other_peer, &dag, &empty_seen(&context)),
             Err(DecodeError::Malformed(_))
         ));
     }

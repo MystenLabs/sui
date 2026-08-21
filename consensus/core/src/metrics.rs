@@ -134,6 +134,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) slim_block_decode_failures: IntCounterVec,
     pub(crate) slim_blocks_sent: IntCounterVec,
     pub(crate) slim_block_gate_transitions: IntCounterVec,
+    pub(crate) slim_block_seen_digests: IntGauge,
+    pub(crate) slim_block_seen_digests_refused: IntCounter,
     pub(crate) proposed_block_commit_latency: Histogram,
     pub(crate) proposed_block_finalization_latency: Histogram,
     pub(crate) proposed_block_size: Histogram,
@@ -306,6 +308,16 @@ impl NodeMetrics {
                 "slim_block_gate_transitions",
                 "Subscriptions switching between slim and full emission, by the form switched to",
                 &["form"],
+                registry,
+            ).unwrap(),
+            slim_block_seen_digests: register_int_gauge_with_registry!(
+                "slim_block_seen_digests",
+                "Slots held in the wire-observed digest map",
+                registry,
+            ).unwrap(),
+            slim_block_seen_digests_refused: register_int_counter_with_registry!(
+                "slim_block_seen_digests_refused",
+                "Digest observations refused because the map was at capacity",
                 registry,
             ).unwrap(),
             subscribe_blocks_response_bytes: register_int_counter_vec_with_registry!(
