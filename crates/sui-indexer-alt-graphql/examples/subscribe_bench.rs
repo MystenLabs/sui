@@ -22,9 +22,23 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-const LIVE_QUERY: &str = "subscription { transactions { cursor node { digest } } }";
-const BACKFILL_QUERY: &str =
-    "subscription { transactions(filter: { afterCheckpoint: 0 }) { cursor node { digest } } }";
+/// (live, backfill-from-genesis) query pair selected by the `QUERY_TYPE` env (tx | checkpoint | event).
+fn queries() -> (&'static str, &'static str) {
+    match std::env::var("QUERY_TYPE").as_deref().unwrap_or("tx") {
+        "checkpoint" | "cp" => (
+            "subscription { checkpoints { cursor node { sequenceNumber } } }",
+            "subscription { checkpoints(afterCheckpoint: 0) { cursor node { sequenceNumber } } }",
+        ),
+        "event" | "ev" => (
+            "subscription { events { cursor node { sequenceNumber } } }",
+            "subscription { events(filter: { afterCheckpoint: 0 }) { cursor node { sequenceNumber } } }",
+        ),
+        _ => (
+            "subscription { transactions { cursor node { digest } } }",
+            "subscription { transactions(filter: { afterCheckpoint: 0 }) { cursor node { digest } } }",
+        ),
+    }
+}
 
 /// One SSE subscriber: counts delivered payloads (by `"digest"` occurrences) into `delivered` until
 /// `stop`. `query` selects live vs backfill-from-genesis.
@@ -49,7 +63,7 @@ async fn subscriber(
         match tokio::time::timeout(Duration::from_millis(500), resp.chunk()).await {
             Ok(Ok(Some(chunk))) => {
                 let n = std::str::from_utf8(&chunk)
-                    .map(|s| s.matches("\"digest\"").count())
+                    .map(|s| s.matches("\"cursor\"").count())
                     .unwrap_or(0);
                 delivered.fetch_add(n as u64, Ordering::Relaxed);
             }
@@ -123,6 +137,7 @@ async fn main() -> anyhow::Result<()> {
     let name = std::env::var("NAME").unwrap_or_else(|_| format!("n{n}"));
     std::fs::create_dir_all(&out_dir)?;
 
+    let (live_q, backfill_q) = queries();
     let stop = Arc::new(AtomicBool::new(false));
     let delivered_backfill = Arc::new(AtomicU64::new(0));
     let delivered_live = Arc::new(AtomicU64::new(0));
@@ -137,9 +152,9 @@ async fn main() -> anyhow::Result<()> {
             i % 2 == 0
         };
         let (query, delivered) = if backfill {
-            (BACKFILL_QUERY, delivered_backfill.clone())
+            (backfill_q, delivered_backfill.clone())
         } else {
-            (LIVE_QUERY, delivered_live.clone())
+            (live_q, delivered_live.clone())
         };
         handles.push(tokio::spawn(subscriber(
             server.clone(),
