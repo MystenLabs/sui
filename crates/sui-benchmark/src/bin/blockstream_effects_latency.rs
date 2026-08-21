@@ -162,6 +162,18 @@ async fn main() -> Result<()> {
 
     let genesis = Genesis::new_from_file(&opts.genesis_blob_path);
     let genesis = genesis.genesis()?;
+
+    // Standard uptime gauge (self-updating), so Grafana can tell the tool is alive and for how long.
+    let chain_identifier =
+        sui_types::digests::ChainIdentifier::from(*genesis.checkpoint().digest()).to_string();
+    registry
+        .register(mysten_metrics::uptime_metric(
+            "blockstream-effects-latency",
+            env!("CARGO_PKG_VERSION"),
+            &chain_identifier,
+        ))
+        .unwrap();
+
     let metrics = BenchmarkProxyMetrics::new(&registry);
 
     // Submit through the validators directly; the baseline node URL is used only for the
