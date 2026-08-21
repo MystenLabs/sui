@@ -4,6 +4,8 @@
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 #![deny(clippy::indexing_slicing)]
+#![deny(clippy::cast_possible_wrap)]
+#![deny(clippy::cast_sign_loss)]
 
 use crate::error::{UserInputError, UserInputResult};
 use crate::transaction::ObjectReadResult;

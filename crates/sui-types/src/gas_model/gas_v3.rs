@@ -5,6 +5,8 @@
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 #![deny(clippy::indexing_slicing)]
+#![deny(clippy::cast_possible_wrap)]
+#![deny(clippy::cast_sign_loss)]
 
 use crate::error::UserInputResult;
 use crate::gas::{GasCostSummary, GasUsageReport, SuiGasStatusAPI};
@@ -185,7 +187,7 @@ impl SuiGasStatus {
         self.reference_gas_price
     }
 
-    /// Meter-derived computation cost in MIST (bucketed units × effective_gas_price).
+    /// Meter-derived computation cost in MIST (bucketed units * effective_gas_price).
     fn uncapped_computation_cost(&self) -> u64 {
         if self.force_computation_cost_to_budget {
             return self.gas_budget;
@@ -196,7 +198,7 @@ impl SuiGasStatus {
     }
 
     /// Computation cost reported in `summary()`, capped so
-    /// `computation + storage_cost - sender_rebate ≤ gas_budget`
+    /// `computation + storage_cost - sender_rebate <= gas_budget`
     /// storage charges stick, computation absorbs whatever budget remains.
     fn derived_computation_cost(&self) -> u64 {
         let uncapped_cost = self.uncapped_computation_cost();

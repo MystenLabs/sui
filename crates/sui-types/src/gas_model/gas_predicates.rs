@@ -64,7 +64,7 @@ pub fn cost_table_for_version(gas_model: u64) -> CostTable {
 }
 
 // In gas model versions <= 13, charge_native_function_before_execution pops
-// args that were already popped by charge_call — a double-pop. The resulting
+// args that were already popped by charge_call - a double-pop. The resulting
 // negative stack heights were masked by saturating_sub in pop_stack.
 // Version 14+ fixes the double-pop so charge_native_function_before_execution
 // no longer pops args.

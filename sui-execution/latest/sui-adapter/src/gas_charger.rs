@@ -393,9 +393,6 @@ pub mod checked {
             }
         }
 
-        /// Single reset for execution errors.
-        /// Invoked on any legitimate error (Move Abort, OOG, etc.).
-        /// Errors here become BumpOnly
         pub(crate) fn handle_error(
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
@@ -492,7 +489,7 @@ pub mod checked {
             cost_summary
         }
 
-        // === legacy methods below — see `mod legacy` for the full bodies ===
+        // === legacy methods below - see `mod legacy` for the full bodies ===
     }
 
     /// Pre-refactor gas charging: a single monolithic `charge_gas` plus the storage-OOG
