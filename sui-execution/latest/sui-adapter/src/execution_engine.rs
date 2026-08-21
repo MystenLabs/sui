@@ -382,7 +382,7 @@ pub(crate) mod checked {
     }
 
     /// Post-execution consistency: SUI conservation + the expensive ownership invariants. `Err` means
-    /// an invariant was violated unrecoverably — no panic, no recovery; the caller bails to
+    /// an invariant was violated unrecoverably - no panic, no recovery; the caller bails to
     /// `BumpOnly` reporting the error.
     #[allow(clippy::too_many_arguments)]
     fn check_consistency<Mode: ExecutionMode>(
@@ -410,7 +410,7 @@ pub(crate) mod checked {
         )
         .map_err(|error| (error, BumpOnlyReason::Conservation))?;
 
-        // Ownership invariants — only under expensive checks + non-arbitrary mode; a violation is a
+        // Ownership invariants - only under expensive checks + non-arbitrary mode; a violation is a
         // real bug that should never fire.
         if enable_expensive_checks
             && !Mode::allow_arbitrary_function_calls()
@@ -592,7 +592,7 @@ pub(crate) mod checked {
     }
 
     /// Report an unexpected `BumpOnly` exit: a transaction whose writes were all dropped and which
-    /// was charged nothing because a stage of the pipeline failed. `debug_fatal` semantics — panics
+    /// was charged nothing because a stage of the pipeline failed. `debug_fatal` semantics - panics
     /// under `crash_on_debug()`, counts + logs in production.
     ///
     /// Skipped for the expected IFFW short-circuit, and for the simulation paths
@@ -1446,7 +1446,7 @@ pub(crate) mod checked {
                 cost_summary,
             ) {
                 // If we still fail, it's a problem with gas charging that happens even in the
-                // "aborted" case — no other option but panic. We would create or destroy SUI
+                // "aborted" case - no other option but panic. We would create or destroy SUI
                 // otherwise (or admit an unauthorized accumulator Split).
                 panic!(
                     "SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ",

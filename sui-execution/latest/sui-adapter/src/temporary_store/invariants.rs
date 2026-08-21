@@ -103,13 +103,11 @@ impl InvariantChecker {
     ) {
         // `enable_gasless` is not checked: a gasless-shaped tx cannot execute while the flag is
         // off (rejected at validation with GasPriceUnderRGP).
-        let is_gasless = is_gasless_transaction(gas_data, transaction_kind);
         self.inputs = InvariantInputs {
             input_reservations: compute_input_reservations(
                 transaction_kind,
                 gas_data,
                 transaction_signer,
-                is_gasless,
             ),
             advance_epoch_gas_summary: transaction_kind.get_advance_epoch_tx_gas_summary(),
             is_genesis: matches!(transaction_kind, TransactionKind::Genesis(_)),
@@ -524,12 +522,12 @@ fn compute_input_reservations(
     transaction_kind: &TransactionKind,
     gas_data: &GasData,
     transaction_signer: SuiAddress,
-    is_gasless: bool,
 ) -> BTreeMap<(SuiAddress, TypeTag), u64> {
     use sui_types::balance::Balance;
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::{Reservation, WithdrawFrom, is_gas_paid_from_address_balance};
 
+    let is_gasless = is_gasless_transaction(gas_data, transaction_kind);
     let mut reservations: BTreeMap<(SuiAddress, TypeTag), u64> = BTreeMap::new();
     let sui_balance_type = Balance::type_tag(GAS::type_tag());
 
@@ -714,12 +712,6 @@ impl InvariantChecker {
             .filter(|id| {
                 // remove any non-mutable inputs. This will remove deleted or readonly shared
                 // objects.
-                // REVIEW AND DELETE COMMENT AFTER: before we took a caller-passed `mutable_inputs`
-                // (= `input_objects.all_mutable_inputs()`); now we derive the identical set from the
-                // store. Verified exactly equivalent:
-                // all_mutable_inputs() ==
-                //      exclusive_mutable_inputs() (mutable_input_refs) ∪
-                //      non_exclusive_input_objects() (non_exclusive_input_original_versions).
                 store.mutable_input_refs.contains_key(id)
                     || store.non_exclusive_input_original_versions.contains_key(id)
             })

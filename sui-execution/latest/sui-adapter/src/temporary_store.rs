@@ -219,14 +219,14 @@ impl<'backing> TemporaryStore<'backing> {
     /// Bounding SUI to `TOTAL_SUPPLY_MIST` rejects any such amount here, *before* gas is charged, so
     /// the rejected PTB-emitted writes are dropped on gas reset and only the (bounded) gas events
     /// remain. Crucially, `TOTAL_SUPPLY_MIST` is ~8.4B SUI below `u64::MAX`, so the gas events emitted
-    /// after this check (which move only real SUI) cannot push any per-key total past `u64::MAX` —
+    /// after this check (which move only real SUI) cannot push any per-key total past `u64::MAX` -
     /// hence they need not be re-checked. Non-SUI balances have no uncapped gas path, so the
     /// object-runtime per-key `u64::MAX` cap is the binding guard there and we only backstop u64
     /// representability.
     ///
     /// The per-key limits are not sufficient on their own: withdrawn SUI can be spread across several
     /// object keys (each withdrawal `<= TOTAL_SUPPLY_MIST`) and then recombined *outside* the
-    /// accumulator — e.g. each withdrawal redeemed to a `Coin<SUI>` and merged into the PTB gas coin
+    /// accumulator - e.g. each withdrawal redeemed to a `Coin<SUI>` and merged into the PTB gas coin
     /// via `MergeCoins`, which is an object mutation, not an accumulator event. The recombined coin
     /// can then reach `u64::MAX` and overflow `deduct_gas` on a refund. So we also bound the
     /// *cross-key* total SUI withdrawn (gross Split) to the supply, capping the total SUI a single
@@ -581,7 +581,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// inputs. Its effects record only those version bumps and the input dependencies.
     pub(crate) fn into_bump_only(self) -> Self {
         let Self {
-            // Input-derived — reused verbatim.
+            // Input-derived - reused verbatim.
             store,
             tx_digest,
             input_objects,
@@ -592,7 +592,7 @@ impl<'backing> TemporaryStore<'backing> {
             receiving_objects,
             cur_epoch,
             protocol_config,
-            // Execution-derived — discarded.
+            // Execution-derived - discarded.
             execution_results: _,
             loaded_runtime_objects: _,
             wrapped_object_containers: _,
