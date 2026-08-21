@@ -1,0 +1,23 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[EC04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/ide_mode/match_type_param_subject.move:16:16
+   │
+16 │         match (t) {
+   │                ^ Pattern '_' not covered
+   │
+   = Match arms with guards are not considered for coverage.
+
+note[NC15004]: IDE missing match arms
+   ┌─ tests/move_2024/ide_mode/match_type_param_subject.move:16:19
+   │  
+16 │           match (t) {
+   │ ╭───────────────────^
+17 │ │             _ if (flag) => 0,
+18 │ │         }
+   │ ╰─────────^ Missing arms: '_'
