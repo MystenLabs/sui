@@ -98,6 +98,8 @@ use tracing::warn;
 use crate::config::SubscriptionConfig;
 #[cfg(any(feature = "staging", test))]
 use crate::error::RpcError;
+use crate::metrics::ProcessedCheckpointMetricReporter;
+use crate::metrics::SubscriptionMetrics;
 use crate::task::watermark::Watermarks;
 
 use super::StreamedTransactionStore;
@@ -344,6 +346,8 @@ pub(crate) struct CheckpointStreamTask {
     /// before fetching.
     watermarks_rx: watch::Receiver<Arc<Watermarks>>,
     gap_recovery_chunk_size: usize,
+    metrics: Arc<SubscriptionMetrics>,
+    upstream_processed_checkpoint_metrics: ProcessedCheckpointMetricReporter,
 }
 
 impl CheckpointStreamTask {
@@ -359,8 +363,15 @@ impl CheckpointStreamTask {
         readiness: Arc<SubscriptionReadiness>,
         ledger_grpc_reader: LedgerGrpcReader,
         watermarks_rx: watch::Receiver<Arc<Watermarks>>,
+        metrics: Arc<SubscriptionMetrics>,
     ) -> (Self, CheckpointBroadcaster) {
         let (sender, broadcaster) = broadcast::channel(config.broadcast_buffer);
+        let upstream_processed_checkpoint_metrics = ProcessedCheckpointMetricReporter::new(
+            &metrics.upstream_processed_checkpoints,
+            &metrics.upstream_latest_processed_checkpoint,
+            &metrics.upstream_processed_checkpoint_timestamp_lag,
+            &metrics.upstream_latest_processed_checkpoint_timestamp_ms,
+        );
         let task = Self {
             uri,
             sender,
@@ -370,6 +381,8 @@ impl CheckpointStreamTask {
             ledger_grpc_reader,
             watermarks_rx,
             gap_recovery_chunk_size: config.gap_recovery_chunk_size,
+            metrics,
+            upstream_processed_checkpoint_metrics,
         };
         (task, broadcaster)
     }
@@ -407,13 +420,23 @@ impl CheckpointStreamTask {
             loop {
                 info!("Connecting to checkpoint stream at {}...", self.uri);
                 let stream = backoff::future::retry(reconnect_backoff(), || async {
-                    self.connect().await.map_err(classify_connect_error)
+                    self.connect().await.map_err(|e| {
+                        self.metrics.record_connect_failure(&e);
+                        classify_connect_error(e)
+                    })
                 })
-                .await?;
+                .await
+                .inspect_err(|_| {
+                    self.metrics.record_termination("connect_error");
+                })?;
                 info!("Connected to checkpoint stream at {}", self.uri);
 
                 self.consume_stream(stream, &mut last_broadcast, &mut first_live_recorded)
-                    .await?;
+                    .await
+                    .inspect_err(|_| {
+                        self.metrics.record_termination("stream_error");
+                    })?;
+                self.metrics.upstream_disconnections.inc();
                 warn!("Checkpoint stream ended, reconnecting");
             }
         })
@@ -462,10 +485,12 @@ impl CheckpointStreamTask {
                 && seq > last + 1
             {
                 info!(from = last + 1, to = seq - 1, "Recovering gap");
+                self.metrics.upstream_gap_recoveries.inc();
                 recover_gap(
                     &self.ledger_grpc_reader,
                     &self.watermarks_rx,
                     &self.sender,
+                    &self.upstream_processed_checkpoint_metrics,
                     last + 1,
                     seq - 1,
                     self.gap_recovery_chunk_size,
@@ -491,9 +516,18 @@ impl CheckpointStreamTask {
         // persistent index; the eviction task drains each cache once the index catches up.
         self.streaming_packages
             .index_packages(seq, &extract_packages(&checkpoint));
-        let processed = process_checkpoint(checkpoint)?;
+        let processed = process_checkpoint(checkpoint).inspect_err(|_| {
+            self.metrics.upstream_malformed_checkpoints.inc();
+        })?;
         self.streaming_transactions
             .index_transactions(seq, &processed.transactions);
+
+        self.upstream_processed_checkpoint_metrics.report(
+            "live",
+            processed.summary.sequence_number,
+            processed.summary.timestamp_ms,
+        );
+
         // Ignore send errors: no active subscribers is a normal state.
         let _ = self.sender.send(Arc::new(processed));
         Ok(())
