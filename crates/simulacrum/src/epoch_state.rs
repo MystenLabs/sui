@@ -10,8 +10,7 @@ use sui_config::{
 };
 use sui_core::{
     accumulators::{
-        funds_read::AccountFundsRead,
-        object_funds_checker::metrics::ObjectFundsCheckerMetrics,
+        funds_read::AccountFundsRead, object_funds_checker::metrics::ObjectFundsCheckerMetrics,
         unsettled_object_withdrawals::UnsettledObjectWithdrawals,
     },
     transaction_simulation::{SimulationInputLoader, simulate_transaction},
@@ -20,7 +19,7 @@ use sui_execution::Executor;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-    accumulator_root::{AccumulatorObjId, AccumulatorValue, UnsettledObjectFundsRead, U128},
+    accumulator_root::{AccumulatorObjId, AccumulatorValue, U128, UnsettledObjectFundsRead},
     base_types::{ObjectRef, SequenceNumber, TransactionDigest},
     coin_reservation::BorrowedCoinReservationResolver,
     committee::{Committee, EpochId},
