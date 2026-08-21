@@ -77,7 +77,7 @@ warning[WSL00012]: it will not be possible to call this function
 31 │     public fun ret_ctx_val(): TxContext {
    │                               ^^^^^^^^^ Invalid return type. 'TxContext' cannot be returned
    │
-   = Due to restrictions in PTB execution, 'TxContext' may never appear in the return type of a function callable from a transaction, by value or by reference. This function will not be callable on Sui
+   = Due to restrictions in PTB execution, 'TxContext' may never appear in the return type of a function callable from a transaction, by value or by reference. This function will not be callable from PTBs on Sui
    = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[WSL00012]: it will not be possible to call this function
@@ -86,7 +86,7 @@ warning[WSL00012]: it will not be possible to call this function
 35 │     public fun ret_ctx_imm(ctx: &TxContext): &TxContext {
    │                                              ^^^^^^^^^^ Invalid return type. 'TxContext' cannot be returned
    │
-   = Due to restrictions in PTB execution, 'TxContext' may never appear in the return type of a function callable from a transaction, by value or by reference. This function will not be callable on Sui
+   = Due to restrictions in PTB execution, 'TxContext' may never appear in the return type of a function callable from a transaction, by value or by reference. This function will not be callable from PTBs on Sui
    = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[WSL00012]: it will not be possible to call this function
@@ -95,7 +95,7 @@ warning[WSL00012]: it will not be possible to call this function
 38 │     public fun ret_ctx_mut(ctx: &mut TxContext): &mut TxContext {
    │                                                  ^^^^^^^^^^^^^^ Invalid return type. 'TxContext' cannot be returned
    │
-   = Due to restrictions in PTB execution, 'TxContext' may never appear in the return type of a function callable from a transaction, by value or by reference. This function will not be callable on Sui
+   = Due to restrictions in PTB execution, 'TxContext' may never appear in the return type of a function callable from a transaction, by value or by reference. This function will not be callable from PTBs on Sui
    = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[WSL00012]: it will not be possible to call this function
@@ -104,7 +104,7 @@ warning[WSL00012]: it will not be possible to call this function
 41 │     public fun ret_ctx_tuple(ctx: &mut TxContext): (u64, &mut TxContext) {
    │                                                          ^^^^^^^^^^^^^^ Invalid return type. 'TxContext' cannot be returned
    │
-   = Due to restrictions in PTB execution, 'TxContext' may never appear in the return type of a function callable from a transaction, by value or by reference. This function will not be callable on Sui
+   = Due to restrictions in PTB execution, 'TxContext' may never appear in the return type of a function callable from a transaction, by value or by reference. This function will not be callable from PTBs on Sui
    = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[WSL00012]: it will not be possible to call this function
@@ -113,5 +113,5 @@ warning[WSL00012]: it will not be possible to call this function
 44 │     entry fun ret_ctx_entry(): TxContext {
    │                                ^^^^^^^^^ Invalid return type. 'TxContext' cannot be returned
    │
-   = Due to restrictions in PTB execution, 'TxContext' may never appear in the return type of a function callable from a transaction, by value or by reference. This function will not be callable on Sui
+   = Due to restrictions in PTB execution, 'TxContext' may never appear in the return type of a function callable from a transaction, by value or by reference. This function will not be callable from PTBs on Sui
    = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
