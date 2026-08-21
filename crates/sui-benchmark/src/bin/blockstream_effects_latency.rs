@@ -10,6 +10,7 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use anyhow::Context;
@@ -41,6 +42,9 @@ use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::TransactionData;
 use sui_types::utils::to_sender_signed_transaction;
+use tokio::sync::Mutex;
+use tokio::task::JoinSet;
+use tokio::time::MissedTickBehavior;
 use tonic::transport::Channel;
 use tracing::info;
 
@@ -68,9 +72,14 @@ struct Opts {
     /// Total number of transactions to measure.
     #[arg(long, default_value_t = 200)]
     num_transactions: usize,
-    /// Number of concurrent in-flight transactions (also the number of gas coins used).
+    /// Number of gas coins, which bounds the maximum in-flight transactions.
     #[arg(long, default_value_t = 8)]
     concurrency: usize,
+    /// Open-loop offered load in transactions/second. When unset (or 0), runs closed-loop: each of
+    /// `concurrency` workers submits, waits for completion, then submits the next. To sustain a
+    /// target without saturating, size `concurrency` >= target-qps * average latency (seconds).
+    #[arg(long)]
+    target_qps: Option<u64>,
     /// Gas price to use. Defaults to the network reference gas price.
     #[arg(long)]
     gas_price: Option<u64>,
@@ -102,6 +111,10 @@ struct Metrics {
     succeeded: IntCounter,
     failed: IntCounter,
     in_flight: IntGauge,
+    /// Configured open-loop target rate (0 in closed-loop mode).
+    target_qps: IntGauge,
+    /// Ticks skipped because no gas coin was free — the offered load exceeded capacity.
+    saturated: IntCounter,
 }
 
 impl Metrics {
@@ -136,6 +149,18 @@ impl Metrics {
             in_flight: register_int_gauge_with_registry!(
                 "blockstream_effects_in_flight",
                 "Measured transactions currently in flight",
+                registry,
+            )
+            .unwrap(),
+            target_qps: register_int_gauge_with_registry!(
+                "blockstream_effects_target_qps",
+                "Configured open-loop target rate (0 = closed-loop)",
+                registry,
+            )
+            .unwrap(),
+            saturated: register_int_counter_with_registry!(
+                "blockstream_effects_saturated_total",
+                "Dispatch ticks skipped because no gas coin was free (offered load exceeded capacity)",
                 registry,
             )
             .unwrap(),
@@ -214,37 +239,28 @@ async fn main() -> Result<()> {
         .await
         .context("connecting to baseline node")?;
 
-    let per_worker = opts.num_transactions.div_ceil(opts.concurrency);
-    let mut handles = Vec::new();
-    for gas in gas_coins {
-        let worker = Worker {
-            proxy: proxy.clone(),
-            keypair: keypair.clone(),
-            sender,
-            gas_price,
-            wait_timeout_ms: opts.wait_timeout_ms,
-            primary_client: primary_client.clone(),
-            baseline_client: baseline_client.clone(),
-            metric: metric.clone(),
-        };
-        handles.push(tokio::spawn(
-            async move { worker.run(gas, per_worker).await },
-        ));
-    }
+    let ctx = Arc::new(Ctx {
+        proxy,
+        keypair,
+        sender,
+        gas_price,
+        wait_timeout_ms: opts.wait_timeout_ms,
+        primary_client,
+        baseline_client,
+        metric: metric.clone(),
+    });
 
-    let mut samples = Vec::new();
-    let mut failures = 0usize;
-    for handle in handles {
-        let (worker_samples, worker_failures) = handle.await.expect("worker task panicked");
-        samples.extend(worker_samples);
-        failures += worker_failures;
-    }
+    metric.target_qps.set(opts.target_qps.unwrap_or(0) as i64);
+    let (samples, failures) = match opts.target_qps {
+        Some(qps) if qps > 0 => run_open_loop(ctx, gas_coins, opts.num_transactions, qps).await,
+        _ => run_closed_loop(ctx, gas_coins, opts.num_transactions).await,
+    };
 
     report(&samples, failures);
     Ok(())
 }
 
-struct Worker {
+struct Ctx {
     proxy: Arc<dyn ValidatorProxy + Send + Sync>,
     keypair: Arc<AccountKeyPair>,
     sender: SuiAddress,
@@ -255,84 +271,158 @@ struct Worker {
     metric: Arc<Metrics>,
 }
 
-impl Worker {
-    async fn run(self, mut gas: ObjectRef, count: usize) -> (Vec<Sample>, usize) {
-        let mut samples = Vec::with_capacity(count);
-        let mut failures = 0;
-        for _ in 0..count {
-            // Transfer the whole coin to self: recycles the gas coin (new version, same owner).
-            let tx = make_transfer_sui_transaction(
-                gas,
-                self.sender,
-                None,
-                self.sender,
-                &self.keypair,
-                self.gas_price,
+/// Submit one transaction and measure its local-effects latency on both nodes. Returns the sample
+/// (`None` on failure) and the gas coin reference to use next — recycled from the finalized effects,
+/// or unchanged if submission failed.
+async fn measure_transaction(ctx: &Ctx, gas: ObjectRef) -> (Option<Sample>, ObjectRef) {
+    // Transfer the whole coin to self: recycles the gas coin (new version, same owner).
+    let tx = make_transfer_sui_transaction(
+        gas,
+        ctx.sender,
+        None,
+        ctx.sender,
+        &ctx.keypair,
+        ctx.gas_price,
+    );
+    let digest = *tx.digest();
+
+    ctx.metric.submitted.inc();
+    ctx.metric.in_flight.inc();
+
+    let submit = ctx.proxy.execute_transaction_block(tx);
+    let primary = wait_for_effects(&ctx.primary_client, digest, ctx.wait_timeout_ms);
+    let baseline = wait_for_effects(&ctx.baseline_client, digest, ctx.wait_timeout_ms);
+    let (submit_res, primary_res, baseline_res) = tokio::join!(submit, primary, baseline);
+    ctx.metric.in_flight.dec();
+
+    let next_gas = match &submit_res {
+        Ok(effects) if effects.is_ok() => effects.gas_object().0,
+        Ok(effects) => {
+            ctx.metric.failed.inc();
+            tracing::warn!(
+                "transaction {digest} failed on-chain: {:?}",
+                effects.status()
             );
-            let digest = *tx.digest();
-
-            self.metric.submitted.inc();
-            self.metric.in_flight.inc();
-
-            let submit = self.proxy.execute_transaction_block(tx);
-            let primary = wait_for_effects(&self.primary_client, digest, self.wait_timeout_ms);
-            let baseline = wait_for_effects(&self.baseline_client, digest, self.wait_timeout_ms);
-            let (submit_res, primary_res, baseline_res) = tokio::join!(submit, primary, baseline);
-            self.metric.in_flight.dec();
-
-            // Recycle the gas coin from the finalized effects so the next iteration can proceed.
-            match &submit_res {
-                Ok(effects) if effects.is_ok() => gas = effects.gas_object().0,
-                Ok(effects) => {
-                    self.metric.failed.inc();
-                    failures += 1;
-                    tracing::warn!(
-                        "transaction {digest} failed on-chain: {:?}",
-                        effects.status()
-                    );
-                    continue;
-                }
-                Err(e) => {
-                    self.metric.failed.inc();
-                    failures += 1;
-                    tracing::warn!("submitting transaction {digest} failed: {e}");
-                    continue;
-                }
-            }
-
-            match (primary_res, baseline_res) {
-                (Some(primary_ms), Some(baseline_ms)) => {
-                    let delta_ms = baseline_ms - primary_ms;
-                    self.metric
-                        .latency_seconds
-                        .with_label_values(&["primary"])
-                        .observe(primary_ms / 1000.0);
-                    self.metric
-                        .latency_seconds
-                        .with_label_values(&["baseline"])
-                        .observe(baseline_ms / 1000.0);
-                    self.metric.succeeded.inc();
-                    info!(
-                        digest = %digest,
-                        primary_ms,
-                        baseline_ms,
-                        delta_ms,
-                        "measured transaction"
-                    );
-                    samples.push(Sample {
-                        primary_ms,
-                        baseline_ms,
-                        delta_ms,
-                    });
-                }
-                _ => {
-                    self.metric.failed.inc();
-                    failures += 1;
-                }
-            }
+            return (None, gas);
         }
-        (samples, failures)
+        Err(e) => {
+            ctx.metric.failed.inc();
+            tracing::warn!("submitting transaction {digest} failed: {e}");
+            return (None, gas);
+        }
+    };
+
+    match (primary_res, baseline_res) {
+        (Some(primary_ms), Some(baseline_ms)) => {
+            let delta_ms = baseline_ms - primary_ms;
+            ctx.metric
+                .latency_seconds
+                .with_label_values(&["primary"])
+                .observe(primary_ms / 1000.0);
+            ctx.metric
+                .latency_seconds
+                .with_label_values(&["baseline"])
+                .observe(baseline_ms / 1000.0);
+            ctx.metric.succeeded.inc();
+            info!(
+                digest = %digest,
+                primary_ms,
+                baseline_ms,
+                delta_ms,
+                "measured transaction"
+            );
+            (
+                Some(Sample {
+                    primary_ms,
+                    baseline_ms,
+                    delta_ms,
+                }),
+                next_gas,
+            )
+        }
+        _ => {
+            ctx.metric.failed.inc();
+            (None, next_gas)
+        }
     }
+}
+
+/// Closed-loop: one worker per gas coin, each submitting sequentially until the total is reached.
+async fn run_closed_loop(
+    ctx: Arc<Ctx>,
+    gas_coins: Vec<ObjectRef>,
+    num: usize,
+) -> (Vec<Sample>, usize) {
+    let workers = gas_coins.len();
+    let mut set = JoinSet::new();
+    for (i, gas) in gas_coins.into_iter().enumerate() {
+        let ctx = ctx.clone();
+        let count = num / workers + usize::from(i < num % workers);
+        set.spawn(async move {
+            let mut gas = gas;
+            let mut samples = Vec::new();
+            let mut failures = 0;
+            for _ in 0..count {
+                let (sample, next) = measure_transaction(&ctx, gas).await;
+                gas = next;
+                match sample {
+                    Some(s) => samples.push(s),
+                    None => failures += 1,
+                }
+            }
+            (samples, failures)
+        });
+    }
+    let mut samples = Vec::new();
+    let mut failures = 0;
+    while let Some(res) = set.join_next().await {
+        let (worker_samples, worker_failures) = res.expect("worker task panicked");
+        samples.extend(worker_samples);
+        failures += worker_failures;
+    }
+    (samples, failures)
+}
+
+/// Open-loop: dispatch at a fixed rate, bounded by the gas-coin pool. When no coin is free at a
+/// tick, the offered load has exceeded capacity — the tick is counted as saturated and skipped.
+async fn run_open_loop(
+    ctx: Arc<Ctx>,
+    gas_coins: Vec<ObjectRef>,
+    num: usize,
+    qps: u64,
+) -> (Vec<Sample>, usize) {
+    let pool = Arc::new(Mutex::new(gas_coins));
+    let mut ticker = tokio::time::interval(Duration::from_micros(1_000_000 / qps.max(1)));
+    ticker.set_missed_tick_behavior(MissedTickBehavior::Burst);
+
+    let mut set = JoinSet::new();
+    let mut submitted = 0;
+    while submitted < num {
+        ticker.tick().await;
+        let gas = pool.lock().await.pop();
+        let Some(gas) = gas else {
+            ctx.metric.saturated.inc();
+            continue;
+        };
+        submitted += 1;
+        let ctx = ctx.clone();
+        let pool = pool.clone();
+        set.spawn(async move {
+            let (sample, next) = measure_transaction(&ctx, gas).await;
+            pool.lock().await.push(next);
+            sample
+        });
+    }
+
+    let mut samples = Vec::new();
+    let mut failures = 0;
+    while let Some(res) = set.join_next().await {
+        match res.expect("measurement task panicked") {
+            Some(s) => samples.push(s),
+            None => failures += 1,
+        }
+    }
+    (samples, failures)
 }
 
 /// Call `WaitForLocalEffects` and return the elapsed milliseconds since `start`, or `None` if the
