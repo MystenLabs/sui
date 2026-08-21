@@ -80,9 +80,9 @@ pub enum TransactionContents {
 /// Transaction data from a gRPC execution or streaming response.
 #[derive(Clone)]
 pub struct ExecutedTransactionData {
-    pub effects: Box<TransactionEffects>,
+    pub effects: Arc<TransactionEffects>,
     pub events: Vec<Arc<Event>>,
-    pub transaction_data: Box<TransactionData>,
+    pub transaction_data: Arc<TransactionData>,
     pub signatures: Vec<GenericSignature>,
     pub balance_changes: Vec<grpc::BalanceChange>,
     /// The proto TransactionEffects from gRPC, if available.
@@ -319,9 +319,9 @@ impl TransactionContents {
         let proto_transaction = executed_transaction.transaction.clone();
 
         Ok(Self::ExecutedTransaction(ExecutedTransactionData {
-            effects: Box::new(effects),
+            effects: Arc::new(effects),
             events,
-            transaction_data: Box::new(transaction_data),
+            transaction_data: Arc::new(transaction_data),
             signatures,
             balance_changes,
             proto_effects,
@@ -335,6 +335,17 @@ impl TransactionContents {
         match self {
             Self::LedgerGrpc(txn) => Ok(txn.transaction_data.as_ref().clone()),
             Self::ExecutedTransaction(tx) => Ok(tx.transaction_data.as_ref().clone()),
+        }
+    }
+
+    /// Like [`Self::data`], but returns a shared reference to the underlying transaction data
+    /// instead of a deep clone. Prefer this when the caller only needs to read the data (the
+    /// common case) — GraphQL resolvers that independently call this per selected field share one
+    /// allocation instead of each paying for a full clone of the transaction data.
+    pub fn data_arc(&self) -> anyhow::Result<Arc<TransactionData>> {
+        match self {
+            Self::LedgerGrpc(txn) => Ok(txn.transaction_data.clone()),
+            Self::ExecutedTransaction(tx) => Ok(tx.transaction_data.clone()),
         }
     }
 
@@ -363,6 +374,17 @@ impl TransactionContents {
         match self {
             Self::LedgerGrpc(txn) => Ok(txn.effects.as_ref().clone()),
             Self::ExecutedTransaction(tx) => Ok(tx.effects.as_ref().clone()),
+        }
+    }
+
+    /// Like [`Self::effects`], but returns a shared reference to the underlying effects instead
+    /// of a deep clone. Prefer this when the caller only needs to read the effects (the common
+    /// case) — GraphQL resolvers that independently call this per selected field share one
+    /// allocation instead of each paying for a full clone of the effects tree.
+    pub fn effects_arc(&self) -> anyhow::Result<Arc<TransactionEffects>> {
+        match self {
+            Self::LedgerGrpc(txn) => Ok(txn.effects.clone()),
+            Self::ExecutedTransaction(tx) => Ok(tx.effects.clone()),
         }
     }
 

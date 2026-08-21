@@ -674,9 +674,9 @@ fn hydrate_executed_transaction(
 
     Ok(NativeTransactionContents::ExecutedTransaction(
         sui_indexer_alt_reader::kv_loader::ExecutedTransactionData {
-            effects: Box::new(effects),
+            effects: Arc::new(effects),
             events,
-            transaction_data: Box::new(transaction_data),
+            transaction_data: Arc::new(transaction_data),
             signatures,
             balance_changes: proto.balance_changes.clone(),
             proto_effects: proto.effects.clone(),
