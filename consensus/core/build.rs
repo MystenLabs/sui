@@ -79,6 +79,15 @@ fn build_tonic_services(out_dir: &Path) {
         )
         .method(
             tonic_build::manual::Method::builder()
+                .name("fetch_slot_digests")
+                .route_name("FetchSlotDigests")
+                .input_type("crate::network::tonic_network::FetchSlotDigestsRequest")
+                .output_type("crate::network::tonic_network::FetchSlotDigestsResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            tonic_build::manual::Method::builder()
                 .name("get_latest_rounds")
                 .route_name("GetLatestRounds")
                 .input_type("crate::network::tonic_network::GetLatestRoundsRequest")

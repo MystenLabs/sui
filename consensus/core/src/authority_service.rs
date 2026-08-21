@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, pin::Pin, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
-use consensus_types::block::{BlockRef, Round};
+use consensus_types::block::{BlockDigest, BlockRef, Round};
 use futures::{Stream, StreamExt, ready, stream, task};
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::RwLock;
@@ -17,7 +17,7 @@ use tokio_util::sync::ReusableBoxFuture;
 use tracing::{debug, info, warn};
 
 use crate::{
-    block::{BlockAPI as _, ExtendedBlock, GENESIS_ROUND, SignedBlock, VerifiedBlock},
+    block::{BlockAPI as _, ExtendedBlock, GENESIS_ROUND, SignedBlock, Slot, VerifiedBlock},
     block_sync_service::BlockSyncService,
     block_verifier::BlockVerifier,
     commit::{CommitRange, TrustedCommit},
@@ -601,6 +601,34 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         self.block_sync_service
             .fetch_latest_blocks(peer, authorities)
             .await
+    }
+
+    async fn handle_fetch_slot_digests(
+        &self,
+        _peer: AuthorityIndex,
+        slots: Vec<Slot>,
+    ) -> ConsensusResult<Vec<(Slot, BlockDigest)>> {
+        fail_point_async!("consensus-rpc-response");
+
+        if slots.len() > crate::network::MAX_SLOT_DIGEST_REQUEST_SIZE {
+            return Err(ConsensusError::InvalidFetchBlocksRequest(format!(
+                "fetch_slot_digests asked for {} slots, limit {}",
+                slots.len(),
+                crate::network::MAX_SLOT_DIGEST_REQUEST_SIZE
+            )));
+        }
+        let dag_state = self.dag_state.read();
+        Ok(slots
+            .into_iter()
+            .filter_map(|slot| {
+                // Only a uniquely-resolved slot is answered; an equivocated one has
+                // no digest worth hinting.
+                match dag_state.digest_at_slot(slot) {
+                    crate::block::SlotDigest::Unique(digest) => Some((slot, digest)),
+                    _ => None,
+                }
+            })
+            .collect())
     }
 
     async fn handle_get_latest_rounds(
@@ -1264,6 +1292,16 @@ mod tests {
             _peer: AuthorityIndex,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn fetch_slot_digests(
+            &self,
+            _peer: AuthorityIndex,
+            _slots: Vec<crate::block::Slot>,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<(crate::block::Slot, consensus_types::block::BlockDigest)>>
+        {
             unimplemented!("Unimplemented")
         }
     }

@@ -110,6 +110,14 @@ impl ValidatorNetworkService for Mutex<TestService> {
     ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
         unimplemented!("Unimplemented")
     }
+
+    async fn handle_fetch_slot_digests(
+        &self,
+        _peer: AuthorityIndex,
+        _slots: Vec<crate::block::Slot>,
+    ) -> ConsensusResult<Vec<(crate::block::Slot, consensus_types::block::BlockDigest)>> {
+        unimplemented!("Unimplemented")
+    }
 }
 
 #[async_trait]

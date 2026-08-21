@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     net::{SocketAddr, SocketAddrV4, SocketAddrV6},
     pin::Pin,
     sync::{Arc, Weak},
@@ -12,9 +12,10 @@ use std::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
-use consensus_types::block::{BlockRef, Round};
+use consensus_types::block::{BlockDigest, BlockRef, Round};
 use fastcrypto::{encoding::Encoding, traits::ToFromBytes};
 use futures::{Stream, StreamExt as _, stream};
+use itertools::Itertools as _;
 use mysten_network::{Multiaddr, multiaddr::Protocol};
 use parking_lot::RwLock;
 use sui_http::{
@@ -42,6 +43,7 @@ use super::{
 };
 use crate::{
     CommitIndex,
+    block::Slot,
     commit::CommitRange,
     context::Context,
     error::{ConsensusError, ConsensusResult},
@@ -377,6 +379,61 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         })?;
         let response = response.into_inner();
         Ok((response.highest_received, response.highest_accepted))
+    }
+
+    async fn fetch_slot_digests(
+        &self,
+        peer: AuthorityIndex,
+        slots: Vec<Slot>,
+        timeout: Duration,
+    ) -> ConsensusResult<Vec<(Slot, BlockDigest)>> {
+        let requested: BTreeSet<Slot> = slots.iter().copied().collect();
+        let mut client = self.get_client(peer, timeout).await?;
+        let mut request = Request::new(FetchSlotDigestsRequest {
+            rounds: slots.iter().map(|slot| slot.round).collect(),
+            authorities: slots
+                .iter()
+                .map(|slot| slot.authority.value() as u32)
+                .collect(),
+        });
+        request.set_timeout(timeout);
+        let response = client.fetch_slot_digests(request).await.map_err(|e| {
+            ConsensusError::NetworkRequest(format!("fetch_slot_digests failed: {e:?}"))
+        })?;
+        let response = response.into_inner();
+        if response.rounds.len() != response.authorities.len()
+            || response.rounds.len() != response.digests.len()
+        {
+            return Err(ConsensusError::NetworkRequest(
+                "fetch_slot_digests returned misaligned arrays".to_string(),
+            ));
+        }
+        let mut resolved = Vec::with_capacity(response.rounds.len());
+        for ((round, authority), digest) in response
+            .rounds
+            .into_iter()
+            .zip_eq(response.authorities)
+            .zip_eq(response.digests)
+        {
+            let Some(authority) = self
+                .context
+                .committee
+                .to_authority_index(authority as usize)
+            else {
+                continue;
+            };
+            let slot = Slot::new(round, authority);
+            // Answers are hints for self-validating reconstruction, but only for
+            // slots this request asked about.
+            if !requested.contains(&slot) {
+                continue;
+            }
+            let Ok(digest) = <[u8; 32]>::try_from(digest.as_ref()) else {
+                continue;
+            };
+            resolved.push((slot, BlockDigest(digest)));
+        }
+        Ok(resolved)
     }
 
     #[cfg(test)]
@@ -803,6 +860,51 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
                 .into_iter();
         let stream = iter(responses);
         Ok(Response::new(stream))
+    }
+
+    async fn fetch_slot_digests(
+        &self,
+        request: Request<FetchSlotDigestsRequest>,
+    ) -> Result<Response<FetchSlotDigestsResponse>, tonic::Status> {
+        let Some(peer_index) = request
+            .extensions()
+            .get::<PeerInfo>()
+            .map(|p| p.authority_index)
+        else {
+            return Err(tonic::Status::internal("PeerInfo not found"));
+        };
+        let request = request.into_inner();
+        if request.rounds.len() != request.authorities.len() {
+            return Err(tonic::Status::invalid_argument("misaligned slot arrays"));
+        }
+        if request.rounds.len() > crate::network::MAX_SLOT_DIGEST_REQUEST_SIZE {
+            return Err(tonic::Status::invalid_argument("too many slots"));
+        }
+        let mut slots = Vec::with_capacity(request.rounds.len());
+        for (round, authority) in request.rounds.into_iter().zip_eq(request.authorities) {
+            let Some(authority) = self
+                .context
+                .committee
+                .to_authority_index(authority as usize)
+            else {
+                return Err(tonic::Status::invalid_argument("invalid authority index"));
+            };
+            slots.push(Slot::new(round, authority));
+        }
+        let resolved = self
+            .service()?
+            .handle_fetch_slot_digests(peer_index, slots)
+            .await
+            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
+        let mut response = FetchSlotDigestsResponse::default();
+        for (slot, digest) in resolved {
+            response.rounds.push(slot.round);
+            response.authorities.push(slot.authority.value() as u32);
+            response
+                .digests
+                .push(Bytes::copy_from_slice(digest.as_ref()));
+        }
+        Ok(Response::new(response))
     }
 
     async fn get_latest_rounds(
@@ -1516,6 +1618,26 @@ pub(crate) struct FetchLatestBlocksResponse {
     // The response of the requested blocks as Serialized SignedBlock.
     #[prost(bytes = "bytes", repeated, tag = "1")]
     blocks: Vec<Bytes>,
+}
+
+/// Slots as parallel arrays; the response returns only the slots the peer resolved
+/// to a unique digest.
+#[derive(Clone, prost::Message)]
+pub(crate) struct FetchSlotDigestsRequest {
+    #[prost(uint32, repeated, tag = "1")]
+    rounds: Vec<Round>,
+    #[prost(uint32, repeated, tag = "2")]
+    authorities: Vec<u32>,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct FetchSlotDigestsResponse {
+    #[prost(uint32, repeated, tag = "1")]
+    rounds: Vec<Round>,
+    #[prost(uint32, repeated, tag = "2")]
+    authorities: Vec<u32>,
+    #[prost(bytes = "bytes", repeated, tag = "3")]
+    digests: Vec<Bytes>,
 }
 
 #[derive(Clone, prost::Message)]

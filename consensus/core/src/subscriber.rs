@@ -87,11 +87,13 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let worker_pending = pending_reconstructions.clone();
         let worker_seen = seen_digests.clone();
         let worker_registry = registry.clone();
+        let worker_client = network_client.clone();
         let reconstruction_worker = spawn_monitored_task!(run_reconstruction_worker(
             worker_context,
             worker_codec,
             worker_dag_state,
             worker_service,
+            worker_client,
             worker_pending,
             worker_seen,
             worker_registry,
@@ -676,6 +678,16 @@ mod test {
         ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
             unimplemented!("Unimplemented")
         }
+
+        async fn fetch_slot_digests(
+            &self,
+            _peer: AuthorityIndex,
+            _slots: Vec<crate::block::Slot>,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<(crate::block::Slot, consensus_types::block::BlockDigest)>>
+        {
+            unimplemented!("Unimplemented")
+        }
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -816,6 +828,7 @@ mod test {
         let authority_service = Arc::new(Mutex::new(TestService::new()));
         let network_client = Arc::new(OneShotSlimClient {
             slim: Mutex::new(Some(slim)),
+            ..Default::default()
         });
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
@@ -904,6 +917,7 @@ mod test {
         let authority_service = Arc::new(Mutex::new(TestService::new()));
         let network_client = Arc::new(OneShotSlimClient {
             slim: Mutex::new(Some(slim)),
+            ..Default::default()
         });
         let registry = Arc::new(FakeRegistry::default());
         let store = Arc::new(MemStore::new());
@@ -942,9 +956,81 @@ mod test {
         );
     }
 
+    /// A parked block whose missing digest the sending peer can supply is finished
+    /// by the digest pull, without a full-block fetch.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn parked_slim_block_resolves_from_fetched_slot_digest() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let peer = context.committee.to_authority_index(1).unwrap();
+
+        let missing_ancestor = VerifiedBlock::new_for_test(TestBlock::new(1, 2).build());
+        let own_parent = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
+        let block = VerifiedBlock::new_for_test(
+            TestBlock::new(2, 1)
+                .set_ancestors(vec![own_parent.reference(), missing_ancestor.reference()])
+                .build(),
+        );
+        let slim = {
+            let sender_dag_state = Arc::new(RwLock::new(DagState::new(
+                context.clone(),
+                Arc::new(MemStore::new()),
+            )));
+            sender_dag_state.write().accept_block(own_parent.clone());
+            sender_dag_state
+                .write()
+                .accept_block(missing_ancestor.clone());
+            SlimBlockCodec::new(context.clone())
+                .encode(&block, &sender_dag_state)
+                .unwrap()
+        };
+
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let missing_slot = crate::block::Slot::from(missing_ancestor.reference());
+        let network_client = Arc::new(OneShotSlimClient {
+            slim: Mutex::new(Some(slim)),
+            slot_digests: Mutex::new(vec![(missing_slot, missing_ancestor.reference().digest)]),
+        });
+        let registry = Arc::new(FakeRegistry::default());
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let (_accepted_tx, accepted_rx) = broadcast::channel(8);
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client,
+            authority_service.clone(),
+            dag_state.clone(),
+            registry.clone(),
+            accepted_rx,
+        );
+        subscriber.subscribe(peer);
+
+        for _ in 0..20 {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            if !authority_service.lock().handle_send_block.is_empty() {
+                break;
+            }
+        }
+        let service = authority_service.lock();
+        assert_eq!(service.handle_send_block.len(), 1);
+        match &service.handle_send_block[0].1.block {
+            SerializedBlockForm::Full(bytes) => {
+                assert_eq!(bytes, block.serialized(), "byte-identical reconstruction")
+            }
+            SerializedBlockForm::Slim(_) => panic!("must deliver the rebuilt full form"),
+        }
+        assert!(
+            registry.registered.lock().is_empty(),
+            "a digest-resolved block must not reach the full-block fetch lane"
+        );
+    }
+
     /// Emits one slim payload, then stays open without yielding.
+    #[derive(Default)]
     struct OneShotSlimClient {
         slim: Mutex<Option<Bytes>>,
+        /// Answers for fetch_slot_digests; empty means the peer resolves nothing.
+        slot_digests: Mutex<Vec<(crate::block::Slot, consensus_types::block::BlockDigest)>>,
     }
 
     #[async_trait]
@@ -1014,6 +1100,16 @@ mod test {
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
             unimplemented!("Unimplemented")
+        }
+
+        async fn fetch_slot_digests(
+            &self,
+            _peer: AuthorityIndex,
+            _slots: Vec<crate::block::Slot>,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<(crate::block::Slot, consensus_types::block::BlockDigest)>>
+        {
+            Ok(std::mem::take(&mut *self.slot_digests.lock()))
         }
     }
 

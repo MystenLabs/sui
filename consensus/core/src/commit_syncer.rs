@@ -985,6 +985,16 @@ mod tests {
             unimplemented!("Unimplemented")
         }
 
+        async fn fetch_slot_digests(
+            &self,
+            _peer: AuthorityIndex,
+            _slots: Vec<crate::block::Slot>,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<(crate::block::Slot, consensus_types::block::BlockDigest)>>
+        {
+            unimplemented!("Unimplemented")
+        }
+
         #[cfg(test)]
         async fn send_block(
             &self,

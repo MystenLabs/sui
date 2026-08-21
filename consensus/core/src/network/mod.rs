@@ -27,18 +27,22 @@ use std::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
-use consensus_types::block::{BlockRef, Round};
+use consensus_types::block::{BlockDigest, BlockRef, Round};
 use fastcrypto::encoding::{Encoding, Hex};
 use futures::Stream;
 use mysten_network::{Multiaddr, multiaddr::Protocol};
 use prost::Message as _;
 
 use crate::{
-    block::{ExtendedBlock, VerifiedBlock},
+    block::{ExtendedBlock, Slot, VerifiedBlock},
     commit::{CommitRange, TrustedCommit},
     context::Context,
     error::{ConsensusError, ConsensusResult},
 };
+
+/// Most slots one fetch_slot_digests request may carry, enforced at the wire
+/// boundary and respected by the puller.
+pub(crate) const MAX_SLOT_DIGEST_REQUEST_SIZE: usize = 128;
 
 /// Identifies an observer node by its network public key.
 pub type NodeId = NetworkPublicKey;
@@ -175,6 +179,15 @@ pub(crate) trait ValidatorNetworkClient: Send + Sync + Sized + 'static {
         timeout: Duration,
     ) -> ConsensusResult<(Vec<Round>, Vec<Round>)>;
 
+    /// Asks `peer` for the digests it holds at `slots`. The response carries only the
+    /// slots the peer resolved to a unique digest.
+    async fn fetch_slot_digests(
+        &self,
+        peer: AuthorityIndex,
+        slots: Vec<Slot>,
+        timeout: Duration,
+    ) -> ConsensusResult<Vec<(Slot, BlockDigest)>>;
+
     /// Sends a serialized SignedBlock to a peer.
     #[cfg(test)]
     async fn send_block(
@@ -233,6 +246,14 @@ pub(crate) trait ValidatorNetworkService: Send + Sync + 'static {
     ) -> ConsensusResult<Vec<Bytes>>;
 
     /// Handles the request to get the latest received & accepted rounds of all authorities.
+    /// Resolves each requested slot against local accepted state, returning only the
+    /// slots with a unique digest.
+    async fn handle_fetch_slot_digests(
+        &self,
+        peer: AuthorityIndex,
+        slots: Vec<Slot>,
+    ) -> ConsensusResult<Vec<(Slot, BlockDigest)>>;
+
     async fn handle_get_latest_rounds(
         &self,
         peer: AuthorityIndex,
