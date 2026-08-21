@@ -1320,6 +1320,7 @@
                 "bridge": false,
                 "cancel_for_failed_dkg_early": false,
                 "check_for_init_during_upgrade": false,
+                "check_object_funds_withdraw_in_execution": false,
                 "commit_root_state_digest": false,
                 "consensus_always_accept_system_transactions": false,
                 "consensus_batched_block_sync": false,
@@ -2037,6 +2038,7 @@
                 "random_beacon_min_round_interval_ms": null,
                 "random_beacon_reduction_allowed_delta": null,
                 "random_beacon_reduction_lower_bound": null,
+                "reserve_object_funds_for_withdrawal_cold_read_cost": null,
                 "reward_slashing_rate": {
                   "u64": "10000"
                 },
@@ -2165,6 +2167,7 @@
                 "buffer_stake_for_protocol_upgrade_bps": "5000",
                 "cancel_for_failed_dkg_early": false,
                 "check_for_init_during_upgrade": false,
+                "check_object_funds_withdraw_in_execution": false,
                 "commit_root_state_digest": false,
                 "consensus_always_accept_system_transactions": false,
                 "consensus_batched_block_sync": false,

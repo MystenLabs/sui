@@ -88,7 +88,7 @@ mod config;
 mod crypto;
 mod dynamic_field;
 pub mod event;
-mod funds_accumulator;
+pub mod funds_accumulator;
 mod object;
 pub mod object_runtime;
 mod package;
@@ -137,6 +137,10 @@ pub struct NativesCostTable {
 
     // Event natives
     pub event_emit_cost_params: EventEmitCostParams,
+
+    // Funds accumulator natives
+    pub reserve_object_funds_for_withdrawal_cost_params:
+        funds_accumulator::ReserveObjectFundsForWithdrawalCostParams,
 
     // Object
     pub borrow_uid_cost_params: BorrowUidCostParams,
@@ -375,6 +379,13 @@ impl NativesCostTable {
                     .event_emit_auth_stream_cost_as_option()
                     .map(Into::into),
             },
+
+            reserve_object_funds_for_withdrawal_cost_params:
+                funds_accumulator::ReserveObjectFundsForWithdrawalCostParams {
+                    cold_read_cost: protocol_config
+                        .reserve_object_funds_for_withdrawal_cold_read_cost_as_option()
+                        .map(Into::into),
+                },
 
             borrow_uid_cost_params: BorrowUidCostParams {
                 object_borrow_uid_cost_base: protocol_config.object_borrow_uid_cost_base().into(),
@@ -1110,6 +1121,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "funds_accumulator",
             "withdraw_from_accumulator_address",
             make_native!(funds_accumulator::withdraw_from_accumulator_address),
+        ),
+        (
+            "funds_accumulator",
+            "reserve_object_funds_for_withdrawal",
+            make_native!(funds_accumulator::reserve_object_funds_for_withdrawal),
         ),
         (
             "groth16",

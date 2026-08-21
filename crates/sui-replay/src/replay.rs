@@ -803,6 +803,11 @@ impl LocalExec {
                 tx_info.epoch_start_timestamp,
                 checked_input_objects,
                 sui_types::base_types::SystemObjectVersions::default(),
+                // TODO: Replaying a transaction that withdrew object funds needs the unsettled
+                // withdrawals that earlier transactions in the same consensus commit had
+                // accumulated at execution time. Until those are reconstructed, replaying such a
+                // transaction can diverge from the original execution.
+                &sui_types::accumulator_root::EmptyUnsettledObjectFunds,
                 gas_data,
                 gas_status,
                 transaction_kind.clone(),
@@ -1000,6 +1005,11 @@ impl LocalExec {
                 epoch_start_timestamp,
                 input_objects,
                 sui_types::base_types::SystemObjectVersions::default(),
+                // TODO: Replaying a transaction that withdrew object funds needs the unsettled
+                // withdrawals that earlier transactions in the same consensus commit had
+                // accumulated at execution time. Until those are reconstructed, replaying such a
+                // transaction can diverge from the original execution.
+                &sui_types::accumulator_root::EmptyUnsettledObjectFunds,
                 gas_data,
                 gas_status,
                 kind,

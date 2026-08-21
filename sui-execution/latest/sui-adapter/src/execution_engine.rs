@@ -16,7 +16,10 @@ pub(crate) mod checked {
     use mysten_common::{assert_reachable, debug_fatal, in_test_configuration};
     use std::collections::{BTreeMap, BTreeSet};
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
-    use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
+    use sui_types::accumulator_root::{
+        ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE, EmptyUnsettledObjectFunds,
+        UnsettledObjectFundsRead,
+    };
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
@@ -154,6 +157,7 @@ pub(crate) mod checked {
         store: &dyn BackingStore,
         input_objects: CheckedInputObjects,
         system_object_versions: SystemObjectVersionRequirements,
+        unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -187,6 +191,7 @@ pub(crate) mod checked {
             protocol_config,
             *epoch_id,
             system_object_versions,
+            unsettled_object_funds,
         );
 
         // TODO: remove all `legacy` code on the next execution version cut
@@ -290,6 +295,9 @@ pub(crate) mod checked {
             protocol_config,
             0,
             SystemObjectVersionRequirements::Exact(SystemObjectVersions::default()),
+            // The genesis transaction cannot withdraw object funds, so there are never
+            // unsettled withdrawals for it to account for.
+            &EmptyUnsettledObjectFunds,
         );
         let mut gas_charger = GasCharger::new_unmetered(tx_context.borrow().digest());
         SPT::execute::<execution_mode::Genesis>(
@@ -704,6 +712,8 @@ pub(crate) mod checked {
             // Ungated: this only ever turns a would-be arithmetic failure into a deterministic abort,
             // which produces no committed effects and so cannot diverge from any previously-committed
             // result, and it applies uniformly across protocol versions.
+            // TODO: Remove this check from future executor versions once object funds checks run
+            // during execution.
             if result.is_ok()
                 && let Err(e) = temporary_store.check_accumulator_amounts_representable()
             {

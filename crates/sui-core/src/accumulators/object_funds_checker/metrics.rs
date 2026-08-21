@@ -17,6 +17,7 @@ pub struct ObjectFundsCheckerMetrics {
     pub unsettled_accounts: IntGauge,
     pub unsettled_versions: IntGauge,
     pub check_result: IntCounterVec,
+    pub in_execution_check_result: IntCounterVec,
 }
 
 impl ObjectFundsCheckerMetrics {
@@ -56,6 +57,13 @@ impl ObjectFundsCheckerMetrics {
             check_result: register_int_counter_vec_with_registry!(
                 "object_funds_check_result",
                 "Count of object funds check results by outcome",
+                &["result"],
+                registry,
+            )
+            .unwrap(),
+            in_execution_check_result: register_int_counter_vec_with_registry!(
+                "object_funds_in_execution_check_result",
+                "Count of committed in-execution object funds check outcomes by result",
                 &["result"],
                 registry,
             )

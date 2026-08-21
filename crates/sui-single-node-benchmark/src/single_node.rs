@@ -218,6 +218,9 @@ impl SingleValidator {
                 0,
                 input_objects,
                 sui_types::base_types::SystemObjectVersions::default(),
+                // The benchmark only measures execution throughput and never withdraws object
+                // funds, so there are no unsettled withdrawals to account for.
+                &sui_types::accumulator_root::EmptyUnsettledObjectFunds,
                 gas_data,
                 gas_status,
                 kind,

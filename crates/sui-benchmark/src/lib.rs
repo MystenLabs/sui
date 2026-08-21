@@ -227,26 +227,21 @@ impl ExecutionEffects {
     }
 
     pub fn is_insufficient_funds(&self) -> bool {
-        match self {
-            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
-                match effects.data().status() {
-                    ExecutionStatus::Success => false,
-                    ExecutionStatus::Failure(ExecutionFailure {
-                        error: ExecutionErrorKind::InsufficientFundsForWithdraw,
-                        ..
-                    }) => true,
-                    _ => false,
-                }
-            }
-            ExecutionEffects::ExecutedTransaction(txn) => match txn.effects.status() {
-                ExecutionStatus::Success => false,
-                ExecutionStatus::Failure(ExecutionFailure {
-                    error: ExecutionErrorKind::InsufficientFundsForWithdraw,
-                    ..
-                }) => true,
-                _ => false,
-            },
-        }
+        let status = match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => effects.data().status(),
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.status(),
+        };
+        matches!(
+            status,
+            ExecutionStatus::Failure(ExecutionFailure {
+                error: ExecutionErrorKind::InsufficientFundsForWithdraw,
+                ..
+            })
+        ) || matches!(
+            status,
+            ExecutionStatus::Failure(ExecutionFailure { error, .. })
+                if sui_types::funds_accumulator::is_object_funds_insufficient_abort(error)
+        )
     }
 
     pub fn is_invalid_transaction(&self) -> bool {

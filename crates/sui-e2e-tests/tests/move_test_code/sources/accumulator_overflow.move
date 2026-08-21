@@ -13,9 +13,9 @@ use sui::tx_context::{Self, TxContext};
 
 const U64_MAX: u64 = 18446744073709551615;
 
-/// Object-sourced withdrawals are checked for backing only at settlement (which runs after effects
-/// construction), so this withdraws `u64::MAX` and deposits it to the sender, yielding a single
-/// Move-native Merge of `u64::MAX` to `(sender, Balance<SUI>)`.
+/// Regression helper for the old post-execution object-funds path: this attempts to withdraw
+/// `u64::MAX` from a fresh object and deposit it to the sender. With in-execution object-funds
+/// checking enabled, this aborts before emitting the `u64::MAX` accumulator writes.
 public entry fun merge_u64_max(ctx: &mut TxContext) {
     let sender = tx_context::sender(ctx);
     let mut id = object::new(ctx);
@@ -41,11 +41,9 @@ public fun withdraw_sui_as_coin(amount: u64, ctx: &mut TxContext): Coin<SUI> {
     coin::from_balance<SUI>(bal, ctx)
 }
 
-/// Deposit `u64::MAX` of `Balance<T>` to the sender twice via object-sourced withdrawals. Both
-/// deposits are Move-native Merges to `(sender, Balance<T>)`, so the second pushes the object-runtime
-/// per-key merge total past `u64::MAX` and is rejected with an arithmetic error. Unlike
-/// `Balance<SUI>`, an arbitrary `Balance<T>` has no uncapped gas-smash deposit path, so this per-key
-/// cap is the binding guard (and gas/conservation checking does not apply to non-SUI types).
+/// Regression helper for a custom-coin accumulator overflow shape. With in-execution object-funds
+/// checking enabled, the first unbacked withdrawal aborts before either `u64::MAX` deposit is
+/// emitted.
 public entry fun double_merge_u64_max<T>(ctx: &mut TxContext) {
     let sender = tx_context::sender(ctx);
 
