@@ -318,7 +318,6 @@ fn compile_match_literal(
 ) -> MatchTree {
     let mut subject_binders = vec![];
     let lits = matrix.first_lits();
-    // Binder-only columns become `Bind` upstream, so no literals means error patterns.
     ice_assert!(
         context.reporter,
         !lits.is_empty() || context.env.has_errors(),
@@ -380,7 +379,6 @@ fn compile_match_struct(
         );
         (subject_binders, unpack)
     } else {
-        // Binder-only columns become `Bind` upstream, so a missing ctor means error patterns.
         ice_assert!(
             context.reporter,
             context.env.has_errors(),
@@ -414,7 +412,6 @@ fn compile_enum_switch(
         .collect::<BTreeSet<_>>();
 
     let ctors = matrix.first_variant_ctors();
-    // Binder-only columns become `Bind` upstream, so no variants means error patterns.
     ice_assert!(
         context.reporter,
         !ctors.is_empty() || context.env.has_errors(),
@@ -641,9 +638,7 @@ fn match_switch_to_exp(
     }
 }
 
-/// Binds the subject binders as immutable copies of the subject around `next`. Fringe subjects
-/// are always imm-refs (`make_initial_fringe`, `make_imm_ref_match_binders`), so the copies are
-/// legal for any subject type; by-value arm bindings happen at the leaves via `make_arm_unpack`.
+/// Binds the subject binders as imm-refs for subsequent matching and guard usage.
 fn bind_subject_binders(
     context: &ResolutionContext,
     binding: MatchBindings,

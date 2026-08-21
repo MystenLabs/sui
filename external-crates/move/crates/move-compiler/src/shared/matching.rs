@@ -154,10 +154,6 @@ impl PatternArm {
             .all(|pat| matches!(pat.pat.value, TP::Wildcard | TP::Binder(_, _)))
     }
 
-    /// Returns true if the head pattern cannot discriminate its subject: a binder, a wildcard, or
-    /// an `@`-chain ending in one. These are exactly the cases `specialize_default` retains, so a
-    /// column of them default-specializes losslessly. `ErrorPat` is deliberately `false`: error
-    /// rows must keep routing to the loud paths.
     fn head_is_bindable_only(&self) -> bool {
         fn bindable_only(pat: &MatchPattern) -> bool {
             match &pat.pat.value {
@@ -586,8 +582,8 @@ impl PatternMatrix {
         })
     }
 
-    /// Returns true if no row's head pattern can discriminate the subject — i.e.,
-    /// `specialize_default` on this matrix drops no rows.
+    /// Returns true if each row's head pattern is a binder or wildcard
+    /// (e.g., none discriminate the subject)
     pub fn first_column_binders_only(&self) -> bool {
         self.patterns.iter().all(|pat| pat.head_is_bindable_only())
     }
