@@ -12,9 +12,12 @@
 //! Everything parked is UNVERIFIED: a claim carries no checked signature until
 //! reconstruction succeeds, which is why this state lives in its own container with
 //! its own bounds. Admission accepts only claimed rounds inside a GC-anchored window,
-//! one entry per slot, under per-peer and total byte quotas; anything refused is
-//! dropped, and recovers the same way it does today -- a later block that references
-//! it suspends and drives the ordinary missing-ancestor fetch.
+//! one entry per slot, under per-peer and total byte quotas.
+//!
+//! Entries that outlive a grace window, and blocks that cannot be parked at all --
+//! dead frontier slots, ambiguity, refusals -- escalate through
+//! [`MissingBlockRegistry`]: the claim named its own digest, so the full block is
+//! exactly addressable on the fetch path.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -36,6 +39,7 @@ use crate::{
     network::{ExtendedSerializedBlock, SerializedBlockForm, ValidatorNetworkService},
     seen_digests::SeenDigests,
     slim_block::SlimBlockCodec,
+    synchronizer::SynchronizerHandle,
 };
 
 /// Admission window height above the local accept frontier. The frontier anchor keeps
@@ -89,6 +93,9 @@ struct ParkedSlimBlock {
     /// inverted index without scanning it.
     missing: BTreeSet<Slot>,
     charge: usize,
+    parked_at: tokio::time::Instant,
+    /// Last sweep registration, rotating retries across the population.
+    last_swept: Option<tokio::time::Instant>,
 }
 
 /// Why a claim was not admitted. Refused claims are dropped.
@@ -164,6 +171,26 @@ impl ParkingQuotas {
     }
 }
 
+/// Sink for refs whose recovery needs a fetch. Implemented by the synchronizer's
+/// exact-fetch lane; a trait so tests can record registrations.
+#[async_trait::async_trait]
+pub(crate) trait MissingBlockRegistry: Send + Sync {
+    async fn register_missing_block(
+        &self,
+        block_ref: BlockRef,
+    ) -> crate::error::ConsensusResult<()>;
+}
+
+#[async_trait::async_trait]
+impl MissingBlockRegistry for crate::synchronizer::SynchronizerHandle {
+    async fn register_missing_block(
+        &self,
+        block_ref: BlockRef,
+    ) -> crate::error::ConsensusResult<()> {
+        SynchronizerHandle::register_missing_block(self, block_ref).await
+    }
+}
+
 /// An entry whose last missing slot filled, ready to decode. Its byte charge stays
 /// counted against the admission caps until the entry drops, worker cancellation
 /// included; the release is atomic and takes no lock.
@@ -197,6 +224,9 @@ pub(crate) struct PendingReconstructions {
     /// One entry per claimed slot, whichever digest claimed it first.
     occupancy: BTreeMap<Slot, BlockRef>,
     quotas: Arc<ParkingQuotas>,
+    /// Where the last sweep stopped, so a truncated pass resumes rather than
+    /// re-scanning the same prefix and stranding its own tail.
+    sweep_cursor: Option<BlockRef>,
 }
 
 impl PendingReconstructions {
@@ -213,6 +243,7 @@ impl PendingReconstructions {
             missing_slots: BTreeMap::new(),
             occupancy: BTreeMap::new(),
             quotas,
+            sweep_cursor: None,
         }
     }
 
@@ -273,6 +304,8 @@ impl PendingReconstructions {
                 peer,
                 missing,
                 charge,
+                parked_at: tokio::time::Instant::now(),
+                last_swept: None,
             },
         );
         self.update_gauges();
@@ -322,11 +355,24 @@ impl PendingReconstructions {
     }
 
     /// Marks the slots of `accepted` filled and pops the entries with nothing left
-    /// to wait for.
+    /// to wait for. An accepted block that IS a parked claim supersedes it: the full
+    /// form arrived through another path, so the parked copy has nothing to add.
     pub(crate) fn on_blocks_accepted(&mut self, accepted: &[BlockRef]) -> Vec<ReadyEntry> {
         let mut ready = Vec::new();
         for block_ref in accepted {
             let slot = Slot::from(*block_ref);
+            if self.occupancy.get(&slot) == Some(block_ref) {
+                let entry = self
+                    .remove_entry_keeping_charge(block_ref)
+                    .expect("occupancy entries always have a parked block");
+                self.quotas.release(entry.peer, entry.charge);
+                self.context
+                    .metrics
+                    .node_metrics
+                    .slim_block_park_outcomes
+                    .with_label_values(&["superseded"])
+                    .inc();
+            }
             let Some(dependents) = self.missing_slots.remove(&slot) else {
                 continue;
             };
@@ -358,8 +404,9 @@ impl PendingReconstructions {
     }
 
     /// Drops entries GC has made unrecoverable: the claim itself now below the
-    /// window, or a missing slot that can no longer fill. Returns how many died.
-    pub(crate) fn on_gc(&mut self, gc_round: Round) -> usize {
+    /// window, or a missing slot that can no longer fill. Returns the dead refs so
+    /// the still-live ones can be routed to the fetch lane.
+    pub(crate) fn on_gc(&mut self, gc_round: Round) -> Vec<BlockRef> {
         let dead: Vec<BlockRef> = self
             .pending
             .iter()
@@ -376,7 +423,51 @@ impl PendingReconstructions {
         if !dead.is_empty() {
             self.update_gauges();
         }
-        dead.len()
+        dead
+    }
+
+    /// Entries parked past the grace window, for the periodic sweep. Each returned
+    /// ref is fetched in full; its arrival supersedes the parked entry. Grace keeps
+    /// the natural path -- the ancestor's own arrival -- ahead of the fetch for the
+    /// common case, and the retry spacing rotates the lane across the population.
+    pub(crate) fn stale_dependents(&mut self, cap: usize) -> Vec<BlockRef> {
+        const GRACE: std::time::Duration = std::time::Duration::from_millis(100);
+        const RETRY: std::time::Duration = std::time::Duration::from_millis(500);
+        let now = tokio::time::Instant::now();
+        let mut out = Vec::new();
+        // Two ranges around the cursor visit every entry exactly once per rotation.
+        let start = self.sweep_cursor.take().unwrap_or(BlockRef::MIN);
+        let total = self.pending.len();
+        let mut visited = 0usize;
+        let mut cursor = None;
+        for (block_ref, entry) in self
+            .pending
+            .range(start..)
+            .chain(self.pending.range(..start))
+        {
+            if out.len() >= cap {
+                cursor = Some(*block_ref);
+                break;
+            }
+            visited += 1;
+            if now.duration_since(entry.parked_at) < GRACE {
+                continue;
+            }
+            if entry
+                .last_swept
+                .is_some_and(|last| now.duration_since(last) < RETRY)
+            {
+                continue;
+            }
+            out.push(*block_ref);
+        }
+        for block_ref in &out {
+            if let Some(entry) = self.pending.get_mut(block_ref) {
+                entry.last_swept = Some(now);
+            }
+        }
+        self.sweep_cursor = if visited >= total { None } else { cursor };
+        out
     }
 
     /// Removes an entry from the maps while keeping its bytes charged, for handoff
@@ -408,7 +499,8 @@ impl PendingReconstructions {
 /// Consumes Core's accepted-block broadcast, plus entries the subscriber found
 /// already complete at admission, and finishes parked entries whose slots have
 /// filled. Reconstructed blocks re-enter through `handle_send_block` like any
-/// received block; entries that still fail to decode are dropped.
+/// received block. Entries that outlive the grace window, fail to decode at the
+/// wake, or die at GC while their claim is still live escalate to the fetch lane.
 ///
 /// GC cleanup piggybacks on the broadcast: a commit that advances GC with no later
 /// acceptance leaves dead entries resident until the next accepted block, which is
@@ -420,9 +512,17 @@ pub(crate) async fn run_reconstruction_worker<S: ValidatorNetworkService>(
     authority_service: Weak<S>,
     pending: Arc<Mutex<PendingReconstructions>>,
     seen_digests: Arc<SeenDigests>,
+    registry: Arc<dyn MissingBlockRegistry>,
     mut accepted: broadcast::Receiver<VerifiedBlock>,
     mut reconciled: tokio::sync::mpsc::UnboundedReceiver<Vec<ReadyEntry>>,
 ) {
+    // Sweep cadence and per-tick cap. The drain rate has to exceed the rate at
+    // which parks fail to resolve on their own, or the pending set only grows.
+    const SWEEP_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+    const SWEEP_CAP: usize = 128;
+    let mut sweep = tokio::time::interval(SWEEP_INTERVAL);
+    sweep.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
     let mut last_gc_round: Round = 0;
     loop {
         let mut refs = Vec::new();
@@ -438,8 +538,29 @@ pub(crate) async fn run_reconstruction_worker<S: ValidatorNetworkService>(
             entries = reconciled.recv() => {
                 let Some(entries) = entries else { return };
                 for entry in entries {
-                    finish_entry(&context, &codec, &dag_state, &authority_service, &seen_digests, entry)
-                        .await;
+                    finish_entry(
+                        &context,
+                        &codec,
+                        &dag_state,
+                        &authority_service,
+                        &seen_digests,
+                        &registry,
+                        entry,
+                    )
+                    .await;
+                }
+                continue;
+            }
+            _ = sweep.tick() => {
+                let stale = pending.lock().stale_dependents(SWEEP_CAP);
+                for block_ref in stale {
+                    context
+                        .metrics
+                        .node_metrics
+                        .slim_block_park_outcomes
+                        .with_label_values(&["swept_to_fetch"])
+                        .inc();
+                    let _ = registry.register_missing_block(block_ref).await;
                 }
                 continue;
             }
@@ -471,23 +592,34 @@ pub(crate) async fn run_reconstruction_worker<S: ValidatorNetworkService>(
         };
         drop(dag_state_strong);
 
-        let ready = {
+        let (ready, dead) = {
             let mut pending = pending.lock();
             let ready = pending.on_blocks_accepted(&refs);
-            if gc_round > last_gc_round {
+            let dead = if gc_round > last_gc_round {
                 last_gc_round = gc_round;
-                let dropped = pending.on_gc(gc_round);
-                if dropped > 0 {
-                    context
-                        .metrics
-                        .node_metrics
-                        .slim_block_park_outcomes
-                        .with_label_values(&["gc_dropped"])
-                        .inc_by(dropped as u64);
-                }
-            }
-            ready
+                pending.on_gc(gc_round)
+            } else {
+                Vec::new()
+            };
+            (ready, dead)
         };
+
+        // A dead entry whose claim is still above GC is exactly addressable, so it
+        // moves to the fetch lane; one below GC is stale and just dropped.
+        for block_ref in dead {
+            let outcome = if block_ref.round > gc_round {
+                let _ = registry.register_missing_block(block_ref).await;
+                "gc_escalated"
+            } else {
+                "gc_dropped"
+            };
+            context
+                .metrics
+                .node_metrics
+                .slim_block_park_outcomes
+                .with_label_values(&[outcome])
+                .inc();
+        }
 
         for entry in ready {
             finish_entry(
@@ -496,6 +628,7 @@ pub(crate) async fn run_reconstruction_worker<S: ValidatorNetworkService>(
                 &dag_state,
                 &authority_service,
                 &seen_digests,
+                &registry,
                 entry,
             )
             .await;
@@ -504,17 +637,25 @@ pub(crate) async fn run_reconstruction_worker<S: ValidatorNetworkService>(
 }
 
 /// Reconstructs and delivers one entry, recording its outcome. The entry's charge
-/// releases when it drops here.
+/// releases when it drops here; a failed decode escalates the ref to the fetch lane.
 async fn finish_entry<S: ValidatorNetworkService>(
     context: &Context,
     codec: &SlimBlockCodec,
     dag_state: &Weak<RwLock<DagState>>,
     authority_service: &Weak<S>,
     seen_digests: &SeenDigests,
+    registry: &Arc<dyn MissingBlockRegistry>,
     entry: ReadyEntry,
 ) {
+    let block_ref = entry.block_ref;
     let outcome =
         reconstruct_and_deliver(codec, dag_state, authority_service, seen_digests, entry).await;
+    if matches!(
+        outcome,
+        "missing_ancestor" | "ambiguous_slot" | "digest_mismatch"
+    ) {
+        let _ = registry.register_missing_block(block_ref).await;
+    }
     context
         .metrics
         .node_metrics
@@ -698,6 +839,36 @@ mod tests {
         );
     }
 
+    /// Acceptance of the claimed block itself removes the parked copy; a different
+    /// digest at the slot leaves it, since the claim may still be the valid one.
+    #[test]
+    fn accepted_claim_supersedes_its_parked_copy() {
+        let mut rng = StdRng::seed_from_u64(13);
+        let (_context, pending) = fixture();
+        let parked = r(&mut rng, 6, 1);
+        let missing = vec![Slot::new(5, AuthorityIndex::new_for_test(2))];
+        pending
+            .lock()
+            .try_admit(claim(parked, missing.clone(), 10), 0, 6)
+            .unwrap();
+
+        // A different digest at the same slot changes nothing.
+        let equivocation = BlockRef::new(parked.round, parked.author, BlockDigest([9u8; 32]));
+        assert!(
+            pending
+                .lock()
+                .on_blocks_accepted(&[equivocation])
+                .is_empty()
+        );
+        assert_eq!(pending.lock().quotas.total_bytes(), 10);
+
+        // The claim itself arriving in full releases everything.
+        assert!(pending.lock().on_blocks_accepted(&[parked]).is_empty());
+        assert_eq!(pending.lock().quotas.total_bytes(), 0);
+        assert_eq!(pending.lock().pending.len(), 0);
+        assert!(!pending.lock().missing_slots.contains_key(&missing[0]));
+    }
+
     /// GC kills entries whose claim fell below it or whose missing slot can no
     /// longer fill, and returns their bytes to the quotas.
     #[test]
@@ -734,7 +905,7 @@ mod tests {
 
         // `doomed` has a live claim round but a missing slot at 11 <= 12: only the
         // dead-slot condition can kill it.
-        assert_eq!(pending.lock().on_gc(12), 1);
+        assert_eq!(pending.lock().on_gc(12), vec![doomed]);
         let guard = pending.lock();
         assert_eq!(guard.quotas.total_bytes(), 10);
         assert_eq!(guard.pending.len(), 1);
@@ -772,6 +943,42 @@ mod tests {
         assert!(ready[0].excluded_ancestors.capacity() <= limit);
         drop(ready);
         assert_eq!(pending.lock().quotas.total_bytes(), 0);
+    }
+
+    /// The sweep skips entries inside the grace window, returns each stale entry
+    /// once per retry interval, and resumes a truncated pass at its cursor.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn sweep_respects_grace_retry_and_cursor() {
+        let mut rng = StdRng::seed_from_u64(12);
+        let (_context, pending) = fixture();
+        let missing = vec![Slot::new(5, AuthorityIndex::new_for_test(2))];
+        let refs: Vec<BlockRef> = (0..3)
+            .map(|i| {
+                let block_ref = r(&mut rng, 6 + i, 1);
+                pending
+                    .lock()
+                    .try_admit(claim(block_ref, missing.clone(), 10), 0, 6)
+                    .unwrap();
+                block_ref
+            })
+            .collect();
+
+        // Inside the grace window nothing is stale.
+        assert!(pending.lock().stale_dependents(10).is_empty());
+
+        tokio::time::advance(std::time::Duration::from_millis(150)).await;
+        // A capped pass returns some and resumes; two passes cover the population.
+        let first = pending.lock().stale_dependents(2);
+        assert_eq!(first.len(), 2);
+        let second = pending.lock().stale_dependents(2);
+        assert_eq!(second.len(), 1);
+        let seen: BTreeSet<BlockRef> = first.iter().chain(&second).copied().collect();
+        assert_eq!(seen, refs.iter().copied().collect());
+
+        // Swept entries wait out the retry interval before being offered again.
+        assert!(pending.lock().stale_dependents(10).is_empty());
+        tokio::time::advance(std::time::Duration::from_millis(600)).await;
+        assert_eq!(pending.lock().stale_dependents(10).len(), 3);
     }
 
     /// A popped entry keeps its bytes charged against admission until it drops,
