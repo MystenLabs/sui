@@ -8,6 +8,7 @@
 //! execution isolates how much sooner one node (e.g. a consensus-observer node) executes than the
 //! other (e.g. a state-sync node) — independent of checkpointing or indexing.
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -16,7 +17,13 @@ use anyhow::Result;
 use anyhow::bail;
 use clap::Parser;
 use comfy_table::Table;
+use prometheus::HistogramVec;
+use prometheus::IntCounter;
+use prometheus::IntGauge;
 use prometheus::Registry;
+use prometheus::register_histogram_vec_with_registry;
+use prometheus::register_int_counter_with_registry;
+use prometheus::register_int_gauge_with_registry;
 use sui_benchmark::BenchmarkProxyMetrics;
 use sui_benchmark::LocalValidatorAggregatorProxy;
 use sui_benchmark::ValidatorProxy;
@@ -35,6 +42,7 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::TransactionData;
 use sui_types::utils::to_sender_signed_transaction;
 use tonic::transport::Channel;
+use tracing::info;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -69,13 +77,16 @@ struct Opts {
     /// Per-node wait timeout for a transaction's local effects, in milliseconds.
     #[arg(long, default_value_t = 30_000)]
     wait_timeout_ms: u64,
-    /// Optional path to write the raw per-transaction samples as JSON.
-    #[arg(long)]
-    output_json: Option<String>,
+    /// Host for the Prometheus metrics scrape endpoint.
+    #[arg(long, default_value = "127.0.0.1")]
+    client_metric_host: String,
+    /// Port for the Prometheus metrics scrape endpoint.
+    #[arg(long, default_value_t = 8081)]
+    client_metric_port: u16,
 }
 
 /// One measured transaction: milliseconds from submission to each node reporting local effects.
-#[derive(Clone, Copy, serde::Serialize)]
+#[derive(Clone, Copy)]
 struct Sample {
     primary_ms: f64,
     baseline_ms: f64,
@@ -83,13 +94,74 @@ struct Sample {
     delta_ms: f64,
 }
 
+/// Prometheus metrics exposed on the scrape endpoint for live Grafana dashboards.
+struct Metrics {
+    /// Submit-to-local-effects latency per node (label `node` = primary|baseline).
+    latency_seconds: HistogramVec,
+    submitted: IntCounter,
+    succeeded: IntCounter,
+    failed: IntCounter,
+    in_flight: IntGauge,
+}
+
+impl Metrics {
+    fn new(registry: &Registry) -> Self {
+        Self {
+            latency_seconds: register_histogram_vec_with_registry!(
+                "blockstream_effects_latency_seconds",
+                "Submit-to-local-effects latency per full node",
+                &["node"],
+                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            submitted: register_int_counter_with_registry!(
+                "blockstream_effects_submitted_total",
+                "Transactions submitted for measurement",
+                registry,
+            )
+            .unwrap(),
+            succeeded: register_int_counter_with_registry!(
+                "blockstream_effects_succeeded_total",
+                "Transactions whose effects were observed on both nodes",
+                registry,
+            )
+            .unwrap(),
+            failed: register_int_counter_with_registry!(
+                "blockstream_effects_failed_total",
+                "Transactions that failed to submit or timed out on a node",
+                registry,
+            )
+            .unwrap(),
+            in_flight: register_int_gauge_with_registry!(
+                "blockstream_effects_in_flight",
+                "Measured transactions currently in flight",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts = Opts::parse();
 
+    let mut telemetry = telemetry_subscribers::TelemetryConfig::new();
+    telemetry.log_string = Some("info".to_string());
+    let _guard = telemetry.with_env().init();
+
+    let registry_service = mysten_metrics::start_prometheus_server(
+        format!("{}:{}", opts.client_metric_host, opts.client_metric_port)
+            .parse::<SocketAddr>()
+            .context("parsing metrics address")?,
+    );
+    let registry = registry_service.default_registry();
+    mysten_metrics::init_metrics(&registry);
+    let metric = Arc::new(Metrics::new(&registry));
+
     let genesis = Genesis::new_from_file(&opts.genesis_blob_path);
     let genesis = genesis.genesis()?;
-    let registry = Registry::new();
     let metrics = BenchmarkProxyMetrics::new(&registry);
 
     // Submit through the validators directly; the baseline node URL is used only for the
@@ -136,6 +208,7 @@ async fn main() -> Result<()> {
             wait_timeout_ms: opts.wait_timeout_ms,
             primary_client: primary_client.clone(),
             baseline_client: baseline_client.clone(),
+            metric: metric.clone(),
         };
         handles.push(tokio::spawn(async move { worker.run(gas, per_worker).await }));
     }
@@ -149,10 +222,6 @@ async fn main() -> Result<()> {
     }
 
     report(&samples, failures);
-    if let Some(path) = opts.output_json {
-        std::fs::write(&path, serde_json::to_vec_pretty(&samples)?)?;
-        println!("wrote {} samples to {path}", samples.len());
-    }
     Ok(())
 }
 
@@ -164,6 +233,7 @@ struct Worker {
     wait_timeout_ms: u64,
     primary_client: LocalExecutionServiceClient<Channel>,
     baseline_client: LocalExecutionServiceClient<Channel>,
+    metric: Arc<Metrics>,
 }
 
 impl Worker {
@@ -182,33 +252,61 @@ impl Worker {
             );
             let digest = *tx.digest();
 
+            self.metric.submitted.inc();
+            self.metric.in_flight.inc();
+
             let submit = self.proxy.execute_transaction_block(tx);
             let primary = wait_for_effects(&self.primary_client, digest, self.wait_timeout_ms);
             let baseline = wait_for_effects(&self.baseline_client, digest, self.wait_timeout_ms);
             let (submit_res, primary_res, baseline_res) = tokio::join!(submit, primary, baseline);
+            self.metric.in_flight.dec();
 
             // Recycle the gas coin from the finalized effects so the next iteration can proceed.
             match &submit_res {
                 Ok(effects) if effects.is_ok() => gas = effects.gas_object().0,
                 Ok(effects) => {
-                    eprintln!("transaction {digest} failed on-chain: {:?}", effects.status());
+                    self.metric.failed.inc();
                     failures += 1;
+                    tracing::warn!("transaction {digest} failed on-chain: {:?}", effects.status());
                     continue;
                 }
                 Err(e) => {
-                    eprintln!("submitting transaction {digest} failed: {e}");
+                    self.metric.failed.inc();
                     failures += 1;
+                    tracing::warn!("submitting transaction {digest} failed: {e}");
                     continue;
                 }
             }
 
             match (primary_res, baseline_res) {
-                (Some(primary_ms), Some(baseline_ms)) => samples.push(Sample {
-                    primary_ms,
-                    baseline_ms,
-                    delta_ms: baseline_ms - primary_ms,
-                }),
-                _ => failures += 1,
+                (Some(primary_ms), Some(baseline_ms)) => {
+                    let delta_ms = baseline_ms - primary_ms;
+                    self.metric
+                        .latency_seconds
+                        .with_label_values(&["primary"])
+                        .observe(primary_ms / 1000.0);
+                    self.metric
+                        .latency_seconds
+                        .with_label_values(&["baseline"])
+                        .observe(baseline_ms / 1000.0);
+                    self.metric.succeeded.inc();
+                    info!(
+                        digest = %digest,
+                        primary_ms,
+                        baseline_ms,
+                        delta_ms,
+                        "measured transaction"
+                    );
+                    samples.push(Sample {
+                        primary_ms,
+                        baseline_ms,
+                        delta_ms,
+                    });
+                }
+                _ => {
+                    self.metric.failed.inc();
+                    failures += 1;
+                }
             }
         }
         (samples, failures)
@@ -237,7 +335,7 @@ async fn wait_for_effects(
         }
         Ok(WaitForLocalEffectsResponse::TimedOut) => None,
         Err(status) => {
-            eprintln!("wait_for_local_effects for {digest} errored: {status}");
+            tracing::warn!("wait_for_local_effects for {digest} errored: {status}");
             None
         }
     }
