@@ -24,7 +24,23 @@ use crate::{
     transaction_vote_tracker::TransactionVoteTracker,
 };
 
-/// Finalizes transaction votes with the Mysticeti v3 one-round voting rule.
+/// Finalizes transactions in committed sub-DAGs under the Mysticeti v3 transaction voting rules.
+///
+/// Consensus sends committed sub-DAGs in commit order. Consensus has sequenced the transactions,
+/// but it has not yet decided whether each transaction is accepted or rejected. The finalizer
+/// buffers these commits and resolves each transaction from its transaction votes.
+///
+/// The finalizer uses direct and indirect finalizations:
+///
+/// - Direct finalization uses next round children blocks from the local DAG as implicit accept votes.
+///   It gets explicit reject votes from [`TransactionVoteTracker`]. This rule gives a fast decision
+///   when the accept or reject stake reaches quorum.
+/// - Indirect finalization uses committed next-round blocks as implicit accept votes. After a
+///   committed anchor reaches the required depth, it accepts a transaction when the accept stake
+///   reaches the certification threshold. Otherwise, it rejects the transaction. This rule gives
+///   a final decision when direct finalization does not have enough local evidence.
+///
+/// The finalizer keeps a commit in its pending queue until every transaction in the commit has a decision.
 pub(crate) struct CommitFinalizerV3 {
     context: Arc<Context>,
     dag_state: Arc<RwLock<DagState>>,
@@ -119,6 +135,18 @@ impl CommitFinalizerV3 {
         self.pending_commits
             .push_back(CommitStateV3::new(committed_sub_dag));
 
+        // Direct finalization applies these steps to every pending block at round r:
+        //
+        // 1. The validator loads its local blocks at round r + 1.
+        // 2. It counts an implicit accept when a block at round r + 1 directly references the
+        //    target, has a cutoff below the target block's round, and does not explicitly reject
+        //    the transaction. It counts each authority at most once for each transaction.
+        // 3. It reads explicit reject stake from the transaction vote tracker.
+        // 4. It accepts the transaction when accept stake reaches quorum. It rejects the
+        //    transaction when reject stake reaches quorum. Otherwise, the transaction stays
+        //    pending.
+        //
+        // The validator reuses the same set of next-round blocks for all pending targets at round r.
         let voting_blocks_by_round = self.prepare_direct_voting_blocks();
         for index in 0..self.pending_commits.len() {
             self.try_direct_finalize_commit(index, &voting_blocks_by_round);
@@ -132,6 +160,16 @@ impl CommitFinalizerV3 {
             .with_label_values(&["direct"])
             .inc_by(finalized_commits.len() as u64);
 
+        // Indirect finalization is the fallback for resolving pending transactions and commits.
+        // Each validator starts this rule when a later committed anchor is at least
+        // INDIRECT_COMMIT_DEPTH leader rounds ahead.
+        //
+        // For each pending transaction in a block at round r, the validator counts implicit accept
+        // votes only from committed blocks at round r + 1. It accepts the transaction when this
+        // stake reaches the certification threshold. Otherwise, it rejects the transaction.
+        //
+        // Any direct accept quorum of a transaction must leave an accept certificate in the
+        // committed blocks of the same round.
         while self.pending_commits.len() > 1 {
             let first_leader_round = self.pending_commits.front().unwrap().commit.leader.round;
             let anchor_round = self.pending_commits.back().unwrap().commit.leader.round;
