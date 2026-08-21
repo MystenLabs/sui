@@ -22,7 +22,7 @@
 //! The free functions here take an [`AncestorDigestResolver`] and so cannot reach node
 //! state; [`SlimBlockCodec`] is the binding that supplies one from `DagState`.
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, Committee, DIGEST_LENGTH};
@@ -459,6 +459,9 @@ struct LocalStateResolver<'a> {
     /// to omit from what it has accepted, since a hint it happens to hold says nothing
     /// about what a receiver knows.
     seen: Option<&'a SeenDigests>,
+    /// Per-call answers from a digest fetch, scoped to one decode so an unauthenticated
+    /// response never enters shared state. Consulted last.
+    hints: Option<&'a BTreeMap<Slot, BlockDigest>>,
 }
 
 impl AncestorDigestResolver for LocalStateResolver<'_> {
@@ -467,9 +470,19 @@ impl AncestorDigestResolver for LocalStateResolver<'_> {
             return SlotDigest::Unique(self.genesis_digests[slot.authority.value()]);
         }
         match self.dag_state.digest_at_slot(slot) {
-            SlotDigest::Absent => self
-                .seen
-                .map_or(SlotDigest::Absent, |seen| seen.digest_at_slot(slot)),
+            SlotDigest::Absent => {
+                match self
+                    .seen
+                    .map_or(SlotDigest::Absent, |seen| seen.digest_at_slot(slot))
+                {
+                    SlotDigest::Absent => self.hints.map_or(SlotDigest::Absent, |hints| {
+                        hints
+                            .get(&slot)
+                            .map_or(SlotDigest::Absent, |digest| SlotDigest::Unique(*digest))
+                    }),
+                    resolved => resolved,
+                }
+            }
             resolved => resolved,
         }
     }
@@ -506,6 +519,7 @@ impl SlimBlockCodec {
                 genesis_digests: &self.genesis_digests,
                 dag_state: &dag_state,
                 seen: None,
+                hints: None,
             };
             ancestor_overrides(block, &resolver, min_omittable_round)
         };
@@ -522,6 +536,18 @@ impl SlimBlockCodec {
         dag_state: &RwLock<DagState>,
         seen: &SeenDigests,
     ) -> Result<(SignedBlock, Bytes), DecodeError> {
+        self.decode_with_hints(slim, author, dag_state, seen, None)
+    }
+
+    /// [`Self::decode`] with per-call digest answers consulted after local state.
+    pub(crate) fn decode_with_hints(
+        &self,
+        slim: &[u8],
+        author: AuthorityIndex,
+        dag_state: &RwLock<DagState>,
+        seen: &SeenDigests,
+        hints: Option<&BTreeMap<Slot, BlockDigest>>,
+    ) -> Result<(SignedBlock, Bytes), DecodeError> {
         let parsed = parse_slim(slim, &self.context.committee, author)?;
         // The guard covers ancestor resolution and nothing else: the reserialize and
         // hash below are a full pass over the block, and holding the DAG lock across
@@ -532,6 +558,7 @@ impl SlimBlockCodec {
                 genesis_digests: &self.genesis_digests,
                 dag_state: &dag_state,
                 seen: Some(seen),
+                hints,
             };
             resolve_ancestors(&parsed, &self.context.committee, &resolver)?
         };

@@ -360,6 +360,16 @@ mod test {
                 Ok((received_rounds, accepted_rounds))
             }
         }
+
+        async fn fetch_slot_digests(
+            &self,
+            _peer: AuthorityIndex,
+            _slots: Vec<crate::block::Slot>,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<(crate::block::Slot, consensus_types::block::BlockDigest)>>
+        {
+            unimplemented!("Unimplemented")
+        }
     }
 
     #[tokio::test]

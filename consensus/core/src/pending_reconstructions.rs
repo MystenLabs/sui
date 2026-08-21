@@ -26,7 +26,7 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
-use consensus_types::block::{BlockRef, Round};
+use consensus_types::block::{BlockDigest, BlockRef, Round};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::broadcast;
 use tracing::debug;
@@ -36,7 +36,10 @@ use crate::{
     context::Context,
     dag_state::DagState,
     error::ConsensusError,
-    network::{ExtendedSerializedBlock, SerializedBlockForm, ValidatorNetworkService},
+    network::{
+        ExtendedSerializedBlock, SerializedBlockForm, ValidatorNetworkClient,
+        ValidatorNetworkService,
+    },
     seen_digests::SeenDigests,
     slim_block::SlimBlockCodec,
     synchronizer::SynchronizerHandle,
@@ -461,13 +464,51 @@ impl PendingReconstructions {
             }
             out.push(*block_ref);
         }
-        for block_ref in &out {
+        self.sweep_cursor = if visited >= total { None } else { cursor };
+        out
+    }
+
+    /// Starts the retry interval for the entries a sweep actually served. Only they
+    /// wait it out; everyone else stays eligible for the next tick's rotation.
+    pub(crate) fn mark_swept(&mut self, refs: &[BlockRef]) {
+        let now = tokio::time::Instant::now();
+        for block_ref in refs {
             if let Some(entry) = self.pending.get_mut(block_ref) {
                 entry.last_swept = Some(now);
             }
         }
-        self.sweep_cursor = if visited >= total { None } else { cursor };
-        out
+    }
+
+    /// Pops one still-parked entry for the digest pull, keeping its charge like any
+    /// other handoff to the worker.
+    pub(crate) fn take_entry(&mut self, block_ref: &BlockRef) -> Option<ReadyEntry> {
+        let entry = self.remove_entry_keeping_charge(block_ref)?;
+        Some(ReadyEntry {
+            block_ref: *block_ref,
+            slim: entry.slim,
+            excluded_ancestors: entry.excluded_ancestors,
+            peer: entry.peer,
+            charge: entry.charge,
+            quotas: self.quotas.clone(),
+        })
+    }
+
+    /// The peer and missing slots behind each still-parked ref, for the digest pull.
+    pub(crate) fn claims_for(
+        &self,
+        refs: &[BlockRef],
+    ) -> Vec<(BlockRef, AuthorityIndex, Vec<Slot>)> {
+        refs.iter()
+            .filter_map(|block_ref| {
+                self.pending.get(block_ref).map(|entry| {
+                    (
+                        *block_ref,
+                        entry.peer,
+                        entry.missing.iter().copied().collect(),
+                    )
+                })
+            })
+            .collect()
     }
 
     /// Removes an entry from the maps while keeping its bytes charged, for handoff
@@ -505,23 +546,29 @@ impl PendingReconstructions {
 /// GC cleanup piggybacks on the broadcast: a commit that advances GC with no later
 /// acceptance leaves dead entries resident until the next accepted block, which is
 /// also the next moment anything could change here.
-pub(crate) async fn run_reconstruction_worker<S: ValidatorNetworkService>(
+pub(crate) async fn run_reconstruction_worker<
+    S: ValidatorNetworkService,
+    C: ValidatorNetworkClient,
+>(
     context: Arc<Context>,
     codec: Arc<SlimBlockCodec>,
     dag_state: Weak<RwLock<DagState>>,
     authority_service: Weak<S>,
+    network_client: Arc<C>,
     pending: Arc<Mutex<PendingReconstructions>>,
     seen_digests: Arc<SeenDigests>,
     registry: Arc<dyn MissingBlockRegistry>,
     mut accepted: broadcast::Receiver<VerifiedBlock>,
     mut reconciled: tokio::sync::mpsc::UnboundedReceiver<Vec<ReadyEntry>>,
 ) {
-    // Sweep cadence and per-tick cap. The drain rate has to exceed the rate at
-    // which parks fail to resolve on their own, or the pending set only grows.
+    // Sweep cadence. The drain rate has to exceed the rate at which parks fail to
+    // resolve on their own, or the pending set only grows.
     const SWEEP_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
-    const SWEEP_CAP: usize = 128;
     let mut sweep = tokio::time::interval(SWEEP_INTERVAL);
     sweep.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    // Which peer the last sweep served, so ticks rotate across peers instead of the
+    // ordering always electing the same one.
+    let mut sweep_peer_cursor: Option<AuthorityIndex> = None;
 
     let mut last_gc_round: Round = 0;
     loop {
@@ -537,31 +584,32 @@ pub(crate) async fn run_reconstruction_worker<S: ValidatorNetworkService>(
             },
             entries = reconciled.recv() => {
                 let Some(entries) = entries else { return };
+                let ctx = FinishCtx {
+                    context: &context,
+                    codec: &codec,
+                    dag_state: &dag_state,
+                    authority_service: &authority_service,
+                    seen_digests: &seen_digests,
+                    registry: &registry,
+                };
                 for entry in entries {
-                    finish_entry(
-                        &context,
-                        &codec,
-                        &dag_state,
-                        &authority_service,
-                        &seen_digests,
-                        &registry,
-                        entry,
-                    )
-                    .await;
+                    finish_entry(&ctx, entry, None).await;
                 }
                 continue;
             }
             _ = sweep.tick() => {
-                let stale = pending.lock().stale_dependents(SWEEP_CAP);
-                for block_ref in stale {
-                    context
-                        .metrics
-                        .node_metrics
-                        .slim_block_park_outcomes
-                        .with_label_values(&["swept_to_fetch"])
-                        .inc();
-                    let _ = registry.register_missing_block(block_ref).await;
-                }
+                sweep_stale_entries(
+                    &mut sweep_peer_cursor,
+                    &context,
+                    &codec,
+                    &dag_state,
+                    &authority_service,
+                    &network_client,
+                    &pending,
+                    &seen_digests,
+                    &registry,
+                )
+                .await;
                 continue;
             }
         }
@@ -621,42 +669,143 @@ pub(crate) async fn run_reconstruction_worker<S: ValidatorNetworkService>(
                 .inc();
         }
 
+        let ctx = FinishCtx {
+            context: &context,
+            codec: &codec,
+            dag_state: &dag_state,
+            authority_service: &authority_service,
+            seen_digests: &seen_digests,
+            registry: &registry,
+        };
         for entry in ready {
-            finish_entry(
-                &context,
-                &codec,
-                &dag_state,
-                &authority_service,
-                &seen_digests,
-                &registry,
-                entry,
-            )
-            .await;
+            finish_entry(&ctx, entry, None).await;
         }
+    }
+}
+
+/// One sweep pass over entries past the grace window, one peer per tick: pull the
+/// missing digests from the peer that sent the blocks -- it omitted them because it
+/// had them -- and finish its entries against those answers. The answers never enter
+/// shared state, and a wrong one cannot produce a wrong block: the rebuild must hash
+/// to the claimed digest, so a failed decode escalates to the fetch lane like any
+/// other. Entries of other peers re-offer on later ticks through the retry spacing;
+/// an unreachable peer's entries go straight to the lane.
+async fn sweep_stale_entries<S: ValidatorNetworkService, C: ValidatorNetworkClient>(
+    peer_cursor: &mut Option<AuthorityIndex>,
+    context: &Context,
+    codec: &SlimBlockCodec,
+    dag_state: &Weak<RwLock<DagState>>,
+    authority_service: &Weak<S>,
+    network_client: &Arc<C>,
+    pending: &Arc<Mutex<PendingReconstructions>>,
+    seen_digests: &SeenDigests,
+    registry: &Arc<dyn MissingBlockRegistry>,
+) {
+    const SWEEP_CAP: usize = 128;
+    const DIGEST_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1_000);
+
+    let stale = pending.lock().stale_dependents(SWEEP_CAP);
+    if stale.is_empty() {
+        return;
+    }
+    let claims = pending.lock().claims_for(&stale);
+    let mut by_peer: BTreeMap<AuthorityIndex, Vec<&(BlockRef, AuthorityIndex, Vec<Slot>)>> =
+        BTreeMap::new();
+    for claim in &claims {
+        by_peer.entry(claim.1).or_default().push(claim);
+    }
+    // The peer after the previously served one, wrapping.
+    let Some((&peer, _)) = (match *peer_cursor {
+        Some(last) => by_peer
+            .range((std::ops::Bound::Excluded(last), std::ops::Bound::Unbounded))
+            .next()
+            .or_else(|| by_peer.iter().next()),
+        None => by_peer.iter().next(),
+    }) else {
+        return;
+    };
+    *peer_cursor = Some(peer);
+    let group = by_peer.remove(&peer).expect("selected above");
+    let group_refs: Vec<BlockRef> = group.iter().map(|(block_ref, _, _)| *block_ref).collect();
+    pending.lock().mark_swept(&group_refs);
+    let slots: Vec<Slot> = group
+        .iter()
+        .flat_map(|(_, _, slots)| slots.iter().copied())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .take(crate::network::MAX_SLOT_DIGEST_REQUEST_SIZE)
+        .collect();
+
+    let hints: BTreeMap<Slot, BlockDigest> = match network_client
+        .fetch_slot_digests(peer, slots, DIGEST_FETCH_TIMEOUT)
+        .await
+    {
+        Ok(resolved) => {
+            let mut hints = BTreeMap::new();
+            for (slot, digest) in resolved {
+                // First answer wins; a peer contradicting itself resolves nothing.
+                hints.entry(slot).or_insert(digest);
+            }
+            hints
+        }
+        Err(error) => {
+            debug!("fetch_slot_digests from {} failed: {}", peer, error);
+            BTreeMap::new()
+        }
+    };
+
+    for (block_ref, _, _) in group {
+        if hints.is_empty() {
+            context
+                .metrics
+                .node_metrics
+                .slim_block_park_outcomes
+                .with_label_values(&["swept_to_fetch"])
+                .inc();
+            let _ = registry.register_missing_block(*block_ref).await;
+            continue;
+        }
+        let Some(entry) = pending.lock().take_entry(block_ref) else {
+            continue;
+        };
+        let ctx = FinishCtx {
+            context,
+            codec,
+            dag_state,
+            authority_service,
+            seen_digests,
+            registry,
+        };
+        finish_entry(&ctx, entry, Some(&hints)).await;
     }
 }
 
 /// Reconstructs and delivers one entry, recording its outcome. The entry's charge
 /// releases when it drops here; a failed decode escalates the ref to the fetch lane.
+/// Everything the finish path borrows, bundled once per worker call site.
+struct FinishCtx<'a, S: ValidatorNetworkService> {
+    context: &'a Context,
+    codec: &'a SlimBlockCodec,
+    dag_state: &'a Weak<RwLock<DagState>>,
+    authority_service: &'a Weak<S>,
+    seen_digests: &'a SeenDigests,
+    registry: &'a Arc<dyn MissingBlockRegistry>,
+}
+
 async fn finish_entry<S: ValidatorNetworkService>(
-    context: &Context,
-    codec: &SlimBlockCodec,
-    dag_state: &Weak<RwLock<DagState>>,
-    authority_service: &Weak<S>,
-    seen_digests: &SeenDigests,
-    registry: &Arc<dyn MissingBlockRegistry>,
+    ctx: &FinishCtx<'_, S>,
     entry: ReadyEntry,
+    hints: Option<&BTreeMap<Slot, BlockDigest>>,
 ) {
     let block_ref = entry.block_ref;
-    let outcome =
-        reconstruct_and_deliver(codec, dag_state, authority_service, seen_digests, entry).await;
+    let outcome = reconstruct_and_deliver(ctx, entry, hints).await;
     if matches!(
         outcome,
         "missing_ancestor" | "ambiguous_slot" | "digest_mismatch"
     ) {
-        let _ = registry.register_missing_block(block_ref).await;
+        let _ = ctx.registry.register_missing_block(block_ref).await;
     }
-    context
+    ctx.context
         .metrics
         .node_metrics
         .slim_block_park_outcomes
@@ -667,16 +816,20 @@ async fn finish_entry<S: ValidatorNetworkService>(
 /// Decodes one ready entry against current state and hands it to the receive path.
 /// Returns the outcome label.
 async fn reconstruct_and_deliver<S: ValidatorNetworkService>(
-    codec: &SlimBlockCodec,
-    dag_state: &Weak<RwLock<DagState>>,
-    authority_service: &Weak<S>,
-    seen_digests: &SeenDigests,
+    ctx: &FinishCtx<'_, S>,
     mut entry: ReadyEntry,
+    hints: Option<&BTreeMap<Slot, BlockDigest>>,
 ) -> &'static str {
-    let Some(dag_state) = dag_state.upgrade() else {
+    let Some(dag_state) = ctx.dag_state.upgrade() else {
         return "shutdown";
     };
-    let serialized = match codec.decode(&entry.slim, entry.peer, &dag_state, seen_digests) {
+    let serialized = match ctx.codec.decode_with_hints(
+        &entry.slim,
+        entry.peer,
+        &dag_state,
+        ctx.seen_digests,
+        hints,
+    ) {
         Ok((_signed, serialized)) => serialized,
         // A slot resolvable at admission can be collected before the wake; the
         // block then recovers the ordinary way, through a dependent's suspension.
@@ -689,7 +842,7 @@ async fn reconstruct_and_deliver<S: ValidatorNetworkService>(
         }
     };
     drop(dag_state);
-    let Some(authority_service) = authority_service.upgrade() else {
+    let Some(authority_service) = ctx.authority_service.upgrade() else {
         return "shutdown";
     };
     let block = ExtendedSerializedBlock {
@@ -967,15 +1120,18 @@ mod tests {
         assert!(pending.lock().stale_dependents(10).is_empty());
 
         tokio::time::advance(std::time::Duration::from_millis(150)).await;
-        // A capped pass returns some and resumes; two passes cover the population.
+        // A capped pass returns some, and marked entries drop out while the rest stay
+        // eligible; marked passes cover the population without repeats.
         let first = pending.lock().stale_dependents(2);
         assert_eq!(first.len(), 2);
+        pending.lock().mark_swept(&first);
         let second = pending.lock().stale_dependents(2);
         assert_eq!(second.len(), 1);
+        pending.lock().mark_swept(&second);
         let seen: BTreeSet<BlockRef> = first.iter().chain(&second).copied().collect();
         assert_eq!(seen, refs.iter().copied().collect());
 
-        // Swept entries wait out the retry interval before being offered again.
+        // Served entries wait out the retry interval before being offered again.
         assert!(pending.lock().stale_dependents(10).is_empty());
         tokio::time::advance(std::time::Duration::from_millis(600)).await;
         assert_eq!(pending.lock().stale_dependents(10).len(), 3);
