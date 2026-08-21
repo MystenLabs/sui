@@ -26,9 +26,12 @@ use crate::config::Limits;
 use crate::config::SubscriptionConfig;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
+use crate::error::upcast;
 use crate::scope::Scope;
 use crate::task::streaming::StreamedCaches;
+use crate::task::streaming::SubscriberLimit;
 use crate::task::streaming::SubscriptionBroadcast;
+use crate::task::streaming::SubscriptionLifecycleGuard;
 use crate::task::watermark::Watermarks;
 
 mod events;
@@ -79,13 +82,14 @@ impl Subscription {
             (a, b) => a.or(b),
         };
         reject_if_start_too_far_ahead(start_from, broadcast, config)?;
+        let guard = admit_subscription(ctx, broadcast, "checkpoints")?;
 
         let caches = caches.clone();
         let resolver_limits = limits.package_resolver();
 
         let stream = broadcast
             .clone()
-            .subscribe(start_from, fetcher.clone(), config);
+            .subscribe(start_from, fetcher.clone(), config, guard);
 
         Ok(stream.map(move |item| {
             item.map(|processed| {
@@ -148,6 +152,7 @@ impl Subscription {
             (a, b) => a.or(b),
         };
         reject_if_start_too_far_ahead(start_from, broadcast, config)?;
+        let guard = admit_subscription(ctx, broadcast, "transactions")?;
 
         Ok(subscribe::<Transaction>(
             reader.clone(),
@@ -159,6 +164,7 @@ impl Subscription {
             after,
             after_checkpoint,
             config.clone(),
+            guard,
         ))
     }
 
@@ -202,6 +208,7 @@ impl Subscription {
             (a, b) => a.or(b),
         };
         reject_if_start_too_far_ahead(start_from, broadcast, config)?;
+        let guard = admit_subscription(ctx, broadcast, "events")?;
 
         Ok(subscribe::<Event>(
             reader.clone(),
@@ -213,8 +220,22 @@ impl Subscription {
             after,
             after_checkpoint,
             config.clone(),
+            guard,
         ))
     }
+}
+
+/// Admit a new subscription of `subscription_type` by claiming a concurrency slot, or return an
+/// at-capacity error refusing it. The returned guard holds the slot and the per-subscriber metric
+/// handles for the subscription's lifetime; it is moved into the subscription's stream driver.
+fn admit_subscription(
+    ctx: &Context<'_>,
+    broadcast: &SubscriptionBroadcast,
+    subscription_type: &'static str,
+) -> Result<SubscriptionLifecycleGuard, RpcError<Error>> {
+    let subscriber_limit: &SubscriberLimit = ctx.data()?;
+    SubscriptionLifecycleGuard::new(subscription_type, broadcast.metrics(), subscriber_limit)
+        .map_err(upcast)
 }
 
 /// Reject a start point sitting more than `max_ahead` checkpoints past the chain tip. There is

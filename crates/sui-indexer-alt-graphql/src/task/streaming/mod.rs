@@ -74,6 +74,8 @@ pub(crate) use checkpoint_stream_task::reconnect_error;
 #[cfg(feature = "staging")]
 pub(crate) use gap_recovery::wait_for_pipelines_catching_up_at;
 #[cfg(feature = "staging")]
+pub(crate) use lifecycle::SubscriberLimit;
+#[cfg(feature = "staging")]
 pub(crate) use lifecycle::SubscriptionLifecycleGuard;
 #[cfg(feature = "staging")]
 pub(crate) use lifecycle::SubscriptionTerminationReason;

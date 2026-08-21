@@ -53,6 +53,7 @@ pub struct SubscriptionMetrics {
     // Metrics aggregated across all subscribers.
     pub active_subscriptions: IntGaugeVec,
     pub subscriptions_opened: IntCounterVec,
+    pub subscriptions_rejected: IntCounterVec,
     pub subscription_terminations: IntCounterVec,
     pub subscription_duration: HistogramVec,
     pub payloads_delivered: IntCounterVec,
@@ -135,6 +136,13 @@ impl SubscriptionMetrics {
                 "graphql_subscription_opened",
                 "Total subscriptions opened, by type",
                 &["type"],
+                registry,
+            )
+            .unwrap(),
+            subscriptions_rejected: register_int_counter_vec_with_registry!(
+                "graphql_subscription_rejected",
+                "Total subscriptions refused before opening, by type and reason (e.g. the server was at its concurrent-subscription capacity)",
+                &["type", "reason"],
                 registry,
             )
             .unwrap(),
