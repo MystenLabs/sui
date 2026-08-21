@@ -30,7 +30,7 @@ impl LocalEffectsWaiter for AuthorityState {
 
         Ok(LocalEffects {
             effects_digest: effects.digest(),
-            effects: include_details.then_some(effects),
+            effects: include_details.then(|| Box::new(effects)),
         })
     }
 }
