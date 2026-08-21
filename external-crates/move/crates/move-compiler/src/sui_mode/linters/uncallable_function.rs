@@ -122,7 +122,7 @@ simple_visitor!(
         if matches!(&fdef.visibility, Visibility::Public(_)) || fdef.entry.is_some() {
             const RETURN_NOTE: &str = "Due to restrictions in PTB execution, 'TxContext' may \
                 never appear in the return type of a function callable from a transaction, by \
-                value or by reference. This function will not be callable on Sui";
+                value or by reference. This function will not be callable from PTBs on Sui";
             for ret_ty in return_position_types(&signature.return_type) {
                 match tx_context_kind(ret_ty) {
                     None | Some(TxContextKind::None) => (),
