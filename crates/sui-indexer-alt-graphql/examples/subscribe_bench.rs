@@ -2,12 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Separate-process subscription load client for `examples/serve_testnet`. Opens N SSE subscriptions,
-//! scrapes the server's `/metrics` out-of-process, and samples isolated server RSS to a CSV.
+//! half backfilling from genesis and half live, scrapes the server's `/metrics` out-of-process, and
+//! samples isolated server RSS + CPU to a CSV.
 //!
 //! ```text
-//! N=100 SECS=60 NAME=live_100 OUT=/tmp/subbench_testnet \
+//! N=100 SECS=60 NAME=mix_100 OUT=/tmp/subbench_testnet \
 //!   cargo run --release --example subscribe_bench -p sui-indexer-alt-graphql
 //! ```
+//!
+//! Subscribers alternate by index: even = backfill from checkpoint 0, odd = live from the tip.
+//! `client_delivered` splits into `delivered_backfill` / `delivered_live` so the two phases can be
+//! reported separately (the server metric under-counts backfill deliveries).
 
 use std::io::Write;
 use std::sync::Arc;
@@ -17,15 +22,23 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-const QUERY: &str = "subscription { transactions { cursor node { digest } } }";
+const LIVE_QUERY: &str = "subscription { transactions { cursor node { digest } } }";
+const BACKFILL_QUERY: &str =
+    "subscription { transactions(filter: { afterCheckpoint: 0 }) { cursor node { digest } } }";
 
-/// One SSE subscriber: counts delivered payloads (by `"digest"` occurrences) until `stop`.
-async fn subscriber(url: String, delivered: Arc<AtomicU64>, stop: Arc<AtomicBool>) {
+/// One SSE subscriber: counts delivered payloads (by `"digest"` occurrences) into `delivered` until
+/// `stop`. `query` selects live vs backfill-from-genesis.
+async fn subscriber(
+    url: String,
+    query: &'static str,
+    delivered: Arc<AtomicU64>,
+    stop: Arc<AtomicBool>,
+) {
     let mut resp = match reqwest::Client::new()
         .post(&url)
         .header("Accept", "text/event-stream")
         .header("Content-Type", "application/json")
-        .json(&serde_json::json!({ "query": QUERY }))
+        .json(&serde_json::json!({ "query": query }))
         .send()
         .await
     {
@@ -109,12 +122,21 @@ async fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all(&out_dir)?;
 
     let stop = Arc::new(AtomicBool::new(false));
-    let delivered = Arc::new(AtomicU64::new(0));
+    let delivered_backfill = Arc::new(AtomicU64::new(0));
+    let delivered_live = Arc::new(AtomicU64::new(0));
     let mut handles = Vec::with_capacity(n);
     for i in 0..n {
+        // Interleave so a paced ramp opens backfill and live subscribers evenly over time.
+        let backfill = i % 2 == 0;
+        let (query, delivered) = if backfill {
+            (BACKFILL_QUERY, delivered_backfill.clone())
+        } else {
+            (LIVE_QUERY, delivered_live.clone())
+        };
         handles.push(tokio::spawn(subscriber(
             server.clone(),
-            delivered.clone(),
+            query,
+            delivered,
             stop.clone(),
         )));
         // Pace opening: after each batch of `ramp` spawns, wait a second.
@@ -127,9 +149,13 @@ async fn main() -> anyhow::Result<()> {
     let client = reqwest::Client::new();
     let path = format!("{out_dir}/{name}.csv");
     let mut f = std::fs::File::create(&path)?;
-    writeln!(f, "t_ms,active,opened,delivered,lag_sum,lag_count,term_lagged,client_delivered,rss_kb,cpu_pct,processed_cp")?;
+    writeln!(f, "t_ms,active,opened,delivered,lag_sum,lag_count,term_lagged,client_delivered,delivered_backfill,delivered_live,rss_kb,cpu_pct,processed_cp")?;
 
-    eprintln!("[client] {name}: {n} subscribers -> {server} for {secs}s");
+    eprintln!(
+        "[client] {name}: {n} subscribers ({} backfill / {} live) -> {server} for {secs}s",
+        n.div_ceil(2),
+        n / 2,
+    );
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(secs) {
         let text = client
@@ -144,9 +170,11 @@ async fn main() -> anyhow::Result<()> {
         };
         let lag = "graphql_subscription_live_payload_delivery_checkpoint_timestamp_lag";
         let (rss_kb, cpu_pct) = server_rss_cpu();
+        let d_backfill = delivered_backfill.load(Ordering::Relaxed);
+        let d_live = delivered_live.load(Ordering::Relaxed);
         writeln!(
             f,
-            "{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{}",
             start.elapsed().as_millis(),
             metric_sum(&text, "graphql_subscription_active_subscriptions") as i64,
             metric_sum(&text, "graphql_subscription_opened") as u64,
@@ -154,7 +182,9 @@ async fn main() -> anyhow::Result<()> {
             metric_sum(&text, &format!("{lag}_sum")),
             metric_sum(&text, &format!("{lag}_count")) as u64,
             terminations_lagged(&text) as u64,
-            delivered.load(Ordering::Relaxed),
+            d_backfill + d_live,
+            d_backfill,
+            d_live,
             rss_kb,
             cpu_pct,
             metric_sum(&text, "graphql_subscription_upstream_processed_checkpoints") as u64,
@@ -168,8 +198,9 @@ async fn main() -> anyhow::Result<()> {
         let _ = h.await;
     }
     eprintln!(
-        "[client] {name}: done, client_delivered={} -> {path}",
-        delivered.load(Ordering::Relaxed)
+        "[client] {name}: done, backfill={} live={} -> {path}",
+        delivered_backfill.load(Ordering::Relaxed),
+        delivered_live.load(Ordering::Relaxed),
     );
     Ok(())
 }

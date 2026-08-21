@@ -60,6 +60,7 @@ use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 
 const TESTNET: &str = "https://fullnode.testnet.sui.io:443";
+const ARCHIVE: &str = "https://archive.testnet.sui.io:443";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -87,8 +88,11 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or(8000);
     let listen = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
 
+    // Ledger reads, including backfill scans from genesis, go to the archive endpoint which serves
+    // full history; the live checkpoint stream and fullnode client stay on the fullnode.
+    let ledger_url = std::env::var("LEDGER_GRPC_URL").unwrap_or_else(|_| ARCHIVE.to_string());
     let kv_args = KvArgs {
-        ledger_grpc_url: Some(TESTNET.parse().unwrap()),
+        ledger_grpc_url: Some(ledger_url.parse().unwrap()),
         enable_list_apis: Some(true),
         ..Default::default()
     };
@@ -107,7 +111,8 @@ async fn main() -> anyhow::Result<()> {
 
     eprintln!("[serve] subscriptions on http://{listen}/graphql/subscriptions");
     eprintln!("[serve] metrics on       http://{metrics_addr}/metrics");
-    eprintln!("[serve] upstream (stream + ledger): {TESTNET}");
+    eprintln!("[serve] upstream stream: {TESTNET}");
+    eprintln!("[serve] upstream ledger: {ledger_url}");
 
     let service = start_rpc(
         None, // DB-less

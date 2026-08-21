@@ -102,6 +102,13 @@ pub(crate) async fn wait_for_pipelines_catching_up_at(
     target: u64,
     watermarks_rx: &mut watch::Receiver<Arc<Watermarks>>,
 ) -> anyhow::Result<()> {
+    // BENCH (DB-less): with no indexer pipelines there is nothing to wait for, and package-free
+    // queries (e.g. just `digest`) need no local indexing, so the archive ledger serves history
+    // directly. Without this the wait below never passes (`!pipelines.is_empty()` is always false)
+    // and backfill parks forever.
+    if watermarks_rx.borrow().per_pipeline().is_empty() {
+        return Ok(());
+    }
     watermarks_rx
         .wait_for(|w| {
             let pipelines = w.per_pipeline();
