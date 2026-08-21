@@ -51,11 +51,19 @@ pub(crate) enum MultisigMemberPublicKey {
     Secp256r1(Secp256r1PublicKey),
     Passkey(PasskeyPublicKey),
     ZkLogin(ZkLoginPublicIdentifier),
+    MlDsa65(MlDsa65PublicKey),
 }
 
 /// An Ed25519 public key.
 #[derive(SimpleObject, Clone)]
 pub(crate) struct Ed25519PublicKey {
+    /// The raw public key bytes.
+    bytes: Option<Base64>,
+}
+
+/// An ML-DSA-65 public key.
+#[derive(SimpleObject, Clone)]
+pub(crate) struct MlDsa65PublicKey {
     /// The raw public key bytes.
     bytes: Option<Base64>,
 }
@@ -165,6 +173,9 @@ impl From<&PublicKey> for MultisigMemberPublicKey {
                 bytes: Some(Base64(pk.as_ref().to_vec())),
             }),
             PublicKey::Passkey(_) => MultisigMemberPublicKey::Passkey(PasskeyPublicKey {
+                bytes: Some(Base64(pk.as_ref().to_vec())),
+            }),
+            PublicKey::MLDSA65(_) => MultisigMemberPublicKey::MlDsa65(MlDsa65PublicKey {
                 bytes: Some(Base64(pk.as_ref().to_vec())),
             }),
             PublicKey::ZkLogin(z) => {

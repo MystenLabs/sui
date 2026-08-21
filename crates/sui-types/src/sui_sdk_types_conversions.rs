@@ -1176,6 +1176,11 @@ impl TryFrom<crate::crypto::PublicKey> for MultisigMemberPublicKey {
             crate::crypto::PublicKey::Passkey(p) => {
                 Self::Passkey(PasskeyPublicKey::new(Secp256r1PublicKey::new(p.0)))
             }
+            crate::crypto::PublicKey::MLDSA65(_) => {
+                return Err(SdkTypeConversionError(
+                    "ML-DSA-65 has no sui-sdk-types representation yet".to_string(),
+                ));
+            }
         }
         .pipe(Ok)
     }
@@ -1234,21 +1239,32 @@ impl TryFrom<crate::crypto::Signature> for SimpleSignature {
                     )?,
                 }
             }
+            crate::crypto::Signature::MLDSA65SuiSignature(_) => {
+                return Err(SdkTypeConversionError(
+                    "ML-DSA-65 has no sui-sdk-types representation yet".to_string(),
+                ));
+            }
         }
         .pipe(Ok)
     }
 }
 
-impl From<crate::crypto::SignatureScheme> for SignatureScheme {
-    fn from(value: crate::crypto::SignatureScheme) -> Self {
+impl TryFrom<crate::crypto::SignatureScheme> for SignatureScheme {
+    type Error = SdkTypeConversionError;
+
+    fn try_from(value: crate::crypto::SignatureScheme) -> Result<Self, Self::Error> {
         match value {
-            crate::crypto::SignatureScheme::ED25519 => Self::Ed25519,
-            crate::crypto::SignatureScheme::Secp256k1 => Self::Secp256k1,
-            crate::crypto::SignatureScheme::Secp256r1 => Self::Secp256r1,
-            crate::crypto::SignatureScheme::BLS12381 => Self::Bls12381,
-            crate::crypto::SignatureScheme::MultiSig => Self::Multisig,
-            crate::crypto::SignatureScheme::ZkLoginAuthenticator => Self::ZkLogin,
-            crate::crypto::SignatureScheme::PasskeyAuthenticator => Self::Passkey,
+            crate::crypto::SignatureScheme::ED25519 => Ok(Self::Ed25519),
+            crate::crypto::SignatureScheme::Secp256k1 => Ok(Self::Secp256k1),
+            crate::crypto::SignatureScheme::Secp256r1 => Ok(Self::Secp256r1),
+            crate::crypto::SignatureScheme::BLS12381 => Ok(Self::Bls12381),
+            crate::crypto::SignatureScheme::MultiSig => Ok(Self::Multisig),
+            crate::crypto::SignatureScheme::ZkLoginAuthenticator => Ok(Self::ZkLogin),
+            crate::crypto::SignatureScheme::PasskeyAuthenticator => Ok(Self::Passkey),
+            // TODO: map once sui-sdk-types defines MLDSA65.
+            crate::crypto::SignatureScheme::MLDSA65 => Err(SdkTypeConversionError(
+                "ML-DSA-65 has no sui-sdk-types representation yet".to_string(),
+            )),
         }
     }
 }

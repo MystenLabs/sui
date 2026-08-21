@@ -632,6 +632,7 @@ fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a9f9
 fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a9f994cd6b2882c7e916786943712fce1f2b6013", features = [
   "experimental",
 ] }
+fastcrypto-pq = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a9f994cd6b2882c7e916786943712fce1f2b6013" }
 passkey-types = { version = "0.4.0" }
 passkey-client = { version = "0.4.0" }
 passkey-authenticator = { version = "0.4.0" }

@@ -29,6 +29,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::Ed25519SuiSignature;
 use sui_types::crypto::EncodeDecodeBase64;
+use sui_types::crypto::MLDSA65SuiSignature;
 use sui_types::crypto::Secp256k1SuiSignature;
 use sui_types::crypto::Secp256r1SuiSignature;
 use sui_types::crypto::Signature;
@@ -107,6 +108,13 @@ async fn test_flag_in_signature_and_keypair() -> Result<(), anyhow::Error> {
                     Secp256r1SuiSignature::SCHEME.flag()
                 );
                 assert!(pk1.flag() == Secp256r1SuiSignature::SCHEME.flag())
+            }
+            Signature::MLDSA65SuiSignature(_) => {
+                assert_eq!(
+                    *sig.as_ref().first().unwrap(),
+                    MLDSA65SuiSignature::SCHEME.flag()
+                );
+                assert!(pk1.flag() == MLDSA65SuiSignature::SCHEME.flag())
             }
         }
     }
