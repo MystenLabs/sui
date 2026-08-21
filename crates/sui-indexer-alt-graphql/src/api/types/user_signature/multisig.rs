@@ -142,7 +142,7 @@ impl From<&sui_types::multisig::MultiSigPublicKey> for MultisigCommittee {
                 pk.pubkeys()
                     .iter()
                     .map(|(public_key, weight)| MultisigMember {
-                        public_key: Some(MultisigMemberPublicKey::from(public_key)),
+                        public_key: multisig_member_public_key(public_key),
                         weight: Some(*weight),
                     })
                     .collect(),
@@ -152,32 +152,33 @@ impl From<&sui_types::multisig::MultiSigPublicKey> for MultisigCommittee {
     }
 }
 
-impl From<&PublicKey> for MultisigMemberPublicKey {
-    fn from(pk: &PublicKey) -> Self {
-        match pk {
-            PublicKey::Ed25519(_) => MultisigMemberPublicKey::Ed25519(Ed25519PublicKey {
-                bytes: Some(Base64(pk.as_ref().to_vec())),
-            }),
-            PublicKey::Secp256k1(_) => MultisigMemberPublicKey::Secp256k1(Secp256k1PublicKey {
-                bytes: Some(Base64(pk.as_ref().to_vec())),
-            }),
-            PublicKey::Secp256r1(_) => MultisigMemberPublicKey::Secp256r1(Secp256r1PublicKey {
-                bytes: Some(Base64(pk.as_ref().to_vec())),
-            }),
-            PublicKey::Passkey(_) => MultisigMemberPublicKey::Passkey(PasskeyPublicKey {
-                bytes: Some(Base64(pk.as_ref().to_vec())),
-            }),
-            PublicKey::ZkLogin(z) => {
-                // Convert through sui_sdk_types for clean field extraction.
-                MultisigMemberPublicKey::ZkLogin(
-                    sui_sdk_types::ZkLoginPublicIdentifier::try_from(z.to_owned())
-                        .map(|id| ZkLoginPublicIdentifier {
-                            iss: Some(id.iss().to_owned()),
-                            address_seed: Some(id.address_seed().to_string()),
-                        })
-                        .unwrap_or_default(),
-                )
-            }
+/// `None` for member schemes with no GraphQL representation yet.
+fn multisig_member_public_key(pk: &PublicKey) -> Option<MultisigMemberPublicKey> {
+    match pk {
+        PublicKey::Ed25519(_) => Some(MultisigMemberPublicKey::Ed25519(Ed25519PublicKey {
+            bytes: Some(Base64(pk.as_ref().to_vec())),
+        })),
+        PublicKey::Secp256k1(_) => Some(MultisigMemberPublicKey::Secp256k1(Secp256k1PublicKey {
+            bytes: Some(Base64(pk.as_ref().to_vec())),
+        })),
+        PublicKey::Secp256r1(_) => Some(MultisigMemberPublicKey::Secp256r1(Secp256r1PublicKey {
+            bytes: Some(Base64(pk.as_ref().to_vec())),
+        })),
+        PublicKey::Passkey(_) => Some(MultisigMemberPublicKey::Passkey(PasskeyPublicKey {
+            bytes: Some(Base64(pk.as_ref().to_vec())),
+        })),
+        PublicKey::ZkLogin(z) => {
+            // Convert through sui_sdk_types for clean field extraction.
+            Some(MultisigMemberPublicKey::ZkLogin(
+                sui_sdk_types::ZkLoginPublicIdentifier::try_from(z.to_owned())
+                    .map(|id| ZkLoginPublicIdentifier {
+                        iss: Some(id.iss().to_owned()),
+                        address_seed: Some(id.address_seed().to_string()),
+                    })
+                    .unwrap_or_default(),
+            ))
         }
+        // TODO: add once the GraphQL API defines MLDSA65.
+        PublicKey::MLDSA65(_) => None,
     }
 }

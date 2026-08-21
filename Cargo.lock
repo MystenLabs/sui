@@ -5635,6 +5635,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fastcrypto-pq"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=a9f994cd6b2882c7e916786943712fce1f2b6013#a9f994cd6b2882c7e916786943712fce1f2b6013"
+dependencies = [
+ "bincode 1.3.3",
+ "fastcrypto",
+ "fastcrypto-derive",
+ "mysten-mldsa-native-rs",
+ "rand 0.8.5",
+ "serde",
+]
+
+[[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=a9f994cd6b2882c7e916786943712fce1f2b6013#a9f994cd6b2882c7e916786943712fce1f2b6013"
@@ -9553,6 +9566,16 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "mysten-mldsa-native-rs"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/mysten-mldsa-native-rs.git?rev=ea1a9794c7ad0c68b9410121964b7439540826bc#ea1a9794c7ad0c68b9410121964b7439540826bc"
+dependencies = [
+ "cc",
+ "cpufeatures 0.2.9",
+ "zeroize",
 ]
 
 [[package]]
@@ -17440,6 +17463,7 @@ dependencies = [
  "expect-test",
  "eyre",
  "fastcrypto",
+ "fastcrypto-pq",
  "fastcrypto-tbls",
  "fastcrypto-zkp",
  "imbl",
@@ -19067,7 +19091,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
