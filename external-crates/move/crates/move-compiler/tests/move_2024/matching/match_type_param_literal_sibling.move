@@ -1,4 +1,3 @@
-// A type-parameter column ahead of a literal-switch column.
 module 0x42::m;
 
 public struct Val<T> has drop { asset: T, value: u64 }

@@ -1,4 +1,3 @@
-// Or-pattern expansion producing multiple rows that share a type-parameter-column binder.
 module 0x42::m;
 
 public enum State has drop {

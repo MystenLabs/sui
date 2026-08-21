@@ -1,5 +1,6 @@
-// All-wild enum columns ahead of the discriminant compile to a bind, not a variant switch
-// with the default tree cloned into every arm.
+// Test that a match discriminates correctly when enum-typed fields are matched only by
+// wildcards ahead of the field that actually discriminates (`small`): the wild `big`
+// columns need no variant switch of their own.
 module 0x42::m;
 
 public enum Big has drop {

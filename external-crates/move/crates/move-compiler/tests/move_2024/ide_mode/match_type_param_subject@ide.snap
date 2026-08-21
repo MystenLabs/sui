@@ -6,18 +6,18 @@ info:
   lint: false
 ---
 error[EC04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/match_type_param_subject.move:19:16
+   ┌─ tests/move_2024/ide_mode/match_type_param_subject.move:16:16
    │
-19 │         match (t) {
+16 │         match (t) {
    │                ^ Pattern '_' not covered
    │
    = Match arms with guards are not considered for coverage.
 
 note[NC15004]: IDE missing match arms
-   ┌─ tests/move_2024/ide_mode/match_type_param_subject.move:19:19
+   ┌─ tests/move_2024/ide_mode/match_type_param_subject.move:16:19
    │  
-19 │           match (t) {
+16 │           match (t) {
    │ ╭───────────────────^
-20 │ │             _ if (flag) => 0,
-21 │ │         }
+17 │ │             _ if (flag) => 0,
+18 │ │         }
    │ ╰─────────^ Missing arms: '_'

@@ -1,6 +1,4 @@
-// Tests that a type-parameter-typed field may precede a discriminating field on the match
-// fringe (GH #26788). The `asset: T` column has no structure to inspect, so match
-// compilation must bind it and move on to `state`.
+// Test matching on nested type param fields
 module 0x42::m {
 
     public enum State has drop {

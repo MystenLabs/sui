@@ -1,4 +1,3 @@
-// Type-parameter columns surfacing at several depths of a nested unpack.
 module 0x42::m;
 
 public enum State has drop {

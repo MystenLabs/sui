@@ -6,124 +6,67 @@ info:
   lint: false
 ---
 error[EC04007]: incompatible types
-   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:16:16
+   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:14:16
    │
-11 │ public struct Wrap has drop { b: bool }
+ 9 │ public struct Wrap has drop { b: bool }
    │                                  ---- Expected: 'bool'
    ·
-16 │         Wrap { b: 5 } => 0,
-   │                ^  - Given: integer
+14 │         Wrap { b: 5u64 } => 0,
+   │                ^  ---- Given: 'u64'
    │                │   
    │                Invalid pattern field type
 
-warning[WC04039]: unable to determine literal's type
-   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:16:19
-   │
-16 │         Wrap { b: 5 } => 0,
-   │                   ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
-   │
-   = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
-   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 error[EC04007]: incompatible types
-   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:24:16
+   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:22:16
    │
-11 │ public struct Wrap has drop { b: bool }
+ 9 │ public struct Wrap has drop { b: bool }
    │                                  ---- Expected: 'bool'
    ·
-24 │         Wrap { b: 5 } => 0,
-   │                ^  - Given: integer
+22 │         Wrap { b: 5u64 } => 0,
+   │                ^  ---- Given: 'u64'
    │                │   
    │                Invalid pattern field type
 
-warning[WC04039]: unable to determine literal's type
-   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:24:19
-   │
-24 │         Wrap { b: 5 } => 0,
-   │                   ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
-   │
-   = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
-   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 error[EC04007]: incompatible types
-   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:32:17
+   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:30:17
    │
-12 │ public struct SWrap has drop { s: State }
+10 │ public struct SWrap has drop { s: State }
    │                                   ----- Expected: '0x42::m::State'
    ·
-32 │         SWrap { s: 5 } => 0,
-   │                 ^  - Given: integer
+30 │         SWrap { s: 5u64 } => 0,
+   │                 ^  ---- Given: 'u64'
    │                 │   
    │                 Invalid pattern field type
 
-warning[WC04039]: unable to determine literal's type
-   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:32:20
-   │
-32 │         SWrap { s: 5 } => 0,
-   │                    ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
-   │
-   = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
-   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 error[EC04007]: incompatible types
-   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:40:16
+   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:38:16
    │
-11 │ public struct Wrap has drop { b: bool }
+ 9 │ public struct Wrap has drop { b: bool }
    │                                  ---- Expected: 'bool'
    ·
-40 │         Wrap { b: State::On } => 0,
+38 │         Wrap { b: State::On } => 0,
    │                ^  --------- Given: '0x42::m::State'
    │                │   
    │                Invalid pattern field type
 
 error[EC04007]: incompatible types
-   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:54:17
+   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:52:17
    │
-12 │ public struct SWrap has drop { s: State }
+10 │ public struct SWrap has drop { s: State }
    │                                   ----- Expected: '0x42::m::State'
    ·
-54 │         SWrap { s: Mode::On(5) } => 0,
+52 │         SWrap { s: Mode::On(5) } => 0,
    │                 ^  ----------- Given: '0x42::m::Mode'
    │                 │   
    │                 Invalid pattern field type
 
 error[EC04007]: incompatible types
-   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:62:17
+   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:60:17
    │
-12 │ public struct SWrap has drop { s: State }
+10 │ public struct SWrap has drop { s: State }
    │                                   ----- Expected: '0x42::m::State'
    ·
-62 │         SWrap { s: Mode::Third } => 0,
-   │                 ^  ----------- Given: '0x42::m::Mode'
-   │                 │   
-   │                 Invalid pattern field type
-
-error[EC04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:77:12
-   │
-77 │     match (s) {
-   │            ^ Pattern 'SWrap { s: State::On { 0: _0 } }' not covered
-   │
-   = When '_0' is not 5
-
-error[EC04007]: incompatible types
-   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:78:17
-   │
-12 │ public struct SWrap has drop { s: State }
-   │                                   ----- Expected: '0x42::m::State'
-   ·
-78 │         SWrap { s: Mode::On(5) } => 0,
-   │                 ^  ----------- Given: '0x42::m::Mode'
-   │                 │   
-   │                 Invalid pattern field type
-
-error[EC04007]: incompatible types
-   ┌─ tests/move_2024/matching/match_invalid_nested_pattern_types.move:87:17
-   │
-12 │ public struct SWrap has drop { s: State }
-   │                                   ----- Expected: '0x42::m::State'
-   ·
-87 │         SWrap { s: Mode::On(_) } => 0,
+60 │         SWrap { s: Mode::Third } => 0,
    │                 ^  ----------- Given: '0x42::m::Mode'
    │                 │   
    │                 Invalid pattern field type

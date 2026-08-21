@@ -1,5 +1,3 @@
-// Ability mixes for the type-parameter column: unconstrained, key+store (non-drop,
-// non-copy), and copy+drop.
 module 0x42::m;
 
 public enum State has drop {

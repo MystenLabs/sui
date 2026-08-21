@@ -1,4 +1,4 @@
-// Binder forms against a type-parameter column: plain, `mut`, `_`, `@`-chains, unused.
+// Test various binder forms for type params: `mut`, `_`, `@`, etc
 module 0x42::m;
 
 public enum State has drop {
@@ -15,6 +15,7 @@ fun plain<T>(i: Inner<T>): T {
     }
 }
 
+#[allow(unused_assignment)]
 fun mut_binder<T: drop>(i: Inner<T>, replacement: T): T {
     match (i) {
         Inner { asset: mut a, state: State::On } => {
@@ -32,6 +33,7 @@ fun at_chain<T>(i: &Inner<T>): bool {
     }
 }
 
+#[allow(unused_variable)]
 fun unused_binder<T>(i: &Inner<T>): bool {
     match (i) {
         Inner { asset: unused, state: State::On } => true,

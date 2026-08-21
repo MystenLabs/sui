@@ -6,21 +6,21 @@ info:
   lint: false
 ---
 warning[WC10007]: issue with attribute value
-  ┌─ tests/move_2024/ide_mode/match_type_param_subject.move:4:9
+  ┌─ tests/move_2024/ide_mode/match_type_param_subject.move:1:9
   │
-4 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
+1 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
   │         ^^^^^^^^^^^^^^^^^^^^^ Unknown diagnostic filter 'ide_path_autocomplete'
 
 warning[WC10007]: issue with attribute value
-  ┌─ tests/move_2024/ide_mode/match_type_param_subject.move:4:31
+  ┌─ tests/move_2024/ide_mode/match_type_param_subject.move:1:31
   │
-4 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
+1 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
   │                               ^^^^^^^^^^^^^^^^^^^^ Unknown diagnostic filter 'ide_dot_autocomplete'
 
 error[EC04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/match_type_param_subject.move:19:16
+   ┌─ tests/move_2024/ide_mode/match_type_param_subject.move:16:16
    │
-19 │         match (t) {
+16 │         match (t) {
    │                ^ Pattern '_' not covered
    │
    = Match arms with guards are not considered for coverage.

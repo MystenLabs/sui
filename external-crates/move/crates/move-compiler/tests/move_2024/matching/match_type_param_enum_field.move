@@ -1,4 +1,3 @@
-// A type-parameter column produced by a variant unpack rather than a struct unpack.
 module 0x42::m;
 
 public enum State has drop {

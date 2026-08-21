@@ -1,4 +1,3 @@
-// Two type-parameter columns straddling a discriminating column.
 module 0x42::m;
 
 public enum State has drop {

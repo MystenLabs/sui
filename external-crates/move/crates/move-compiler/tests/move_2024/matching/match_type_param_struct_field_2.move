@@ -1,4 +1,3 @@
-// Type-parameter columns before, after, and between discriminating siblings on the fringe.
 module 0x42::m;
 
 public enum State has drop {

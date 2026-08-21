@@ -1,5 +1,3 @@
-// Guards interacting with a type-parameter column: a guard that uses the parameter binder,
-// and guarded wild rows above an unguarded discriminating row (GH-25790 interplay).
 module 0x42::m;
 
 public enum State has drop {
