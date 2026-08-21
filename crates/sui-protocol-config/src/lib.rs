@@ -381,6 +381,8 @@ const MAINNET_USDB: &str =
 //              PTB Move call signature at most once mutably or any number of
 //              times immutably (never by value), and never in return position.
 //              Enable allowed_proposers on devnet.
+//              Enable the step-by-step gas-charging pipeline (gas_model_version 15),
+//              replacing the monolithic charge_gas with discrete charging steps.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4610,6 +4612,8 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.allowed_proposers = true;
                     }
+
+                    cfg.gas_model_version = Some(15);
                 }
                 // Use this template when making changes:
                 //
