@@ -34,7 +34,7 @@ use sui_storage::object_store::util::path_to_filesystem;
 use sui_storage::object_store::{ObjectStoreGetExt, ObjectStoreListExt, ObjectStorePutExt};
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
 use sui_types::global_state_hash::GlobalStateHash;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::{debug, error, info};
@@ -42,6 +42,12 @@ use tracing::{debug, error, info};
 pub type SnapshotChecksums = (DigestByBucketAndPartition, GlobalStateHash);
 pub type DigestByBucketAndPartition = BTreeMap<u32, BTreeMap<u32, [u8; 32]>>;
 pub type Sha3DigestType = Arc<Mutex<BTreeMap<u32, BTreeMap<u32, [u8; 32]>>>>;
+
+pub struct StateAccumulatorSender {
+    pub partials: mpsc::Sender<(GlobalStateHash, u64)>,
+    pub completion: oneshot::Sender<()>,
+}
+
 #[derive(Clone)]
 pub struct StateSnapshotReaderV1 {
     epoch: u64,
@@ -293,7 +299,7 @@ impl StateSnapshotReaderV1 {
         &mut self,
         perpetual_db: Arc<AuthorityPerpetualTables>,
         abort_registration: AbortRegistration,
-        sender: Option<tokio::sync::mpsc::Sender<(GlobalStateHash, u64)>>,
+        accumulator: Option<StateAccumulatorSender>,
     ) -> Result<()> {
         // This computes and stores the sha3 digest of object references in REFERENCE file for each
         // bucket partition. When downloading objects, we will match sha3 digest of object references
@@ -301,8 +307,8 @@ impl StateSnapshotReaderV1 {
         // references and start building state accumulator and fail early if the state root hash
         // doesn't match but we still need to ensure that objects match references exactly.
         let (sha3_digests, num_part_files) = self.compute_checksum().await?;
-        let accum_handle =
-            sender.map(|sender| self.spawn_accumulation_tasks(sender, num_part_files));
+        let accum_handle = accumulator
+            .map(|accumulator| self.spawn_accumulation_tasks(accumulator, num_part_files));
         self.sync_live_objects(perpetual_db.clone(), abort_registration, sha3_digests)
             .await?;
         if let Some(handle) = accum_handle {
@@ -386,9 +392,13 @@ impl StateSnapshotReaderV1 {
 
     fn spawn_accumulation_tasks(
         &self,
-        sender: tokio::sync::mpsc::Sender<(GlobalStateHash, u64)>,
+        accumulator: StateAccumulatorSender,
         num_part_files: usize,
     ) -> JoinHandle<()> {
+        let StateAccumulatorSender {
+            partials: sender,
+            completion,
+        } = accumulator;
         // Spawn accumulation progress bar
         let concurrency = self.concurrency;
         let accum_counter = Arc::new(AtomicU64::new(0));
@@ -471,6 +481,7 @@ impl StateSnapshotReaderV1 {
                     .await;
             }
             accum_progress_bar.finish_with_message("Accumulation complete");
+            let _ = completion.send(());
         })
     }
 
