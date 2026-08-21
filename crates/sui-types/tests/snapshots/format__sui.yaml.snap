@@ -1064,6 +1064,12 @@ PublicKey:
       ZkLogin:
         NEWTYPE:
           TYPENAME: ZkLoginPublicIdentifier
+    5:
+      MLDSA65:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 1952
 RandomnessRound:
   NEWTYPESTRUCT: U64
 RandomnessStateUpdate:
