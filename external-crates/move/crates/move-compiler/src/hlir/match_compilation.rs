@@ -40,8 +40,8 @@ enum MatchTree {
 
 #[derive(Debug, Clone)]
 struct MatchBindings {
-    subject: FringeEntry,                    // subject for this match node
-    subject_binders: Vec<(Mutability, Var)>, // binders for the subject, if any
+    subject: FringeEntry,     // subject for this match node
+    subject_binders: Binders, // binders for the subject, if any
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +65,71 @@ enum MatchSwitch {
         arms: BTreeMap<VariantName, (Vec<(Field, Var, Type)>, Box<MatchTree>)>,
         default: Box<MatchTree>,
     },
+}
+
+impl MatchTree {
+    fn continue_node(subject: FringeEntry, subject_binders: Binders, next: MatchTree) -> MatchTree {
+        MatchTree::Node(
+            MatchBindings {
+                subject,
+                subject_binders,
+            },
+            MatchNode::Continue(Box::new(next)),
+        )
+    }
+
+    fn literal_switch(
+        subject: FringeEntry,
+        subject_binders: Binders,
+        arms: BTreeMap<Value, Box<MatchTree>>,
+        default: MatchTree,
+    ) -> MatchTree {
+        MatchTree::Node(
+            MatchBindings {
+                subject,
+                subject_binders,
+            },
+            MatchNode::Switch(MatchSwitch::Literal {
+                arms,
+                default: Box::new(default),
+            }),
+        )
+    }
+
+    fn struct_switch(
+        subject: FringeEntry,
+        subject_binders: Binders,
+        tyargs: Vec<Type>,
+        unpack: StructUnpack<Box<MatchTree>>,
+    ) -> MatchTree {
+        MatchTree::Node(
+            MatchBindings {
+                subject,
+                subject_binders,
+            },
+            MatchNode::Switch(MatchSwitch::Struct { tyargs, unpack }),
+        )
+    }
+
+    fn enum_switch(
+        subject: FringeEntry,
+        subject_binders: Binders,
+        tyargs: Vec<Type>,
+        arms: BTreeMap<VariantName, (Vec<(Field, Var, Type)>, Box<MatchTree>)>,
+        default: MatchTree,
+    ) -> MatchTree {
+        MatchTree::Node(
+            MatchBindings {
+                subject,
+                subject_binders,
+            },
+            MatchNode::Switch(MatchSwitch::Enum {
+                tyargs,
+                arms,
+                default: Box::new(default),
+            }),
+        )
+    }
 }
 
 pub(super) fn compile_match(
@@ -196,13 +261,7 @@ fn build_match_tree(
     if matrix.first_column_binders_only() {
         let (subject_binders, default) = matrix.specialize_default(context);
         let next = build_match_tree(context, fringe, default);
-        MatchTree::Node(
-            MatchBindings {
-                subject,
-                subject_binders,
-            },
-            MatchNode::Continue(Box::new(next)),
-        )
+        MatchTree::continue_node(subject, subject_binders, next)
     } else if subject.ty.value.unfold_to_builtin_type_name().is_some() {
         compile_match_literal(context, subject, fringe, matrix)
     } else if let Some((mident, datatype_name)) = subject
@@ -280,18 +339,9 @@ fn compile_match_literal(
 
     let (mut new_binders, default) = matrix.specialize_default(context);
     subject_binders.append(&mut new_binders);
-    let default_result = Box::new(build_match_tree(context, fringe, default));
+    let default_result = build_match_tree(context, fringe, default);
 
-    MatchTree::Node(
-        MatchBindings {
-            subject,
-            subject_binders,
-        },
-        MatchNode::Switch(MatchSwitch::Literal {
-            arms,
-            default: default_result,
-        }),
-    )
+    MatchTree::literal_switch(subject, subject_binders, arms, default_result)
 }
 
 #[growing_stack]
@@ -343,13 +393,7 @@ fn compile_match_struct(
         (subject_binders, unpack)
     };
 
-    MatchTree::Node(
-        MatchBindings {
-            subject,
-            subject_binders,
-        },
-        MatchNode::Switch(MatchSwitch::Struct { tyargs, unpack }),
-    )
+    MatchTree::struct_switch(subject, subject_binders, tyargs, unpack)
 }
 
 #[growing_stack]
@@ -417,18 +461,8 @@ fn compile_enum_switch(
     };
     subject_binders.append(&mut new_binders);
 
-    let default = Box::new(build_match_tree(context, fringe, default_matrix));
-    MatchTree::Node(
-        MatchBindings {
-            subject,
-            subject_binders,
-        },
-        MatchNode::Switch(MatchSwitch::Enum {
-            tyargs,
-            arms,
-            default,
-        }),
-    )
+    let default = build_match_tree(context, fringe, default_matrix);
+    MatchTree::enum_switch(subject, subject_binders, tyargs, arms, default)
 }
 
 fn make_fringe_entries(binders: &[(Field, Var, Type)]) -> VecDeque<FringeEntry> {
