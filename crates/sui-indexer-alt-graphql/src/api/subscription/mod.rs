@@ -26,6 +26,7 @@ use crate::config::Limits;
 use crate::config::SubscriptionConfig;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
+use crate::metrics::SubscriptionMetrics;
 use crate::scope::Scope;
 use crate::task::streaming::StreamedCaches;
 use crate::task::streaming::SubscriptionBroadcast;
@@ -70,6 +71,7 @@ impl Subscription {
         let config: &SubscriptionConfig = ctx.data()?;
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
         let fetcher: &LedgerGrpcReader = ctx.data()?;
+        let metrics: &Arc<SubscriptionMetrics> = ctx.data()?;
 
         let start_from: Option<u64> = match (
             after.map(|c| c.sequence_number()),
@@ -83,9 +85,10 @@ impl Subscription {
         let caches = caches.clone();
         let resolver_limits = limits.package_resolver();
 
-        let stream = broadcast
-            .clone()
-            .subscribe(start_from, fetcher.clone(), config);
+        let stream =
+            broadcast
+                .clone()
+                .subscribe(start_from, fetcher.clone(), config, metrics.clone());
 
         Ok(stream.map(move |item| {
             item.map(|processed| {
@@ -130,6 +133,7 @@ impl Subscription {
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
         let reader: &AlphaLedgerGrpcReader = ctx.data()?;
         let watermarks_rx: &watch::Receiver<Arc<Watermarks>> = ctx.data()?;
+        let metrics: &Arc<SubscriptionMetrics> = ctx.data()?;
 
         let caches = caches.clone();
         let resolver_limits = limits.package_resolver();
@@ -159,6 +163,7 @@ impl Subscription {
             after,
             after_checkpoint,
             config.clone(),
+            metrics.clone(),
         ))
     }
 
@@ -184,6 +189,7 @@ impl Subscription {
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
         let reader: &AlphaLedgerGrpcReader = ctx.data()?;
         let watermarks_rx: &watch::Receiver<Arc<Watermarks>> = ctx.data()?;
+        let metrics: &Arc<SubscriptionMetrics> = ctx.data()?;
 
         let caches = caches.clone();
         let resolver_limits = limits.package_resolver();
@@ -213,6 +219,7 @@ impl Subscription {
             after,
             after_checkpoint,
             config.clone(),
+            metrics.clone(),
         ))
     }
 }

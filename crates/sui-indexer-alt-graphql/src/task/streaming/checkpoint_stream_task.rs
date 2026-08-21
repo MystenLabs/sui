@@ -110,6 +110,12 @@ use super::checkpoint_resume::scan_checkpoints;
 #[cfg(any(feature = "staging", test))]
 use super::gap_recovery::CheckpointFetcher;
 use super::gap_recovery::recover_gap;
+#[cfg(any(feature = "staging", test))]
+use super::lifecycle::SubscriptionLifecycleGuard;
+#[cfg(any(feature = "staging", test))]
+use super::lifecycle::SubscriptionTerminationReason;
+#[cfg(any(feature = "staging", test))]
+use super::lifecycle::SubscriptionType;
 use super::processed_checkpoint::ProcessedCheckpoint;
 use super::processed_checkpoint::ProcessedTransaction;
 
@@ -225,6 +231,7 @@ impl SubscriptionBroadcast {
         resume_from: Option<u64>,
         fetcher: F,
         config: &SubscriptionConfig,
+        metrics: Arc<SubscriptionMetrics>,
     ) -> impl Stream<Item = Result<Arc<ProcessedCheckpoint>, RpcError>> + 'static {
         // Resubscribe and pin the handoff once the scan is within this many checkpoints of the tip.
         // Half the buffer leaves room for checkpoints arriving during the handoff, so it won't lag.
@@ -233,6 +240,8 @@ impl SubscriptionBroadcast {
         let config = config.clone();
 
         stream! {
+            let mut guard =
+                SubscriptionLifecycleGuard::new(SubscriptionType::Checkpoints, &metrics);
             let mut last_yielded: Option<u64> = resume_from;
             let mut receiver = self.broadcaster.resubscribe();
             // `resubscribe` is future-only (delivers `handoff + 1`), so Phase 1 stops exactly at
@@ -242,7 +251,9 @@ impl SubscriptionBroadcast {
             // Phase 1: scan toward the tip; within `handoff_threshold`, resubscribe + pin, stop at it.
             if let Some(start_after) = last_yielded {
                 for await item in scan_checkpoints(fetcher, self.clone(), start_after, &config) {
-                    let processed = item?;
+                    let processed = item.inspect_err(|_| {
+                        guard.set_termination_reason(SubscriptionTerminationReason::BackfillError);
+                    })?;
                     let seq = processed.summary.sequence_number;
                     last_yielded = Some(seq);
                     yield Ok(processed);
@@ -276,6 +287,8 @@ impl SubscriptionBroadcast {
                                 received = processed.summary.sequence_number,
                                 "Unexpected gap between scan and live; disconnecting"
                             );
+                            guard
+                                .set_termination_reason(SubscriptionTerminationReason::UnexpectedGap);
                             yield Err(reconnect_error());
                             return;
                         }
@@ -287,11 +300,15 @@ impl SubscriptionBroadcast {
                     },
                     Err(broadcast::error::RecvError::Lagged(missed)) if !delivered_live => {
                         warn!(missed, "Subscriber fell behind during catch-up (likely kv-rpc lag)");
+                        guard.set_termination_reason(SubscriptionTerminationReason::Lagged);
                         yield Err(reconnect_error());
                         return;
                     }
                     // Slow subscriber (Lagged after going live) or closed channel: disconnect.
                     Err(e) => {
+                        guard.set_termination_reason(
+                            SubscriptionTerminationReason::from_recv_error(&e),
+                        );
                         yield Err(broadcast_error(e));
                         return;
                     }
@@ -833,7 +850,12 @@ mod tests {
         // Fetcher is unused since resume_from is None.
         let fetcher = MockFetcher::success_for_range(0..=0);
 
-        let stream = broadcast.subscribe(None, fetcher, &SubscriptionConfig::default());
+        let stream = broadcast.subscribe(
+            None,
+            fetcher,
+            &SubscriptionConfig::default(),
+            SubscriptionMetrics::new_for_test(),
+        );
         tokio::pin!(stream);
 
         // Poll once so the receiver gets pinned at tail=0 before any sends.
@@ -857,7 +879,12 @@ mod tests {
 
         // resume_from = 2 → Phase 1 yields 3, 4, 5; then Phase 2 picks up live items.
         let fetcher = MockFetcher::success_for_range(3..=5);
-        let stream = broadcast.subscribe(Some(2), fetcher, &SubscriptionConfig::default());
+        let stream = broadcast.subscribe(
+            Some(2),
+            fetcher,
+            &SubscriptionConfig::default(),
+            SubscriptionMetrics::new_for_test(),
+        );
         tokio::pin!(stream);
 
         // Phase 1 catches up via scan.
@@ -873,7 +900,12 @@ mod tests {
     async fn subscribe_yields_error_when_channel_closes() {
         let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
         let fetcher = MockFetcher::success_for_range(0..=0);
-        let stream = broadcast.subscribe(None, fetcher, &SubscriptionConfig::default());
+        let stream = broadcast.subscribe(
+            None,
+            fetcher,
+            &SubscriptionConfig::default(),
+            SubscriptionMetrics::new_for_test(),
+        );
         tokio::pin!(stream);
 
         // Dropping the sender closes the channel; subscriber should yield an error and end.

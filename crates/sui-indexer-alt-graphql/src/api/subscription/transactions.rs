@@ -26,10 +26,13 @@ use crate::pagination::Page;
 use crate::scope::Scope;
 use crate::task::streaming::ProcessedCheckpoint;
 use crate::task::streaming::StreamedCaches;
+use crate::task::streaming::SubscriptionType;
 
 use super::scan_then_live::Subscribable;
 
 impl Subscribable for Transaction {
+    const SUBSCRIPTION_TYPE: SubscriptionType = SubscriptionType::Transactions;
+
     type Item = Self;
     type Cursor = CTransaction;
     type Filter = TransactionFilter;
