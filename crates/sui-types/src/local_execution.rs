@@ -31,8 +31,9 @@ pub enum WaitForLocalEffectsResponse {
     /// The node has locally executed the transaction.
     Executed {
         effects_digest: TransactionEffectsDigest,
-        /// Present only when `include_details` was set on the request.
-        effects: Option<TransactionEffects>,
+        /// Present only when `include_details` was set on the request. Boxed because
+        /// [`TransactionEffects`] is large relative to the other response variant.
+        effects: Option<Box<TransactionEffects>>,
     },
     /// The node did not locally execute the transaction before the timeout elapsed.
     TimedOut,
@@ -42,7 +43,7 @@ pub enum WaitForLocalEffectsResponse {
 pub struct LocalEffects {
     pub effects_digest: TransactionEffectsDigest,
     /// Populated only when the caller asked for details.
-    pub effects: Option<TransactionEffects>,
+    pub effects: Option<Box<TransactionEffects>>,
 }
 
 /// Interface the RPC layer uses to wait on node-local execution without depending on `sui-core`.
