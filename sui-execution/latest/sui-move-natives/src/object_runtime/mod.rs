@@ -95,13 +95,11 @@ pub struct RuntimeResults {
     pub settlement_output_sui: u64,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
 struct ObjectFundsAvailable {
-    /// Current known available balance for this object balance account: a single running
-    /// amount that deposits increase and reservations decrease.
-    /// We lazily query the store the first time when the available balance is not sufficient
-    /// to serve a reservation. In case where we first deposit into an object, and then reserve
-    /// a smaller amount, we will not need to query the store at all.
+    /// Current known available balance.
+    /// Keeps a running total available based on sends/redeems in this transaction.
+    /// The first time an insufficient balance is reached, we must then query the object store.
     available: U256,
     /// Whether a query to the store has been made.
     queried: bool,
@@ -172,6 +170,14 @@ impl TestInventories {
 }
 
 impl ObjectFundsAvailable {
+    /// Initially, the available balance is 0 and no store query has been made.
+    fn init() -> Self {
+        Self {
+            available: U256::from(0u64),
+            queried: false,
+        }
+    }
+
     fn needs_store_read(&self, amount: U256) -> bool {
         self.available < amount && !self.queried
     }
@@ -246,12 +252,11 @@ impl<'a> ObjectRuntime<'a> {
         amount: U256,
     ) -> ObjectFundsSufficiency {
         let key = (owner.into(), type_.clone());
-        let mut entry = self
+        let entry = self
             .state
             .object_funds_available
-            .get(&key)
-            .copied()
-            .unwrap_or_default();
+            .entry(key)
+            .or_insert_with(ObjectFundsAvailable::init);
         if entry.needs_store_read(amount) {
             let settled_available = match self
                 .child_object_store
@@ -268,14 +273,12 @@ impl<'a> ObjectRuntime<'a> {
             entry.available = available;
             entry.queried = true;
         }
-        let sufficiency = if entry.available >= amount {
+        if entry.available >= amount {
             entry.available -= amount;
             ObjectFundsSufficiency::Sufficient
         } else {
             ObjectFundsSufficiency::Insufficient
-        };
-        self.state.object_funds_available.insert(key, entry);
-        sufficiency
+        }
     }
 
     pub(crate) fn object_funds_sufficiency_needs_store_read(
@@ -288,7 +291,7 @@ impl<'a> ObjectRuntime<'a> {
             .object_funds_available
             .get(&(owner.into(), type_.clone()))
             .copied()
-            .unwrap_or_default()
+            .unwrap_or_else(ObjectFundsAvailable::init)
             .needs_store_read(amount)
     }
 
@@ -526,7 +529,7 @@ impl<'a> ObjectRuntime<'a> {
                             .state
                             .object_funds_available
                             .entry((target_addr, target_ty.clone()))
-                            .or_default();
+                            .or_insert_with(ObjectFundsAvailable::init);
                         entry.available = entry
                             .available
                             .checked_add(U256::from(amount as u128))

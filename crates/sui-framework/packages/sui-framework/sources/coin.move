@@ -165,8 +165,7 @@ public fun put<T>(balance: &mut Balance<T>, coin: Coin<T>) {
 // === Address Balance <-> Coin utility functions ===
 
 /// Redeem a `Withdrawal<Balance<T>>` and create a `Coin<T>` from the withdrawn Balance<T>.
-/// For an object withdrawal, the transaction aborts if the withdrawal specifies more funds than
-/// are currently available to the object.
+/// Aborts if an object withdrawal exceeds the funds currently available to the object.
 public fun redeem_funds<T>(
     withdrawal: sui::funds_accumulator::Withdrawal<Balance<T>>,
     ctx: &mut TxContext,
