@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 134
+version: 135
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -279,6 +279,8 @@ address_to_u256_cost_base: 52
 address_from_u256_cost_base: 52
 config_read_setting_impl_cost_base: 100
 config_read_setting_impl_cost_per_byte: 40
+package_original_package_id_impl_cost_base: 52
+package_original_package_id_impl_cost_per_byte: 15
 dynamic_field_hash_type_and_key_cost_base: 52
 dynamic_field_hash_type_and_key_type_cost_per_byte: 2
 dynamic_field_hash_type_and_key_value_cost_per_byte: 2
@@ -486,8 +488,8 @@ random_beacon_dkg_timeout_round: 3000
 random_beacon_min_round_interval_ms: 500
 random_beacon_dkg_version: 1
 consensus_max_transaction_size_bytes: 262144
-consensus_max_transactions_in_block_bytes: 524288
-consensus_max_num_transactions_in_block: 512
+consensus_max_transactions_in_block_bytes: 294912
+consensus_max_num_transactions_in_block: 128
 consensus_voting_rounds: 40
 max_accumulated_txn_cost_per_object_in_narwhal_commit: 40
 max_deferral_rounds_for_congestion_control: 10
