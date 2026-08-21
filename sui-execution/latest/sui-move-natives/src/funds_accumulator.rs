@@ -3,8 +3,10 @@
 
 use std::collections::VecDeque;
 
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_binary_format::safe_unwrap;
+use move_binary_format::{
+    errors::{PartialVMError, PartialVMResult},
+    safe_assert_eq, safe_unwrap,
+};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, u256::U256, vm_status::StatusCode,
 };
@@ -35,6 +37,7 @@ const E_ACCUMULATOR_TYPE_TOO_LARGE: u64 = 4;
 
 #[derive(Clone)]
 pub struct ReserveObjectFundsForWithdrawalCostParams {
+    pub base_cost: Option<InternalGas>,
     pub cold_read_cost: Option<InternalGas>,
 }
 
@@ -164,19 +167,10 @@ pub fn reserve_object_funds_for_withdrawal(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 2);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 2);
 
-    let ty_tag = context.type_to_type_tag(&safe_unwrap!(ty_args.pop()))?;
-
-    let limit = safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<U256>());
-    let owner: SuiAddress =
-        safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>()).into();
-
-    // We want to charge extra gas if we need to read the object available funds from storage.
-    // This should only need to be done once per account.
-    // Check here so that we can charge gas before reading from storage.
-    let needs_cold_read = {
+    let (ty_tag, limit, owner) = {
         let obj_runtime: &ObjectRuntime = context.extensions().get()?;
         if !obj_runtime
             .protocol_config
@@ -186,22 +180,37 @@ pub fn reserve_object_funds_for_withdrawal(
             // checked in execution. They are checked post-execution, and potentially retried if insufficient.
             return Ok(NativeResult::ok(context.gas_used(), smallvec![]));
         }
-        obj_runtime.object_funds_sufficiency_needs_store_read(owner, &ty_tag, limit)
-    };
 
-    if needs_cold_read {
-        let cold_read_cost = context
+        let cost_params = context
             .extensions()
             .get::<NativesCostTable>()?
             .reserve_object_funds_for_withdrawal_cost_params
-            .cold_read_cost
-            .ok_or_else(|| {
+            .clone();
+        let base_cost = cost_params.base_cost.ok_or_else(|| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                "reserve_object_funds_for_withdrawal base gas cost is not set".to_string(),
+            )
+        })?;
+        native_charge_gas_early_exit!(context, base_cost);
+
+        let ty_tag = context.type_to_type_tag(&safe_unwrap!(ty_args.pop()))?;
+        let limit = safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<U256>());
+        let owner: SuiAddress =
+            safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>()).into();
+
+        // We want to charge extra gas if we need to read the object available funds from storage.
+        // This should only need to be done once per account.
+        // Check here so that we can charge gas before reading from storage.
+        if obj_runtime.object_funds_sufficiency_needs_store_read(owner, &ty_tag, limit) {
+            let cold_read_cost = cost_params.cold_read_cost.ok_or_else(|| {
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
                     "reserve_object_funds_for_withdrawal cold read gas cost is not set".to_string(),
                 )
             })?;
-        native_charge_gas_early_exit!(context, cold_read_cost);
-    }
+            native_charge_gas_early_exit!(context, cold_read_cost);
+        }
+        (ty_tag, limit, owner)
+    };
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
     match obj_runtime.check_object_funds_sufficiency(owner, &ty_tag, limit) {

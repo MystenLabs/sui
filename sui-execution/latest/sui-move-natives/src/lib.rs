@@ -382,6 +382,9 @@ impl NativesCostTable {
 
             reserve_object_funds_for_withdrawal_cost_params:
                 funds_accumulator::ReserveObjectFundsForWithdrawalCostParams {
+                    base_cost: protocol_config
+                        .reserve_object_funds_for_withdrawal_cost_base_as_option()
+                        .map(Into::into),
                     cold_read_cost: protocol_config
                         .reserve_object_funds_for_withdrawal_cold_read_cost_as_option()
                         .map(Into::into),

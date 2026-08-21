@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "134",
+              "maxSupportedProtocolVersion": "135",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -2039,6 +2039,7 @@
                 "random_beacon_reduction_allowed_delta": null,
                 "random_beacon_reduction_lower_bound": null,
                 "reserve_object_funds_for_withdrawal_cold_read_cost": null,
+                "reserve_object_funds_for_withdrawal_cost_base": null,
                 "reward_slashing_rate": {
                   "u64": "10000"
                 },

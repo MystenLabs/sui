@@ -6,7 +6,7 @@ use move_core_types::u256::U256;
 
 #[test]
 fn store_read_is_needed_only_when_uncached_balance_is_insufficient() {
-    let empty = ObjectFundsAvailable::default();
+    let empty = ObjectFundsAvailable::init();
     assert!(!empty.needs_store_read(U256::from(0u64)));
     assert!(empty.needs_store_read(U256::from(1u64)));
 
