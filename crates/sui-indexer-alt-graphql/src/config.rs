@@ -299,6 +299,10 @@ pub struct SubscriptionConfig {
     /// is rejected instead. Raising this admits starts further past the tip, at the cost of
     /// connections parked waiting longer.
     pub max_start_checkpoints_ahead_of_tip: u64,
+
+    /// Maximum number of concurrent subscriptions the server admits at once. A subscription opened
+    /// while this many are already active is rejected so it can retry later.
+    pub max_subscribers: usize,
 }
 
 impl Default for SubscriptionConfig {
@@ -313,6 +317,7 @@ impl Default for SubscriptionConfig {
             per_subscriber_max_output_nodes_per_second: 1_000_000,
             // About a minute at the average checkpoint rate.
             max_start_checkpoints_ahead_of_tip: 300,
+            max_subscribers: 1024,
         }
     }
 }
@@ -328,6 +333,7 @@ pub struct SubscriptionLayer {
     pub max_concurrent_resolutions: Option<usize>,
     pub per_subscriber_max_output_nodes_per_second: Option<u32>,
     pub max_start_checkpoints_ahead_of_tip: Option<u64>,
+    pub max_subscribers: Option<usize>,
 }
 
 impl SubscriptionLayer {
@@ -355,6 +361,7 @@ impl SubscriptionLayer {
             max_start_checkpoints_ahead_of_tip: self
                 .max_start_checkpoints_ahead_of_tip
                 .unwrap_or(base.max_start_checkpoints_ahead_of_tip),
+            max_subscribers: self.max_subscribers.unwrap_or(base.max_subscribers),
         }
     }
 }
@@ -680,6 +687,7 @@ impl From<SubscriptionConfig> for SubscriptionLayer {
                 value.per_subscriber_max_output_nodes_per_second,
             ),
             max_start_checkpoints_ahead_of_tip: Some(value.max_start_checkpoints_ahead_of_tip),
+            max_subscribers: Some(value.max_subscribers),
         }
     }
 }

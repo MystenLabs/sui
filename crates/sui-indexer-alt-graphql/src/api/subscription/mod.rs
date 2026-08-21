@@ -26,10 +26,14 @@ use crate::config::Limits;
 use crate::config::SubscriptionConfig;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
+use crate::error::upcast;
 use crate::metrics::SubscriptionMetrics;
 use crate::scope::Scope;
 use crate::task::streaming::StreamedCaches;
+use crate::task::streaming::SubscriberLimit;
 use crate::task::streaming::SubscriptionBroadcast;
+use crate::task::streaming::SubscriptionLifecycleGuard;
+use crate::task::streaming::SubscriptionType;
 use crate::task::watermark::Watermarks;
 
 mod events;
@@ -71,7 +75,6 @@ impl Subscription {
         let config: &SubscriptionConfig = ctx.data()?;
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
         let fetcher: &LedgerGrpcReader = ctx.data()?;
-        let metrics: &Arc<SubscriptionMetrics> = ctx.data()?;
 
         let start_from: Option<u64> = match (
             after.map(|c| c.sequence_number()),
@@ -81,14 +84,14 @@ impl Subscription {
             (a, b) => a.or(b),
         };
         reject_if_start_too_far_ahead(start_from, broadcast, config)?;
+        let guard = admit_subscription(ctx, SubscriptionType::Checkpoints)?;
 
         let caches = caches.clone();
         let resolver_limits = limits.package_resolver();
 
-        let stream =
-            broadcast
-                .clone()
-                .subscribe(start_from, fetcher.clone(), config, metrics.clone());
+        let stream = broadcast
+            .clone()
+            .subscribe(start_from, fetcher.clone(), config, guard);
 
         Ok(stream.map(move |item| {
             item.map(|processed| {
@@ -133,7 +136,6 @@ impl Subscription {
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
         let reader: &AlphaLedgerGrpcReader = ctx.data()?;
         let watermarks_rx: &watch::Receiver<Arc<Watermarks>> = ctx.data()?;
-        let metrics: &Arc<SubscriptionMetrics> = ctx.data()?;
 
         let caches = caches.clone();
         let resolver_limits = limits.package_resolver();
@@ -152,6 +154,7 @@ impl Subscription {
             (a, b) => a.or(b),
         };
         reject_if_start_too_far_ahead(start_from, broadcast, config)?;
+        let guard = admit_subscription(ctx, SubscriptionType::Transactions)?;
 
         Ok(subscribe::<Transaction>(
             reader.clone(),
@@ -163,7 +166,7 @@ impl Subscription {
             after,
             after_checkpoint,
             config.clone(),
-            metrics.clone(),
+            guard,
         ))
     }
 
@@ -189,7 +192,6 @@ impl Subscription {
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
         let reader: &AlphaLedgerGrpcReader = ctx.data()?;
         let watermarks_rx: &watch::Receiver<Arc<Watermarks>> = ctx.data()?;
-        let metrics: &Arc<SubscriptionMetrics> = ctx.data()?;
 
         let caches = caches.clone();
         let resolver_limits = limits.package_resolver();
@@ -208,6 +210,7 @@ impl Subscription {
             (a, b) => a.or(b),
         };
         reject_if_start_too_far_ahead(start_from, broadcast, config)?;
+        let guard = admit_subscription(ctx, SubscriptionType::Events)?;
 
         Ok(subscribe::<Event>(
             reader.clone(),
@@ -219,9 +222,21 @@ impl Subscription {
             after,
             after_checkpoint,
             config.clone(),
-            metrics.clone(),
+            guard,
         ))
     }
+}
+
+/// Admit a new subscription of `subscription_type` by claiming a concurrency slot, or return an
+/// at-capacity error refusing it. The returned guard holds the slot and the per-subscriber metric
+/// handles for the subscription's lifetime; it is moved into the subscription's stream driver.
+fn admit_subscription(
+    ctx: &Context<'_>,
+    subscription_type: SubscriptionType,
+) -> Result<SubscriptionLifecycleGuard, RpcError<Error>> {
+    let metrics: &Arc<SubscriptionMetrics> = ctx.data()?;
+    let subscriber_limit: &SubscriberLimit = ctx.data()?;
+    SubscriptionLifecycleGuard::new(subscription_type, metrics, subscriber_limit).map_err(upcast)
 }
 
 /// Reject a start point sitting more than `max_ahead` checkpoints past the chain tip. There is
