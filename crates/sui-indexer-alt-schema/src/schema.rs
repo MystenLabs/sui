@@ -181,13 +181,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    tx_balance_changes (tx_sequence_number) {
-        tx_sequence_number -> Int8,
-        balance_changes -> Bytea,
-    }
-}
-
-diesel::table! {
     tx_calls (package, module, function, tx_sequence_number) {
         package -> Bytea,
         module -> Text,
@@ -245,7 +238,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     sum_displays,
     tx_affected_addresses,
     tx_affected_objects,
-    tx_balance_changes,
     tx_calls,
     tx_digests,
     tx_kinds,

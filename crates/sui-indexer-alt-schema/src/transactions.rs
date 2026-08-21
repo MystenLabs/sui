@@ -8,33 +8,14 @@ use diesel::expression::AsExpression;
 use diesel::prelude::*;
 use diesel::serialize;
 use diesel::sql_types::SmallInt;
-use serde::Deserialize;
-use serde::Serialize;
 use sui_field_count::FieldCount;
-use sui_types::object::Owner;
 
 use crate::schema::kv_transactions;
 use crate::schema::tx_affected_addresses;
 use crate::schema::tx_affected_objects;
-use crate::schema::tx_balance_changes;
 use crate::schema::tx_calls;
 use crate::schema::tx_digests;
 use crate::schema::tx_kinds;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum BalanceChange {
-    V1 {
-        /// Owner whose balance changed
-        owner: Owner,
-
-        /// Type of the Coin (just the one-time witness type).
-        coin_type: String,
-
-        /// The amount the balance changed by. A negative amount means the net flow of value is
-        /// from the owner, and a positive amount means the net flow of value is to the owner.
-        amount: i128,
-    },
-}
 
 #[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = kv_transactions)]
@@ -66,13 +47,6 @@ pub struct StoredTxAffectedObject {
     /// and created objects.
     pub affected: Vec<u8>,
     pub sender: Vec<u8>,
-}
-
-#[derive(Insertable, Selectable, Debug, Clone, FieldCount, Queryable)]
-#[diesel(table_name = tx_balance_changes)]
-pub struct StoredTxBalanceChange {
-    pub tx_sequence_number: i64,
-    pub balance_changes: Vec<u8>,
 }
 
 #[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
