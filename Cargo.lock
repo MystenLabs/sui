@@ -16625,6 +16625,7 @@ dependencies = [
  "sui-types",
  "tabled",
  "telemetry-subscribers",
+ "tempfile",
  "tokio",
  "toml 0.7.4",
  "tracing",
