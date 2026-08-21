@@ -37,7 +37,7 @@ use crate::{
     block::{ExtendedBlock, VerifiedBlock},
     commit::{CommitRange, TrustedCommit},
     context::Context,
-    error::ConsensusResult,
+    error::{ConsensusError, ConsensusResult},
 };
 
 /// Identifies an observer node by its network public key.
@@ -402,10 +402,15 @@ impl SerializedBlockEnvelope {
         Self { block: Some(form) }.encode_to_vec().into()
     }
 
-    pub(crate) fn decode_form(bytes: &[u8]) -> Result<SerializedBlockForm, prost::DecodeError> {
-        Self::decode(bytes)?
+    pub(crate) fn decode_form(bytes: &[u8]) -> ConsensusResult<SerializedBlockForm> {
+        Self::decode(bytes)
+            .map_err(ConsensusError::MalformedBlockEnvelope)?
             .block
-            .ok_or_else(|| prost::DecodeError::new("empty block envelope"))
+            .ok_or_else(|| {
+                ConsensusError::MalformedBlockEnvelope(prost::DecodeError::new(
+                    "empty block envelope",
+                ))
+            })
     }
 }
 

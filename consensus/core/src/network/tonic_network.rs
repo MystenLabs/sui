@@ -165,11 +165,12 @@ impl ValidatorNetworkClient for TonicValidatorClient {
                         // of being rejected block by block forever.
                         Err(e) => {
                             debug!("Failed to decode block envelope from {}: {e:?}", peer);
+                            let reason: &'static str = (&e).into();
                             metrics_context
                                 .metrics
                                 .node_metrics
                                 .subscribe_stream_form_failures
-                                .with_label_values(&[peer_hostname.as_str(), "malformed_envelope"])
+                                .with_label_values(&[peer_hostname.as_str(), reason])
                                 .inc();
                             None
                         }
@@ -1443,7 +1444,7 @@ fn frame_subscription_block(
 fn interpret_subscription_block(
     block: Bytes,
     slim_enabled: bool,
-) -> Result<SerializedBlockForm, prost::DecodeError> {
+) -> ConsensusResult<SerializedBlockForm> {
     if slim_enabled {
         SerializedBlockEnvelope::decode_form(&block)
     } else {
@@ -1642,9 +1643,15 @@ mod tests {
     /// protobuf reads as a tag for the illegal field number 0.
     #[tokio::test]
     async fn malformed_envelopes_are_errors_not_blocks() {
-        assert!(interpret_subscription_block(Bytes::from_static(b"\xff\xff\xff"), true).is_err());
+        assert!(matches!(
+            interpret_subscription_block(Bytes::from_static(b"\xff\xff\xff"), true),
+            Err(ConsensusError::MalformedBlockEnvelope(_))
+        ));
         assert!(
-            interpret_subscription_block(Bytes::new(), true).is_err(),
+            matches!(
+                interpret_subscription_block(Bytes::new(), true),
+                Err(ConsensusError::MalformedBlockEnvelope(_))
+            ),
             "an empty envelope has no form and must not decode"
         );
         for version_byte in [1u8, 2, 3] {

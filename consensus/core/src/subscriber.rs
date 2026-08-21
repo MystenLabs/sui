@@ -261,11 +261,13 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                         // slim payload can only come from a misbehaving peer: drop it
                         // here rather than hand downstream a form it cannot parse.
                         if matches!(block.block, SerializedBlockForm::Slim(_)) {
+                            let reason: &'static str =
+                                (&ConsensusError::UnexpectedBlockForm).into();
                             context
                                 .metrics
                                 .node_metrics
                                 .subscribe_stream_form_failures
-                                .with_label_values(&[peer_hostname, "unexpected_slim"])
+                                .with_label_values(&[peer_hostname, reason])
                                 .inc();
                             retries = 0;
                             backoff.reset();
@@ -555,7 +557,7 @@ mod test {
                 .subscribe_stream_form_failures
                 .with_label_values(&[
                     context.committee.authority(peer).hostname.as_str(),
-                    "unexpected_slim",
+                    "UnexpectedBlockForm",
                 ])
                 .get()
                 > 0,
