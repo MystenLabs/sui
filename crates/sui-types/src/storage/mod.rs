@@ -756,22 +756,14 @@ impl Display for DeleteKind {
     }
 }
 
-pub trait BackingStore:
-    BackingPackageStore + RuntimeObjectResolver + ObjectStore + ParentSync
-{
-    fn as_object_store(&self) -> &dyn ObjectStore;
-}
+pub trait BackingStore: RuntimeObjectResolver + ObjectStore + ParentSync {}
 
 impl<T> BackingStore for T
 where
-    T: BackingPackageStore,
     T: RuntimeObjectResolver,
     T: ObjectStore,
     T: ParentSync,
 {
-    fn as_object_store(&self) -> &dyn ObjectStore {
-        self
-    }
 }
 
 pub fn get_transaction_input_objects(
