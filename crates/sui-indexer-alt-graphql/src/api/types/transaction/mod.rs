@@ -121,7 +121,7 @@ impl Transaction {
                 return Ok(None);
             };
 
-            let transaction_data = content.data()?;
+            let transaction_data = content.data_arc()?;
             Ok(TransactionKind::from(
                 transaction_data.kind().clone(),
                 contents.scope.clone(),
@@ -146,7 +146,7 @@ impl TransactionContents {
                 return Ok(None);
             };
 
-            let transaction_data = content.data()?;
+            let transaction_data = content.data_arc()?;
             match transaction_data.expiration() {
                 TransactionExpiration::None => Ok(None),
                 TransactionExpiration::Epoch(epoch_id) => {
@@ -173,7 +173,7 @@ impl TransactionContents {
                 return Ok(None);
             };
 
-            let transaction_data = content.data()?;
+            let transaction_data = content.data_arc()?;
             Ok(Some(GasInput::from_gas_data(
                 self.scope.clone(),
                 transaction_data.gas_data().clone(),
@@ -190,7 +190,7 @@ impl TransactionContents {
                 return Ok(None);
             };
 
-            let sender = content.data()?.sender();
+            let sender = content.data_arc()?.sender();
             Ok((sender != NativeSuiAddress::ZERO)
                 .then(|| Address::with_address(self.scope.clone(), sender)))
         }
@@ -1000,9 +1000,9 @@ mod tests {
         let pt = ProgrammableTransactionBuilder::new().finish();
         let data = TransactionData::new_programmable(sender, vec![random_object_ref()], pt, 1, 1);
         let contents = NativeTransactionContents::ExecutedTransaction(ExecutedTransactionData {
-            effects: Box::new(NativeTransactionEffects::default()),
+            effects: Arc::new(NativeTransactionEffects::default()),
             events: vec![],
-            transaction_data: Box::new(data),
+            transaction_data: Arc::new(data),
             signatures: vec![],
             balance_changes: vec![],
             proto_effects: None,
