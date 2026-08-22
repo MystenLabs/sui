@@ -15,6 +15,11 @@ and Lean evidence, limits, source revisions, and focused revalidation triggers
 for reviewed assumptions. The [implementation gap report](IMPLEMENTATION_GAPS.md)
 records missing product work.
 
+The v3 transaction path is in progress on the branch
+`tmw/mysticeti-v3-transaction-voting`, and the product intends to merge it.
+A row that cites that branch is verified against the branch code, and it must
+be revalidated when the branch merges.
+
 ## Assumption boundary
 
 A basic environment assumption describes one simple fact, such as bounded message
@@ -142,9 +147,9 @@ Each `Type` field must contain the word `environment`, `refinement`, `model`,
 | Enforced in Rust | 2 |
 | Partially verified | 11 |
 | Environmental assumption | 5 |
-| Open proof obligation | 8 |
+| Open proof obligation | 9 |
 | Accepted modeling assumption | 3 |
-| Known mismatch | 8 |
+| Known mismatch | 7 |
 
 A known mismatch blocks the affected product claim. Other open statuses identify
 a condition; they do not indicate a failed proof inside the model.
@@ -305,7 +310,7 @@ See [EV-COMMIT-SYNC-COVERAGE](ASSUMPTION_EVIDENCE.md#ev-commit-sync-coverage).
 | `REF-RECOVERY-GC-FRONTIER` | Keep each recovery target above the old-block cleanup boundary or define a safe resume rule. |
 | `REF-RECOVERY-LAYER-MAPPING` | Retain and identify all rounds in the complete recovery anchor window. |
 | `REF-CAUSAL-CAPSULE-PROJECTION` | For each actual correct proposal persistence action, identify the durable pinned recovery capsule with the exact static capsule used by the backlog projection. Keep unique references, in-range authors, and the target-round upper bound. This equality is a past persistence refinement. It does not state future delivery or acceptance. |
-| `REF-LOCAL-PROPOSAL-PROGRESS` | Map the current one-shot maximum timeout and its watcher retries. A forced attempt can stop for the old round only if that round is already signed or the threshold clock moved higher. A missing recovered own-round value or excessive propagation delay is temporary. The related watcher makes another forced attempt when that blocker clears. Installing a commit must not interrupt an active Core callback. |
+| `REF-LOCAL-PROPOSAL-PROGRESS` | Map the current one-shot maximum timeout and its watcher retries. A forced attempt can stop for the old round only if that round is already signed or the threshold clock moved higher. A missing recovered own-round value or excessive propagation delay is temporary. The recovered-round watcher makes a forced attempt on every value change; the delay watcher makes one only when the full proposal gate flips from blocked to clear. Installing a commit must not interrupt an active Core callback. |
 | `REF-CURRENT-TIP-REPLAY` | Map the current receiver-driven subscription path. A broken, ended, or idle stream terminates. The correct receiver retries. A successful subscription sends the requested cached own block, if it is available, or the sender's latest own block. The proof uses the exact requested tip or treats a newer tip as higher frontier progress. |
 | `REF-POST-GST-CAUSAL-SERVICE` | Map the V2 current no-idle source package. Its selected support, recursive need, queue-source, and no-idle rules derive unbounded later own-block production at each correct, available host. Map pinned ordinary block sync and commit-orthogonal above-GC retention separately. The no-skip round-catch-up rule derives only the finite intermediate window that fixed-reference pacing needs. None of these source rules supplies a future block, window, Flex result, or commit. |
 
@@ -317,9 +322,9 @@ See [EV-COMMIT-SYNC-COVERAGE](ASSUMPTION_EVIDENCE.md#ev-commit-sync-coverage).
 | `REF-INTEGER-BOUNDS` | Set explicit numeric limits and use checked calculations for all modeled values. |
 | `REF-FINITE-BLOCK-ID-SPACE` | Map `BlockId` injectively into one fixed finite space. For current Rust, use the fixed byte-array space of `BlockDigest`. Together with the finite authority set and unique capsule references, this gives the static per-round reference cap. |
 | `REF-V3-ACTIVATION` | Activate v3 from shared epoch state. |
-| `REF-V3-TRANSACTION-PATH` | Implement the modeled v3 proposal, transaction-vote, cutoff, and finalization path. |
+| `REF-V3-TRANSACTION-PATH` | Implement the modeled v3 proposal, transaction-vote, cutoff, and finalization path. In progress on the branch: v3 proposals sign votes and the cutoff, the verifier checks them, and `CommitFinalizerV3` finalizes. The merge remains. |
 | `REF-AMNESIA-SIGNER-GUARD` | Prevent conflicting signatures after complete local consensus-state loss. |
-| `REF-CORE-HANDLER-COMPLETION` | Map each nonempty ordinary `add_blocks` batch to `ValidatorCoreHandlerInputObservation` through `handlerInputOccurs` and `qualifyingInputHasFiniteHandler`. Map direct packet-driven input acceptance through `ValidatorPacketDrivenBlockAcceptanceAt` and `packetDrivenAcceptanceHasInputOrigin`. Do not classify later GC-unsuspension as a new input; use its enclosing handler episode. Cover the finite input batch and GC-unsuspended block work, observe the terminal no-more-commits result, and invoke `try_propose(false)` before return. Map the already-actual attempt through `ValidatorCoreProposalAttemptContinuationRules` to a same-batch proposal action, protected normal work, or current durable retry work. These mappings must not assert proposal success or future DAG progress. |
+| `REF-CORE-HANDLER-COMPLETION` | Map each ordinary `add_blocks` call that accepts at least one block to `ValidatorCoreHandlerInputObservation` through `handlerInputOccurs` and `qualifyingInputHasFiniteHandler`; a nonempty batch whose blocks are all duplicate or suspended runs neither the commit loop nor the proposal attempt. Map direct packet-driven input acceptance through `ValidatorPacketDrivenBlockAcceptanceAt` and `packetDrivenAcceptanceHasInputOrigin`. Do not classify later GC-unsuspension as a new input; use its enclosing handler episode. Cover the finite input batch and GC-unsuspended block work, observe the terminal no-more-commits result, and invoke `try_propose(false)` before return. Map the already-actual attempt through `ValidatorCoreProposalAttemptContinuationRules` to a same-batch proposal action, protected normal work, or current durable retry work. These mappings must not assert proposal success or future DAG progress. |
 | `REF-PARENT-SYNC` | For an ordinary block, keep fetching each missing causal-history block above the requester's local cleanup round. Handle empty peer sets, recursive direct-parent discovery, and fair retries. References at or below local cleanup are committed roots and require no recovery. |
 | `REF-FLEX-ACCEPTED-BODY-OWNERSHIP` | At one actual Flex action-before state, map each authenticated accepted body from a correct author to that author's exact durable `ownBlockAt` entry. Derive the restored time-zero origin or an exact earlier proposal-persistence action from this current fact. Do not state future production. |
 | `REF-FLEX-POST-REFRESH-INPUT` | Map each actual `runCommitter` action to the literal scan input that Rust reads after it refreshes pending rounds. The same action must return the result computed from that input. Result equality is derived from the two views of the same action; it is not a separate future-result premise. |
@@ -339,8 +344,8 @@ See [EV-COMMIT-SYNC-COVERAGE](ASSUMPTION_EVIDENCE.md#ev-commit-sync-coverage).
 | `REF-AUTHENTICATION` | Protocol signatures cover the complete block, author keys are checked, and validator connections use mutual authentication. |
 | `REF-VOTE-DEDUP` | One validator identity counts once in each voter set. |
 | `REF-COMMIT-STATE` | One durable commit supplies the local index, reference, and protocol timestamp after restart. |
-| `REF-OWN-PROPOSAL-ROUND` | Normal restart restores the own-round floor. Peer-assisted empty-store recovery sets a verified floor. Complete amnesia remains open. |
-| `REF-DURABLE-PROPOSAL` | A local proposal is durable before broadcast. |
+| `REF-OWN-PROPOSAL-ROUND` | Normal restart restores the own-round floor from the store. The peer-assisted fetch sets a verified floor; its trigger is `boot_counter == 0` with the sync timeout configured on a validator, not an empty store. The counter increments only after a run that handled a commit, so the fetch also runs on a normal process restart and on epoch starts during a multi-epoch catch-up. Complete amnesia remains open. |
+| `REF-DURABLE-PROPOSAL` | A local proposal is durable before broadcast: `try_new_block` calls `DagState::flush()` before it returns the block for broadcast, and durability is the store write guarantee of that flush. |
 | `REF-DURABLE-COMMIT-OUTPUT` | Finalized commits and their committed blocks are flushed to storage before they are sent to the commit handler. `CommitFinalizer` calls `dag_state.flush()` and only then sends each commit on `commit_sender`. |
 | `REF-PARENT-QUORUM` | An ordinary accepted non-genesis block has immediate parents from distinct validators with quorum stake. |
 | `REF-DIGEST-CHAIN` | Every digest is taken over the complete serialized body. A commit body holds `previous_digest`, so commits form a hash chain. A block body holds each ancestor as a `BlockRef` with a digest, the proposer always places its own last proposed block first, and the verifier rejects a block whose first ancestor is not its own author, whose later ancestors repeat an author, or whose ancestor round is not below the block round. So each author's own blocks form a hash chain and the block DAG is hash-linked. |
@@ -349,17 +354,17 @@ See [EV-COMMIT-SYNC-COVERAGE](ASSUMPTION_EVIDENCE.md#ev-commit-sync-coverage).
 | `REF-COMMIT-SYNC-CHECKS` | Synchronized ranges are checked for indexes, digest links, block references, gaps, order, and quorum support on the range tip. Each commit does not have a separate certificate. |
 | `REF-LEADER-SCHEDULE` | The same prefix and same fixed build and random-generator configuration produce the same ordered schedule and interval. |
 | `REF-ROUND-LEADER-SELECTION` | Each stored pending v3 round contains the full schedule in one deterministic round order. Thus, `P_r = S`. |
-| `REF-DIRECT-DECISION` | Direct selected-slot decisions use the modeled commit, skip, and undecided rules. |
-| `REF-INDIRECT-DECISION` | Indirect selected-slot decisions use ordered, deduplicated certificate evidence. |
+| `REF-DIRECT-DECISION` | Direct selected-slot decisions read the voting round one above the slot. Without a quorum of accepted voting-round stake, the slot stays undecided. A leader block commits on a quorum of linking voting blocks. A skip vote is a voting-round block that does not link to the leader block; a block with a skip-vote quorum is skipped, and the slot is skipped when every block in it is skipped, including an empty slot. Rust asserts that no block reaches both quorums. |
+| `REF-INDIRECT-DECISION` | Indirect selected-slot decisions walk once from the anchor through ancestors above the decision round, and count a vote only from a block one round above the decision round to a decision block, one vote per author. A decision block with certification-threshold stake is certified. The slot commits when exactly one of its blocks is certified; zero or several certified blocks skip the slot. |
 | `REF-DECISION-ORIGIN` | `update_slot_decision` records whether the first result was direct or indirect. It changes only an undecided slot and asserts result equality on a later update. The exact indirect anchor and history are not stored. |
-| `REF-PENDING-ROUNDS` | Pending rounds are consecutive. The scan visits each base that has a complete anchor window; newer stored rounds can supply anchor evidence only. |
+| `REF-PENDING-ROUNDS` | Pending rounds are consecutive. The direct scan decides undecided slots from the minimum next leader round up to one round below the highest accepted round. The indirect scan runs from high to low over bases up to two rounds below the highest accepted round; each base uses the anchor at base plus two, which is the first committed slot at or above that round with no undecided slot before it. |
 | `REF-GC-BOUNDARY` | Local cleanup keeps above-boundary blocks. Pending commit state and finalizer state own copied evidence independently of the live cache. |
 | `REF-COMMIT-INSTALL-DAG` | Before a local or synchronized commit install moves GC, accept and catalogue every exact commit-body block. Retain the accumulated closed frontier above the new GC round. |
 | `REF-FLEX-RESULT` | When the current decision scan finds a commit, the local commit state records it through the normal commit path. |
 | `REF-COMMIT-MATERIALIZER-WALK` | With `enable_v3`, `FlexCommitter::build_commit` marks every committed leader of the commit round and walks their causal history. It follows an ancestor only when the reference is above the local GC round and no earlier commit took it. It marks each followed reference before it pushes the body. `get_block(..).unwrap()` must find every such body in the local `DagState`. Lean records a finite duplicate-free catalog domain. Every successful catalog read must use an identifier in that domain. `buildCommit_terminates` gives a fuel value at most one more than the domain length. A repeated ancestor reference is dropped by `if !set_committed(..) { continue; }`; block verification also rejects two ancestors from one author. `Linearizer::linearize_sub_dag` is the one-leader pre-v3 form of the same walk. The V3 source map requires a nonempty leader list and requires every leader to have the commit-head round. Rust also aborts on a leader that is already committed and on a committed block at or below GC. The raw Lean walk has no such failure, so an unmapped modeled run can succeed where Rust panics. |
-| `REF-COMMIT-BODY-ORDER` | `sort_committed_blocks` keys on the block round and on `hash(seed \|\| digest)`, with a seed over the committed leader digests. Distinct committed references must therefore get distinct keys. The named leader is the last block of the sorted vector, and `calculate_commit_timestamp` reads the leaders' one-round-below ancestors from `DagState`, which can include blocks that an earlier commit already took. The pre-v3 `sort_sub_dag_blocks` keys only on round and author and has no such tie-break. |
-| `REF-V3-SCHEDULE-SCORER` | `LeaderScheduleV3::add_commit` keeps a three-deep pending window and scores `C-3` against `[C-2, C-1, C]`. Its scoring calculation must be a deterministic function of those four committed materials. It must read only the commit index, the commit digest, the named leader, and the sorted committed block bodies with their `ancestors()`. It must not read other local state. The model takes that calculation as one function and does not reproduce its arithmetic, so the voting scan, the certifying scan, the equivocation rule, and the distinct-author stake sums stay source obligations. Its running per-authority totals move by `checked_add` and `checked_sub` over the sliding entry window. `refresh_current_schedule` recomputes `allowed_leaders` only at an update-interval boundary. `select_allowed_leaders` seeds its shuffle from the commit digest of the last pending commit. The source map requires the same ordered committed-leader list at two hosts for one exact head. Exact commit-decision replay must supply this condition because `compute_sort_seed` hashes leader digests in list order. Rust also asserts consecutive commit indexes, strictly increasing leader rounds across the pending window, a leader set that contains the named leader, and a scan that ends above its bound. The Lean model does not carry these remaining invariants, so it accepts histories that Rust would abort. |
-| `REF-V3-SCHEDULE-READERS` | Proposer ancestor selection and the FlexCommitter must read the allowed-leader vector, the round order, and the minimum next leader round of the current replayed schedule state, not separately derived values. |
+| `REF-COMMIT-BODY-ORDER` | `sort_committed_blocks` keys on the block round and on `hash(seed \|\| digest)`, with a seed over the committed leader digests. Distinct committed references must therefore get distinct keys. The named leader is the last block of the sorted vector, and `calculate_commit_timestamp` takes the stake-weighted median of the committed leaders' own timestamps when their stake reaches the certification threshold; below that threshold it falls back to the leaders' one-round-below ancestors from `DagState`, which can include blocks that an earlier commit already took. The pre-v3 `sort_sub_dag_blocks` keys only on round and author and has no such tie-break. |
+| `REF-V3-SCHEDULE-SCORER` | `LeaderScheduleV3::add_commit` keeps a three-deep pending window and scores `C-3` against `[C-2, C-1, C]`. Its scoring calculation must be a deterministic function of those four committed materials. It must read only the commit index, the commit digest, the named leader, the sorted committed block bodies with their `ancestors()`, and the epoch-fixed committee stakes, schedule configuration, epoch start timestamp, and epoch number. It must not read other mutable local state. The model takes that calculation as one function and does not reproduce its arithmetic, so the voting scan, the certifying scan, the equivocation rule, and the distinct-author stake sums stay source obligations. Its running per-authority totals move by `checked_add` and `checked_sub` over the sliding entry window. `refresh_current_schedule` recomputes `allowed_leaders` only at an update-interval boundary. `select_allowed_leaders_with_fixed_config` seeds its shuffle from the commit digest of the last pending commit, and from the epoch start timestamp and epoch number when no commit is pending. The source map requires the same ordered committed-leader list at two hosts for one exact head. Exact commit-decision replay must supply this condition because `compute_sort_seed` hashes leader digests in list order. Rust also asserts consecutive commit indexes, strictly increasing leader rounds across the pending window, a leader set that contains the named leader, and a scan that ends above its bound. The Lean model does not carry these remaining invariants, so it accepts histories that Rust would abort. |
+| `REF-V3-SCHEDULE-READERS` | The FlexCommitter reads the minimum next leader round and the allowed-leader vector of the current replayed schedule state, and derives each round's slot order from that vector with a round-seeded shuffle; the schedule state stores no round order. The proposer reads the same state only to wait for leader blocks. Proposer ancestor selection does not read the schedule; it excludes ancestors by propagation scores, and `ASM-LIVE-LEADER-SCHEDULE` records that this exclusion must not drop the exact first leader. |
 | `REF-V3-SCHEDULE-INPUTS` | `LeaderScheduleV3::add_commit` is also called for a synchronized commit that `FlexCommitter::handle_certified_commit` built, and `from_store` replays committed sub-DAGs from storage over a bounded suffix that starts at `replay_start`. The Lean model replays from genesis and maps only the local build path. Map the other two input routes, and show that the bounded suffix replay reaches the same schedule state. |
 
 ### Accepted model and environment
@@ -399,7 +404,7 @@ finalizer work is not evidence for this result.
 - **Lean use:** Every weighted decision uses one common configuration.
   `EndToEndLivenessInputs.authorityCountAtLeastTwo` records the minimum
   validator count.
-- **Rust evidence:** Some v3 inputs can come from local process settings.
+- **Rust evidence:** The v3 flag and the schedule parameters are fixed constants of the node build, and the bad-nodes threshold comes from the versioned protocol config, so different builds can use different values.
 - **Discharge:** Move all proof-relevant inputs into authenticated epoch state.
 
 ## ASM-SAFE-FAULT-BOUND
@@ -489,7 +494,8 @@ finalizer work is not evidence for this result.
 - **Claim:** Product leader and transaction decisions use the same evidence,
   voter accounting, and result rules as the model. Once a slot is committed or
   skipped, later direct and indirect rule runs preserve that result. The signed
-  cutoff is the maximum of the block-cleanup and vote-cleanup rounds.
+  cutoff is at least the block-cleanup and vote-cleanup rounds; vote-target
+  truncation can raise it, and every removed target is at or below it.
 - **Type:** Rust refinement.
 - **Status:** Partially verified.
 - **Effect if false:** Safety.
@@ -509,9 +515,14 @@ finalizer work is not evidence for this result.
 - **Rust evidence:** `RoundState::update_slot_decision` changes only an
   undecided slot, records the first direct or indirect origin, and asserts
   equality on a later update. A fully decided round can skip another indirect
-  run. The modeled v3 transaction path is incomplete.
+  run. On the branch, `try_new_block` computes the signed cutoff: it starts at
+  the DAG GC round, which the tracker GC round never exceeds, and
+  `truncate_transaction_votes` raises it to cover every removed vote target.
+  The verifier requires the cutoff below the block round and every explicit
+  vote target above the cutoff and below the block round.
 - **Evidence record:** [EV-CACHED-INDIRECT-ORIGIN](ASSUMPTION_EVIDENCE.md#ev-cached-indirect-origin).
-- **Discharge:** Add the transaction path and shared conformance vectors.
+- **Discharge:** Merge the v3 transaction path and add shared conformance
+  vectors.
 
 ## ASM-SAFE-INDIRECT-ORIGIN
 
@@ -531,9 +542,10 @@ finalizer work is not evidence for this result.
   `maybe_refresh_pending_commit_state` discards the pending rounds on a
   schedule change, so no stale indirect result survives either event. The
   mismatch is inside one pending-state lifetime: `Decision::Indirect` records
-  that the indirect rule decided the slot, and
-  `FlexCommitter::try_indirect_decide` only logs the deciding anchor, so the
-  anchor and the ordered scan are not readable from the stored state.
+  that the indirect rule decided the slot,
+  `LeaderSlotDecider::try_indirect_decide` returns statuses without the anchor,
+  and `FlexCommitter::decide_with_anchor_block` only logs it, so the anchor and
+  the ordered scan are not readable from the stored state.
 - **Evidence record:** [EV-CACHED-INDIRECT-ORIGIN](ASSUMPTION_EVIDENCE.md#ev-cached-indirect-origin).
 - **Discharge:** Retain the exact indirect anchor and scan origin inside one
   pending-state lifetime, or show that the Lean field does not need them once
@@ -652,13 +664,22 @@ finalizer work is not evidence for this result.
 ## ASM-SAFE-FIRST-TRIGGER
 
 - **Claim:** The Rust finalizer keeps a queue of unfinalized commits ordered by
-  index. It compares the leader round of the newest commit in the queue with the
-  leader round of the earliest one. When the newest is at least
-  `indirectCommitDepth` rounds ahead, the finalizer runs the indirect rule on
-  every pending transaction of the earliest commit, removes that commit, and
-  repeats. This row assumes that this queue behavior is the modeled
-  `FirstEligible` choice. Use of the *same* trigger by two hosts is the
-  conclusion, not the claim.
+  index. Each new commit first reruns direct finalization for all pending
+  commits. For a target block, the first local descendant on each authority
+  chain can give an implicit accept vote through the round after the commit
+  leader; a vote cutoff that covers the target or an explicit reject blocks the
+  implicit accept, and accept votes count only when the target is above the GC
+  round of its commit. The transaction vote tracker supplies explicit reject
+  votes. An accept quorum accepts, and a reject quorum rejects. If the earliest
+  commit stays pending and at least one later commit exists, indirect
+  finalization applies the same first-vote rule to committed descendants only
+  and accepts transactions with certification stake. When the newest leader
+  round is at least `indirectCommitDepth` rounds ahead of the earliest, the
+  finalizer rejects every transaction that still has no committed accept
+  certificate. A commit leaves the queue when every one of its transactions has
+  a decision, so depth two is the latest release point. This row assumes that
+  the depth comparison is the modeled `FirstEligible` choice. Use of the *same*
+  trigger by two hosts is the conclusion, not the claim.
 - **Type:** Single-host Rust refinement.
 - **Status:** Partially verified.
 - **Effect if false:** Safety.
@@ -668,14 +689,20 @@ finalizer work is not evidence for this result.
   `mysticeti_v3_safety` returns that equality as part of its conclusion. The
   other half of the binder, that the host has the stream up to the trigger
   position, is gap-free delivery and belongs to `ASM-SAFE-COMMIT-STORE`.
-- **Rust evidence:** The described queue matches the model. Commit leader rounds
-  increase along the stream, so the first commit that is deep enough is the one
-  whose arrival releases the earliest commit. No source review records this
-  mapping with file and line.
+- **Rust evidence:** The in-progress branch
+  `tmw/mysticeti-v3-transaction-voting` implements this algorithm as
+  `CommitFinalizerV3` in `commit_finalizer_v3.rs`, with the shared depth
+  constant `INDIRECT_COMMIT_DEPTH` of two and no remote-commit wait. Commit
+  leader rounds increase along the stream, so the first deep-enough commit is
+  the one whose arrival forces the release of a still-pending earliest commit.
+  This tree still carries the older finalizer; the mapping revalidates on
+  merge.
 - **Evidence record:** [EV-FINALIZER-TRIGGER-OUTPUT](ASSUMPTION_EVIDENCE.md#ev-finalizer-trigger-output).
-- **Discharge:** Map the queue code to `FirstEligible`. Confirm that the
-  comparison uses the earliest commit's leader round as the pending round, and
-  the newest commit's leader round as the test value.
+- **Discharge:** Merge the v3 finalizer. Then record the mapping from
+  `process_commit` and `compute_indirect_decisions` to `FirstEligible` with
+  file and line, and confirm that the comparison uses the earliest commit's
+  leader round as the pending round and the newest commit's leader round as the
+  test value.
 
 ## ASM-SAFE-COMMITTED-PREFIX
 
@@ -684,7 +711,7 @@ finalizer work is not evidence for this result.
 - **Status:** Open proof obligation.
 - **Effect if false:** Safety.
 - **Lean use:** Direct-against-indirect safety needs the missing witness in the prefix.
-- **Rust evidence:** Local and synchronized paths construct prefixes, but complete inclusion is not proved.
+- **Rust evidence:** Local and synchronized paths construct prefixes. The branch finalizer counts only strict descendants of the target and drops targets at or below the commit GC round, which keeps required accept evidence inside the commit stream until the depth-two decision. Complete inclusion is not proved.
 - **Evidence record:** [EV-FINALIZER-TRIGGER-OUTPUT](ASSUMPTION_EVIDENCE.md#ev-finalizer-trigger-output).
 - **Discharge:** Prove witness inclusion for local, synchronization, replay, and restart paths.
 
@@ -708,9 +735,9 @@ finalizer work is not evidence for this result.
   of the old claim, the retained above-GC frontier, is now
   `ASM-LIVE-GC-FRONTIER`.
 - **Rust evidence:** The v3 certified-commit path accepts each commit's blocks
-  before it handles and records the commit. Local ownership is verified. Atomic
-  persistence, restart, and the complete evidence path still need a full
-  refinement check.
+  before it handles and records the commit, and asserts the chain link to the
+  last local commit. Atomic persistence, restart, and the complete evidence
+  path still need a full refinement check.
 - **Evidence records:** [EV-DURABLE-COMMIT-PREFIX](ASSUMPTION_EVIDENCE.md#ev-durable-commit-prefix) and [EV-FINALIZER-TRIGGER-OUTPUT](ASSUMPTION_EVIDENCE.md#ev-finalizer-trigger-output).
 - **Discharge:** Enforce the required depth, test accept-before-GC ordering for
   local and synchronized installs, and close the complete evidence mapping.
@@ -753,7 +780,7 @@ finalizer work is not evidence for this result.
 - **Status:** Known mismatch.
 - **Effect if false:** Safety.
 - **Lean use:** Transaction safety always uses v3 voting semantics.
-- **Rust evidence:** V3 and transaction voting can be configured independently.
+- **Rust evidence:** V3 and transaction voting can be configured independently. This also holds on the branch: with transaction voting off, the v3 finalizer passes commits through as already finalized.
 - **Discharge:** Use one feature value or reject an incompatible pair.
 
 ## ASM-REFINE-INTEGERS
@@ -954,7 +981,7 @@ finalizer work is not evidence for this result.
   require per-validator production. The adopted commit proof also uses
   `ValidatorV2BlockProductionCurrentSourceMaps.blockProductionLiveness` to
   derive unbounded later own blocks before it applies finite no-skip catch-up.
-- **Rust evidence:** The maximum timeout makes one forced attempt. A change to the recovered own round makes another forced attempt. A propagation-delay change makes another forced attempt when that blocker clears. A forced attempt bypasses leader presence and minimum-delay checks. It can still stop because the round is stale, the block already exists, the recovered own-round guard blocks a duplicate signature, or one of the two temporary blockers is active.
+- **Rust evidence:** The maximum timeout makes one forced attempt. A change to the recovered own round makes another forced attempt. A propagation-delay change makes another forced attempt only when the full proposal gate flips from blocked to clear, so a cleared delay alone forces nothing while the recovered own round is missing or higher. A forced attempt bypasses leader presence and minimum-delay checks. It can still stop because the round is stale, the block already exists, the recovered own-round guard blocks a duplicate signature, or one of the two temporary blockers is active.
 - **Evidence record:** [EV-NETWORK-ROUND-PROGRESS](ASSUMPTION_EVIDENCE.md#ev-network-round-progress).
 - **Discharge:** Map each forced-return branch and the two watcher retries to `ValidatorNormalFrontierPacemakerRules`. Add tests for the stale, already-signed, recovered-round, and temporary-blocker cases.
 
@@ -988,8 +1015,8 @@ finalizer work is not evidence for this result.
 - **Claim:** The schedule Rust computes behaves as the modeled `config`
   functions. One commit head determines one selected leader set
   `config.leaderSchedule` and one selected slot order
-  `config.selectedLeaderOrder`. The proposer and the FlexCommitter use one
-  shared indirect depth.
+  `config.selectedLeaderOrder`. The slot decider, the FlexCommitter, and the
+  v3 finalizer use one shared indirect depth.
 - **Not claimed here:** The row this came from also said that correct validators
   derive the same selected leader slot order. That is not an assumption. The
   model gives every validator one shared `ValidatorEpochConfig`, so
@@ -1013,9 +1040,12 @@ finalizer work is not evidence for this result.
   an action-scoped parent rule must include the exact first Flex leader.
 - **Rust evidence:** Within one Core, the proposer and the FlexCommitter receive
   the current `NextCommitLeaderSchedule`. Off-boundary commits keep
-  `allowed_leaders`; a boundary commit can change it, and the FlexCommitter then
-  keeps a compatible suffix or resets. No review maps the schedule algorithm
-  itself onto the modeled `DeterministicLeaderSchedule`.
+  `allowed_leaders`; a boundary commit can change it. After each commit the
+  FlexCommitter keeps its pending rounds only when the new vector is identical
+  and then drops rounds below the new minimum next leader round; any vector
+  difference resets all pending round state. The branch v3 finalizer imports
+  the same `INDIRECT_COMMIT_DEPTH` as the slot decider. No review maps the
+  schedule algorithm itself onto the modeled `DeterministicLeaderSchedule`.
 - **Evidence records:** [EV-SCHEDULE-HEAD-LOCAL](ASSUMPTION_EVIDENCE.md#ev-schedule-head-local) and [EV-FIRST-FLEX-LEADER-PARENT](ASSUMPTION_EVIDENCE.md#ev-first-flex-leader-parent).
 - **Discharge:** Map the schedule algorithm to the modeled one, add the
   action-scoped proposal schedule read, and stop score exclusion from dropping
@@ -1197,13 +1227,17 @@ finalizer work is not evidence for this result.
   happens, with no alternative branch. What an epoch end should do with still
   pending transactions is product work, tracked as
   [REF-FINALIZER-TAIL](#missing-rust-behavior-and-open-source-refinements).
-- **Type:** Missing product-path refinement.
-- **Status:** Known mismatch.
+- **Type:** Protocol liveness refinement.
+- **Status:** Open proof obligation.
 - **Effect if false:** Liveness.
 - **Lean use:** Transaction progress needs a trigger after the target commit.
-- **Rust evidence:** The modeled trigger path is absent.
+- **Rust evidence:** The branch `CommitFinalizerV3` rejects every remaining
+  pending transaction at depth two, so a deep enough later commit completes
+  the earliest pending commit. That such a commit arrives is not derived from
+  the commit liveness result.
 - **Evidence record:** [EV-FINALIZER-TRIGGER-OUTPUT](ASSUMPTION_EVIDENCE.md#ev-finalizer-trigger-output).
-- **Discharge:** Implement the trigger path.
+- **Discharge:** Derive the trigger arrival from commit liveness: committed
+  leader rounds increase without bound.
 
 ## ASM-LIVE-DURABILITY
 
@@ -1228,9 +1262,12 @@ finalizer work is not evidence for this result.
   `transaction_liveness_stage_composition` is the same kind of stage bound:
   commit production to finalizer entry within one `network.delta`. Transaction
   progress ends at durable output, not at an in-memory decision.
-- **Rust evidence:** On both paths the write happens before the send, so what
-  this row assumes is how long each stage takes, not whether the two are
-  ordered. No measurement bounds either stage.
+- **Rust evidence:** The proposal path flushes the block in `try_new_block`
+  before broadcast, and the finalizer writes its decision before output, so
+  what this row assumes is how long each stage takes, not whether write and
+  send are ordered. The middle stage, a produced commit entering the
+  finalizer, is an in-process send with no flush in `post_commit`; its
+  durability arrives inside the finalizer. No measurement bounds any stage.
 - **Evidence records:** [EV-DURABLE-COMMIT-PREFIX](ASSUMPTION_EVIDENCE.md#ev-durable-commit-prefix) and [EV-FINALIZER-TRIGGER-OUTPUT](ASSUMPTION_EVIDENCE.md#ev-finalizer-trigger-output).
 - **Discharge:** Bound the time from a finalizer decision to the flushed write,
   and from the flushed write to the consumer.

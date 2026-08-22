@@ -122,6 +122,8 @@ structure TransactionGcWindow where
 
 namespace TransactionGcWindow
 
+/-- The lowest first-vote round. Retention of this round also keeps every
+later first-vote round for the target. -/
 def votingRound (window : TransactionGcWindow) : Nat :=
   window.targetRound + 1
 

@@ -64,17 +64,22 @@ slot order.
 
 ### Transaction decisions
 
-For one transaction, an accept result and a reject result cannot both be valid. A
-next-round block votes to accept only when it references the target, the target is
-above the signed vote cutoff, and the block has no explicit rejection. Every
-other present next-round block votes to reject. A missing block supplies no vote.
+For one transaction, an accept result and a reject result cannot both be valid.
+The first descendant of the target on each authority chain, through the round
+after the target's commit leader, gives an implicit accept vote when the target
+is above the signed vote cutoff and the block has no explicit rejection for the
+transaction. A block that does not accept supplies no stake. Explicit reject
+votes are signed vote entries, and the vote tracker aggregates them; only the
+depth-two trigger rejects the transactions that still have no committed accept
+certificate.
 
 The proof covers direct against direct, direct against indirect, and indirect
 against indirect results. Durable restart behavior remains a product obligation.
 
-The signed cutoff is the maximum of the block-cleanup round and the
-transaction-vote cleanup round. A target at or below either boundary receives a
-reject vote. An accept vote is above both boundaries.
+The signed cutoff is at least the block-cleanup round and the transaction-vote
+cleanup round, and vote-target truncation can raise it. Every removed target is
+at or below the cutoff, and an accept vote is above it, so an accept vote is
+above both cleanup boundaries.
 
 ### Committed material
 
@@ -446,10 +451,10 @@ The current product does not implement commit progress recovery, the
 fixed-reference quadratic wait, or the V2 no-skip proposal sequence. Exact
 successful-Flex material replay is a non-adopted proof experiment and is not a
 current product requirement. Normal startup does
-not enable the analyzed v3 path from shared epoch state. The product also does
-not implement the modeled signed v3 transaction voting and finalization path.
-Therefore, the related recovery and transaction results do not yet describe
-product behavior.
+not enable the analyzed v3 path from shared epoch state. The signed v3
+transaction voting and finalization path is implemented on the branch
+`tmw/mysticeti-v3-transaction-voting` and is not merged. Therefore, the
+related recovery and transaction results do not yet describe product behavior.
 
 The current review also does not prove the V2 current no-idle sources, pinned
 sync sources, commit-orthogonal retention, exact-next timer promptness,

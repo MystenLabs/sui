@@ -138,9 +138,10 @@ state. Check arithmetic and compatibility before the epoch starts.
 Related assumptions: `ASM-CONFIG-VOTING` and
 `ASM-SAFE-EVIDENCE-REFINEMENT`.
 
-The product does not implement the complete modeled v3 proposal, transaction-vote,
-and finalization path. Implement this path before the transaction theorems apply.
-V3 activation must also activate its transaction voting rule.
+The branch `tmw/mysticeti-v3-transaction-voting` implements the v3 proposal,
+transaction-vote, cutoff, and finalization path; merge it before the
+transaction theorems apply. V3 activation must also activate its transaction
+voting rule.
 
 ## Other safety and progress work
 

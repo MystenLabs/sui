@@ -10,9 +10,11 @@ namespace Mysticeti
 
 /-! Safety of Mysticeti v3 transaction voting and finalization. -/
 
-/-- The signed facts in one round `R + 1` block for one transaction in a round
-`R` block. `transactionVoteCutoffRound` maps to the Rust signed
-`transaction_votes_cutoff_round` field. The Rust mapping is
+/-- The signed facts in one later block for one transaction in one earlier
+target block. The first descendant of the target on each authority chain votes
+through the round after the target's commit leader. `targetReferenced` is
+causal inclusion of the target. `transactionVoteCutoffRound` maps to the Rust
+signed `transaction_votes_cutoff_round` field. The Rust mapping is
 `ASM-SAFE-AUTHENTICATION` and `ASM-SAFE-EVIDENCE-REFINEMENT`. -/
 structure TransactionVote where
   targetRound : Nat
@@ -24,27 +26,22 @@ structure TransactionVote where
 
 namespace TransactionVote
 
-/-- The verifier and caller conditions for one v3 next-round vote. -/
+/-- The verifier conditions for one v3 vote: the voting block is after its
+target, and its signed cutoff is below its own round. -/
 def Valid (vote : TransactionVote) : Prop :=
-  vote.votingRound = vote.targetRound + 1 ∧
+  vote.targetRound < vote.votingRound ∧
     vote.transactionVoteCutoffRound < vote.votingRound
 
 def targetAboveCutoff (vote : TransactionVote) : Bool :=
   decide (vote.transactionVoteCutoffRound < vote.targetRound)
 
-/-- This is `PreparedVotingBlock::accepts_transaction`. -/
+/-- This is `VotingBlock::select_accepted_transactions`: an implicit accept
+needs causal inclusion of a target above the signed cutoff and no explicit
+reject. A block that does not accept supplies no stake; explicit reject
+quorums come from the vote tracker, and the depth-two trigger rejects the
+transactions that still have no committed certificate. -/
 def accepts (vote : TransactionVote) : Bool :=
   vote.targetAboveCutoff && vote.targetReferenced && !vote.explicitlyRejects
-
-/-- Every next-round block that does not accept is a reject vote. -/
-def rejects (vote : TransactionVote) : Bool := !vote.accepts
-
-/-- Each modeled transaction vote selects exactly one result. An accept vote and
-a reject vote cannot occur together. -/
-theorem exactly_one (vote : TransactionVote) :
-    (vote.accepts = true ∧ vote.rejects = false) ∨
-      (vote.accepts = false ∧ vote.rejects = true) := by
-  cases accepted : vote.accepts <;> simp [rejects, accepted]
 
 theorem accepts_implies_above_cutoff (vote : TransactionVote)
     (accepted : vote.accepts = true) :
@@ -55,70 +52,35 @@ theorem accepts_implies_above_cutoff (vote : TransactionVote)
     simpa [accepts, targetAboveCutoff] using accepted
   exact details.1.1
 
-theorem cutoff_rejects (vote : TransactionVote)
-    (collected : vote.targetRound <= vote.transactionVoteCutoffRound) :
-    vote.rejects = true := by
-  simp [rejects, accepts, targetAboveCutoff, Nat.not_lt.mpr collected]
-
-/-- A valid next-round vote cannot carry a cleanup cutoff after its target. -/
-theorem valid_cutoff_is_before_or_at_target (vote : TransactionVote)
-    (valid : vote.Valid) :
-    vote.transactionVoteCutoffRound < vote.targetRound ∨
-      vote.transactionVoteCutoffRound = vote.targetRound := by
-  unfold Valid at valid
-  omega
-
-/-- A present next-round block rejects a target that it does not reference. -/
-theorem missing_reference_rejects (vote : TransactionVote)
-    (missing : vote.targetReferenced = false) : vote.rejects = true := by
-  simp [rejects, accepts, missing]
-
-/-- An explicit rejection makes the modeled next-round vote reject. -/
-theorem explicit_reject_rejects (vote : TransactionVote)
-    (explicit : vote.explicitlyRejects = true) : vote.rejects = true := by
-  simp [rejects, accepts, explicit]
-
 end TransactionVote
 
-/-- The two local GC boundaries that produce the signed transaction vote cutoff.
-The causal-history boundary covers block GC. The vote-tracker boundary covers
-explicit reject-vote GC. -/
+/-- The signed transaction vote cutoff covers the two local GC boundaries. The
+causal-history boundary covers block GC. The vote-tracker boundary covers
+explicit reject-vote GC and never exceeds block GC. The proposer starts the
+cutoff at the block GC round, and vote-target truncation can raise it, so the
+cutoff is at least both boundaries. -/
 structure TransactionVoteProduction where
   vote : TransactionVote
   causalHistoryGcRound : Nat
   voteTrackerGcRound : Nat
-  cutoffFromGc :
-    vote.transactionVoteCutoffRound =
-      max causalHistoryGcRound voteTrackerGcRound
+  cutoffCoversGc :
+    max causalHistoryGcRound voteTrackerGcRound ≤
+      vote.transactionVoteCutoffRound
 
 namespace TransactionVoteProduction
 
-/-- A target removed by causal-history block GC is a reject vote. -/
-theorem causal_history_gc_rejects (production : TransactionVoteProduction)
-    (collected : production.vote.targetRound <= production.causalHistoryGcRound) :
-    production.vote.rejects = true := by
-  apply production.vote.cutoff_rejects
-  rw [production.cutoffFromGc]
-  exact Nat.le_trans collected (Nat.le_max_left _ _)
-
-/-- A target removed by vote-tracker GC is a reject vote. -/
-theorem vote_tracker_gc_rejects (production : TransactionVoteProduction)
-    (collected : production.vote.targetRound <= production.voteTrackerGcRound) :
-    production.vote.rejects = true := by
-  apply production.vote.cutoff_rejects
-  rw [production.cutoffFromGc]
-  exact Nat.le_trans collected (Nat.le_max_right _ _)
-
-/-- An accept vote is above both GC boundaries that produced its signed cutoff. -/
+/-- An accept vote is above both GC boundaries below its signed cutoff. -/
 theorem accepts_only_above_gc (production : TransactionVoteProduction)
     (accepted : production.vote.accepts = true) :
     production.causalHistoryGcRound < production.vote.targetRound ∧
       production.voteTrackerGcRound < production.vote.targetRound := by
   have aboveCutoff := production.vote.accepts_implies_above_cutoff accepted
-  rw [production.cutoffFromGc] at aboveCutoff
+  have coverage := production.cutoffCoversGc
   constructor
-  · exact Nat.lt_of_le_of_lt (Nat.le_max_left _ _) aboveCutoff
-  · exact Nat.lt_of_le_of_lt (Nat.le_max_right _ _) aboveCutoff
+  · exact Nat.lt_of_le_of_lt
+      (Nat.le_trans (Nat.le_max_left _ _) coverage) aboveCutoff
+  · exact Nat.lt_of_le_of_lt
+      (Nat.le_trans (Nat.le_max_right _ _) coverage) aboveCutoff
 
 end TransactionVoteProduction
 
@@ -159,7 +121,7 @@ structure TransactionEvidence (authorityCount : Nat) (stake : Nat → Nat)
         gcWindow.votingRound →
         VoterSet.SubsetAt authorityCount anchorVotes
           blockEvidence.committedPrefix
-  /-- Every counted direct accept witness is a valid next-round vote for this
+  /-- Every counted direct accept witness is a valid vote for this
   target and passes the signed cutoff classifier.
   `ASM-SAFE-EVIDENCE-REFINEMENT`. -/
   directAcceptVoteEvidence :

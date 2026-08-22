@@ -39,10 +39,12 @@ def DepthTwoEligible (pendingLeaderRound : Nat) (commit : Commit) : Prop :=
 /-- `position` is the first eligible commit after `start`.
 
 `ASM-SAFE-FIRST-TRIGGER` maps this choice to the Rust finalizer queue. That
-queue holds unfinalized commits by index. It releases the earliest commit when
-the newest commit in the queue is at least `indirectCommitDepth` leader rounds
+queue holds unfinalized commits by index. A commit can leave the queue as soon
+as every one of its transactions has a decision, and it must leave when the
+newest commit in the queue is at least `indirectCommitDepth` leader rounds
 ahead of it. Because commit leader rounds increase along the stream, the first
-commit deep enough is the one whose arrival releases the earliest commit. -/
+commit deep enough is the one whose arrival forces the release of a
+still-pending earliest commit. -/
 def FirstEligible (stream : CommitStream)
     (pendingLeaderRound start position : Nat) : Prop :=
   start ≤ position ∧
