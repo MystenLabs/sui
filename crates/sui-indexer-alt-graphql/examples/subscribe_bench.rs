@@ -33,6 +33,12 @@ fn queries() -> (&'static str, &'static str) {
             "subscription { events { cursor node { sequenceNumber } } }",
             "subscription { events(filter: { afterCheckpoint: 0 }) { cursor node { sequenceNumber } } }",
         ),
+        // Complex: descending into object contents (objectChanges → outputState → previousTransaction) forces
+        // a per-delivered-tx BatchGetObjects to the ledger (not in the scan payload). Exercises the resolution path.
+        "tx_prev" | "complex" => (
+            "subscription { transactions { cursor node { digest effects { objectChanges { nodes { outputState { previousTransaction { digest } } } } } } } }",
+            "subscription { transactions(filter: { afterCheckpoint: 0 }) { cursor node { digest effects { objectChanges { nodes { outputState { previousTransaction { digest } } } } } } } }",
+        ),
         _ => (
             "subscription { transactions { cursor node { digest } } }",
             "subscription { transactions(filter: { afterCheckpoint: 0 }) { cursor node { digest } } }",

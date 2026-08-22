@@ -174,7 +174,12 @@ where
     // previous page's cursor), so feeding one window of `n` concurrent resolutions takes ceil(n /
     // page) scans: a page much smaller than the concurrency makes scanning the bottleneck, a much
     // larger one just holds a bigger page in memory. Matching them is roughly one scan per window.
-    let scan_page_size = config.max_concurrent_resolutions;
+    // BENCH: `BENCH_SCAN_PAGE` decouples the scan page size from `max_concurrent_resolutions` so the
+    // two can be swept independently. Unset → coupled (page = resolution concurrency), the default.
+    let scan_page_size = std::env::var("BENCH_SCAN_PAGE")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(config.max_concurrent_resolutions);
 
     // Pin the handoff once the scan comes within half the live buffer of the tip, leaving room for
     // checkpoints that arrive during the handoff so the receiver does not lag.
