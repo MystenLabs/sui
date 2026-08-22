@@ -4,14 +4,14 @@
 use move_binary_format::CompiledModule;
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
-use std::collections::BTreeMap;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
+use sui_adapter_latest::temporary_store::SystemObjectVersionRequirements;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::transaction::GasData;
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress, TxContext},
+    base_types::{SuiAddress, SystemObjectVersions, TxContext},
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
@@ -74,7 +74,7 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        system_object_versions: SystemObjectVersions,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -93,7 +93,7 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::Normal>(
                 store,
                 input_objects,
-                system_object_versions,
+                SystemObjectVersionRequirements::Exact(system_object_versions),
                 gas,
                 gas_status,
                 transaction_kind,
@@ -125,7 +125,7 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        system_object_versions: SystemObjectVersions,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -144,7 +144,7 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
                 store,
                 input_objects,
-                system_object_versions,
+                SystemObjectVersionRequirements::Exact(system_object_versions),
                 gas,
                 gas_status,
                 transaction_kind,
@@ -193,8 +193,7 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
                 store,
                 input_objects,
-                // TODO: Support system object versions for dev-inspect.
-                BTreeMap::new(),
+                SystemObjectVersionRequirements::Latest,
                 gas,
                 gas_status,
                 transaction_kind,
@@ -214,8 +213,7 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
                 store,
                 input_objects,
-                // TODO: Support system object versions for dev-inspect.
-                BTreeMap::new(),
+                SystemObjectVersionRequirements::Latest,
                 gas,
                 gas_status,
                 transaction_kind,

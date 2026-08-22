@@ -715,6 +715,14 @@ macro_rules! implement_storage_traits {
             ) -> Option<Object> {
                 ObjectCacheRead::get_object_by_key(self, object_id, version)
             }
+
+            fn load_implicitly_read_system_object(
+                &self,
+                object_id: &ObjectID,
+                version: sui_types::base_types::ConsensusObjectVersion,
+            ) -> Object {
+                $implementor::load_implicitly_read_system_object(self, object_id, version)
+            }
         }
 
         impl RuntimeObjectResolver for $implementor {

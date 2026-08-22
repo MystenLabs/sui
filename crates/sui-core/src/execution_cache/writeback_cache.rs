@@ -64,6 +64,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::hash::Hash;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+use std::time::Instant;
 use sui_config::ExecutionCacheConfig;
 use sui_macros::fail_point;
 use sui_protocol_config::ProtocolVersion;
@@ -71,7 +72,8 @@ use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use sui_types::base_types::{
-    EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData,
+    ConsensusObjectVersion, EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber,
+    VerifiedExecutionData,
 };
 use sui_types::bridge::{Bridge, get_bridge};
 use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
@@ -495,6 +497,48 @@ macro_rules! check_cache_entry_by_latest {
 }
 
 impl WritebackCache {
+    pub(crate) fn load_implicitly_read_system_object(
+        &self,
+        object_id: &ObjectID,
+        version: ConsensusObjectVersion,
+    ) -> Object {
+        assert!(
+            sui_types::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(object_id),
+            "{object_id} is not an implicitly read system object"
+        );
+        let ConsensusObjectVersion {
+            initial_shared_version,
+            version,
+        } = version;
+        if let Some(object) = ObjectCacheRead::get_object_by_key(self, object_id, version) {
+            return object;
+        }
+        self.metrics
+            .implicit_system_object_read_waits
+            .with_label_values(&[object_id.to_string().as_str()])
+            .inc();
+        let wait_start = Instant::now();
+        let key = InputKey::VersionedObject {
+            id: FullObjectID::Consensus((*object_id, initial_shared_version)),
+            version,
+        };
+        self.object_notify_read.read_one_blocking(
+            "load_implicitly_read_system_object",
+            &key,
+            |_key| self.object_exists_by_key(object_id, version).then_some(()),
+        );
+        self.metrics
+            .implicit_system_object_read_wait_latency
+            .with_label_values(&[object_id.to_string().as_str()])
+            .observe(wait_start.elapsed().as_secs_f64());
+        ObjectCacheRead::get_object_by_key(self, object_id, version).unwrap_or_else(|| {
+            panic!(
+                "system object {object_id} not found at version {version} after its write was \
+                 committed"
+            )
+        })
+    }
+
     pub fn new(
         config: &ExecutionCacheConfig,
         store: Arc<AuthorityStore>,

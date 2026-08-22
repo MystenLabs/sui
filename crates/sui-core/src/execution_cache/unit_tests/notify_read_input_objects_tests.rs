@@ -11,7 +11,7 @@ use sui_framework::BuiltInFramework;
 use sui_move_build::BuildConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::base_types::{ConsensusObjectVersion, ObjectID, SequenceNumber, SuiAddress};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::InputKey;
 use tempfile::tempdir;
@@ -305,4 +305,68 @@ async fn test_receiving_object_higher_version() {
         .notify_read_input_objects(&input_keys, &receiving_keys, epoch)
         .now_or_never()
         .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_load_implicitly_read_system_object() {
+    let cache = create_writeback_cache().await;
+
+    let object_id = sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
+    let init_version = SequenceNumber::from(1);
+    let target_version = SequenceNumber::from(3);
+
+    let below_target = Object::with_id_owner_version_for_testing(
+        object_id,
+        SequenceNumber::from(2),
+        Owner::Shared {
+            initial_shared_version: init_version,
+        },
+    );
+    cache.write_object_entry_for_test(below_target);
+
+    let semaphore = Arc::new(tokio::sync::Semaphore::new(1));
+    let permit = semaphore.clone().try_acquire_owned().unwrap();
+    assert_eq!(semaphore.available_permits(), 0);
+    let blocked = tokio::task::spawn_blocking({
+        let cache = cache.clone();
+        move || {
+            let _permit_guard =
+                mysten_common::sync::execution_permit::set_execution_permit(Box::new(permit));
+            cache.as_ref().load_implicitly_read_system_object(
+                &object_id,
+                ConsensusObjectVersion {
+                    initial_shared_version: init_version,
+                    version: target_version,
+                },
+            )
+        }
+    });
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Check that even though the task hasn't finished yet, the permit is already released.
+    assert!(!blocked.is_finished());
+    assert_eq!(semaphore.available_permits(), 1);
+
+    let at_target = Object::with_id_owner_version_for_testing(
+        object_id,
+        target_version,
+        Owner::Shared {
+            initial_shared_version: init_version,
+        },
+    );
+    cache.write_object_entry_for_test(at_target);
+    let object = timeout(Duration::from_secs(3), blocked)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(object.version(), target_version);
+    assert_eq!(semaphore.available_permits(), 1);
+
+    let object = cache.as_ref().load_implicitly_read_system_object(
+        &object_id,
+        ConsensusObjectVersion {
+            initial_shared_version: init_version,
+            version: target_version,
+        },
+    );
+    assert_eq!(object.version(), target_version);
 }
