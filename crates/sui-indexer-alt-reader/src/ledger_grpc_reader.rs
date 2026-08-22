@@ -349,6 +349,7 @@ pub(crate) mod test_support {
     use sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsRequest;
     use sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsResponse;
     use sui_rpc::proto::sui::rpc::v2::GetObjectRequest;
+    use sui_rpc::proto::sui::rpc::v2::GetObjectResult;
     use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerService;
     use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer;
     use tokio::net::TcpListener;
@@ -405,11 +406,18 @@ pub(crate) mod test_support {
     pub(crate) struct MockLedgerServer {
         transaction_batches: Arc<Mutex<Vec<Vec<String>>>>,
         object_batches: Arc<Mutex<Vec<Vec<GetObjectRequest>>>>,
+        object_results: Arc<Mutex<Vec<GetObjectResult>>>,
     }
 
     impl MockLedgerServer {
         pub(crate) fn new() -> Self {
             Self::default()
+        }
+
+        /// Canned per-object results for the next `BatchGetObjects` calls. When empty (the
+        /// default), calls respond with an empty result set.
+        pub(crate) fn set_object_results(&self, results: Vec<GetObjectResult>) {
+            *self.object_results.lock().unwrap() = results;
         }
 
         pub(crate) async fn start(&self) -> anyhow::Result<(SocketAddr, JoinHandle<()>)> {
@@ -458,7 +466,9 @@ pub(crate) mod test_support {
                 .lock()
                 .unwrap()
                 .push(request.into_inner().requests);
-            Ok(Response::new(BatchGetObjectsResponse::default()))
+            let mut response = BatchGetObjectsResponse::default();
+            response.objects = self.object_results.lock().unwrap().clone();
+            Ok(Response::new(response))
         }
     }
 }

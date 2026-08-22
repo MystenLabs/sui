@@ -13,18 +13,20 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::debug;
 
-use crate::task::watermark::KV_PACKAGES_PIPELINE;
+use crate::task::watermark::LEDGER_GRPC_PIPELINE;
 use crate::task::watermark::Pipeline;
 use crate::task::watermark::WatermarksLock;
 
 use super::StreamedPackageStore;
 
 /// Background task that evicts packages from the `StreamedPackageStore` once the
-/// `kv_packages` pipeline has indexed the checkpoint that introduced them.
+/// ledger gRPC service has indexed the checkpoint that introduced them. Package
+/// resolution is served by the ledger gRPC service, so once its watermark passes a
+/// checkpoint, that checkpoint's packages are resolvable without the in-memory copy.
 ///
 /// The stream task sends `(checkpoint_seq, package_ids)` entries to this task over
 /// an unbounded mpsc channel. On each timer tick, the task drains all entries whose
-/// checkpoint is at or below the current `kv_packages` watermark.
+/// checkpoint is at or below the current `ledger_grpc` watermark.
 pub(crate) struct PackageEvictionTask<S> {
     streaming_packages: Arc<StreamedPackageStore<S>>,
     receiver: UnboundedReceiver<(u64, Vec<AccountAddress>)>,
@@ -62,7 +64,7 @@ impl<S: Send + Sync + 'static> PackageEvictionTask<S> {
             loop {
                 interval.tick().await;
 
-                let Some(kv_packages_hi) = kv_packages_watermark(&watermarks).await else {
+                let Some(ledger_grpc_hi) = ledger_grpc_watermark(&watermarks).await else {
                     continue;
                 };
 
@@ -79,7 +81,7 @@ impl<S: Send + Sync + 'static> PackageEvictionTask<S> {
                     match peeked_cp {
                         None => break,
                         Some(None) => return Ok(()),
-                        Some(Some(cp)) if cp > kv_packages_hi => break,
+                        Some(Some(cp)) if cp > ledger_grpc_hi => break,
                         Some(Some(_)) => {
                             let (cp_seq, package_ids) = stream
                                 .next()
@@ -99,13 +101,13 @@ impl<S: Send + Sync + 'static> PackageEvictionTask<S> {
     }
 }
 
-/// Read the current `kv_packages` high watermark from the shared watermarks.
+/// Read the current `ledger_grpc` high watermark from the shared watermarks.
 /// Returns `None` if the pipeline is not being tracked.
-async fn kv_packages_watermark(watermarks: &WatermarksLock) -> Option<u64> {
+async fn ledger_grpc_watermark(watermarks: &WatermarksLock) -> Option<u64> {
     let watermarks = watermarks.read().await;
     watermarks
         .per_pipeline()
-        .get(KV_PACKAGES_PIPELINE)
+        .get(LEDGER_GRPC_PIPELINE)
         .map(|p: &Pipeline| p.hi().checkpoint())
 }
 
@@ -146,8 +148,8 @@ mod tests {
         ))
     }
 
-    async fn set_kv_packages_hi(watermarks: &WatermarksLock, hi: u64) {
-        *watermarks.write().await = Arc::new(Watermarks::for_test(&[("kv_packages", hi)]));
+    async fn set_ledger_grpc_hi(watermarks: &WatermarksLock, hi: u64) {
+        *watermarks.write().await = Arc::new(Watermarks::for_test(&[(LEDGER_GRPC_PIPELINE, hi)]));
     }
 
     #[tokio::test(start_paused = true)]
@@ -158,7 +160,7 @@ mod tests {
 
         store.index_packages(5, &[pkg(addr(1), 1)]);
         tx.send((5, vec![addr(1)])).unwrap();
-        set_kv_packages_hi(&watermarks, 10).await;
+        set_ledger_grpc_hi(&watermarks, 10).await;
 
         let _service = PackageEvictionTask::new(
             store.clone(),
@@ -183,7 +185,7 @@ mod tests {
         let p = pkg(addr(1), 1);
         store.index_packages(10, std::slice::from_ref(&p));
         tx.send((10, vec![addr(1)])).unwrap();
-        set_kv_packages_hi(&watermarks, 5).await;
+        set_ledger_grpc_hi(&watermarks, 5).await;
 
         let _service = PackageEvictionTask::new(
             store.clone(),
@@ -200,7 +202,7 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn skips_eviction_when_kv_packages_untracked() {
+    async fn skips_eviction_when_ledger_grpc_untracked() {
         let store = Arc::new(StreamedPackageStore::new(MockStore));
         let (tx, rx) = unbounded_channel();
         let watermarks: WatermarksLock = Default::default();
@@ -237,7 +239,7 @@ mod tests {
         store.index_packages(10, std::slice::from_ref(&p10));
         tx.send((10, vec![addr(10)])).unwrap();
 
-        set_kv_packages_hi(&watermarks, 8).await;
+        set_ledger_grpc_hi(&watermarks, 8).await;
 
         let _service = PackageEvictionTask::new(
             store.clone(),
