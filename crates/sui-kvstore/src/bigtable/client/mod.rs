@@ -1834,6 +1834,19 @@ impl std::fmt::Display for PartialWriteError {
 
 impl std::error::Error for PartialWriteError {}
 
+/// Lazily hex-encodes a byte slice when displayed, so logging call sites can pass raw bytes
+/// straight into a tracing field without paying the encoding cost unless the log is emitted.
+struct HexBytes<'a>(&'a [u8]);
+
+impl std::fmt::Display for HexBytes<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for byte in self.0 {
+            write!(f, "{byte:02x}")?;
+        }
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl KeyValueStoreReader for BigTableClient {
     async fn get_objects(&mut self, object_keys: &[ObjectKey]) -> Result<Vec<Object>> {
@@ -1926,15 +1939,11 @@ impl KeyValueStoreReader for BigTableClient {
             .pop()
         {
             let object = tables::objects::decode(&row)?;
-            let row_key_hex = row_key
-                .iter()
-                .map(|b| format!("{:02x}", b))
-                .collect::<String>();
             tracing::debug!(
                 ?object_id,
                 found_id = ?object.id(),
                 found_version = %object.version(),
-                row_key = %row_key_hex,
+                row_key = %HexBytes(&row_key),
                 "get_latest_object: found object"
             );
             return Ok(Some(object));

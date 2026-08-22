@@ -28,12 +28,9 @@ impl Processor for PackagesByIdPipeline {
                     continue;
                 };
 
-                let original_id = package.original_package_id().to_vec();
-                let package_id = obj.id().to_vec();
-
                 let entry = tables::make_entry(
-                    tables::packages_by_id::encode_key(&package_id),
-                    tables::packages_by_id::encode(&original_id),
+                    tables::packages_by_id::encode_key(obj.id().as_ref()),
+                    tables::packages_by_id::encode(package.original_package_id().as_ref()),
                     Some(timestamp_ms),
                 );
                 entries.push(entry);
