@@ -377,6 +377,7 @@ const MAINNET_USDB: &str =
 //              Bound type nodes in accumulators.
 // Version 134: Add `package::original_package_id` and its native costs.
 //              Reduce the consensus block transaction count and payload limits.
+//              Disable defer_unpaid_amplification on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4587,6 +4588,13 @@ impl ProtocolConfig {
 
                     cfg.consensus_max_transactions_in_block_bytes = Some(288 * 1024);
                     cfg.consensus_max_num_transactions_in_block = Some(128);
+
+                    // (v134, Testnet) is already released with
+                    // defer_unpaid_amplification enabled and must not change; mainnet is
+                    // still on v133, so its v134 config can disable the flag here.
+                    if chain == Chain::Mainnet {
+                        cfg.feature_flags.defer_unpaid_amplification = false;
+                    }
                 }
                 // Use this template when making changes:
                 //
