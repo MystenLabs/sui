@@ -7,7 +7,6 @@ pub use checked::*;
 mod checked {
 
     use crate::execution_mode::{self, ExecutionMode};
-    use crate::execution_value::SuiResolver;
     use crate::gas_charger::PaymentMethod;
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
@@ -259,7 +258,7 @@ mod checked {
             metrics,
             move_vm,
             &mut temporary_store,
-            store.as_backing_package_store(),
+            store,
             tx_context,
             &mut gas_charger,
             None,
@@ -659,7 +658,7 @@ mod checked {
                     metrics,
                     move_vm,
                     temporary_store,
-                    store.as_backing_package_store(),
+                    store,
                     tx_ctx,
                     gas_charger,
                     None,
@@ -673,7 +672,7 @@ mod checked {
                     metrics,
                     move_vm,
                     temporary_store,
-                    store.as_backing_package_store(),
+                    store,
                     tx_ctx,
                     gas_charger,
                     None,
@@ -983,7 +982,7 @@ mod checked {
             metrics.clone(),
             move_vm,
             temporary_store,
-            store.as_backing_package_store(),
+            store,
             tx_ctx.clone(),
             gas_charger,
             None,
@@ -1015,7 +1014,7 @@ mod checked {
                     metrics.clone(),
                     move_vm,
                     temporary_store,
-                    store.as_backing_package_store(),
+                    store,
                     tx_ctx.clone(),
                     gas_charger,
                     None,
@@ -1094,7 +1093,7 @@ mod checked {
                     metrics.clone(),
                     move_vm,
                     temporary_store,
-                    store.as_backing_package_store(),
+                    store,
                     tx_ctx.clone(),
                     gas_charger,
                     None,
@@ -1168,7 +1167,7 @@ mod checked {
             metrics,
             move_vm,
             temporary_store,
-            store.as_backing_package_store(),
+            store,
             tx_ctx,
             gas_charger,
             None,
@@ -1316,7 +1315,7 @@ mod checked {
             metrics,
             move_vm,
             temporary_store,
-            store.as_backing_package_store(),
+            store,
             tx_ctx,
             gas_charger,
             None,
@@ -1389,7 +1388,7 @@ mod checked {
             metrics,
             move_vm,
             temporary_store,
-            store.as_backing_package_store(),
+            store,
             tx_ctx,
             gas_charger,
             None,

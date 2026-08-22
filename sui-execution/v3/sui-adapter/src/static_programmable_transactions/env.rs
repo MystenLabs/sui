@@ -9,7 +9,6 @@ use crate::{
     data_store::{
         PackageStore, cached_package_store::CachedPackageStore, linked_data_store::LinkedDataStore,
     },
-    execution_value::ExecutionState,
     programmable_transactions::execution::subst_signature,
     static_programmable_transactions::{
         linkage::{
@@ -48,13 +47,14 @@ use sui_types::{
     gas_coin::GasCoin,
     move_package::{UpgradeCap, UpgradeReceipt, UpgradeTicket},
     object::Object,
+    storage::StorageView,
     type_input::{StructInput, TypeInput},
 };
 
 pub struct Env<'pc, 'vm, 'state, 'linkage> {
     pub protocol_config: &'pc ProtocolConfig,
     pub vm: &'vm MoveVM,
-    pub state_view: &'state mut dyn ExecutionState,
+    pub state_view: &'state mut dyn StorageView,
     pub linkable_store: &'linkage CachedPackageStore<'state>,
     pub linkage_analysis: &'linkage LinkageAnalyzer,
     gas_coin_type: OnceCell<Type>,
@@ -80,7 +80,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     pub fn new(
         protocol_config: &'pc ProtocolConfig,
         vm: &'vm MoveVM,
-        state_view: &'state mut dyn ExecutionState,
+        state_view: &'state mut dyn StorageView,
         linkable_store: &'linkage CachedPackageStore<'state>,
         linkage_analysis: &'linkage LinkageAnalyzer,
     ) -> Self {

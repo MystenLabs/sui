@@ -6,6 +6,8 @@ pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 mod checked {
 
+    use sui_types::storage::StorageView;
+
     use std::{
         collections::{BTreeMap, BTreeSet, HashMap},
         sync::Arc,
@@ -15,8 +17,8 @@ mod checked {
     use crate::error::convert_vm_error;
     use crate::execution_mode::ExecutionMode;
     use crate::execution_value::{
-        CommandKind, ExecutionState, InputObjectMetadata, InputValue, ObjectContents, ObjectValue,
-        RawValueType, ResultValue, TryFromValue, UsageKind, Value,
+        CommandKind, InputObjectMetadata, InputValue, ObjectContents, ObjectValue, RawValueType,
+        ResultValue, TryFromValue, UsageKind, Value,
     };
     use crate::gas_charger::GasCharger;
     use crate::programmable_transactions::linkage_view::{LinkageInfo, LinkageView, SavedLinkage};
@@ -65,7 +67,7 @@ mod checked {
         /// The MoveVM
         pub vm: &'vm MoveVM,
         /// The global state, used for resolving packages
-        pub state_view: &'state dyn ExecutionState,
+        pub state_view: &'state dyn StorageView,
         /// A shared transaction context, contains transaction digest information and manages the
         /// creation of new object IDs
         pub tx_context: &'a mut TxContext,
@@ -110,7 +112,7 @@ mod checked {
             protocol_config: &'a ProtocolConfig,
             metrics: Arc<ExecutionMetrics>,
             vm: &'vm MoveVM,
-            state_view: &'state dyn ExecutionState,
+            state_view: &'state dyn StorageView,
             tx_context: &'a mut TxContext,
             gas_charger: &'a mut GasCharger,
             inputs: Vec<CallArg>,
@@ -123,11 +125,11 @@ mod checked {
 
             // we need a new session just for loading types, which is sad
             // TODO remove this
-            let linkage = LinkageView::new(Box::new(state_view.as_sui_resolver()), init_linkage);
+            let linkage = LinkageView::new(Box::new(state_view), init_linkage);
             let mut tmp_session = new_session(
                 vm,
                 linkage,
-                state_view.as_child_resolver(),
+                state_view,
                 BTreeMap::new(),
                 !gas_charger.is_unmetered(),
                 protocol_config,
@@ -191,7 +193,7 @@ mod checked {
             let session = new_session(
                 vm,
                 linkage,
-                state_view.as_child_resolver(),
+                state_view,
                 input_object_map,
                 !gas_charger.is_unmetered(),
                 protocol_config,
@@ -688,7 +690,7 @@ mod checked {
             let tmp_session = new_session(
                 vm,
                 linkage,
-                state_view.as_child_resolver(),
+                state_view,
                 BTreeMap::new(),
                 !gas_charger.is_unmetered(),
                 protocol_config,
@@ -1142,7 +1144,7 @@ mod checked {
     /// Load an input object from the state_view
     fn load_object<'vm, 'state>(
         vm: &'vm MoveVM,
-        state_view: &'state dyn ExecutionState,
+        state_view: &'state dyn StorageView,
         session: &mut Session<'state, 'vm, LinkageView<'state>>,
         input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
         override_as_immutable: bool,
@@ -1209,7 +1211,7 @@ mod checked {
     /// Load a CallArg, either an object or a raw set of BCS bytes
     fn load_call_arg<'vm, 'state>(
         vm: &'vm MoveVM,
-        state_view: &'state dyn ExecutionState,
+        state_view: &'state dyn StorageView,
         session: &mut Session<'state, 'vm, LinkageView<'state>>,
         input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
         call_arg: CallArg,
@@ -1226,7 +1228,7 @@ mod checked {
     /// Load an ObjectArg from state view, marking if it can be treated as mutable or not
     fn load_object_arg<'vm, 'state>(
         vm: &'vm MoveVM,
-        state_view: &'state dyn ExecutionState,
+        state_view: &'state dyn StorageView,
         session: &mut Session<'state, 'vm, LinkageView<'state>>,
         input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
         obj_arg: ObjectArg,

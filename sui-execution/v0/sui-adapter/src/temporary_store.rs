@@ -779,10 +779,9 @@ impl TemporaryStore<'_> {
         params: &AdvanceEpochParams,
         protocol_config: &ProtocolConfig,
     ) {
-        let wrapper = get_sui_system_state_wrapper(self.store.as_object_store())
+        let wrapper = get_sui_system_state_wrapper(self.store)
             .expect("System state wrapper object must exist");
-        let (new_object, _) =
-            wrapper.advance_epoch_safe_mode(params, self.store.as_object_store(), protocol_config);
+        let (new_object, _) = wrapper.advance_epoch_safe_mode(params, self.store, protocol_config);
         self.write_object(new_object, WriteKind::Mutate);
     }
 }
