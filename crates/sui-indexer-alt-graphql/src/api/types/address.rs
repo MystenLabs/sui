@@ -255,7 +255,7 @@ impl Address {
                 return Ok(None);
             };
 
-            let effects = content.effects()?;
+            let effects = content.effects_arc()?;
             let address: ObjectID = self.address.into();
 
             for change in effects.object_changes() {
