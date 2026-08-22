@@ -135,38 +135,44 @@ impl ProtocolKeySignature {
 
 /// Authority name is a raw bytes identity for an authority, matching `AuthorityName`
 /// on the Sui side. It is only used for identity sanity checks and not for cryptographic
-/// verification. The bytes originate from the authority's BLS12381 public key.
-pub const AUTHORITY_NAME_LENGTH: usize = 96;
-
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AuthorityName([u8; AUTHORITY_NAME_LENGTH]);
+/// verification, so its length is not tied to any particular signature scheme: the bytes are
+/// whatever the Sui side derives the authority's identity from (a BLS12381 public key today).
+/// Any expectation about the length belongs to the code constructing the committee.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct AuthorityName(Vec<u8>);
 
 impl AuthorityName {
-    pub fn new(bytes: [u8; AUTHORITY_NAME_LENGTH]) -> Self {
-        Self(bytes)
+    pub fn new(bytes: impl Into<Vec<u8>>) -> Self {
+        Self(bytes.into())
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Self {
-        let mut arr = [0u8; AUTHORITY_NAME_LENGTH];
-        arr.copy_from_slice(bytes);
-        Self(arr)
+        Self(bytes.to_vec())
     }
 
     pub fn to_bytes(&self) -> &[u8] {
         &self.0
     }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 impl std::fmt::Debug for AuthorityName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "AuthorityName({})", Base64::encode(self.0))
+        write!(f, "AuthorityName({})", Base64::encode(&self.0))
     }
 }
 
 impl Serialize for AuthorityName {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         if serializer.is_human_readable() {
-            serializer.serialize_str(&Base64::encode(self.0))
+            serializer.serialize_str(&Base64::encode(&self.0))
         } else {
             serializer.serialize_bytes(&self.0)
         }
@@ -175,20 +181,13 @@ impl Serialize for AuthorityName {
 
 impl<'de> Deserialize<'de> for AuthorityName {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        if deserializer.is_human_readable() {
+        let bytes = if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            let bytes = Base64::decode(&s).map_err(serde::de::Error::custom)?;
-            let arr: [u8; AUTHORITY_NAME_LENGTH] = bytes
-                .try_into()
-                .map_err(|_| serde::de::Error::custom("invalid authority name length"))?;
-            Ok(Self(arr))
+            Base64::decode(&s).map_err(serde::de::Error::custom)?
         } else {
-            let bytes = <Vec<u8>>::deserialize(deserializer)?;
-            let arr: [u8; AUTHORITY_NAME_LENGTH] = bytes
-                .try_into()
-                .map_err(|_| serde::de::Error::custom("invalid authority name length"))?;
-            Ok(Self(arr))
-        }
+            <Vec<u8>>::deserialize(deserializer)?
+        };
+        Ok(Self(bytes))
     }
 }
 
@@ -196,3 +195,52 @@ impl<'de> Deserialize<'de> for AuthorityName {
 pub type DefaultHashFunction = Blake2b256;
 pub const DIGEST_LENGTH: usize = DefaultHashFunction::OUTPUT_SIZE;
 pub const INTENT_MESSAGE_LENGTH: usize = INTENT_PREFIX_LENGTH + DIGEST_LENGTH;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn authority_name_roundtrips_at_any_length() {
+        for len in [0usize, 1, 32, 48, 96, 1024] {
+            let name = AuthorityName::new(vec![len as u8; len]);
+            assert_eq!(name.len(), len);
+            assert_eq!(name.is_empty(), len == 0);
+
+            let binary = bcs::to_bytes(&name).unwrap();
+            assert_eq!(bcs::from_bytes::<AuthorityName>(&binary).unwrap(), name);
+
+            let json = serde_json::to_string(&name).unwrap();
+            assert_eq!(serde_json::from_str::<AuthorityName>(&json).unwrap(), name);
+        }
+    }
+
+    /// The 96 byte BLS12381 encoding must stay byte-identical to what the previous fixed-length
+    /// `AuthorityName` produced, so committees serialized by either version interoperate.
+    #[test]
+    fn authority_name_binary_encoding_is_length_prefixed_bytes() {
+        let name = AuthorityName::new([7u8; 96]);
+        let mut expected = vec![96u8];
+        expected.extend_from_slice(&[7u8; 96]);
+        assert_eq!(bcs::to_bytes(&name).unwrap(), expected);
+    }
+
+    /// Committee ordering relies on `Ord`, which must stay lexicographic across mixed lengths.
+    #[test]
+    fn authority_name_orders_lexicographically() {
+        let mut names = vec![
+            AuthorityName::new(vec![2u8]),
+            AuthorityName::new(vec![1u8, 1u8]),
+            AuthorityName::new(vec![1u8]),
+        ];
+        names.sort();
+        assert_eq!(
+            names,
+            vec![
+                AuthorityName::new(vec![1u8]),
+                AuthorityName::new(vec![1u8, 1u8]),
+                AuthorityName::new(vec![2u8]),
+            ]
+        );
+    }
+}

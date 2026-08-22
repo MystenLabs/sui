@@ -3727,11 +3727,13 @@ dependencies = [
 name = "consensus-config"
 version = "0.1.0"
 dependencies = [
+ "bcs",
  "fastcrypto",
  "insta",
  "mysten-network",
  "rand 0.8.5",
  "serde",
+ "serde_json",
  "shared-crypto",
 ]
 
