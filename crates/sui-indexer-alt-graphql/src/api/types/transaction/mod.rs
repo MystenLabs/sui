@@ -690,11 +690,11 @@ async fn tx_affected_address(
         WHERE
             affected = {Bytea}
         "#,
-        affected_address.into_vec(),
+        affected_address.to_inner(),
     );
 
     if let Some(address) = sent_address {
-        query += query!(" AND sender = {Bytea}", address.into_vec());
+        query += query!(" AND sender = {Bytea}", address.to_inner());
     }
 
     tx_sequence_numbers(ctx, query, page).await
@@ -716,11 +716,11 @@ async fn tx_affected_object(
         WHERE
             affected = {Bytea}
         "#,
-        affected_object.into_vec(),
+        affected_object.to_inner(),
     );
 
     if let Some(address) = sent_address {
-        query += query!(" AND sender = {Bytea}", address.into_vec());
+        query += query!(" AND sender = {Bytea}", address.to_inner());
     }
 
     tx_sequence_numbers(ctx, query, page).await
@@ -742,7 +742,7 @@ async fn tx_call(
         WHERE
             package = {Bytea}
         "#,
-        function.package().into_vec(),
+        function.package().to_inner(),
     );
 
     if let Some(module) = function.module() {
@@ -754,7 +754,7 @@ async fn tx_call(
     }
 
     if let Some(address) = sent_address {
-        query += query!(" AND sender = {Bytea}", address.into_vec());
+        query += query!(" AND sender = {Bytea}", address.to_inner());
     }
 
     tx_sequence_numbers(ctx, query, page).await
