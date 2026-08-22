@@ -636,12 +636,13 @@ fn calculate_commit_timestamp(
     let leader_round = committed_leaders[0].round();
     debug_assert!(committed_leaders.iter().all(|b| b.round() == leader_round));
 
-    // When there are enough leader stake, use leaders to compute the commit timestamp.
+    // The timestamp median requires quorum stake. If the leaders have less stake,
+    // use the quorum of their parent-round ancestors.
     let total_leader_stake = committed_leaders
         .iter()
         .map(|b| context.committee.stake(b.author()))
         .sum::<Stake>();
-    if total_leader_stake >= context.committee.certification_threshold() {
+    if total_leader_stake >= context.committee.quorum_threshold() {
         let ts = crate::linearizer::median_timestamp_by_stake(context, committed_leaders)
             .unwrap_or_else(|e| panic!("Cannot compute commit timestamp: {e}"));
         return ts.max(dag_state.last_commit_timestamp_ms());
