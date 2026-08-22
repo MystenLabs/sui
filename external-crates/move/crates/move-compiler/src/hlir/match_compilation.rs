@@ -53,6 +53,14 @@ enum MatchTree {
         arms: BTreeMap<VariantName, (Vec<(Field, Var, Type)>, Box<MatchTree>)>,
         default: Box<MatchTree>,
     },
+    // A generic type parameter (e.g., `T: key + store`) in fringe position has no
+    // inspectable structure. The only valid patterns against it are wildcards/binders,
+    // so we bind the value and recurse on the remaining fringe.
+    TypeParamBind {
+        subject: FringeEntry,
+        subject_binders: Vec<(Mutability, Var)>,
+        next: Box<MatchTree>,
+    },
 }
 
 pub(super) fn compile_match(
@@ -212,6 +220,17 @@ fn build_match_tree(
                 datatype_name,
             )
         }
+    } else if is_type_param(&subject.ty.value) {
+        // A generic type parameter (TypeInner::Param or Ref(_, Param)) has no
+        // inspectable structure. Any pattern on it must be a binder or wildcard.
+        // Specialize as default and recurse on the remaining fringe.
+        let (subject_binders, default_matrix) = matrix.specialize_default(context);
+        let next = build_match_tree(context, fringe, default_matrix);
+        MatchTree::TypeParamBind {
+            subject,
+            subject_binders,
+            next: Box::new(next),
+        }
     } else {
         ice_assert!(
             context.reporter,
@@ -220,6 +239,17 @@ fn build_match_tree(
             "Non-datatype and non-builtin type reached match compilation without a prior error"
         );
         MatchTree::Failure
+    }
+}
+
+// Returns true if `ty` is a generic type parameter, possibly behind an immutable reference.
+// Such types have no inspectable datatype structure and must be treated as opaque wildcards
+// during match compilation.
+fn is_type_param(ty: &N::Type_) -> bool {
+    match ty.inner() {
+        N::TypeInner::Param(_) => true,
+        N::TypeInner::Ref(_, inner) => matches!(inner.value.inner(), N::TypeInner::Param(_)),
+        _ => false,
     }
 }
 
@@ -506,6 +536,20 @@ fn match_tree_to_exp(
                 }
             };
             make_copy_bindings(context, bindings, unpack_exp)
+        }
+        MatchTree::TypeParamBind {
+            subject,
+            subject_binders,
+            next,
+        } => {
+            // Bind any binder-pattern variables to the opaque type-parameter subject,
+            // then continue with the remaining match tree.
+            let bindings = subject_binders
+                .into_iter()
+                .map(|(_mut, binder)| (binder, (Mutability::Imm, subject.clone())))
+                .collect();
+            let next_exp = match_tree_to_exp(context, init_subject, *next);
+            make_copy_bindings(context, bindings, next_exp)
         }
         MatchTree::LiteralSwitch {
             subject,
