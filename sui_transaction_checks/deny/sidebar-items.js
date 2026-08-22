@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["check_transaction_for_signing"]};

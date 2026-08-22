@@ -1,0 +1,606 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/sui-kv-rpc/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-17e0aaed.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sui_kv_rpc" data-themes="" data-resource-suffix="" data-rustdoc-version="1.96.1 (31fca3adb 2026-06-26)" data-channel="1.96.1" data-search-js="search-b5634cc7.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">sui_kv_rpc/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Mysten Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="kw">use </span>std::net::SocketAddr;
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>std::sync::Arc;
+<a href=#6 id=6 data-nosnippet>6</a>
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>prometheus::HistogramVec;
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>prometheus::IntCounterVec;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>prometheus::Registry;
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>prometheus::register_histogram_vec_with_registry;
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>prometheus::register_int_counter_vec_with_registry;
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>sui_kvstore::BITMAP_INDEX_PIPELINE;
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>sui_kvstore::BigTableClient;
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>sui_kvstore::CHECKPOINTS_BY_DIGEST_PIPELINE;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>sui_kvstore::CHECKPOINTS_PIPELINE;
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>sui_kvstore::EPOCH_END_PIPELINE;
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>sui_kvstore::EPOCH_START_PIPELINE;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>sui_kvstore::EVENT_BITMAP_INDEX_PIPELINE;
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>sui_kvstore::KeyValueStoreReader;
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>sui_kvstore::OBJECTS_PIPELINE;
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">pub use </span>sui_kvstore::PoolConfig;
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>sui_kvstore::TRANSACTIONS_PIPELINE;
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>sui_kvstore::TX_SEQ_DIGEST_PIPELINE;
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>sui_package_resolver::PackageStore;
+<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>sui_package_resolver::PackageStoreWithLruCache;
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>sui_package_resolver::Resolver;
+<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>sui_rpc::proto::sui::rpc::v2::GetServiceInfoResponse;
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerService;
+<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer;
+<a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span>sui_rpc_api::ServerVersion;
+<a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>sui_types::digests::ChainIdentifier;
+<a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span>sui_types::message_envelope::Message;
+<a href=#33 id=33 data-nosnippet>33</a><span class="kw">use </span>tokio::sync::RwLock;
+<a href=#34 id=34 data-nosnippet>34</a><span class="kw">use </span>tokio::time::Duration;
+<a href=#35 id=35 data-nosnippet>35</a><span class="kw">use </span>tokio::time::sleep;
+<a href=#36 id=36 data-nosnippet>36</a><span class="kw">use </span>tonic::transport::Identity;
+<a href=#37 id=37 data-nosnippet>37</a><span class="kw">use </span>tonic::transport::Server;
+<a href=#38 id=38 data-nosnippet>38</a><span class="kw">use </span>tonic::transport::ServerTlsConfig;
+<a href=#39 id=39 data-nosnippet>39</a><span class="kw">use </span>tracing::error;
+<a href=#40 id=40 data-nosnippet>40</a>
+<a href=#41 id=41 data-nosnippet>41</a><span class="kw">mod </span>bigtable_client;
+<a href=#42 id=42 data-nosnippet>42</a><span class="kw">mod </span>config;
+<a href=#43 id=43 data-nosnippet>43</a><span class="kw">mod </span>object_cache;
+<a href=#44 id=44 data-nosnippet>44</a><span class="kw">mod </span>operation;
+<a href=#45 id=45 data-nosnippet>45</a><span class="kw">mod </span>package_store;
+<a href=#46 id=46 data-nosnippet>46</a><span class="kw">mod </span>pipeline;
+<a href=#47 id=47 data-nosnippet>47</a><span class="kw">mod </span>render;
+<a href=#48 id=48 data-nosnippet>48</a><span class="kw">mod </span>resolve;
+<a href=#49 id=49 data-nosnippet>49</a><span class="kw">mod </span>v2;
+<a href=#50 id=50 data-nosnippet>50</a>
+<a href=#51 id=51 data-nosnippet>51</a><span class="kw">use </span>bigtable_client::Metrics <span class="kw">as </span>BigTableLimiterMetrics;
+<a href=#52 id=52 data-nosnippet>52</a><span class="kw">pub use </span>config::KvRpcConfig;
+<a href=#53 id=53 data-nosnippet>53</a><span class="kw">pub use </span>config::LedgerHistoryConfig;
+<a href=#54 id=54 data-nosnippet>54</a><span class="kw">pub use </span>config::LedgerHistoryMethodConfig;
+<a href=#55 id=55 data-nosnippet>55</a><span class="kw">pub use </span>config::PipelineStage;
+<a href=#56 id=56 data-nosnippet>56</a><span class="kw">pub use </span>config::ResolvedLedgerHistoryMethodConfig;
+<a href=#57 id=57 data-nosnippet>57</a><span class="kw">pub use </span>config::ResolvedStageConfig;
+<a href=#58 id=58 data-nosnippet>58</a><span class="kw">pub use </span>config::StageConfig;
+<a href=#59 id=59 data-nosnippet>59</a><span class="kw">pub use </span>config::StagesConfig;
+<a href=#60 id=60 data-nosnippet>60</a><span class="kw">use </span>package_store::BigTablePackageStore;
+<a href=#61 id=61 data-nosnippet>61</a>
+<a href=#62 id=62 data-nosnippet>62</a><span class="doccomment">/// Pipelines whose watermarks always bound the `GetServiceInfo` checkpoint
+<a href=#63 id=63 data-nosnippet>63</a>/// height, because every instance serves the point-lookup APIs that read them.
+<a href=#64 id=64 data-nosnippet>64</a></span><span class="kw">pub const </span>DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES: [<span class="kw-2">&amp;</span>str; <span class="number">6</span>] = [
+<a href=#65 id=65 data-nosnippet>65</a>    CHECKPOINTS_PIPELINE,
+<a href=#66 id=66 data-nosnippet>66</a>    CHECKPOINTS_BY_DIGEST_PIPELINE,
+<a href=#67 id=67 data-nosnippet>67</a>    TRANSACTIONS_PIPELINE,
+<a href=#68 id=68 data-nosnippet>68</a>    OBJECTS_PIPELINE,
+<a href=#69 id=69 data-nosnippet>69</a>    EPOCH_START_PIPELINE,
+<a href=#70 id=70 data-nosnippet>70</a>    EPOCH_END_PIPELINE,
+<a href=#71 id=71 data-nosnippet>71</a>];
+<a href=#72 id=72 data-nosnippet>72</a>
+<a href=#73 id=73 data-nosnippet>73</a><span class="doccomment">/// Pipelines that only back the List APIs. Folded into the `GetServiceInfo`
+<a href=#74 id=74 data-nosnippet>74</a>/// watermark set when the List APIs are enabled, so an instance whose indexer
+<a href=#75 id=75 data-nosnippet>75</a>/// has not caught up on them does not advertise a height it cannot serve.
+<a href=#76 id=76 data-nosnippet>76</a></span><span class="kw">pub const </span>LIST_API_SERVICE_INFO_WATERMARK_PIPELINES: [<span class="kw-2">&amp;</span>str; <span class="number">3</span>] = [
+<a href=#77 id=77 data-nosnippet>77</a>    TX_SEQ_DIGEST_PIPELINE,
+<a href=#78 id=78 data-nosnippet>78</a>    BITMAP_INDEX_PIPELINE,
+<a href=#79 id=79 data-nosnippet>79</a>    EVENT_BITMAP_INDEX_PIPELINE,
+<a href=#80 id=80 data-nosnippet>80</a>];
+<a href=#81 id=81 data-nosnippet>81</a>
+<a href=#82 id=82 data-nosnippet>82</a><span class="kw">pub type </span>PackageResolver = Arc&lt;Resolver&lt;Arc&lt;<span class="kw">dyn </span>PackageStore&gt;&gt;&gt;;
+<a href=#83 id=83 data-nosnippet>83</a>
+<a href=#84 id=84 data-nosnippet>84</a><span class="attr">#[derive(Clone)]
+<a href=#85 id=85 data-nosnippet>85</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>KvRpcMetrics {
+<a href=#86 id=86 data-nosnippet>86</a>    bigtable_limiter: Arc&lt;BigTableLimiterMetrics&gt;,
+<a href=#87 id=87 data-nosnippet>87</a>    response_render_latency_ms: HistogramVec,
+<a href=#88 id=88 data-nosnippet>88</a>    response_page_bytes: HistogramVec,
+<a href=#89 id=89 data-nosnippet>89</a>    stream_first_frame_latency_ms: HistogramVec,
+<a href=#90 id=90 data-nosnippet>90</a>    stream_frame_yield_wait_ms: HistogramVec,
+<a href=#91 id=91 data-nosnippet>91</a>    stream_watermark_frames_total: IntCounterVec,
+<a href=#92 id=92 data-nosnippet>92</a>    final_stream_poll_wait_ms: HistogramVec,
+<a href=#93 id=93 data-nosnippet>93</a>    bitmap_buckets_evaluated: HistogramVec,
+<a href=#94 id=94 data-nosnippet>94</a>    bitmap_buckets_discarded: HistogramVec,
+<a href=#95 id=95 data-nosnippet>95</a>    bitmap_leaf_seeks: HistogramVec,
+<a href=#96 id=96 data-nosnippet>96</a>}
+<a href=#97 id=97 data-nosnippet>97</a>
+<a href=#98 id=98 data-nosnippet>98</a><span class="kw">impl </span>KvRpcMetrics {
+<a href=#99 id=99 data-nosnippet>99</a>    <span class="kw">fn </span>new(registry: <span class="kw-2">&amp;</span>Registry) -&gt; Arc&lt;<span class="self">Self</span>&gt; {
+<a href=#100 id=100 data-nosnippet>100</a>        Arc::new(<span class="self">Self </span>{
+<a href=#101 id=101 data-nosnippet>101</a>            bigtable_limiter: BigTableLimiterMetrics::new(registry),
+<a href=#102 id=102 data-nosnippet>102</a>            response_render_latency_ms: <span class="macro">register_histogram_vec_with_registry!</span>(
+<a href=#103 id=103 data-nosnippet>103</a>                <span class="string">"kv_rpc_response_render_latency_ms"</span>,
+<a href=#104 id=104 data-nosnippet>104</a>                <span class="string">"Wall time spent rendering one consumed or emitted List response item. Histogram sums across concurrent render work are not an additive request critical-path waterfall. The resolution label is the coarse response detail selected from the read mask; it does not describe filter or scan complexity."</span>,
+<a href=#105 id=105 data-nosnippet>105</a>                <span class="kw-2">&amp;</span>[<span class="string">"method"</span>, <span class="string">"resolution"</span>],
+<a href=#106 id=106 data-nosnippet>106</a>                prometheus::exponential_buckets(<span class="number">0.01</span>, <span class="number">2.0</span>, <span class="number">24</span>).unwrap(),
+<a href=#107 id=107 data-nosnippet>107</a>                registry,
+<a href=#108 id=108 data-nosnippet>108</a>            )
+<a href=#109 id=109 data-nosnippet>109</a>            .unwrap(),
+<a href=#110 id=110 data-nosnippet>110</a>            response_page_bytes: <span class="macro">register_histogram_vec_with_registry!</span>(
+<a href=#111 id=111 data-nosnippet>111</a>                <span class="string">"kv_rpc_response_page_bytes"</span>,
+<a href=#112 id=112 data-nosnippet>112</a>                <span class="string">"Protobuf encoded size of data-bearing List response frames, measured with encoded_len without serializing or copying the response for metrics. Watermark-only and terminal-only frames are excluded and counted by kv_rpc_stream_watermark_frames_total. The histogram sum reports data-page byte throughput. The resolution label is the coarse response detail selected from the read mask; it does not describe filter or scan complexity."</span>,
+<a href=#113 id=113 data-nosnippet>113</a>                <span class="kw-2">&amp;</span>[<span class="string">"method"</span>, <span class="string">"resolution"</span>],
+<a href=#114 id=114 data-nosnippet>114</a>                prometheus::exponential_buckets(<span class="number">1_024.0</span>, <span class="number">2.0</span>, <span class="number">17</span>).unwrap(),
+<a href=#115 id=115 data-nosnippet>115</a>                registry,
+<a href=#116 id=116 data-nosnippet>116</a>            )
+<a href=#117 id=117 data-nosnippet>117</a>            .unwrap(),
+<a href=#118 id=118 data-nosnippet>118</a>            stream_first_frame_latency_ms: <span class="macro">register_histogram_vec_with_registry!</span>(
+<a href=#119 id=119 data-nosnippet>119</a>                <span class="string">"kv_rpc_stream_first_frame_latency_ms"</span>,
+<a href=#120 id=120 data-nosnippet>120</a>                <span class="string">"Wall time from List request start to the first response frame of any kind, the client's first actionable signal; a watermark carries the resume cursor. Do not treat it as purely server-owned latency or page on it alone without checking yield-wait and backpressure. The resolution label is the coarse response detail selected from the read mask; it does not describe filter or scan complexity."</span>,
+<a href=#121 id=121 data-nosnippet>121</a>                <span class="kw-2">&amp;</span>[<span class="string">"method"</span>, <span class="string">"resolution"</span>],
+<a href=#122 id=122 data-nosnippet>122</a>                prometheus::exponential_buckets(<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">17</span>).unwrap(),
+<a href=#123 id=123 data-nosnippet>123</a>                registry,
+<a href=#124 id=124 data-nosnippet>124</a>            )
+<a href=#125 id=125 data-nosnippet>125</a>            .unwrap(),
+<a href=#126 id=126 data-nosnippet>126</a>            stream_frame_yield_wait_ms: <span class="macro">register_histogram_vec_with_registry!</span>(
+<a href=#127 id=127 data-nosnippet>127</a>                <span class="string">"kv_rpc_stream_frame_yield_wait_ms"</span>,
+<a href=#128 id=128 data-nosnippet>128</a>                <span class="string">"Wall time from yielding one List response frame of any kind until the handler stream is polled again. It may include mpsc blocking, tonic/protobuf/Hyper/H2 work, executor scheduling, network flow control, and client drain. It is a broad downstream transport-consumption and backpressure signal, not proof of a slow client; correlate it with payload bytes, client telemetry, and network metrics. The resolution label is the coarse response detail selected from the read mask; it does not describe filter or scan complexity."</span>,
+<a href=#129 id=129 data-nosnippet>129</a>                <span class="kw-2">&amp;</span>[<span class="string">"method"</span>, <span class="string">"resolution"</span>],
+<a href=#130 id=130 data-nosnippet>130</a>                prometheus::exponential_buckets(<span class="number">0.01</span>, <span class="number">2.0</span>, <span class="number">24</span>).unwrap(),
+<a href=#131 id=131 data-nosnippet>131</a>                registry,
+<a href=#132 id=132 data-nosnippet>132</a>            )
+<a href=#133 id=133 data-nosnippet>133</a>            .unwrap(),
+<a href=#134 id=134 data-nosnippet>134</a>            stream_watermark_frames_total: <span class="macro">register_int_counter_vec_with_registry!</span>(
+<a href=#135 id=135 data-nosnippet>135</a>                <span class="string">"kv_rpc_stream_watermark_frames_total"</span>,
+<a href=#136 id=136 data-nosnippet>136</a>                <span class="string">"Total non-data List response frames (watermark-only and terminal-only) emitted by streaming List APIs."</span>,
+<a href=#137 id=137 data-nosnippet>137</a>                <span class="kw-2">&amp;</span>[<span class="string">"method"</span>],
+<a href=#138 id=138 data-nosnippet>138</a>                registry,
+<a href=#139 id=139 data-nosnippet>139</a>            )
+<a href=#140 id=140 data-nosnippet>140</a>            .unwrap(),
+<a href=#141 id=141 data-nosnippet>141</a>            final_stream_poll_wait_ms: <span class="macro">register_histogram_vec_with_registry!</span>(
+<a href=#142 id=142 data-nosnippet>142</a>                <span class="string">"kv_rpc_final_stream_poll_wait_ms"</span>,
+<a href=#143 id=143 data-nosnippet>143</a>                <span class="string">"Wall time from polling the final resolved response stream until the poll returns data, a watermark, an error, or EOF. Excludes time when downstream backpressure prevents the response producer from being polled. May include hydration, scheduling, and render work performed inside the upstream stream. The resolution label is the coarse response detail selected from the read mask; it does not describe filter or scan complexity."</span>,
+<a href=#144 id=144 data-nosnippet>144</a>                <span class="kw-2">&amp;</span>[<span class="string">"method"</span>, <span class="string">"resolution"</span>],
+<a href=#145 id=145 data-nosnippet>145</a>                prometheus::exponential_buckets(<span class="number">0.01</span>, <span class="number">2.0</span>, <span class="number">24</span>).unwrap(),
+<a href=#146 id=146 data-nosnippet>146</a>                registry,
+<a href=#147 id=147 data-nosnippet>147</a>            )
+<a href=#148 id=148 data-nosnippet>148</a>            .unwrap(),
+<a href=#149 id=149 data-nosnippet>149</a>            bitmap_buckets_evaluated: <span class="macro">register_histogram_vec_with_registry!</span>(
+<a href=#150 id=150 data-nosnippet>150</a>                <span class="string">"kv_rpc_bitmap_buckets_evaluated"</span>,
+<a href=#151 id=151 data-nosnippet>151</a>                <span class="string">"Buckets evaluated against the per-request bitmap scan budget. Caps at the configured budget; actual backend bucket reads may exceed it by up to max_bitmap_filter_literals (one extra fetched-and-discarded bucket per leaf stream at exhaustion). Tail near the per-request cap means clients are hitting SCAN_LIMIT and paging."</span>,
+<a href=#152 id=152 data-nosnippet>152</a>                <span class="kw-2">&amp;</span>[<span class="string">"method"</span>],
+<a href=#153 id=153 data-nosnippet>153</a>                <span class="comment">// Exponential 1..2048: many requests evaluate few buckets
+<a href=#154 id=154 data-nosnippet>154</a>                // (small or empty scans), a tail saturates at the default 1k cap.
+<a href=#155 id=155 data-nosnippet>155</a>                </span>prometheus::exponential_buckets(<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">12</span>).unwrap(),
+<a href=#156 id=156 data-nosnippet>156</a>                registry,
+<a href=#157 id=157 data-nosnippet>157</a>            )
+<a href=#158 id=158 data-nosnippet>158</a>            .unwrap(),
+<a href=#159 id=159 data-nosnippet>159</a>            bitmap_buckets_discarded: <span class="macro">register_histogram_vec_with_registry!</span>(
+<a href=#160 id=160 data-nosnippet>160</a>                <span class="string">"kv_rpc_bitmap_buckets_discarded"</span>,
+<a href=#161 id=161 data-nosnippet>161</a>                <span class="string">"Charged dead bucket rows discarded while bitmap leaves catch up across provably unmatchable gaps."</span>,
+<a href=#162 id=162 data-nosnippet>162</a>                <span class="kw-2">&amp;</span>[<span class="string">"method"</span>],
+<a href=#163 id=163 data-nosnippet>163</a>                prometheus::exponential_buckets(<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">12</span>).unwrap(),
+<a href=#164 id=164 data-nosnippet>164</a>                registry,
+<a href=#165 id=165 data-nosnippet>165</a>            )
+<a href=#166 id=166 data-nosnippet>166</a>            .unwrap(),
+<a href=#167 id=167 data-nosnippet>167</a>            bitmap_leaf_seeks: <span class="macro">register_histogram_vec_with_registry!</span>(
+<a href=#168 id=168 data-nosnippet>168</a>                <span class="string">"kv_rpc_bitmap_leaf_seeks"</span>,
+<a href=#169 id=169 data-nosnippet>169</a>                <span class="string">"Bitmap leaf scans abandoned and reopened beyond provably unmatchable gaps."</span>,
+<a href=#170 id=170 data-nosnippet>170</a>                <span class="kw-2">&amp;</span>[<span class="string">"method"</span>],
+<a href=#171 id=171 data-nosnippet>171</a>                prometheus::exponential_buckets(<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">12</span>).unwrap(),
+<a href=#172 id=172 data-nosnippet>172</a>                registry,
+<a href=#173 id=173 data-nosnippet>173</a>            )
+<a href=#174 id=174 data-nosnippet>174</a>            .unwrap(),
+<a href=#175 id=175 data-nosnippet>175</a>        })
+<a href=#176 id=176 data-nosnippet>176</a>    }
+<a href=#177 id=177 data-nosnippet>177</a>
+<a href=#178 id=178 data-nosnippet>178</a>    <span class="kw">fn </span>observe_response_render(
+<a href=#179 id=179 data-nosnippet>179</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#180 id=180 data-nosnippet>180</a>        method: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+<a href=#181 id=181 data-nosnippet>181</a>        resolution: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+<a href=#182 id=182 data-nosnippet>182</a>        elapsed: std::time::Duration,
+<a href=#183 id=183 data-nosnippet>183</a>    ) {
+<a href=#184 id=184 data-nosnippet>184</a>        <span class="self">self</span>.response_render_latency_ms
+<a href=#185 id=185 data-nosnippet>185</a>            .with_label_values(<span class="kw-2">&amp;</span>[method, resolution])
+<a href=#186 id=186 data-nosnippet>186</a>            .observe(elapsed.as_secs_f64() * <span class="number">1000.0</span>);
+<a href=#187 id=187 data-nosnippet>187</a>    }
+<a href=#188 id=188 data-nosnippet>188</a>
+<a href=#189 id=189 data-nosnippet>189</a>    <span class="kw">fn </span>observe_response_page_bytes(
+<a href=#190 id=190 data-nosnippet>190</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#191 id=191 data-nosnippet>191</a>        method: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+<a href=#192 id=192 data-nosnippet>192</a>        resolution: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+<a href=#193 id=193 data-nosnippet>193</a>        bytes: usize,
+<a href=#194 id=194 data-nosnippet>194</a>    ) {
+<a href=#195 id=195 data-nosnippet>195</a>        <span class="self">self</span>.response_page_bytes
+<a href=#196 id=196 data-nosnippet>196</a>            .with_label_values(<span class="kw-2">&amp;</span>[method, resolution])
+<a href=#197 id=197 data-nosnippet>197</a>            .observe(bytes <span class="kw">as </span>f64);
+<a href=#198 id=198 data-nosnippet>198</a>    }
+<a href=#199 id=199 data-nosnippet>199</a>
+<a href=#200 id=200 data-nosnippet>200</a>    <span class="kw">fn </span>observe_stream_first_frame_latency(
+<a href=#201 id=201 data-nosnippet>201</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#202 id=202 data-nosnippet>202</a>        method: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+<a href=#203 id=203 data-nosnippet>203</a>        resolution: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+<a href=#204 id=204 data-nosnippet>204</a>        elapsed: std::time::Duration,
+<a href=#205 id=205 data-nosnippet>205</a>    ) {
+<a href=#206 id=206 data-nosnippet>206</a>        <span class="self">self</span>.stream_first_frame_latency_ms
+<a href=#207 id=207 data-nosnippet>207</a>            .with_label_values(<span class="kw-2">&amp;</span>[method, resolution])
+<a href=#208 id=208 data-nosnippet>208</a>            .observe(elapsed.as_secs_f64() * <span class="number">1000.0</span>);
+<a href=#209 id=209 data-nosnippet>209</a>    }
+<a href=#210 id=210 data-nosnippet>210</a>
+<a href=#211 id=211 data-nosnippet>211</a>    <span class="kw">fn </span>observe_stream_frame_yield_wait(
+<a href=#212 id=212 data-nosnippet>212</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#213 id=213 data-nosnippet>213</a>        method: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+<a href=#214 id=214 data-nosnippet>214</a>        resolution: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+<a href=#215 id=215 data-nosnippet>215</a>        elapsed: std::time::Duration,
+<a href=#216 id=216 data-nosnippet>216</a>    ) {
+<a href=#217 id=217 data-nosnippet>217</a>        <span class="self">self</span>.stream_frame_yield_wait_ms
+<a href=#218 id=218 data-nosnippet>218</a>            .with_label_values(<span class="kw-2">&amp;</span>[method, resolution])
+<a href=#219 id=219 data-nosnippet>219</a>            .observe(elapsed.as_secs_f64() * <span class="number">1000.0</span>);
+<a href=#220 id=220 data-nosnippet>220</a>    }
+<a href=#221 id=221 data-nosnippet>221</a>
+<a href=#222 id=222 data-nosnippet>222</a>    <span class="kw">fn </span>inc_stream_watermark_frames(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str) {
+<a href=#223 id=223 data-nosnippet>223</a>        <span class="self">self</span>.stream_watermark_frames_total
+<a href=#224 id=224 data-nosnippet>224</a>            .with_label_values(<span class="kw-2">&amp;</span>[method])
+<a href=#225 id=225 data-nosnippet>225</a>            .inc();
+<a href=#226 id=226 data-nosnippet>226</a>    }
+<a href=#227 id=227 data-nosnippet>227</a>
+<a href=#228 id=228 data-nosnippet>228</a>    <span class="kw">fn </span>observe_final_stream_poll_wait(
+<a href=#229 id=229 data-nosnippet>229</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#230 id=230 data-nosnippet>230</a>        method: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+<a href=#231 id=231 data-nosnippet>231</a>        resolution: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+<a href=#232 id=232 data-nosnippet>232</a>        elapsed: std::time::Duration,
+<a href=#233 id=233 data-nosnippet>233</a>    ) {
+<a href=#234 id=234 data-nosnippet>234</a>        <span class="self">self</span>.final_stream_poll_wait_ms
+<a href=#235 id=235 data-nosnippet>235</a>            .with_label_values(<span class="kw-2">&amp;</span>[method, resolution])
+<a href=#236 id=236 data-nosnippet>236</a>            .observe(elapsed.as_secs_f64() * <span class="number">1000.0</span>);
+<a href=#237 id=237 data-nosnippet>237</a>    }
+<a href=#238 id=238 data-nosnippet>238</a>
+<a href=#239 id=239 data-nosnippet>239</a>    <span class="kw">fn </span>observe_bitmap_buckets_evaluated(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, buckets: u64) {
+<a href=#240 id=240 data-nosnippet>240</a>        <span class="self">self</span>.bitmap_buckets_evaluated
+<a href=#241 id=241 data-nosnippet>241</a>            .with_label_values(<span class="kw-2">&amp;</span>[method])
+<a href=#242 id=242 data-nosnippet>242</a>            .observe(buckets <span class="kw">as </span>f64);
+<a href=#243 id=243 data-nosnippet>243</a>    }
+<a href=#244 id=244 data-nosnippet>244</a>    <span class="kw">fn </span>observe_bitmap_buckets_discarded(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, buckets: u64) {
+<a href=#245 id=245 data-nosnippet>245</a>        <span class="self">self</span>.bitmap_buckets_discarded
+<a href=#246 id=246 data-nosnippet>246</a>            .with_label_values(<span class="kw-2">&amp;</span>[method])
+<a href=#247 id=247 data-nosnippet>247</a>            .observe(buckets <span class="kw">as </span>f64);
+<a href=#248 id=248 data-nosnippet>248</a>    }
+<a href=#249 id=249 data-nosnippet>249</a>
+<a href=#250 id=250 data-nosnippet>250</a>    <span class="kw">fn </span>observe_bitmap_leaf_seeks(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, seeks: u64) {
+<a href=#251 id=251 data-nosnippet>251</a>        <span class="self">self</span>.bitmap_leaf_seeks
+<a href=#252 id=252 data-nosnippet>252</a>            .with_label_values(<span class="kw-2">&amp;</span>[method])
+<a href=#253 id=253 data-nosnippet>253</a>            .observe(seeks <span class="kw">as </span>f64);
+<a href=#254 id=254 data-nosnippet>254</a>    }
+<a href=#255 id=255 data-nosnippet>255</a>}
+<a href=#256 id=256 data-nosnippet>256</a>
+<a href=#257 id=257 data-nosnippet>257</a><span class="attr">#[derive(Clone)]
+<a href=#258 id=258 data-nosnippet>258</a></span><span class="kw">pub struct </span>KvRpcServer {
+<a href=#259 id=259 data-nosnippet>259</a>    chain_id: ChainIdentifier,
+<a href=#260 id=260 data-nosnippet>260</a>    client: BigTableClient,
+<a href=#261 id=261 data-nosnippet>261</a>    server_version: <span class="prelude-ty">Option</span>&lt;ServerVersion&gt;,
+<a href=#262 id=262 data-nosnippet>262</a>    service_info_watermark_pipelines: Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt;,
+<a href=#263 id=263 data-nosnippet>263</a>    cache: Arc&lt;RwLock&lt;<span class="prelude-ty">Option</span>&lt;GetServiceInfoResponse&gt;&gt;&gt;,
+<a href=#264 id=264 data-nosnippet>264</a>    package_resolver: PackageResolver,
+<a href=#265 id=265 data-nosnippet>265</a>    metrics: Arc&lt;KvRpcMetrics&gt;,
+<a href=#266 id=266 data-nosnippet>266</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) ledger_history: LedgerHistoryConfig,
+<a href=#267 id=267 data-nosnippet>267</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) request_bigtable_concurrency: usize,
+<a href=#268 id=268 data-nosnippet>268</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) stages: StagesConfig,
+<a href=#269 id=269 data-nosnippet>269</a>    <span class="comment">// The list RPCs are part of the stable v2 LedgerService, but serving them
+<a href=#270 id=270 data-nosnippet>270</a>    // needs the pipelines in [`LIST_API_SERVICE_INFO_WATERMARK_PIPELINES`].
+<a href=#271 id=271 data-nosnippet>271</a>    // Instances that do not index them reject list requests with
+<a href=#272 id=272 data-nosnippet>272</a>    // `Unimplemented`.
+<a href=#273 id=273 data-nosnippet>273</a>    </span>list_apis_enabled: bool,
+<a href=#274 id=274 data-nosnippet>274</a>}
+<a href=#275 id=275 data-nosnippet>275</a>
+<a href=#276 id=276 data-nosnippet>276</a><span class="doccomment">/// Optional configuration for the gRPC server (TLS, metrics, reflection, and
+<a href=#277 id=277 data-nosnippet>277</a>/// an optional second plaintext listener).
+<a href=#278 id=278 data-nosnippet>278</a></span><span class="attr">#[derive(Default)]
+<a href=#279 id=279 data-nosnippet>279</a></span><span class="kw">pub struct </span>ServerConfig {
+<a href=#280 id=280 data-nosnippet>280</a>    <span class="kw">pub </span>tls_identity: <span class="prelude-ty">Option</span>&lt;Identity&gt;,
+<a href=#281 id=281 data-nosnippet>281</a>    <span class="kw">pub </span>metrics_registry: <span class="prelude-ty">Option</span>&lt;Registry&gt;,
+<a href=#282 id=282 data-nosnippet>282</a>    <span class="kw">pub </span>enable_reflection: bool,
+<a href=#283 id=283 data-nosnippet>283</a>    <span class="doccomment">/// Address a second, unencrypted gRPC listener binds to, serving the
+<a href=#284 id=284 data-nosnippet>284</a>    /// same `LedgerService` as the primary listener without TLS. See
+<a href=#285 id=285 data-nosnippet>285</a>    /// [`KvRpcConfig::plaintext_address`] for the rationale.
+<a href=#286 id=286 data-nosnippet>286</a>    </span><span class="kw">pub </span>plaintext_address: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
+<a href=#287 id=287 data-nosnippet>287</a>}
+<a href=#288 id=288 data-nosnippet>288</a>
+<a href=#289 id=289 data-nosnippet>289</a><span class="kw">fn </span>ledger_service_with_response_compression&lt;T&gt;(service: T) -&gt; LedgerServiceServer&lt;T&gt;
+<a href=#290 id=290 data-nosnippet>290</a><span class="kw">where
+<a href=#291 id=291 data-nosnippet>291</a>    </span>T: LedgerService,
+<a href=#292 id=292 data-nosnippet>292</a>{
+<a href=#293 id=293 data-nosnippet>293</a>    LedgerServiceServer::new(service).send_compressed(tonic::codec::CompressionEncoding::Zstd)
+<a href=#294 id=294 data-nosnippet>294</a>}
+<a href=#295 id=295 data-nosnippet>295</a>
+<a href=#296 id=296 data-nosnippet>296</a><span class="doccomment">/// Build and start one gRPC listener serving `ledger`'s `LedgerService`, wired with the given
+<a href=#297 id=297 data-nosnippet>297</a>/// (shared, already-constructed) metrics/logging layers and optional reflection. `builder` carries
+<a href=#298 id=298 data-nosnippet>298</a>/// whatever TLS config the caller wants for this listener (or none, for a plaintext listener).
+<a href=#299 id=299 data-nosnippet>299</a>///
+<a href=#300 id=300 data-nosnippet>300</a>/// Used once per listener -- the primary listener, and the optional second plaintext one -- so
+<a href=#301 id=301 data-nosnippet>301</a>/// that expensive shared pieces (metrics, allowlist, request-log layer) are constructed once by
+<a href=#302 id=302 data-nosnippet>302</a>/// the caller and passed in here, rather than rebuilt (and, for `RpcMetrics`, re-registered against
+<a href=#303 id=303 data-nosnippet>303</a>/// the same `Registry`, which panics) per listener.
+<a href=#304 id=304 data-nosnippet>304</a></span><span class="kw">fn </span>spawn_listener(
+<a href=#305 id=305 data-nosnippet>305</a>    listen_address: SocketAddr,
+<a href=#306 id=306 data-nosnippet>306</a>    builder: Server,
+<a href=#307 id=307 data-nosnippet>307</a>    ledger: KvRpcServer,
+<a href=#308 id=308 data-nosnippet>308</a>    rpc_metrics: Arc&lt;sui_rpc_api::RpcMetrics&gt;,
+<a href=#309 id=309 data-nosnippet>309</a>    grpc_method_allowlist: sui_rpc_api::GrpcMethodAllowlist,
+<a href=#310 id=310 data-nosnippet>310</a>    request_log_layer: mysten_network::request_log::GrpcRequestLogLayer,
+<a href=#311 id=311 data-nosnippet>311</a>    enable_reflection: bool,
+<a href=#312 id=312 data-nosnippet>312</a>    file_descriptor_sets: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="lifetime">'static </span>[u8]],
+<a href=#313 id=313 data-nosnippet>313</a>) -&gt; anyhow::Result&lt;sui_futures::service::Service&gt; {
+<a href=#314 id=314 data-nosnippet>314</a>    <span class="kw">use </span>sui_http::middleware::callback::CallbackLayer;
+<a href=#315 id=315 data-nosnippet>315</a>    <span class="kw">use </span>sui_rpc_api::RpcMetricsMakeCallbackHandler;
+<a href=#316 id=316 data-nosnippet>316</a>
+<a href=#317 id=317 data-nosnippet>317</a>    <span class="kw">let </span><span class="kw-2">mut </span>router = builder
+<a href=#318 id=318 data-nosnippet>318</a>        .layer(CallbackLayer::new(
+<a href=#319 id=319 data-nosnippet>319</a>            RpcMetricsMakeCallbackHandler::with_grpc_method_allowlist(
+<a href=#320 id=320 data-nosnippet>320</a>                rpc_metrics,
+<a href=#321 id=321 data-nosnippet>321</a>                grpc_method_allowlist,
+<a href=#322 id=322 data-nosnippet>322</a>            ),
+<a href=#323 id=323 data-nosnippet>323</a>        ))
+<a href=#324 id=324 data-nosnippet>324</a>        .layer(request_log_layer)
+<a href=#325 id=325 data-nosnippet>325</a>        .add_service(ledger_service_with_response_compression(ledger));
+<a href=#326 id=326 data-nosnippet>326</a>
+<a href=#327 id=327 data-nosnippet>327</a>    <span class="kw">if </span>enable_reflection {
+<a href=#328 id=328 data-nosnippet>328</a>        <span class="kw">let </span><span class="kw-2">mut </span>reflection_v1_builder = tonic_reflection::server::Builder::configure();
+<a href=#329 id=329 data-nosnippet>329</a>        <span class="kw">let </span><span class="kw-2">mut </span>reflection_v1alpha_builder = tonic_reflection::server::Builder::configure();
+<a href=#330 id=330 data-nosnippet>330</a>        <span class="kw">for </span><span class="kw-2">&amp;</span>fds <span class="kw">in </span>file_descriptor_sets {
+<a href=#331 id=331 data-nosnippet>331</a>            reflection_v1_builder = reflection_v1_builder.register_encoded_file_descriptor_set(fds);
+<a href=#332 id=332 data-nosnippet>332</a>            reflection_v1alpha_builder =
+<a href=#333 id=333 data-nosnippet>333</a>                reflection_v1alpha_builder.register_encoded_file_descriptor_set(fds);
+<a href=#334 id=334 data-nosnippet>334</a>        }
+<a href=#335 id=335 data-nosnippet>335</a>        router = router
+<a href=#336 id=336 data-nosnippet>336</a>            .add_service(reflection_v1_builder.build_v1()<span class="question-mark">?</span>)
+<a href=#337 id=337 data-nosnippet>337</a>            .add_service(reflection_v1alpha_builder.build_v1alpha()<span class="question-mark">?</span>);
+<a href=#338 id=338 data-nosnippet>338</a>    }
+<a href=#339 id=339 data-nosnippet>339</a>
+<a href=#340 id=340 data-nosnippet>340</a>    <span class="kw">let </span>(tx, rx) = tokio::sync::oneshot::channel::&lt;()&gt;();
+<a href=#341 id=341 data-nosnippet>341</a>    <span class="kw">let </span>server_future = router.serve_with_shutdown(listen_address, <span class="kw">async </span>{
+<a href=#342 id=342 data-nosnippet>342</a>        <span class="kw">let _ </span>= rx.<span class="kw">await</span>;
+<a href=#343 id=343 data-nosnippet>343</a>    });
+<a href=#344 id=344 data-nosnippet>344</a>
+<a href=#345 id=345 data-nosnippet>345</a>    <span class="prelude-val">Ok</span>(sui_futures::service::Service::new()
+<a href=#346 id=346 data-nosnippet>346</a>        .spawn(<span class="kw">async move </span>{
+<a href=#347 id=347 data-nosnippet>347</a>            server_future.<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#348 id=348 data-nosnippet>348</a>            <span class="prelude-val">Ok</span>(())
+<a href=#349 id=349 data-nosnippet>349</a>        })
+<a href=#350 id=350 data-nosnippet>350</a>        .with_shutdown_signal(<span class="kw">async move </span>{
+<a href=#351 id=351 data-nosnippet>351</a>            <span class="kw">let _ </span>= tx.send(());
+<a href=#352 id=352 data-nosnippet>352</a>        }))
+<a href=#353 id=353 data-nosnippet>353</a>}
+<a href=#354 id=354 data-nosnippet>354</a>
+<a href=#355 id=355 data-nosnippet>355</a><span class="kw">impl </span>KvRpcServer {
+<a href=#356 id=356 data-nosnippet>356</a>    <span class="kw">pub async fn </span>new(
+<a href=#357 id=357 data-nosnippet>357</a>        instance_id: String,
+<a href=#358 id=358 data-nosnippet>358</a>        project_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#359 id=359 data-nosnippet>359</a>        app_profile_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#360 id=360 data-nosnippet>360</a>        channel_timeout: <span class="prelude-ty">Option</span>&lt;Duration&gt;,
+<a href=#361 id=361 data-nosnippet>361</a>        server_version: <span class="prelude-ty">Option</span>&lt;ServerVersion&gt;,
+<a href=#362 id=362 data-nosnippet>362</a>        registry: <span class="kw-2">&amp;</span>Registry,
+<a href=#363 id=363 data-nosnippet>363</a>        credentials_path: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#364 id=364 data-nosnippet>364</a>        pool_config: PoolConfig,
+<a href=#365 id=365 data-nosnippet>365</a>        ledger_history: LedgerHistoryConfig,
+<a href=#366 id=366 data-nosnippet>366</a>        request_bigtable_concurrency: usize,
+<a href=#367 id=367 data-nosnippet>367</a>        stages: StagesConfig,
+<a href=#368 id=368 data-nosnippet>368</a>        enable_list_apis: bool,
+<a href=#369 id=369 data-nosnippet>369</a>    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+<a href=#370 id=370 data-nosnippet>370</a>        ledger_history.validate()<span class="question-mark">?</span>;
+<a href=#371 id=371 data-nosnippet>371</a>        <span class="kw">let </span><span class="kw-2">mut </span>client = BigTableClient::new_remote_with_credentials(
+<a href=#372 id=372 data-nosnippet>372</a>            instance_id,
+<a href=#373 id=373 data-nosnippet>373</a>            project_id,
+<a href=#374 id=374 data-nosnippet>374</a>            <span class="bool-val">false</span>,
+<a href=#375 id=375 data-nosnippet>375</a>            channel_timeout,
+<a href=#376 id=376 data-nosnippet>376</a>            <span class="prelude-val">None</span>,
+<a href=#377 id=377 data-nosnippet>377</a>            <span class="string">"sui-kv-rpc"</span>.to_string(),
+<a href=#378 id=378 data-nosnippet>378</a>            <span class="prelude-val">Some</span>(registry),
+<a href=#379 id=379 data-nosnippet>379</a>            app_profile_id,
+<a href=#380 id=380 data-nosnippet>380</a>            pool_config,
+<a href=#381 id=381 data-nosnippet>381</a>            credentials_path,
+<a href=#382 id=382 data-nosnippet>382</a>            <span class="bool-val">false</span>,
+<a href=#383 id=383 data-nosnippet>383</a>        )
+<a href=#384 id=384 data-nosnippet>384</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#385 id=385 data-nosnippet>385</a>        <span class="kw">let </span>genesis = client
+<a href=#386 id=386 data-nosnippet>386</a>            .get_checkpoints(<span class="kw-2">&amp;</span>[<span class="number">0</span>])
+<a href=#387 id=387 data-nosnippet>387</a>            .<span class="kw">await</span><span class="question-mark">?
+<a href=#388 id=388 data-nosnippet>388</a>            </span>.pop()
+<a href=#389 id=389 data-nosnippet>389</a>            .expect(<span class="string">"failed to fetch genesis checkpoint from the KV store"</span>);
+<a href=#390 id=390 data-nosnippet>390</a>        <span class="kw">let </span>summary = genesis.summary.expect(<span class="string">"genesis checkpoint missing summary"</span>);
+<a href=#391 id=391 data-nosnippet>391</a>        <span class="kw">let </span>chain_id = ChainIdentifier::from(summary.digest());
+<a href=#392 id=392 data-nosnippet>392</a>        <span class="kw">let </span>metrics = KvRpcMetrics::new(registry);
+<a href=#393 id=393 data-nosnippet>393</a>        <span class="self">Self</span>::init(
+<a href=#394 id=394 data-nosnippet>394</a>            client,
+<a href=#395 id=395 data-nosnippet>395</a>            chain_id,
+<a href=#396 id=396 data-nosnippet>396</a>            server_version,
+<a href=#397 id=397 data-nosnippet>397</a>            enable_list_apis,
+<a href=#398 id=398 data-nosnippet>398</a>            metrics,
+<a href=#399 id=399 data-nosnippet>399</a>            ledger_history,
+<a href=#400 id=400 data-nosnippet>400</a>            request_bigtable_concurrency,
+<a href=#401 id=401 data-nosnippet>401</a>            stages,
+<a href=#402 id=402 data-nosnippet>402</a>        )
+<a href=#403 id=403 data-nosnippet>403</a>    }
+<a href=#404 id=404 data-nosnippet>404</a>
+<a href=#405 id=405 data-nosnippet>405</a>    <span class="doccomment">/// Construct a KvRpcServer backed by a local BigTable emulator.
+<a href=#406 id=406 data-nosnippet>406</a>    </span><span class="kw">pub async fn </span>new_local(
+<a href=#407 id=407 data-nosnippet>407</a>        host: String,
+<a href=#408 id=408 data-nosnippet>408</a>        instance_id: String,
+<a href=#409 id=409 data-nosnippet>409</a>        server_version: <span class="prelude-ty">Option</span>&lt;ServerVersion&gt;,
+<a href=#410 id=410 data-nosnippet>410</a>    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+<a href=#411 id=411 data-nosnippet>411</a>        <span class="self">Self</span>::new_local_with_config(
+<a href=#412 id=412 data-nosnippet>412</a>            host,
+<a href=#413 id=413 data-nosnippet>413</a>            instance_id,
+<a href=#414 id=414 data-nosnippet>414</a>            server_version,
+<a href=#415 id=415 data-nosnippet>415</a>            LedgerHistoryConfig::default(),
+<a href=#416 id=416 data-nosnippet>416</a>            KvRpcConfig::default().request_bigtable_concurrency(),
+<a href=#417 id=417 data-nosnippet>417</a>            StagesConfig::default(),
+<a href=#418 id=418 data-nosnippet>418</a>            <span class="bool-val">false</span>,
+<a href=#419 id=419 data-nosnippet>419</a>        )
+<a href=#420 id=420 data-nosnippet>420</a>        .<span class="kw">await
+<a href=#421 id=421 data-nosnippet>421</a>    </span>}
+<a href=#422 id=422 data-nosnippet>422</a>
+<a href=#423 id=423 data-nosnippet>423</a>    <span class="doccomment">/// Construct a KvRpcServer backed by a local BigTable emulator with explicit
+<a href=#424 id=424 data-nosnippet>424</a>    /// ledger-history and per-stage configuration. Tests use this to exercise
+<a href=#425 id=425 data-nosnippet>425</a>    /// scan-budget / chunk-size behaviour (e.g. a small `tx_seq_digest` chunk
+<a href=#426 id=426 data-nosnippet>426</a>    /// size) against a modest synthetic dataset.
+<a href=#427 id=427 data-nosnippet>427</a>    </span><span class="kw">pub async fn </span>new_local_with_config(
+<a href=#428 id=428 data-nosnippet>428</a>        host: String,
+<a href=#429 id=429 data-nosnippet>429</a>        instance_id: String,
+<a href=#430 id=430 data-nosnippet>430</a>        server_version: <span class="prelude-ty">Option</span>&lt;ServerVersion&gt;,
+<a href=#431 id=431 data-nosnippet>431</a>        ledger_history: LedgerHistoryConfig,
+<a href=#432 id=432 data-nosnippet>432</a>        request_bigtable_concurrency: usize,
+<a href=#433 id=433 data-nosnippet>433</a>        stages: StagesConfig,
+<a href=#434 id=434 data-nosnippet>434</a>        enable_list_apis: bool,
+<a href=#435 id=435 data-nosnippet>435</a>    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+<a href=#436 id=436 data-nosnippet>436</a>        <span class="kw">let </span>client = BigTableClient::new_local(host, instance_id).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#437 id=437 data-nosnippet>437</a>        <span class="comment">// Emulator/test path: metrics are inert (no scrape endpoint), but the
+<a href=#438 id=438 data-nosnippet>438</a>        // request-scoped BigTable wrapper still expects a handle.
+<a href=#439 id=439 data-nosnippet>439</a>        </span><span class="kw">let </span>metrics = KvRpcMetrics::new(<span class="kw-2">&amp;</span>Registry::default());
+<a href=#440 id=440 data-nosnippet>440</a>        <span class="self">Self</span>::init(
+<a href=#441 id=441 data-nosnippet>441</a>            client,
+<a href=#442 id=442 data-nosnippet>442</a>            ChainIdentifier::from(sui_types::digests::CheckpointDigest::default()),
+<a href=#443 id=443 data-nosnippet>443</a>            server_version,
+<a href=#444 id=444 data-nosnippet>444</a>            enable_list_apis,
+<a href=#445 id=445 data-nosnippet>445</a>            metrics,
+<a href=#446 id=446 data-nosnippet>446</a>            ledger_history,
+<a href=#447 id=447 data-nosnippet>447</a>            request_bigtable_concurrency,
+<a href=#448 id=448 data-nosnippet>448</a>            stages,
+<a href=#449 id=449 data-nosnippet>449</a>        )
+<a href=#450 id=450 data-nosnippet>450</a>    }
+<a href=#451 id=451 data-nosnippet>451</a>
+<a href=#452 id=452 data-nosnippet>452</a>    <span class="kw">fn </span>init(
+<a href=#453 id=453 data-nosnippet>453</a>        client: BigTableClient,
+<a href=#454 id=454 data-nosnippet>454</a>        chain_id: ChainIdentifier,
+<a href=#455 id=455 data-nosnippet>455</a>        server_version: <span class="prelude-ty">Option</span>&lt;ServerVersion&gt;,
+<a href=#456 id=456 data-nosnippet>456</a>        enable_list_apis: bool,
+<a href=#457 id=457 data-nosnippet>457</a>        metrics: Arc&lt;KvRpcMetrics&gt;,
+<a href=#458 id=458 data-nosnippet>458</a>        ledger_history: LedgerHistoryConfig,
+<a href=#459 id=459 data-nosnippet>459</a>        request_bigtable_concurrency: usize,
+<a href=#460 id=460 data-nosnippet>460</a>        stages: StagesConfig,
+<a href=#461 id=461 data-nosnippet>461</a>    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+<a href=#462 id=462 data-nosnippet>462</a>        ledger_history.validate()<span class="question-mark">?</span>;
+<a href=#463 id=463 data-nosnippet>463</a>
+<a href=#464 id=464 data-nosnippet>464</a>        <span class="kw">let </span>cache = Arc::new(RwLock::new(<span class="prelude-val">None</span>));
+<a href=#465 id=465 data-nosnippet>465</a>
+<a href=#466 id=466 data-nosnippet>466</a>        <span class="kw">let </span>package_store: Arc&lt;<span class="kw">dyn </span>PackageStore&gt; = Arc::new(PackageStoreWithLruCache::new(
+<a href=#467 id=467 data-nosnippet>467</a>            BigTablePackageStore::new(client.clone()),
+<a href=#468 id=468 data-nosnippet>468</a>        ));
+<a href=#469 id=469 data-nosnippet>469</a>        <span class="kw">let </span>package_resolver = Arc::new(Resolver::new(package_store));
+<a href=#470 id=470 data-nosnippet>470</a>
+<a href=#471 id=471 data-nosnippet>471</a>        <span class="kw">let </span>server = <span class="self">Self </span>{
+<a href=#472 id=472 data-nosnippet>472</a>            chain_id,
+<a href=#473 id=473 data-nosnippet>473</a>            client,
+<a href=#474 id=474 data-nosnippet>474</a>            server_version,
+<a href=#475 id=475 data-nosnippet>475</a>            service_info_watermark_pipelines: service_info_watermark_pipelines(enable_list_apis),
+<a href=#476 id=476 data-nosnippet>476</a>            cache,
+<a href=#477 id=477 data-nosnippet>477</a>            package_resolver,
+<a href=#478 id=478 data-nosnippet>478</a>            metrics,
+<a href=#479 id=479 data-nosnippet>479</a>            ledger_history,
+<a href=#480 id=480 data-nosnippet>480</a>            request_bigtable_concurrency,
+<a href=#481 id=481 data-nosnippet>481</a>            stages,
+<a href=#482 id=482 data-nosnippet>482</a>            list_apis_enabled: enable_list_apis,
+<a href=#483 id=483 data-nosnippet>483</a>        };
+<a href=#484 id=484 data-nosnippet>484</a>
+<a href=#485 id=485 data-nosnippet>485</a>        <span class="kw">let </span>server_clone = server.clone();
+<a href=#486 id=486 data-nosnippet>486</a>        tokio::spawn(<span class="kw">async move </span>{
+<a href=#487 id=487 data-nosnippet>487</a>            <span class="kw">loop </span>{
+<a href=#488 id=488 data-nosnippet>488</a>                <span class="kw">match </span>v2::get_service_info(
+<a href=#489 id=489 data-nosnippet>489</a>                    server_clone.client.clone(),
+<a href=#490 id=490 data-nosnippet>490</a>                    server_clone.chain_id,
+<a href=#491 id=491 data-nosnippet>491</a>                    server_clone.server_version.clone(),
+<a href=#492 id=492 data-nosnippet>492</a>                    <span class="kw-2">&amp;</span>server_clone.service_info_watermark_pipelines,
+<a href=#493 id=493 data-nosnippet>493</a>                )
+<a href=#494 id=494 data-nosnippet>494</a>                .<span class="kw">await
+<a href=#495 id=495 data-nosnippet>495</a>                </span>{
+<a href=#496 id=496 data-nosnippet>496</a>                    <span class="prelude-val">Ok</span>(info) =&gt; {
+<a href=#497 id=497 data-nosnippet>497</a>                        <span class="kw">let </span><span class="kw-2">mut </span>cache = server_clone.cache.write().<span class="kw">await</span>;
+<a href=#498 id=498 data-nosnippet>498</a>                        <span class="kw-2">*</span>cache = <span class="prelude-val">Some</span>(info);
+<a href=#499 id=499 data-nosnippet>499</a>                    }
+<a href=#500 id=500 data-nosnippet>500</a>                    <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">error!</span>(<span class="string">"Failed to update service info cache: {:?}"</span>, e),
+<a href=#501 id=501 data-nosnippet>501</a>                }
+<a href=#502 id=502 data-nosnippet>502</a>                sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
+<a href=#503 id=503 data-nosnippet>503</a>            }
+<a href=#504 id=504 data-nosnippet>504</a>        });
+<a href=#505 id=505 data-nosnippet>505</a>
+<a href=#506 id=506 data-nosnippet>506</a>        <span class="prelude-val">Ok</span>(server)
+<a href=#507 id=507 data-nosnippet>507</a>    }
+<a href=#508 id=508 data-nosnippet>508</a>
+<a href=#509 id=509 data-nosnippet>509</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>check_list_apis_enabled(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), tonic::Status&gt; {
+<a href=#510 id=510 data-nosnippet>510</a>        <span class="kw">if </span><span class="self">self</span>.list_apis_enabled {
+<a href=#511 id=511 data-nosnippet>511</a>            <span class="prelude-val">Ok</span>(())
+<a href=#512 id=512 data-nosnippet>512</a>        } <span class="kw">else </span>{
+<a href=#513 id=513 data-nosnippet>513</a>            <span class="prelude-val">Err</span>(tonic::Status::unimplemented(
+<a href=#514 id=514 data-nosnippet>514</a>                <span class="string">"the List APIs are not enabled on this instance"</span>,
+<a href=#515 id=515 data-nosnippet>515</a>            ))
+<a href=#516 id=516 data-nosnippet>516</a>        }
+<a href=#517 id=517 data-nosnippet>517</a>    }
+<a href=#518 id=518 data-nosnippet>518</a>
+<a href=#519 id=519 data-nosnippet>519</a>    <span class="doccomment">/// Start this server as a tonic gRPC service on the given address.
+<a href=#520 id=520 data-nosnippet>520</a>    /// Returns a `Service` handle for lifecycle management.
+<a href=#521 id=521 data-nosnippet>521</a>    </span><span class="kw">pub async fn </span>start_service(
+<a href=#522 id=522 data-nosnippet>522</a>        <span class="self">self</span>,
+<a href=#523 id=523 data-nosnippet>523</a>        listen_address: SocketAddr,
+<a href=#524 id=524 data-nosnippet>524</a>        config: ServerConfig,
+<a href=#525 id=525 data-nosnippet>525</a>    ) -&gt; anyhow::Result&lt;sui_futures::service::Service&gt; {
+<a href=#526 id=526 data-nosnippet>526</a>        <span class="kw">use </span>sui_rpc_api::{RpcMetrics, grpc_method_paths_from_file_descriptor_sets};
+<a href=#527 id=527 data-nosnippet>527</a>
+<a href=#528 id=528 data-nosnippet>528</a>        <span class="comment">// Single source of truth for every encoded FileDescriptorSet that
+<a href=#529 id=529 data-nosnippet>529</a>        // backs a gRPC service mounted below. Consumed by both the
+<a href=#530 id=530 data-nosnippet>530</a>        // reflection services and the metrics allowlist so they cannot drift
+<a href=#531 id=531 data-nosnippet>531</a>        // out of sync, and shared by the optional second (plaintext)
+<a href=#532 id=532 data-nosnippet>532</a>        // listener below.
+<a href=#533 id=533 data-nosnippet>533</a>        </span><span class="kw">let </span>file_descriptor_sets: Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>[u8]&gt; = <span class="macro">vec!</span>[
+<a href=#534 id=534 data-nosnippet>534</a>            sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
+<a href=#535 id=535 data-nosnippet>535</a>            sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET,
+<a href=#536 id=536 data-nosnippet>536</a>            sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
+<a href=#537 id=537 data-nosnippet>537</a>        ];
+<a href=#538 id=538 data-nosnippet>538</a>
+<a href=#539 id=539 data-nosnippet>539</a>        <span class="kw">let </span>registry = config.metrics_registry.unwrap_or_default();
+<a href=#540 id=540 data-nosnippet>540</a>        <span class="kw">let </span>grpc_method_allowlist = Arc::new(grpc_method_paths_from_file_descriptor_sets(
+<a href=#541 id=541 data-nosnippet>541</a>            <span class="kw-2">&amp;</span>file_descriptor_sets,
+<a href=#542 id=542 data-nosnippet>542</a>        )<span class="question-mark">?</span>);
+<a href=#543 id=543 data-nosnippet>543</a>        <span class="comment">// Constructed once and shared (via `Arc`/`Clone`) across both
+<a href=#544 id=544 data-nosnippet>544</a>        // listeners below: `RpcMetrics::new` registers Prometheus collectors
+<a href=#545 id=545 data-nosnippet>545</a>        // against `registry`, and doing that twice would panic on duplicate
+<a href=#546 id=546 data-nosnippet>546</a>        // registration.
+<a href=#547 id=547 data-nosnippet>547</a>        </span><span class="kw">let </span>rpc_metrics = Arc::new(RpcMetrics::new(<span class="kw-2">&amp;</span>registry));
+<a href=#548 id=548 data-nosnippet>548</a>        <span class="kw">let </span>request_log_layer =
+<a href=#549 id=549 data-nosnippet>549</a>            mysten_network::request_log::GrpcRequestLogLayer::from_encoded_file_descriptor_sets(
+<a href=#550 id=550 data-nosnippet>550</a>                file_descriptor_sets.iter().copied(),
+<a href=#551 id=551 data-nosnippet>551</a>            )<span class="question-mark">?</span>;
+<a href=#552 id=552 data-nosnippet>552</a>
+<a href=#553 id=553 data-nosnippet>553</a>        <span class="kw">let </span><span class="kw-2">mut </span>builder = Server::builder();
+<a href=#554 id=554 data-nosnippet>554</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(identity) = config.tls_identity {
+<a href=#555 id=555 data-nosnippet>555</a>            builder = builder.tls_config(ServerTlsConfig::new().identity(identity))<span class="question-mark">?</span>;
+<a href=#556 id=556 data-nosnippet>556</a>        }
+<a href=#557 id=557 data-nosnippet>557</a>
+<a href=#558 id=558 data-nosnippet>558</a>        <span class="comment">// Cloned up-front (before `self` is consumed below) only when the
+<a href=#559 id=559 data-nosnippet>559</a>        // second listener is actually being started.
+<a href=#560 id=560 data-nosnippet>560</a>        </span><span class="kw">let </span>ledger_for_plaintext = config.plaintext_address.is_some().then(|| <span class="self">self</span>.clone());
+<a href=#561 id=561 data-nosnippet>561</a>
+<a href=#562 id=562 data-nosnippet>562</a>        <span class="kw">let </span><span class="kw-2">mut </span>service = spawn_listener(
+<a href=#563 id=563 data-nosnippet>563</a>            listen_address,
+<a href=#564 id=564 data-nosnippet>564</a>            builder,
+<a href=#565 id=565 data-nosnippet>565</a>            <span class="self">self</span>,
+<a href=#566 id=566 data-nosnippet>566</a>            rpc_metrics.clone(),
+<a href=#567 id=567 data-nosnippet>567</a>            grpc_method_allowlist.clone(),
+<a href=#568 id=568 data-nosnippet>568</a>            request_log_layer.clone(),
+<a href=#569 id=569 data-nosnippet>569</a>            config.enable_reflection,
+<a href=#570 id=570 data-nosnippet>570</a>            <span class="kw-2">&amp;</span>file_descriptor_sets,
+<a href=#571 id=571 data-nosnippet>571</a>        )<span class="question-mark">?</span>;
+<a href=#572 id=572 data-nosnippet>572</a>
+<a href=#573 id=573 data-nosnippet>573</a>        <span class="comment">// Second, unencrypted listener for trusted internal callers (e.g.
+<a href=#574 id=574 data-nosnippet>574</a>        // other in-cluster services) that should not need to negotiate TLS
+<a href=#575 id=575 data-nosnippet>575</a>        // to reach this server. Serves the same `LedgerService`.
+<a href=#576 id=576 data-nosnippet>576</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(plaintext_address) = config.plaintext_address {
+<a href=#577 id=577 data-nosnippet>577</a>            <span class="kw">let </span>ledger =
+<a href=#578 id=578 data-nosnippet>578</a>                ledger_for_plaintext.expect(<span class="string">"cloned above whenever plaintext_address is set"</span>);
+<a href=#579 id=579 data-nosnippet>579</a>            <span class="kw">let </span>plaintext_service = spawn_listener(
+<a href=#580 id=580 data-nosnippet>580</a>                plaintext_address,
+<a href=#581 id=581 data-nosnippet>581</a>                Server::builder(),
+<a href=#582 id=582 data-nosnippet>582</a>                ledger,
+<a href=#583 id=583 data-nosnippet>583</a>                rpc_metrics,
+<a href=#584 id=584 data-nosnippet>584</a>                grpc_method_allowlist,
+<a href=#585 id=585 data-nosnippet>585</a>                request_log_layer,
+<a href=#586 id=586 data-nosnippet>586</a>                config.enable_reflection,
+<a href=#587 id=587 data-nosnippet>587</a>                <span class="kw-2">&amp;</span>file_descriptor_sets,
+<a href=#588 id=588 data-nosnippet>588</a>            )<span class="question-mark">?</span>;
+<a href=#589 id=589 data-nosnippet>589</a>            service = service.merge(plaintext_service);
+<a href=#590 id=590 data-nosnippet>590</a>        }
+<a href=#591 id=591 data-nosnippet>591</a>
+<a href=#592 id=592 data-nosnippet>592</a>        <span class="prelude-val">Ok</span>(service)
+<a href=#593 id=593 data-nosnippet>593</a>    }
+<a href=#594 id=594 data-nosnippet>594</a>}
+<a href=#595 id=595 data-nosnippet>595</a>
+<a href=#596 id=596 data-nosnippet>596</a><span class="doccomment">/// Pipelines whose watermarks bound the checkpoint height reported by
+<a href=#597 id=597 data-nosnippet>597</a>/// `GetServiceInfo`: the always-served set, plus the List API pipelines when
+<a href=#598 id=598 data-nosnippet>598</a>/// those APIs are enabled.
+<a href=#599 id=599 data-nosnippet>599</a></span><span class="kw">pub fn </span>service_info_watermark_pipelines(enable_list_apis: bool) -&gt; Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt; {
+<a href=#600 id=600 data-nosnippet>600</a>    <span class="kw">let </span><span class="kw-2">mut </span>pipelines = DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.to_vec();
+<a href=#601 id=601 data-nosnippet>601</a>    <span class="kw">if </span>enable_list_apis {
+<a href=#602 id=602 data-nosnippet>602</a>        pipelines.extend_from_slice(<span class="kw-2">&amp;</span>LIST_API_SERVICE_INFO_WATERMARK_PIPELINES);
+<a href=#603 id=603 data-nosnippet>603</a>    }
+<a href=#604 id=604 data-nosnippet>604</a>    pipelines
+<a href=#605 id=605 data-nosnippet>605</a>}
+</code></pre></div></section></main></body></html>

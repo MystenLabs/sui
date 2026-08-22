@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Condition","QueryType"],"fn":["fails_threshold_condition","timestamp_string_to_unix_seconds"],"mod":["query"],"struct":["Config","Query","QueryResultValidation","UtcNowProvider"],"trait":["NowProvider"]};

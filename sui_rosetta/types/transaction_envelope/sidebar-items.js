@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AuxData"],"fn":["decode","decode_inner_proto","encode","encode_inner_proto","proto_to_transaction_data"],"struct":["RosettaTransaction"]};

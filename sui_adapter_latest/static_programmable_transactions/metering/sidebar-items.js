@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["loading","pre_translation","translation_meter","typing"]};

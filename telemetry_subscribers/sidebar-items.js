@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LogFormat"],"fn":["get_global_telemetry_config","init_for_testing"],"mod":["span_latency_prom"],"struct":["FilterHandle","LogTail","TelemetryConfig","TelemetryGuards","TracingHandle"],"type":["BoxError"]};

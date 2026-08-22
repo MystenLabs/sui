@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["randomize_cache_capacity_in_tests","tempdir"],"type":["TempDir"]};

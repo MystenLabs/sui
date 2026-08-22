@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_GAS_BUDGET"],"fn":["burn_from_currency","burn_from_treasury","create_dynamic_currency","finalize","hide_treasury_cap","migrate","migrate_deny_cap","migrate_regulated_metadata","publish","show_treasury_cap"],"struct":["LegacyCoinOutputs"]};

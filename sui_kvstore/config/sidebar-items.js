@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["default_committer_config"],"struct":["BigtablePoolLayer","CommitterLayer","ConcurrentLayer","IndexerConfig","IngestionConfig","PipelineIngestionLayer","PipelineLayer","SequentialLayer"]};
