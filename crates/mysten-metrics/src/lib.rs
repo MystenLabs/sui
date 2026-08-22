@@ -78,6 +78,7 @@ pub struct Metrics {
     pub scope_entrance: IntGaugeVec,
     pub thread_stall_duration_sec: Histogram,
     pub system_invariant_violations: IntCounterVec,
+    pub execution_bump_only_exits: IntCounterVec,
 }
 
 impl Metrics {
@@ -156,6 +157,14 @@ impl Metrics {
                 "system_invariant_violations",
                 "Number of system invariant violations",
                 &["name"],
+                registry,
+            ).unwrap(),
+            execution_bump_only_exits: register_int_counter_vec_with_registry!(
+                "execution_bump_only_exits",
+                "Number of transactions that bailed to the BumpOnly execution exit, \
+                 excluding the expected InsufficientFundsForWithdraw short-circuit. Labelled by the \
+                 stage that bailed. Any non-zero value is an execution invariant failure.",
+                &["reason"],
                 registry,
             ).unwrap(),
         }

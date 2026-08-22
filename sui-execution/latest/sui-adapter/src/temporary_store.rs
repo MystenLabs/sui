@@ -219,14 +219,14 @@ impl<'backing> TemporaryStore<'backing> {
     /// Bounding SUI to `TOTAL_SUPPLY_MIST` rejects any such amount here, *before* gas is charged, so
     /// the rejected PTB-emitted writes are dropped on gas reset and only the (bounded) gas events
     /// remain. Crucially, `TOTAL_SUPPLY_MIST` is ~8.4B SUI below `u64::MAX`, so the gas events emitted
-    /// after this check (which move only real SUI) cannot push any per-key total past `u64::MAX` —
+    /// after this check (which move only real SUI) cannot push any per-key total past `u64::MAX` -
     /// hence they need not be re-checked. Non-SUI balances have no uncapped gas path, so the
     /// object-runtime per-key `u64::MAX` cap is the binding guard there and we only backstop u64
     /// representability.
     ///
     /// The per-key limits are not sufficient on their own: withdrawn SUI can be spread across several
     /// object keys (each withdrawal `<= TOTAL_SUPPLY_MIST`) and then recombined *outside* the
-    /// accumulator — e.g. each withdrawal redeemed to a `Coin<SUI>` and merged into the PTB gas coin
+    /// accumulator - e.g. each withdrawal redeemed to a `Coin<SUI>` and merged into the PTB gas coin
     /// via `MergeCoins`, which is an object mutation, not an accumulator event. The recombined coin
     /// can then reach `u64::MAX` and overflow `deduct_gas` on a refund. So we also bound the
     /// *cross-key* total SUI withdrawn (gross Split) to the supply, capping the total SUI a single
@@ -576,6 +576,55 @@ impl<'backing> TemporaryStore<'backing> {
         self.invariants.clear();
     }
 
+    /// Consume this (post-execution) store and return the store used by a `BumpOnly` exit: keep
+    /// the input-derived state, discard everything execution produced, then bump the mutable
+    /// inputs. Its effects record only those version bumps and the input dependencies.
+    pub(crate) fn into_bump_only(self) -> Self {
+        let Self {
+            // Input-derived - reused verbatim.
+            store,
+            tx_digest,
+            input_objects,
+            non_exclusive_input_original_versions,
+            stream_ended_consensus_objects,
+            lamport_timestamp,
+            mutable_input_refs,
+            receiving_objects,
+            cur_epoch,
+            protocol_config,
+            // Execution-derived - discarded.
+            execution_results: _,
+            loaded_runtime_objects: _,
+            wrapped_object_containers: _,
+            runtime_packages_loaded_from_db: _,
+            generated_runtime_ids: _,
+            loaded_per_epoch_config_objects: _,
+            invariants: _,
+        } = self;
+        let mut bump_only = Self {
+            store,
+            tx_digest,
+            input_objects,
+            non_exclusive_input_original_versions,
+            stream_ended_consensus_objects,
+            lamport_timestamp,
+            mutable_input_refs,
+            receiving_objects,
+            cur_epoch,
+            protocol_config,
+            execution_results: ExecutionResultsV2::default(),
+            loaded_runtime_objects: BTreeMap::new(),
+            wrapped_object_containers: BTreeMap::new(),
+            runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
+            generated_runtime_ids: BTreeSet::new(),
+            loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
+            invariants: InvariantChecker::new(),
+        };
+        // The only writes a BumpOnly exit records: bump the versions of the mutable inputs it locked.
+        bump_only.ensure_active_inputs_mutated();
+        bump_only
+    }
+
     pub fn read_object(&self, id: &ObjectID) -> Option<&Object> {
         // there should be no read after delete
         debug_assert!(!self.execution_results.deleted_object_ids.contains(id));
@@ -658,12 +707,23 @@ impl<'backing> TemporaryStore<'backing> {
             .fold(0, |sum, obj| sum + obj.object_size_for_gas_metering())
     }
 
+    /// Validates gasless post-execution invariants, using the withdrawal reservations derived
+    /// from the input reservations cached by [`Self::set_invariant_inputs`].
+    pub(crate) fn check_gasless_execution_requirements(&self) -> Result<(), String> {
+        self.check_gasless_execution_requirements_with_reservations(Some(
+            &self.invariants.gasless_reservations(),
+        ))
+    }
+
     /// Validates gasless post-execution invariants:
     /// - No new objects were created or existing objects mutated (written_objects is empty)
     /// - The set of deleted objects exactly equals the set of input Coin objects
     /// - Each recipient receives at least the minimum transfer amount per token type
     /// - Unused withdrawal reservation (reservation - actual split) is 0 or >= min_amount
-    pub fn check_gasless_execution_requirements(
+    ///
+    /// Parameterized entry for the legacy path, which computes its (flag-gated) reservations
+    /// out-of-band. Deleted with legacy at the next execution cut.
+    pub fn check_gasless_execution_requirements_with_reservations(
         &self,
         withdrawal_reservations: Option<&BTreeMap<(SuiAddress, TypeTag), u64>>,
     ) -> Result<(), String> {
@@ -817,9 +877,8 @@ impl<'backing> TemporaryStore<'backing> {
         self.protocol_config
     }
 
-    /// Cache the transaction-derived inputs the system-invariant checks need (consumed by both the
-    /// conservation checks and the ownership-invariant check). Must be called once, before
-    /// execution, after any gas-smash filtering of `gas_data`.
+    /// Cache the transaction-derived inputs the system-invariant checks need. Must be called once,
+    /// before execution, after any gas-smash filtering of `gas_data`.
     /// See [`invariants::InvariantChecker::set_transaction_inputs`].
     pub(crate) fn set_invariant_inputs(
         &mut self,
@@ -854,7 +913,6 @@ impl<'backing> TemporaryStore<'backing> {
         sender: &SuiAddress,
         sponsor: &Option<SuiAddress>,
         gas_charger: &GasCharger,
-        mutable_inputs: &HashSet<ObjectID>,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
         self.invariants.check_ownership_invariants(
@@ -862,7 +920,6 @@ impl<'backing> TemporaryStore<'backing> {
             sender,
             sponsor,
             gas_charger,
-            mutable_inputs,
             is_epoch_change,
         )
     }
@@ -875,7 +932,10 @@ impl TemporaryStore<'_> {
     /// All objects will be updated with their new (current) storage rebate/cost.
     /// `SuiGasStatus` `storage_rebate` and `storage_gas_units` track the transaction
     /// overall storage rebate and cost.
-    pub(crate) fn collect_storage_and_rebate(&mut self, gas_charger: &mut GasCharger) {
+    pub(crate) fn collect_storage_and_rebate(
+        &mut self,
+        gas_charger: &mut GasCharger,
+    ) -> Result<(), ExecutionError> {
         // Use two loops because we cannot mut iterate written while calling get_object_modified_at.
         let old_storage_rebates: Vec<_> = self
             .execution_results
@@ -896,18 +956,19 @@ impl TemporaryStore<'_> {
             // new object size
             let new_object_size = object.object_size_for_gas_metering();
             // track changes and compute the new object `storage_rebate`
-            let new_storage_rebate = gas_charger.track_storage_mutation(
-                object.id(),
-                new_object_size,
-                old_storage_rebate,
-            );
+            let new_storage_rebate = gas_charger
+                .track_storage_mutation(object.id(), new_object_size, old_storage_rebate)
+                .ok_or_else(|| ExecutionError::from_kind(ExecutionErrorKind::InvariantViolation))?;
             object.storage_rebate = new_storage_rebate;
         }
 
-        self.collect_rebate(gas_charger);
+        self.collect_rebate(gas_charger)
     }
 
-    pub(crate) fn collect_rebate(&self, gas_charger: &mut GasCharger) {
+    pub(crate) fn collect_rebate(
+        &self,
+        gas_charger: &mut GasCharger,
+    ) -> Result<(), ExecutionError> {
         for object_id in &self.execution_results.modified_objects {
             if self
                 .execution_results
@@ -922,8 +983,11 @@ impl TemporaryStore<'_> {
                 // Unwrap is safe because this loop iterates through all modified objects.
                 .unwrap()
                 .storage_rebate;
-            gas_charger.track_storage_mutation(*object_id, 0, storage_rebate);
+            gas_charger
+                .track_storage_mutation(*object_id, 0, storage_rebate)
+                .ok_or_else(|| ExecutionError::from_kind(ExecutionErrorKind::InvariantViolation))?;
         }
+        Ok(())
     }
 
     pub fn check_execution_results_consistency<Mode: ExecutionMode>(
