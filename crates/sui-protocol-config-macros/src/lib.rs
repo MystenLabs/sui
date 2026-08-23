@@ -475,6 +475,7 @@ pub fn feature_flag_getters_macro(input: TokenStream) -> TokenStream {
     let struct_name = &ast.ident;
     let data = &ast.data;
 
+    // Enforce that every field is a `bool`.
     let getters = match data {
         Data::Struct(data_struct) => match &data_struct.fields {
             // Operate on each field of the ProtocolConfig struct
@@ -496,53 +497,57 @@ pub fn feature_flag_getters_macro(input: TokenStream) -> TokenStream {
                         .attrs
                         .iter()
                         .any(|attr| attr.path.is_ident("skip_protocol_config_accessor"));
-                    // Check if field is of type bool
-                    match field_type {
+                    let is_bool = matches!(
+                        field_type,
                         Type::Path(type_path)
                             if type_path
                                 .path
                                 .segments
                                 .last()
-                                .is_some_and(|segment| segment.ident == "bool") =>
-                        {
-                            let getter = if skip_protocol_config_accessor {
-                                quote! {}
-                            } else {
-                                quote! {
-                                    // Forward the flag from ProtocolConfig.
-                                    pub fn #field_name(&self) -> #field_type {
-                                        self.feature_flags.#field_name
-                                    }
-                                }
-                            };
-                            let setter_name: proc_macro2::TokenStream =
-                                format!("set_{}_for_testing", field_name).parse().unwrap();
-                            let protocol_config_getter = quote! {
-                                #getter
-
-                                pub fn #setter_name(&mut self, val: bool) {
-                                    self.feature_flags.#field_name = val;
-                                }
-                            };
-                            Some((
-                                protocol_config_getter,
-                                (
-                                    quote! {
-                                        stringify!(#field_name) => Some(self.#field_name),
-                                    },
-                                    (
-                                        quote! {
-                                            stringify!(#field_name) => self.#field_name = val,
-                                        },
-                                        quote! {
-                                            stringify!(#field_name)
-                                        },
-                                    ),
-                                ),
-                            ))
-                        }
-                        _ => None,
+                                .is_some_and(|segment| segment.ident == "bool")
+                    );
+                    if !is_bool {
+                        panic!(
+                            "`{}::{}` must be `bool` — `ProtocolConfigFeatureFlagsGetters` only supports bool fields. \
+                             Non-bool configuration belongs on `ProtocolConfig` so it flows through `render`.",
+                            struct_name, field_name,
+                        );
                     }
+                    let getter = if skip_protocol_config_accessor {
+                        quote! {}
+                    } else {
+                        quote! {
+                            // Forward the flag from ProtocolConfig.
+                            pub fn #field_name(&self) -> #field_type {
+                                self.feature_flags.#field_name
+                            }
+                        }
+                    };
+                    let setter_name: proc_macro2::TokenStream =
+                        format!("set_{}_for_testing", field_name).parse().unwrap();
+                    let protocol_config_getter = quote! {
+                        #getter
+
+                        pub fn #setter_name(&mut self, val: bool) {
+                            self.feature_flags.#field_name = val;
+                        }
+                    };
+                    Some((
+                        protocol_config_getter,
+                        (
+                            quote! {
+                                stringify!(#field_name) => Some(self.#field_name),
+                            },
+                            (
+                                quote! {
+                                    stringify!(#field_name) => self.#field_name = val,
+                                },
+                                quote! {
+                                    stringify!(#field_name)
+                                },
+                            ),
+                        ),
+                    ))
                 })
                 .collect::<Vec<_>>(),
             _ => panic!("Only named fields are supported."),
