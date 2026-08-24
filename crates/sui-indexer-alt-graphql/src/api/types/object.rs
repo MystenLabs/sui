@@ -1224,19 +1224,28 @@ impl Object {
                     return Ok(None);
                 };
 
-                // Check execution context cache first and return if available
-                if let Some(cached_object) = self
-                    .super_
-                    .scope
-                    .execution_output_object(self.super_.address.into(), version.into())
-                {
-                    Ok(Some(cached_object.clone()))
-                } else {
-                    Ok(kv_loader
-                        .load_one_object(self.super_.address.into(), version.into())
-                        .await
-                        .context("Failed to fetch object contents")?)
+                // Serve from in-memory sources before the KV backend: the execution output cache
+                // (mutation/simulation output), then the streamed object store (a live subscription
+                // may reach an object from an earlier streamed checkpoint, still ahead of the index).
+                let in_memory =
+                    self.super_
+                        .scope
+                        .execution_output_object(self.super_.address.into(), version.into())
+                        .cloned()
+                        .or_else(|| {
+                            self.super_.scope.streamed_object_store().and_then(|store| {
+                                store.get(self.super_.address.into(), version.into())
+                            })
+                        });
+
+                if let Some(object) = in_memory {
+                    return Ok(Some(object));
                 }
+
+                Ok(kv_loader
+                    .load_one_object(self.super_.address.into(), version.into())
+                    .await
+                    .context("Failed to fetch object contents")?)
             })
             .await
             .map(Option::as_ref)

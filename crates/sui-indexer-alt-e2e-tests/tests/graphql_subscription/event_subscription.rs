@@ -18,6 +18,7 @@ use tokio_stream::StreamExt;
 use crate::testing::SubscriptionTestCluster;
 use crate::testing::emit_event_harness;
 use crate::testing::graphql_redactions;
+use crate::testing::sort_object_changes;
 use crate::testing::wait_for_matching_item;
 
 /// How long to let the validator advance so a resumed subscription's live receiver pins past the
@@ -808,9 +809,13 @@ async fn test_event_subscription_checkpoint_filter_errors() {
     );
 }
 
-/// An event subscription query selecting `previousTransaction` (and its nested contents) on the
-/// input and output objects of the emitting transaction's object changes. Live by default; resumes
-/// (backfill) when `after_checkpoint` is set.
+/// An event subscription query selecting each object change's own Move type, its
+/// `previousTransaction`, and, through the output object's `previousTransaction`, the Move contents of
+/// that transaction's own input objects. Those input objects belong to earlier checkpoints than the
+/// emitting transaction, so resolving their contents on the live path, reached through a
+/// `previousTransaction` hop, exercises the streamed object store. The object's own type also names
+/// each change, giving the snapshot a stable order. Live by default; resumes (backfill) when
+/// `after_checkpoint` is set.
 fn prev_tx_event_query(filter: &str, after_checkpoint: Option<u64>) -> String {
     let resume = after_checkpoint
         .map(|c| format!("afterCheckpoint: {c},"))
@@ -824,8 +829,17 @@ fn prev_tx_event_query(filter: &str, after_checkpoint: Option<u64>) -> String {
                         effects {{
                             objectChanges {{
                                 nodes {{
-                                    inputState {{ previousTransaction {{ digest sender {{ address }} kind {{ __typename }} }} }}
-                                    outputState {{ previousTransaction {{ digest sender {{ address }} kind {{ __typename }} }} }}
+                                    inputState {{
+                                        asMoveObject {{ contents {{ type {{ repr }} }} }}
+                                        previousTransaction {{ digest sender {{ address }} kind {{ __typename }} }}
+                                    }}
+                                    outputState {{
+                                        asMoveObject {{ contents {{ type {{ repr }} }} }}
+                                        previousTransaction {{
+                                            digest sender {{ address }} kind {{ __typename }}
+                                            effects {{ objectChanges(first: 10) {{ nodes {{ inputState {{ asMoveObject {{ contents {{ type {{ repr }} }} }} }} }} }} }}
+                                        }}
+                                    }}
                                 }}
                             }}
                         }}
@@ -854,13 +868,16 @@ async fn next_event_for_tx(
 }
 
 /// `previousTransaction` reached from a live *event* subscription (event -> transaction -> object)
-/// resolves its full contents, and identically to the backfill path.
+/// resolves its full contents, and identically to the backfill path, as do the Move contents of
+/// objects reached through a `previousTransaction` hop.
 ///
 /// The emitting transaction mutates an object created by an earlier transaction, so the object's
 /// `inputState.previousTransaction` is a different transaction than the one being delivered. On the
 /// live path the scope is anchored to the emitting transaction, so that lookup misses the anchor and
 /// is served by the in-memory streamed transaction store while the checkpoint runs ahead of the KV
-/// backend; the backfill path resolves the same transactions from the index.
+/// backend; the objects reached through `previousTransaction` belong to earlier checkpoints and have
+/// their contents served by the streamed object store. The backfill path resolves the same data from
+/// the index.
 #[tokio::test]
 async fn test_event_subscription_previous_transaction_parity() {
     let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
@@ -881,7 +898,7 @@ async fn test_event_subscription_previous_transaction_parity() {
         emit_event_harness::mutate_and_emit(&mut cluster.validator, package_id, object, 100).await;
 
     // 3. Collect the live event node for the emitting transaction, then drop the live subscription.
-    let live_node = next_event_for_tx(&mut live, &emit).await;
+    let mut live_node = next_event_for_tx(&mut live, &emit).await;
     drop(live);
 
     // 4. Resume from before the lifecycle so the same event arrives via backfill.
@@ -892,29 +909,20 @@ async fn test_event_subscription_previous_transaction_parity() {
             pkg_var(),
         )
         .await;
-    let backfill_node = next_event_for_tx(&mut backfill, &emit).await;
+    let mut backfill_node = next_event_for_tx(&mut backfill, &emit).await;
 
-    // 5. Live and backfill resolve the emitting transaction's `previousTransaction`s identically.
+    // 5. Sort object changes (including those nested under `previousTransaction`) by type so the
+    //    snapshot is stable, then check live and backfill resolve identically.
+    sort_object_changes(&mut live_node);
+    sort_object_changes(&mut backfill_node);
     assert_eq!(
         live_node, backfill_node,
         "live and backfill resolved event.transaction previousTransaction differently",
     );
 
-    // 6. And the contents actually resolved on the live path (not null).
-    let resolved = live_node["transaction"]["effects"]["objectChanges"]["nodes"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .flat_map(|change| [&change["inputState"], &change["outputState"]])
-        .any(|state| {
-            let pt = &state["previousTransaction"];
-            pt["digest"].is_string()
-                && pt["sender"]["address"].is_string()
-                && pt["kind"]["__typename"].is_string()
-        });
-    assert!(
-        resolved,
-        "live event previousTransaction contents did not resolve: {:#}",
-        live_node,
-    );
+    // 6. Pin the resolved shape, including the object contents reached through previousTransaction.
+    //    A regression that failed to resolve would surface here as null contents.
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!("event_subscription_previous_transaction", live_node);
+    });
 }

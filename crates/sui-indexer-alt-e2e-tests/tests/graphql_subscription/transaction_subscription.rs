@@ -26,6 +26,7 @@ use super::testing::object_wrapping_harness::publish;
 use super::testing::object_wrapping_harness::unwrap_wrapper;
 use super::testing::object_wrapping_harness::update_item;
 use super::testing::object_wrapping_harness::wrap_item;
+use super::testing::sort_object_changes;
 use super::testing::transaction_digest;
 use super::testing::transfer_coins;
 use super::testing::wait_for_matching_item;
@@ -880,8 +881,12 @@ async fn test_transaction_subscription_affected_address_parity() {
     );
 }
 
-/// A transaction subscription query selecting `previousTransaction` (and its nested contents) on the
-/// input and output objects of each object change. Live by default; resumes (backfill) when
+/// A transaction subscription query selecting each object change's own Move type, its
+/// `previousTransaction`, and, through the output object's `previousTransaction`, the Move contents of
+/// that transaction's own input objects. Those input objects belong to earlier checkpoints than the
+/// delivered transaction, so resolving their contents on the live path, reached through a
+/// `previousTransaction` hop, exercises the streamed object store. The object's own type also names
+/// each change, giving the snapshot a stable order. Live by default; resumes (backfill) when
 /// `after_checkpoint` is set.
 fn prev_tx_query(filter: &str, after_checkpoint: Option<u64>) -> String {
     let resume = after_checkpoint
@@ -895,8 +900,17 @@ fn prev_tx_query(filter: &str, after_checkpoint: Option<u64>) -> String {
                     effects {{
                         objectChanges {{
                             nodes {{
-                                inputState {{ previousTransaction {{ digest sender {{ address }} kind {{ __typename }} }} }}
-                                outputState {{ previousTransaction {{ digest sender {{ address }} kind {{ __typename }} }} }}
+                                inputState {{
+                                    asMoveObject {{ contents {{ type {{ repr }} }} }}
+                                    previousTransaction {{ digest sender {{ address }} kind {{ __typename }} }}
+                                }}
+                                outputState {{
+                                    asMoveObject {{ contents {{ type {{ repr }} }} }}
+                                    previousTransaction {{
+                                        digest sender {{ address }} kind {{ __typename }}
+                                        effects {{ objectChanges(first: 10) {{ nodes {{ inputState {{ asMoveObject {{ contents {{ type {{ repr }} }} }} }} }} }} }}
+                                    }}
+                                }}
                             }}
                         }}
                     }}
@@ -932,8 +946,11 @@ fn previous_transactions<'a>(node: &'a Value, side: &str) -> Vec<&'a str> {
 }
 
 /// `previousTransaction` (full contents, not just the digest) resolves from a live subscription
-/// identically to the backfill path, across every object-change shape. On the live path the
-/// cross-transaction lookups are served by the in-memory streamed transaction store.
+/// identically to the backfill path, across every object-change shape, as do the Move contents of
+/// objects reached through a `previousTransaction` hop. On the live path the cross-transaction
+/// lookups are served by the in-memory streamed transaction store, and the objects reached through
+/// `previousTransaction`, which belong to earlier checkpoints, have their contents served by the
+/// streamed object store.
 #[tokio::test]
 async fn test_transaction_subscription_previous_transaction_parity() {
     let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
@@ -958,7 +975,7 @@ async fn test_transaction_subscription_previous_transaction_parity() {
     let digests = vec![d1, d2, d3, d4];
 
     // 3. Collect the live nodes, then drop the subscription.
-    let live_nodes = collect_nodes(&mut live, &digests).await;
+    let mut live_nodes = collect_nodes(&mut live, &digests).await;
     drop(live);
 
     // 4. Resume before the lifecycle so the same txs arrive via backfill.
@@ -969,9 +986,12 @@ async fn test_transaction_subscription_previous_transaction_parity() {
             sender_var(sender),
         )
         .await;
-    let backfill_nodes = collect_nodes(&mut backfill, &digests).await;
+    let mut backfill_nodes = collect_nodes(&mut backfill, &digests).await;
 
-    // 5. Live and backfill resolve identically.
+    // 5. Sort object changes (including those nested under `previousTransaction`) by type so the
+    //    snapshot is stable, then check live and backfill resolve identically.
+    live_nodes.iter_mut().for_each(sort_object_changes);
+    backfill_nodes.iter_mut().for_each(sort_object_changes);
     assert_eq!(
         live_nodes, backfill_nodes,
         "live and backfill resolved previousTransaction differently",

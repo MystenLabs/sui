@@ -100,6 +100,7 @@ use crate::config::SubscriptionConfig;
 use crate::error::RpcError;
 use crate::task::watermark::Watermarks;
 
+use super::StreamedObjectStore;
 use super::StreamedTransactionStore;
 use super::StreamingPackageStore;
 use super::SubscriptionReadiness;
@@ -335,6 +336,9 @@ pub(crate) struct CheckpointStreamTask {
     sender: broadcast::Sender<Arc<ProcessedCheckpoint>>,
     streaming_packages: Arc<StreamingPackageStore>,
     streaming_transactions: Arc<StreamedTransactionStore>,
+    // Populated only under the staging feature (from the checkpoint's `execution_objects`).
+    #[cfg_attr(not(feature = "staging"), allow(dead_code))]
+    streaming_objects: Arc<StreamedObjectStore>,
     readiness: Arc<SubscriptionReadiness>,
     /// kv-rpc reader used to fill upstream gaps. Required: streaming subscriptions need a
     /// fallback source to recover from disconnects. lib.rs ensures this is configured when
@@ -356,6 +360,7 @@ impl CheckpointStreamTask {
         config: &SubscriptionConfig,
         streaming_packages: Arc<StreamingPackageStore>,
         streaming_transactions: Arc<StreamedTransactionStore>,
+        streaming_objects: Arc<StreamedObjectStore>,
         readiness: Arc<SubscriptionReadiness>,
         ledger_grpc_reader: LedgerGrpcReader,
         watermarks_rx: watch::Receiver<Arc<Watermarks>>,
@@ -366,6 +371,7 @@ impl CheckpointStreamTask {
             sender,
             streaming_packages,
             streaming_transactions,
+            streaming_objects,
             readiness,
             ledger_grpc_reader,
             watermarks_rx,
@@ -494,6 +500,10 @@ impl CheckpointStreamTask {
         let processed = process_checkpoint(checkpoint)?;
         self.streaming_transactions
             .index_transactions(seq, &processed.transactions);
+        // `execution_objects` only exists under the staging feature (it's the streamed object source).
+        #[cfg(feature = "staging")]
+        self.streaming_objects
+            .index_objects(seq, &processed.execution_objects);
         // Ignore send errors: no active subscribers is a normal state.
         let _ = self.sender.send(Arc::new(processed));
         Ok(())

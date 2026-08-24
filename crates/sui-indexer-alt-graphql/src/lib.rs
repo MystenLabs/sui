@@ -57,6 +57,7 @@ use task::chain_identifier;
 use task::streaming::CheckpointStreamTask;
 use task::streaming::StreamedCacheEvictionTask;
 use task::streaming::StreamedCaches;
+use task::streaming::StreamedObjectStore;
 use task::streaming::StreamedTransactionStore;
 use task::streaming::StreamingPackageStore;
 #[cfg(feature = "staging")]
@@ -404,12 +405,14 @@ pub async fn start_rpc(
 
             let streaming_packages = Arc::new(StreamingPackageStore::new(package_store.clone()));
             let streaming_transactions = Arc::new(StreamedTransactionStore::new());
+            let streaming_objects = Arc::new(StreamedObjectStore::new());
             let readiness = SubscriptionReadiness::new(watermark_task.watermarks_rx());
             let (stream_task, broadcaster) = CheckpointStreamTask::new(
                 uri,
                 &config.subscription,
                 streaming_packages.clone(),
                 streaming_transactions.clone(),
+                streaming_objects.clone(),
                 readiness.clone(),
                 ledger_grpc.clone(),
                 watermark_task.watermarks_rx(),
@@ -417,6 +420,7 @@ pub async fn start_rpc(
             let caches = Arc::new(StreamedCaches::new(
                 streaming_packages,
                 streaming_transactions,
+                streaming_objects,
             ));
             // One task flushes every streamed cache once its backing index catches up.
             let eviction_task = StreamedCacheEvictionTask::new(

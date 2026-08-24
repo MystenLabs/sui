@@ -25,6 +25,7 @@ use sui_types::object::Object as NativeObject;
 
 use crate::config::Limits;
 use crate::error::RpcError;
+use crate::task::streaming::StreamedObjectStore;
 use crate::task::streaming::StreamedTransactionStore;
 use crate::task::watermark::Watermarks;
 
@@ -401,6 +402,17 @@ impl Scope {
         #[cfg(feature = "staging")]
         if let DataSource::Streamed { caches, .. } = &self.data_source {
             return Some(&caches.transaction_store);
+        }
+        None
+    }
+
+    /// The streamed object store, when reading a live streamed checkpoint. An object introduced by an
+    /// earlier streamed checkpoint (e.g. reached via `Object.previousTransaction`) runs ahead of the
+    /// durable index, so this serves its contents by `(id, version)` until the index catches up.
+    pub(crate) fn streamed_object_store(&self) -> Option<&Arc<StreamedObjectStore>> {
+        #[cfg(feature = "staging")]
+        if let DataSource::Streamed { caches, .. } = &self.data_source {
+            return Some(&caches.object_store);
         }
         None
     }
