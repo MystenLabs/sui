@@ -51,9 +51,11 @@ function buildFileMap(config, sourceDir) {
     }
   }
 
-  // Also discover any .md files in the source that aren't in the explicit map
+  // Also discover any .md/.mdx files in the source that aren't in the explicit map
   if (fs.existsSync(sourceDir)) {
-    const files = fs.readdirSync(sourceDir).filter((f) => f.endsWith(".md"));
+    const files = fs
+      .readdirSync(sourceDir)
+      .filter((f) => f.endsWith(".md") || f.endsWith(".mdx"));
     for (const f of files) {
       if (!map[f]) {
         map[f] = toKebabCase(f);
@@ -122,8 +124,8 @@ function extractDescription(content) {
   return desc || "";
 }
 
-function generateKeywords(slug, title) {
-  const base = ["messaging", "sui-stack-messaging"];
+function generateKeywords(slug, title, configName) {
+  const base = [configName, `sui-stack-${configName}`];
   // Add slug-derived keywords
   const slugWords = slug
     .split("-")
@@ -131,13 +133,13 @@ function generateKeywords(slug, title) {
   return [...new Set([...base, ...slugWords])];
 }
 
-function addFrontmatter(content, slug) {
+function addFrontmatter(content, slug, configName) {
   // Don't add if already has frontmatter
   if (/^---\s*\n/.test(content)) return content;
 
   const title = extractTitle(content) || slug;
   const description = extractDescription(content);
-  const keywords = generateKeywords(slug, title);
+  const keywords = generateKeywords(slug, title, configName);
 
   const fm = [
     "---",
@@ -280,6 +282,12 @@ function rewriteLinks(content, fileMap, linkPrefix) {
     // Handle both ./File.md and File.md references
     linkLookup[`./${srcFile}`] = `${linkPrefix}/${slug}`;
     linkLookup[srcFile] = `${linkPrefix}/${slug}`;
+    // Also add basename variants (without extension) for root-relative links
+    // like /ServerOverview or /Design used by some doc sites
+    const basename = srcFile.replace(/\.mdx?$/, "");
+    linkLookup[`/${basename}`] = `${linkPrefix}/${slug}`;
+    linkLookup[basename] = `${linkPrefix}/${slug}`;
+    linkLookup[`/${srcFile}`] = `${linkPrefix}/${slug}`;
   }
 
   // Rewrite markdown links: [text](./File.md#anchor) -> [text](/prefix/slug#anchor)
@@ -307,6 +315,13 @@ function rewriteLinks(content, fileMap, linkPrefix) {
 
       if (lookup) {
         return `[${text}](${lookup}${anchor})`;
+      }
+
+      // Rewrite relative links to static assets (PDFs, images, etc.) as
+      // absolute paths so Docusaurus serves them from the static directory
+      // and the broken-link checker does not flag them.
+      if (/\.(pdf|png|jpe?g|gif|svg|zip)$/i.test(normalized)) {
+        return `[${text}](${linkPrefix}/${normalized}${anchor})`;
       }
 
       // Handle technical_design_docs/ references
@@ -377,7 +392,7 @@ function convertSourceReferences(content, config) {
 
 // --- Main pipeline ---
 
-function transformFile(content, slug, config, fileMap) {
+function transformFile(content, slug, config, fileMap, configName) {
   const transforms = config.transforms || [];
   let result = content;
 
@@ -402,7 +417,7 @@ function transformFile(content, slug, config, fileMap) {
   }
 
   if (transforms.includes("frontmatter")) {
-    result = addFrontmatter(result, slug);
+    result = addFrontmatter(result, slug, configName);
   }
 
   return result;
@@ -422,12 +437,15 @@ function processSource(name, config) {
   // Build the file map
   const fileMap = buildFileMap(config, sourceDir);
 
+  // Files to preserve (manually maintained in the Sui docs repo)
+  const preserve = new Set(config.preserve || []);
+
   // Ensure target directory exists
-  // Clean previous output first (except index.mdx which is manually maintained)
+  // Clean previous output first (except preserved files)
   if (fs.existsSync(targetDir)) {
     const existing = fs.readdirSync(targetDir);
     for (const f of existing) {
-      if (f === "index.mdx" || f === "chat-app.mdx") continue;
+      if (preserve.has(f)) continue;
       const fullPath = path.join(targetDir, f);
       if (fs.statSync(fullPath).isFile()) {
         fs.unlinkSync(fullPath);
@@ -450,7 +468,7 @@ function processSource(name, config) {
     }
 
     const content = fs.readFileSync(srcPath, "utf8");
-    const transformed = transformFile(content, slug, config, fileMap);
+    const transformed = transformFile(content, slug, config, fileMap, name);
     const targetFile = slug.endsWith(".mdx") ? slug : `${slug}.mdx`;
     const targetPath = path.join(targetDir, targetFile);
 
@@ -458,10 +476,29 @@ function processSource(name, config) {
     count++;
   }
 
+  // Copy static assets (PDFs, images, etc.) listed in config.
+  // Assets are placed in site/static/{targetPath}/ so that relative links
+  // from docs pages resolve correctly (e.g. ./Seal_White_Paper_v2.pdf).
+  const staticAssets = config.staticAssets || [];
+  if (staticAssets.length > 0) {
+    const staticDir = path.join(SITE_ROOT, "static", config.targetPath);
+    fs.mkdirSync(staticDir, { recursive: true });
+    for (const asset of staticAssets) {
+      const srcPath = path.join(sourceDir, asset);
+      if (fs.existsSync(srcPath)) {
+        fs.copyFileSync(srcPath, path.join(staticDir, asset));
+      } else {
+        console.warn(`⚠️  ${name}: static asset not found: ${asset}`);
+      }
+    }
+  }
+
   console.log(`✅ ${name}: transformed ${count} files → ${config.targetPath}/`);
 
-  // Validate: fail if the source repo contains .md files not in fileMap or exclude
-  const allSourceFiles = fs.readdirSync(sourceDir).filter((f) => f.endsWith(".md"));
+  // Validate: fail if the source repo contains .md/.mdx files not in fileMap or exclude
+  const allSourceFiles = fs
+    .readdirSync(sourceDir)
+    .filter((f) => f.endsWith(".md") || f.endsWith(".mdx"));
   const mappedFiles = new Set(Object.keys(config.fileMap || {}));
   const excludedFiles = new Set(config.exclude || []);
   const unmapped = allSourceFiles.filter(
@@ -470,9 +507,9 @@ function processSource(name, config) {
 
   if (unmapped.length > 0) {
     console.error(
-      `\n❌ ${name}: found ${unmapped.length} unmapped .md file(s) in ${config.sourcePath}/:\n` +
+      `\n❌ ${name}: found ${unmapped.length} unmapped file(s) in ${config.sourcePath}/:\n` +
         unmapped.map((f) => `   - ${f}`).join("\n") +
-        `\n\nEvery .md file in the source must have an entry in external-docs.json ` +
+        `\n\nEvery .md/.mdx file in the source must have an entry in external-docs.json ` +
         `fileMap (to include it) or exclude (to skip it), and a corresponding ` +
         `sidebar entry in sidebars.js.\n`,
     );

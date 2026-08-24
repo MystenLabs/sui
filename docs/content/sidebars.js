@@ -591,17 +591,31 @@ suiStackSidebar: [
       label: 'Seal',
       link: { type: 'doc', id: 'sui-stack/seal/index' },
       items: [
+        'sui-stack/seal/server-overview',
+        'sui-stack/seal/getting-started',
         {
-          type: 'link',
-          label: 'Seal Docs',
-          href: 'https://seal-docs.wal.app',
+          type: 'category',
+          label: 'Developer guide',
+          items: [
+            'sui-stack/seal/design',
+            'sui-stack/seal/using-seal',
+            'sui-stack/seal/example-patterns',
+            'sui-stack/seal/security-best-practices',
+          ],
         },
+        {
+          type: 'category',
+          label: 'Operator guide',
+          items: [
+            'sui-stack/seal/key-server-ops',
+            'sui-stack/seal/key-server-committee-ops',
+            'sui-stack/seal/aggregator',
+            'sui-stack/seal/seal-cli',
+          ],
+        },
+        'sui-stack/seal/pricing',
+        'sui-stack/seal/terms-of-service',
         'sui-stack/seal/sui-stack-seal',
-        {
-          type: 'link',
-          label: 'Messaging SDK Chat App Example →',
-          href: '/sui-stack/messaging/chat-app',
-        },
       ],
     },
     {
