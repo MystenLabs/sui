@@ -2364,6 +2364,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-abstract-interpreter-v4"
+version = "0.1.0"
+dependencies = [
+ "itertools 0.10.5",
+]
+
+[[package]]
 name = "move-abstract-stack"
 version = "0.0.1"
 
@@ -2523,6 +2530,23 @@ dependencies = [
 
 [[package]]
 name = "move-bytecode-verifier-v3"
+version = "0.1.0"
+dependencies = [
+ "hex-literal",
+ "move-abstract-interpreter",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-regex-borrow-graph",
+ "move-vm-config",
+ "petgraph",
+ "serde",
+]
+
+[[package]]
+name = "move-bytecode-verifier-v4"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
@@ -3303,6 +3327,43 @@ dependencies = [
  "parking_lot 0.11.2",
  "proptest",
  "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-v4"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "better_any",
+ "bumpalo",
+ "dashmap",
+ "fail",
+ "hex",
+ "indexmap 2.8.0",
+ "insta",
+ "lasso",
+ "memory-stats",
+ "move-abstract-interpreter",
+ "move-binary-format",
+ "move-bytecode-verifier-v4",
+ "move-compiler",
+ "move-core-types",
+ "move-ir-compiler",
+ "move-ir-to-bytecode",
+ "move-proc-macros",
+ "move-stdlib",
+ "move-trace-format",
+ "move-vm-config",
+ "parking_lot 0.11.2",
+ "proptest",
+ "quick_cache",
+ "serde",
+ "sha2 0.9.9",
+ "sha3",
+ "smallvec",
+ "tempfile",
  "tracing",
 ]
 
