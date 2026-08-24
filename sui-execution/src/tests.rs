@@ -146,3 +146,23 @@ impl Packages {
         self.normal_edges(pkg).map(move |(_, to)| to)
     }
 }
+
+/// The `move_execution_version` protocol config value drives which Move subsystem serves
+/// execution. Until the adapter is generic over `move-execution-api`, `latest::Executor::new`
+/// hardwires subsystem 4 (and panics on anything else); this test exercises the future dispatch
+/// through the harness demo driver: the version the config names, and the tip subsystem it will
+/// name after the flip, produce identical observable behavior today.
+#[test]
+fn test_move_subsystem_dispatch_follows_protocol_config() {
+    let config = sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE();
+    let configured = config.move_execution_version();
+    assert_eq!(
+        configured, 4,
+        "latest currently pins the frozen v4 subsystem"
+    );
+
+    let frozen = move_execution_api_demo::demo_for_version(configured).unwrap();
+    // The flip to the tip subsystem is this one line in the protocol config: 4 -> 5.
+    let tip = move_execution_api_demo::demo_for_version(5).unwrap();
+    assert_eq!(frozen, tip);
+}

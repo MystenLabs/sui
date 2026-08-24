@@ -23,6 +23,11 @@
 //! [`Linkage`]), and exposes the verifier's abstract-interpretation framework for the one
 //! sui-verifier pass that needs it (`id_leak_verifier`). Those surfaces are elided here.
 
+//! Error vocabulary: the harnesses speak `VMResult`/`PartialVMError` from `move-binary-format`,
+//! which is already a *shared, never-cut* crate (every frozen subsystem and every execution cut
+//! uses the same one -- it is on the encapsulation-test allowlist), so errors cross the harness
+//! boundary without translation.
+
 use std::collections::BTreeMap;
 
 use move_binary_format::{CompiledModule, errors::VMResult};

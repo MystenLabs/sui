@@ -381,6 +381,7 @@ const MAINNET_USDB: &str =
 //              PTB Move call signature at most once mutably or any number of
 //              times immutably (never by value), and never in return position.
 //              Enable allowed_proposers on devnet.
+//              Add move_execution_version (4: the frozen v4 Move subsystem).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2178,6 +2179,12 @@ pub struct ProtocolConfig {
     /// Maximum serialized size in bytes of a gasless transaction (SenderSignedData).
     /// Bounds the persistent storage impact of each admitted gasless transaction.
     gasless_max_tx_size_bytes: Option<u64>,
+
+    /// The Move subsystem version (`move-execution/vN`: the Move VM and bytecode verifier, cut
+    /// whole) that the execution layer must use. Selects among the subsystems registered in the
+    /// current execution version's dispatch; versions before this field predate the
+    /// move-execution-api harness and are hardwired to their subsystem.
+    move_execution_version: Option<u64>,
 }
 
 /// An aliased address.
@@ -2998,6 +3005,8 @@ impl ProtocolConfig {
             gasless_max_tps: None,
             include_special_package_amendments: None,
             gasless_max_tx_size_bytes: None,
+
+            move_execution_version: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4612,6 +4621,10 @@ impl ProtocolConfig {
                 }
                 135 => {
                     cfg.feature_flags.ptb_tx_context_restrictions = true;
+
+                    // The frozen v4 Move subsystem: identical to pre-harness behavior. The tip
+                    // subsystem (v5) becomes selectable once registered in latest's dispatch.
+                    cfg.move_execution_version = Some(4);
 
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.allowed_proposers = true;

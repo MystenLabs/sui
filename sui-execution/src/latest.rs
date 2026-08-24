@@ -50,6 +50,15 @@ pub(crate) struct Verifier<'m> {
 
 impl Executor {
     pub(crate) fn new(protocol_config: &ProtocolConfig, silent: bool) -> Result<Self, SuiError> {
+        // This executor is hardwired to the frozen v4 Move subsystem until the adapter is
+        // generic over move-execution-api; at that point this check becomes the dispatch over
+        // registered subsystems (mirroring how the generated multiplexer dispatches on
+        // `execution_version`, including the panic on an unregistered value).
+        match protocol_config.move_execution_version_as_option() {
+            // Protocol versions predating the knob ran what is now frozen as subsystem 4.
+            None | Some(4) => (),
+            Some(v) => panic!("Unsupported Move execution version {v}"),
+        }
         Ok(Executor(Arc::new(new_move_runtime(
             all_natives(silent, protocol_config),
             protocol_config,
