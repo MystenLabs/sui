@@ -8720,6 +8720,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-bytecode-verifier-v4"
+version = "0.1.0"
+dependencies = [
+ "move-abstract-interpreter",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-regex-borrow-graph",
+ "move-vm-config",
+ "petgraph 0.8.1",
+ "serde",
+]
+
+[[package]]
 name = "move-bytecode-viewer"
 version = "0.1.0"
 dependencies = [
@@ -8763,7 +8779,7 @@ dependencies = [
  "move-unit-test",
  "move-vm-config",
  "move-vm-profiler",
- "move-vm-runtime",
+ "move-vm-runtime-v4",
  "path-clean",
  "serde",
  "serde_json",
@@ -8934,6 +8950,61 @@ dependencies = [
  "move-symbol-pool",
  "regex",
  "serde",
+]
+
+[[package]]
+name = "move-execution-api"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-vm-config",
+]
+
+[[package]]
+name = "move-execution-api-demo"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+ "move-compiler",
+ "move-core-types",
+ "move-execution-api",
+ "move-execution-tip",
+ "move-execution-v4",
+ "move-vm-config",
+ "tempfile",
+]
+
+[[package]]
+name = "move-execution-tip"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-execution-api",
+ "move-trace-format",
+ "move-vm-config",
+ "move-vm-runtime",
+]
+
+[[package]]
+name = "move-execution-v4"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-v4",
+ "move-core-types",
+ "move-execution-api",
+ "move-trace-format",
+ "move-vm-config",
+ "move-vm-runtime-v4",
 ]
 
 [[package]]
@@ -9222,7 +9293,7 @@ dependencies = [
  "move-stdlib",
  "move-symbol-pool",
  "move-vm-config",
- "move-vm-runtime",
+ "move-vm-runtime-v4",
  "regex",
  "serde_json",
  "tempfile",
@@ -9245,7 +9316,7 @@ dependencies = [
  "move-stdlib",
  "move-trace-format",
  "move-vm-config",
- "move-vm-runtime",
+ "move-vm-runtime-v4",
  "parking_lot 0.11.2",
  "rand 0.8.5",
  "rayon",
@@ -9362,6 +9433,34 @@ dependencies = [
  "move-vm-config",
  "move-vm-types-v3",
  "parking_lot 0.11.2",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-v4"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "better_any",
+ "bumpalo",
+ "dashmap 6.1.0",
+ "fail",
+ "hex",
+ "indexmap 2.8.0",
+ "lasso",
+ "move-abstract-interpreter",
+ "move-binary-format",
+ "move-bytecode-verifier-v4",
+ "move-core-types",
+ "move-trace-format",
+ "move-vm-config",
+ "parking_lot 0.11.2",
+ "quick_cache",
+ "serde",
+ "sha2 0.9.9",
+ "sha3 0.9.1",
  "smallvec",
  "tracing",
 ]
@@ -13949,7 +14048,7 @@ dependencies = [
  "move-trace-format",
  "move-vm-config",
  "move-vm-profiler",
- "move-vm-runtime",
+ "move-vm-runtime-v4",
  "mysten-common",
  "mysten-metrics",
  "nonempty",
@@ -14833,13 +14932,14 @@ dependencies = [
  "move-bytecode-verifier-v1",
  "move-bytecode-verifier-v2",
  "move-bytecode-verifier-v3",
+ "move-execution-api-demo",
  "move-trace-format",
  "move-vm-config",
- "move-vm-runtime",
  "move-vm-runtime-v0",
  "move-vm-runtime-v1",
  "move-vm-runtime-v2",
  "move-vm-runtime-v3",
+ "move-vm-runtime-v4",
  "move-vm-types-v0",
  "move-vm-types-v1",
  "move-vm-types-v2",
@@ -15993,7 +16093,7 @@ dependencies = [
  "move-package-alt-compilation",
  "move-unit-test",
  "move-vm-config",
- "move-vm-runtime",
+ "move-vm-runtime-v4",
  "mysten-metrics",
  "prometheus",
  "rand 0.8.5",
@@ -16070,7 +16170,7 @@ dependencies = [
  "indexmap 2.8.0",
  "move-binary-format",
  "move-core-types",
- "move-vm-runtime",
+ "move-vm-runtime-v4",
  "rand 0.8.5",
  "smallvec",
  "sui-protocol-config",
@@ -17389,7 +17489,7 @@ dependencies = [
  "move-stdlib",
  "move-symbol-pool",
  "move-transactional-test-runner",
- "move-vm-runtime",
+ "move-vm-runtime-v4",
  "msim",
  "once_cell",
  "rand 0.8.5",

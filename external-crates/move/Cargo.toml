@@ -186,7 +186,10 @@ move-transactional-test-runner = { path = "crates/move-transactional-test-runner
 move-unit-test = { path = "crates/move-unit-test" }
 move-vm-config = { path = "crates/move-vm-config" }
 move-vm-profiler = { path = "crates/move-vm-profiler" }
-move-vm-runtime = { path = "crates/move-vm-runtime" }
+# The Move subsystem consumed by everything not yet behind move-execution-api: pinned to the
+# frozen v4 subsystem so that tip divergence cannot change behavior until protocol dispatch
+# selects it. The tip crate is reachable only via move-execution-tip (explicit path).
+move-vm-runtime = { path = "move-execution/v4/crates/move-vm-runtime", package = "move-vm-runtime-v4" }
 
 [profile.bench]
 debug = true

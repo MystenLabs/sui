@@ -23,7 +23,7 @@ use indexmap::{IndexMap, IndexSet};
 use move_binary_format::{
     CompiledModule,
     compatibility::{Compatibility, InclusionCheck},
-    errors::{Location, PartialVMError},
+    errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::FunctionDefinitionIndex,
     normalized,
 };
@@ -36,9 +36,9 @@ use move_core_types::{
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_runtime::{
     execution::{
-        Type as VMType,
+        Type as VMType, TypeSubst as _,
         values::{VMValueCast, Value as VMValue},
-        vm::MoveVM,
+        vm::{LoadedFunctionInformation, MoveVM},
     },
     natives::extensions::NativeExtensions,
     shared::{
@@ -1994,6 +1994,41 @@ unsafe fn create_written_object<Mode: ExecutionMode>(
             Mode::packages_are_predefined(),
         )
     }
+}
+
+/// substitutes the type arguments into the parameter and return types
+pub fn subst_signature(
+    signature: LoadedFunctionInformation,
+    type_arguments: &[VMType],
+) -> VMResult<LoadedFunctionInformation> {
+    let LoadedFunctionInformation {
+        parameters,
+        return_,
+        is_entry,
+        is_native,
+        visibility,
+        index,
+        instruction_count,
+    } = signature;
+    let parameters = parameters
+        .into_iter()
+        .map(|ty| ty.subst(type_arguments))
+        .collect::<PartialVMResult<Vec<_>>>()
+        .map_err(|err| err.finish(Location::Undefined))?;
+    let return_ = return_
+        .into_iter()
+        .map(|ty| ty.subst(type_arguments))
+        .collect::<PartialVMResult<Vec<_>>>()
+        .map_err(|err| err.finish(Location::Undefined))?;
+    Ok(LoadedFunctionInformation {
+        parameters,
+        return_,
+        is_entry,
+        is_native,
+        visibility,
+        index,
+        instruction_count,
+    })
 }
 
 pub enum EitherError<E: ExecutionErrorTrait = ExecutionError> {
