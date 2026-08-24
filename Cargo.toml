@@ -594,7 +594,7 @@ webpki = { version = "0.103.10", package = "rustls-webpki", features = [
 ] }
 which = "8.0.2"
 winnow = "0.7"
-wiremock = "0.5"
+wiremock = "0.6"
 x509-parser = { version = "0.17.0", features = ["verify"] }
 zstd = "0.12.3"
 versions = "4.1.0"
