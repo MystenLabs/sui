@@ -147,7 +147,6 @@ feature_flags:
   generate_df_type_layouts: true
   framework_tx_context_mut_restrictions: true
   include_function_signatures_in_instantiation_limits: true
-  ptb_tx_context_restrictions: true
   enable_display_registry: true
   private_generics_verifier_v2: true
   deprecate_global_storage_ops: true
@@ -168,9 +167,7 @@ feature_flags:
   split_checkpoints_in_consensus_handler: true
   consensus_always_accept_system_transactions: true
   validator_metadata_verify_v2: true
-  defer_unpaid_amplification: true
   defer_owned_object_double_spend: true
-  allowed_proposers: true
   randomize_checkpoint_tx_limit_in_tests: true
   gasless_transaction_drop_safety: true
   merge_randomness_into_checkpoint: true
