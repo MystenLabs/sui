@@ -1986,7 +1986,6 @@ impl FunctionTypeInfo {
             Some(match ty {
                 Type::Reference(r) => (*r, Some(Mutability::Imm)),
                 Type::MutableReference(t) => (*t, Some(Mutability::Mut)),
-                Type::TyParam(_) => return None,
                 _ => (ty, None),
             })
         }

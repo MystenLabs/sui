@@ -1883,13 +1883,11 @@ fn check_elem_layout(ty: &Type, v: &Value) -> PartialVMResult<()> {
     macro_rules! allowed_types {
         ($ty:expr; $v:expr; $allowed:pat) => {
             match $ty {
-                Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
-                    Err(partial_vm_error!(
-                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "invalid type param for vector: {:?}",
-                        ty
-                    ))
-                }
+                Type::Reference(_) | Type::MutableReference(_) => Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "invalid type param for vector: {:?}",
+                    ty
+                )),
                 $allowed => Ok(()),
                 _ => Err(partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
@@ -2180,7 +2178,7 @@ impl TryFrom<&Type> for VectorSpecialization {
             Type::Vector(_) | Type::Signer | Type::Datatype(_) | Type::DatatypeInstantiation(_) => {
                 VectorSpecialization::Container
             }
-            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+            Type::Reference(_) | Type::MutableReference(_) => {
                 return Err(partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
                     "invalid type param for vector: {:?}",

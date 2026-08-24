@@ -1250,13 +1250,6 @@ fn check_depth_of_type_impl(
             let depth_formula = run_context.vtables.calculate_depth_of_type(si)?;
             check_depth!(depth_formula.solve(&ty_arg_depths)?)
         }
-        // NB: substitution must be performed before calling this function
-        Type::TyParam(_) => {
-            return Err(partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "Type parameter should be fully resolved"
-            ));
-        }
     };
 
     Ok(ty_depth)

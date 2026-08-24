@@ -7,7 +7,7 @@ use crate::{
     execution::{
         dispatch_tables::VMDispatchTables, interpreter, tracing::tracer::VMTracer, values::Value,
     },
-    jit::execution::ast::{Function, Type},
+    jit::execution::ast::{Function, Type, TypeSubst as _},
     natives::extensions::NativeExtensions,
     runtime::telemetry::{TelemetryContext, TransactionTelemetryContext},
     shared::{
@@ -449,23 +449,25 @@ impl<'extensions> MoveVM<'extensions> {
 
         let fun_ref = function.to_ref();
 
+        // verify type arguments
+        self.virtual_tables
+            .verify_ty_args(fun_ref.type_parameters(), ty_args)
+            .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
+
+        // Runtime types carry no type parameters, so the signature's type parameters are
+        // substituted away with the (just-verified) type arguments as part of conversion.
         let parameters = fun_ref
             .parameters
             .iter()
-            .map(|ty| ty.to_type())
+            .map(|ty| ty.subst(ty_args))
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
 
         let return_ = fun_ref
             .return_
             .iter()
-            .map(|ty| ty.to_type())
+            .map(|ty| ty.subst(ty_args))
             .collect::<PartialVMResult<Vec<_>>>()
-            .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
-
-        // verify type arguments
-        self.virtual_tables
-            .verify_ty_args(fun_ref.type_parameters(), ty_args)
             .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
 
         let function = MoveVMFunction {

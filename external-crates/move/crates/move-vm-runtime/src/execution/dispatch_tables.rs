@@ -442,11 +442,6 @@ impl VMDispatchTables {
                 Type::Reference(_) | Type::MutableReference(_) => Ok(AbilitySet::REFERENCES),
                 Type::Signer => Ok(AbilitySet::SIGNER),
 
-                Type::TyParam(_) => Err(partial_vm_error!(
-                    UNREACHABLE,
-                    "Unexpected TyParam type after translating from TypeTag to Type"
-                )),
-
                 Type::Vector(ty) => AbilitySet::polymorphic_abilities(
                     AbilitySet::VECTOR,
                     vec![false],
@@ -485,7 +480,6 @@ impl VMDispatchTables {
             | Type::Vector(_)
             | Type::Reference(_)
             | Type::MutableReference(_)
-            | Type::TyParam(_)
             | Type::U16
             | Type::U32
             | Type::U256 => None,
@@ -693,7 +687,7 @@ impl VMDispatchTables {
                         self.datatype_to_type_tag_impl(gidx, ty_args, tag_type, type_size)?,
                     ))
                 }
-                Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+                Type::Reference(_) | Type::MutableReference(_) => {
                     return Err(partial_vm_error!(
                         UNKNOWN_INVARIANT_VIOLATION_ERROR,
                         "no type tag for {:?}",
@@ -779,7 +773,7 @@ impl VMDispatchTables {
                     self.datatype_to_type_layout(gidx, ty_args, type_size)?
                         .into_layout()
                 }
-                Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+                Type::Reference(_) | Type::MutableReference(_) => {
                     return Err(partial_vm_error!(
                         UNKNOWN_INVARIANT_VIOLATION_ERROR,
                         "no type layout for {:?}",
@@ -898,7 +892,7 @@ impl VMDispatchTables {
                     self.datatype_to_fully_annotated_layout_impl(gidx, ty_args, type_size)?
                         .into_layout()
                 }
-                Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+                Type::Reference(_) | Type::MutableReference(_) => {
                     return Err(partial_vm_error!(
                         UNKNOWN_INVARIANT_VIOLATION_ERROR,
                         "no type layout for {:?}",
