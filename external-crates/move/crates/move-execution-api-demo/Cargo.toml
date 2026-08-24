@@ -1,0 +1,21 @@
+[package]
+name = "move-execution-api-demo"
+version = "0.1.0"
+authors = ["Mysten Labs <opensource@mystenlabs.com>"]
+description = "Demonstration driver running the same generic code over two Move subsystem versions"
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+bcs.workspace = true
+move-binary-format.workspace = true
+move-bytecode-verifier-meter.workspace = true
+move-compiler.workspace = true
+move-core-types.workspace = true
+move-execution-api = { path = "../move-execution-api" }
+move-execution-tip = { path = "../move-execution-tip" }
+move-execution-v4 = { path = "../../move-execution/v4/crates/move-execution-v4" }
+move-vm-config.workspace = true
+tempfile.workspace = true

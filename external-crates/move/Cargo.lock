@@ -2810,6 +2810,61 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-execution-api"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-vm-config",
+]
+
+[[package]]
+name = "move-execution-api-demo"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+ "move-compiler",
+ "move-core-types",
+ "move-execution-api",
+ "move-execution-tip",
+ "move-execution-v4",
+ "move-vm-config",
+ "tempfile",
+]
+
+[[package]]
+name = "move-execution-tip"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-execution-api",
+ "move-trace-format",
+ "move-vm-config",
+ "move-vm-runtime",
+]
+
+[[package]]
+name = "move-execution-v4"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-v4",
+ "move-core-types",
+ "move-execution-api",
+ "move-trace-format",
+ "move-vm-config",
+ "move-vm-runtime-v4",
+]
+
+[[package]]
 name = "move-ir-compiler"
 version = "0.1.0"
 dependencies = [

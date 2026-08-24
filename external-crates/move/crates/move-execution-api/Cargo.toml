@@ -1,0 +1,14 @@
+[package]
+name = "move-execution-api"
+version = "0.1.0"
+authors = ["Mysten Labs <opensource@mystenlabs.com>"]
+description = "The harness interface between the Sui execution layer and a versioned Move subsystem"
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[dependencies]
+move-binary-format.workspace = true
+move-bytecode-verifier-meter.workspace = true
+move-core-types.workspace = true
+move-vm-config.workspace = true

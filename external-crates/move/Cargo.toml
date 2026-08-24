@@ -20,6 +20,8 @@ members = [
     "move-execution/v3/crates/move-vm-runtime",
     "move-execution/v4/crates/move-vm-runtime",
     # "move-execution/$CUT/crates/move-vm-runtime",
+    "move-execution/v4/crates/move-execution-v4",
+    # "move-execution/$CUT/crates/move-execution-$CUT",
     "move-execution/v0/crates/move-stdlib-natives",
     "move-execution/v1/crates/move-stdlib-natives",
     "move-execution/v2/crates/move-stdlib-natives",
