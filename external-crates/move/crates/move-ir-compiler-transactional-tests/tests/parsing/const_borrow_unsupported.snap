@@ -1,0 +1,12 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 0, lines 1-9:
+//# print-bytecode
+Error: ParserError: Invalid Token: borrowing constants is not yet supported
+
+task 1, lines 11-19:
+//# print-bytecode
+Error: ParserError: Invalid Token: constants cannot be mutably borrowed

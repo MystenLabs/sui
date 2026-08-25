@@ -5,11 +5,8 @@ edition = "2024"
 license = "Apache-2.0"
 publish = false
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = [
-  'cfg(msim)',
-  'cfg(fail_points)',
-] }
+[lints]
+workspace = true
 
 [dependencies]
 anyhow.workspace = true
@@ -38,10 +35,12 @@ futures.workspace = true
 sui-name-service.workspace = true
 fastcrypto.workspace = true
 sui-inverted-index.workspace = true
+sui-rpc-cursor.workspace = true
 sui-types.workspace = true
 sui-macros.workspace = true
 mysten-common.workspace = true
 mysten-network.workspace = true
+sui-http.workspace = true
 sui-protocol-config.workspace = true
 sui-package-resolver.workspace = true
 move-binary-format.workspace = true
@@ -62,7 +61,9 @@ tonic-reflection.workspace = true
 tonic-web.workspace = true
 
 [dev-dependencies]
+base64.workspace = true
 # `test-util` enables `#[tokio::test(start_paused = true)]` for the
 # virtual-time deadline tests in `grpc::deadline`.
 tokio = { workspace = true, features = ["test-util"] }
+tracing-subscriber.workspace = true
 

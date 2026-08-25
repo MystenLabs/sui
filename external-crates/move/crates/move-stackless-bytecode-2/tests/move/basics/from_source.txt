@@ -1,3 +1,4 @@
 call
+generic_call
 pack
 unpack

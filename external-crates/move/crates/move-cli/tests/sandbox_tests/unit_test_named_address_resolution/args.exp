@@ -16,7 +16,7 @@ Test failures:
 Failures in A::AModule:
 
 ┌── double_three_failure ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │    ┌─ ./sources/AModule.move:10:9
 │    │
 │  9 │     public fun double_except_three(x: u64): u64 {
@@ -30,7 +30,7 @@ Failures in A::AModule:
 Failures in std::AModuleTestsShouldAllFail:
 
 ┌── abort_uncaught ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │   ┌─ ./sources/BModule.move:7:9
 │   │
 │ 6 │     public fun abort_() {
@@ -43,7 +43,7 @@ Failures in std::AModuleTestsShouldAllFail:
 
 
 ┌── double_three_const_based_different_module_fail ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │    ┌─ ./sources/AModule.move:10:9
 │    │
 │  9 │     public fun double_except_three(x: u64): u64 {
@@ -56,7 +56,7 @@ Failures in std::AModuleTestsShouldAllFail:
 
 
 ┌── double_three_location_based_invalid ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │    ┌─ ./sources/AModule.move:10:9
 │    │
 │  9 │     public fun double_except_three(x: u64): u64 {
@@ -69,7 +69,7 @@ Failures in std::AModuleTestsShouldAllFail:
 
 
 ┌── double_three_should_fail ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │    ┌─ ./sources/AModule.move:10:9
 │    │
 │  9 │     public fun double_except_three(x: u64): u64 {
@@ -82,7 +82,7 @@ Failures in std::AModuleTestsShouldAllFail:
 
 
 ┌── double_three_should_fail_named_const ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │    ┌─ ./sources/AModule.move:10:9
 │    │
 │  9 │     public fun double_except_three(x: u64): u64 {
@@ -94,7 +94,7 @@ Failures in std::AModuleTestsShouldAllFail:
 └──────────────────
 
 Test result: FAILED. Total tests: 8; passed: 2; failed: 6
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ ./tests/AModuleTestsShouldAllFail.move:9:24
   │
 9 │     #[expected_failure(abort_code = 0)]

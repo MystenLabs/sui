@@ -1,0 +1,45 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 4-30:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x2::aliased_unpack_of_two_variants,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 9)],
+    message: "Variant tag mismatch: expected 1, found 0",
+}
+
+task 1, lines 32-57:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::alias_write_changes_variant'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::alias_write_changes_variant,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}
+
+task 2, lines 59-77:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::alias_write_shrinks_vector'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x4::alias_write_shrinks_vector,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 11)],
+}
+
+task 3, lines 79-97:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000005::alias_write_grows_vector'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x5::alias_write_grows_vector,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}

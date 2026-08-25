@@ -262,6 +262,17 @@ pub enum Error {
     /// and the error is surfaced rather than silently swallowed.
     #[error("internal invariant violated: {0}")]
     Internal(&'static str),
+
+    /// A resume cursor passed to
+    /// [`iter_prefix_from`](crate::DbMap::iter_prefix_from) does not
+    /// lie within the prefix it claims to resume: its encoded bytes
+    /// do not start with the prefix's encoding. Scanning from it
+    /// would leak rows from outside the prefix into the result, so
+    /// the call is rejected instead. Cursors typically derive from
+    /// client-supplied page tokens, so callers should treat this as
+    /// invalid input rather than a storage fault.
+    #[error("resume cursor does not lie within the iteration prefix")]
+    CursorOutsidePrefix,
 }
 
 #[cfg(test)]

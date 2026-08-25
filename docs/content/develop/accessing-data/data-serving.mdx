@@ -1,7 +1,53 @@
 ---
 title: Data Access Interfaces
 description: Overview of the types of data access mechanisms available in Sui.
-keywords: [ data types, data access, data access interfaces, json rpc, custom indexers, indexers, grpc, graphql rpc, general-purpose indexer ]
+keywords:
+  - data types
+  - data access
+  - data access interfaces
+  - json rpc
+  - custom indexers
+  - indexers
+  - grpc
+  - graphql rpc
+  - general-purpose indexer
+goal:
+  description: >-
+    Reader understands overview of the types of data access mechanisms available
+    in Sui
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Data access interfaces
+    stage: History
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Data access interfaces
+    stage: Ship
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Data access interfaces
+    stage: Ship
+questions:
+  - What is Data Access Interfaces in Sui?
+  - When to use GraphQL or gRPC?
+  - How does data access interfaces work on Sui?
+answer: Overview of the types of data access mechanisms available in Sui.
 ---
 
 <AgentPrompt
@@ -70,4 +116,4 @@ Refer to the following articles outlining general differences between gRPC and G
 
 Directly connect to [JSON-RPC](/references/sui-api) hosted on Sui [full nodes](/operators/full-node/sui-full-node) that are operated by [RPC providers](https://sui.io/developers#dev-tools) (filter by `RPC`) or [data indexer operators](https://github.com/sui-foundation/awesome-sui?tab=readme-ov-file#indexers--data-services). The Mainnet, Testnet, or Devnet load balancer URLs abstract the Sui Foundation-managed full nodes. Do not use those for production.
 
-You can get real-time or historical data using JSON-RPC while it remains available. The retention period for historical data depends on the [pruning strategy](/operators/data-management/managing-data#sui-full-node-pruning-policies) that node operators implement. Do not assume a full node implicitly falls back to the Archival Store; use GraphQL with Archival configured by the operator, or query an Archival Service endpoint directly.
+You can get real-time or historical data using JSON-RPC while it remains available. The retention period for historical data depends on the [pruning strategy](/operators/data-management/managing-data#sui-node-pruning-policies) that node operators implement. Do not assume a full node implicitly falls back to the Archival Store; use GraphQL with Archival configured by the operator, or query an Archival Service endpoint directly.

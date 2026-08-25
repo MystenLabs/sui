@@ -1,0 +1,18 @@
+//# print-bytecode
+// A vector element must also carry an explicit integer suffix.
+mvir 0x42::M {
+    const C: vector<u64> = vector(1, 2u64);
+}
+
+//# print-bytecode
+// A constant value must be a literal, not an arbitrary expression.
+mvir 0x42::M {
+    const C: u64 = foo();
+}
+
+//# print-bytecode
+// A constant value cannot reference another constant.
+mvir 0x42::M {
+    const A: u64 = 1u64;
+    const B: u64 = copy(A);
+}

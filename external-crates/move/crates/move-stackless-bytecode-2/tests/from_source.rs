@@ -1,81 +1,43 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+mod common;
+
 use move_stackless_bytecode_2::from_model;
 
-use move_command_line_common::insta_assert;
-use move_package_alt_compilation::{build_config::BuildConfig, model_builder};
-use move_symbol_pool::Symbol;
+use move_package_alt_compilation::model_builder;
 
-use tempfile::TempDir;
-
-use move_package_alt::{RootPackage, Vanilla};
-use std::{collections::BTreeSet, io::BufRead, path::Path};
+use std::path::Path;
 
 fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
     let pkg_dir = file_path.parent().unwrap();
-    let output_dir = TempDir::new()?;
 
-    let config = BuildConfig {
-        install_dir: Some(output_dir.path().to_path_buf()),
-        force_recompilation: false,
+    let test_module_names = common::read_test_module_names(file_path)?;
 
-        ..Default::default()
-    };
-
-    let mut writer = Vec::new();
-
-    let env = Vanilla::default_environment();
-    let root_pkg: RootPackage<Vanilla> = config
-        .package_loader(pkg_dir, &env, Vanilla::new())
-        .load_sync()?;
-
-    let test_module_names = std::io::BufReader::new(std::fs::File::open(file_path)?)
-        .lines()
-        .collect::<Result<Vec<_>, _>>()?;
-    let test_module_names = test_module_names
-        .into_iter()
-        .map(|name| name.into())
-        .collect::<BTreeSet<Symbol>>();
-
-    let model = model_builder::build(&mut writer, &root_pkg, &config)?;
+    let model = common::run_test_package_build(pkg_dir, model_builder::build)?;
     let bytecode = from_model(&model, /* optimize */ true)?;
-
-    for pkg in &bytecode.packages {
-        let pkg_name = pkg.name;
-        for (module_name, module) in &pkg.modules {
-            if test_module_names.contains(module_name) {
-                let name = format!("{}_{}", pkg_name.expect("NO PACKAGE NAME"), module_name);
-                let stackless_bytecode = format!("{}", module);
-                insta_assert! {
-                    input_path: file_path,
-                    contents: stackless_bytecode,
-                    name: name,
-                    suffix: "opt.sbir",
-                };
-            }
-        }
-    }
+    assert_modules(file_path, &bytecode, &test_module_names, "opt.sbir")?;
 
     let bytecode = from_model(&model, /* optimize */ false)?;
-
-    for pkg in &bytecode.packages {
-        let pkg_name = pkg.name;
-        for (module_name, module) in &pkg.modules {
-            if test_module_names.contains(module_name) {
-                let name = format!("{}_{}", pkg_name.expect("NO PACKAGE NAME"), module_name);
-                let stackless_bytecode = format!("{}", module);
-                insta_assert! {
-                    input_path: file_path,
-                    contents: stackless_bytecode,
-                    name: name,
-                    suffix: "no_opt.sbir",
-                };
-            }
-        }
-    }
+    assert_modules(file_path, &bytecode, &test_module_names, "no_opt.sbir")?;
 
     Ok(())
+}
+
+/// Validates test output for input modules from all translated packages.
+fn assert_modules(
+    file_path: &Path,
+    bytecode: &move_stackless_bytecode_2::ast::StacklessBytecode,
+    test_module_names: &std::collections::BTreeSet<move_symbol_pool::Symbol>,
+    suffix: &str,
+) -> anyhow::Result<()> {
+    let modules = bytecode.packages.iter().flat_map(|pkg| {
+        let package_name = pkg.name.expect("NO PACKAGE NAME");
+        pkg.modules
+            .values()
+            .map(move |module| (package_name, module))
+    });
+    common::assert_modules(file_path, modules, test_module_names, suffix)
 }
 
 // Hand in each Move.toml path

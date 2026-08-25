@@ -1,0 +1,38 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 4-34:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000071::zzds_suffix'. Got VMError: {
+    major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x71::zzds_suffix,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 4)],
+}
+
+task 1, lines 36-38:
+//# view-abstract-state 0x71::zzds_suffix::shape
+view-abstract-state subcommand is only available with regex reference safety
+
+task 2, lines 39-69:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000072::zzds_suffix_write'. Got VMError: {
+    major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x72::zzds_suffix_write,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 4)],
+}
+
+task 3, lines 70-98:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000073::zzds_suffix_write_ok'. Got VMError: {
+    major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x73::zzds_suffix_write_ok,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 4)],
+}

@@ -11,7 +11,7 @@ use crate::{
     jit::execution::ast::{Function, Type},
     natives::extensions::NativeContextExtensions,
     runtime::telemetry::TransactionTelemetryContext,
-    shared::{gas::GasMeter, vm_pointer::VMPointer},
+    shared::{TypeLimits, gas::GasMeter, vm_pointer::VMPointer},
     try_block,
 };
 use move_binary_format::errors::*;
@@ -31,6 +31,7 @@ pub(crate) fn run(
     vtables: &mut VMDispatchTables,
     telemetry: &mut TransactionTelemetryContext,
     vm_config: Arc<VMConfig>,
+    type_limits: TypeLimits,
     extensions: &mut NativeContextExtensions,
     tracer: &mut Option<VMTracer<'_>>,
     gas_meter: &mut impl GasMeter,
@@ -80,7 +81,8 @@ pub(crate) fn run(
                         fun_ref.module_id(&vtables.interner).clone(),
                     ))
             })?;
-            let state = MachineState::new(Arc::clone(&vtables.interner), call_stack);
+            let state =
+                MachineState::new(Arc::clone(&vtables.interner), type_limits, call_stack);
             eval::run(state, vtables, telemetry, vm_config, extensions, tracer, gas_meter)
         }
     };

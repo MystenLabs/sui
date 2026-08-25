@@ -5,10 +5,7 @@
 //! [`schema::transaction_bitmap`](crate::schema::transaction_bitmap)
 //! CF.
 //!
-//! Mirrors the tx-space half of
-//! `write_ledger_history_rows_for_checkpoint` in
-//! `sui-core::rpc_index`. For every transaction in the checkpoint
-//! the pipeline:
+//! For every transaction in the checkpoint the pipeline:
 //!
 //! 1. Visits every dimension candidate via
 //!    [`sui_inverted_index::for_each_transaction_dimension`].

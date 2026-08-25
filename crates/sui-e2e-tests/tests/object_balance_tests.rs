@@ -13,8 +13,8 @@ use test_cluster::TestClusterBuilder;
 #[sim_test]
 async fn test_object_balance_withdraw_stress() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.create_root_accumulator_object_for_testing();
-        cfg.enable_accumulators_for_testing();
+        cfg.set_create_root_accumulator_object_for_testing(true);
+        cfg.set_enable_accumulators_for_testing(true);
         cfg.set_enable_object_funds_withdraw_for_testing(true);
         cfg
     });

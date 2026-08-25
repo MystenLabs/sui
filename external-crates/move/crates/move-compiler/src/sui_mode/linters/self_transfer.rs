@@ -18,10 +18,7 @@ use crate::{
         },
     },
     diag,
-    diagnostics::{
-        Diagnostic, Diagnostics,
-        codes::{DiagnosticInfo, Severity, custom},
-    },
+    diagnostics::{Diagnostic, Diagnostics},
     hlir::ast::{Label, ModuleCall, Type, Type_, Var},
     parser::ast::Ability_,
     sui_mode::{SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME},
@@ -29,22 +26,13 @@ use crate::{
 use std::collections::BTreeMap;
 
 use super::{
-    INVALID_LOC, LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode,
-    PUBLIC_TRANSFER_FUN, TRANSFER_FUN, TRANSFER_MOD_NAME, type_abilities,
+    INVALID_LOC, PUBLIC_TRANSFER_FUN, SuiLintCode, TRANSFER_FUN, TRANSFER_MOD_NAME, type_abilities,
 };
 
 const TRANSFER_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
     (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, PUBLIC_TRANSFER_FUN),
     (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, TRANSFER_FUN),
 ];
-
-const SELF_TRANSFER_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Sui as u8,
-    LinterDiagnosticCode::SelfTransfer as u8,
-    "non-composable transfer to sender",
-);
 
 //**************************************************************************************************
 // types
@@ -166,7 +154,11 @@ impl SimpleAbsInt for SelfTransferVerifierAI {
                 let msg = "Transfer of an object to transaction sender address";
                 let uid_msg = "Returning an object from a function, allows a caller to use the object \
                                and enables composability via programmable transactions.";
-                let mut d = diag!(SELF_TRANSFER_DIAG, (*loc, msg), (self.fn_ret_loc, uid_msg));
+                let mut d = diag!(
+                    SuiLintCode::SelfTransfer.diag_info(),
+                    (*loc, msg),
+                    (self.fn_ret_loc, uid_msg)
+                );
                 if sender_addr_loc != INVALID_LOC {
                     d.add_secondary_label((
                         sender_addr_loc,

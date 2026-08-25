@@ -50,7 +50,6 @@ use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
 use crate::api::types::owner::Owner;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
-use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction_object::TransactionObject;
 use crate::config::Limits;
@@ -58,6 +57,7 @@ use crate::error::RpcError;
 use crate::error::bad_user_input;
 use crate::error::upcast;
 use crate::pagination::Page;
+use crate::pagination::StreamConnection;
 use crate::scope::Scope;
 
 pub(crate) struct DynamicField {
@@ -194,9 +194,9 @@ impl DynamicField {
             .ok()?
     }
 
-    /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+    /// Fetch the balance for `coinType` (e.g. `0x2::sui::SUI`) owned by this address.
     ///
-    /// If the address does not own any coins of that type, a balance of zero is returned.
+    /// The result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. If this address has no balance of that type, all three values are zero.
     pub(crate) async fn balance(
         &self,
         ctx: &Context<'_>,
@@ -205,7 +205,9 @@ impl DynamicField {
         self.super_.balance(ctx, coin_type).await.ok()?
     }
 
-    /// Total balance across coins owned by this address, grouped by coin type.
+    /// Balances held by this address, grouped by coin type.
+    ///
+    /// Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator.
     pub(crate) async fn balances(
         &self,
         ctx: &Context<'_>,
@@ -312,9 +314,9 @@ impl DynamicField {
         self.super_.move_object_bcs(ctx).await.ok()?
     }
 
-    /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+    /// Fetch balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
     ///
-    /// If the address does not own any coins of a given type, a balance of zero is returned for that type.
+    /// Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.
     pub(crate) async fn multi_get_balances(
         &self,
         ctx: &Context<'_>,
@@ -436,7 +438,7 @@ impl DynamicField {
         last: Option<u64>,
         before: Option<CTransaction>,
         filter: Option<TransactionFilter>,
-    ) -> Option<Result<TransactionConnection, RpcError>> {
+    ) -> Option<Result<StreamConnection<Transaction>, RpcError>> {
         self.super_
             .received_transactions(ctx, first, after, last, before, filter)
             .await

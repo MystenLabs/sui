@@ -1,0 +1,90 @@
+---
+title: Oracle Safety for High-Stakes Consumers
+sidebar_label: Oracle Safety
+description: >-
+  Oracle failure modes for DeFi on Sui, what liquidations, collateral valuation,
+  and expiry settlement each additionally require, and a runnable keeper for
+  push-model freshness.
+keywords:
+  - oracle safety
+  - stale price
+  - confidence interval
+  - price manipulation
+  - liquidation
+  - collateral valuation
+  - keeper
+  - price pusher
+goal:
+  description: >-
+    Reader can identify oracle failure modes and apply the right checks for
+    liquidations, collateral valuation, and settlement, and run a keeper.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What are the failure modes of a price oracle?
+  - How do liquidations use an oracle differently from collateral valuation?
+  - How do I keep a push oracle feed fresh?
+  - What is a keeper for a price oracle?
+answer: >-
+  Oracle failure modes are stale prices, a blown-out confidence interval, a
+  depeg or deviation, manipulation windows, and provider downtime. Guard each
+  with a staleness bound, a confidence check, a deviation check against a
+  reference, and a fallback. Liquidations need the tightest freshness and must
+  act only on the checked price; collateral valuation should value
+  conservatively using the confidence interval; expiry settlement freezes one
+  price at expiry. A keeper pushes fresh updates on an interval for push-model
+  consumers.
+builder_paths:
+  - path_id: oracle-integration
+    path_name: Oracles for DeFi
+    step: Oracle safety
+    stage: Oracles
+---
+
+Reading a price is a few lines. Reading it safely means naming the ways a price can be wrong and guarding each one, because a lending pool or a settlement pays for the ones you skip. The [Move adapter](/onchain-finance/oracles/move-adapter) centralizes these guards; the sections below are when and why to apply each.
+
+## Failure modes
+
+- **Stale price.** The onchain price has not been refreshed and no longer reflects the market. This is the most common and most dangerous failure, and it is guarded by a staleness bound: [`get_price_no_older_than`](/onchain-finance/oracles/consuming-price-feeds#the-stale-price-rejection) aborts rather than returning an old value. Observed: reading a Testnet feed nobody just updated with a one-second bound aborts with `pyth::check_price_is_fresh` error code `3`.
+- **Confidence blowout.** Pyth reports a price with a confidence interval. When sources disagree, the interval widens. Acting on the midpoint of a wide interval is acting on a guess. Sourced to provider behavior: the confidence is part of every Pyth price; the adapter's `assert_confidence` rejects a price whose interval exceeds a fraction of the price you choose.
+- **Depeg or deviation.** A single feed can spike or a pegged asset can depeg. A deviation check against a second source or a time-averaged reference catches the spike before it drives an action. The adapter's `assert_within_deviation` does this.
+- **Manipulation window.** Design consideration: a price read in a single transaction reflects a single instant, which a well-capitalized actor can move for one block. Averaging over recent values, requiring two independent sources to agree, or using a confidence and deviation bound together raises the cost of moving the price you act on.
+- **Provider downtime.** Design consideration: an oracle can stop updating. A fallback to a second feed, and a defined behavior when both are stale (pause, not guess), keeps a consumer safe rather than stuck on the last value. The adapter's `price_or_fallback` reads the primary and only falls through to the secondary if the primary is stale.
+
+## What each consumer additionally needs
+
+The guards are shared, but the emphasis differs by what the price drives.
+
+- **Liquidations.** The tightest freshness bound, because a liquidation acts on the price now. Act only on the checked price, never on `get_price_unsafe`, and reject on a wide confidence interval rather than liquidate on a guess. [DeepBook Margin](/onchain-finance/deepbook/deepbook-margin/margin-risks#oracle-risk) is a worked consumer: it values positions through Pyth with a maximum price age and treats a stale price as a hard failure.
+- **Collateral valuation.** Value conservatively. When you value collateral to decide how much a user can borrow, use the low end of the confidence interval (price minus confidence), so a wide interval lends less rather than over-lends. A generous max-age is acceptable for a display, but the borrowing decision uses the same tight, checked read a liquidation does.
+- **Expiry settlement.** Freeze exactly one price at or after a defined expiry, and never re-settle. The mechanics are the subject of [Resolution patterns](/onchain-finance/oracles/resolution-patterns); the safety point is that settlement reads through the same staleness bound, so a market cannot settle against a price the transaction did not refresh.
+
+## Keep push feeds fresh with a keeper
+
+A pull consumer updates and reads in its own transaction, so freshness is automatic. A push consumer reads a stored price that a separate service, a keeper, keeps current. The keeper fetches from Hermes and applies the update on an interval:
+
+<ImportContent source="examples/oracle-adapter/ts/src/keeper.ts" mode="code" tag="keeper" />
+
+Each push is a transaction that costs gas plus the Pyth base update fee, so the interval trades freshness against cost, and a push consumer still checks the stored price's age because the keeper can fall behind. Running one cycle on Testnet updates the feed and returns a transaction digest; a production keeper runs the loop with backoff, a spend cap, and its signing key off the hot path.
+
+## Troubleshooting
+
+- **`MoveAbort` in `check_price_is_fresh` (code 3):** observed. The feed is older than your bound. In a pull flow, confirm the update command runs before the read in the same transaction. For a push feed, the keeper has fallen behind.
+- **`getFullnodeUrl('testnet')` calls return 404:** observed. The Mysten Testnet fullnode serves gRPC; the Pyth SDK needs JSON-RPC. Point the client at a JSON-RPC endpoint.
+- **A price passes the staleness check but looks wrong:** hypothesized. A single feed can be manipulated or briefly diverge. Add a deviation check against a second source, and reject rather than act when they disagree.

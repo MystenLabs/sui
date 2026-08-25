@@ -31,6 +31,7 @@ async fn get_transaction() {
         events,
         checkpoint,
         timestamp,
+        objects,
         ..
     } = client
         .get_transaction(GetTransactionRequest::new(&transaction_digest))
@@ -50,6 +51,47 @@ async fn get_transaction() {
     assert!(events.is_none());
     assert!(checkpoint.is_none());
     assert!(timestamp.is_none());
+    assert!(objects.is_none());
+
+    // Request only objects
+    let ExecutedTransaction {
+        digest,
+        transaction,
+        signatures,
+        effects,
+        events,
+        checkpoint,
+        timestamp,
+        balance_changes,
+        objects,
+        transaction_index,
+        ..
+    } = client
+        .get_transaction(
+            GetTransactionRequest::new(&transaction_digest)
+                .with_read_mask(FieldMask::from_paths(["objects"])),
+        )
+        .await
+        .unwrap()
+        .into_inner()
+        .transaction
+        .unwrap();
+
+    assert!(digest.is_none());
+    assert!(transaction.is_none());
+    assert!(signatures.is_empty());
+    assert!(effects.is_none());
+    assert!(events.is_none());
+    assert!(checkpoint.is_none());
+    assert!(timestamp.is_none());
+    assert!(balance_changes.is_empty());
+    assert!(
+        !objects
+            .expect("objects should be populated when requested")
+            .objects
+            .is_empty()
+    );
+    assert!(transaction_index.is_none());
 
     // Request all fields
     let ExecutedTransaction {
@@ -60,6 +102,7 @@ async fn get_transaction() {
         events,
         checkpoint,
         timestamp,
+        objects,
         ..
     } = client
         .get_transaction(
@@ -72,6 +115,7 @@ async fn get_transaction() {
                     "events",
                     "checkpoint",
                     "timestamp",
+                    "objects",
                 ],
             )),
         )
@@ -88,4 +132,10 @@ async fn get_transaction() {
     assert!(events.is_some());
     assert!(checkpoint.is_some());
     assert!(timestamp.is_some());
+    assert!(
+        !objects
+            .expect("objects should be populated when requested")
+            .objects
+            .is_empty()
+    );
 }

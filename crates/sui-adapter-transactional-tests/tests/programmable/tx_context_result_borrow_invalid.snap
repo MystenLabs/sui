@@ -1,15 +1,15 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 15 tasks
+processed 17 tasks
 
-task 1, lines 8-38:
+task 1, lines 11-49:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5555600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5966000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 40-43:
+task 2, lines 51-54:
 //# programmable
 // cannot manually supply the TxContext
 //> 0: test::m::mut_id();
@@ -17,7 +17,7 @@ task 2, lines 40-43:
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 1 argument calling function 'test::m::mut_tx', but found 2"), command: Some(1) } }
 
-task 3, lines 45-48:
+task 3, lines 56-59:
 //# programmable
 // cannot manually supply the TxContext
 //> 0: test::m::mut_id();
@@ -25,7 +25,7 @@ task 3, lines 45-48:
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 1 argument calling function 'test::m::imm_tx', but found 2"), command: Some(1) } }
 
-task 4, lines 50-53:
+task 4, lines 61-64:
 //# programmable
 // cannot manually supply the TxContext
 //> 0: test::m::imm_id();
@@ -33,7 +33,7 @@ task 4, lines 50-53:
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 1 argument calling function 'test::m::imm_tx', but found 2"), command: Some(1) } }
 
-task 5, lines 55-58:
+task 5, lines 66-69:
 //# programmable
 // cannot manually supply the TxContext, even when one is inferred
 //> 0: test::m::imm_id();
@@ -41,7 +41,7 @@ task 5, lines 55-58:
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 2 arguments calling function 'test::m::imm_imm_tx', but found 3"), command: Some(1) } }
 
-task 6, lines 60-63:
+task 6, lines 71-74:
 //# programmable
 // cannot manually supply the TxContext, even when generic
 //> 0: test::m::mut_id();
@@ -49,7 +49,7 @@ task 6, lines 60-63:
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 1 argument calling function 'test::m::gen_mut', but found 2"), command: Some(1) } }
 
-task 7, lines 65-68:
+task 7, lines 76-79:
 //# programmable
 // cannot manually supply the TxContext, even when generic
 //> 0: test::m::mut_id();
@@ -57,7 +57,7 @@ task 7, lines 65-68:
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 1 argument calling function 'test::m::gen_imm', but found 2"), command: Some(1) } }
 
-task 8, lines 70-73:
+task 8, lines 81-84:
 //# programmable
 // cannot manually supply the TxContext, even when generic
 //> 0: test::m::imm_id();
@@ -65,7 +65,7 @@ task 8, lines 70-73:
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 1 argument calling function 'test::m::gen_imm', but found 2"), command: Some(1) } }
 
-task 9, lines 75-78:
+task 9, lines 86-89:
 //# programmable
 // cannot manually supply the TxContext, even when multiple supplied
 //> 0: test::m::mut_id();
@@ -73,7 +73,7 @@ task 9, lines 75-78:
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 2 arguments calling function 'test::m::gen_mut_tx', but found 4"), command: Some(1) } }
 
-task 10, lines 80-83:
+task 10, lines 91-94:
 //# programmable
 // cannot manually supply the TxContext, even when multiple supplied
 //> 0: test::m::mut_id();
@@ -81,7 +81,7 @@ task 10, lines 80-83:
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 2 arguments calling function 'test::m::gen_imm_tx', but found 4"), command: Some(1) } }
 
-task 11, lines 85-88:
+task 11, lines 96-99:
 //# programmable
 // cannot manually supply the TxContext, even when multiple supplied
 //> 0: test::m::imm_id();
@@ -89,7 +89,7 @@ task 11, lines 85-88:
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 2 arguments calling function 'test::m::gen_imm_tx', but found 4"), command: Some(1) } }
 
-task 12, lines 90-93:
+task 12, lines 101-104:
 //# programmable
 // cannot manually supply the TxContext, even when generic and inferred
 //> 0: test::m::mut_id();
@@ -97,7 +97,7 @@ task 12, lines 90-93:
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 2 arguments calling function 'test::m::gen_mut_tx', but found 3"), command: Some(1) } }
 
-task 13, lines 95-98:
+task 13, lines 106-109:
 //# programmable
 // cannot manually supply the TxContext,  even when generic and inferred
 //> 0: test::m::mut_id();
@@ -105,10 +105,24 @@ task 13, lines 95-98:
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 2 arguments calling function 'test::m::gen_imm_tx', but found 3"), command: Some(1) } }
 
-task 14, lines 100-103:
+task 14, lines 111-114:
 //# programmable
 // cannot manually supply the TxContext,  even when generic and inferred
 //> 0: test::m::imm_id();
 //> test::m::gen_imm_tx<sui::tx_context::TxContext>(Result(0));
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 2 arguments calling function 'test::m::gen_imm_tx', but found 3"), command: Some(1) } }
+
+task 15, lines 116-118:
+//# programmable
+// a generic &mut T return unifying to &mut TxContext cannot become a result
+//> test::m::gen_mut_id<sui::tx_context::TxContext>();
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext }, source: Some("TxContext cannot be returned from a Move call"), command: Some(0) } }
+
+task 16, lines 120-122:
+//# programmable
+// a generic &T return unifying to &TxContext cannot become a result
+//> test::m::gen_imm_id<sui::tx_context::TxContext>();
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext }, source: Some("TxContext cannot be returned from a Move call"), command: Some(0) } }

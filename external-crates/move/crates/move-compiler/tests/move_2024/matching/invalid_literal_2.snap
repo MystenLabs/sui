@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_2024/matching/invalid_literal_2.move:9:13
   │
 7 │     fun test(opt: &Option<u8>) {
@@ -17,7 +17,7 @@ error[E04007]: incompatible types
   │             │            Given: 'bool'
   │             Invalid pattern
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/matching/invalid_literal_2.move:10:13
    │
  7 │     fun test(opt: &Option<u8>) {

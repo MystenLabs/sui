@@ -93,7 +93,9 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # pin@v6.2.0
         with:
-          node-version: '20'
+          # Node 22+ (V8 12.0+) is required for the JSON.parse source-text reviver used to
+          # parse large integer values (u64/u128) in traces without precision loss.
+          node-version: '22'
           cache: 'pnpm'
 
       - name: Install dependencies

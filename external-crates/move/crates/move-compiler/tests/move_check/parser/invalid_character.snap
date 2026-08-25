@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01001]: invalid character
+error[EC01001]: invalid character
   ┌─ tests/move_check/parser/invalid_character.move:1:12
   │
 1 │ address 0x1~

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
    ┌─ tests/move_2024/typing/match_loop_return.move:7:23
    │  
  7 │               match (v) {

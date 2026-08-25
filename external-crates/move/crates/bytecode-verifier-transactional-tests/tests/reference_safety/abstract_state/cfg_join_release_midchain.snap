@@ -1,0 +1,38 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 3-29:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::release_alias_parent'. Got VMError: {
+    major_status: MOVELOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::release_alias_parent,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 20)],
+}
+
+task 1, lines 31-58:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::release_struct_parent'. Got VMError: {
+    major_status: MOVELOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::release_struct_parent,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 23)],
+}
+
+task 2, lines 60-89:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::release_midchain_deep'. Got VMError: {
+    major_status: MOVELOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x4::release_midchain_deep,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 26)],
+}
+
+task 3, line 91:
+//# view-abstract-state 0x4::release_midchain_deep::t
+view-abstract-state subcommand is only available with regex reference safety

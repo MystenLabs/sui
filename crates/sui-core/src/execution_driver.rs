@@ -3,6 +3,7 @@
 
 use std::sync::{Arc, Weak};
 
+use mysten_common::sync::execution_permit::set_execution_permit;
 use mysten_common::{fatal, random::get_rng};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::Rng;
@@ -29,8 +30,9 @@ pub async fn execution_process(
 ) {
     info!("Starting pending certificates execution process.");
 
-    // Rate limit concurrent executions to # of cpus.
-    let limit = Arc::new(Semaphore::new(num_cpus::get()));
+    // Rate limit concurrent executions to half of the available CPUs.
+    let execution_concurrency = std::cmp::max(1, num_cpus::get() / 2);
+    let limit = Arc::new(Semaphore::new(execution_concurrency));
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
@@ -88,8 +90,12 @@ pub async fn execution_process(
 
         let limit = limit.clone();
         // hold semaphore permit until task completes. unwrap ok because we never close
-        // the semaphore in this context.
-        let permit = limit.acquire_owned().await.unwrap();
+        // the semaphore in this context. The scope measures time blocked waiting for a
+        // permit, i.e. how saturated execution concurrency is.
+        let permit = {
+            let _scope = monitored_scope("ExecutionDriver::acquire_permit");
+            limit.acquire_owned().await.unwrap()
+        };
 
         if get_rng().gen_range(0.0..1.0) < QUEUEING_DELAY_SAMPLING_RATIO {
             authority
@@ -106,42 +112,72 @@ pub async fn execution_process(
 
         authority.metrics.execution_rate_tracker.lock().record();
 
-        // Certificate execution can take significant time, so run it in a separate task.
+        // Certificate execution is CPU-bound and can take significant time, so run it on a
+        // blocking thread to avoid stalling the async runtime's worker threads.
         let epoch_store_clone = epoch_store.clone();
-        spawn_monitored_task!(epoch_store.within_alive_epoch(async move {
+        let execution_span = error_span!("execution_driver", tx_digest = ?digest);
+        // spawn_blocking runs on a thread that does not inherit the current tracing span,
+        // so re-enter the span inside the blocking closure to keep execution logs attributed.
+        let blocking_span = execution_span.clone();
+        spawn_monitored_task!(async move {
             let _scope = monitored_scope("ExecutionDriver::task");
-            let _guard = permit;
+            // `permit` is moved into the blocking closure below and installed on the
+            // execution thread, so that a blocking sync primitive can release it if
+            // execution has to wait on work that another execution must perform (which
+            // would otherwise deadlock under limited concurrency). Until then it is held
+            // by this task, and the early returns below drop it, freeing the slot.
             if authority.is_tx_already_executed(&digest) {
                 return;
             }
 
             fail_point_async!("transaction_execution_delay");
 
-            match authority.try_execute_immediately(
-                &certificate,
-                execution_env,
-                &epoch_store_clone,
-            ) {
-                ExecutionOutput::Success(_) => {
-                    authority
-                        .metrics
-                        .execution_driver_executed_transactions
-                        .inc();
+            // Hold the epoch-alive guard across execution so that `epoch_terminated()` waits
+            // for in-flight execution to finish (previously guaranteed by `within_alive_epoch`,
+            // since execution has no yield points). Skip if the epoch has already ended.
+            let Some(_alive_guard) = epoch_store.enter_alive_epoch().await else {
+                info!("Epoch ended before execution could start; transaction will be retried in the next epoch");
+                return;
+            };
+
+            // Await unconditionally: once dispatched, execution always runs to completion
+            // within the alive-epoch guard and is never detached at epoch end.
+            tokio::task::spawn_blocking(move || {
+                // Install the permit so a blocking sync primitive can release it while
+                // execution waits; otherwise it is released when this guard drops at the
+                // end of execution. Not re-acquired after a release - any transient
+                // over-subscription resolves itself as tasks complete.
+                let _permit_guard = set_execution_permit(Box::new(permit));
+                let _enter = blocking_span.enter();
+                let _scope = monitored_scope("ExecutionDriver::blocking_task");
+                match authority.try_execute_immediately(
+                    &certificate,
+                    execution_env,
+                    &epoch_store_clone,
+                ) {
+                    ExecutionOutput::Success(_) => {
+                        authority
+                            .metrics
+                            .execution_driver_executed_transactions
+                            .inc();
+                    }
+                    ExecutionOutput::EpochEnded => {
+                        warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
+                    }
+                    ExecutionOutput::Fatal(e) => {
+                        fatal!("Failed to execute certified transaction {digest:?}! error={e} certificate={certificate:?}");
+                    }
+                    ExecutionOutput::RetryLater => {
+                        // Transaction will be retried later and auto-rescheduled, so we ignore it here
+                        authority
+                            .metrics
+                            .execution_driver_paused_transactions
+                            .inc();
+                    }
                 }
-                ExecutionOutput::EpochEnded => {
-                    warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
-                }
-                ExecutionOutput::Fatal(e) => {
-                    fatal!("Failed to execute certified transaction {digest:?}! error={e} certificate={certificate:?}");
-                }
-                ExecutionOutput::RetryLater => {
-                    // Transaction will be retried later and auto-rescheduled, so we ignore it here
-                    authority
-                        .metrics
-                        .execution_driver_paused_transactions
-                        .inc();
-                }
-            }
-        }.instrument(error_span!("execution_driver", tx_digest = ?digest))));
+            })
+            .await
+            .expect("transaction execution task panicked");
+        }.instrument(execution_span));
     }
 }

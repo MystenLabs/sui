@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E07003]: invalid operation, could create a dangling reference
+error[EC07003]: invalid operation, could create a dangling reference
    ┌─ tests/move_2024/matching/bad_guard_3.move:16:20
    │
 14 │         match (o) {

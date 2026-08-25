@@ -1,0 +1,49 @@
+// Reading (not writing) through a reference is allowed even with an
+// outstanding mutable extension of it.
+
+//# run
+mvir 0x2::read_parent {
+
+public struct S has copy, drop { f: u64 }
+
+entry fun t() {
+    let s: Self::S;
+    let x: &mut Self::S;
+    let f: &mut u64;
+    let read: Self::S;
+label b0:
+    s = S { f: 0 };
+    x = &mut s;
+    f = &mut copy(x).S::f;
+    // read through x while f extends it
+    read = *copy(x);
+    assert(*&(&read).S::f == 0, 42);
+    *move(f) = 1;
+    assert(*&mut move(x).S::f == 1, 43);
+    return;
+}
+
+}
+
+//# run
+mvir 0x3::eq_parent {
+
+public struct S has copy, drop { f: u64 }
+
+entry fun t() {
+    let s: Self::S;
+    let x: &mut Self::S;
+    let y: &Self::S;
+    let f: &mut u64;
+label b0:
+    s = S { f: 0 };
+    x = &mut s;
+    y = &s;
+    f = &mut copy(x).S::f;
+    // freeze and compare references while f extends x
+    assert(freeze(move(x)) == move(y), 42);
+    *move(f) = 1;
+    return;
+}
+
+}

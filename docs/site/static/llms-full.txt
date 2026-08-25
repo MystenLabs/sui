@@ -215,82 +215,82 @@
 
 ### Onchain Finance/Deepbook Margin
 - [Contract
-    Information](https://docs.sui.io/onchain-finance/deepbook-margin/contract-information.md)
+    Information](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin/contract-information.md)
 - [Deepbook Margin
-    Indexer](https://docs.sui.io/onchain-finance/deepbook-margin/deepbook-margin-indexer.md)
-- [Design](https://docs.sui.io/onchain-finance/deepbook-margin/design.md)
-- [Deepbook Margin Index](https://docs.sui.io/onchain-finance/deepbook-margin/index.md)
-- [Margin Risks](https://docs.sui.io/onchain-finance/deepbook-margin/margin-risks.md)
+    Indexer](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin/deepbook-margin-indexer.md)
+- [Design](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin/design.md)
+- [Deepbook Margin Index](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin/index.md)
+- [Margin Risks](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin/margin-risks.md)
 
 ### Onchain Finance/Deepbook Margin Sdk
-- [Deepbook Margin Sdk Index](https://docs.sui.io/onchain-finance/deepbook-margin-sdk/index.md)
-- [Maintainer](https://docs.sui.io/onchain-finance/deepbook-margin-sdk/maintainer.md)
-- [Margin Manager](https://docs.sui.io/onchain-finance/deepbook-margin-sdk/margin-manager.md)
-- [Margin Pool](https://docs.sui.io/onchain-finance/deepbook-margin-sdk/margin-pool.md)
-- [Orders](https://docs.sui.io/onchain-finance/deepbook-margin-sdk/orders.md)
-- [Tpsl](https://docs.sui.io/onchain-finance/deepbook-margin-sdk/tpsl.md)
+- [Deepbook Margin Sdk Index](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin-sdk/index.md)
+- [Maintainer](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin-sdk/maintainer.md)
+- [Margin Manager](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin-sdk/margin-manager.md)
+- [Margin Pool](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin-sdk/margin-pool.md)
+- [Orders](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin-sdk/orders.md)
+- [Tpsl](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin-sdk/tpsl.md)
 
 ### Onchain Finance/Deepbook Margin/Contract Information
 - [Interest
-    Rates](https://docs.sui.io/onchain-finance/deepbook-margin/contract-information/interest-rates.md)
+    Rates](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin/contract-information/interest-rates.md)
 -
-    [Maintainer](https://docs.sui.io/onchain-finance/deepbook-margin/contract-information/maintainer.md)
+    [Maintainer](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin/contract-information/maintainer.md)
 - [Margin
-    Manager](https://docs.sui.io/onchain-finance/deepbook-margin/contract-information/margin-manager.md)
+    Manager](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin/contract-information/margin-manager.md)
 - [Margin
-    Pool](https://docs.sui.io/onchain-finance/deepbook-margin/contract-information/margin-pool.md)
-- [Orders](https://docs.sui.io/onchain-finance/deepbook-margin/contract-information/orders.md)
+    Pool](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin/contract-information/margin-pool.md)
+- [Orders](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin/contract-information/orders.md)
 - [Risk
-    Ratio](https://docs.sui.io/onchain-finance/deepbook-margin/contract-information/risk-ratio.md)
+    Ratio](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin/contract-information/risk-ratio.md)
 - [Supply
-    Referral](https://docs.sui.io/onchain-finance/deepbook-margin/contract-information/supply-referral.md)
-- [Tpsl](https://docs.sui.io/onchain-finance/deepbook-margin/contract-information/tpsl.md)
+    Referral](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin/contract-information/supply-referral.md)
+- [Tpsl](https://docs.sui.io/onchain-finance/deepbook/deepbook-margin/contract-information/tpsl.md)
 
 ### Onchain Finance/Deepbook Predict
 - [Contract
-    Information](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information.md)
-- [Design](https://docs.sui.io/onchain-finance/deepbook-predict/design.md)
-- [Deepbook Predict Index](https://docs.sui.io/onchain-finance/deepbook-predict/index.md)
+    Information](https://docs.sui.io/onchain-finance/deepbook/deepbook-predict/contract-information.md)
+- [Design](https://docs.sui.io/onchain-finance/deepbook/deepbook-predict/design.md)
+- [Deepbook Predict Index](https://docs.sui.io/onchain-finance/deepbook/deepbook-predict/index.md)
 
 ### Onchain Finance/Deepbook Predict/Contract Information
 - [Market
-    Keys](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/market-keys.md)
-- [Oracle](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/oracle.md)
+    Keys](https://docs.sui.io/onchain-finance/deepbook/deepbook-predict/contract-information/market-keys.md)
+- [Oracle](https://docs.sui.io/onchain-finance/deepbook/deepbook-predict/contract-information/oracle.md)
 - [Predict
-    Manager](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/predict-manager.md)
-- [Predict](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/predict.md)
-- [Registry](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/registry.md)
-- [Vault](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/vault.md)
+    Manager](https://docs.sui.io/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager.md)
+- [Predict](https://docs.sui.io/onchain-finance/deepbook/deepbook-predict/contract-information/predict.md)
+- [Registry](https://docs.sui.io/onchain-finance/deepbook/deepbook-predict/contract-information/registry.md)
+- [Vault](https://docs.sui.io/onchain-finance/deepbook/deepbook-predict/contract-information/vault.md)
 
 ### Onchain Finance/Deepbookv3
-- [Contract Information](https://docs.sui.io/onchain-finance/deepbookv3/contract-information.md)
-- [Deepbook](https://docs.sui.io/onchain-finance/deepbookv3/deepbook.md)
-- [Deepbookv3 Indexer](https://docs.sui.io/onchain-finance/deepbookv3/deepbookv3-indexer.md)
-- [Design](https://docs.sui.io/onchain-finance/deepbookv3/design.md)
+- [Contract Information](https://docs.sui.io/onchain-finance/deepbook/deepbookv3/contract-information.md)
+- [Deepbook](https://docs.sui.io/onchain-finance/deepbook/deepbookv3/deepbook.md)
+- [Deepbookv3 Indexer](https://docs.sui.io/onchain-finance/deepbook/deepbookv3/deepbookv3-indexer.md)
+- [Design](https://docs.sui.io/onchain-finance/deepbook/deepbookv3/design.md)
 
 ### Onchain Finance/Deepbookv3 Sdk
-- [Balance Manager](https://docs.sui.io/onchain-finance/deepbookv3-sdk/balance-manager.md)
-- [Flash Loans](https://docs.sui.io/onchain-finance/deepbookv3-sdk/flash-loans.md)
-- [Deepbookv3 Sdk Index](https://docs.sui.io/onchain-finance/deepbookv3-sdk/index.md)
-- [Orders](https://docs.sui.io/onchain-finance/deepbookv3-sdk/orders.md)
-- [Pools](https://docs.sui.io/onchain-finance/deepbookv3-sdk/pools.md)
-- [Staking Governance](https://docs.sui.io/onchain-finance/deepbookv3-sdk/staking-governance.md)
-- [Swaps](https://docs.sui.io/onchain-finance/deepbookv3-sdk/swaps.md)
+- [Balance Manager](https://docs.sui.io/onchain-finance/deepbook/deepbookv3-sdk/balance-manager.md)
+- [Flash Loans](https://docs.sui.io/onchain-finance/deepbook/deepbookv3-sdk/flash-loans.md)
+- [Deepbookv3 Sdk Index](https://docs.sui.io/onchain-finance/deepbook/deepbookv3-sdk/index.md)
+- [Orders](https://docs.sui.io/onchain-finance/deepbook/deepbookv3-sdk/orders.md)
+- [Pools](https://docs.sui.io/onchain-finance/deepbook/deepbookv3-sdk/pools.md)
+- [Staking Governance](https://docs.sui.io/onchain-finance/deepbook/deepbookv3-sdk/staking-governance.md)
+- [Swaps](https://docs.sui.io/onchain-finance/deepbook/deepbookv3-sdk/swaps.md)
 
 ### Onchain Finance/Deepbookv3/Contract Information
 - [Balance
-    Manager](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/balance-manager.md)
-- [Ewma](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/ewma.md)
-- [Flash Loans](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/flash-loans.md)
-- [Orders](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/orders.md)
+    Manager](https://docs.sui.io/onchain-finance/deepbook/deepbookv3/contract-information/balance-manager.md)
+- [Ewma](https://docs.sui.io/onchain-finance/deepbook/deepbookv3/contract-information/ewma.md)
+- [Flash Loans](https://docs.sui.io/onchain-finance/deepbook/deepbookv3/contract-information/flash-loans.md)
+- [Orders](https://docs.sui.io/onchain-finance/deepbook/deepbookv3/contract-information/orders.md)
 - [Permissionless
-    Pool](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/permissionless-pool.md)
+    Pool](https://docs.sui.io/onchain-finance/deepbook/deepbookv3/contract-information/permissionless-pool.md)
 - [Query The
-    Pool](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/query-the-pool.md)
-- [Referral](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/referral.md)
+    Pool](https://docs.sui.io/onchain-finance/deepbook/deepbookv3/contract-information/query-the-pool.md)
+- [Referral](https://docs.sui.io/onchain-finance/deepbook/deepbookv3/contract-information/referral.md)
 - [Staking
-    Governance](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/staking-governance.md)
-- [Swaps](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/swaps.md)
+    Governance](https://docs.sui.io/onchain-finance/deepbook/deepbookv3/contract-information/staking-governance.md)
+- [Swaps](https://docs.sui.io/onchain-finance/deepbook/deepbookv3/contract-information/swaps.md)
 
 ### Onchain Finance/Examples Patterns
 - [Fixed Supply](https://docs.sui.io/onchain-finance/examples-patterns/fixed-supply.md)

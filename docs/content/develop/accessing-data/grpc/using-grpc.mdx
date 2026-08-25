@@ -1,7 +1,58 @@
 ---
 title: Querying Data with gRPC
-description: Learn how to use gRPC clients for the Sui network with grpcurl, Buf CLI, and popular programming languages.
-keywords: [ grpc, grpc client, grpcurl, typescript grpc, golang grpc, python grpc, sui grpc tutorial ]
+description: >-
+  Learn how to use gRPC clients for the Sui network with grpcurl, Buf CLI, and
+  popular programming languages.
+keywords:
+  - grpc
+  - grpc client
+  - grpcurl
+  - typescript grpc
+  - golang grpc
+  - python grpc
+  - sui grpc tutorial
+goal:
+  description: >-
+    Reader can use gRPC clients for the Sui network with grpcurl, Buf CLI, and
+    popular programming languages
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: gRPC queries
+    stage: History
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: gRPC queries
+    stage: Ship
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: gRPC queries
+    stage: Ship
+questions:
+  - How do I query data with grpc?
+  - What is Querying Data with gRPC in Sui?
+  - Why should I use querying data with grpc?
+answer: >-
+  Learn how to use gRPC clients for the Sui network with grpcurl, Buf CLI, and
+  popular programming languages.
 ---
 
 <AgentPrompt
@@ -13,13 +64,9 @@ This guide provides practical examples for querying the Sui network using gRPC. 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
 
-Before you begin, ensure you have access to a [gRPC](/develop/accessing-data/grpc)-enabled Sui full node. Check the [list of RPC and data providers](https://www.notion.so/mystenlabs/RPC-providers-offering-future-Sui-data-primitives-2466d9dcb4e980a99a36e9aafd8c17e0?source=copy_link) that support gRPC on their full nodes, and contact a provider directly to request access.
+- [x] Obtain access to a [gRPC](/develop/accessing-data/grpc)-enabled Sui full node. Check the [list of RPC and data providers](https://www.notion.so/mystenlabs/RPC-providers-offering-future-Sui-data-primitives-2466d9dcb4e980a99a36e9aafd8c17e0?source=copy_link) that support gRPC on their full nodes, and contact a provider directly to request access.
 
-If your provider doesn't yet support gRPC, you can:
-
-- Ask them to enable it.
-
-- Reach out to the Sui Foundation team on Discord or Telegram for help.
+If your provider does not support gRPC, ask them to enable it or contact the Sui Foundation team on Discord or Telegram for help.
 
 </TabItem>
 </Tabs>
@@ -32,13 +79,81 @@ In the Sui gRPC API, `FieldMask`s are used in requests like `GetTransaction`, `G
 
 Field masks are defined using `google.protobuf.FieldMask` and typically appear in the request message as `read_mask`. You can pass an explicit value of `*` to request all fields.
 
-If you omit `read_mask`, it defaults to `*` (all fields), unless documented otherwise.
+If you omit `read_mask`, the server applies a method-specific default that returns a minimal subset of fields (for example, `object_id,version,digest` for `GetObject`). Pass `*` explicitly to request all fields. See [`read_mask_defaults.rs`](https://github.com/MystenLabs/sui/blob/main/crates/sui-rpc-api/src/read_mask_defaults.rs) for the full list of defaults.
 
 - Each field path in the mask must match the field structure of the response proto message. Nested fields are supported using dot notation.
 
 - In batch APIs, only the top-level `read_mask` is respected. The API ignores any masks inside sub-requests.
 
 - In some cases, non-terminal repeated fields might be supported in the mask, even if this is atypical per standard `FieldMask` behavior.
+
+### Field path reference {#field-path-reference}
+
+The following tables list commonly used `read_mask` field paths for each service method. Field paths follow the proto message structure defined in the [`sui-apis` proto source](https://github.com/MystenLabs/sui-apis/tree/main/proto) and support dot notation for nested fields.
+
+#### `LedgerService.GetObject` / `BatchGetObjects`
+
+| Field path | Description |
+| --- | --- |
+| `object_id` | The object's unique ID |
+| `version` | The object's version (sequence number) |
+| `digest` | The object's content digest |
+| `object_type` | The Move type of the object |
+| `owner` | Ownership information (address-owned, shared, immutable, or wrapped) |
+| `contents` | The object's BCS-encoded content |
+| `contents.json` | The object's content as JSON |
+| `previous_transaction` | Digest of the transaction that last modified this object |
+| `storage_rebate` | Storage rebate in MIST if the object is deleted |
+
+#### `LedgerService.GetTransaction` / `BatchGetTransactions`
+
+| Field path | Description |
+| --- | --- |
+| `digest` | The transaction digest |
+| `effects` | Execution effects (status, gas used, created/mutated/deleted objects) |
+| `events` | Events emitted during execution |
+| `signatures` | Transaction signatures |
+| `transaction` | The transaction data (sender, commands, gas info) |
+| `balance_changes` | Balance changes caused by the transaction |
+| `objects` | Object mutations (created, mutated, deleted, wrapped, unwrapped) |
+
+#### `LedgerService.GetCheckpoint`
+
+| Field path | Description |
+| --- | --- |
+| `sequence_number` | The checkpoint sequence number |
+| `digest` | The checkpoint digest |
+| `summary` | Checkpoint summary (timestamp, gas costs, transaction count) |
+| `summary.timestamp` | Finalization timestamp |
+| `summary.total_network_transactions` | Cumulative transaction count up to this checkpoint |
+| `transactions` | Transaction digests included in this checkpoint |
+
+#### `LedgerService.GetEpoch`
+
+| Field path | Description |
+| --- | --- |
+| `epoch` | The epoch number |
+| `reference_gas_price` | Reference gas price for this epoch in MIST |
+| `start` | Epoch start timestamp |
+| `end` | Epoch end timestamp (set after epoch ends) |
+| `protocol_config` | Protocol configuration parameters |
+
+#### `SubscriptionService` streams
+
+`SubscribeCheckpoints`, `SubscribeTransactions`, and `SubscribeEvents` accept a `read_mask` that applies to the checkpoint, transaction, or event payload in each response frame. Use the same field paths as the corresponding `Get*` or `List*` methods.
+
+### Connection and buffer limits {#connection-limits}
+
+The following limits are configured in the Sui full node source code and apply to all gRPC endpoints unless the operator overrides them:
+
+| Limit type | Default value | Source |
+| --- | --- | --- |
+| Connection max age | 4 hours (server sends GOAWAY) | [`DEFAULT_MAX_CONNECTION_AGE`](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/src/rpc_config.rs) |
+| gRPC timeout (unary) | 60 seconds | [`DEFAULT_GRPC_TIMEOUT`](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/src/rpc_config.rs) |
+| Subscription buffer | 1,024 items per subscriber | [`CHECKPOINT_MAILBOX_SIZE`](https://github.com/MystenLabs/sui/blob/main/crates/sui-rpc-api/src/subscription/mod.rs) |
+| Max subscribers | 1,024 | [`DEFAULT_MAX_SUBSCRIBERS`](https://github.com/MystenLabs/sui/blob/main/crates/sui-rpc-api/src/subscription/mod.rs) |
+
+The public Sui Foundation endpoints at `fullnode.<network>.sui.io` are behind load balancers that impose additional rate limits (requests per second, concurrent streams, and message size caps) beyond what the node itself configures. Contact your provider for their specific limits, or check the full node's `grpc` configuration section if you operate your own node.
 
 ## Field presence
 
@@ -109,7 +224,7 @@ Interact with gRPC by using [`grpcurl`](https://github.com/fullstorydev/grpcurl)
 ### List available gRPC services
 
 ```shell
-$ grpcurl <full node URL:port> list
+$ grpcurl <FULL_NODE_URL> list
 ```
 
 The port on Sui Foundation managed full nodes is `443`. 
@@ -117,48 +232,161 @@ The port on Sui Foundation managed full nodes is `443`.
 ### List available APIs in the `LedgerService`
 
 ```shell
-$ grpcurl <full node URL:port> list sui.rpc.v2.LedgerService
+$ grpcurl <FULL_NODE_URL> list sui.rpc.v2.LedgerService
 ```
 
 ### Get the events and effects details of a particular transaction
 
 ```shell
-$ grpcurl -d '{ "digest": "J4NvV5iQZQFm1xKPYv9ffDCCPW6cZ4yFKsCqFUiDX5L4" }' <full node URL:port> sui.rpc.v2.LedgerService/GetTransaction
+$ grpcurl -d '{ "digest": "J4NvV5iQZQFm1xKPYv9ffDCCPW6cZ4yFKsCqFUiDX5L4" }' <FULL_NODE_URL> sui.rpc.v2.LedgerService/GetTransaction
 ```
 
 ### Get the transactions in a particular checkpoint
 
 ```shell
-$ grpcurl -d '{ "sequence_number": "164329987", "read_mask": { "paths": ["transactions"]} }' <full node URL:port> sui.rpc.v2.LedgerService/GetCheckpoint
+$ grpcurl -d '{ "sequence_number": "164329987", "read_mask": { "paths": ["transactions"]} }' <FULL_NODE_URL> sui.rpc.v2.LedgerService/GetCheckpoint
 ```
 
 ### Get the latest information for a coin type
 
 ```shell
-$ grpcurl -d '{ "coin_type": "0x2::sui::SUI" }' <full node URL:port> sui.rpc.v2.StateService/GetCoinInfo
+$ grpcurl -d '{ "coin_type": "0x2::sui::SUI" }' <FULL_NODE_URL> sui.rpc.v2.StateService/GetCoinInfo
 ```
 
 ### List the objects owned by a particular address
 
 ```shell
-$ grpcurl -d '{ "owner": "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b490281c8e4d5" }' <full node URL:port> sui.rpc.v2.StateService/ListOwnedObjects
+$ grpcurl -d '{ "owner": "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b490281c8e4d5" }' <FULL_NODE_URL> sui.rpc.v2.StateService/ListOwnedObjects
 ```
 
 ### List the dynamic fields in a particular object
 
 ```shell
-$ grpcurl -d '{ "parent": "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac" }' <full node URL:port> sui.rpc.v2.StateService/ListDynamicFields
+$ grpcurl -d '{ "parent": "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac" }' <FULL_NODE_URL> sui.rpc.v2.StateService/ListDynamicFields
+```
+
+### List transactions matching a filter {#ledger-history-list-apis}
+
+Use `LedgerService.ListTransactions` to query transactions over a checkpoint range with a `TransactionFilter`. The service returns a server-side stream.
+
+Run the following command:
+
+```shell
+$ grpcurl -d '{
+  "start_checkpoint": "1000000",
+  "end_checkpoint": "1000100",
+  "filter": {
+    "terms": [{
+      "literals": [{
+        "sender": { "address": "<ADDRESS>" }
+      }]
+    }]
+  }
+}' <FULL_NODE_URL> sui.rpc.v2.LedgerService/ListTransactions
+```
+
+### List events matching a filter
+
+Use `LedgerService.ListEvents` to query events over a checkpoint range with an `EventFilter`.
+
+Run the following command:
+
+```shell
+$ grpcurl -d '{
+  "start_checkpoint": "1000000",
+  "end_checkpoint": "1000100",
+  "filter": {
+    "terms": [{
+      "literals": [{
+        "event_type": { "event_type": "<PACKAGE>::module::MyEvent" }
+      }]
+    }]
+  }
+}' <FULL_NODE_URL> sui.rpc.v2.LedgerService/ListEvents
+```
+
+### List checkpoints
+
+Use `LedgerService.ListCheckpoints` to query a range of checkpoints.
+
+Run the following command:
+
+```shell
+$ grpcurl -d '{
+  "start_checkpoint": "1000000",
+  "end_checkpoint": "1000010",
+  "read_mask": { "paths": ["digest", "summary"] }
+}' <FULL_NODE_URL> sui.rpc.v2.LedgerService/ListCheckpoints
 ```
 
 ## Access streaming data with Buf
 
-`grpcurl` does not support server-side streaming RPCs. To test or experiment with `SubscriptionService`, use the [Buf CLI](https://buf.build/docs/cli/) instead.
+`grpcurl` handles server-side streaming for finite calls like `LedgerService.List*`. For indefinite `SubscriptionService` streams, the [Buf CLI](https://buf.build/docs/cli/) provides better timeout and reconnection control.
+
+### Subscribe to checkpoints
 
 ```shell
-$ buf curl --protocol grpc https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints -d '{ "readMask": "sequenceNumber,digest,summary.timestamp" }'  --timeout 1m
+$ buf curl --protocol grpc https://<FULL_NODE_URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints -d '{ "readMask": "sequenceNumber,digest,summary.timestamp" }'  --timeout 1m
+```
+
+### Subscribe to transactions with a filter
+
+Use `SubscriptionService.SubscribeTransactions` to stream transactions that match a `TransactionFilter` from the current tip of the chain.
+
+Run the following command:
+
+```shell
+$ buf curl --protocol grpc \
+  https://<FULL_NODE_URL>/sui.rpc.v2.SubscriptionService/SubscribeTransactions \
+  -d '{
+    "filter": {
+      "terms": [{
+        "literals": [{
+          "sender": { "address": "<ADDRESS>" }
+        }]
+      }]
+    }
+  }' \
+  --timeout 5m
+```
+
+### Subscribe to events with a filter
+
+Use `SubscriptionService.SubscribeEvents` to stream events that match an `EventFilter` from the current tip of the chain.
+
+Run the following command:
+
+```shell
+$ buf curl --protocol grpc \
+  https://<FULL_NODE_URL>/sui.rpc.v2.SubscriptionService/SubscribeEvents \
+  -d '{
+    "filter": {
+      "terms": [{
+        "literals": [{
+          "event_type": { "event_type": "<PACKAGE>::module::MyEvent" }
+        }]
+      }]
+    }
+  }' \
+  --timeout 5m
 ```
 
 
+### Pagination with watermarks {#list-api-pagination}
+
+Every response frame in a list API stream includes a `watermark` with a `cursor` that records the server's scan position. When the stream ends, the final frame contains a `query_end` with a `reason` field indicating why the server stopped:
+
+| **Reason** | **Meaning** | **Action** |
+|--------|---------|--------|
+| `ITEM_LIMIT` | Returned the requested number of items. | Resume from the latest `watermark.cursor`. |
+| `SCAN_LIMIT` | The server's internal scan budget was exhausted before finding enough results. Common with sparse filters. | Resume from the latest `watermark.cursor`. The server made progress even if it returned fewer items than requested. |
+| `LEDGER_TIP` | Reached the current tip of the chain (no `end_checkpoint` was specified). | No more results available yet. Poll later or switch to a `Subscribe*` stream. |
+| `CHECKPOINT_BOUND` | Reached the `end_checkpoint` specified in the request. | No more results in this range. |
+| `CURSOR_BOUND` | Reached a cursor-derived boundary. | Resume from the latest `watermark.cursor`. |
+
+To paginate, take the `cursor` from the latest `watermark` in the stream and pass it as `options.after` (for ascending order) or `options.before` (for descending order) in your next request. The `watermark` also tells you how much of the checkpoint range has been covered, which is useful when a sparse filter produces few or no matching items.
+
+For operator-level configuration of these APIs (timeouts, item limits, scan budgets), see [Ledger history configuration](/operators/full-node/sui-full-node#ledger-history-configuration).
 
 ## Build gRPC clients
 
@@ -221,7 +449,7 @@ const LedgerService = suiProto.sui.rpc.v2.LedgerService;
 
 // Create gRPC client
 const client = new LedgerService(
-  '<full node URL>:443',
+  '<FULL_NODE_URL>:443',
   grpc.credentials.createSsl()
 );
 
@@ -313,7 +541,7 @@ import (
 func main() {
     // Set up gRPC connection with TLS (port 443)
 		creds := credentials.NewTLS(&tls.Config{})
-		conn, err := grpc.Dial("<full node URL>:443", grpc.WithTransportCredentials(creds))
+		conn, err := grpc.Dial("<FULL_NODE_URL>:443", grpc.WithTransportCredentials(creds))
 		if err != nil {
 			log.Fatalf("failed to connect: %v", err)
 		}
@@ -395,7 +623,7 @@ from sui.rpc.v2 import ledger_service_pb2, ledger_service_pb2_grpc
 
 def main():
     # Create secure channel to port 443
-    channel = grpc.secure_channel("<full node URL>:443", grpc.ssl_channel_credentials())
+    channel = grpc.secure_channel("<FULL_NODE_URL>:443", grpc.ssl_channel_credentials())
     stub = ledger_service_pb2_grpc.LedgerServiceStub(channel)
 
     # Sample transaction digest in Base58 format

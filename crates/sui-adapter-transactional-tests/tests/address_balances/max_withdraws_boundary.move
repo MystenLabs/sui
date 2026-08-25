@@ -11,7 +11,7 @@
 //   - 10 explicit reservations: at boundary, passes.
 //   - 11 explicit reservations: over limit, rejects.
 
-//# init --addresses test=0x0 --accounts A --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
+//# init --addresses test=0x0 --accounts A
 
 // Seed A's address balance with plenty.
 //# programmable --sender A --inputs 1000000000000 @A

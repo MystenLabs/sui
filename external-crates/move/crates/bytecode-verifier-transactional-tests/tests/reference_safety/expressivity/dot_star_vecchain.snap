@@ -1,0 +1,14 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 1 task
+
+task 0, lines 4-20:
+//# publish
+Error: Unable to publish module '00000000000000000000000000000000000000000000000000000000000000c5::l5_imm_released_then_write'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0xc5::l5_imm_released_then_write,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 8)],
+}

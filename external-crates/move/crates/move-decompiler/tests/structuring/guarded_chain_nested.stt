@@ -1,0 +1,24 @@
+// Two chained pyth-nested checks to a single far join (20). check1 (nodes 0/1/2) falls
+// through to check2 (node 4); both checks' fail-arms jump to join 20.
+//
+//   check1: 0 cond(a>b) {1 cond(thr){3 fail->20 | 4=next}} {2 cond(thr){5 fail->20 | 4=next}}
+//   check2: 4 cond(a>b) {6 cond(thr){8 fail->20 | 10=rest}} {7 cond(thr){9 fail->20 | 10=rest}}
+//   10 rest -> 20
+//   20 join sink
+//
+// 4.idom = 0, 20.idom = 0. When node 0 hoists orphans [4, 20], check2's structure (4_body)
+// sits as a sibling BEFORE the join 20. The fail-jumps `goto 20` inside check1's arms are at
+// tail positions (reachable by elide_tail_jump_to), but check2's fail-jumps are buried inside
+// 4_body's non-last IfElse — elide_tail_jump_to only walks the Seq's LAST item, so they survive.
+cond,0,1,2
+cond,1,3,4
+cond,2,5,4
+code,3,20
+code,5,20
+cond,4,6,7
+cond,6,8,10
+cond,7,9,10
+code,8,20
+code,9,20
+code,10,20
+code,20

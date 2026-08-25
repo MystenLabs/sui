@@ -1,7 +1,63 @@
 ---
 title: Authenticated Events
-description: Cryptographically verifiable Move events that can be verified by a light client without trusting any intermediary, suitable for trustless event consumption.
-keywords: [authenticated events, light client, event verification, MMR, Merkle Mountain Range, event streaming, cryptographic verification, move events, event completeness]
+description: >-
+  Cryptographically verifiable Move events that can be verified by a light
+  client without trusting any intermediary, suitable for trustless event
+  consumption.
+keywords:
+  - authenticated events
+  - light client
+  - event verification
+  - MMR
+  - Merkle Mountain Range
+  - event streaming
+  - cryptographic verification
+  - move events
+  - event completeness
+goal:
+  description: >-
+    Reader understands how authenticated events let a light client
+    cryptographically verify Move events without trusting an intermediary
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Authenticated events
+    stage: Advanced
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Authenticated events
+    stage: History
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Authenticated events
+    stage: Ship
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Authenticated events
+    stage: Verify & Secure
+questions:
+  - What is Authenticated Events in Sui?
+  - Why authenticated events?
+  - How does authenticated events work on Sui?
+answer: >-
+  Cryptographically verifiable Move events that can be verified by a light
+  client without trusting any intermediary, suitable for trustless event
+  consumption.
 ---
 
 Authenticated events provide a cryptographically verifiable stream of Move events from Sui smart contracts. Unlike regular events, authenticated events can be verified by a light client without trusting any intermediary, making them suitable for applications that require trustless event consumption.

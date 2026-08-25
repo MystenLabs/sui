@@ -55,6 +55,9 @@ const SUI_DISPLAY_REGISTRY_OBJECT_ID: address = @0xd;
 /// The hardcoded ID for the AddressAliasState Object.
 const SUI_ADDRESS_ALIAS_STATE_ID: address = @0xa;
 
+/// The hardcoded ID for the singleton ForwardingAddressRegistry object.
+const SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID: address = @0xfa;
+
 /// Sender is not @0x0 the system address.
 const ENotSystemAddress: u64 = 0;
 
@@ -199,6 +202,14 @@ public(package) fun address_alias_state(): UID {
     }
 }
 
+/// Create the `UID` for the singleton `ForwardingAddressRegistry` object.
+/// This should only be called once from `forwarding_address`.
+public(package) fun forwarding_address_registry(): UID {
+    UID {
+        id: ID { bytes: SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID },
+    }
+}
+
 /// Get the inner `ID` of `uid`
 public fun uid_as_inner(uid: &UID): &ID {
     &uid.id
@@ -267,8 +278,8 @@ public fun id_address<T: key>(obj: &T): address {
 native fun borrow_uid<T: key>(obj: &T): &UID;
 
 /// Generate a new UID specifically used for creating a UID from a hash
-public(package) fun new_uid_from_hash(bytes: address): UID {
-    record_new_uid(bytes);
+public(package) fun new_uid_from_hash(parent: address, bytes: address): UID {
+    record_new_uid_from_hash(parent, bytes);
     UID { id: ID { bytes } }
 }
 
@@ -277,8 +288,9 @@ public(package) fun new_uid_from_hash(bytes: address): UID {
 // helper for delete
 native fun delete_impl(id: address);
 
-// marks newly created UIDs from hash
-native fun record_new_uid(id: address);
+// marks newly created UIDs from hash, tracking the root version of `parent` so that the new UID
+// `bytes` inherits the parent's root version.
+native fun record_new_uid_from_hash(parent: address, bytes: address);
 
 #[test_only]
 /// Return the most recent created object ID.

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E10008]: ambiguous attribute value
+error[EC10008]: ambiguous attribute value
   ┌─ tests/move_check/warning_suppression/conflict_warn_deny_same_code.move:4:12
   │
 4 │     #[warn(unused_variable)]
@@ -13,7 +13,7 @@ error[E10008]: ambiguous attribute value
 5 │     #[deny(unused_variable)]
   │            --------------- Conflicting filter for 'unused_variable' specified here
 
-error[E09002]: unused variable
+error[EC09002]: unused variable
   ┌─ tests/move_check/warning_suppression/conflict_warn_deny_same_code.move:7:13
   │
 5 │     #[deny(unused_variable)]

@@ -1,0 +1,44 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 4-24:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::push_through_mut_alias_len_through_imm'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::push_through_mut_alias_len_through_imm,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 18)],
+}
+
+task 1, lines 26-54:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::variant_switch_through_imm_alias'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x4::variant_switch_through_imm_alias,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 11)],
+}
+
+task 2, lines 56-86:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000005::mutate_resource_holder_through_alias'. Got VMError: {
+    major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x5::mutate_resource_holder_through_alias,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 11)],
+}
+
+task 3, lines 88-117:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::swap_through_mut_alias_of_resource_vector'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x6::swap_through_mut_alias_of_resource_vector,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 14)],
+}

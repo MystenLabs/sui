@@ -12,7 +12,7 @@
 //! | `!(a <= b)`  | `a > b`  |
 //! | `!(a >= b)`  | `a < b`  |
 //!
-//! Double-negation (`!!e` → `e`) is already handled by `utils::negate`; this pass only
+//! Double-negation (`!!e` -> `e`) is already handled by `utils::negate`; this pass only
 //! covers the comparison case. The structurer often emits `!(cond)` shapes after inverting
 //! a branch direction (e.g., `swap_continue_break`'s output), and these rewrites remove a
 //! visible parenthesis and one logical step per guard.

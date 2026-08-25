@@ -6,17 +6,21 @@
 //! the `Env` provides consistent access to shared components such as the VM or the protocol config.
 
 use crate::{
-    data_store::{PackageStore, cached_package_store::CachedPackageStore},
+    data_store::{VerifiedPackageStore, cached_package_store::CachedPackageStore},
     execution_mode::ExecutionMode,
     execution_value::ExecutionState,
     static_programmable_transactions::{
         execution::context::subst_signature,
         linkage::{analysis::LinkageAnalyzer, resolved_linkage::ExecutableLinkage},
-        loading::ast::{self as L, Datatype, LoadedFunction, LoadedFunctionInstantiation, Type},
+        loading::ast::{
+            self as L, Datatype, DeserializedPackage, LoadedFunction, LoadedFunctionInstantiation,
+            Type,
+        },
     },
 };
 use move_binary_format::{
-    errors::VMError,
+    CompiledModule,
+    errors::{Location, VMError, VMResult},
     file_format::{Ability, AbilitySet, TypeParameterIndex},
 };
 use move_core_types::{
@@ -42,7 +46,7 @@ use sui_types::{
     execution_status::{ExecutionErrorKind, TypeArgumentError},
     funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT,
     gas_coin::GasCoin,
-    move_package::{UpgradeCap, UpgradeReceipt, UpgradeTicket},
+    move_package::{MovePackage, UpgradeCap, UpgradeReceipt, UpgradeTicket},
     object::Object,
     type_input::{StructInput, TypeInput},
 };
@@ -600,6 +604,39 @@ where
         let tag = to_type_tag_internal(self, type_arg_idx, ty)?;
         self.load_vm_type_from_type_tag(Some(type_arg_idx), &tag)
     }
+
+    pub fn deserialize_package(
+        &self,
+        module_bytes: &[Vec<u8>],
+        dep_ids: &[ObjectID],
+    ) -> Result<DeserializedPackage, Mode::Error> {
+        assert_invariant!(
+            !module_bytes.is_empty(),
+            "empty package is checked in transaction input checker"
+        );
+
+        let total_bytes = module_bytes.iter().map(|v| v.len()).sum();
+
+        let binary_config = self.protocol_config.binary_config(None);
+        let deserialized_modules = module_bytes
+            .iter()
+            .map(|b| {
+                CompiledModule::deserialize_with_config(b, &binary_config)
+                    .map_err(|e| e.finish(Location::Undefined))
+            })
+            .collect::<VMResult<Vec<CompiledModule>>>()
+            .map_err(|e| self.convert_vm_error(e))?;
+        let computed_digest = MovePackage::compute_digest_for_modules_and_deps(
+            module_bytes,
+            dep_ids,
+            /* hash_modules */ true,
+        );
+        Ok(DeserializedPackage {
+            deserialized_modules,
+            total_bytes,
+            computed_digest,
+        })
+    }
 }
 
 fn to_identifier<E: ExecutionErrorTrait>(name: String) -> Result<Identifier, E> {
@@ -609,7 +646,7 @@ fn to_identifier<E: ExecutionErrorTrait>(name: String) -> Result<Identifier, E> 
 
 fn convert_vm_error<E: ExecutionErrorTrait>(
     error: VMError,
-    store: &dyn PackageStore,
+    store: &VerifiedPackageStore<'_>,
     linkage: Option<&ExecutableLinkage>,
     _protocol_config: &ProtocolConfig,
 ) -> E {

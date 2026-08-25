@@ -51,7 +51,7 @@ use sui_system::sui_system_state_inner::{
     Self,
     SystemParameters,
     SuiSystemStateInner,
-    SuiSystemStateInnerV2
+    SuiSystemStateInnerV2,
 };
 use sui_system::validator::Validator;
 use sui_system::validator_cap::UnverifiedValidatorOperationCap;

@@ -1,0 +1,6 @@
+[package]
+name = "staleness"
+edition = "2024.beta"
+
+[addresses]
+staleness = "0x42"

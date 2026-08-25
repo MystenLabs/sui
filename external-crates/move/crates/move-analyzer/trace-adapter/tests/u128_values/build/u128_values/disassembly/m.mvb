@@ -1,0 +1,31 @@
+// Move bytecode v7
+module 0.m {
+use 0000000000000000000000000000000000000000000000000000000000000001::unit_test;
+
+observe(small#0#0: u128, big#0#0: u128, max#0#0: u128): u128 * u128 * u128 {
+B0:
+	0: MoveLoc[0](small#0#0: u128)
+	1: MoveLoc[1](big#0#0: u128)
+	2: MoveLoc[2](max#0#0: u128)
+	3: Ret
+}
+
+test() {
+B0:
+	0: LdU128(9007199254740993)
+	1: LdU128(18446744073709551615)
+	2: LdU128(340282366920938463463374607431768211455)
+	3: Call observe(u128, u128, u128): u128 * u128 * u128
+	4: Pop
+	5: Pop
+	6: Pop
+	7: Ret
+}
+
+entry public unit_test_poison() {
+B0:
+	0: Call unit_test::poison()
+	1: Ret
+}
+
+}

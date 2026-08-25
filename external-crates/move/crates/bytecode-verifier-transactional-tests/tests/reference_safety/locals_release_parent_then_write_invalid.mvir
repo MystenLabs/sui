@@ -1,0 +1,22 @@
+// release the parent, re-borrow the local, write while a descendant of the parent is live
+
+//# publish
+mvir 0x42::m {
+    public struct S has drop { f: u64 }
+
+    fun t() {
+        let x: Self::S;
+        let r: &mut Self::S;
+        let fr: &mut u64;
+        let r2: &mut Self::S;
+    label b0:
+        x = S { f: 1 };
+        r = &mut x;
+        fr = &mut copy(r).S::f;
+        _ = move(r);
+        r2 = &mut x;
+        *move(r2) = S { f: 2 };
+        *move(fr) = 3;
+        return;
+    }
+}

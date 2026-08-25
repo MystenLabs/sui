@@ -69,6 +69,7 @@ use sui_move_build::BuildConfig as SuiBuildConfig;
 use sui_package_alt::{SuiFlavor, find_environment};
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::{LocalDatabase, get_available_port};
+use sui_prompt::{self, execute_prompt_command};
 use sui_protocol_config::Chain;
 use sui_replay_2 as SR2;
 use sui_rpc_api::Client;
@@ -379,6 +380,10 @@ pub enum SuiCommand {
         cmd: sui_move::Command,
     },
 
+    /// Expert Sui and Move knowledge for AI agents (run `sui prompt` to start).
+    #[clap(name = "prompt")]
+    Prompt(sui_prompt::Prompt),
+
     /// Command to initialize the bridge committee, usually used when
     /// running local bridge cluster.
     #[clap(name = "bridge-committee-init")]
@@ -516,12 +521,16 @@ impl SuiCommand {
             }
             SuiCommand::GenesisCeremony(cmd) => run(cmd),
             SuiCommand::KeyTool {
-                keystore_path: _,
+                keystore_path,
                 json,
                 cmd,
             } => {
                 let config_path = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
                 let mut context = WalletContext::new(&config_path)?;
+                if let Some(keystore_path) = keystore_path {
+                    context.config.keystore =
+                        Keystore::from(FileBasedKeystore::load_or_create(&keystore_path)?);
+                }
 
                 cmd.execute(&mut context).await?.print(!json);
                 Ok(())
@@ -713,6 +722,10 @@ impl SuiCommand {
                         .await
                     }
                 }
+            }
+            SuiCommand::Prompt(prompt) => {
+                execute_prompt_command(prompt)?;
+                Ok(())
             }
             SuiCommand::BridgeInitialize {
                 network_config,
@@ -1214,12 +1227,24 @@ async fn start(
         let mut graphql_config = GraphQlConfig::default();
         graphql_config.zklogin.env = sui_indexer_alt_graphql::config::ZkLoginEnv::Test;
 
+        // The local fullnode already serves the `LedgerService` gRPC API that
+        // `--ledger-grpc-url` points at, so KV point-lookups can be served from it directly.
+        let kv_args = KvArgs {
+            ledger_grpc_url: Some(
+                fullnode_grpc_url
+                    .as_str()
+                    .parse()
+                    .context("Failed to parse fullnode gRPC URL into a ledger gRPC URI")?,
+            ),
+            ..Default::default()
+        };
+
         rpc_services = rpc_services.merge(
             start_graphql(
                 database_url.clone(),
                 fullnode_args,
                 DbArgs::default(),
-                KvArgs::default(),
+                kv_args,
                 consistent_reader_args,
                 graphql_args,
                 SystemPackageTaskArgs::default(),

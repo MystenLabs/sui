@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: true
 ---
-warning[Lint W04001]: constant should follow naming convention
+warning[WL04001]: constant should follow naming convention
   ┌─ tests/linter/warn_lint_filter.move:5:5
   │
 4 │     #[warn(lint(constant_naming))]

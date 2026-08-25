@@ -24,13 +24,12 @@ public struct Default2 {
 public struct Sort has key, copy, drop, store {}
 
 // abilities support comments in between
-public struct Cmt has /* please */ key /* don't */ , /* do */ store /* this */  {}
+public struct Cmt has /* please */ key, /* don't */ /* do */ store /* this */  {}
 
 // line comments are also possible, but
 // let's hope no one ever uses them
 public struct Cmt2 has copy, drop, // kill me
-store // trailing
- {}
+store {} // trailing
 
 // empty struct can be with comemtns
 // both single and multi-line
@@ -113,8 +112,9 @@ public struct Point(
 
 // allows block comments before types
 /* what about this? */ public struct /* oh my god */ Point /* hello */ (
-    /* X */ u64, /* post */
-    /* Y */ u64, /* post okay */
+    /* X */ u64 /* post */,
+    // trailing
+    /* Y */ u64 /* post okay */,
     // trailing
 ) // trailing for Point
 

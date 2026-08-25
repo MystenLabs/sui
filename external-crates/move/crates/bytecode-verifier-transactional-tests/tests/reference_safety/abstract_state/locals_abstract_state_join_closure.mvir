@@ -1,0 +1,31 @@
+// the joined graph is an edge union, so ROOT --local#x.field#f--> r2 is absent and StLoc x is
+// accepted
+
+//# publish
+mvir 0x2::joinclosure {
+    public struct S has drop { f: u64 }
+
+    fun t(c: bool) {
+        let x: Self::S;
+        let y: Self::S;
+        let r1: &mut Self::S;
+        let r2: &mut u64;
+    label b0:
+        x = S { f: 1 };
+        y = S { f: 2 };
+        r1 = &mut y;
+        r2 = &mut copy(r1).S::f;
+    label loop_cond:
+        jump_if (move(c)) loop_end;
+    label loop_body:
+        c = false;
+        r1 = &mut x;
+        jump loop_cond;
+    label loop_end:
+        _ = move(r1);
+        *move(r2) = 5;
+        return;
+    }
+}
+
+//# view-abstract-state 0x2::joinclosure::t

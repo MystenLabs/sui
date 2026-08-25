@@ -1,0 +1,14 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, lines 23-44:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::unpack_variant_value_after_borrow_invalid'. Got VMError: {
+    major_status: MOVELOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::unpack_variant_value_after_borrow_invalid,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}

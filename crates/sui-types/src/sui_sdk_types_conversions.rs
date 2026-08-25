@@ -14,7 +14,7 @@ use sui_sdk_types::{
     Bls12381PublicKey, Bls12381Signature, CanceledTransaction, CanceledTransactionV2, ChangeEpoch,
     CheckpointCommitment, CheckpointContents, CheckpointData, CheckpointSummary, Command,
     CommandArgumentError, ConsensusDeterminedVersionAssignments, Digest, Ed25519PublicKey,
-    Ed25519Signature, EndOfEpochTransactionKind, ExecutionError, ExecutionStatus,
+    Ed25519Signature, EndOfEpochTransactionKind, Event, ExecutionError, ExecutionStatus,
     ExecutionTimeObservationKey, ExecutionTimeObservations, FundsWithdrawal, IdOperation,
     Identifier, Input, Jwk, JwkId, MakeMoveVector, MergeCoins, MoveCall, MoveLocation, MovePackage,
     MultisigMemberPublicKey, MultisigMemberSignature, Mutability, Object, ObjectIn, ObjectOut,
@@ -131,6 +131,7 @@ bcs_convert_impl!(
     crate::passkey_authenticator::PasskeyAuthenticator,
     PasskeyAuthenticator
 );
+bcs_convert_impl!(crate::event::Event, Event);
 bcs_convert_impl!(crate::effects::TransactionEvents, TransactionEvents);
 bcs_convert_impl!(crate::transaction::TransactionKind, TransactionKind);
 bcs_convert_impl!(crate::move_package::MovePackage, MovePackage);
@@ -695,6 +696,8 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
         match value {
             crate::transaction::TransactionExpiration::None => Self::None,
             crate::transaction::TransactionExpiration::Epoch(epoch) => Self::Epoch(epoch),
+            // TODO: `Validity`'s allowed_proposers has no sdk representation yet, so a
+            // `Validity` expiration is reported as `ValidDuring`.
             crate::transaction::TransactionExpiration::ValidDuring {
                 min_epoch,
                 max_epoch,
@@ -702,6 +705,15 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
                 max_timestamp,
                 chain,
                 nonce,
+            }
+            | crate::transaction::TransactionExpiration::Validity {
+                min_epoch,
+                max_epoch,
+                min_timestamp,
+                max_timestamp,
+                chain,
+                nonce,
+                allowed_proposers: _,
             } => Self::ValidDuring {
                 min_epoch,
                 max_epoch,
@@ -852,6 +864,8 @@ impl From<crate::execution_status::CommandArgumentError> for CommandArgumentErro
                 Self::CannotWriteToExtendedReference,
             crate::execution_status::CommandArgumentError::InvalidReferenceArgument =>
                 Self::InvalidReferenceArgument,
+            crate::execution_status::CommandArgumentError::InvalidTxContext =>
+                Self::InvalidTxContext,
         }
     }
 }
@@ -1627,6 +1641,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             ) => Self::WriteAccumulatorStorageCost {
                 storage_cost: storage_cost.storage_cost,
             },
+            crate::transaction::EndOfEpochTransactionKind::ForwardingAddressRegistryCreate => {
+                Self::ForwardingAddressRegistryCreate
+            }
         }
     }
 }

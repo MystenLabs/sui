@@ -3,7 +3,7 @@
 
 // Test settled_funds_value from sui::balance
 
-//# init --addresses test=0x0 --accounts A B C D --enable-accumulators
+//# init --addresses test=0x0 --accounts A B C D
 
 //# publish
 module test::balance_read;

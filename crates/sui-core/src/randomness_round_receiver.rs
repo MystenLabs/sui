@@ -26,7 +26,6 @@ use tokio::task::JoinHandle;
 use tracing::{debug, info, instrument, warn};
 
 use crate::authority::AuthorityState;
-use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 
 /// A randomness signature for a specific epoch and round, broadcast to observer peers.
 #[derive(Debug, Serialize, Deserialize, Clone)]

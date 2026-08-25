@@ -4,14 +4,16 @@
 use std::future::Future;
 use std::time::Duration;
 
+use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
 use sui_inverted_index::BitmapQuery;
+use sui_inverted_index::SkipPolicy;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::tables::event_bitmap_index;
 use sui_kvstore::tables::transaction_bitmap_index;
-use sui_rpc::proto::sui::rpc::v2alpha::EventFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter;
+use sui_rpc::proto::sui::rpc::v2::EventFilter;
+use sui_rpc::proto::sui::rpc::v2::TransactionFilter;
 use sui_rpc_api::RpcError;
 use tokio::time::Instant;
 
@@ -43,7 +45,6 @@ pub(crate) struct QueryContext {
     method: &'static str,
     checkpoint_hi_exclusive: u64,
     ledger_history: LedgerHistoryConfig,
-    request_bigtable_concurrency: usize,
     stages: StagesConfig,
 }
 
@@ -55,7 +56,6 @@ impl QueryContext {
         method: &'static str,
         checkpoint_hi_exclusive: u64,
         ledger_history: LedgerHistoryConfig,
-        request_bigtable_concurrency: usize,
         stages: StagesConfig,
     ) -> Self {
         Self {
@@ -65,7 +65,6 @@ impl QueryContext {
             method,
             checkpoint_hi_exclusive,
             ledger_history,
-            request_bigtable_concurrency,
             stages,
         }
     }
@@ -91,10 +90,6 @@ impl QueryContext {
         self.checkpoint_hi_exclusive
     }
 
-    pub(crate) fn request_bigtable_concurrency(&self) -> usize {
-        self.request_bigtable_concurrency
-    }
-
     /// Per-request evaluated-bucket budget for `spec`. Handlers pass this
     /// into `eval_bitmap_query_stream`, which constructs a
     /// `BitmapScanBudget` internally and reports the resulting
@@ -109,14 +104,59 @@ impl QueryContext {
             other => panic!("unknown bitmap index table {other}; add a budget for it"),
         }
     }
-
-    pub(crate) fn observe_response_render(&self, elapsed: std::time::Duration) {
-        self.metrics.observe_response_render(self.method, elapsed);
+    pub(crate) fn bitmap_skip_policy(&self) -> SkipPolicy {
+        self.ledger_history.bitmap_skip_policy()
     }
 
-    pub(crate) fn observe_stream_item_yield_wait(&self, elapsed: std::time::Duration) {
+    pub(crate) fn observe_response_render(
+        &self,
+        resolution: &'static str,
+        elapsed: std::time::Duration,
+    ) {
         self.metrics
-            .observe_stream_item_yield_wait(self.method, elapsed);
+            .observe_response_render(self.method, resolution, elapsed);
+    }
+
+    pub(crate) fn observe_response_page_bytes(&self, resolution: &'static str, bytes: usize) {
+        self.metrics
+            .observe_response_page_bytes(self.method, resolution, bytes);
+    }
+
+    pub(crate) fn observe_stream_first_frame_latency(
+        &self,
+        resolution: &'static str,
+        elapsed: std::time::Duration,
+    ) {
+        self.metrics
+            .observe_stream_first_frame_latency(self.method, resolution, elapsed);
+    }
+
+    pub(crate) fn observe_stream_frame_yield_wait(
+        &self,
+        resolution: &'static str,
+        elapsed: std::time::Duration,
+    ) {
+        self.metrics
+            .observe_stream_frame_yield_wait(self.method, resolution, elapsed);
+    }
+
+    pub(crate) fn inc_stream_watermark_frames(&self) {
+        self.metrics.inc_stream_watermark_frames(self.method);
+    }
+
+    pub(crate) async fn next_response_item<T>(
+        &self,
+        resolution: &'static str,
+        stream: &mut BoxStream<'static, T>,
+    ) -> Option<T> {
+        let poll_started_at = Instant::now();
+        let item = stream.next().await;
+        self.metrics.observe_final_stream_poll_wait(
+            self.method,
+            resolution,
+            poll_started_at.elapsed(),
+        );
+        item
     }
 
     pub(crate) fn transaction_filter_query(
@@ -131,10 +171,8 @@ impl QueryContext {
     }
 
     /// Callback for `eval_bitmap_query_stream`'s `on_metrics`. Fires exactly
-    /// once when the eval pipeline drops (natural end, error, or consumer
-    /// cancel) and records `buckets_evaluated` to the
-    /// `kv_rpc_bitmap_buckets_evaluated` histogram for budget tuning. Also
-    /// emits a debug log line for ad-hoc inspection.
+    /// once when the eval pipeline drops and records charged, discarded, and
+    /// seek counts for budget and gap-policy tuning.
     pub(crate) fn bitmap_scan_observer(
         &self,
     ) -> impl FnOnce(sui_inverted_index::BitmapScanMetrics) + Send + 'static {
@@ -142,9 +180,13 @@ impl QueryContext {
         let method = self.method;
         move |m| {
             metrics.observe_bitmap_buckets_evaluated(method, m.buckets_evaluated);
+            metrics.observe_bitmap_buckets_discarded(method, m.buckets_discarded);
+            metrics.observe_bitmap_leaf_seeks(method, m.leaf_seeks);
             tracing::debug!(
                 method,
                 buckets_evaluated = m.buckets_evaluated,
+                buckets_discarded = m.buckets_discarded,
+                leaf_seeks = m.leaf_seeks,
                 "bitmap scan complete"
             );
         }
@@ -189,7 +231,6 @@ impl KvRpcServer {
             operation,
             self.cached_checkpoint_hi_exclusive().await?,
             self.ledger_history.clone(),
-            self.request_bigtable_concurrency,
             self.stages.clone(),
         ))
     }

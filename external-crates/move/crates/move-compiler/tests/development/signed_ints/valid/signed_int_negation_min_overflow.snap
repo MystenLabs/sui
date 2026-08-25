@@ -5,4 +5,34 @@ info:
   edition: development
   lint: false
 ---
+warning[WC08002]: operation always errors
+  ┌─ tests/development/signed_ints/valid/signed_int_negation_min_overflow.move:9:22
+  │
+9 │         let _y: i8 = -x; // overflows: -(-128) doesn't fit in i8
+  │                      ^^ Negating '-128' is outside the range of 'i8'. This operation always errors at runtime
+  │
+  = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
+warning[WC08002]: operation always errors
+   ┌─ tests/development/signed_ints/valid/signed_int_negation_min_overflow.move:14:23
+   │
+14 │         let _y: i64 = -x; // overflows
+   │                       ^^ Negating '-9223372036854775808' is outside the range of 'i64'. This operation always errors at runtime
+   │
+   = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[WC08002]: operation always errors
+   ┌─ tests/development/signed_ints/valid/signed_int_negation_min_overflow.move:24:23
+   │
+24 │         let _x: i8 = (128i64 as i8); // 128 doesn't fit in i8
+   │                       ^^^^^^^^^^^^ The 'i64' value '128' is outside the range of 'i8'. This operation always errors at runtime
+   │
+   = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[WC08002]: operation always errors
+   ┌─ tests/development/signed_ints/valid/signed_int_negation_min_overflow.move:28:23
+   │
+28 │         let _x: i8 = (-129i64 as i8); // -129 doesn't fit in i8
+   │                       ^^^^^^^^^^^^^ The 'i64' value '-129' is outside the range of 'i8'. This operation always errors at runtime
+   │
+   = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

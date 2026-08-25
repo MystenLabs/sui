@@ -9,7 +9,7 @@ use a::b::{
     Self as c,
     e as f,
     g as f,
-    h as i
+    h as i,
 };
 use std::ascii::String as ASCII;
 use std::option::{Self as opt, Option};
@@ -25,7 +25,7 @@ use sui::sui::SUI;
 use sui::transfer_policy::{
     Self,
     TransferPolicy,
-    TransferRequest
+    TransferRequest,
 };
 
 public fun do_something() {}

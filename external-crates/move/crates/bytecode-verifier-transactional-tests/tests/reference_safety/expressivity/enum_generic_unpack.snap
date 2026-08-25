@@ -1,0 +1,14 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 1 task
+
+task 0, lines 4-24:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000404::generic_imm_and_mut'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x404::generic_imm_and_mut,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 5)],
+}

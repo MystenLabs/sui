@@ -1,6 +1,37 @@
 ---
 title: MDX Components
 description: Extensions to the Sui docs rendering engine.
+keywords:
+  - MDX
+  - components
+  - documentation
+  - frontmatter
+  - Docusaurus
+  - contributing
+goal:
+  description: >-
+    Contributor can use the custom MDX components available in Sui docs, such as
+    tabs, admonitions, and ImportContent
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is MDX Components in Sui?
+  - Where can I find the mdx components reference?
+  - How does mdx components work on Sui?
+answer: Extensions to the Sui docs rendering engine.
 ---
 
 The Sui developer documentation uses the MarkdownX (`.mdx`) format for all pages. MDX allows [JSX within Markdown content](https://mdxjs.com/). The site uses Docusaurus, an open-source framework that provides built-in features like admonitions and Mermaid diagrams. It also utilizes community plugins and custom components the documentation team developed. While none of these features are required in a contribution, you can include them if they enhance the reader’s experience.
@@ -72,7 +103,7 @@ In local development, the setting `onBrokenMarkdownLinks: "warn"` remains at `"w
 **Example:**
 
 ```jsx
-<UnsafeLink href="link/to/path">Link title</UnsafeLink>
+<UnsafeLink href="/getting-started">Link title</UnsafeLink>
 ```
 
 ## Custom admonition boxes
@@ -99,7 +130,7 @@ Use `<Tabs>` and `<TabItem>` to segment content that achieves the same goal but 
 
 Docusaurus automatically imports the `<Tabs>` and `<TabItem>` components into every documentation page. You do not need to import them manually. 
 
-The docs use a few custom scripts to properly render and style the `<Tabs>` component. These scripts let you use `<Tabs>` with [`{@include:}` snippets](#snippets-include) without breaking the page's formatting.
+The docs use a few custom scripts to properly render and style the `<Tabs>` component. These scripts let you use `<Tabs>` with [`{@include:}` snippets](#snippet-mode) without breaking the page's formatting.
 
 When using multiple instances of `<Tabs>` within a page, use `groupId` to persist selections across sections. The name of each `<TabItem>` across `<Tabs>` components using `groupId` must match for the tabs to function properly.
 

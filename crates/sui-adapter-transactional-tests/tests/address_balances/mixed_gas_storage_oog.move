@@ -6,7 +6,7 @@
 // value and clear the secondary's Split withdraw accumulator event; re-smash
 // must re-mutate and re-emit consistently.
 
-//# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
+//# init --addresses test=0x0 --accounts A B
 
 //# publish
 module test::oog;

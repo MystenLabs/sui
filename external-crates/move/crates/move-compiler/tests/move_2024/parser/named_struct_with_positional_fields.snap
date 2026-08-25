@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_2024/parser/named_struct_with_positional_fields.move:3:26
   │
 3 │     public struct Foo{u64, u16} has copy, drop;
@@ -14,7 +14,7 @@ error[E01002]: unexpected token
   │                          Unexpected ','
   │                          Expected ':'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_2024/parser/named_struct_with_positional_fields.move:3:31
   │
 3 │     public struct Foo{u64, u16} has copy, drop;

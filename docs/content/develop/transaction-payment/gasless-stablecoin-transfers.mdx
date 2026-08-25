@@ -1,7 +1,55 @@
 ---
 title: Gasless Stablecoin Transfers
-description: Gasless stablecoin transfers on Sui enable peer-to-peer payments of qualified stablecoins to execute without paying gas fees in SUI.
-keywords: [ usdc, stablecoins, sui dollar, usdsui, usdy, ausd, fdusd, buck, ysld, gasless, free tier ]
+description: >-
+  Gasless stablecoin transfers on Sui enable peer-to-peer payments of qualified
+  stablecoins to execute without paying gas fees in SUI.
+keywords:
+  - usdc
+  - stablecoins
+  - sui dollar
+  - usdsui
+  - usdy
+  - ausd
+  - fdusd
+  - buck
+  - ysld
+  - gasless
+  - free tier
+goal:
+  description: >-
+    Reader understands gasless stablecoin transfers on Sui enable peer-to-peer
+    payments of qualified stablecoins to execute
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Gasless stablecoin transfers
+    stage: Gas
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Gasless stablecoin transfers
+    stage: Authorization
+questions:
+  - What is Gasless Stablecoin Transfers in Sui?
+  - What gasless stablecoin transfers don't cover?
+  - How do I monitor gasless stablecoin transfers?
+answer: >-
+  Gasless stablecoin transfers on Sui enable peer-to-peer payments of qualified
+  stablecoins to execute without paying gas fees in SUI.
 ---
 
 Chain-specific gas fees can introduce several points of friction to end users and complicate institutional compliance for asset trading or payments. Eliminating chain-specific gas is a major simplification for regulated institutions to conduct payments without the burden of holding digital assets that might fluctuate in value.
@@ -113,3 +161,11 @@ tx.moveCall({
 ```
 
 If the coin type isn't allowlisted or the PTB shape isn't eligible, the transaction fails at validation.
+
+## Compliance considerations
+
+When you integrate stablecoins into your app, be aware of issuer-specific compliance requirements:
+
+- **USDC (Circle):** Circle maintains a blacklist of addresses. If an address is blacklisted by Circle, transactions involving USDC to or from that address fail onchain. Your app should handle this gracefully by checking transaction results and displaying a clear error when a transfer is rejected. See [Circle's compliance documentation](https://www.circle.com/en/legal/usdc-user-agreement) for details.
+- **Regulated tokens on Sui:** Some stablecoins on Sui use the [regulated token standard](/onchain-finance/fungible-tokens/regulated-tokens) with `DenyCapV2`. The issuer can block specific addresses from transacting with the token through the `DenyList` object (`0x403`). Check whether the stablecoins you integrate use deny-listing and account for denied transactions in your error handling ([Security Best Practices](/develop/security/best-practices)).
+- **Provider responsibility:** Sui documentation covers onchain primitives (coin types, transfer functions, deny-listing). Compliance obligations such as KYC verification, sanctions screening, and reporting are the responsibility of the stablecoin issuer and your app. Consult your legal team and the issuer's compliance documentation for your specific jurisdiction.

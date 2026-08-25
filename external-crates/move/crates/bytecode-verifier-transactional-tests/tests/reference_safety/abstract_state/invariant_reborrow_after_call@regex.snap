@@ -1,0 +1,83 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, line 31:
+//# view-abstract-state 0x2::reborrow::t
+{
+  "after": {
+    "local_root": "ROOT",
+    "locals": {
+      "b": {
+        "Reference": "r#b"
+      },
+      "r": {
+        "Reference": "r#r"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#b": true,
+        "r#r": true
+      },
+      "outgoing": {
+        "ROOT": {
+          "r#b": [
+            {
+              "labels": [
+                "x"
+              ],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#r": [
+            {
+              "labels": [
+                "x"
+              ],
+              "ends_in_dot_star": true
+            }
+          ]
+        },
+        "r#b": {
+          "r#r": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        },
+        "r#r": {
+          "r#b": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        }
+      }
+    }
+  },
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {},
+    "graph": {
+      "nodes": {
+        "ROOT": true
+      },
+      "outgoing": {}
+    }
+  }
+}
+
+task 2, lines 33-58:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::reborrow_then_write'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::reborrow_then_write,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 11)],
+}

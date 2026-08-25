@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04014]: invalid loop control
+error[EC04014]: invalid loop control
   ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:7:24
   │  
 6 │           do!(|| {
@@ -16,7 +16,7 @@ error[E04014]: invalid loop control
 9 │ │         });
   │ ╰─────────' Inside this lambda
 
-error[E04014]: invalid loop control
+error[EC04014]: invalid loop control
   ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:8:24
   │  
 6 │           do!(|| {
@@ -27,7 +27,7 @@ error[E04014]: invalid loop control
 9 │ │         });
   │ ╰─────────' Inside this lambda
 
-error[E04014]: invalid loop control
+error[EC04014]: invalid loop control
    ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:15:28
    │    
 13 │   ╭         loop {
@@ -41,7 +41,7 @@ error[E04014]: invalid loop control
 18 │   │         };
    │   ╰─────────' To 'break' to this loop, add a label, e.g. `'label: loop` and `break 'label`
 
-error[E04014]: invalid loop control
+error[EC04014]: invalid loop control
    ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:16:28
    │    
 13 │   ╭         loop {
@@ -55,7 +55,7 @@ error[E04014]: invalid loop control
 18 │   │         };
    │   ╰─────────' To 'continue' to this loop, add a label, e.g. `'label: loop` and `continue 'label`
 
-error[E04014]: invalid loop control
+error[EC04014]: invalid loop control
    ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:22:28
    │    
 20 │   ╭         while (true) {
@@ -69,7 +69,7 @@ error[E04014]: invalid loop control
 25 │   │         }
    │   ╰─────────' To 'break' to this loop, add a label, e.g. `'label: while` and `break 'label`
 
-error[E04014]: invalid loop control
+error[EC04014]: invalid loop control
    ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:23:28
    │    
 20 │   ╭         while (true) {
@@ -83,7 +83,7 @@ error[E04014]: invalid loop control
 25 │   │         }
    │   ╰─────────' To 'continue' to this loop, add a label, e.g. `'label: while` and `continue 'label`
 
-error[E04014]: invalid loop control
+error[EC04014]: invalid loop control
    ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:31:28
    │    
 29 │   ╭         'a: loop {
@@ -97,7 +97,7 @@ error[E04014]: invalid loop control
 34 │   │         };
    │   ╰─────────' To 'break' to this loop, specify the label, e.g. `break 'a`
 
-error[E04014]: invalid loop control
+error[EC04014]: invalid loop control
    ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:32:28
    │    
 29 │   ╭         'a: loop {
@@ -111,7 +111,7 @@ error[E04014]: invalid loop control
 34 │   │         };
    │   ╰─────────' To 'continue' to this loop, specify the label, e.g. `continue 'a`
 
-error[E04014]: invalid loop control
+error[EC04014]: invalid loop control
    ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:38:28
    │    
 36 │   ╭         'b: while (true) {
@@ -125,7 +125,7 @@ error[E04014]: invalid loop control
 41 │   │         }
    │   ╰─────────' To 'break' to this loop, specify the label, e.g. `break 'b`
 
-error[E04014]: invalid loop control
+error[EC04014]: invalid loop control
    ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:39:28
    │    
 36 │   ╭         'b: while (true) {

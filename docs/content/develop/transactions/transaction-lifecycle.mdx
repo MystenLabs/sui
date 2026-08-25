@@ -1,7 +1,55 @@
 ---
 title: Life of a Transaction
-description: The life of a transaction on the Sui network has some differences compared to those from other blockchains.
-keywords: [ transaction lifecycle, transaction flow, transaction finality, settlement, consensus, execution ]
+description: >-
+  The life of a transaction on the Sui network has some differences compared to
+  those from other blockchains.
+keywords:
+  - transaction lifecycle
+  - transaction flow
+  - transaction finality
+  - settlement
+  - consensus
+  - execution
+goal:
+  description: >-
+    Reader understands each stage of a transaction's lifecycle on Sui, from
+    creation through consensus, finality, and checkpoints
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Transaction lifecycle
+    stage: Payment Flow
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Transaction lifecycle
+    stage: Money Movement
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Transaction lifecycle
+    stage: Ship
+questions:
+  - What is Life of a Transaction in Sui?
+  - How does life of a transaction work on Sui?
+  - Why should I use life of a transaction?
+answer: >-
+  At a high level, the following diagram outlines the life cycle of a
+  transaction on the Sui blockchain. All transactions are sequenced by Sui's
+  [Mysticeti DAG consensus](/develop/sui-architecture/consensus).
 ---
 
 At a high level, the following diagram outlines the life cycle of a transaction on the Sui blockchain. All transactions are sequenced by Sui's [Mysticeti DAG consensus](/develop/sui-architecture/consensus).

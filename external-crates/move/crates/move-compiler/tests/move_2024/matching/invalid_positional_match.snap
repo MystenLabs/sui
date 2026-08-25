@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
   ┌─ tests/move_2024/matching/invalid_positional_match.move:9:13
   │
 9 │             Entry::One => ()

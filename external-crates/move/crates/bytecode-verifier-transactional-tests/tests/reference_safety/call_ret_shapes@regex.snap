@@ -1,0 +1,34 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+task 0, lines 3-19:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ret_imm_parent_mut_child'. Got VMError: {
+    major_status: RET_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x2::ret_imm_parent_mut_child,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 8)],
+}
+
+task 4, lines 62-73:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::ret_mut_with_live_imm_extension'. Got VMError: {
+    major_status: RET_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x6::ret_mut_with_live_imm_extension,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 5, lines 75-93:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000007::ret_local_ref_via_call'. Got VMError: {
+    major_status: UNSAFE_RET_LOCAL_OR_RESOURCE_STILL_BORROWED,
+    sub_status: None,
+    location: 0x7::ret_local_ref_via_call,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 6)],
+}

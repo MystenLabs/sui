@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04036]: non-exhaustive pattern
+error[EC04036]: non-exhaustive pattern
    ┌─ tests/move_2024/matching/invalid_wrong_variant.move:13:16
    │
 13 │         match (e) {
    │                ^ Pattern 'E::B' not covered
 
-error[E03020]: unbound variant
+error[EC03020]: unbound variant
    ┌─ tests/move_2024/matching/invalid_wrong_variant.move:15:13
    │  
  7 │ ╭     public enum E {

@@ -2,8 +2,59 @@
 title: Security Best Practices
 sidebar_label: Best Practices
 description: Overview of security best practices on Sui.
-keywords: [ security, security best practices, smart contract security, access control, package upgrades, key management ]
+keywords:
+  - security
+  - security best practices
+  - smart contract security
+  - access control
+  - package upgrades
+  - key management
+goal:
+  description: Reader understands overview of security best practices on Sui
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: DeFi security patterns
+    stage: Operations
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Payment security
+    stage: Operations
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Security best practices
+    stage: Ship
+  - path_id: walrus-general
+    path_name: Walrus General Data Storage
+    step: Security best practices
+    stage: Ship
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Security best practices
+    stage: Ship
+questions:
+  - What is Security Best Practices in Sui?
+  - How does security best practices work on Sui?
+  - What are the security considerations for security best practices?
+answer: Overview of security best practices on Sui.
 ---
+
+Overview of security best practices on Sui.
 
 This page describes a few recommended security best practices when developing applications on Sui. These recommendations are not comprehensive for all application types, use cases, or architectures. Do your own research and have production applications audited thoroughly.
 

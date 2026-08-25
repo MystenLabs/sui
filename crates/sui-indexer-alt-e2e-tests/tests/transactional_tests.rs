@@ -35,8 +35,6 @@ struct OffchainReader {
     queries: AtomicUsize,
 }
 
-datatest_stable::harness!(run_test, "tests", r".*\.move$");
-
 impl OffchainReader {
     fn new(cluster: Arc<OffchainCluster>) -> Self {
         Self {
@@ -166,10 +164,6 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
 async fn run_test(path: &Path) -> Result<(), Box<dyn Error>> {
-    if cfg!(msim) {
-        return Ok(());
-    }
-
     telemetry_subscribers::init_for_testing();
 
     // start the adapter first to start the executor (simulacrum)
@@ -183,4 +177,17 @@ async fn run_test(path: &Path) -> Result<(), Box<dyn Error>> {
     // run the tasks in the test
     run_tasks_with_adapter(path, adapter, output, None).await?;
     Ok(())
+}
+
+#[cfg(not(msim))]
+datatest_stable::harness!(run_test, "tests", r".*\.move$");
+
+// The off-chain cluster these tests stand up is not exercised by the simulator,
+// so running them under msim only costs time. Expose an empty harness so nextest
+// still sees a well-formed binary.
+#[cfg(msim)]
+fn main() {
+    // Referenced so the otherwise-unused test fn does not trip dead-code warnings.
+    let _ = run_test;
+    datatest_stable::runner(&[]);
 }

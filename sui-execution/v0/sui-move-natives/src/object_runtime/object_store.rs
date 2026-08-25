@@ -19,7 +19,7 @@ use sui_types::{
     error::VMMemoryLimitExceededSubStatusCode,
     metrics::ExecutionMetrics,
     object::{Data, MoveObject, Object, Owner},
-    storage::ChildObjectResolver,
+    storage::RuntimeObjectResolver,
 };
 
 use super::get_all_uids;
@@ -41,7 +41,7 @@ pub(crate) struct ChildObjectEffect {
 
 struct Inner<'a> {
     // used for loading child objects
-    resolver: &'a dyn ChildObjectResolver,
+    resolver: &'a dyn RuntimeObjectResolver,
     // The version of the root object in ownership at the beginning of the transaction.
     // If it was a child object, it resolves to the root parent's sequence number.
     // Otherwise, it is just the sequence number at the beginning of the transaction.
@@ -58,7 +58,7 @@ struct Inner<'a> {
 }
 
 // maintains the runtime GlobalValues for child objects and manages the fetching of objects
-// from storage, through the `ChildObjectResolver`
+// from storage, through the `RuntimeObjectResolver`
 pub(super) struct ObjectStore<'a> {
     // contains object resolver and object cache
     // kept as a separate struct to deal with lifetime issues where the `store` is accessed
@@ -241,7 +241,7 @@ impl Inner<'_> {
 
 impl<'a> ObjectStore<'a> {
     pub(super) fn new(
-        resolver: &'a dyn ChildObjectResolver,
+        resolver: &'a dyn RuntimeObjectResolver,
         root_version: BTreeMap<ObjectID, SequenceNumber>,
         is_metered: bool,
         constants: LocalProtocolConfig,

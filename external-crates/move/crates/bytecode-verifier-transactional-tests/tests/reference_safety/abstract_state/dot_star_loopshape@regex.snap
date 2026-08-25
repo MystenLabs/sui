@@ -1,0 +1,337 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, line 69:
+//# view-abstract-state 0x51::zzds_loopshape::l1
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true
+      },
+      "outgoing": {}
+    }
+  },
+  "lbody": {
+    "local_root": "ROOT",
+    "locals": {
+      "r": {
+        "Reference": "r#r"
+      },
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#r": true,
+        "r#s": true
+      },
+      "outgoing": {
+        "r#r": {
+          "r#s": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#s": {
+          "r#r": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  },
+  "le": {
+    "local_root": "ROOT",
+    "locals": {
+      "r": {
+        "Reference": "r#r"
+      },
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#r": true,
+        "r#s": true
+      },
+      "outgoing": {
+        "r#r": {
+          "r#s": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#s": {
+          "r#r": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  },
+  "lh": {
+    "local_root": "ROOT",
+    "locals": {
+      "r": {
+        "Reference": "r#r"
+      },
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#r": true,
+        "r#s": true
+      },
+      "outgoing": {
+        "r#r": {
+          "r#s": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#s": {
+          "r#r": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 2, line 71:
+//# view-abstract-state 0x51::zzds_loopshape::l2
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "o": {
+        "Reference": "r#o"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#o": true
+      },
+      "outgoing": {}
+    }
+  },
+  "lbody": {
+    "local_root": "ROOT",
+    "locals": {
+      "o": {
+        "Reference": "r#o"
+      },
+      "r": {
+        "Reference": "r#r"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#o": true,
+        "r#r": true
+      },
+      "outgoing": {
+        "r#o": {
+          "r#r": [
+            {
+              "labels": [
+                "O.b"
+              ],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "O.b"
+              ],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  },
+  "le": {
+    "local_root": "ROOT",
+    "locals": {
+      "o": {
+        "Reference": "r#o"
+      },
+      "r": {
+        "Reference": "r#r"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#o": true,
+        "r#r": true
+      },
+      "outgoing": {
+        "r#o": {
+          "r#r": [
+            {
+              "labels": [
+                "O.b"
+              ],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "O.b"
+              ],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  },
+  "lh": {
+    "local_root": "ROOT",
+    "locals": {
+      "o": {
+        "Reference": "r#o"
+      },
+      "r": {
+        "Reference": "r#r"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#o": true,
+        "r#r": true
+      },
+      "outgoing": {
+        "r#o": {
+          "r#r": [
+            {
+              "labels": [
+                "O.b"
+              ],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "O.b"
+              ],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 3, line 73:
+//# view-abstract-state 0x51::zzds_loopshape::l3
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "v": {
+        "Reference": "r#v"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#v": true
+      },
+      "outgoing": {}
+    }
+  },
+  "lbody": {
+    "local_root": "ROOT",
+    "locals": {
+      "v": {
+        "Reference": "r#v"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#v": true
+      },
+      "outgoing": {}
+    }
+  },
+  "le": {
+    "local_root": "ROOT",
+    "locals": {
+      "v": {
+        "Reference": "r#v"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#v": true
+      },
+      "outgoing": {}
+    }
+  },
+  "lh": {
+    "local_root": "ROOT",
+    "locals": {
+      "v": {
+        "Reference": "r#v"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#v": true
+      },
+      "outgoing": {}
+    }
+  }
+}

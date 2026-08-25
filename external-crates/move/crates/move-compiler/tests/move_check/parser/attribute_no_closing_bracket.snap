@@ -5,13 +5,13 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W02018]: unknown attribute
+warning[WC02018]: unknown attribute
   ┌─ tests/move_check/parser/attribute_no_closing_bracket.move:3:7
   │
 3 │     #[attr = 0
   │       ^^^^ Unknown attribute 'attr'. Custom attributes must be wrapped in 'ext', e.g. '#[ext(attr)]'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_check/parser/attribute_no_closing_bracket.move:4:5
   │
 3 │     #[attr = 0

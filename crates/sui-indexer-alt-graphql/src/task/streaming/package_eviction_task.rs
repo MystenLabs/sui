@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::pin::pin;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -55,7 +56,7 @@ impl<S: Send + Sync + 'static> PackageEvictionTask<S> {
         } = self;
 
         Service::new().spawn_aborting(async move {
-            let mut stream = Box::pin(UnboundedReceiverStream::new(receiver).peekable());
+            let mut stream = pin!(UnboundedReceiverStream::new(receiver).peekable());
             let mut interval = tokio::time::interval(eviction_interval);
 
             loop {

@@ -8,7 +8,7 @@
 //   - the reservation emits a single Split accumulator event,
 //   - the smash target is mutated with the summed value.
 
-//# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
+//# init --addresses test=0x0 --accounts A B
 
 //# view-object 0,0
 

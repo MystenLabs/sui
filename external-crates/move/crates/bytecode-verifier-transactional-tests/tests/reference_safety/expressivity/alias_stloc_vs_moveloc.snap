@@ -1,0 +1,24 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 0, lines 3-17:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::stloc_alias_ok'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x2::stloc_alias_ok,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 5)],
+}
+
+task 1, lines 19-33:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::moveloc_alias_invalid'. Got VMError: {
+    major_status: MOVELOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::moveloc_alias_invalid,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}

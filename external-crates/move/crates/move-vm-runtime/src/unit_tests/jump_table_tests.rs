@@ -59,7 +59,7 @@ fn test_package_empty() {
     let interner = IdentifierInterner::new();
     let input_package = create_test_input_package();
 
-    let result = package(&natives, &interner, input_package);
+    let result = package(&natives, &interner, &BTreeMap::new(), input_package);
     assert!(result.is_ok());
 
     let pkg = result.unwrap();
@@ -78,7 +78,7 @@ fn test_package_preserves_version_and_original_id() {
     input_package.version_id = test_version_id;
     input_package.original_id = test_original_id;
 
-    let result = package(&natives, &interner, input_package);
+    let result = package(&natives, &interner, &BTreeMap::new(), input_package);
     assert!(result.is_ok());
 
     let pkg = result.unwrap();
@@ -101,7 +101,7 @@ fn test_package_with_type_origin_table() {
         input_package.original_id,
     );
 
-    let result = package(&natives, &interner, input_package);
+    let result = package(&natives, &interner, &BTreeMap::new(), input_package);
     assert!(result.is_ok());
 }
 
@@ -144,7 +144,7 @@ fn test_package_multiple_modules_dependency_order() {
         linkage_table: BTreeMap::from([(original_id, version_id)]),
     };
 
-    let result = package(&natives, &interner, input_package);
+    let result = package(&natives, &interner, &BTreeMap::new(), input_package);
     assert!(result.is_ok());
 
     let pkg = result.unwrap();
@@ -157,7 +157,7 @@ fn test_package_creates_virtual_table() {
     let interner = IdentifierInterner::new();
     let input_package = create_test_input_package();
 
-    let result = package(&natives, &interner, input_package);
+    let result = package(&natives, &interner, &BTreeMap::new(), input_package);
     assert!(result.is_ok());
 
     let pkg = result.unwrap();
@@ -181,7 +181,7 @@ fn test_package_error_handling_invalid_identifier() {
         input_package.original_id,
     );
 
-    let result = package(&natives, &interner, input_package);
+    let result = package(&natives, &interner, &BTreeMap::new(), input_package);
     assert!(result.is_ok());
 }
 

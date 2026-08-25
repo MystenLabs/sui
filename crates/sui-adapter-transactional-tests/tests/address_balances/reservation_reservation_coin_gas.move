@@ -7,7 +7,7 @@
 // The snapshot must show only one withdrawal-side accumulator event for the
 // merged reservation (not two), confirming the dedup happens upfront.
 
-//# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
+//# init --addresses test=0x0 --accounts A B
 
 //# view-object 0,0
 

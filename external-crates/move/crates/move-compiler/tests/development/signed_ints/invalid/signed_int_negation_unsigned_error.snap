@@ -5,7 +5,7 @@ info:
   edition: development
   lint: false
 ---
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
   ┌─ tests/development/signed_ints/invalid/signed_int_negation_unsigned_error.move:5:19
   │
 4 │         let a: u64 = 5;

@@ -87,6 +87,7 @@ use tokio::sync::mpsc;
 use tracing::warn;
 
 use crate::bigtable::client::BigTableClient;
+use crate::bigtable::client::CheckpointSpan;
 use crate::handlers::BitmapIndexValue;
 use crate::rate_limiter::CompositeRateLimiter;
 use crate::store::BitmapInitialWatermarks;
@@ -163,6 +164,7 @@ impl Handle {
         &self,
         batch: Vec<Arc<Vec<BitmapIndexValue>>>,
         watermark: CommitterWatermark,
+        checkpoint_span: Option<CheckpointSpan>,
     ) -> Result<(), ()> {
         debug_assert_eq!(
             batch.len(),
@@ -171,7 +173,7 @@ impl Handle {
         );
 
         let framework_commit_time = Instant::now();
-        let checkpoint = watermark.checkpoint_hi_inclusive;
+        let generation_checkpoint = watermark.checkpoint_hi_inclusive;
         // This must precede shard fanout: generation state observes commits in
         // the same cp order as the sequential framework calls `commit()`.
         if self
@@ -192,10 +194,14 @@ impl Handle {
         let sends = self
             .shard_merge_senders
             .iter()
-            .zip_debug_eq(batch.into_iter())
+            .zip_debug_eq(batch)
             .enumerate()
             .map(|(shard_id, (tx, values))| async move {
-                let merge = shard::Merge { checkpoint, values };
+                let merge = shard::Merge {
+                    generation_checkpoint,
+                    checkpoint_span,
+                    values,
+                };
                 tx.send(merge).await.map_err(|_| shard_id)
             });
         if let Err(shard_id) = try_join_all(sends).await {

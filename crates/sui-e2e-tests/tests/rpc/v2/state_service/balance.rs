@@ -87,8 +87,8 @@ async fn test_balance_changes_on_transfer() {
 #[sim_test]
 async fn test_address_balance() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.create_root_accumulator_object_for_testing();
-        cfg.enable_accumulators_for_testing();
+        cfg.set_create_root_accumulator_object_for_testing(true);
+        cfg.set_enable_accumulators_for_testing(true);
         cfg
     });
 
@@ -137,8 +137,8 @@ async fn test_address_balance() {
 #[sim_test]
 async fn test_address_balance_account_with_only_address_balance() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.create_root_accumulator_object_for_testing();
-        cfg.enable_accumulators_for_testing();
+        cfg.set_create_root_accumulator_object_for_testing(true);
+        cfg.set_enable_accumulators_for_testing(true);
         cfg
     });
 

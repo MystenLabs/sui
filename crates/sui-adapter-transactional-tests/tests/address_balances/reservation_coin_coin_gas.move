@@ -9,7 +9,7 @@
 //   - the gas charge against the address balance happens at final charging
 //     time via a separate Split event.
 
-//# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
+//# init --addresses test=0x0 --accounts A B
 
 //# view-object 0,0
 

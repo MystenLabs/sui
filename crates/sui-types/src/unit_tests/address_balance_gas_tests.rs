@@ -137,8 +137,8 @@ fn test_address_balance_payment_requires_accumulators_enabled() {
 #[test]
 fn test_address_balance_payment_requires_feature_flag() {
     let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
-    config.enable_accumulators_for_testing();
-    config.disable_address_balance_gas_payments_for_testing();
+    config.set_enable_accumulators_for_testing(true);
+    config.set_enable_address_balance_gas_payments_for_testing(false);
 
     let tx_data = create_test_transaction_data(
         vec![],
@@ -639,10 +639,8 @@ fn test_address_balance_max_epoch_edge_case() {
     };
 
     let context_at_max = TxValidityCheckContext {
-        config: &config,
         epoch: u64::MAX,
-        chain_identifier: ChainIdentifier::default(),
-        reference_gas_price: 1000,
+        ..TxValidityCheckContext::from_cfg_for_testing(&config)
     };
     let result = tx_data.validity_check(&context_at_max);
     assert!(result.is_ok(), "Should not panic with u64::MAX epoch");

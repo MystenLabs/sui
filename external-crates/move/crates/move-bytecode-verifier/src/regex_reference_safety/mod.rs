@@ -17,12 +17,12 @@ use move_abstract_interpreter::absint::BlockInvariant;
 use move_abstract_stack::{AbsStackError, AbstractStack};
 use move_binary_format::{
     CompiledModule,
-    errors::{PartialVMError, PartialVMResult},
+    errors::PartialVMResult,
     file_format::{
         Bytecode, CodeOffset, FunctionHandle, StructDefinition, StructFieldInformation,
         VariantDefinition,
     },
-    safe_assert, safe_unwrap,
+    partial_vm_error_with_debug_message, safe_assert, safe_unwrap,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
@@ -369,10 +369,11 @@ fn execute_inner(
 
         Bytecode::VecImmBorrow(_) => {
             safe_assert!(safe_unwrap!(verifier.stack.pop()).is_non_ref());
-            let vec_ref = safe_unwrap!(verifier.stack.pop());
+            let vec_ref = safe_unwrap!(safe_unwrap!(verifier.stack.pop()).to_ref());
+            let imm_vec_ref = state.freeze_ref(offset, vec_ref, meter)?;
             let values = state.call(
                 offset,
-                vec![vec_ref],
+                vec![imm_vec_ref],
                 &[ValueKind::Reference(false)],
                 meter,
                 StatusCode::VEC_BORROW_ELEMENT_EXISTS_MUTABLE_BORROW_ERROR, // should not be hit
@@ -547,10 +548,10 @@ fn execute_inner(
         | Bytecode::ImmBorrowGlobalDeprecated(_)
         | Bytecode::ImmBorrowGlobalGenericDeprecated(_) => {
             safe_assert!(!verifier.config.deprecate_global_storage_ops);
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Unsupported deprecated bytecode".to_string()),
-            );
+            return Err(partial_vm_error_with_debug_message!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Unsupported deprecated bytecode".to_string()
+            ));
         }
     };
     Ok(())

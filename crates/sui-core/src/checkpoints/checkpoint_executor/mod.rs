@@ -49,7 +49,7 @@ use tracing::{debug, info, instrument};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::backpressure::BackpressureManager;
-use crate::authority::{AuthorityState, ExecutionEnv};
+use crate::authority::{AuthorityState, ExecutionEnv, ExpectedEffectsDigest};
 use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::execution_scheduler_impl::BarrierDependencyBuilder;
 use crate::global_state_hasher::GlobalStateHasher;
@@ -428,10 +428,25 @@ impl CheckpointExecutor {
 
         finish_stage!(pipeline_handle, BuildDbBatch);
 
-        let object_funds_checker = self.state.object_funds_checker.load();
-        if let Some(object_funds_checker) = object_funds_checker.as_ref() {
-            object_funds_checker.commit_effects(batch.0.iter().map(|o| &o.effects));
-        }
+        // commit_accumulator_versions can only be called after the checkpoint is fully executed.
+        // This is the earliest point where we can guarantee that no transactions will be reading
+        // the unsettled object withdraws for the committed accumulator versions.
+        let committed_accumulator_versions = batch
+            .0
+            .iter()
+            .filter_map(|outputs| {
+                outputs.effects.object_changes().into_iter().find_map(|o| {
+                    if o.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID {
+                        o.input_version
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        self.state
+            .unsettled_object_withdrawals
+            .commit_accumulator_versions(committed_accumulator_versions);
 
         let mut ckpt_state = tokio::task::spawn_blocking({
             let this = self.clone();
@@ -479,7 +494,7 @@ impl CheckpointExecutor {
         finish_stage!(pipeline_handle, FinalizeCheckpoint);
 
         if let Some(checkpoint_data) = ckpt_state.full_data.take() {
-            self.commit_index_updates_and_enqueue_to_subscription_service(checkpoint_data);
+            self.enqueue_to_subscription_service(checkpoint_data);
         }
 
         finish_stage!(pipeline_handle, UpdateRpcIndex);
@@ -641,7 +656,8 @@ impl CheckpointExecutor {
         finish_stage!(pipeline_handle, WaitForTransactions);
 
         if ckpt_state.data.checkpoint.is_last_checkpoint_of_epoch() {
-            self.execute_change_epoch_tx(&tx_data).await;
+            self.execute_change_epoch_tx(&tx_data, ckpt_state.data.checkpoint.sequence_number)
+                .await;
         }
 
         self.finalize_executed_checkpoint_transactions(ckpt_state, &tx_data, pipeline_handle)
@@ -719,7 +735,6 @@ impl CheckpointExecutor {
 
     fn checkpoint_data_enabled(&self) -> bool {
         self.subscription_service_checkpoint_sender.is_some()
-            || self.state.rpc_index.is_some()
             || self.config.data_ingestion_dir.is_some()
     }
 
@@ -761,12 +776,6 @@ impl CheckpointExecutor {
             &*self.transaction_cache_reader,
         )
         .expect("failed to load checkpoint data");
-
-        // Index the checkpoint. This is done out of order and is not written
-        // and committed to the DB until later (committing must be done in-order).
-        if let Some(rpc_index) = &self.state.rpc_index {
-            rpc_index.index_checkpoint(&checkpoint);
-        }
 
         if let Some(path) = &self.config.data_ingestion_dir {
             store_checkpoint_locally(path, &checkpoint)
@@ -954,7 +963,10 @@ impl CheckpointExecutor {
 
                         let mut env = ExecutionEnv::new()
                             .with_assigned_versions(assigned_versions)
-                            .with_expected_effects_digest(*expected_fx_digest)
+                            .with_expected_effects(ExpectedEffectsDigest::Certified {
+                                digest: *expected_fx_digest,
+                                checkpoint_seq: ckpt_state.data.checkpoint.sequence_number,
+                            })
                             .with_barrier_dependencies(barrier_deps);
 
                         // Check if the expected effects indicate insufficient balance
@@ -981,7 +993,11 @@ impl CheckpointExecutor {
 
     // Execute the change epoch txn
     #[instrument(level = "error", skip_all)]
-    async fn execute_change_epoch_tx(&self, tx_data: &CheckpointTransactionData) {
+    async fn execute_change_epoch_tx(
+        &self,
+        tx_data: &CheckpointTransactionData,
+        checkpoint_seq: CheckpointSequenceNumber,
+    ) {
         let change_epoch_tx = tx_data.transactions.last().unwrap();
         let change_epoch_fx = tx_data.effects.last().unwrap();
         assert_eq!(
@@ -1031,7 +1047,10 @@ impl CheckpointExecutor {
                 change_epoch_tx.clone(),
                 ExecutionEnv::new()
                     .with_assigned_versions(assigned_versions)
-                    .with_expected_effects_digest(change_epoch_fx.digest()),
+                    .with_expected_effects(ExpectedEffectsDigest::Certified {
+                        digest: change_epoch_fx.digest(),
+                        checkpoint_seq,
+                    }),
             )],
             &self.epoch_store,
         );
@@ -1108,16 +1127,11 @@ impl CheckpointExecutor {
         );
     }
 
-    /// If configured, commit the pending index updates for the provided checkpoint as well as
-    /// enqueuing the checkpoint to the subscription service
+    /// Publish the checkpoint to the broadcast stream so its downstream
+    /// consumers (the RPC subscription service and the embedded rpc-store
+    /// indexer) can pick it up.
     #[instrument(level = "info", skip_all)]
-    fn commit_index_updates_and_enqueue_to_subscription_service(&self, checkpoint: Checkpoint) {
-        if let Some(rpc_index) = &self.state.rpc_index {
-            rpc_index
-                .commit_update_for_checkpoint(checkpoint.summary.sequence_number)
-                .expect("failed to update rpc_indexes");
-        }
-
+    fn enqueue_to_subscription_service(&self, checkpoint: Checkpoint) {
         // Best-effort, non-blocking publish to the broadcast stream. A send
         // error just means there are no live subscribers right now, which is
         // fine: subscribers (the RPC subscription service and the embedded

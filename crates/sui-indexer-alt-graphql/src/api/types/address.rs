@@ -40,7 +40,6 @@ use crate::api::types::object_filter::ObjectFilter;
 use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
-use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::transaction_effects::EffectsContents;
@@ -51,6 +50,7 @@ use crate::error::bad_user_input;
 use crate::error::convert;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
+use crate::pagination::StreamConnection;
 use crate::scope::Scope;
 use crate::task::watermark::Watermarks;
 
@@ -88,7 +88,7 @@ pub(crate) enum AddressTransactionRelationship {
         name = "balance",
         arg(name = "coin_type", ty = "TypeInput"),
         ty = "Option<Result<Balance, RpcError<balance::Error>>>",
-        desc = "Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.\n\nIf the address does not own any coins of that type, a balance of zero is returned.",
+        desc = "Fetch the balance for `coinType` (e.g. `0x2::sui::SUI`) owned by this address.\n\nThe result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of that type, all three values are zero.",
     ),
     field(
         name = "balances",
@@ -97,7 +97,7 @@ pub(crate) enum AddressTransactionRelationship {
         arg(name = "last", ty = "Option<u64>"),
         arg(name = "before", ty = "Option<balance::Cursor>"),
         ty = "Option<Result<Connection<String, Balance>, RpcError<balance::Error>>>",
-        desc = "Total balance across coins owned by this address, grouped by coin type.",
+        desc = "Balances held by this address, grouped by coin type.\n\nEach result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator.",
     ),
     field(
         name = "default_name_record",
@@ -108,7 +108,7 @@ pub(crate) enum AddressTransactionRelationship {
         name = "multi_get_balances",
         arg(name = "keys", ty = "Vec<TypeInput>"),
         ty = "Option<Result<Vec<Balance>, RpcError<balance::Error>>>",
-        desc = "Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.\n\nReturns `null` when no checkpoint is set in scope (e.g. execution scope). If the address does not own any coins of a given type, a balance of zero is returned for that type.",
+        desc = "Fetch balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.\n\nEach result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.",
     ),
     field(
         name = "objects",
@@ -286,10 +286,9 @@ impl Address {
         .transpose()
     }
 
-    /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+    /// Fetch the balance for `coinType` (e.g. `0x2::sui::SUI`) owned by this address.
     ///
-    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
-    /// If the address does not own any coins of that type, a balance of zero is returned.
+    /// The result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of that type, all three values are zero.
     pub(crate) async fn balance(
         &self,
         ctx: &Context<'_>,
@@ -300,7 +299,9 @@ impl Address {
             .transpose()
     }
 
-    /// Total balance across coins owned by this address, grouped by coin type.
+    /// Balances held by this address, grouped by coin type.
+    ///
+    /// Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator.
     pub(crate) async fn balances(
         &self,
         ctx: &Context<'_>,
@@ -431,17 +432,20 @@ impl Address {
         .await
     }
 
-    /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+    /// Fetch balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
     ///
-    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
-    /// If the address does not own any coins of a given type, a balance of zero is returned for that type.
+    /// Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.
     pub(crate) async fn multi_get_balances(
         &self,
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
     ) -> Option<Result<Vec<Balance>, RpcError<balance::Error>>> {
-        let coin_types = keys.into_iter().map(|k| k.into()).collect();
-        Balance::fetch_many(ctx, &self.scope, self.address, coin_types)
+        let keys = keys
+            .into_iter()
+            .map(|coin_type| (self.address, coin_type.into()))
+            .collect();
+
+        Balance::fetch_many(ctx, &self.scope, keys)
             .await
             .transpose()
     }
@@ -498,7 +502,7 @@ impl Address {
         before: Option<CTransaction>,
         relation: Option<AddressTransactionRelationship>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Option<Result<TransactionConnection, RpcError>> {
+    ) -> Option<Result<StreamConnection<Transaction>, RpcError>> {
         Some(
             async {
                 let pagination: &PaginationConfig = ctx.data()?;

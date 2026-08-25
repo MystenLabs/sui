@@ -1,0 +1,24 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 0, lines 3-24:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000046::write_through_mut_alias_then_read_imm'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x46::write_through_mut_alias_then_read_imm,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}
+
+task 1, lines 26-47:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000055::vec_imm_elem_with_live_mut_elem'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x55::vec_imm_elem_with_live_mut_elem,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 11)],
+}

@@ -1,0 +1,125 @@
+---
+title: DeepBook Margin
+description: >-
+  Leveraged trading capabilities for DeepBookV3, enabling users to trade with
+  borrowed funds and increase their buying power.
+keywords:
+  - deepbook margin
+  - margin trading
+  - leveraged trading
+  - deepbookv3
+  - collateral
+  - liquidation
+  - isolated margin
+  - risk ratio
+  - deep book
+goal:
+  description: >-
+    Reader understands leveraged trading capabilities for DeepBookV3, enabling
+    users to trade with borrowed funds
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Margin trading overview
+    stage: Margin
+questions:
+  - What is DeepBook Margin on Sui?
+  - How do I open a leveraged position on DeepBook?
+  - How much leverage can I take on DeepBook Margin?
+  - When does DeepBook Margin liquidate my position?
+answer: >-
+  DeepBook Margin adds leveraged trading to DeepBookV3. You create a
+  MarginManager bound to one DeepBook pool, deposit collateral, borrow the base
+  or quote asset from an isolated MarginPool, and trade through the pool proxy.
+  A risk ratio of total assets over total debt, priced by Pyth oracles, governs
+  how much you can borrow and withdraw, and anyone can liquidate your position
+  once that ratio reaches the pool's liquidation threshold.
+---
+
+DeepBook Margin extends DeepBookV3 with leveraged trading. You post collateral, borrow the other side of a trading pair from a lending pool, and trade the borrowed funds on the same order book that spot traders use. The borrow amplifies both your gains and your losses, and it accrues interest for as long as you hold it.
+
+:::caution
+
+Margin trading borrows funds against collateral, and liquidation is permissionless. Once your position's risk ratio reaches the pool's liquidation threshold, anyone can liquidate it, and the reward the liquidator takes from your collateral is a permanent loss. No grace period applies. Read [Margin Risks](/onchain-finance/deepbook/deepbook-margin/margin-risks) before you open a position.
+
+:::
+
+## How leveraged trading works {#how-it-works}
+
+Three shared objects sit on top of the spot order book:
+
+| **Object** | **Role** |
+|---|---|
+| `MarginManager` | Your account. It wraps a DeepBook `BalanceManager`, binds to one DeepBook pool, holds your collateral, and tracks your borrow. |
+| `MarginPool` | The lending pool for a single asset. Your borrow draws from it, and your interest accrues to it. |
+| `MarginRegistry` | Governance state. It stores each pool's risk parameters and tracks which DeepBook pools have margin enabled. |
+
+Each `MarginManager` borrows from one margin pool at a time, base or quote. That is isolated margin, not a cross-pool account, which keeps risk on a single axis. See [Design](/onchain-finance/deepbook/deepbook-margin/design) for the full object model.
+
+One number governs everything you can do with a position:
+
+```text
+risk_ratio = total_assets / total_debt
+```
+
+The protocol values both sides through Pyth oracles, so your risk ratio moves whenever the market moves, and it drifts down on its own as interest accrues even when prices are flat. Each pool defines four thresholds against that ratio, and the ordering `liquidation < min borrow < min withdraw` always holds.
+
+| **Threshold** | **Effect** |
+|---|---|
+| Min borrow risk ratio | A borrow must leave your ratio at or above this. It sets your maximum leverage. |
+| Min withdraw risk ratio | A withdraw must leave your ratio at or above this, so you cannot pull collateral out from under an open borrow. |
+| Liquidation risk ratio | At or below this, anyone can liquidate your position. |
+| Target liquidation risk ratio | The ratio a liquidation restores your position to. |
+
+The min borrow risk ratio determines how much leverage a pair allows:
+
+```text
+max_leverage ≈ 1 / (1 - 1 / min_borrow_risk_ratio)
+```
+
+A min borrow ratio of 1.25 permits roughly 5x, and 1.5 permits roughly 3x. Higher-volatility assets carry stricter parameters and therefore less leverage. [Risk Ratio](/onchain-finance/deepbook/deepbook-margin/contract-information/risk-ratio) works a full position lifecycle through with numbers.
+
+## Open a leveraged position {#open-a-position}
+
+The path from an empty wallet to an open leveraged position is six steps. Each names the DeepBook SDK call that performs it. The [Leveraged Position Workflow](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow) runs all six on Testnet with type-checked code and the result to confirm at each step.
+
+1. **Create a `MarginManager` for the pool** with `marginManager.newMarginManager(poolKey)`. One call creates it, shares it, and registers it. Save the resulting object ID and reuse it, because creating a new manager each run fragments your collateral across orphaned objects.
+1. **Read the pool's risk parameters** from the `MarginRegistry`. Governance sets them per pool, so read them onchain instead of assuming the protocol defaults.
+1. **Check borrow liquidity** in the margin pool you intend to borrow from. A pool with no headroom under its max utilization rate rejects the borrow, and a nearly full pool charges a high [interest rate](/onchain-finance/deepbook/deepbook-margin/contract-information/interest-rates).
+1. **Deposit collateral** with `marginManager.depositBase` or `depositQuote`. The more you deposit before borrowing, the higher your starting risk ratio.
+1. **Borrow** with `marginManager.borrowBase` or `borrowQuote`. The call aborts unless the resulting ratio stays at or above the min borrow risk ratio, so size the borrow from the parameters you read rather than by trial and error.
+1. **Trade** through the pool proxy with `poolProxy.placeLimitOrder`. Margin orders never use the spot order entry, because the proxy applies the risk checks that keep a borrow safe.
+
+Closing reverses the sequence. Reduce exposure with `poolProxy.placeReduceOnlyLimitOrder`, repay the borrow plus accrued interest with `marginManager.repayBase` or `repayQuote`, then withdraw your collateral.
+
+### Read the parameters before you borrow {#read-parameters}
+
+Every threshold is a read-only query, so you can inspect a pool before committing any funds. The following helper reads all six values a position depends on, using the `MarginRegistry` accessors in `@mysten/deepbook-v3`:
+
+<ImportContent source="examples/deepbook-margin/src/risk-params.ts" mode="code" tag="risk-params" />
+
+Confirm the pool supports margin at all with `isPoolEnabledForMargin`, and monitor a live position with `getMarginManagerState`, which returns the oracle-priced risk ratio alongside the prices it used.
+
+## Interest and liquidation {#interest-and-liquidation}
+
+Your borrow accrues interest under a kinked utilization model. Rates rise gently below the kink and steeply above it, which discourages borrowing from a nearly exhausted pool. The pool applies that interest whenever its state changes, so your debt grows on its own and your risk ratio drifts down even when prices hold flat. Suppliers receive most of the interest, and a protocol spread splits the rest between referrals, the treasury, and the pool maintainer. [Interest Rates](/onchain-finance/deepbook/deepbook-margin/contract-information/interest-rates) covers the formulas and the accrual mechanics.
+
+If your risk ratio falls to the liquidation threshold, a liquidator repays part of your debt and takes a reward from your collateral, sized to restore your position to the target liquidation ratio rather than to close it entirely. You keep a smaller, healthier position, minus the reward. A deeply underwater position can be fully liquidated, and the lending pool can absorb bad debt. Monitoring your ratio and acting early, by adding collateral or reducing the position, is the only defense.
+
+To build an application on top of margin rather than trade it directly, see [Integrating DeepBook Margin](/onchain-finance/deepbook/deepbook-margin/margin-integration) for the structural differences from the spot path, and the [DeepBook Margin SDK](/onchain-finance/deepbook/deepbook-margin-sdk) reference for the TypeScript surface.
+
+import DocCardList from '@theme/DocCardList';
+
+<DocCardList />

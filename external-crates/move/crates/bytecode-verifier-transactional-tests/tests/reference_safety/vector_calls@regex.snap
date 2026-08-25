@@ -1,0 +1,44 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+task 0, lines 3-26:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000051::pass_vec_ref_with_live_elem'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x51::pass_vec_ref_with_live_elem,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 10)],
+}
+
+task 1, lines 28-50:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000052::pass_vec_ref_and_elem_together'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x52::pass_vec_ref_and_elem_together,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 11)],
+}
+
+task 2, lines 52-74:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000053::imm_elem_from_call_then_push'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x53::imm_elem_from_call_then_push,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 11)],
+}
+
+task 4, lines 101-122:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000055::callee_grows_while_holding_own_elem'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x55::callee_grows_while_holding_own_elem,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}

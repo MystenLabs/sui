@@ -1,0 +1,380 @@
+// shapes both checkers accept: sibling &mut borrows, reference returns across a join, dot-star
+// in a loop, deep field chains, a local that is a reference on only one side of a join
+
+//# run
+
+mvir 0x46::two_mut_siblings {
+
+public struct T has copy, drop { f: u64 }
+
+// the old graph re-parents on factor, so the second &mut x becomes the parent of the first
+entry fun t() {
+    let x: Self::T;
+    let s1: &mut Self::T;
+    let s2: &mut Self::T;
+label b0:
+    x = T { f: 0 };
+    s1 = &mut x;
+    s2 = &mut x;
+    *move(s1) = T { f: 1 };
+    *move(s2) = T { f: 2 };
+    return;
+}
+
+}
+
+//# run
+
+mvir 0x48::mut_field_call_no_imm {
+
+public struct T has copy, drop { f: u64 }
+
+fun g(b: &mut u64) {
+label b0:
+    *move(b) = 7;
+    return;
+}
+
+entry fun t() {
+    let x: Self::T;
+    let s: &mut Self::T;
+    let f: &mut u64;
+label b0:
+    x = T { f: 0 };
+    s = &mut x;
+    f = &mut move(s).T::f;
+    Self::g(move(f));
+    return;
+}
+
+}
+
+//# publish
+
+mvir 0x50::ret_refs_across_join {
+
+public struct Inner has copy, drop { h: u64 }
+public struct T has copy, drop { f: u64, g: Self::Inner }
+
+fun t(a: &mut Self::T, c: bool): &mut u64 {
+    let r: &mut u64;
+label b0:
+    jump_if (copy(c)) b2;
+label b1:
+    r = &mut copy(a).T::f;
+    jump b3;
+label b2:
+    r = &mut (&mut copy(a).T::g).Inner::h;
+    jump b3;
+label b3:
+    _ = move(a);
+    return move(r);
+}
+
+}
+
+//# publish
+
+mvir 0x51::ret_two_refs_across_join {
+
+public struct Inner has copy, drop { h: u64 }
+public struct T has copy, drop { f: u64, g: Self::Inner }
+
+fun t(a: &mut Self::T, b: &Self::T, c: bool): &Self::T * &mut u64 {
+    let i: &Self::T;
+    let r: &mut u64;
+label b0:
+    i = copy(b);
+    jump_if (copy(c)) b2;
+label b1:
+    r = &mut copy(a).T::f;
+    jump b3;
+label b2:
+    r = &mut (&mut copy(a).T::g).Inner::h;
+    jump b3;
+label b3:
+    _ = move(a);
+    _ = move(b);
+    return move(i), move(r);
+}
+
+}
+
+//# publish
+
+mvir 0x52::builder_loop_then_write {
+
+public struct Inner has copy, drop { h: u64 }
+public struct T has copy, drop { f: u64, g: Self::Inner }
+
+fun bump(s: &mut Self::T): &mut Self::T {
+label b0:
+    return move(s);
+}
+
+fun t(c: bool) {
+    let x: Self::T;
+    let r: &mut Self::T;
+label b0:
+    x = T { f: 0, g: Inner { h: 0 } };
+    r = &mut x;
+label lh:
+    r = Self::bump(move(r));
+    jump_if (copy(c)) lh;
+label lx:
+    *move(r) = T { f: 1, g: Inner { h: 1 } };
+    return;
+}
+
+}
+
+//# publish
+
+mvir 0x53::loop_dot_star_then_stloc {
+
+public struct Inner has copy, drop { h: u64 }
+public struct T has copy, drop { f: u64, g: Self::Inner }
+
+fun bump(s: &mut Self::T): &mut u64 {
+label b0:
+    return &mut move(s).T::f;
+}
+
+fun t(c: bool) {
+    let x: Self::T;
+    let r: &mut Self::T;
+    let u: &mut u64;
+label b0:
+    x = T { f: 0, g: Inner { h: 0 } };
+    r = &mut x;
+    u = Self::bump(move(r));
+label lh:
+    *copy(u) = 1;
+    jump_if (copy(c)) lh;
+label lx:
+    _ = move(u);
+    // the borrow is dead here
+    x = T { f: 2, g: Inner { h: 2 } };
+    _ = move(x);
+    return;
+}
+
+}
+
+//# publish
+
+mvir 0x54::call_dot_star_then_field_write {
+
+public struct Inner has copy, drop { h: u64 }
+public struct T has copy, drop { f: u64, g: Self::Inner }
+
+fun inner(s: &mut Self::T): &mut Self::Inner {
+label b0:
+    return &mut move(s).T::g;
+}
+
+fun t(a: &mut Self::T) {
+    let n: &mut Self::Inner;
+    let u: &mut u64;
+label b0:
+    n = Self::inner(copy(a));
+    u = &mut copy(n).Inner::h;
+    *move(u) = 1;
+    *move(n) = Inner { h: 2 };
+    _ = move(a);
+    return;
+}
+
+}
+
+//# publish
+
+mvir 0x56::local_is_ref_on_one_side {
+
+public struct Inner has copy, drop { h: u64 }
+public struct T has copy, drop { f: u64, g: Self::Inner }
+
+fun t(a: &mut Self::T, c: bool) {
+    let r: &mut u64;
+    let k: u64;
+label b0:
+    jump_if (copy(c)) b2;
+label b1:
+    r = &mut copy(a).T::f;
+    k = 0;
+    jump b3;
+label b2:
+    k = 1;
+    jump b3;
+label b3:
+    // r is a reference on only one side of the join
+    *copy(a) = T { f: move(k), g: Inner { h: 0 } };
+    _ = move(a);
+    return;
+}
+
+}
+
+//# publish
+
+mvir 0x57::enum_unpack_in_loop {
+
+public enum X has drop {
+    One { p: u64, q: u64 },
+    Two { p: u64, q: u64 },
+}
+
+fun t(e: &mut Self::X, c: bool) {
+    let p: &mut u64;
+    let q: &mut u64;
+label b0:
+label lh:
+    &mut X::One { p: p, q: q } = copy(e);
+    *move(p) = 1;
+    *move(q) = 2;
+    jump_if (copy(c)) lh;
+label lx:
+    *copy(e) = X::Two { p: 3, q: 4 };
+    _ = move(e);
+    return;
+}
+
+}
+
+//# publish
+
+mvir 0x61::deep_chain_write {
+
+public struct Inner has copy, drop { h: u64 }
+public struct Mid has copy, drop { i: Self::Inner }
+public struct Top has copy, drop { f: u64, g: Self::Mid }
+
+fun t(a: &mut Self::Top) {
+    let m: &mut Self::Mid;
+    let n: &mut Self::Inner;
+    let u: &mut u64;
+label b0:
+    m = &mut copy(a).Top::g;
+    n = &mut copy(m).Mid::i;
+    u = &mut copy(n).Inner::h;
+    *move(u) = 1;
+    *move(n) = Inner { h: 2 };
+    *move(m) = Mid { i: Inner { h: 3 } };
+    _ = move(a);
+    return;
+}
+
+}
+
+//# publish
+
+mvir 0x62::deep_chain_disjoint_field_call {
+
+public struct Inner has copy, drop { h: u64 }
+public struct Mid has copy, drop { i: Self::Inner }
+public struct Top has copy, drop { f: u64, g: Self::Mid }
+
+fun c(x: &mut u64, y: &mut Self::Inner) { label b0: return; }
+
+fun t(a: &mut Self::Top) {
+    let u: &mut u64;
+    let n: &mut Self::Inner;
+label b0:
+    u = &mut copy(a).Top::f;
+    n = &mut (&mut copy(a).Top::g).Mid::i;
+    // disjoint fields of the same struct
+    Self::c(move(u), move(n));
+    _ = move(a);
+    return;
+}
+
+}
+
+//# publish
+
+mvir 0x63::dot_star_then_deep_field {
+
+public struct Inner has copy, drop { h: u64 }
+public struct Mid has copy, drop { i: Self::Inner }
+public struct Top has copy, drop { f: u64, g: Self::Mid }
+
+fun mid(a: &mut Self::Top): &mut Self::Mid {
+label b0:
+    return &mut move(a).Top::g;
+}
+
+fun t(a: &mut Self::Top) {
+    let m: &mut Self::Mid;
+    let n: &mut Self::Inner;
+    let u: &mut u64;
+label b0:
+    m = Self::mid(copy(a));
+    // Regex::extend drops labels after a dot-star
+    n = &mut copy(m).Mid::i;
+    u = &mut copy(n).Inner::h;
+    *move(u) = 1;
+    _ = move(n);
+    _ = move(m);
+    _ = move(a);
+    return;
+}
+
+}
+
+//# publish
+
+mvir 0x65::freeze_deep_then_transfer {
+
+public struct Inner has copy, drop { h: u64 }
+public struct Mid has copy, drop { i: Self::Inner }
+public struct Top has copy, drop { f: u64, g: Self::Mid }
+
+fun c(x: &Self::Mid, y: &mut u64) { label b0: return; }
+
+fun t(a: &mut Self::Top) {
+    let p: &Self::Mid;
+    let u: &mut u64;
+label b0:
+    p = &copy(a).Top::g;
+    u = &mut copy(a).Top::f;
+    Self::c(move(p), move(u));
+    _ = move(a);
+    return;
+}
+
+}
+
+//# publish
+
+mvir 0x66::deep_loop_widening {
+
+public struct Inner has copy, drop { h: u64 }
+public struct Mid has copy, drop { i: Self::Inner }
+public struct Top has copy, drop { f: u64, g: Self::Mid }
+
+fun mid(a: &mut Self::Top): &mut Self::Mid {
+label b0:
+    return &mut move(a).Top::g;
+}
+fun inner(m: &mut Self::Mid): &mut Self::Inner {
+label b0:
+    return &mut move(m).Mid::i;
+}
+
+fun t(a: &mut Self::Top, c: bool) {
+    let m: &mut Self::Mid;
+    let n: &mut Self::Inner;
+label b0:
+    m = Self::mid(copy(a));
+label lh:
+    n = Self::inner(copy(m));
+    *copy(n) = Inner { h: 1 };
+    _ = move(n);
+    jump_if (copy(c)) lh;
+label lx:
+    *move(m) = Mid { i: Inner { h: 2 } };
+    _ = move(a);
+    return;
+}
+
+}

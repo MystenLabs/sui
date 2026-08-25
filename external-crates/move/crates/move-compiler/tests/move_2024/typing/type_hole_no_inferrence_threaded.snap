@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04023]: invalid method call
+error[EC04023]: invalid method call
   ┌─ tests/move_2024/typing/type_hole_no_inferrence_threaded.move:8:13
   │
 6 │         let mut c: Cup<_> = any();

@@ -68,7 +68,6 @@ use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
 use crate::api::types::owner::Owner;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
-use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction_object::TransactionObject;
 use crate::error::RpcError;
@@ -80,6 +79,7 @@ use crate::intersect;
 use crate::pagination::Page;
 use crate::pagination::PageLimits;
 use crate::pagination::PaginationConfig;
+use crate::pagination::StreamConnection;
 use crate::scope::Scope;
 use crate::task::watermark::Watermarks;
 
@@ -153,7 +153,7 @@ use crate::task::watermark::Watermarks;
         arg(name = "last", ty = "Option<u64>"),
         arg(name = "before", ty = "Option<CTransaction>"),
         arg(name = "filter", ty = "Option<TransactionFilter>"),
-        ty = "Option<Result<TransactionConnection, RpcError>>",
+        ty = "Option<Result<StreamConnection<Transaction>, RpcError>>",
         desc = "The transactions that sent objects to this object."
     )
 )]
@@ -331,9 +331,9 @@ impl Object {
             .ok()?
     }
 
-    /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+    /// Fetch the balance for `coinType` (e.g. `0x2::sui::SUI`) owned by this address.
     ///
-    /// If the address does not own any coins of that type, a balance of zero is returned.
+    /// The result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. If this address has no balance of that type, all three values are zero.
     pub(crate) async fn balance(
         &self,
         ctx: &Context<'_>,
@@ -342,7 +342,9 @@ impl Object {
         self.super_.balance(ctx, coin_type).await.ok()?
     }
 
-    /// Total balance across coins owned by this address, grouped by coin type.
+    /// Balances held by this address, grouped by coin type.
+    ///
+    /// Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator.
     pub(crate) async fn balances(
         &self,
         ctx: &Context<'_>,
@@ -465,10 +467,9 @@ impl Object {
         .await
     }
 
-    /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+    /// Fetch balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
     ///
-    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
-    /// If the address does not own any coins of a given type, a balance of zero is returned for that type.
+    /// Each result includes the total balance, the balance held in coin objects, and the balance held in the address's balance accumulator. Returns `null` when no checkpoint is set in scope (e.g. execution scope). If this address has no balance of a given type, all three values are zero for that type.
     pub(crate) async fn multi_get_balances(
         &self,
         ctx: &Context<'_>,
@@ -665,7 +666,7 @@ impl Object {
         last: Option<u64>,
         before: Option<CTransaction>,
         filter: Option<TransactionFilter>,
-    ) -> Option<Result<TransactionConnection, RpcError>> {
+    ) -> Option<Result<StreamConnection<Transaction>, RpcError>> {
         let result = async {
             let pagination: &PaginationConfig = ctx.data()?;
             let limits = pagination.limits("IObject", "receivedTransactions");
@@ -965,7 +966,7 @@ impl Object {
         let pg_reader: &PgReader = ctx.data()?;
 
         let mut query = v::obj_versions
-            .filter(v::object_id.eq(address.to_vec()))
+            .filter(v::object_id.eq(address.to_inner()))
             .filter(v::object_digest.is_not_null())
             .filter(sql!(as Bool,
                 r#"

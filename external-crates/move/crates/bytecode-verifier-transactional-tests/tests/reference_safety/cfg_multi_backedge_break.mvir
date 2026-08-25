@@ -1,0 +1,170 @@
+// the driver breaks on the first changed back edge, so a block with two backward arms does not
+// propagate to the second one in that pass
+
+//# publish
+mvir 0x2::a_violation_at_first_head {
+
+public struct S has copy, drop { f: u64 }
+public enum E has copy, drop { A { }, B { }, C { } }
+
+fun t(e: &Self::E, s: &mut Self::S, n: u64) {
+    let p: &mut u64;
+label b0:
+    p = &mut copy(s).S::f;
+label h1:
+    // unsafe once p is live here
+    *copy(s) = S { f: 1 };
+    jump_if (copy(n) == 0) done;
+label h2:
+    n = move(n) - 1;
+    jump_if (copy(n) == 0) done;
+label body:
+    p = &mut copy(s).S::f;
+    variant_switch E (copy(e)) { A: h1, B: h2, C: done };
+label done:
+    _ = move(p);
+    _ = move(e);
+    _ = move(s);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::b_violation_at_second_head {
+
+public struct S has copy, drop { f: u64 }
+public enum E has copy, drop { A { }, B { }, C { } }
+
+fun t(e: &Self::E, s: &mut Self::S, n: u64) {
+    let p: &mut u64;
+label b0:
+    p = &mut copy(s).S::f;
+label h1:
+    jump_if (copy(n) == 0) done;
+label h2:
+    // unsafe once p is live here
+    *copy(s) = S { f: 1 };
+    n = move(n) - 1;
+    jump_if (copy(n) == 0) done;
+label body:
+    p = &mut copy(s).S::f;
+    variant_switch E (copy(e)) { A: h1, B: h2, C: done };
+label done:
+    _ = move(p);
+    _ = move(e);
+    _ = move(s);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x4::c_violation_after_loops {
+
+public struct S has copy, drop { f: u64 }
+public enum E has copy, drop { A { }, B { }, C { } }
+
+// the violation is past both loops, so it must propagate forward
+fun t(e: &Self::E, s: &mut Self::S, n: u64) {
+    let p: &mut u64;
+label b0:
+    p = &mut copy(s).S::f;
+label h1:
+    jump_if (copy(n) == 0) done;
+label h2:
+    n = move(n) - 1;
+    jump_if (copy(n) == 0) done;
+label body:
+    p = &mut copy(s).S::f;
+    variant_switch E (copy(e)) { A: h1, B: h2, C: done };
+label done:
+    *copy(s) = S { f: 1 };
+    _ = move(p);
+    _ = move(e);
+    _ = move(s);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x5::d_triple_nested_inner_ext_outer_write {
+
+public struct S has copy, drop { f: u64 }
+
+// extension created innermost, write outermost
+fun t(s: &mut Self::S, a: u64, b: u64, c: u64) {
+    let p: &mut u64;
+    let i: u64;
+    let j: u64;
+label b0:
+    p = &mut copy(s).S::f;
+label h1:
+    *copy(s) = S { f: 1 };
+    jump_if (copy(a) == 0) e1;
+label b1:
+    a = move(a) - 1;
+    i = copy(b);
+label h2:
+    jump_if (copy(i) == 0) e2;
+label b2:
+    i = move(i) - 1;
+    j = copy(c);
+label h3:
+    jump_if (copy(j) == 0) e3;
+label b3:
+    j = move(j) - 1;
+    p = &mut copy(s).S::f;
+    jump h3;
+label e3:
+    jump h2;
+label e2:
+    jump h1;
+label e1:
+    _ = move(p);
+    _ = move(s);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x6::e_triple_nested_valid {
+
+public struct S has copy, drop { f: u64 }
+
+// same, extension consumed before every back edge
+fun t(s: &mut Self::S, a: u64, b: u64, c: u64) {
+    let p: &mut u64;
+    let i: u64;
+    let j: u64;
+label b0:
+label h1:
+    *copy(s) = S { f: 1 };
+    jump_if (copy(a) == 0) e1;
+label b1:
+    a = move(a) - 1;
+    i = copy(b);
+label h2:
+    jump_if (copy(i) == 0) e2;
+label b2:
+    i = move(i) - 1;
+    j = copy(c);
+label h3:
+    jump_if (copy(j) == 0) e3;
+label b3:
+    j = move(j) - 1;
+    p = &mut copy(s).S::f;
+    *move(p) = 2;
+    jump h3;
+label e3:
+    jump h2;
+label e2:
+    jump h1;
+label e1:
+    _ = move(s);
+    return;
+}
+
+}

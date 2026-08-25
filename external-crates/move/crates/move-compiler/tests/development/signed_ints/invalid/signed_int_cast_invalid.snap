@@ -5,7 +5,7 @@ info:
   edition: development
   lint: false
 ---
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
   ┌─ tests/development/signed_ints/invalid/signed_int_cast_invalid.move:8:19
   │
 8 │         let _y = (x as bool);
@@ -13,7 +13,7 @@ error[E04003]: built-in operation not supported
   │                   │     
   │                   Invalid argument to 'as'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/development/signed_ints/invalid/signed_int_cast_invalid.move:14:19
    │
 13 │         let x = true;
@@ -21,7 +21,7 @@ error[E04003]: built-in operation not supported
 14 │         let _y = (x as i8);
    │                   ^ Invalid argument to 'as'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/development/signed_ints/invalid/signed_int_cast_invalid.move:20:19
    │
 20 │         let _y = (x as address);
@@ -29,7 +29,7 @@ error[E04003]: built-in operation not supported
    │                   │     
    │                   Invalid argument to 'as'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/development/signed_ints/invalid/signed_int_cast_invalid.move:26:19
    │
 25 │         let x = @0x42;
@@ -37,7 +37,7 @@ error[E04003]: built-in operation not supported
 26 │         let _y = (x as i64);
    │                   ^ Invalid argument to 'as'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/development/signed_ints/invalid/signed_int_cast_invalid.move:32:19
    │
 32 │         let _y = (x as vector<u8>);

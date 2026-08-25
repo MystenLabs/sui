@@ -1,0 +1,24 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 0, lines 4-20:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000067::write_mut_elem_with_imm_vector_live'. Got VMError: {
+    major_status: BORROWLOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x67::write_mut_elem_with_imm_vector_live,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 8)],
+}
+
+task 1, lines 22-38:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000069::write_mut_elem_after_imm_elem_dead'. Got VMError: {
+    major_status: BORROWLOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x69::write_mut_elem_after_imm_elem_dead,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 8)],
+}

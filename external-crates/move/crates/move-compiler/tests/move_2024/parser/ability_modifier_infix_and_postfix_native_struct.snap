@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_2024/parser/ability_modifier_infix_and_postfix_native_struct.move:4:46
   │
 4 │     public native struct Foo has copy, drop; has store;

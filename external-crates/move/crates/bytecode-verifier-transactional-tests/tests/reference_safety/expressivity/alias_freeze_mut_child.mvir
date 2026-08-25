@@ -1,0 +1,108 @@
+// freeze has no check, so a mutable child can hang off an immutable parent
+
+//# run
+mvir 0x2::freeze_parent_write_child {
+
+public struct Inner has copy, drop { v: u64 }
+public struct Outer has copy, drop { f: Self::Inner }
+
+entry fun t() {
+    let a: Self::Outer;
+    let p: &mut Self::Outer;
+    let c: &mut Self::Inner;
+    let frozen: &Self::Outer;
+    let read: Self::Outer;
+    let inner: &Self::Inner;
+label b0:
+    a = Outer { f: Inner { v: 0 } };
+    p = &mut a;
+    c = &mut copy(p).Outer::f;
+    frozen = freeze(move(p));
+    *move(c) = Inner { v: 7 };
+    read = *move(frozen);
+    inner = &(&read).Outer::f;
+    assert(*&move(inner).Inner::v == 7, 42);
+    return;
+}
+
+}
+
+//# run
+mvir 0x3::freeze_parent_call_then_write_child {
+
+public struct Inner has copy, drop { v: u64 }
+public struct Outer has copy, drop { f: Self::Inner }
+
+fun observe(o: &Self::Outer): u64 {
+    let i: &Self::Inner;
+label b0:
+    i = &move(o).Outer::f;
+    return *&move(i).Inner::v;
+}
+
+entry fun t() {
+    let a: Self::Outer;
+    let p: &mut Self::Outer;
+    let c: &mut Self::Inner;
+    let frozen: &Self::Outer;
+label b0:
+    a = Outer { f: Inner { v: 0 } };
+    p = &mut a;
+    c = &mut copy(p).Outer::f;
+    frozen = freeze(move(p));
+    // c is a mut extension of frozen but is not in the transfer set
+    assert(Self::observe(copy(frozen)) == 0, 42);
+    *move(c) = Inner { v: 7 };
+    assert(Self::observe(move(frozen)) == 7, 43);
+    return;
+}
+
+}
+
+//# run
+mvir 0x5::freeze_enum_parent_mut_variant_field {
+
+public enum E has copy, drop {
+    One { a: u64 },
+    Two { b: address },
+}
+
+entry fun t() {
+    let e: Self::E;
+    let p: &mut Self::E;
+    let a: &mut u64;
+    let frozen: &Self::E;
+    let ia: &u64;
+label b0:
+    e = E::One { a: 0 };
+    p = &mut e;
+    &mut E::One { a: a } = copy(p);
+    frozen = freeze(move(p));
+    *move(a) = 5;
+    &E::One { a: ia } = move(frozen);
+    assert(*move(ia) == 5, 42);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x6::freeze_vector_parent_mut_elem {
+
+fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &mut u64;
+    let frozen: &vector<u64>;
+label b0:
+    v = vector<u64; 1>(0);
+    vr = &mut v;
+    e = vec_mut_borrow<u64>(copy(vr), 0);
+    frozen = freeze(move(vr));
+    assert(vec_len<u64>(copy(frozen)) == 1, 42);
+    *move(e) = 1;
+    _ = move(frozen);
+    return;
+}
+
+}

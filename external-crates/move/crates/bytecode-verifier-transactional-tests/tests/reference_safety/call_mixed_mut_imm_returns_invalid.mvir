@@ -1,0 +1,41 @@
+// The caller treats a call's mutable results as disjoint from its immutable results. These returns
+// would overlap, so the callee's return check has to reject them for that to hold.
+
+//# publish
+mvir 0x2::same_field_alias {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun split(s: &mut Self::S): &mut u64 * &u64 {
+label b0:
+    return &mut copy(s).S::f, &move(s).S::f;
+}
+
+}
+
+//# publish
+mvir 0x3::imm_parent_mut_child {
+
+public struct Inner has copy, drop { f: u64 }
+public struct S has copy, drop { inner: Self::Inner }
+
+fun split(s: &mut Self::S): &mut u64 * &Self::Inner {
+    let inner: &mut Self::Inner;
+label b0:
+    inner = &mut copy(s).S::inner;
+    return &mut move(inner).Inner::f, &move(s).S::inner;
+}
+
+}
+
+//# publish
+mvir 0x4::two_mut_aliases {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun split(s: &mut Self::S): &mut u64 * &mut u64 {
+label b0:
+    return &mut copy(s).S::f, &mut move(s).S::f;
+}
+
+}

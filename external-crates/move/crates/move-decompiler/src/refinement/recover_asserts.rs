@@ -9,11 +9,11 @@ use move_symbol_pool::Symbol;
 
 // Recognize the `assert!` idiom in structured output. Two empty-arm shapes:
 //
-//   - `if (cond) { } else { abort code }`        →  `assert!(cond, code)`
-//   - `if (cond) { abort code }` (no/empty else) →  `assert!(!cond, code)`
+//   - `if (cond) { } else { abort code }`        ->  `assert!(cond, code)`
+//   - `if (cond) { abort code }` (no/empty else) ->  `assert!(!cond, code)`
 //
 // The non-empty-arm variants (`if (cond) { rest } else { abort code }` and its mirror)
-// are not handled here — `simplify_if` hoists `rest` out first, leaving an empty-arm
+// are not handled here - `simplify_if` hoists `rest` out first, leaving an empty-arm
 // shape that this pass then collapses. Keeping the assert recovery scoped to the
 // empty-arm forms means it's a pure pattern-match: no AST shape manipulation, just a
 // node-for-node rewrite.
@@ -30,7 +30,7 @@ impl Refine for RecoverAsserts {
             return false;
         };
 
-        // `if (cond) { } else { abort code }` — the natural shape from a `!cond` test that
+        // `if (cond) { } else { abort code }` - the natural shape from a `!cond` test that
         // branches to abort on failure. Pull `cond` and `code` verbatim.
         if is_empty(then_b)
             && let Some(else_inner) = else_b.as_ref().as_ref()
@@ -40,7 +40,7 @@ impl Refine for RecoverAsserts {
             return true;
         }
 
-        // `if (cond) { abort code }` (or empty-else equivalent) — the negation of the above.
+        // `if (cond) { abort code }` (or empty-else equivalent) - the negation of the above.
         // Wrap `cond` in `!` (or strip an existing `!`) so the recovered assertion reads in
         // the same direction.
         let else_is_empty_or_missing = else_b.as_ref().as_ref().is_none_or(is_empty);

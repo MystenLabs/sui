@@ -4,7 +4,7 @@
 import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, doc } from 'prettier';
-import { printLeadingComment, printTrailingComment } from '../../utilities';
+import { inlineTrailingComment, printLeadingComment } from '../../utilities';
 const { group, indent, ifBreak, breakParent, lineSuffix, softline } = doc.builders;
 
 /** The type of the node implemented in this file */
@@ -39,7 +39,7 @@ function printDotExpression(path: AstPath<Node>, options: MoveOptions, print: pr
 
     // if dot expression has a trailing comment and it breaks, we need to
     // print it manually after the rhs
-    const trailing = lineSuffix(printTrailingComment(path));
+    const trailing = lineSuffix(inlineTrailingComment(path));
 
     const lhs = path.call(
         (path) => printNode(path, options, print, false),

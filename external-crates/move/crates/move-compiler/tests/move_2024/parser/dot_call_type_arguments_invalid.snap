@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E03010]: unbound field
+error[EC03010]: unbound field
    ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:9
    │
 12 │         c.uncup <u64> ();
    │         ^^^^^^^ Unbound field 'uncup' in 'a::m::Cup'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:9
    │
 12 │         c.uncup <u64> ();
@@ -20,7 +20,7 @@ error[E04003]: built-in operation not supported
    │         Invalid argument to '>'
    │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E03009]: unbound variable
+error[EC03009]: unbound variable
    ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:18
    │
 11 │         let c = Cup { value: 0u64 };
@@ -31,7 +31,7 @@ error[E03009]: unbound variable
    │                  Unbound variable 'u64'
    │                  Did you mean: 'c'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:21
    │
 12 │         c.uncup <u64> ();
@@ -40,7 +40,7 @@ error[E04007]: incompatible types
    │         │           Incompatible arguments to '>'
    │         Found: 'bool'. It is not compatible with the other type.
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:23
    │
 12 │         c.uncup <u64> ();

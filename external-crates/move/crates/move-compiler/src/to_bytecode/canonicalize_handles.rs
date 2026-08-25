@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 
+use crate::{diagnostics::IceReporter, ice};
 use move_binary_format::{
     CompiledModule,
     file_format::{
@@ -14,6 +15,7 @@ use move_binary_format::{
     internals::ModuleIndex,
 };
 use move_core_types::account_address::AccountAddress;
+use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
 /// Pass to order handles in compiled modules stably and canonically.  Performs the
@@ -65,6 +67,8 @@ macro_rules! remap {
 
 /// Apply canonicalization to a compiled module.
 pub fn in_module(
+    reporter: &IceReporter,
+    loc: Loc,
     module: &mut CompiledModule,
     address_names: &HashMap<(AccountAddress, &str), Symbol>,
 ) {
@@ -160,7 +164,11 @@ pub fn in_module(
                 .map(|posn| posn.0)
                 .or_else(|| enums_defs.get(ndx_ref).map(|posn| posn.0))
             else {
-                panic!("ICE struct handle from module without definition: {handle:?}");
+                reporter.add_diag(ice!((
+                    loc,
+                    format!("struct handle from module without definition: {handle:?}")
+                )));
+                return ReferenceKey::Internal(TableIndex::MAX);
             };
             ReferenceKey::Internal(ref_key)
         } else {
@@ -207,7 +215,11 @@ pub fn in_module(
         if handle.module == module.self_handle_idx() {
             // Order functions from this module first, and in definition order
             let Some(def_position) = function_defs.get(&FunctionHandleIndex(ix)) else {
-                panic!("ICE function handle from module without definition: {handle:?}");
+                reporter.add_diag(ice!((
+                    loc,
+                    format!("function handle from module without definition: {handle:?}")
+                )));
+                return ReferenceKey::Internal(TableIndex::MAX);
             };
             ReferenceKey::Internal(def_position.0)
         } else {

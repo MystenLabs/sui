@@ -5,7 +5,7 @@ use std::{
     collections::BTreeMap,
     net::{SocketAddr, SocketAddrV4, SocketAddrV6},
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, Weak},
     time::{Duration, Instant},
 };
 
@@ -15,13 +15,15 @@ use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use consensus_types::block::{BlockRef, Round};
 use fastcrypto::{encoding::Encoding, traits::ToFromBytes};
 use futures::{Stream, StreamExt as _, stream};
-use mysten_network::{
-    Multiaddr,
-    callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler},
-    multiaddr::Protocol,
-};
+use mysten_network::{Multiaddr, multiaddr::Protocol};
 use parking_lot::RwLock;
-use sui_http::ServerHandle;
+use sui_http::{
+    ServerHandle,
+    middleware::{
+        callback::{CallbackLayer, MakeCallbackHandler, RequestBody, ResponseHandler},
+        grpc_timeout::GrpcTimeout,
+    },
+};
 use sui_tls::AllowPublicKeys;
 use tokio_stream::{Iter, iter};
 use tonic::{Request, Response, Streaming, codec::CompressionEncoding};
@@ -30,7 +32,7 @@ use tracing::{debug, error, info, trace, warn};
 
 use super::{
     BlockStream, ExtendedSerializedBlock, NetworkManager, ObserverNetworkService,
-    ValidatorNetworkClient, ValidatorNetworkService,
+    SerializedBlockEnvelope, SerializedBlockForm, ValidatorNetworkClient, ValidatorNetworkService,
     metrics_layer::{MetricsCallbackMaker, MetricsResponseCallback, SizedRequest, SizedResponse},
     observer::{ObserverPeerInfo, ObserverServiceProxy, TonicObserverClient},
     tonic_gen::{
@@ -140,21 +142,47 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         let response = client.subscribe_blocks(request).await.map_err(|e| {
             ConsensusError::NetworkRequest(format!("subscribe_blocks failed: {e:?}"))
         })?;
+        let slim_enabled = self
+            .context
+            .protocol_config
+            .slim_block_propagation_enabled();
+        let metrics_context = self.context.clone();
+        let peer_hostname = self.context.committee.authority(peer).hostname.clone();
         let stream = response
             .into_inner()
-            .take_while(|b| futures::future::ready(b.is_ok()))
-            .filter_map(move |b| async move {
-                match b {
-                    Ok(response) => Some(ExtendedSerializedBlock {
-                        block: response.block,
-                        excluded_ancestors: response.excluded_ancestors,
-                    }),
-                    Err(e) => {
-                        debug!("Network error received from {}: {e:?}", peer);
-                        None
+            .map(move |b| match b {
+                Ok(response) => {
+                    match interpret_subscription_block(response.block, slim_enabled) {
+                        Ok(block) => Some(ExtendedSerializedBlock {
+                            block,
+                            excluded_ancestors: response.excluded_ancestors,
+                        }),
+                        // A payload that does not frame as an envelope is a peer or
+                        // configuration fault, not an invalid block. Ending the stream
+                        // here, before anything is delivered, keeps the subscriber's
+                        // retry counter and backoff unreset, so a persistently
+                        // mismatched peer escalates through reconnect backoff instead
+                        // of being rejected block by block forever.
+                        Err(e) => {
+                            debug!("Failed to decode block envelope from {}: {e:?}", peer);
+                            let reason: &'static str = (&e).into();
+                            metrics_context
+                                .metrics
+                                .node_metrics
+                                .subscribe_stream_form_failures
+                                .with_label_values(&[peer_hostname.as_str(), reason])
+                                .inc();
+                            None
+                        }
                     }
                 }
-            });
+                Err(e) => {
+                    debug!("Network error received from {}: {e:?}", peer);
+                    None
+                }
+            })
+            .take_while(|item| futures::future::ready(item.is_some()))
+            .map(|item| item.expect("terminated by take_while"));
         let rate_limited_stream =
             tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
                 .boxed();
@@ -372,13 +400,30 @@ impl ValidatorNetworkClient for TonicValidatorClient {
 }
 
 // Tonic channel wrapped with layers.
-pub(crate) type Channel = mysten_network::callback::Callback<
-    tower_http::trace::Trace<
-        tonic_rustls::Channel,
-        tower_http::classify::SharedClassifier<tower_http::classify::GrpcErrorsAsFailures>,
+pub(crate) type Channel = sui_http::middleware::callback::Callback<
+    tower::util::MapRequest<
+        tower_http::trace::Trace<
+            tonic_rustls::Channel,
+            tower_http::classify::SharedClassifier<tower_http::classify::GrpcErrorsAsFailures>,
+        >,
+        ReboxRequestFn,
     >,
     MetricsCallbackMaker,
 >;
+
+/// The callback middleware hands the wrapped service a request body of type
+/// `RequestBody`, but `tonic_rustls::Channel` is monomorphic on
+/// `tonic::body::Body`, so the body must be reboxed before it reaches the
+/// channel. A fn pointer (rather than a closure) keeps `Channel` nameable as a
+/// type alias.
+pub(crate) type ReboxRequestFn =
+    fn(http::Request<RequestBody<tonic::body::Body, ()>>) -> http::Request<tonic::body::Body>;
+
+pub(crate) fn rebox_request(
+    request: http::Request<RequestBody<tonic::body::Body, ()>>,
+) -> http::Request<tonic::body::Body> {
+    request.map(tonic::body::Body::new)
+}
 
 /// Manages a pool of connections to peers to avoid constantly reconnecting,
 /// which can be expensive.
@@ -504,6 +549,7 @@ impl ChannelPool {
                 self.context.metrics.network_metrics.outbound.clone(),
                 self.context.parameters.tonic.excessive_message_size,
             )))
+            .map_request(rebox_request as ReboxRequestFn)
             .layer(
                 TraceLayer::new_for_grpc()
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
@@ -521,12 +567,26 @@ impl ChannelPool {
 /// Proxies Tonic requests to NetworkService with actual handler implementation.
 struct TonicServiceProxy<S: ValidatorNetworkService> {
     context: Arc<Context>,
-    service: Arc<S>,
+    // TonicServiceProxy is cloned into per-connection server tasks, which complete on the
+    // network's schedule during graceful shutdown, and can briefly outlive the node if it is
+    // dropped without stop(). Hold the service weakly so lingering connections cannot extend
+    // the life of the authority service and its state; requests racing shutdown fail with
+    // `unavailable` instead.
+    service: Weak<S>,
 }
 
 impl<S: ValidatorNetworkService> TonicServiceProxy<S> {
     fn new(context: Arc<Context>, service: Arc<S>) -> Self {
-        Self { context, service }
+        Self {
+            context,
+            service: Arc::downgrade(&service),
+        }
+    }
+
+    fn service(&self) -> Result<Arc<S>, tonic::Status> {
+        self.service
+            .upgrade()
+            .ok_or_else(|| tonic::Status::unavailable("Consensus authority is shutting down"))
     }
 }
 
@@ -544,11 +604,13 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
             return Err(tonic::Status::internal("PeerInfo not found"));
         };
         let block = request.into_inner().block;
+        // The unicast send path stays raw full SignedBlock bytes; only the live
+        // subscription stream uses the envelope framing.
         let block = ExtendedSerializedBlock {
-            block,
+            block: SerializedBlockForm::Full(block),
             excluded_ancestors: vec![],
         };
-        self.service
+        self.service()?
             .handle_send_block(peer_index, block)
             .await
             .map_err(|e| tonic::Status::invalid_argument(format!("{e:?}")))?;
@@ -583,16 +645,35 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
                 return Err(tonic::Status::invalid_argument("Missing request"));
             }
         };
+        let context = self.context.clone();
+        let subscriber_hostname = context.committee.authority(peer_index).hostname.clone();
         let stream = self
-            .service
+            .service()?
             .handle_subscribe_blocks(peer_index, first_request.last_received_round)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?
-            .map(|block| {
-                Ok(SubscribeBlocksResponse {
-                    block: block.block,
+            .map(move |block| {
+                let label = match &block.block {
+                    SerializedBlockForm::Full(_) => "full",
+                    SerializedBlockForm::Slim(_) => "slim",
+                };
+                let response = SubscribeBlocksResponse {
+                    block: frame_subscription_block(
+                        block.block,
+                        context.protocol_config.slim_block_propagation_enabled(),
+                    )?,
                     excluded_ancestors: block.excluded_ancestors,
-                })
+                };
+                // Pre-compression payload bytes by form, so the saving from the
+                // slim form is measurable independently of zstd below. With slim
+                // propagation enabled the count includes the envelope framing.
+                context
+                    .metrics
+                    .node_metrics
+                    .subscribe_blocks_response_bytes
+                    .with_label_values(&[subscriber_hostname.as_str(), label])
+                    .inc_by(prost::Message::encoded_len(&response) as u64);
+                Ok(response)
             });
         let rate_limited_stream =
             tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
@@ -628,7 +709,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         let fetch_after_rounds = inner.fetch_after_rounds;
         let fetch_missing_ancestors = inner.fetch_missing_ancestors;
         let blocks = self
-            .service
+            .service()?
             .handle_fetch_blocks(
                 peer_index,
                 block_refs,
@@ -660,7 +741,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         };
         let request = request.into_inner();
         let (commits, certifier_blocks) = self
-            .service
+            .service()?
             .handle_fetch_commits(peer_index, (request.start..=request.end).into())
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
@@ -710,7 +791,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         }
 
         let blocks = self
-            .service
+            .service()?
             .handle_fetch_latest_blocks(peer_index, authorities)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
@@ -736,7 +817,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
             return Err(tonic::Status::internal("PeerInfo not found"));
         };
         let (highest_received, highest_accepted) = self
-            .service
+            .service()?
             .handle_get_latest_rounds(peer_index)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
@@ -920,9 +1001,7 @@ impl TonicManager {
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
                     .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
             )
-            .layer_fn(|service| {
-                mysten_network::grpc_timeout::GrpcTimeout::new(service, DEFAULT_GRPC_SERVER_TIMEOUT)
-            });
+            .layer_fn(|service| GrpcTimeout::new(service, Some(DEFAULT_GRPC_SERVER_TIMEOUT)));
 
         let consensus_service_server = ConsensusServiceServer::new(service)
             .max_encoding_message_size(config.message_size_limit)
@@ -1051,9 +1130,7 @@ impl TonicManager {
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
                     .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
             )
-            .layer_fn(|service| {
-                mysten_network::grpc_timeout::GrpcTimeout::new(service, DEFAULT_GRPC_SERVER_TIMEOUT)
-            });
+            .layer_fn(|service| GrpcTimeout::new(service, Some(DEFAULT_GRPC_SERVER_TIMEOUT)));
 
         let observer_service = tonic::service::Routes::new(observer_service_server)
             .into_axum_router()
@@ -1301,10 +1378,14 @@ impl SizedResponse for http::response::Parts {
 }
 
 impl MakeCallbackHandler for MetricsCallbackMaker {
-    type Handler = MetricsResponseCallback;
+    type RequestHandler = ();
+    type ResponseHandler = MetricsResponseCallback;
 
-    fn make_handler(&self, request: &http::request::Parts) -> Self::Handler {
-        self.handle_request(request)
+    fn make_handler(
+        &self,
+        request: &http::request::Parts,
+    ) -> (Self::RequestHandler, Self::ResponseHandler) {
+        ((), self.handle_request(request))
     }
 }
 
@@ -1313,7 +1394,10 @@ impl ResponseHandler for MetricsResponseCallback {
         MetricsResponseCallback::on_response(self, response)
     }
 
-    fn on_error<E>(&mut self, err: &E) {
+    fn on_service_error<E>(&mut self, err: &E)
+    where
+        E: std::fmt::Display + 'static,
+    {
         MetricsResponseCallback::on_error(self, err)
     }
 }
@@ -1335,8 +1419,44 @@ pub(crate) struct SubscribeBlocksRequest {
     last_received_round: Round,
 }
 
+/// Frames one block for the live subscription wire. With slim propagation enabled every
+/// payload rides in a [`SerializedBlockEnvelope`], whichever form it is; disabled, the
+/// bytes are the raw serialized `SignedBlock`, byte-identical to the pre-envelope wire.
+/// A slim form while the flag is off is an internal invariant violation -- nothing
+/// produces one -- and fails the stream rather than fabricating a payload the receiver
+/// would reject block by block.
+fn frame_subscription_block(
+    form: SerializedBlockForm,
+    slim_enabled: bool,
+) -> Result<Bytes, tonic::Status> {
+    if slim_enabled {
+        return Ok(SerializedBlockEnvelope::encode_form(form));
+    }
+    match form {
+        SerializedBlockForm::Full(bytes) => Ok(bytes),
+        SerializedBlockForm::Slim(_) => Err(tonic::Status::internal(
+            "slim block emitted while slim propagation is disabled",
+        )),
+    }
+}
+
+/// Inverse of [`frame_subscription_block`], on the receiving side of the stream.
+fn interpret_subscription_block(
+    block: Bytes,
+    slim_enabled: bool,
+) -> ConsensusResult<SerializedBlockForm> {
+    if slim_enabled {
+        SerializedBlockEnvelope::decode_form(&block)
+    } else {
+        Ok(SerializedBlockForm::Full(block))
+    }
+}
+
 #[derive(Clone, prost::Message)]
 pub(crate) struct SubscribeBlocksResponse {
+    // With slim block propagation disabled these are raw serialized SignedBlock bytes,
+    // byte-identical to the pre-envelope wire. With it enabled they hold a serialized
+    // SerializedBlockEnvelope.
     #[prost(bytes = "bytes", tag = "1")]
     block: Bytes,
     // Serialized BlockRefs that are excluded from the blocks ancestors.
@@ -1438,6 +1558,122 @@ mod tests {
     use consensus_config::{ConsensusProtocolConfig, Parameters, local_committee_and_keys};
     use consensus_types::block::BlockDigest;
     use prometheus::Registry;
+
+    /// With slim propagation disabled the framing is the identity: the wire carries
+    /// the raw SignedBlock bytes unchanged, in the same message struct as before the
+    /// envelope existed -- so deploying this is a wire no-op.
+    #[tokio::test]
+    async fn flag_off_wire_carries_raw_block_bytes() {
+        for block in [Bytes::from_static(b"a-signed-block"), Bytes::new()] {
+            assert_eq!(
+                frame_subscription_block(SerializedBlockForm::Full(block.clone()), false).unwrap(),
+                block
+            );
+        }
+    }
+
+    /// With the flag on, both forms survive framing and interpretation.
+    #[tokio::test]
+    async fn flag_on_roundtrips_both_forms() {
+        for form in [
+            SerializedBlockForm::Full(Bytes::from_static(b"full-bytes")),
+            SerializedBlockForm::Slim(Bytes::from_static(b"slim-bytes")),
+        ] {
+            let framed = frame_subscription_block(form.clone(), true).unwrap();
+            assert_eq!(interpret_subscription_block(framed, true).unwrap(), form);
+        }
+        // Empty payloads are still valid envelopes, distinct from an absent form.
+        for form in [
+            SerializedBlockForm::Full(Bytes::new()),
+            SerializedBlockForm::Slim(Bytes::new()),
+        ] {
+            let framed = frame_subscription_block(form.clone(), true).unwrap();
+            assert_eq!(interpret_subscription_block(framed, true).unwrap(), form);
+        }
+    }
+
+    /// A slim form with the flag off is an internal invariant violation and must fail
+    /// the stream, not fabricate a payload.
+    #[tokio::test]
+    async fn flag_off_slim_fails_the_stream() {
+        assert!(
+            frame_subscription_block(
+                SerializedBlockForm::Slim(Bytes::from_static(b"slim")),
+                false
+            )
+            .is_err()
+        );
+    }
+
+    /// The framing follows the protocol config end to end: the testing setter flips the
+    /// flag on a real config, and both framing directions change with it.
+    #[tokio::test]
+    async fn framing_follows_the_protocol_config() {
+        let mut config = consensus_config::ConsensusProtocolConfig::for_testing();
+        assert!(
+            !config.slim_block_propagation_enabled(),
+            "the flag must default off, including for tests"
+        );
+        let raw = Bytes::from_static(b"a-signed-block");
+
+        let framed_off = frame_subscription_block(
+            SerializedBlockForm::Full(raw.clone()),
+            config.slim_block_propagation_enabled(),
+        )
+        .unwrap();
+        assert_eq!(framed_off, raw, "flag off leaves the bytes untouched");
+
+        config.set_slim_block_propagation_enabled_for_testing(true);
+        let framed_on = frame_subscription_block(
+            SerializedBlockForm::Full(raw.clone()),
+            config.slim_block_propagation_enabled(),
+        )
+        .unwrap();
+        assert_ne!(framed_on, raw, "flag on envelopes the bytes");
+        assert_eq!(
+            interpret_subscription_block(framed_on, config.slim_block_propagation_enabled())
+                .unwrap(),
+            SerializedBlockForm::Full(raw)
+        );
+    }
+
+    /// Envelope decode failures a receiver must survive: garbage, an empty envelope,
+    /// and raw BCS block bytes sent by a flag-off (or lying) peer. Raw SignedBlock
+    /// bytes always fail: their first byte is the block-version index (1..=3), which
+    /// protobuf reads as a tag for the illegal field number 0.
+    #[tokio::test]
+    async fn malformed_envelopes_are_errors_not_blocks() {
+        assert!(matches!(
+            interpret_subscription_block(Bytes::from_static(b"\xff\xff\xff"), true),
+            Err(ConsensusError::MalformedBlockEnvelope(_))
+        ));
+        assert!(
+            matches!(
+                interpret_subscription_block(Bytes::new(), true),
+                Err(ConsensusError::MalformedBlockEnvelope(_))
+            ),
+            "an empty envelope has no form and must not decode"
+        );
+        for version_byte in [1u8, 2, 3] {
+            let raw = Bytes::from(vec![version_byte, 0x42, 0x42, 0x42]);
+            assert!(
+                interpret_subscription_block(raw, true).is_err(),
+                "raw BCS SignedBlock bytes must not parse as an envelope"
+            );
+        }
+    }
+
+    /// The unsupported mismatch direction the other way: a flag-off receiver handed an
+    /// enveloped payload treats it as raw block bytes, which then fail BCS
+    /// deserialization downstream -- rejected per block, never accepted.
+    #[tokio::test]
+    async fn flag_off_receiver_passes_enveloped_bytes_through() {
+        let enveloped =
+            frame_subscription_block(SerializedBlockForm::Full(Bytes::from_static(b"x")), true)
+                .unwrap();
+        let form = interpret_subscription_block(enveloped.clone(), false).unwrap();
+        assert_eq!(form, SerializedBlockForm::Full(enveloped));
+    }
 
     fn create_test_context_and_client() -> (Arc<Context>, TonicValidatorClient) {
         let (committee, mut keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);

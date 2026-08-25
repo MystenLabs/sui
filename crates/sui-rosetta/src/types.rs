@@ -745,6 +745,9 @@ pub struct ConstructionMetadata {
     /// Genesis checkpoint digest (base58), identifies the chain for address-balance gas
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chain_id: Option<String>,
+    /// Uniqueness value for transactions that pay gas from an address balance
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nonce: Option<u32>,
     /// Number of FungibleStakedSui objects in the `objects` array (the rest are StakedSui).
     /// Used by ConsolidateAllStakedSuiToFungible.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1123,6 +1126,7 @@ mod tests {
             address_balance_withdrawal: 0,
             epoch: None,
             chain_id: None,
+            nonce: None,
             fss_object_count: None,
             redeem_token_amount: None,
             redeem_plan: None,

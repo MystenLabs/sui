@@ -6,10 +6,8 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = [
-  'cfg(msim)',
-] }
+[lints]
+workspace = true
 
 [lib]
 path = "src/lib.rs"

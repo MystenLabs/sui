@@ -632,7 +632,8 @@ impl RandomnessEventLoop {
             };
 
         // Try to verify the aggregated signature all at once. (Should work in the happy path.)
-        if ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig).is_err() {
+        if ThresholdBls12381MinSig::verify(&vss_pk.c0(), &round.signature_message(), &sig).is_err()
+        {
             // If verifiation fails, some of the inputs must be invalid. We have to go through
             // one-by-one to find which.
             // TODO: add test for individual sig verification.
@@ -676,7 +677,7 @@ impl RandomnessEventLoop {
                 }
             };
             if let Err(e) =
-                ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig)
+                ThresholdBls12381MinSig::verify(&vss_pk.c0(), &round.signature_message(), &sig)
             {
                 error!(
                     "error while verifying randomness partial signatures after removing invalid partials: {e:?}"
@@ -736,7 +737,7 @@ impl RandomnessEventLoop {
         }
 
         if let Err(e) =
-            ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig)
+            ThresholdBls12381MinSig::verify(&vss_pk.c0(), &round.signature_message(), &sig)
         {
             info!("received invalid full signature from peer {peer_id}: {e:?}");
             if let Some(sender) = self.mailbox_sender.upgrade() {
@@ -1077,7 +1078,7 @@ impl RandomnessEventLoop {
             &dkg_output.vss_pk
         };
 
-        ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig)
+        ThresholdBls12381MinSig::verify(&vss_pk.c0(), &round.signature_message(), &sig)
             .map_err(|e| anyhow::anyhow!("invalid full signature: {e:?}"))?;
 
         self.process_valid_full_signature(self.epoch, round, sig);

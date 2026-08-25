@@ -4,7 +4,7 @@
 // Benchmark the send_funds command with a SUI withdrawal from A's address balance
 // sent to B, with gas also paid from A's address balance.
 
-//# init --addresses test=0x0 --accounts A B C D E --enable-accumulators --enable-address-balance-gas-payments
+//# init --addresses test=0x0 --accounts A B C D E
 
 // Seed A's address balance so it can both fund the withdrawal and pay for gas.
 //# programmable --sender A --inputs 20000000000 @A

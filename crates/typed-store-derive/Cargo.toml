@@ -8,6 +8,9 @@ repository = "https://github.com/mystenlabs/mysten-infra"
 edition = "2024"
 publish = false
 
+[lints]
+workspace = true
+
 [lib]
 proc-macro = true
 

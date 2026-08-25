@@ -1,0 +1,106 @@
+// an imm and a mut field borrow of the same field are epsilon aliases
+
+// control: plain field borrow off the imm alias
+//# publish
+mvir 0x41::d0_control_no_call {
+
+public struct S has copy, drop, store { f: u64 }
+public struct O has copy, drop, store { b: Self::S }
+
+fun t(o: &mut Self::O) {
+    let i: &Self::S;
+    let r: &mut Self::S;
+    let n: &u64;
+label b0:
+    i = &copy(o).O::b;
+    r = &mut copy(o).O::b;
+    n = &move(i).S::f;
+    *move(r) = S { f: 1 };
+    _ = move(n);
+    _ = move(o);
+    return;
+}
+
+}
+
+// the extension comes back from a call
+//# publish
+mvir 0x42::d1_call_off_imm_alias {
+
+public struct S has copy, drop, store { f: u64 }
+public struct O has copy, drop, store { b: Self::S }
+
+fun get_imm(s: &Self::S): &u64 {
+label b0:
+    return &move(s).S::f;
+}
+
+fun t(o: &mut Self::O) {
+    let i: &Self::S;
+    let r: &mut Self::S;
+    let n: &u64;
+label b0:
+    i = &copy(o).O::b;
+    r = &mut copy(o).O::b;
+    n = Self::get_imm(move(i));
+    *move(r) = S { f: 1 };
+    _ = move(n);
+    _ = move(o);
+    return;
+}
+
+}
+
+// the call returns the whole S
+//# publish
+mvir 0x43::d2_call_identity_off_imm_alias {
+
+public struct S has copy, drop, store { f: u64 }
+public struct O has copy, drop, store { b: Self::S }
+
+fun id_imm(s: &Self::S): &Self::S {
+label b0:
+    return move(s);
+}
+
+fun t(o: &mut Self::O) {
+    let i: &Self::S;
+    let r: &mut Self::S;
+    let n: &Self::S;
+label b0:
+    i = &copy(o).O::b;
+    r = &mut copy(o).O::b;
+    n = Self::id_imm(move(i));
+    *move(r) = S { f: 1 };
+    _ = move(n);
+    _ = move(o);
+    return;
+}
+
+}
+
+// no imm alias; result released before the write
+//# publish
+mvir 0x44::d3_baseline {
+
+public struct S has copy, drop, store { f: u64 }
+public struct O has copy, drop, store { b: Self::S }
+
+fun id_mut(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+fun t(o: &mut Self::O) {
+    let r: &mut Self::S;
+    let n: &mut Self::S;
+label b0:
+    r = &mut copy(o).O::b;
+    n = Self::id_mut(copy(r));
+    _ = move(n);
+    *move(r) = S { f: 1 };
+    _ = move(o);
+    return;
+}
+
+}

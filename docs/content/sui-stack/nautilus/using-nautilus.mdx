@@ -1,7 +1,41 @@
 ---
 title: Using Nautilus
 description: Details on how to use Nautilus with the reproducible build template.
-keywords: [ nautilus, using nautilus, deploy aws nitro enclave, aws nitro, enclaves, tee, ec2 ]
+keywords:
+  - nautilus
+  - using nautilus
+  - deploy aws nitro enclave
+  - aws nitro
+  - enclaves
+  - tee
+  - ec2
+goal:
+  description: >-
+    Reader understands details on how to use Nautilus with the reproducible
+    build template and knows when to use it
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Using Nautilus in Sui?
+  - How does using nautilus work on Sui?
+  - Why should I use using nautilus?
+answer: Details on how to use Nautilus with the reproducible build template.
 ---
 
 [Nautilus](/sui-stack/nautilus) is a verifiable offchain compute layer on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) or a TEE marketplace like [Marlin Oyster](/sui-stack/nautilus/community-dev-tools) while preserving trust onchain through smart contract-based verification.

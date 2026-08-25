@@ -7,29 +7,21 @@ use anyhow::Context as _;
 use async_graphql::Context;
 use async_graphql::Enum;
 use async_graphql::SimpleObject;
-use im::hashmap::Entry;
-use im::hashmap::HashMap;
 use serde::Serialize;
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentMessage;
 use shared_crypto::intent::PersonalMessage;
-use sui_types::SUI_AUTHENTICATOR_STATE_ADDRESS;
-use sui_types::TypeTag;
-use sui_types::authenticator_state::ActiveJwk;
-use sui_types::authenticator_state::AuthenticatorStateInner;
 use sui_types::crypto::ToFromBytes;
-use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::signature::GenericSignature;
 use sui_types::signature::VerifyParams;
 use sui_types::signature_verification::VerifiedDigestCache;
 use sui_types::transaction::TransactionData;
-use tracing::warn;
 
 use crate::api::scalars::base64::Base64;
 use crate::api::scalars::sui_address::SuiAddress;
-use crate::api::scalars::type_filter::TypeInput;
-use crate::api::types::dynamic_field::DynamicField;
 use crate::api::types::epoch::Epoch;
+use crate::api::types::signature_verify::chain_zklogin_circuit_mode;
+use crate::api::types::signature_verify::fetch_jwks;
 use crate::config::ZkLoginConfig;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
@@ -92,45 +84,17 @@ pub(crate) async fn verify_signature(
         return Err(bad_user_input(Error::NotZkLogin));
     };
 
-    let jwk_object = DynamicField::by_serialized_name(
-        ctx,
-        scope,
-        SUI_AUTHENTICATOR_STATE_ADDRESS.into(),
-        DynamicFieldType::DynamicField,
-        TypeInput(TypeTag::U64),
-        Base64(bcs::to_bytes(&1u64).unwrap()),
-    )
-    .await
-    .map_err(upcast)?
-    .context("JWK dynamic field not found")?;
+    let jwks = fetch_jwks(ctx, scope).await.map_err(upcast)?;
 
-    let authenticator_field = jwk_object
-        .native(ctx)
+    let zklogin_circuit_mode = chain_zklogin_circuit_mode(ctx, &epoch)
         .await
-        .map_err(upcast)?
-        .as_ref()
-        .context("Couldn't fetch JWK dynamic field contents")?;
-
-    let authenticator_jwks: AuthenticatorStateInner =
-        bcs::from_bytes(&authenticator_field.value_bytes)
-            .context("Failed to deserialize JWK dynamic field contents")?;
-
-    let mut jwks = HashMap::new();
-    for ActiveJwk { jwk_id, jwk, .. } in authenticator_jwks.active_jwks {
-        match jwks.entry(jwk_id.clone()) {
-            Entry::Occupied(_) => {
-                warn!("JWK with kid {jwk_id:?} already exists, skipping");
-            }
-            Entry::Vacant(entry) => {
-                entry.insert(jwk.clone());
-            }
-        }
-    }
+        .map_err(upcast)?;
 
     let params = VerifyParams::new(
         jwks,
         vec![],
         config.env,
+        zklogin_circuit_mode,
         true,
         true,
         true,

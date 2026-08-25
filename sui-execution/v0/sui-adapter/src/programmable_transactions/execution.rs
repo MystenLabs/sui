@@ -498,7 +498,7 @@ mod checked {
 
         // Preserve the old order of operations when package upgrades are not supported, because it
         // affects the order in which error cases are checked.
-        let package_obj = if context.protocol_config.package_upgrades_supported() {
+        let package_obj = if context.protocol_config.package_upgrades() {
             let dependencies = fetch_packages(context, &dep_ids)?;
             let package_obj =
                 context.new_package(&modules, dependencies.iter().map(|p| p.move_package()))?;

@@ -18,6 +18,7 @@ use crate::{
 use move_regex_borrow_graph::{MeterError, meter::DummyMeter, references::Ref};
 use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::{
+    base_types::TxContextKind,
     error::{ExecutionErrorTrait, SafeIndex},
     execution_status::{CommandArgumentError, ExecutionErrorKind},
 };
@@ -35,6 +36,7 @@ enum Value {
 }
 
 struct Context {
+    allow_references_in_ptbs: bool,
     graph: Graph,
     local_root: Ref,
     tx_context: Option<Value>,
@@ -71,7 +73,7 @@ impl Value {
 
 impl Context {
     fn new<Mode: ExecutionMode>(
-        _env: &Env<Mode>,
+        env: &Env<Mode>,
         ast: &T::Transaction,
     ) -> Result<Self, Mode::Error> {
         let gas_coin = if ast.gas_payment.is_none() {
@@ -112,6 +114,7 @@ impl Context {
             )
             .map_err(graph_meter_err::<Mode::Error>)?;
         Ok(Self {
+            allow_references_in_ptbs: env.protocol_config.allow_references_in_ptbs(),
             graph,
             local_root,
             tx_context: Some(Value::NonRef),
@@ -603,6 +606,18 @@ fn call<E: ExecutionErrorTrait>(
             idx as u16,
         )));
     }
+    // `TxContext` is borrowed by the call but is never a source of its outputs: no function can
+    // return a reference into it.
+    let sources = if context.allow_references_in_ptbs {
+        arg_values
+            .iter()
+            .zip_debug_eq(&signature.parameters)
+            .filter(|(_, ty)| matches!(ty.is_tx_context(), TxContextKind::None))
+            .filter_map(|(v, _)| v.to_ref())
+            .collect::<BTreeSet<_>>()
+    } else {
+        sources
+    };
     let mutabilities = signature
         .return_
         .iter()

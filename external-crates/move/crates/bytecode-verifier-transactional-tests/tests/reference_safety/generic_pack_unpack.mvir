@@ -1,0 +1,42 @@
+// PackGeneric / UnpackGeneric, struct by value
+
+//# run
+mvir 0x1::gpack_ok {
+
+public struct S<T> has drop { f: T, g: T }
+
+entry fun t() {
+    let s: Self::S<u64>;
+    let a: u64;
+    let b: u64;
+label b0:
+    s = S<u64> { f: 1, g: 2 };
+    S<u64> { f: a, g: b } = move(s);
+    assert(move(a) == 1, 100);
+    assert(move(b) == 2, 101);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x2::gunpack_after_field_borrow_invalid {
+
+public struct S<T> has drop { f: T, g: T }
+
+fun t() {
+    let s: Self::S<u64>;
+    let r: &mut u64;
+    let a: u64;
+    let b: u64;
+label b0:
+    s = S<u64> { f: 1, g: 2 };
+    r = &mut (&mut s).S<u64>::f;
+    S<u64> { f: a, g: b } = move(s);
+    *move(r) = 3;
+    _ = move(a);
+    _ = move(b);
+    return;
+}
+
+}

@@ -16,7 +16,7 @@ use sui_system::staking_pool::{
     PoolTokenExchangeRate,
     StakedSui,
     StakingPool,
-    FungibleStakedSui
+    FungibleStakedSui,
 };
 use sui_system::validator_cap::{Self, ValidatorOperationCap};
 

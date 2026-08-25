@@ -11,7 +11,7 @@
 //! `end_of_epoch_data`). Every other checkpoint returns `None`
 //! and contributes nothing.
 //!
-//! Mirroring the `index_epoch` flow in `sui-core::rpc_index`:
+//! For the new epoch the pipeline:
 //!
 //! 1. Emit a *start* operand for the new epoch — protocol version,
 //!    reference gas price, start timestamp, start checkpoint, and

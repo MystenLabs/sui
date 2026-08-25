@@ -1,7 +1,46 @@
 ---
 title: Data Management
-description: A high-level description of data management on the Sui network that you can use to optimize your Sui full node configuration. 
-keywords: [ data management, run data management, what is data management, full node data, full node data management, rpc, pruning, data pruning, pruning policies, object pruning, object history ]
+description: >-
+  A high-level description of data management on the Sui network that you can
+  use to optimize your Sui full node configuration.
+keywords:
+  - data management
+  - run data management
+  - what is data management
+  - full node data
+  - full node data management
+  - rpc
+  - pruning
+  - data pruning
+  - pruning policies
+  - object pruning
+  - object history
+goal:
+  description: >-
+    Operator understands data management on Sui full nodes and can configure
+    pruning and archival policies to optimize their node
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more operational depth
+    - pattern: '```'
+      min: 1
+      label: Has configuration or command examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I manage data on a Sui full node?
+  - What are the pruning strategies for Sui nodes?
+  - How do I reduce disk usage on a Sui full node?
+answer: >-
+  A high-level description of data management on the Sui network that you can
+  use to optimize your Sui full node configuration.
 ---
 
 Managing the data on your Sui full node is critical to ensuring a healthy Sui network. This topic provides a high-level description of data management on Sui full nodes that you can use to optimize your full node configuration. For more information about Sui full nodes, including pruning policies and archival settings, see [Run a Sui Full Node](/operators/full-node/sui-full-node).
@@ -57,6 +96,26 @@ A Sui archive instance stores the full Sui transaction history since genesis in 
 A full node that starts from scratch can replay (and thus re-verify) transactions that occurred since Sui genesis from the given archive by [configuring archival fallback](/operators/data-management/archives#set-up-archival-fallback) in the `fullnode.yaml` configuration file to point to the cloud bucket that stores the archive.
 
 A Sui full node that fails to retrieve checkpoints from its peers through the state sync protocol falls back to downloading the missing checkpoints from its pre-configured archive. This fallback enables a full node to catch up with the rest of the system regardless of the pruning policies of its peers.
+
+## Pruning 
+
+If your node's disk usage is growing beyond your capacity (commonly 7TB or more without pruning), copy one of the following configurations into your `fullnode.yaml` and restart the node. Pruning runs in the background and reclaims space over multiple days as RocksDB compaction completes.
+
+| Scenario | Config to copy | Expected disk usage |
+|---|---|---|
+| Validator or state sync node (no RPC traffic) | [Validator config](#validator-and-state-sync-full-node) | Lowest (aggressive pruning, no indexing) |
+| Full node serving RPC queries | [Indexing config](#full-node-with-indexing-but-limited-object-history) | Moderate (5 epochs of object history, 2 epochs of transactions) |
+| Full node with complete object history | [Full history config](#full-node-with-full-object-history-but-pruned-transaction-history) | Highest (all object versions retained, transactions pruned) |
+
+{/* TODO: Citation needed. Verify current approximate disk sizes for each pruning scenario on Mainnet. */}
+
+After applying a pruning configuration, monitor disk usage over the following days. Pruning deletes data logically first; RocksDB reclaims the physical space during background compaction. If disk usage does not decrease after 3 to 5 days, verify your configuration and check that `periodic-compaction-threshold-days` is set to `1`.
+
+:::tip
+
+If you are starting a new full node from scratch, apply your pruning configuration before the first startup. Starting from a [snapshot](/operators/snapshots) with pruning already configured avoids processing the full chain history.
+
+:::
 
 ## Sui node pruning policies
 

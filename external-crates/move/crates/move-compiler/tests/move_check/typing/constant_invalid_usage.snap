@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/constant_invalid_usage.move:11:20
    │
  8 │     const C6: vector<u8> = x"0123";
@@ -16,7 +16,7 @@ error[E04007]: incompatible types
    │               │     
    │               Expected: 'u8'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/constant_invalid_usage.move:12:21
    │
  9 │     const C7: vector<u8> = b"abcd";
@@ -27,7 +27,7 @@ error[E04007]: incompatible types
    │               │      
    │               Expected: 'u64'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/constant_invalid_usage.move:13:22
    │
  3 │     const C1: u8 = 0;
@@ -38,7 +38,7 @@ error[E04007]: incompatible types
    │               │       
    │               Expected: 'u128'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/constant_invalid_usage.move:14:22
    │
  4 │     const C2: u64 = 0;
@@ -49,7 +49,7 @@ error[E04007]: incompatible types
    │               │       
    │               Expected: 'bool'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/constant_invalid_usage.move:15:25
    │
  5 │     const C3: u128 = 0;
@@ -60,7 +60,7 @@ error[E04007]: incompatible types
    │               │          
    │               Expected: 'address'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/constant_invalid_usage.move:16:28
    │
  6 │     const C4: bool = false;
@@ -71,7 +71,7 @@ error[E04007]: incompatible types
    │               │             
    │               Expected: 'vector<u8>'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/constant_invalid_usage.move:17:28
    │
  7 │     const C5: address = @0x0;

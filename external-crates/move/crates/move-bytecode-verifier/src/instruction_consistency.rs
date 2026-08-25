@@ -13,7 +13,7 @@ use move_binary_format::{
         FieldHandleIndex, FunctionDefinitionIndex, FunctionHandleIndex, StructDefinitionIndex,
         TableIndex,
     },
-    safe_assert,
+    partial_vm_error_with_debug_message, safe_assert,
 };
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
@@ -137,9 +137,11 @@ impl<'a> InstructionConsistency<'a> {
                 }
                 VecPack(_, num) | VecUnpack(_, num) => {
                     if *num > u16::MAX as u64 {
-                        return Err(PartialVMError::new(StatusCode::CONSTRAINT_NOT_SATISFIED)
-                            .at_code_offset(self.current_function(), offset as CodeOffset)
-                            .with_message("VecPack/VecUnpack argument out of range".to_string()));
+                        return Err(partial_vm_error_with_debug_message!(
+                            CONSTRAINT_NOT_SATISFIED,
+                            "VecPack/VecUnpack argument out of range".to_string()
+                        )
+                        .at_code_offset(self.current_function(), offset as CodeOffset));
                     }
                 }
 

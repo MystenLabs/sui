@@ -151,11 +151,21 @@ pub enum EndpointId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 // NOTE: AddressSources are prioritized in order of the enum variants below.
 pub enum AddressSource {
-    Admin,     // override from admin server
-    Config,    // override from config file
-    Discovery, // address received from P2P peers via Discovery protocol
-    Seed,      // locally-configured seed address
-    Chain,     // public on-chain address
+    Admin = 1,     // override from admin server
+    Config = 2,    // override from config file
+    Discovery = 3, // address received from P2P peers via Discovery protocol
+    Seed = 4,      // locally-configured seed address
+    Chain = 5,     // public on-chain address
+}
+
+impl AddressSource {
+    /// Reserved metric value for the "no override" state.
+    pub const DEFAULT_ADDRESS_SOURCE_CODE: i64 = 0;
+
+    /// Used as the value of the active-address-source metrics.
+    pub const fn metric_code(self) -> i64 {
+        self as i64
+    }
 }
 
 #[cfg(test)]

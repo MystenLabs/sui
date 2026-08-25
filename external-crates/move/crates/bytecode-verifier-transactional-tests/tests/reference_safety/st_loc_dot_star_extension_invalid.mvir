@@ -1,0 +1,98 @@
+// Reassigning a local while a reference derived through a dot-star path is live is rejected.
+
+//# publish
+mvir 0x2::nested_call {
+
+fun id(r: &mut u64): &mut u64 {
+label b0:
+    return move(r);
+}
+
+fun t() {
+    let v: u64;
+    let r: &mut u64;
+    let r2: &mut u64;
+label b0:
+    v = 0;
+    r = Self::id(&mut v);
+    r2 = Self::id(move(r));
+    v = 1;
+    *move(r2) = 2;
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::field_after_call {
+
+public struct S has drop { f: u64 }
+
+fun id(r: &mut Self::S): &mut Self::S {
+label b0:
+    return move(r);
+}
+
+fun t() {
+    let s: Self::S;
+    let r: &mut Self::S;
+    let f: &mut u64;
+label b0:
+    s = S { f: 0 };
+    r = Self::id(&mut s);
+    // The field extension is absorbed into the dot-star path from s.
+    f = &mut move(r).S::f;
+    s = S { f: 1 };
+    *move(f) = 2;
+    return;
+}
+
+}
+
+//# publish
+mvir 0x4::freeze_call_result {
+
+fun id(r: &mut u64): &mut u64 {
+label b0:
+    return move(r);
+}
+
+fun t() {
+    let v: u64;
+    let r: &mut u64;
+    let frozen: &u64;
+label b0:
+    v = 0;
+    r = Self::id(&mut v);
+    frozen = freeze(move(r));
+    v = 1;
+    _ = *move(frozen);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x5::release_one_call_result_alias {
+
+fun id(r: &mut u64): &mut u64 {
+label b0:
+    return move(r);
+}
+
+fun t() {
+    let v: u64;
+    let r: &mut u64;
+    let alias: &mut u64;
+label b0:
+    v = 0;
+    r = Self::id(&mut v);
+    alias = copy(r);
+    _ = move(r);
+    // Releasing r must not remove alias's dot-star relationship with v.
+    v = 1;
+    *move(alias) = 2;
+    return;
+}
+
+}

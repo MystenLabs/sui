@@ -1,0 +1,14 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 1 task
+
+task 0, lines 4-30:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000a02::imm_unpack_with_live_mut_field'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0xa02::imm_unpack_with_live_mut_field,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 13)],
+}

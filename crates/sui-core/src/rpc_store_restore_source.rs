@@ -11,8 +11,7 @@
 //! # Sharding
 //!
 //! The `ObjectID` space is split into 32 shards by the top
-//! `SHARD_BITS = 5` bits of the first byte (matching the split
-//! used by `par_index_live_object_set`).
+//! `SHARD_BITS = 5` bits of the first byte.
 //! Each shard yields chunks of [`CHUNK_SIZE`] objects; the
 //! `RestoreChunk::cursor` is the 32-byte ObjectID of the last
 //! object in that chunk, so resuming with `Some(c)` starts the
@@ -58,8 +57,7 @@ use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 use crate::authority::authority_store_tables::LiveObject;
 
 /// Bits of the first `ObjectID` byte used to choose a shard.
-/// `1 << SHARD_BITS` shards, matching the constant in
-/// `par_index_live_object_set`.
+/// `1 << SHARD_BITS` shards.
 const SHARD_BITS: u32 = 5;
 
 /// Total number of shards (`1 << SHARD_BITS`).

@@ -1,0 +1,351 @@
+---
+title: Vault
+description: >-
+  Learn about the DeepBook Predict vault, PLP shares, vault value, exposure
+  tracking, and liquidity reads.
+keywords:
+  - deepbook predict vault
+  - vault
+  - plp
+  - liquidity provider
+  - vault value
+  - mark to market
+  - max payout
+  - settled oracle
+goal:
+  description: >-
+    Reader can learn about the DeepBook Predict vault, PLP shares, vault value,
+    exposure tracking, and liquidity reads
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is the DeepBook Predict vault?
+  - How does the Predict vault track exposure and mark-to-market liability?
+  - How do PLP shares work and how do I calculate PLP share price?
+  - Why does a Predict withdrawal fail when the vault holds enough balance?
+answer: >-
+  The DeepBook Predict vault holds accepted quote assets and takes the opposite
+  side of every trade. It tracks four aggregates: `balance` (total quote units
+  held), `total_mtm` (current mark-to-market liability), `vault_value`
+  (`balance - total_mtm`, the value PLP shares claim against), and
+  `total_max_payout` (worst-case settlement liability, which caps withdrawals).
+---
+
+The Predict vault holds accepted quote assets and takes the opposite side of every trade. `predict.move` owns pricing and trading orchestration. `vault.move` is the state machine for balances, exposure, mark-to-market liability, max payout, and settled-oracle compaction.
+
+Liquidity providers interact with the vault through `predict::supply` and `predict::withdraw`, which mint and burn `PLP` shares. See [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict) for those public liquidity entry points.
+
+## Accounting model {#accounting-model}
+
+The vault tracks four aggregate numbers. Every liquidity decision reduces to these values.
+
+| **Aggregate** | **Accessor** | **Meaning** |
+|---|---|---|
+| Balance | `balance()` | Total quote units the vault holds across all asset types. |
+| Mark-to-market liability | `total_mtm()` | Current value the vault owes on open positions, summed across oracles. |
+| Vault value | `vault_value()` | `balance() - total_mtm()`. The net asset value that `PLP` shares claim against. |
+| Max payout | `total_max_payout()` | Worst-case settlement liability across all oracles. Reserved capital that liquidity providers cannot withdraw. |
+
+All four values use quote units, where `1_000_000` equals 1 contract and pays 1 USD at settlement. Percentages and prices use `FLOAT_SCALING`, which is `1_000_000_000` for 100 percent. The vault never mixes the two scales in a single field.
+
+`balance` is the shared quote-denominated total. It is deliberately separate from the concrete per-type balances, which the vault stores in a `Bag` keyed by `BalanceKey<T>`. Because every accepted quote asset must declare exactly 6 decimals, the protocol treats one unit of any accepted asset as interchangeable with one unit of any other, so a single `u64` can represent the pooled total.
+
+## Reading vault state {#reading-vault-state}
+
+The read functions carry these exact signatures. Copy them as written when you generate calls or bindings.
+
+```move title='packages/predict/sources/vault/vault.move'
+public fun balance(vault: &Vault): u64
+public fun asset_balance<T>(vault: &Vault): u64
+public fun total_mtm(vault: &Vault): u64
+public fun vault_value(vault: &Vault): u64
+public fun total_max_payout(vault: &Vault): u64
+```
+
+<details>
+<summary>Full source for the vault read functions</summary>
+
+<ImportContent
+	source="packages/predict/sources/vault/vault.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="balance,asset_balance,total_mtm,vault_value,total_max_payout"
+	noComments
+/>
+
+</details>
+
+Behavior worth knowing before you call them:
+
+- `asset_balance<T>()` returns `0` for an asset the vault has never held. It does not abort, so a zero result does not prove the type is invalid.
+- `vault_value()` aborts with `EMtmExceedsBalance` when `total_mtm` exceeds `balance`. Treat an abort as a solvency signal, not as a transient read failure.
+- `balance()` and `total_max_payout()` are cached fields. The protocol updates them on every trade, so no separate refresh call exists.
+
+:::caution
+
+`Vault` has the `store` ability only. It lives as a field inside the `Predict` shared object, and `Predict` exposes no public accessor that returns `&Vault`. External Move packages cannot call these functions, and you cannot target them with a devInspect call. Read the values from the `Predict` object contents instead, as described in the next section.
+
+:::
+
+### Read vault state from a client {#read-vault-state-from-a-client}
+
+To read vault aggregates off chain, fetch the `Predict` shared object with its contents and walk into the `vault` field:
+
+1. Fetch the `Predict` object by ID and request object contents. See [Accessing Sui Data](/develop/accessing-data) for the available APIs.
+1. Read `vault.balance`, `vault.total_mtm`, and `vault.total_max_payout` as `u64` strings.
+1. Compute `vault_value` yourself as `balance - total_mtm`. The chain does not store this value.
+1. Read the `PLP` supply from `treasury_cap` on the same object.
+1. Derive share price and withdrawal capacity using the formulas in the following sections.
+
+The `oracle_matrices` and `settled_oracles` fields are `Table` handles. Their entries are dynamic fields keyed by oracle ID, so fetch per-oracle exposure with a dynamic field lookup on the table's `id`, not from the `Predict` object contents.
+
+Two public functions on `Predict` complete the liquidity picture, and unlike the vault accessors these are directly callable:
+
+```move title='packages/predict/sources/predict.move'
+public fun accepted_quotes(predict: &Predict): &VecSet<TypeName>
+public fun available_withdrawal(predict: &Predict, clock: &Clock): u64
+public fun max_total_exposure_pct(predict: &Predict): u64
+```
+
+## Quote assets {#quote-assets}
+
+Accepted quote assets are the coin types the protocol allows into the vault as collateral. An admin adds each type through `registry::enable_quote_asset`, which records the type in `TreasuryConfig` and validates that its `Currency` declares exactly 6 decimals. A type that fails the decimals check aborts with `EInvalidQuoteDecimals`.
+
+Inflows and outflows apply different rules, and this asymmetry is intentional:
+
+- **Inflows:** `supply()` and `mint()` call `assert_quote_asset<Quote>()` and abort with `EQuoteAssetNotAccepted` when the type is not currently enabled.
+- **Outflows:** `withdraw()`, `redeem()`, and payouts perform no accepted-asset check. Any type with a concrete balance in the vault can leave, even after an admin disables it for new deposits.
+
+That design lets an admin retire an asset without stranding liquidity providers who supplied it earlier. It also means the vault holds multiple concrete asset types at once while reporting one pooled `balance`. When you withdraw, you choose the outgoing type through the `Quote` type parameter, and the vault dispenses from that type's concrete balance. The call aborts with `EAssetNotInVault` when the vault has never held the type, or `EInsufficientBalance` when the type's concrete balance is smaller than the amount owed, even though the pooled `balance` covers it. Check `asset_balance<T>()` for your chosen type before submitting a large withdrawal.
+
+## PLP shares {#plp-shares}
+
+`PLP` is the liquidity provider share coin, minted on supply and burned on withdrawal. It declares 6 decimals, matching accepted quote assets.
+
+<details>
+<summary>`PLP` source</summary>
+
+<ImportContent
+	source="packages/predict/sources/vault/plp.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="PLP"
+/>
+
+</details>
+
+### Share price {#share-price}
+
+Share price is not stored on chain. Derive it from vault value and `PLP` supply:
+
+```text
+share_price = vault_value / plp_total_supply
+```
+
+`supply()` reads `vault_value()` before it accepts your payment, so your deposit does not dilute the price you buy at. The first supplier receives shares one to one with the deposited amount:
+
+```text
+shares_minted = deposit_amount                                        // when plp_total_supply == 0
+shares_minted = deposit_amount * plp_total_supply / vault_value       // otherwise, rounded down
+```
+
+The call aborts with `EZeroVaultValue` when supply exists but vault value is zero, and with `EZeroSharesMinted` when rounding down produces zero shares. A tiny deposit into a high-priced vault triggers the second case.
+
+### Redemption value {#redemption-value}
+
+`withdraw()` also reads `vault_value()` first, then converts burned shares to quote units:
+
+```text
+redemption_amount = shares_burned * vault_value / plp_total_supply    // rounded down
+```
+
+Burning the entire supply returns the full vault value with no rounding loss, because `shares_to_amount` short-circuits when `shares_burned` equals total supply.
+
+### Worked example {#worked-example}
+
+Assume these onchain values, shown in raw units with the human-readable amount alongside:
+
+| **Field** | **Raw value** | **Reads as** |
+|---|---|---|
+| `vault.balance` | `500_000_000_000` | 500,000 USDC |
+| `vault.total_mtm` | `120_000_000_000` | 120,000 USDC |
+| `vault.total_max_payout` | `300_000_000_000` | 300,000 USDC |
+| `PLP` total supply | `350_000_000_000` | 350,000 PLP |
+
+Derived values follow directly:
+
+- **Vault value:** `500_000_000_000 - 120_000_000_000 = 380_000_000_000`, which is 380,000 USDC.
+- **Share price:** `380,000 / 350,000 = 1.0857` USDC per `PLP`.
+- **Redeem 10,000 PLP:** `10_000_000_000 * 380_000_000_000 / 350_000_000_000 = 10_857_142_857`, which is 10,857.142857 USDC.
+- **Supply 1,000 USDC:** `1_000_000_000 * 350_000_000_000 / 380_000_000_000 = 921_052_631`, which is 921.052631 `PLP`.
+- **Withdrawal capacity:** `500_000_000_000 - 300_000_000_000 = 200_000_000_000`, which is 200,000 USDC.
+- **Utilization:** `120,000 / 500,000 = 24` percent against an 80 percent default exposure ceiling.
+
+The 10,857 USDC redemption fits inside the 200,000 USDC capacity, so it passes the max payout gate and then consumes rate limiter capacity.
+
+## Exposure tracking {#exposure-tracking}
+
+The vault records exposure per oracle in a `StrikeMatrix`, a dense strike-indexed book with page-level summaries. `oracle_matrices` maps oracle ID to that matrix for live oracles. Every trade updates the matrix and the two cached global totals in the same transaction, so the aggregates never lag the book.
+
+### Position updates {#position-updates}
+
+Mints and redeems drive exposure through four package-internal functions. Each one reads the matrix's payout before and after the write, then applies the difference to `total_max_payout`:
+
+- `insert_position()` and `remove_position()` handle single-strike binary positions keyed by strike and direction.
+- `insert_range()` and `remove_range()` handle vertical ranges. A range records as a long up leg at the lower strike plus a long down leg at the higher strike, plus a `range_qty` delta. The vault subtracts `range_qty` to recover the true liability, which is why range paths use `net_max_payout()` rather than the raw matrix payout.
+
+All four abort with `EOracleExposureNotFound` when no matrix exists for the oracle ID, which happens if the oracle was never registered through `registry::create_oracle` or was already compacted after settlement.
+
+### Mark-to-market refresh {#mark-to-market-refresh}
+
+`total_mtm` is a cached sum of per-oracle matrix values. `predict::mint` and `predict::redeem` call an internal refresh that re-evaluates the affected oracle's matrix and writes the delta into the global total. Two paths exist:
+
+- `set_mtm_with_curve()` evaluates the matrix against a sampled live price curve built from current oracle state.
+- `set_mtm_with_settlement()` evaluates the matrix against a frozen settlement price after expiry.
+
+Both subtract the matrix's `range_qty` before storing the result. Only the touched oracle re-evaluates, so a stale price on an untraded oracle leaves its contribution to `total_mtm` unchanged until the next trade on that oracle. Treat `total_mtm` as accurate as of the last trade per oracle, not as a continuously marked figure.
+
+After every mint, `assert_total_exposure()` enforces the risk ceiling:
+
+```text
+total_mtm <= balance * max_total_exposure_pct / FLOAT_SCALING
+```
+
+The default `max_total_exposure_pct` is `800_000_000`, or 80 percent. A mint that would breach the ceiling aborts with `EExceedsMaxTotalExposure`. Read the current ceiling with `predict::max_total_exposure_pct()`.
+
+### Settled oracle compaction {#settled-oracle-compaction}
+
+A dense strike matrix is expensive to keep once its oracle settles and only one strike outcome matters. After settlement, an authorized oracle operator calls `predict::compact_settled_oracle`, which removes the matrix, computes exact settled totals, and stores a two-field `SettledOracleState` record in the `settled_oracles` table.
+
+Compaction rewrites both global aggregates so they reflect exact settled liability rather than the pre-settlement estimate:
+
+- `total_mtm` moves by `remaining_liability - old_mtm`.
+- `total_max_payout` moves by `remaining_liability - old_net_max_payout`.
+
+Each later redemption against that oracle decrements `remaining_quantity` by the redeemed quantity and `remaining_liability` by the payout, and decrements both global totals by the payout. When `remaining_liability` reaches zero, the oracle no longer contributes to vault liability. The record itself stays in the table as a zeroed entry.
+
+Compaction is optional and permissioned. Until an operator triggers it, redemptions on the settled oracle still run through the live matrix path, which produces the same payouts at higher gas cost.
+
+### Interpret `SettledOracleState` {#interpret-settled-oracle-state}
+
+To determine what a settled oracle still owes:
+
+1. Look up the oracle ID in the `settled_oracles` table with a dynamic field query.
+1. When no entry exists, the oracle is not compacted. Read its exposure from `oracle_matrices` instead.
+1. Read `remaining_liability` for the quote units the vault still owes on that oracle. Both `total_mtm` and `total_max_payout` already include this value.
+1. Read `remaining_quantity` for the unredeemed winning contract quantity. A nonzero `remaining_quantity` with zero `remaining_liability` means the outstanding positions settled worthless.
+
+## Max payout {#max-payout}
+
+`total_max_payout` answers a different question than `total_mtm`. Mark-to-market asks what the open book is worth right now. Max payout asks what the vault owes if every oracle settles at its worst strike for the vault. Because binary payouts are discontinuous at settlement, the worst case can far exceed the current mark.
+
+The protocol uses max payout as a solvency reserve on the withdrawal path:
+
+```text
+available = balance > total_max_payout ? balance - total_max_payout : 0
+```
+
+`withdraw()` aborts with `EWithdrawExceedsAvailable` when the redemption amount exceeds `available`. This check runs against `balance`, not `vault_value`, so a withdrawal can fail even when share price implies the vault is comfortably solvent. That is the intended behavior: liquidity providers cannot pull out capital that traders might claim at settlement.
+
+Check `total_max_payout` when you:
+
+- Quote a maximum withdrawable amount in a liquidity provider interface.
+- Diagnose a withdrawal that failed while `vault_value` looked sufficient.
+- Estimate how much a settlement or compaction frees up, because compaction replaces a worst-case estimate with exact settled liability.
+
+A second gate applies after the max payout check. `predict::withdraw` consumes from a token-bucket rate limiter, so a withdrawal within `available` can still fail when recent outflows drained the bucket. Call `predict::available_withdrawal(predict, clock)` for the amount the limiter currently permits, and treat your usable ceiling as the smaller of that value and `available`. An admin configures and enables the limiter, and it starts disabled on a new deployment.
+
+## Structs {#structs}
+
+The vault defines three types. Only `Vault` and `SettledOracleState` hold data you read.
+
+### `Vault` {#vault-struct}
+
+| **Field** | **Type** | **Description** |
+|---|---|---|
+| `balances` | `Bag` | Concrete `Balance<T>` per accepted quote asset type, keyed by `BalanceKey<T>`. |
+| `balance` | `u64` | Pooled treasury balance in quote units across all asset types. |
+| `oracle_matrices` | `Table<ID, StrikeMatrix>` | Per-oracle dense strike book for live position tracking. |
+| `settled_oracles` | `Table<ID, SettledOracleState>` | Per-oracle compact state written by settlement compaction. |
+| `total_mtm` | `u64` | Cached sum of all oracle matrix mark-to-market values. |
+| `total_max_payout` | `u64` | Cached sum of all oracle matrix max payout values, net of range quantity. |
+
+<details>
+<summary>`Vault` source</summary>
+
+<ImportContent
+	source="packages/predict/sources/vault/vault.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="Vault"
+/>
+
+</details>
+
+### `SettledOracleState` {#settled-oracle-state-struct}
+
+| **Field** | **Type** | **Description** |
+|---|---|---|
+| `remaining_quantity` | `u64` | Unredeemed winning contract quantity for the oracle, in quote units. |
+| `remaining_liability` | `u64` | Exact quote units the vault still owes on the oracle. |
+
+`SettledOracleState` has `copy`, `drop`, and `store`, so you can read and pass copies freely.
+
+<details>
+<summary>`SettledOracleState` source</summary>
+
+<ImportContent
+	source="packages/predict/sources/vault/vault.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="SettledOracleState"
+/>
+
+</details>
+
+### `BalanceKey` {#balance-key-struct}
+
+`BalanceKey<T>` is a zero-field phantom key that maps a coin type to its concrete balance inside the `balances` bag. The vault creates it internally during deposits and withdrawals. You never construct one, but you need its shape to resolve bag entries when you read balances off chain.
+
+## Initialization and access control {#initialization-and-access-control}
+
+The vault has no independent lifecycle. Admin-gated calls on `Registry` and `Predict` create and configure it entirely:
+
+| **Operation** | **Entry point** | **Authorization** |
+|---|---|---|
+| Create the vault | `registry::create_predict` calls `predict::create`, which calls `vault::new` | `AdminCap`, and only once per deployment |
+| Allocate an oracle strike matrix | `registry::create_oracle` calls `predict::add_oracle_grid`, which calls `vault::init_oracle_matrix` | `AdminCap` plus an `OracleSVICap` |
+| Enable or disable a quote asset | `registry::enable_quote_asset` and `registry::disable_quote_asset` | `AdminCap` |
+| Set the exposure ceiling | `registry::set_max_total_exposure_pct` | `AdminCap` |
+| Configure the withdrawal limiter | `registry::update_withdrawal_limiter`, `registry::enable_withdrawal_limiter` | `AdminCap` |
+| Compact a settled oracle | `predict::compact_settled_oracle` | The oracle's own `OracleSVICap` |
+
+Every state-changing function in `vault.move` is `public(package)`. No external package can move vault funds or edit exposure. The vault also depends on oracle state for correctness: `init_oracle_matrix` needs the strike grid the registry assigned the oracle, mark-to-market refresh needs a quoteable oracle, and compaction requires a settled oracle with a frozen settlement price. See [Oracle](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle) for the lifecycle those calls depend on.
+
+## Error codes {#error-codes}
+
+| **Code** | **Constant** | **Cause** |
+|---|---|---|
+| `0` | `EInsufficientBalance` | The chosen asset type's concrete balance is smaller than the requested payout. |
+| `1` | `EExceedsMaxTotalExposure` | A mint pushed `total_mtm` above `max_total_exposure_pct` of `balance`. |
+| `2` | `EOracleExposureNotFound` | No strike matrix or settled record exists for the oracle ID. |
+| `3` | `EMtmExceedsBalance` | `total_mtm` exceeds `balance`, so `vault_value()` cannot compute. |
+| `4` | `EAssetNotInVault` | The vault holds no balance entry for the requested asset type. |

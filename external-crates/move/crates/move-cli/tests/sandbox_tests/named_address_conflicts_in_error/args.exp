@@ -1,7 +1,7 @@
 Command `build`:
 INCLUDING DEPENDENCY a
 BUILDING a
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ ./sources/example.move:3:9
   │
 2 │     public fun next(): b::m::Y {

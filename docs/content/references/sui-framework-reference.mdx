@@ -1,7 +1,88 @@
 ---
 title: Sui Framework Reference
-description: The Sui Framework includes the essential libraries necessary for developing Move packages.
-keywords: [ sui framework, libraries, onchain libraries, sui framework reference ]
+description: >-
+  The Sui Framework includes the essential libraries necessary for developing
+  Move packages.
+keywords:
+  - sui framework
+  - libraries
+  - onchain libraries
+  - sui framework reference
+goal:
+  description: >-
+    Reader can browse the Sui framework module reference to find function
+    signatures and type definitions
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - min_words: 100
+      label: Needs more reference content
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - Where can I find the Sui framework API reference?
+  - What modules are available in the Sui framework?
+  - How do I browse the Sui Move standard library?
+answer: >-
+  The Sui Framework includes the essential libraries necessary for developing
+  Move packages.
 ---
 
-The Sui Framework includes the core onchain libraries for Move developers. You can view the [Sui Framework Reference docs](https://docs.sui.io/references/framework/) or view the Markdown format in the [Sui GitHub repo](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/docs).
+The Sui Framework includes the core onchain libraries for Move developers. These libraries provide the types and functions you use to define objects, manage ownership, handle coins, emit events, and interact with system-level features.
+
+## Browse the reference
+
+Access the framework reference in either of the following formats:
+
+- [Sui Framework Reference docs](https://docs.sui.io/references/framework/) — Searchable HTML reference generated from source. Use the search bar to find specific functions, structs, or modules.
+- [Sui GitHub repo](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/docs) — Markdown format in the repository. Use GitHub search or browse the directory structure.
+
+## Framework packages
+
+The framework is organized into 3 packages:
+
+### `sui-framework`
+
+Core types and functions for Sui development. Commonly used modules include:
+
+| **Module** | **Purpose** |
+|---|---|
+| `sui::object` | Object creation (`new`), deletion (`delete`), and ID utilities |
+| `sui::transfer` | Transfer, share, and freeze objects across ownership types |
+| `sui::coin` | Fungible token standard (`Coin<T>`, `TreasuryCap`, minting, burning) |
+| `sui::event` | Emit events for offchain indexing and monitoring |
+| `sui::clock` | Access the network clock for timestamp-based logic |
+| `sui::dynamic_field` | Attach and manage dynamic fields on objects |
+| `sui::dynamic_object_field` | Attach and manage dynamic object fields |
+| `sui::display` | Object Display V2 template engine for offchain rendering |
+| `sui::package` | Package upgrade capabilities and policies |
+| `sui::tx_context` | Transaction metadata (sender, epoch, object creation) |
+
+### `sui-system`
+
+Validator set, staking, and governance modules. You typically do not import these directly unless you are building staking interfaces or validator tooling.
+
+### `move-stdlib`
+
+The standard Move library provides foundational types available to all Move programs:
+
+| **Module** | **Purpose** |
+|---|---|
+| `std::vector` | Growable, ordered collections |
+| `std::option` | Optional values (`Option<T>`) |
+| `std::string` | UTF-8 encoded strings |
+| `std::hash` | SHA2-256 and SHA3-256 hash functions |
+| `std::type_name` | Type reflection and name utilities |
+| `std::ascii` | ASCII string handling |
+
+## Find a specific function or type
+
+To find a specific function or type in the framework:
+
+1. Open the [HTML reference](https://docs.sui.io/references/framework/).
+2. Use the search bar to enter the function or type name (for example, `share_object`, `Coin`, `TreasuryCap`).
+3. Click the result to see the full signature, type parameters, and documentation.

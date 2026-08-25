@@ -1,7 +1,47 @@
 ---
 title: Configure OpenID Providers
-description: zkLogin can be integrated with an application using an OpenID provider's OAuth Client ID and redirect URI.
-keywords: [ zklogin, how to integrate zklogin, oauth, openID, integrate openID, openID providers, open id ]
+description: >-
+  zkLogin can be integrated with an application using an OpenID provider's OAuth
+  Client ID and redirect URI.
+keywords:
+  - zklogin
+  - how to integrate zklogin
+  - oauth
+  - openID
+  - integrate openID
+  - openID providers
+  - open id
+goal:
+  description: >-
+    Reader understands zkLogin can be integrated with an application using an
+    OpenID provider's OAuth Client ID
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: OpenID provider config
+    stage: Auth
+questions:
+  - How do I configure openid providers?
+  - How do I configure an openid provider?
+  - What is Configure OpenID Providers in Sui?
+answer: >-
+  zkLogin can be integrated with an application using an OpenID provider's OAuth
+  Client ID and redirect URI.
 ---
 
 To integrate zkLogin with your app, you need an OAuth client from at least one of the [available providers](#openid-providers). You will use the Client ID and redirect URI from those providers in your zkLogin project. For example, the following TypeScript code constructs a Google login URL for testing.
@@ -9,6 +49,24 @@ To integrate zkLogin with your app, you need an OAuth client from at least one o
 :::caution
 
 When configuring OAuth clients, register the exact redirect URIs your app uses and avoid wildcard or open redirects in production, as these enable token interception. Use a separate OAuth client per environment (for example, local, Testnet, and Mainnet) so test credentials never reach production, and rotate client secrets periodically and whenever one might have been exposed. See [Security Best Practices](/develop/security/best-practices).
+
+:::
+
+## Domain allowlisting checklist
+
+Every time you deploy your app to a new frontend domain, you must update your OAuth provider configuration. If you skip this step, the provider rejects the authentication request and your users cannot sign in.
+
+Complete the following for each new domain:
+
+1. **Add the domain to authorized JavaScript origins.** In your OAuth provider's console (for example, Google Cloud Console under **APIs and Services** > **Credentials**), add the new domain to the list of authorized JavaScript origins. Include both the root domain and any subdomains your app uses.
+2. **Add all redirect URIs for the new domain.** Add every redirect URI your app uses on the new domain. Include the full path (for example, `https://newdomain.example.com/auth/callback`). Do not use wildcard URIs in production ([Security Best Practices](/develop/security/best-practices)).
+3. **Wait for propagation.** Some providers (notably Google) take a few minutes to propagate new origin and redirect URI entries. Test the sign-in flow on the new domain after adding the entries.
+4. **Update your Enoki Portal configuration (if applicable).** If you use the [Enoki platform](https://docs.enoki.mystenlabs.com/) for managed salt or proof generation, add the new domain to your Enoki app configuration. The Enoki salt service only accepts JWTs from allowlisted client IDs and origins.
+5. **Test the full authentication flow.** Sign in through each configured provider on the new domain and verify that the JWT contains the expected `iss`, `aud`, and `sub` claims. Confirm that the derived zkLogin address matches the address produced on your existing domains.
+
+:::tip
+
+If you use separate OAuth clients per environment (recommended), repeat this checklist for each client. A redirect URI registered on your Testnet OAuth client does not carry over to your Mainnet client.
 
 :::
 

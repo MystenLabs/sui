@@ -1,52 +1,172 @@
 ---
 title: Manifest Reference
 description: Explore examples of package manifest files.
-keywords: [ move, move reference, package management, package manager, move packages, move package management ]
+keywords:
+  - move
+  - move reference
+  - package management
+  - package manager
+  - move packages
+  - move package management
 pagination_prev: null
+goal:
+  description: Reader can look up manifest reference syntax and configuration options
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - min_words: 100
+      label: Needs more reference content
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What fields are available in Move.toml?
+  - How do I configure Move.toml for different networks?
+  - What is the Move package manifest format?
+  - What is the [environments] section in Move.toml?
+  - Can I use Base58 or Hex chain IDs in Move.toml?
+answer: Explore examples of package manifest files.
 ---
 
-This section provides sample manifest files for you to use as templates in your project.
+`Move.toml` is the manifest file for a Sui Move package. It declares the package name, dependencies, network environments, and environment-specific dependency overrides. Every Move project has a `Move.toml` at its root ([Move package management](/develop/manage-packages/move-package-management)).
 
-For a basic project that only depends on `sui` and `std`, the minimal lockfile is:
+This reference covers the syntax and available fields for each section of `Move.toml`.
 
-```toml
-[package]
-name = "example"
-```
+## Move.toml structure
 
-For a package that has a `mvr` dependency and a git dependency with different Mainnet and Testnet branches:
-
-<!-- TODO: usdc doesn't actually have different tags; find a package that does -->
+A `Move.toml` manifest can contain the following top-level sections:
 
 ```toml
 [package]
-name = "example"
+name = "<package-name>"
+# Optional: edition = "2024"
+# Optional: implicit-dependencies = false
 
 [dependencies]
-ascii = { r.mvr = "@potatoes/ascii" }
-usdc = { git = "https://github.com/circlefin/stablecoin-sui.git", subdir = "packages/usdc", rev = "releases/testnet" }
-
-[dep-replacements.mainnet]
-usdc = { git = "https://github.com/circlefin/stablecoin-sui.git", subdir = "packages/usdc", rev = "releases/mainnet" }
-```
-
-For a package that defines a `testnet_alpha` environment:
-
-```toml
-[package]
-name = "example"
+# Package dependencies (mvr, git, local, or system)
 
 [environments]
-testnet_alpha = "4c78adac"
+# Custom environment definitions mapping names to chain IDs
+
+[dep-replacements.<env>]
+# Environment-specific dependency overrides
+```
+
+### `[package]`
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | The package name. |
+| `edition` | No | Move edition (for example, `"2024"`). |
+| `implicit-dependencies` | No | Set to `false` to exclude the default `std` and `sui` dependencies. |
+
+### `[dependencies]`
+
+Lists the packages your project depends on. Each dependency has a name (the key) and a source specifier (the value). The following dependency formats are available:
+
+| **Format** | **Syntax** | **When to use** |
+|---|---|---|
+| MVR (Move Registry) | `name = { r.mvr = "@SCOPE/PACKAGE" }` | Published packages registered in the Move Registry |
+| Git | `name = { git = "URL", subdir = "PATH", rev = "BRANCH_OR_TAG" }` | Packages hosted in a Git repository. `subdir` is required when the package is not at the repo root. `rev` specifies a branch, tag, or commit hash. |
+| Local | `name = { local = "../path/to/package" }` | Packages on your local filesystem (useful during development) |
+
+The `sui` and `std` framework dependencies are resolved automatically. You do not need to add them to `[dependencies]` unless you set `implicit-dependencies = false` in `[package]`.
+
+### `[environments]` {#environments}
+
+Maps custom environment names to chain identifiers. The `mainnet` and `testnet` environments are implicitly available and do not need to be listed.
+
+Chain IDs accept either format interchangeably:
+
+- **Hex** (short form) — the first 4 bytes of the genesis checkpoint digest, hex-encoded (for example, `"aba3e445"`).
+- **Base58** (full form) — the complete genesis checkpoint digest, Base58-encoded (for example, `"69WiPg3DAQhKenaFN9I6pYc7MYk..."`).
+
+The package system compares chain IDs by their underlying bytes, so a Hex value in the manifest matches a Base58 value from the CLI and vice versa.
+
+Use `sui client chain-identifier` to look up both formats for the network you are connected to.
+
+### `[dep-replacements.<ENV>]`
+
+Overrides dependencies for a specific environment. Replace `ENV` with the environment name (`mainnet`, `testnet`, or a custom name defined in `[environments]`). Each entry in the section replaces the corresponding dependency from `[dependencies]` when you build or publish for that environment.
+
+Dependency replacements support the same formats as `[dependencies]` (MVR, Git, local). You can also use the `use-environment` key to instruct the resolver to use the address published on a different environment:
+
+```toml
+[dep-replacements.mainnet]
+my-dep = { use-environment = "testnet" }
+```
+
+This tells the resolver to use the `testnet` published address for `my-dep` when building for `mainnet`. This is useful when a dependency has not yet been published on Mainnet but has a Testnet deployment you can reference.
+
+See [environment-specific dependencies](/develop/manage-packages/move-package-management#environment-specific-dependencies) for details and additional examples.
+
+## Example manifests
+
+### Minimal manifest
+
+A basic project that only depends on `sui` and `std` (resolved automatically):
+
+```toml
+[package]
+name = "my_project"
+edition = "2024"
+```
+
+### MVR and Git dependencies
+
+A package with an MVR dependency and a Git dependency that uses a different branch for Mainnet:
+
+```toml
+[package]
+name = "my_project"
+edition = "2024"
 
 [dependencies]
 ascii = { r.mvr = "@potatoes/ascii" }
-usdc = { git = "https://github.com/circlefin/stablecoin-sui.git", subdir = "packages/usdc", rev = "releases/testnet" }
+my_lib = { git = "https://github.com/ORGANIZATION/REPO.git", subdir = "packages/my_lib", rev = "testnet" }
 
 [dep-replacements.mainnet]
-usdc = { git = "https://github.com/circlefin/stablecoin-sui.git", subdir = "packages/usdc", rev = "releases/testnet" }
-
-[dep-replacements.testnet_alpha]
-ascii = { use-environment = "ascii" }
-usdc = { use-environment = "testnet" }
+my_lib = { git = "https://github.com/ORGANIZATION/REPO.git", subdir = "packages/my_lib", rev = "mainnet" }
 ```
+
+The `[dep-replacements.mainnet]` section overrides `my_lib` when you build with `--build-env mainnet`. The `ascii` MVR dependency does not need an override because MVR resolves network-specific addresses automatically.
+
+### Custom environment with dep-replacements
+
+A package that defines a custom `staging` environment and uses `use-environment` to reference addresses from a different network:
+
+```toml
+[package]
+name = "my_project"
+edition = "2024"
+
+[environments]
+staging = "4c78adac"
+
+[dependencies]
+ascii = { r.mvr = "@potatoes/ascii" }
+my_lib = { git = "https://github.com/ORGANIZATION/REPO.git", subdir = "packages/my_lib", rev = "testnet" }
+
+[dep-replacements.staging]
+ascii = { use-environment = "testnet" }
+my_lib = { use-environment = "testnet" }
+```
+
+The `use-environment` key tells the resolver to use the published address from the specified environment. In this example, building for `staging` uses the Testnet addresses for both dependencies.
+
+### FAQ
+
+##### When should you use Git dependencies versus MVR?
+
+Use MVR for packages registered in the Move Registry (these resolve network-specific addresses automatically). Use Git dependencies for packages not registered in MVR, or when you need to pin to a specific branch, tag, or commit.
+
+##### How do environments affect publishing?
+
+The environment determines which dependency addresses the compiler uses during the build. When you publish with `sui client publish`, the active environment (set with `--build-env` or inferred from the connected network) determines which `[dep-replacements]` section applies.
+
+##### What is a lockfile?
+
+The `Move.lock` file records the exact resolved versions and addresses of your dependencies. It is generated automatically when you build. Commit `Move.lock` to version control to ensure reproducible builds.

@@ -1,0 +1,216 @@
+---
+title: Leveraged Position Workflow
+sidebar_label: Leveraged Position Workflow
+description: >-
+  Hands-on DeepBook Margin walkthrough on Sui Testnet: create a MarginManager,
+  read a pool's risk parameters and borrow liquidity, deposit collateral, borrow
+  to open a leveraged position, monitor your risk ratio, and close and withdraw.
+keywords:
+  - deepbook margin
+  - leverage
+  - margin manager
+  - risk ratio
+  - liquidation
+  - borrow
+  - collateral
+  - testnet
+  - deepbook sdk
+goal:
+  description: >-
+    Reader opens, monitors, and closes a leveraged DeepBook position on Testnet,
+    reading each risk parameter onchain and observing the result of each step.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I open a leveraged position on DeepBook with the SDK?
+  - How do I read a margin pool's risk parameters and borrow liquidity?
+  - How do I monitor my risk ratio and avoid liquidation?
+  - What happens if my margin position is liquidated?
+answer: >-
+  Create a MarginManager for a pool, read the pool's risk parameters from the
+  MarginRegistry, deposit collateral, and borrow with borrowBase or borrowQuote
+  to open a leveraged position. Monitor the risk ratio with
+  getMarginManagerState, then close with a reduce-only order, repay the borrow
+  plus interest, and withdraw. If the risk ratio falls to the pool's liquidation
+  threshold, anyone can liquidate the position, repaying part of the debt and
+  taking a reward from the collateral to restore the target risk ratio.
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Open a leveraged position
+    stage: Margin
+---
+
+Open a leveraged position on DeepBook Margin end to end on Sui Testnet: create a `MarginManager`, read the pool's risk parameters and borrow liquidity onchain, deposit collateral, borrow to open leverage, monitor your risk ratio, then close the position, repay the borrow, and withdraw. Each step lists what to observe, so the page doubles as a verification checklist.
+
+Margin trading borrows funds against collateral, and anyone can liquidate a borrowed position. Read [Margin Risks](/onchain-finance/deepbook/deepbook-margin/margin-risks) before you start, and keep it open alongside this walkthrough.
+
+:::caution
+
+Leverage multiplies losses as well as gains, and interest accrues on your borrow continuously. If your position's risk ratio falls to the pool's liquidation threshold, anyone can liquidate it, and the fees from that are a permanent loss. This walkthrough uses small Testnet amounts to make each mechanic observable, not to model a position you should hold. See [Margin Risks](/onchain-finance/deepbook/deepbook-margin/margin-risks) for liquidation, interest rate, and oracle risk in detail.
+
+:::
+
+This walkthrough uses the `SUI_DBUSDC` pool, borrowing the stable quote asset (DBUSDC) against a volatile base collateral (SUI) to open a leveraged long on SUI. Health monitoring here is entirely oracle-priced, so the pair choice matters: on Testnet the SUI and USDC price feeds are canonical Pyth feeds, whereas the Testnet DEEP feed is a substitute (an HFT feed) rather than a dedicated DEEP oracle. Do not build oracle-priced risk math on the substitute feed.
+
+The samples live in the `examples/deepbook-margin` package, type-checked with `tsc --noEmit` against `@mysten/deepbook-v3` and `@mysten/sui`, and reference pools, coins, and margin pools by SDK key rather than hardcoding onchain IDs.
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+- [x] A current CLI: run `suiup update sui`, then `sui --version` to confirm it.
+- [x] Testnet SUI on your address for collateral and gas, from the [Sui faucet](/getting-started/onboarding/get-coins).
+- [x] For the borrow-and-trade steps, enough SUI for collateral and gas, plus DBUSDC borrow liquidity in the margin pool. You supply SUI as collateral and borrow DBUSDC from the pool, so you do not need DBUSDC in your wallet.
+- [x] The SDK installed: `npm install @mysten/deepbook-v3 @mysten/sui`.
+</TabItem>
+</Tabs>
+
+## The margin objects
+
+DeepBook Margin adds three shared objects on top of the spot order book. See [DeepBook Margin design](/onchain-finance/deepbook/deepbook-margin/design) for the full model.
+
+- `MarginManager` wraps a `BalanceManager` and binds it to one DeepBook pool. It holds your collateral, tracks your borrow, and is the account every margin order trades from.
+- `MarginPool` is the lending pool for a single asset. Your borrow draws from it, and interest accrues to it.
+- `MarginRegistry` stores each pool's risk parameters and tracks enabled pools and registered managers.
+
+A `MarginManager` borrows from one margin pool at a time, base or quote, which keeps risk on a single axis.
+
+## Set up the client
+
+The client references pools, coins, and margin pools by SDK key. On Testnet it auto-loads the margin package IDs and Pyth config. Read-only calls work without a manager; borrowing and trading need one.
+
+<ImportContent source="examples/deepbook-margin/src/client.ts" mode="code" tag="client" />
+
+## Create a `MarginManager`
+
+Create one `MarginManager` for the pool and reuse it across runs. A single `margin_manager::new` call creates the manager, shares it, and registers it in the `MarginRegistry`, so there is no separate registration step. Creating a new manager each run leaves orphaned shared objects that fragment your collateral, so discover or persist the ID and create only when you have none.
+
+<ImportContent source="examples/deepbook-margin/src/margin-manager.ts" mode="code" tag="find-manager" />
+
+If that returns nothing, create one, then read the created shared object ID from the effects and save it:
+
+<ImportContent source="examples/deepbook-margin/src/margin-manager.ts" mode="code" tag="create-manager" />
+
+**Observe:** the effects contain a created shared object whose type ends in `MarginManager`, and a `MarginManagerCreatedEvent` naming the manager, its wrapped balance manager, and the DeepBook pool. Save the ID and pass it to the client as a named manager.
+
+## Read the pool's risk parameters
+
+Every threshold that governs your position is stored per pool in the `MarginRegistry` and set by governance, not fixed in code. Read them onchain rather than assuming defaults. See [Risk ratio](/onchain-finance/deepbook/deepbook-margin/contract-information/risk-ratio) for what each one means.
+
+<ImportContent source="examples/deepbook-margin/src/risk-params.ts" mode="code" tag="risk-params" />
+
+**Observe:** for `SUI_DBUSDC` on Testnet at the time of writing, the read returns a liquidation risk ratio of `1.1`, a min borrow risk ratio of `1.2499`, a min withdraw risk ratio of `2`, a target liquidation risk ratio of `1.25`, and liquidation rewards of `0.02` (user) and `0.03` (pool). The ordering `liquidation < min borrow < min withdraw` always holds. Note the rewards are not the protocol defaults, which is why you read them: a borrow must leave your ratio at or above the min borrow ratio, and a withdraw at or above the min withdraw ratio.
+
+## Check borrow liquidity
+
+You borrow from a margin pool, so it must hold enough idle supply to lend. The pool's max utilization rate caps borrowing, and anything already borrowed counts against that cap. A pool with no headroom fails a borrow the same way a thin order book fails a trade, so check before you borrow. Utilization also sets the [interest rate](/onchain-finance/deepbook/deepbook-margin/contract-information/interest-rates), so a nearly full pool is an expensive one.
+
+<ImportContent source="examples/deepbook-margin/src/pool-liquidity.ts" mode="code" tag="pool-liquidity" />
+
+**Observe:** `borrowableNow` is positive for the asset you intend to borrow. For the DBUSDC pool on Testnet at the time of writing, supply is about `10087` and borrow about `119`, so headroom is ample; the SUI pool runs at higher utilization with less headroom and a higher rate. If `borrowableNow` is at or near zero, borrow a smaller amount, wait for supply, or borrow the other asset.
+
+:::info
+
+The remaining steps borrow real funds: they supply SUI as collateral and borrow DBUSDC from the margin pool, so you need SUI for collateral and gas and enough DBUSDC borrow liquidity in the pool, not DBUSDC in your wallet. They appear as type-checked samples with the observable result to confirm when you run them. The code is identical to what an executed run uses, so once the pool has borrow liquidity you run each step in order and check the stated result.
+
+:::
+
+## Deposit collateral
+
+Deposit collateral into the manager. Collateral backs your borrow: the more you deposit before borrowing, the higher your starting risk ratio. This walkthrough deposits SUI as base collateral.
+
+<ImportContent source="examples/deepbook-margin/src/collateral.ts" mode="code" tag="deposit-collateral" />
+
+Size the deposit to your wallet balance, and keep a SUI reserve for gas:
+
+<ImportContent source="examples/deepbook-margin/src/collateral.ts" mode="code" tag="safe-collateral" />
+
+**Observe:** `getMarginManagerState('MM')` reports the collateral, and the manager's base balance increases by the deposited amount. No debt yet, so the risk ratio reads at its maximum.
+
+## Borrow to open leverage
+
+Borrow the quote asset against your collateral. The pool rejects the borrow unless the resulting risk ratio stays at or above the min borrow risk ratio you read, and that ceiling is what sets your maximum leverage. Size the borrow from the risk parameters, not by trial and error.
+
+<ImportContent source="examples/deepbook-margin/src/borrow.ts" mode="code" tag="borrow" />
+
+**Observe:** the manager's borrowed quote shares increase, its quote balance increases by the borrowed amount, and `getMarginManagerState('MM').riskRatio` drops from its maximum to a finite value at or above the min borrow ratio. A borrow that would breach that ratio aborts.
+
+## Open the position
+
+With borrowed DBUSDC in the manager, place a bid on `SUI_DBUSDC` to buy SUI. Margin orders go through the pool proxy, not the spot order entry, so the borrow and the trade stay bound to the manager. The `clientOrderId` is your own tag: the SDK types it as a string, but the contract encodes it as `u64`, so pass a numeric string such as a timestamp, not a label. Price and quantity must respect the pool's tick and lot size.
+
+<ImportContent source="examples/deepbook-margin/src/place-order.ts" mode="code" tag="open-position" />
+
+**Observe:** the order rests or fills against the book, and your position in SUI is now larger than your collateral alone could fund. The borrow funds that surplus, which is the leverage.
+
+## Monitor your risk ratio
+
+Read your live risk ratio and see how close it is to liquidation. `getMarginManagerState` values your collateral and debt through the pool's Pyth oracles and returns the risk ratio in one call, along with the prices it used.
+
+<ImportContent source="examples/deepbook-margin/src/risk.ts" mode="code" tag="read-risk" />
+
+**Observe:** `riskRatio` sits above `liquidationRiskRatio`, and `marginToLiquidation` is the cushion you have. Because the ratio is oracle-priced, it moves whenever SUI moves, and it drifts down on its own as interest accrues, even if the price is flat.
+
+The oracle prices must be fresh. Each pool sets a maximum price age and a price tolerance, which default to these constants and are adjustable by governance within the age bounds shown:
+
+<ImportContent source="packages/deepbook_margin/sources/helper/margin_constants.move" mode="code" org="MystenLabs" repo="deepbookv3" lines="25-28" />
+
+If the price is older than the pool's maximum age, valuation reverts rather than acting on a stale price. See [Margin Risks](/onchain-finance/deepbook/deepbook-margin/margin-risks#oracle-risk) for oracle risk.
+
+## What happens if you do nothing and the price moves against you
+
+If you hold the position and SUI falls, your collateral is worth less against a debt that only grows with interest, so the risk ratio falls. Nothing intervenes on your behalf. When the ratio reaches the pool's liquidation risk ratio, [`can_liquidate`](/onchain-finance/deepbook/deepbook-margin/contract-information/risk-ratio) returns true and the position becomes eligible for liquidation.
+
+Liquidation is permissionless. Today it runs through the `margin_liquidation` package: `liquidate_base` (and its quote counterpart) is callable by anyone, checks eligibility with `can_liquidate`, and sources the repay capital from a shared liquidation vault.
+
+<ImportContent source="packages/margin_liquidation/sources/liquidation_vault.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="liquidate_base" noComments />
+
+That entry point calls the inner `margin_manager::liquidate`, which does the settlement: it repays part of your debt and pays the liquidator and the pool a reward out of your collateral, sized to restore your risk ratio to the target liquidation ratio rather than closing the whole position.
+
+<ImportContent source="packages/deepbook_margin/sources/margin_manager.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="liquidate" signatureOnly />
+
+[Margin Risks: how liquidation works](/onchain-finance/deepbook/deepbook-margin/margin-risks#how-liquidation-works) and the [risk ratio position lifecycle](/onchain-finance/deepbook/deepbook-margin/contract-information/risk-ratio#example-suiusdc-position-lifecycle) work the consequences through with concrete SUI/USDC numbers. In short: partial liquidation leaves you with a smaller, healthier position, but the reward the liquidator takes from your collateral is a permanent loss, and if the position is deeply underwater a full liquidation can occur and the lending pool can take bad debt. Liquidation is immediate once your ratio reaches the threshold, so monitoring and acting early (adding collateral or reducing the position) is the only defense.
+
+## Close the position
+
+To unwind, reduce your exposure with a reduce-only order. Reduce-only guarantees the order can only shrink your position, never flip it or add leverage: here it sells SUI back for DBUSDC so you can repay.
+
+<ImportContent source="examples/deepbook-margin/src/place-order.ts" mode="code" tag="reduce-position" />
+
+Then repay the borrow plus the interest accrued since you opened it. Pass an amount to repay part, or omit it to repay the full outstanding balance.
+
+<ImportContent source="examples/deepbook-margin/src/borrow.ts" mode="code" tag="repay" />
+
+**Observe:** after the reduce-only order fills, your SUI position shrinks; after repay, the manager's borrowed shares drop to zero (or by the repaid amount) and `getMarginManagerState('MM').riskRatio` returns to its maximum once debt is cleared.
+
+## Withdraw collateral
+
+Withdraw your collateral back to your wallet. A withdraw must leave your risk ratio at or above the min withdraw risk ratio, so you cannot pull collateral out from under an open borrow: repay first, then withdraw.
+
+<ImportContent source="examples/deepbook-margin/src/collateral.ts" mode="code" tag="withdraw-collateral" />
+
+**Observe:** your wallet balance increases and the manager's collateral balance decreases by the withdrawn amount. With the debt repaid, you can withdraw the full collateral.
+
+## Troubleshooting
+
+- **Borrow aborts on risk ratio:** the borrow would leave your ratio below the pool's min borrow risk ratio. Deposit more collateral or borrow less. Read the current threshold with `getMinBorrowRiskRatio`.
+- **Withdraw aborts on risk ratio:** you are trying to withdraw collateral that a borrow still depends on. Repay first, then withdraw, and keep the ratio at or above the min withdraw ratio.
+- **Borrow fails for insufficient pool liquidity:** the margin pool has no headroom under its max utilization rate. Check `borrowableNow` from [Check borrow liquidity](#check-borrow-liquidity), borrow less, or wait for supply.
+- **Valuation reverts on a stale price:** the Pyth price is older than the pool's maximum price age. Refresh the price feed before the risk-reading or trading call. See [Oracle risk](/onchain-finance/deepbook/deepbook-margin/margin-risks#oracle-risk).
+- **`Cannot convert <value> to a BigInt`:** `clientOrderId` is encoded as `u64`. The SDK types it as a string, but a non-numeric value fails to encode. Use a numeric string, such as a timestamp.
+- **Every run mints a new manager:** you are not reusing an existing `MarginManager`. Discover or persist the ID and create only when absent, as in [Create a MarginManager](#create-a-marginmanager).

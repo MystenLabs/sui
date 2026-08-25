@@ -4,7 +4,7 @@
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::{JWK, OIDCProvider};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
-use im::hashmap::HashMap as ImHashMap;
+use imbl::hashmap::HashMap as ImHashMap;
 use itertools::Itertools as _;
 use mysten_common::debug_fatal;
 use nonempty::NonEmpty;
@@ -63,6 +63,9 @@ struct ZkLoginParams {
     pub supported_providers: Vec<OIDCProvider>,
     /// The environment (prod/test) the code runs in. It decides which verifying key to use in fastcrypto.
     pub env: ZkLoginEnv,
+    /// zkLogin circuit verify mode: 0 = v1 circuit only, 1 = v2 circuit with
+    /// fallback to v1, 2 = v2 circuit only.
+    pub zklogin_circuit_mode: u64,
     /// Flag to determine whether legacy address (derived from padded address seed) should be verified.
     pub verify_legacy_zklogin_address: bool,
     // Flag to determine whether zkLogin inside multisig is accepted.
@@ -84,6 +87,7 @@ impl SignatureVerifier {
         metrics: Arc<SignatureVerifierMetrics>,
         supported_providers: Vec<OIDCProvider>,
         zklogin_env: ZkLoginEnv,
+        zklogin_circuit_mode: u64,
         verify_legacy_zklogin_address: bool,
         accept_zklogin_in_multisig: bool,
         accept_passkey_in_multisig: bool,
@@ -111,6 +115,7 @@ impl SignatureVerifier {
             zk_login_params: ZkLoginParams {
                 supported_providers,
                 env: zklogin_env,
+                zklogin_circuit_mode,
                 verify_legacy_zklogin_address,
                 accept_zklogin_in_multisig,
                 accept_passkey_in_multisig,
@@ -126,10 +131,10 @@ impl SignatureVerifier {
     pub(crate) fn insert_jwk(&self, jwk_id: &JwkId, jwk: &JWK) {
         let mut jwks = self.jwks.write();
         match jwks.entry(jwk_id.clone()) {
-            im::hashmap::Entry::Occupied(_) => {
+            imbl::hashmap::Entry::Occupied(_) => {
                 debug!("JWK with kid {:?} already exists", jwk_id);
             }
-            im::hashmap::Entry::Vacant(entry) => {
+            imbl::hashmap::Entry::Vacant(entry) => {
                 debug!("inserting JWK with kid: {:?}", jwk_id);
                 entry.insert(jwk.clone());
             }
@@ -224,6 +229,7 @@ impl SignatureVerifier {
             jwks,
             self.zk_login_params.supported_providers.clone(),
             self.zk_login_params.env,
+            self.zk_login_params.zklogin_circuit_mode,
             self.zk_login_params.verify_legacy_zklogin_address,
             self.zk_login_params.accept_zklogin_in_multisig,
             self.zk_login_params.accept_passkey_in_multisig,

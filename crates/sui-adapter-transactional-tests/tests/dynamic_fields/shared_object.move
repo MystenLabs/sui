@@ -3,7 +3,7 @@
 
 // tests adding a shared object as a dynamic field
 
-//# init --addresses test=0x0 --accounts A --shared-object-deletion true
+//# init --addresses test=0x0 --accounts A --enable-feature-flags shared_object_deletion
 
 //# publish
 

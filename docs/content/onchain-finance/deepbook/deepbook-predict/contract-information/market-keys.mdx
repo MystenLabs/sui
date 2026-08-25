@@ -1,0 +1,288 @@
+---
+title: Market Keys
+description: >-
+  Learn how DeepBook Predict identifies binary positions and vertical ranges
+  with MarketKey and RangeKey.
+keywords:
+  - deepbook predict market key
+  - marketkey
+  - rangekey
+  - binary position
+  - vertical range
+  - strike
+  - expiry
+goal:
+  description: >-
+    Reader can learn how DeepBook Predict identifies binary positions and
+    vertical ranges with MarketKey and RangeKey
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is a MarketKey in DeepBook Predict?
+  - How do I build a MarketKey or RangeKey in a transaction block?
+  - Should I use a binary position or a vertical range?
+  - Why does a DeepBook Predict mint fail with an invalid strike error?
+answer: >-
+  `MarketKey` identifies a binary position by oracle ID, expiry, strike, and
+  direction. `RangeKey` identifies a vertical range by oracle ID, expiry, lower
+  strike, and higher strike. Both are plain value types that key the position
+  tables inside a `PredictManager` and the exposure state inside the vault.
+---
+
+`MarketKey` and `RangeKey` identify the internal position quantities stored in a `PredictManager`. Neither is an object. Both are plain `copy`, `drop`, `store` value types that you build inside a transaction, pass to a trading function, and discard.
+
+Use `MarketKey` for binary positions keyed by oracle ID, expiry, strike, and direction. Use `RangeKey` for vertical ranges keyed by oracle ID, expiry, lower strike, and higher strike.
+
+## Choose a key {#choose-a-key}
+
+The instrument you want determines the key you build. Both instruments pay the same way, where a quantity of `1_000_000` pays 1 USD when the instrument wins and nothing when it loses.
+
+| **Your view on settlement** | **Instrument** | **Constructor** | **Wins when** |
+|---|---|---|---|
+| Ends above one level | Binary up | `market_key::up` | `settlement > strike` |
+| Ends at or below one level | Binary down | `market_key::down` | `settlement <= strike` |
+| Lands between two levels | Vertical range | `range_key::new` | `lower < settlement <= higher` |
+
+Pick a binary position for a one-sided directional view. It wins on an unbounded outcome, so it costs more per contract and wins more often.
+
+Pick a vertical range for a view that settlement lands inside a band. A range wins on a bounded outcome, so it costs less per contract and wins less often. Ranges suit a view on where a price settles rather than which direction it moves.
+
+A range is economically a spread of two binary positions, but do not build it that way. The protocol prices a range as one instrument through `predict::mint_range`, stores it as one row keyed by `RangeKey`, and adjusts vault exposure for the pairing. Two separate binary mints cost more gas, create two rows you must track independently, and price without that adjustment.
+
+## `MarketKey` {#market-key}
+
+A `MarketKey` identifies one binary instrument: a single strike on a single oracle, in one direction.
+
+### Fields {#market-key-fields}
+
+| **Field** | **Type** | **Description** |
+|---|---|---|
+| `oracle_id` | `ID` | Object ID of the `OracleSVI` that defines the underlying asset and expiry. |
+| `expiry` | `u64` | Expiration timestamp in milliseconds. Redundant with the oracle, but stored explicitly. |
+| `strike` | `u64` | Strike price in fixed point, on the oracle's configured grid. |
+| `direction` | `u8` | `0` for up, `1` for down. Private, so read it with `is_up()` or `is_down()`. |
+
+### Constructors {#market-key-constructors}
+
+```move title='packages/predict/sources/market_key/market_key.move'
+public fun up(oracle_id: ID, expiry: u64, strike: u64): MarketKey
+public fun down(oracle_id: ID, expiry: u64, strike: u64): MarketKey
+public fun new(oracle_id: ID, expiry: u64, strike: u64, is_up: bool): MarketKey
+```
+
+`up()` and `down()` set the direction for you. `new()` takes a `bool` and normalizes it to the same `0` or `1` byte, so all three produce identical keys for the same inputs. Use `new()` when direction is a runtime value and the named constructors when it is fixed.
+
+None of the three validates its arguments. They always succeed, even with a nonexistent oracle ID or an off-grid strike. Validation happens later, when you pass the key to `predict::mint` or `predict::redeem`. See [Validation rules](#validation-rules).
+
+### Read fields {#market-key-reads}
+
+```move title='packages/predict/sources/market_key/market_key.move'
+public fun oracle_id(key: &MarketKey): ID
+public fun expiry(key: &MarketKey): u64
+public fun strike(key: &MarketKey): u64
+public fun is_up(key: &MarketKey): bool
+public fun is_down(key: &MarketKey): bool
+```
+
+`is_up()` and `is_down()` are exact complements. No third direction value exists, because the constructors are the only way to set the field.
+
+### Worked example {#market-key-example}
+
+These values describe an up position on a BTC oracle expiring 2026-01-01, struck at 95,000 USD. Strikes use the same 1e9 fixed-point scale as `oracle::spot_price` and `oracle::forward_price`, so 1 USD is `1_000_000_000`.
+
+| **Input** | **Value** | **Reads as** |
+|---|---|---|
+| `oracle_id` | `0x7c2f9a1d8e3b45607f1a2c9d0b8e6534a7f10d92c3b8e45f6a0d17b93c2e8f41` | Example ID. Read the real one from the Predict server. |
+| `expiry` | `1767225600000` | 2026-01-01T00:00:00Z in milliseconds |
+| `strike` | `95_000_000_000_000` | 95,000 USD |
+
+In Move:
+
+```move
+let key = market_key::up(
+    oracle_id,
+    1767225600000,
+    95_000_000_000_000,
+);
+```
+
+The following Testnet example builds the same key in a transaction block and passes it straight to `predict::mint`. Step 2 is the `market_key::up` call, and step 3 consumes its result:
+
+<ImportContent source="examples/deepbook-predict/src/mint.ts" mode="code" tag="mint-binary" />
+
+Pass the key result straight into the next `moveCall` as an argument. A key is a value, not an object, so never wrap it in `tx.object`.
+
+<details>
+<summary>Source for the `MarketKey` struct and functions</summary>
+
+<ImportContent
+	source="packages/predict/sources/market_key/market_key.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="MarketKey"
+/>
+
+<ImportContent
+	source="packages/predict/sources/market_key/market_key.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="up,down,new,oracle_id,expiry,strike,is_up,is_down"
+	noComments
+/>
+
+</details>
+
+## `RangeKey` {#range-key}
+
+A `RangeKey` identifies one vertical range: a band between two strikes on a single oracle.
+
+### Fields {#range-key-fields}
+
+| **Field** | **Type** | **Description** |
+|---|---|---|
+| `oracle_id` | `ID` | Object ID of the `OracleSVI` that defines the underlying asset and expiry. |
+| `expiry` | `u64` | Expiration timestamp in milliseconds. |
+| `lower_strike` | `u64` | Bottom of the band, exclusive at settlement. |
+| `higher_strike` | `u64` | Top of the band, inclusive at settlement. |
+
+`RangeKey` has no direction field. A bull-call range and a bear-put range with the same strikes are identical to the vault and share one row. Do not model them as separate holdings.
+
+### Constructor and reads {#range-key-constructor}
+
+```move title='packages/predict/sources/market_key/range_key.move'
+public fun new(oracle_id: ID, expiry: u64, lower_strike: u64, higher_strike: u64): RangeKey
+public fun oracle_id(key: &RangeKey): ID
+public fun expiry(key: &RangeKey): u64
+public fun lower_strike(key: &RangeKey): u64
+public fun higher_strike(key: &RangeKey): u64
+```
+
+Unlike the `MarketKey` constructors, `range_key::new` validates. It aborts with `EInvalidStrikes` when `lower_strike` is not less than `higher_strike`. Equal strikes fail, so a zero-width band cannot exist. This abort happens during key construction, so a bad range fails before the transaction reaches `mint_range`.
+
+### Why the band is half-open {#half-open-band}
+
+A range pays when settlement lands in `(lower_strike, higher_strike]`. That asymmetry follows from the binary rules rather than from a separate convention. The vault records a range as a long up leg at the lower strike plus a long down leg at the higher strike. The up leg wins when `settlement > lower`, and the down leg wins when `settlement <= higher`. Both conditions hold exactly when settlement sits inside the half-open band.
+
+A settlement exactly at `lower_strike` loses. A settlement exactly at `higher_strike` wins.
+
+### Worked example {#range-key-example}
+
+A range on the same oracle, covering 90,000 USD to 100,000 USD:
+
+| **Input** | **Value** | **Reads as** |
+|---|---|---|
+| `lower_strike` | `90_000_000_000_000` | 90,000 USD |
+| `higher_strike` | `100_000_000_000_000` | 100,000 USD |
+
+The following Testnet example builds a `RangeKey` with `range_key::new` and mints against it. The four arguments follow the field order in the preceding table:
+
+<ImportContent source="examples/deepbook-predict/src/mint-range.ts" mode="code" tag="mint-range" />
+
+<details>
+<summary>Source for the `RangeKey` struct and functions</summary>
+
+<ImportContent
+	source="packages/predict/sources/market_key/range_key.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="RangeKey"
+/>
+
+<ImportContent
+	source="packages/predict/sources/market_key/range_key.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="new,oracle_id,expiry,lower_strike,higher_strike"
+	noComments
+/>
+
+</details>
+
+## Validation rules {#validation-rules}
+
+Building a key almost never fails. Using one does. `predict::mint` and `predict::redeem` call `assert_key_matches`, and the range functions call `assert_range_key_matches`. Both compare the key against the `OracleSVI` you passed in the same call, then check every strike against that oracle's grid.
+
+Each oracle registers a strike grid at creation with a minimum strike and a tick size. The grid always spans 100,000 ticks:
+
+```text
+max_strike = min_strike + tick_size * 100_000
+```
+
+A strike is valid when it sits inside `[min_strike, max_strike]` and lands exactly on a tick:
+
+```text
+(strike - min_strike) % tick_size == 0
+```
+
+### Build a valid key {#build-a-valid-key}
+
+1. Fetch a live oracle from the Predict server. Read its object ID, expiry, and strike grid.
+1. Set `oracle_id` to that oracle's object ID. A mismatch aborts with `EMarketKeyOracleMismatch` or `ERangeKeyOracleMismatch`.
+1. Set `expiry` to the value the oracle reports. Do not compute or round it. A mismatch aborts with `EMarketKeyExpiryMismatch` or `ERangeKeyExpiryMismatch`.
+1. Snap each strike to the grid so it satisfies both conditions above. An off-grid or out-of-range strike aborts with `EInvalidStrike`.
+1. For a range, confirm `lower_strike < higher_strike` before you call `range_key::new`. The constructor checks both strikes against the grid, so the narrowest valid band is one tick wide.
+1. Confirm the oracle is still live. A key can be perfectly valid and still fail on `EOracleStale`, `EOracleInactive`, `EOracleExpired`, or `EOracleSettled`.
+
+Using the grid from the earlier example, with a minimum strike of 50,000 USD and a 100 USD tick:
+
+| **Strike** | **Value** | **Result** |
+|---|---|---|
+| 95,000 USD | `95_000_000_000_000` | Valid. Exactly 450 ticks above the minimum. |
+| 95,050 USD | `95_050_000_000_000` | Aborts with `EInvalidStrike`. Lands 450.5 ticks above the minimum. |
+| 40,000 USD | `40_000_000_000_000` | Aborts with `EInvalidStrike`. Below the minimum strike. |
+
+## Keys as table keys {#keys-as-table-keys}
+
+Both types carry `copy`, `drop`, and `store`, the exact abilities Sui requires of a `Table` key. That is why the protocol can store positions as table rows instead of as objects:
+
+| **Table** | **Location** | **Type** |
+|---|---|---|
+| `positions` | `PredictManager` | `Table<MarketKey, u64>` |
+| `range_positions` | `PredictManager` | `Table<RangeKey, u64>` |
+
+`predict::mint` increases the row at your `MarketKey`, and `predict::redeem` decreases it. The vault tracks the same trades separately in per-oracle strike matrices, so the manager records what a user holds while the vault records what the protocol owes. See [Predict Manager](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager) and [Vault](/onchain-finance/deepbook/deepbook-predict/contract-information/vault).
+
+### Equality {#equality}
+
+Two keys are equal when every field matches. Move compares them structurally with `==`, and Sui tables compare the BCS serialization of the key, which follows declaration order. For `MarketKey` that order is `oracle_id`, `expiry`, `strike`, `direction`.
+
+Because the constructors normalize `direction` to `0` or `1` and expose no other path to set it, two keys built from the same inputs always serialize to the same bytes. No equivalent-but-different encoding exists.
+
+Off chain, compare keys by their BCS bytes rather than by field-by-field JSON. To read one specific row, call `predict_manager::position` with a key you build in the same transaction. To enumerate every row, list the dynamic fields of the table's `id`, where each field name is a BCS-serialized key, or read the indexed portfolio endpoint from the Predict server.
+
+:::caution
+
+`expiry` duplicates information the oracle already holds, and it is part of the key. A key with the correct oracle but a wrong expiry is a different table row, not an error at construction time. It reads back as `0` from `position()` and aborts with an expiry mismatch at mint. Always copy the expiry the oracle reports.
+
+:::
+
+## Error codes {#error-codes}
+
+| **Code** | **Constant** | **Module** | **Cause** |
+|---|---|---|---|
+| `0` | `EInvalidStrikes` | `range_key` | `lower_strike` is not less than `higher_strike`. |
+| `0` | `EMarketKeyOracleMismatch` | `oracle_config` | The key's `oracle_id` does not match the oracle passed in the call. |
+| `1` | `EMarketKeyExpiryMismatch` | `oracle_config` | The key's `expiry` does not match the oracle's expiry. |
+| `2` | `EInvalidStrike` | `oracle_config` | A strike is outside the grid or not on a tick. |
+| `9` | `ERangeKeyOracleMismatch` | `oracle_config` | The range key's `oracle_id` does not match the oracle passed in the call. |
+| `10` | `ERangeKeyExpiryMismatch` | `oracle_config` | The range key's `expiry` does not match the oracle's expiry. |
+
+Error numbers repeat across modules, so resolve an abort against the module in the abort location rather than against the number alone.

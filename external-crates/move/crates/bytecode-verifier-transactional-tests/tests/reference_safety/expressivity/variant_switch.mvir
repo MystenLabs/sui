@@ -1,0 +1,26 @@
+// VariantSwitch: read_ref in the new checker, release_value in the old
+
+//# publish
+mvir 0x2::vswitch_with_live_extension {
+
+public enum E has drop {
+    One { x: u64 },
+    Two { x: u64 },
+}
+
+// the field ref x stays live across the switch
+fun t(r: &mut Self::E) {
+    let x: &mut u64;
+label b0:
+    &mut E::One { x: x } = copy(r);
+    variant_switch E (freeze(copy(r))) {
+        One : b1,
+        Two : b1,
+    };
+label b1:
+    *move(x) = 1;
+    _ = move(r);
+    return;
+}
+
+}

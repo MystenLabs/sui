@@ -1,0 +1,143 @@
+// interactions between call results (dot-star extensions) and direct borrows
+
+//# publish
+mvir 0x2::chained_calls {
+
+fun id_mut(r: &mut u64): &mut u64 {
+label b0:
+    return move(r);
+}
+
+fun t() {
+    let a: u64;
+    let r: &mut u64;
+    let r1: &mut u64;
+    let r2: &mut u64;
+label b0:
+    a = 0;
+    r = &mut a;
+    r1 = Self::id_mut(copy(r));
+    r2 = Self::id_mut(copy(r1));
+    // the deepest extension is writable
+    *copy(r2) = 0;
+    _ = move(r2);
+    // released r2, so r1 is writable again
+    *copy(r1) = 0;
+    _ = move(r1);
+    *move(r) = 0;
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::chained_calls_invalid {
+
+fun id_mut(r: &mut u64): &mut u64 {
+label b0:
+    return move(r);
+}
+
+fun t() {
+    let a: u64;
+    let r: &mut u64;
+    let r1: &mut u64;
+    let r2: &mut u64;
+label b0:
+    a = 0;
+    r = &mut a;
+    r1 = Self::id_mut(copy(r));
+    r2 = Self::id_mut(copy(r1));
+    // r1 has a dot-star extension (r2), so it is not writable
+    *copy(r1) = 0;
+    return;
+}
+
+}
+
+//# publish
+mvir 0x4::call_on_extended_imm {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun id(s: &Self::S): &Self::S {
+label b0:
+    return move(s);
+}
+
+fun t(s: Self::S) {
+    let i: &Self::S;
+    let fi: &u64;
+    let ri: &Self::S;
+label b0:
+    i = &s;
+    // give the imm call argument an existing field extension
+    fi = &copy(i).S::f;
+    // the dot-star result must be placed relative to the field borrow
+    ri = Self::id(move(i));
+    _ = *copy(fi);
+    _ = *&copy(ri).S::g;
+    _ = move(fi);
+    _ = move(ri);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x5::call_then_field_write {
+
+public struct S has copy, drop { f: u64 }
+
+fun borrow_f(s: &mut Self::S): &mut u64 {
+label b0:
+    return &mut move(s).S::f;
+}
+
+fun t(s: &mut Self::S, cond: bool) {
+    let f: &mut u64;
+label b0:
+    jump_if (move(cond)) b2;
+label b1:
+    // direct field extension
+    f = &mut copy(s).S::f;
+    jump b3;
+label b2:
+    // dot-star extension via call
+    f = Self::borrow_f(copy(s));
+    jump b3;
+label b3:
+    // f itself has no extensions, so it is writable
+    *move(f) = 0;
+    return;
+}
+
+}
+
+//# publish
+mvir 0x6::call_then_parent_write_invalid {
+
+public struct S has copy, drop { f: u64 }
+
+fun borrow_f(s: &mut Self::S): &mut u64 {
+label b0:
+    return &mut move(s).S::f;
+}
+
+fun t(s: &mut Self::S, cond: bool) {
+    let f: &mut u64;
+label b0:
+    jump_if (move(cond)) b2;
+label b1:
+    f = &mut copy(s).S::f;
+    jump b3;
+label b2:
+    f = Self::borrow_f(copy(s));
+    jump b3;
+label b3:
+    // s has an extension (f) in both branches, so it is not writable
+    *copy(s) = S { f: 0 };
+    return;
+}
+
+}

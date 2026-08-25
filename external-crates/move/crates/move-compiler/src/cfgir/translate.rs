@@ -752,15 +752,18 @@ fn function_body(
             cfgir::refine_inference_and_verify(&function_context, &mut cfg);
             // do not optimize if there are errors, warnings are okay
             if !context.env.has_errors() {
+                // TODO thread through constants
+                let constants = &UniqueMap::new();
                 cfgir::optimize(
                     context.env,
                     &context.reporter,
                     context.current_package,
                     signature,
                     &locals,
-                    &UniqueMap::new(),
+                    constants,
                     &mut cfg,
                 );
+                cfgir::report_always_erroring_operations(&context.reporter, constants, &cfg);
                 if context.debug.print_optimized_blocks {
                     for (lbl, block) in &blocks {
                         println!("{lbl}:");

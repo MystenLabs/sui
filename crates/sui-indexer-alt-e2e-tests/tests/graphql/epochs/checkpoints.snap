@@ -81,8 +81,8 @@ Response: {
       "totalCheckpoints": 4,
       "checkpoints": {
         "pageInfo": {
-          "startCursor": "MA==",
-          "endCursor": "Mw==",
+          "startCursor": "KAEyAggA",
+          "endCursor": "KAEyAggD",
           "hasPreviousPage": false,
           "hasNextPage": false
         },
@@ -137,8 +137,8 @@ Response: {
       "totalCheckpoints": 4,
       "checkpoints": {
         "pageInfo": {
-          "startCursor": "Mg==",
-          "endCursor": "Mw==",
+          "startCursor": "KAEyAggC",
+          "endCursor": "KAEyAggD",
           "hasPreviousPage": true,
           "hasNextPage": false
         },

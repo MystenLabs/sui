@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E01003]: invalid modifier
+error[EC01003]: invalid modifier
   ┌─ tests/move_2024/parser/ability_modifies_infix_no_abilities_postfix.move:3:5
   │
 3 │     struct Foo has copy {} has;
@@ -13,7 +13,7 @@ error[E01003]: invalid modifier
   │
   = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
 
-error[E01003]: invalid modifier
+error[EC01003]: invalid modifier
   ┌─ tests/move_2024/parser/ability_modifies_infix_no_abilities_postfix.move:3:28
   │
 3 │     struct Foo has copy {} has;
@@ -21,13 +21,13 @@ error[E01003]: invalid modifier
   │                │            
   │                Ability declaration previously given here
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_2024/parser/ability_modifies_infix_no_abilities_postfix.move:3:31
   │
 3 │     struct Foo has copy {} has;
   │                               ^ Unexpected ';'. Expected a type ability, one of: 'copy', 'drop', 'store', or 'key'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_2024/parser/ability_modifies_infix_no_abilities_postfix.move:5:1
   │
 5 │ 

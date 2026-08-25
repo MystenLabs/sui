@@ -1,7 +1,42 @@
 ---
 title: What is gRPC?
-description: Learn about gRPC and how it provides fast, type-safe access to Sui network data.
-keywords: [ grpc, g rpc, RPC, sui full node grpc, full node rpc, what is grpc, grpc on sui ]
+description: >-
+  Learn about gRPC and how it provides fast, type-safe access to Sui network
+  data.
+keywords:
+  - grpc
+  - g rpc
+  - RPC
+  - sui full node grpc
+  - full node rpc
+  - what is grpc
+  - grpc on sui
+goal:
+  description: >-
+    Reader understands how gRPC provides fast, type-safe access to Sui network
+    data
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is gRPC in Sui?
+  - When to use?
+  - How does grpc work on Sui?
+answer: >-
+  Learn about gRPC and how it provides fast, type-safe access to Sui network
+  data.
 ---
 
 The [Sui Full Node gRPC API](/references/fullnode-protocol) provides a fast, type-safe, and efficient interface for interacting with the Sui blockchain. Designed for power users, indexers, explorers, and decentralized apps, this API enables access to Sui data with high performance and low latency.
@@ -22,7 +57,7 @@ The [gRPC API](/references/fullnode-protocol) replaces JSON-RPC on full nodes. J
 
 ## Release status
 
-gRPC polling and streaming APIs are generally available. JSON-RPC is deprecated, and applications should migrate to gRPC or GraphQL RPC by July 2026, when JSON-RPC is planned for deactivation. For decision criteria, a JSON-RPC method mapping, and common migration gotchas, see the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration).
+gRPC polling and streaming APIs are generally available. JSON-RPC is deprecated, and JSON-RPC is disabled on Sui Foundation mainnet full nodes the week of July 27, 2026, with full decommission (including code removal) in mid-October 2026. For decision criteria, a JSON-RPC method mapping, the full timeline, and common migration gotchas, see the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration).
 
 :::warning
 The gRPC and GraphQL RPC APIs have replaced JSON-RPC. View the video below to learn more about the migration timeline and which API to use. 
@@ -33,7 +68,7 @@ The gRPC and GraphQL RPC APIs have replaced JSON-RPC. View the video below to le
 
 With built-in support for code generation, you can scaffold clients in TypeScript, Go, Rust, and more. This makes gRPC a strong fit for scalable backend systems, indexers, exchanges, and typed systems-language clients.
 
-In addition to request-response calls, gRPC supports server-side streaming, enabling real-time data delivery without constant polling. Use gRPC when you need subscriptions, generated protobuf clients, low protocol overhead, or low-latency point lookups. For frontends, developer tools, scripts, dynamic-language clients, or flexible filtered historical queries, consider [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) first. GraphQL currently supports filtered pagination over historical transactions and events, while gRPC is the interface that currently supports streaming subscriptions.
+In addition to request-response calls, gRPC supports server-side streaming, enabling real-time data delivery without constant polling. Use gRPC when you need subscriptions, filtered queries over checkpoints, transactions, or events, generated protobuf clients, low protocol overhead, or low-latency point lookups. For frontends, developer tools, scripts, dynamic-language clients, or queries that join multiple resource types in a single request, consider [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) first. Both gRPC and GraphQL support filtered queries over historical transactions and events; gRPC additionally supports streaming subscriptions with the same filters.
 
 :::info Trust boundary
 
@@ -48,9 +83,9 @@ The following gRPC services are available on Sui. Protocol buffers define the gR
 | Service | `.proto` file | Purpose |
 | --- | --- | --- |
 | `TransactionExecutionService` | `sui/rpc/v2/transaction_execution_service.proto` | Submit and execute signed transactions on the Sui network. Wallets and apps use this service to send user actions to the network. |
-| `LedgerService` | `sui/rpc/v2/ledger_service.proto` | Look up specific checkpoints, transactions, objects, and more from the current state and recent history of the Sui network. History refers to the recent past, limited to what a full node retains. |
+| `LedgerService` | `sui/rpc/v2/ledger_service.proto` | Look up specific checkpoints, transactions, objects, and more from the current state and recent history of the Sui network. Also provides streaming list APIs (`ListCheckpoints`, `ListTransactions`, `ListEvents`) for paginated, filtered queries over a checkpoint range. History refers to the recent past, limited to what a full node retains. The [Archival Service](/develop/accessing-data/archival-store) implements the same `LedgerService` interface for long-term historical data beyond a full node's retention window. |
 | `StateService` | `sui/rpc/v2/state_service.proto` | Query up-to-date onchain data like balances, coin metadata, dynamic fields, or owned objects. It also supports dry-run simulations for transactions. |
-| `SubscriptionService` | `sui/rpc/v2/subscription_service.proto` | Stream live updates for checkpoints. Ideal for building reactive systems such as indexers, bots, and dashboards. See Subscriptions for streaming data. |
+| `SubscriptionService` | `sui/rpc/v2/subscription_service.proto` | Stream live updates for checkpoints, transactions, and events with server-side filtering. Use `SubscribeCheckpoints`, `SubscribeTransactions`, or `SubscribeEvents` to receive only the data matching your filters. Ideal for building reactive systems such as indexers, bots, and dashboards. See Subscriptions for streaming data. |
 | `MovePackageService` | `sui/rpc/v2/move_package_service.proto` | Access metadata and the content of Move packages deployed on the Sui network. Useful for tooling, analysis, and smart contract introspection. |
 | `SignatureVerificationService` | `sui/rpc/v2/signature_verification_service.proto` | Validate signatures outside transaction execution. Helps pre-verify payloads that might include [zkLogin](/sui-stack/zklogin-integration) or other signatures, simulate authentication, or build custom signing workflows. |
 | `NameService` | `sui/rpc/v2/name_service.proto` | Resolve human-readable SuiNS names to their underlying name records, and perform reverse lookups from Sui addresses back to linked names. |
@@ -65,9 +100,15 @@ If you were using the `v2beta2` `.proto` files previously, the latest definition
 
 ## Subscriptions for streaming data
 
-The `SubscriptionService` provides real-time streaming updates for onchain activity through gRPC server-side streaming APIs. For example, the `SubscribeCheckpoint` RPC lets you subscribe to the global stream of executed checkpoints. When a subscription is initialized, the stream begins at the latest checkpoint known to the server. Checkpoints are guaranteed to arrive in order and without gaps. This allows clients to track exactly which checkpoint they last processed.
+The `SubscriptionService` provides real-time streaming updates for onchain activity through gRPC server-side streaming APIs. 3 subscription RPCs are available:
 
-If the stream is interrupted due to client disconnect or network error, you can resume from the last known checkpoint using other APIs to backfill any missed data before resubscribing.
+- `SubscribeCheckpoints` streams finalized checkpoints, optionally filtered by a `TransactionFilter`. Use this when you need the full checkpoint structure, including all transactions and their events.
+- `SubscribeTransactions` streams individual executed transactions matching a `TransactionFilter`. Use this when you only need specific transactions (for example, those calling a particular Move function or affecting a specific address).
+- `SubscribeEvents` streams individual events matching an `EventFilter`. Use this when you only need specific events (for example, events of a particular Move type or emitted by a specific module).
+
+All subscriptions begin at the current tip of the chain as seen by the server. They do not support resumption from a prior checkpoint. Each streamed response includes a progress marker (a `cursor` for `SubscribeCheckpoints`, or a `Watermark` for `SubscribeTransactions` and `SubscribeEvents`), so your application can track how far along the chain the stream has reached.
+
+To combine historical and real-time data without gaps, open the subscription first, note the first progress marker (`cursor` or `Watermark`) in the stream, then backfill with the corresponding list API (`ListCheckpoints`, `ListTransactions`, or `ListEvents`) up to that point. The list APIs accept `start_checkpoint` and `end_checkpoint` bounds and return results as a server-side stream with cursor-based pagination through `QueryOptions`. Once the backfill is complete, begin consuming from the already-open subscription.
 
 Streaming APIs are useful for building indexers, dashboards, or bots that need to react to real-time Sui activity with minimal latency.
 
@@ -87,7 +128,7 @@ You can reuse the same gRPC `LedgerService` methods for this lookup, but you mus
 
 1. Generate client code from the official `.proto` definitions in [`sui-apis`](https://github.com/MystenLabs/sui-apis/tree/main/proto) to ensure compatibility and type safety.
 
-1. [Paginate](#pagination) carefully. Always check `next_page_token` and do not assume all data is returned at once.
+1. Paginate carefully. Always check `next_page_token` and do not assume all data is returned at once.
 
 1. Retry transient failures with [exponential backoff](https://en.wikipedia.org/wiki/Exponential_backoff), especially for streaming APIs or busy public nodes.
 

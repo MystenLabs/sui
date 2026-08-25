@@ -53,9 +53,8 @@ use sui_consistent_store::Synchronizer;
 use sui_consistent_store::restore_state;
 use sui_indexer_alt_framework as framework;
 use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_framework::ingestion::BoxedStreamingClient;
+use sui_indexer_alt_framework::ingestion::ArcStreamingClient;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
-use sui_indexer_alt_framework::ingestion::IngestionService;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
@@ -76,8 +75,7 @@ use crate::indexer::pruner::PrunerMetrics;
 /// underlying ingestion service. Surfaced as a constant so the
 /// prefix is consistent across the metrics built in [`Indexer::new`]
 /// and the ones the standalone-binary entry point builds when it
-/// constructs the [`IngestionClient`] / [`IngestionService`] from
-/// `ClientArgs`.
+/// constructs the [`IngestionClient`] from `ClientArgs`.
 pub const METRICS_PREFIX: &str = "rpc_store_indexer";
 
 /// The schema parameter the framework's `Store` / pipelines bind
@@ -257,7 +255,7 @@ impl Indexer {
         path: impl AsRef<Path>,
         indexer_args: IndexerArgs,
         ingestion_client: IngestionClient,
-        streaming_client: Option<BoxedStreamingClient>,
+        streaming_client: Option<ArcStreamingClient>,
         consistency_config: crate::config::ConsistencyConfig,
         pruner_config: Option<PrunerConfig>,
         ingestion_config: IngestionConfig,
@@ -291,7 +289,7 @@ impl Indexer {
         store: Store,
         indexer_args: IndexerArgs,
         ingestion_client: IngestionClient,
-        streaming_client: Option<BoxedStreamingClient>,
+        streaming_client: Option<ArcStreamingClient>,
         consistency_config: crate::config::ConsistencyConfig,
         pruner_config: Option<PrunerConfig>,
         ingestion_config: IngestionConfig,
@@ -299,33 +297,18 @@ impl Indexer {
     ) -> anyhow::Result<Self> {
         let metrics_prefix = Some(METRICS_PREFIX);
 
-        // Load the persisted pruning watermarks into the
-        // in-memory bitmap floor so the bitmap CFs' compaction
-        // filters resume against the on-disk watermark instead of
-        // the process-default zero (which would prune nothing).
-        store
-            .schema()
-            .refresh_pruning_atomics()
-            .context("Failed to refresh pruning watermarks")?;
-
         let sync = Synchronizer::new(
             store.db().clone(),
             consistency_config.buffer_size,
             indexer_args.first_checkpoint,
         );
 
-        let ingestion_metrics = ingestion_client.metrics().clone();
-        let ingestion_service = IngestionService::with_clients(
+        let indexer = framework::Indexer::with_ingestion_clients(
+            store,
+            indexer_args,
             ingestion_client,
             streaming_client,
             ingestion_config,
-            ingestion_metrics,
-        );
-
-        let indexer = framework::Indexer::with_ingestion_service(
-            store,
-            indexer_args,
-            ingestion_service,
             metrics_prefix,
             registry,
         )
@@ -553,9 +536,9 @@ impl Indexer {
             pruner: pruner_setup,
         } = self;
 
-        // Capture a `Db` handle for the pruner before `indexer.run`
-        // consumes the framework indexer (and with it the store).
-        let db = indexer.store().db().clone();
+        // Capture the store for the pruner before `indexer.run`
+        // consumes the framework indexer.
+        let store = indexer.store().clone();
 
         let mut sync_join_set = indexer
             .store()
@@ -581,7 +564,7 @@ impl Indexer {
         // configured: it advances the retention floor and deletes
         // history without extending the indexer's lifetime.
         if let Some((config, metrics)) = pruner_setup {
-            let s_pruner = pruner::start_pruner(db, config, metrics)
+            let s_pruner = pruner::start_pruner(store, config, metrics)
                 .context("Failed to start the rpc-store pruner")?;
             service = service.attach(s_pruner);
         }
@@ -659,7 +642,7 @@ mod tests {
     }
 
     /// `embedded` registers exactly the ten embedded-cohort
-    /// pipelines (four live + six history) and none of the
+    /// pipelines (three live + seven history) and none of the
     /// deactivated raw-chain-data ones, so the synchronizer's
     /// snapshot cohort covers exactly those. Pinned to the
     /// [`LIVE_COHORT`] / [`HISTORY_COHORT`] constants (via the real

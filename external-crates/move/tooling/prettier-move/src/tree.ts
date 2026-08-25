@@ -15,6 +15,12 @@ export class Tree {
     public type: string;
     public text: string;
     public isNamed: boolean;
+    /**
+     * Whether tree-sitter inserted this node to recover from a syntax error.
+     * Missing nodes carry the type of the expected token (e.g. `)`), so this
+     * flag is the only way to detect them.
+     */
+    public isMissing: boolean;
     public children: Tree[];
     public leadingComment: Comment[];
     public trailingComment: Comment | null;
@@ -54,6 +60,7 @@ export class Tree {
         this.type = node.type;
         this.text = node.text;
         this.isNamed = node.isNamed();
+        this.isMissing = node.isMissing();
         this.leadingComment = [];
         this.trailingComment = null;
         this.getParent = () => parent;
@@ -138,11 +145,14 @@ export class Tree {
      * A flag to skip formatting for a specific node. A manual instruction from
      * the user is `prettier-ignore`. When placed above (leading comment) a node,
      * it will skip formatting for that node.
+     *
+     * Only a comment that is exactly `// prettier-ignore` or
+     * `/* prettier-ignore *​/` counts — a comment merely mentioning
+     * `prettier-ignore` must not disable formatting.
      */
     get skipFormattingNode(): boolean {
-        return (
-            !!this.leadingComment.find((comment) => comment.text.includes('prettier-ignore')) ||
-            false
+        return this.leadingComment.some((comment) =>
+            /^(\/\/|\/\*)\s*prettier-ignore\s*(\*\/)?$/.test(comment.text.trim()),
         );
     }
 
@@ -208,12 +218,27 @@ export class Tree {
     }
 
     /**
+     * Whether this node or any of its descendants carries a comment (assigned
+     * as leading/trailing, or still present as a comment child).
+     */
+    get containsComments(): boolean {
+        return (
+            this.leadingComment.length > 0 ||
+            this.trailingComment !== null ||
+            this.children.some((child) => child.isComment || child.containsComments)
+        );
+    }
+
+    /**
      * Important part of the `imports-grouping` functionality. This flag is used to
      * determine whether a node is an `use_module`, `use_module_members` or
      * `use_module_member` node to skip their printing if they're printed as grouped.
+     *
+     * Imports with annotations or comments are excluded from grouping: grouping
+     * rebuilds imports from names only and cannot reproduce them.
      */
     get isGroupedImport(): boolean {
-        return isUseImport(this) && !this.hasAnnotation;
+        return isUseImport(this) && !this.hasAnnotation && !this.containsComments;
     }
 
     /**
@@ -391,7 +416,7 @@ export class Tree {
      * a trailing comment and a leading comment.
      */
     private assignLeadingComments(): Tree {
-        let comments = [];
+        let comments: Comment[] = [];
         let prev = this.previousNamedSibling;
         let newline = false;
 
@@ -403,32 +428,24 @@ export class Tree {
             prev = prev.previousNamedSibling;
         }
 
-        if (prev?.type == 'block_comment') {
-            if (prev.isUsedComment) return this;
-
+        // collect the whole run of comments above the node; `newline` tracks
+        // whether a line break separates a comment from whatever follows it,
+        // so inline block comments (`/* a */ /* b */ node`) stay inline
+        while (prev?.isComment && !prev.isUsedComment) {
             comments.unshift({
                 type: prev.type as 'line_comment' | 'block_comment',
                 text: prev.text,
-                newline,
+                newline: prev.type == 'line_comment' ? true : newline,
             });
 
             prev.isUsedComment = true;
-            this.leadingComment = comments;
-            return this;
-        }
+            prev = prev.previousNamedSibling;
 
-        while (prev?.isComment || (prev?.isNewline && !prev?.isUsedComment)) {
-            if (prev.isUsedComment) break;
-            if (prev.isComment) {
-                comments.unshift({
-                    type: prev.type as 'line_comment' | 'block_comment',
-                    text: prev.text,
-                    newline: true,
-                });
-                prev.isUsedComment = true;
+            newline = false;
+            while (prev?.isNewline) {
+                newline = true;
+                prev = prev.previousNamedSibling;
             }
-
-            prev = prev.previousNamedSibling; // move to the previous comment
         }
 
         this.leadingComment = comments;

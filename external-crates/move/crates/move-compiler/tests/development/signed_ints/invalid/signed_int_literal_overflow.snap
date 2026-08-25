@@ -5,7 +5,7 @@ info:
   edition: development
   lint: false
 ---
-error[E01006]: invalid number literal
+error[EC01006]: invalid number literal
   ┌─ tests/development/signed_ints/invalid/signed_int_literal_overflow.move:4:22
   │
 4 │         let _a: i8 = 128i8;

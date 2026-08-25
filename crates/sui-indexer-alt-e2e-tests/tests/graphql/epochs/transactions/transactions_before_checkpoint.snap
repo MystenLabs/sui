@@ -60,7 +60,7 @@ Response: {
       "transactions": {
         "edges": [
           {
-            "cursor": "MA==",
+            "cursor": "KAE6BAgAEAA=",
             "node": {
               "digest": "85r5mfnut7T1NNBmbL7RpGMf9caJe5VEnpiCJxkz7eDE",
               "effects": {
@@ -110,7 +110,7 @@ Response: {
       "transactions": {
         "edges": [
           {
-            "cursor": "Mw==",
+            "cursor": "KAE6BAgAEAM=",
             "node": {
               "digest": "FJDWwamR3EwoamNYsUgGBy9jSQY29WZR9fN8E8u2e7DC",
               "effects": {
@@ -124,7 +124,7 @@ Response: {
             }
           },
           {
-            "cursor": "NA==",
+            "cursor": "KAE6BAgAEAQ=",
             "node": {
               "digest": "HffXXSawkYwf8vkrjHiVwsWLUey2oKmw8q2nSqV7rAbG",
               "effects": {
@@ -138,7 +138,7 @@ Response: {
             }
           },
           {
-            "cursor": "NQ==",
+            "cursor": "KAE6BAgAEAU=",
             "node": {
               "digest": "5QdTEu1h7fuRih364SecoELKZ8BQvetNyZHhrGV8YF2i",
               "effects": {

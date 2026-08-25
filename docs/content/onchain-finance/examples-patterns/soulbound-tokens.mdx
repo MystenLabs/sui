@@ -1,7 +1,38 @@
 ---
 title: Soulbound NFTs
-description: Use Sui Move struct abilities and the Sui framework transfer module to make an NFT soulbound (non-transferable).
-keywords: [ERC-721, NFT, soulbound]
+description: >-
+  Use Sui Move struct abilities and the Sui framework transfer module to make an
+  NFT soulbound (non-transferable).
+keywords:
+  - ERC-721
+  - NFT
+  - soulbound
+goal:
+  description: >-
+    Reader can use Sui Move struct abilities and the Sui framework transfer
+    module to make an NFT soulbound (non-transferable)
+  requires:
+    - pattern: '```'
+      min: 1
+      label: Has at least one code example
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 200
+      label: Has enough content to explain the pattern
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Soulbound NFTs in Sui?
+  - How does soulbound nfts work on Sui?
+  - Why should I use soulbound nfts?
+answer: >-
+  Use Sui Move struct abilities and the Sui framework transfer module to make an
+  NFT soulbound (non-transferable).
 ---
 
 A soulbound non-fungible token (NFT) is an NFT that is non-transferable. After an NFT is minted to a Sui account, the NFT is bound to that account and cannot be transferred. This implementation uses the custom logic of the Sui framework `transfer` functions. The <UnsafeLink href="/references/framework/sui-framework/sui_sui/transfer">`sui::transfer` module</UnsafeLink> contains 2 functions that transfer objects: <UnsafeLink href="/references/framework/sui-framework/sui_sui/transfer#function-transfer">`transfer::transfer`</UnsafeLink> and <UnsafeLink href="/references/framework/sui-framework/sui_sui/transfer#function-public_transfer">`transfer::public_transfer`</UnsafeLink>.
@@ -19,5 +50,21 @@ The `TestnetSoulboundNFT` struct has the `key` ability but not the `store` abili
 This example also shows how to provide custom transfer logic using the `transfer::transfer` function. This is where you can add additional logic, such as resetting the NFT stats or requiring a payment. Do not provide this functionality if the NFT is fully soulbound:
 
 <ImportContent source="examples/move/nft-soulbound/sources/testnet_soulbound_nft.move" mode="code" fun="transfer" />
+
+## What happens when you try to transfer a soulbound NFT
+
+If a user tries to transfer a soulbound NFT using `transfer::public_transfer`, the transaction aborts with an error because the object lacks the `store` ability. The Move bytecode verifier rejects the call at compile time if you try to use `public_transfer` on a type without `store`. If you attempt the transfer through a [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks), the transaction fails during execution.
+
+## Verify soulbound status
+
+To check whether an NFT is soulbound, query the object's type and inspect its abilities. A struct with `key` but without `store` is soulbound (cannot be publicly transferred). You can verify this through the [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) by querying the object's type information, or by inspecting the Move source code for the type definition.
+
+## Design considerations
+
+When you design soulbound NFTs, consider the following:
+
+- **Object wrapping does not bypass soulbound restrictions.** A type without `store` cannot be wrapped inside another object. The Move type system enforces this at compile time ([Security Best Practices](/develop/security/best-practices)).
+- **Custom transfer logic must be deliberate.** If you include a `transfer::transfer` call in your module, you are providing a way to move the NFT. Only include custom transfer logic if your use case requires controlled transfers (for example, resetting stats or requiring a payment). Omit it entirely for fully soulbound NFTs.
+- **Module upgrades can add transfer functions.** If your package is upgradeable, a future upgrade could add a transfer function. To guarantee permanent soulbound behavior, burn the `UpgradeCap` or apply a restrictive upgrade policy after publication ([Security Best Practices](/develop/security/best-practices)).
 
 [View the full example on GitHub](https://github.com/MystenLabs/sui/tree/main/examples/move/nft-soulbound/sources/testnet_soulbound_nft.move).

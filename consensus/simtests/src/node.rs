@@ -14,7 +14,8 @@ use consensus_config::{
 };
 use consensus_core::{
     Clock, CommitConsumerArgs, CommitConsumerMonitor, CommittedSubDag, ConsensusAuthority,
-    NetworkType, TransactionClient, TransactionVerifier, to_socket_addr,
+    NetworkType, TransactionClient, TransactionVerifier, storage::rocksdb_store::RocksDBStore,
+    to_socket_addr,
 };
 use consensus_types::block::BlockTimestampMs;
 use mysten_metrics::monitored_mpsc::UnboundedReceiver;
@@ -32,6 +33,7 @@ pub struct Config {
     pub db_dir: Arc<TempDir>,
     pub committee: Committee,
     pub keypairs: Vec<(NetworkKeyPair, ProtocolKeyPair)>,
+    /// Boot counter for the simulator process. Each new process uses this value.
     pub boot_counter: u64,
     pub clock_drift: BlockTimestampMs,
     pub protocol_config: ConsensusProtocolConfig,
@@ -65,15 +67,40 @@ impl AuthorityNode {
 
     /// Start this Node
     pub async fn start(&self) -> Result<()> {
-        let node_type = if self.config.observer_network_keypair.is_some() {
+        self.start_with_config(self.config.clone()).await
+    }
+
+    /// Start this Node with an empty store.
+    ///
+    /// The empty store applies only to the process that this call starts.
+    pub async fn start_with_empty_store(&self) -> Result<()> {
+        let db_dir = Arc::new(TempDir::new()?);
+        let mut config = self.config.clone();
+        config.parameters.db_path = db_dir.path().to_path_buf();
+        config.db_dir = db_dir;
+        self.start_with_config(config).await
+    }
+
+    async fn start_with_config(&self, config: Config) -> Result<()> {
+        let node_type = if config.observer_network_keypair.is_some() {
             "Observer"
         } else {
             "Validator"
         };
-        info!(index = %self.config.authority_index, node_type = node_type, "starting in-memory node");
-        let config = self.config.clone();
+        info!(index = %config.authority_index, node_type = node_type, "starting in-memory node");
+        // Each start creates a new simulator process. The boot counter is
+        // process-local, so use the configured value for each new process.
         *self.inner.lock() = Some(AuthorityNodeInner::spawn(config).await);
         Ok(())
+    }
+
+    /// Return the simulator node ID for the running authority.
+    pub fn sim_node_id(&self) -> sui_simulator::task::NodeId {
+        self.inner
+            .lock()
+            .as_ref()
+            .expect("Node not initialised")
+            .node_id()
     }
 
     pub fn spawn_committed_subdag_consumer(&self) -> Result<()> {
@@ -126,15 +153,35 @@ impl AuthorityNode {
         }
     }
 
+    pub fn store(&self) -> Arc<RocksDBStore> {
+        let inner = self.inner.lock();
+        if let Some(inner) = inner.as_ref() {
+            inner.store()
+        } else {
+            panic!("Node not initialised");
+        }
+    }
+
+    pub fn transaction_client_if_running(&self) -> Option<Arc<TransactionClient>> {
+        let inner = self.inner.lock();
+        inner
+            .as_ref()
+            .filter(|inner| inner.is_alive())
+            .map(AuthorityNodeInner::transaction_client)
+    }
+
     /// Stop this Node
-    pub fn stop(&self) {
+    pub async fn stop(&self) {
         let node_type = if self.config.observer_network_keypair.is_some() {
             "Observer"
         } else {
             "Validator"
         };
         info!(index =% self.config.authority_index, node_type = node_type, "stopping in-memory node");
-        *self.inner.lock() = None;
+        let inner = self.inner.lock().take();
+        if let Some(inner) = inner {
+            inner.stop().await;
+        }
         info!(index =% self.config.authority_index, node_type = node_type, "node stopped");
     }
 
@@ -147,7 +194,7 @@ impl AuthorityNode {
 pub(crate) struct AuthorityNodeInner {
     handle: Option<NodeHandle>,
     cancel_sender: Option<tokio::sync::watch::Sender<bool>>,
-    consensus_authority: ConsensusAuthority,
+    consensus_authority: Option<ConsensusAuthority>,
     commit_receiver: ArcSwapOption<UnboundedReceiver<CommittedSubDag>>,
     commit_consumer_monitor: Arc<CommitConsumerMonitor>,
 }
@@ -168,6 +215,19 @@ impl Drop for AuthorityNodeInner {
 }
 
 impl AuthorityNodeInner {
+    fn node_id(&self) -> sui_simulator::task::NodeId {
+        self.handle.as_ref().expect("Node handle missing").node_id
+    }
+
+    async fn stop(mut self) {
+        if let Some(cancel_sender) = self.cancel_sender.take() {
+            cancel_sender.send(true).ok();
+        }
+        if let Some(consensus_authority) = self.consensus_authority.take() {
+            consensus_authority.stop().await;
+        }
+    }
+
     /// Spawn a new Node.
     pub async fn spawn(config: Config) -> Self {
         let (startup_sender, mut startup_receiver) = tokio::sync::watch::channel(false);
@@ -249,7 +309,7 @@ impl AuthorityNodeInner {
         Self {
             handle: Some(NodeHandle { node_id: node.id() }),
             cancel_sender: Some(cancel_sender),
-            consensus_authority,
+            consensus_authority: Some(consensus_authority),
             commit_receiver: ArcSwapOption::new(Some(Arc::new(commit_receiver))),
             commit_consumer_monitor,
         }
@@ -285,7 +345,17 @@ impl AuthorityNodeInner {
     }
 
     pub fn transaction_client(&self) -> Arc<TransactionClient> {
-        self.consensus_authority.transaction_client()
+        self.consensus_authority
+            .as_ref()
+            .expect("Consensus authority missing")
+            .transaction_client()
+    }
+
+    pub fn store(&self) -> Arc<RocksDBStore> {
+        self.consensus_authority
+            .as_ref()
+            .expect("Consensus authority missing")
+            .store()
     }
 }
 
@@ -337,6 +407,7 @@ pub(crate) async fn make_authority(
         network_keypair,
         Arc::new(Clock::new_for_test(clock_drift)),
         transaction_verifier,
+        None,
         commit_consumer,
         registry,
         boot_counter,

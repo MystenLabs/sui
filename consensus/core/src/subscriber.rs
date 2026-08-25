@@ -1,14 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Weak},
+    time::Duration,
+};
 
 use consensus_config::AuthorityIndex;
 use consensus_types::block::Round;
 use futures::StreamExt;
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::{Mutex, RwLock};
-use tokio::{task::JoinHandle, time::sleep};
+use tokio::{
+    task::JoinHandle,
+    time::{sleep, timeout},
+};
 use tracing::{debug, error, info};
 
 use crate::{
@@ -16,8 +22,19 @@ use crate::{
     context::Context,
     dag_state::DagState,
     error::ConsensusError,
-    network::{ValidatorNetworkClient, ValidatorNetworkService},
+    network::{SerializedBlockForm, ValidatorNetworkClient, ValidatorNetworkService},
+    task::{join_and_propagate_panic, reap_finished_task},
 };
+
+/// Bounds both establishing a subscription and waiting for the next block on it, so the
+/// subscription is abandoned and retried when either makes no progress for this long. A healthy
+/// peer proposes blocks multiple times per second, and (re)subscribing to a peer that has proposed
+/// before immediately yields at least its last proposed block, so timeouts and reconnections stay
+/// rare unless the peer is not proposing. This primarily guards against subscriptions that stop
+/// making progress without surfacing a transport error, e.g. a peer whose runtime stalls while its
+/// connections stay open. Kept well above the expected gap between proposals, because a peer that
+/// is reachable but not proposing gets resubscribed to on every timeout.
+const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Subscriber manages the block stream subscriptions to other peers, taking care of retrying
 /// when subscription streams break. Blocks returned from the peer are sent to the authority
@@ -30,6 +47,8 @@ pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkServi
     authority_service: Arc<S>,
     dag_state: Arc<RwLock<DagState>>,
     subscriptions: Arc<Mutex<Box<[Option<JoinHandle<()>>]>>>,
+    // Retain replaced subscription tasks so stop() can await them and propagate panics.
+    retired_subscriptions: Arc<Mutex<Vec<JoinHandle<()>>>>,
 }
 
 impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
@@ -48,6 +67,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             authority_service,
             dag_state,
             subscriptions: Arc::new(Mutex::new(subscriptions.into_boxed_slice())),
+            retired_subscriptions: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -58,24 +78,10 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         }
         let context = self.context.clone();
         let network_client = self.network_client.clone();
-        let authority_service = self.authority_service.clone();
-        let (mut last_received, gc_round) = {
-            let dag_state = self.dag_state.read();
-            (
-                dag_state.get_last_block_for_authority(peer).round(),
-                dag_state.gc_round(),
-            )
-        };
-
-        // If the latest block we have accepted by an authority is older than the current gc round,
-        // then do not attempt to fetch any blocks from that point as they will simply be skipped. Instead
-        // do attempt to fetch from the gc round.
-        if last_received < gc_round {
-            info!(
-                "Last received block for peer {peer} is older than GC round, {last_received} < {gc_round}, fetching from GC round"
-            );
-            last_received = gc_round;
-        }
+        // Subscriber already holds these resources strongly. Give subscription tasks weak
+        // references so they do not become additional owners during shutdown.
+        let authority_service = Arc::downgrade(&self.authority_service);
+        let dag_state = Arc::downgrade(&self.dag_state);
 
         let mut subscriptions = self.subscriptions.lock();
         self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
@@ -83,15 +89,23 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             context,
             network_client,
             authority_service,
+            dag_state,
             peer,
-            last_received,
         )));
     }
 
-    pub(crate) fn stop(&self) {
-        let mut subscriptions = self.subscriptions.lock();
-        for (peer, _) in self.context.committee.authorities() {
-            self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
+    pub(crate) async fn stop(&self) {
+        {
+            let mut subscriptions = self.subscriptions.lock();
+            for (peer, _) in self.context.committee.authorities() {
+                self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
+            }
+        }
+
+        // All retired subscriptions have already been aborted by unsubscribe_locked().
+        let subscriptions = std::mem::take(&mut *self.retired_subscriptions.lock());
+        for subscription in subscriptions {
+            join_and_propagate_panic(subscription).await;
         }
     }
 
@@ -99,6 +113,11 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let peer_hostname = &self.context.committee.authority(peer).hostname;
         if let Some(subscription) = subscription.take() {
             subscription.abort();
+            let mut retired_subscriptions = self.retired_subscriptions.lock();
+            // Reap retired subscriptions that have finished, so the list stays bounded under
+            // repeated resubscriptions.
+            retired_subscriptions.retain_mut(|task| !reap_finished_task(task));
+            retired_subscriptions.push(subscription);
         }
         // There is a race between shutting down the subscription task and clearing the metric here.
         // TODO: fix the race when unsubscribe_locked() gets called outside of stop().
@@ -113,9 +132,9 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
     async fn subscription_loop(
         context: Arc<Context>,
         network_client: Arc<C>,
-        authority_service: Arc<S>,
+        authority_service: Weak<S>,
+        dag_state: Weak<RwLock<DagState>>,
         peer: AuthorityIndex,
-        last_received: Round,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
         const MIN_TIMEOUT: Duration = Duration::from_millis(500);
@@ -151,13 +170,32 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             }
             retries += 1;
 
+            let last_accepted: Round = {
+                let Some(dag_state) = dag_state.upgrade() else {
+                    return;
+                };
+                let dag_state = dag_state.read();
+                let gc_round = dag_state.gc_round();
+                dag_state
+                    .get_last_block_for_authority(peer)
+                    .round()
+                    .max(gc_round)
+            };
+
             // Use longer timeout when retry delay is long, to adapt to slow network.
             let request_timeout = MIN_TIMEOUT.max(delay);
-            let mut blocks = match network_client
-                .subscribe_blocks(peer, last_received, request_timeout)
-                .await
-            {
-                Ok(blocks) => {
+            // `request_timeout` only bounds acquiring the channel, and the channel is usually
+            // cached, so establishing the stream can otherwise block indefinitely waiting for the
+            // peer's response headers, e.g. when the peer accepts connections but its runtime is
+            // stalled. Bound it here rather than with a gRPC deadline on the request, which would
+            // cap the lifetime of the whole subscription.
+            let subscribe = timeout(
+                SUBSCRIPTION_TIMEOUT,
+                network_client.subscribe_blocks(peer, last_accepted, request_timeout),
+            )
+            .await;
+            let mut blocks = match subscribe {
+                Ok(Ok(blocks)) => {
                     debug!(
                         "Subscribed to peer {} {} after {} attempts",
                         peer, peer_hostname, retries
@@ -170,10 +208,23 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                         .inc();
                     blocks
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     debug!(
                         "Failed to subscribe to blocks from peer {} {}: {}",
                         peer, peer_hostname, e
+                    );
+                    context
+                        .metrics
+                        .node_metrics
+                        .subscriber_connection_attempts
+                        .with_label_values(&[peer_hostname.as_str(), "failure"])
+                        .inc();
+                    continue 'subscription;
+                }
+                Err(_) => {
+                    debug!(
+                        "Timed out subscribing to blocks from peer {} {} after {:?}",
+                        peer, peer_hostname, SUBSCRIPTION_TIMEOUT
                     );
                     context
                         .metrics
@@ -194,14 +245,34 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                 .set(1);
 
             'stream: loop {
-                match blocks.next().await {
-                    Some(block) => {
+                match timeout(SUBSCRIPTION_TIMEOUT, blocks.next()).await {
+                    Ok(Some(block)) => {
                         context
                             .metrics
                             .node_metrics
                             .subscribed_blocks
                             .with_label_values(&[peer_hostname])
                             .inc();
+                        let Some(authority_service) = authority_service.upgrade() else {
+                            return;
+                        };
+                        // Nothing emits the slim form yet; the decoder that turns it
+                        // back into a full block lands with the codec. Until then a
+                        // slim payload can only come from a misbehaving peer: drop it
+                        // here rather than hand downstream a form it cannot parse.
+                        if matches!(block.block, SerializedBlockForm::Slim(_)) {
+                            let reason: &'static str =
+                                (&ConsensusError::UnexpectedBlockForm).into();
+                            context
+                                .metrics
+                                .node_metrics
+                                .subscribe_stream_form_failures
+                                .with_label_values(&[peer_hostname, reason])
+                                .inc();
+                            retries = 0;
+                            backoff.reset();
+                            continue 'stream;
+                        }
                         let result = authority_service.handle_send_block(peer, block).await;
                         if let Err(e) = result {
                             match e {
@@ -219,13 +290,24 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                 }
                             }
                         }
-                        // Reset retries when a block is received.
+                        // Reset the retry counter and backoff when a block is received, so a peer
+                        // that recovers after flapping reconnects promptly instead of inheriting
+                        // the previously escalated delay.
                         retries = 0;
+                        backoff.reset();
                     }
-                    None => {
+                    Ok(None) => {
                         debug!(
                             "Subscription to blocks from peer {} {} ended",
                             peer, peer_hostname
+                        );
+                        retries += 1;
+                        break 'stream;
+                    }
+                    Err(_) => {
+                        info!(
+                            "Subscription to blocks from peer {} {} made no progress for {:?}",
+                            peer, peer_hostname, SUBSCRIPTION_TIMEOUT
                         );
                         retries += 1;
                         break 'stream;
@@ -252,11 +334,51 @@ mod test {
         storage::mem_store::MemStore,
     };
 
-    struct SubscriberTestClient {}
+    struct SubscriberTestClient {
+        // Records the `last_received` round passed to each subscribe_blocks() call.
+        subscribe_calls: Mutex<Vec<Round>>,
+        // Interval between blocks on the returned stream. None keeps the stream open
+        // forever without yielding any block.
+        block_interval: Option<Duration>,
+        // When true, subscribe_blocks() itself never returns.
+        hang_on_subscribe: bool,
+        emit_slim: bool,
+    }
 
     impl SubscriberTestClient {
         fn new() -> Self {
-            Self {}
+            Self::new_with_block_interval(Duration::from_millis(1))
+        }
+
+        fn new_pending() -> Self {
+            Self {
+                subscribe_calls: Mutex::new(Vec::new()),
+                block_interval: None,
+                hang_on_subscribe: false,
+                emit_slim: false,
+            }
+        }
+
+        fn new_with_block_interval(interval: Duration) -> Self {
+            Self {
+                subscribe_calls: Mutex::new(Vec::new()),
+                block_interval: Some(interval),
+                hang_on_subscribe: false,
+                emit_slim: false,
+            }
+        }
+
+        fn new_hanging_subscribe() -> Self {
+            Self {
+                subscribe_calls: Mutex::new(Vec::new()),
+                block_interval: None,
+                hang_on_subscribe: true,
+                emit_slim: false,
+            }
+        }
+
+        fn subscribe_calls(&self) -> Vec<Round> {
+            self.subscribe_calls.lock().clone()
         }
     }
 
@@ -274,16 +396,33 @@ mod test {
         async fn subscribe_blocks(
             &self,
             _peer: AuthorityIndex,
-            _last_received: Round,
+            last_received: Round,
             _timeout: Duration,
         ) -> ConsensusResult<BlockStream> {
-            let block_stream = stream::unfold((), |_| async {
-                sleep(Duration::from_millis(1)).await;
-                let block = ExtendedSerializedBlock {
-                    block: Bytes::from(vec![1u8; 8]),
-                    excluded_ancestors: vec![],
+            self.subscribe_calls.lock().push(last_received);
+            if self.hang_on_subscribe {
+                std::future::pending::<()>().await;
+            }
+            let Some(interval) = self.block_interval else {
+                return Ok(Box::pin(stream::pending()));
+            };
+            let emit_slim = self.emit_slim;
+            let block_stream = stream::unfold(0u8, move |i| async move {
+                sleep(interval).await;
+                // With emit_slim set, every other payload is the slim form, which the
+                // subscriber must drop without delivering.
+                let block = if emit_slim && i % 2 == 0 {
+                    ExtendedSerializedBlock {
+                        block: SerializedBlockForm::Slim(Bytes::from(vec![2u8; 8])),
+                        excluded_ancestors: vec![],
+                    }
+                } else {
+                    ExtendedSerializedBlock {
+                        block: SerializedBlockForm::Full(Bytes::from(vec![1u8; 8])),
+                        excluded_ancestors: vec![],
+                    }
                 };
-                Some((block, ()))
+                Some((block, i.wrapping_add(1)))
             })
             .take(10);
             Ok(Box::pin(block_stream))
@@ -363,10 +502,212 @@ mod test {
             assert_eq!(
                 *block,
                 ExtendedSerializedBlock {
-                    block: Bytes::from(vec![1u8; 8]),
-                    excluded_ancestors: vec![]
+                    block: SerializedBlockForm::Full(Bytes::from(vec![1u8; 8])),
+                    excluded_ancestors: vec![],
                 }
             );
         }
+    }
+
+    /// Slim payloads are dropped at the subscriber: nothing can decode them until the
+    /// codec lands, so they must never reach the authority service, while full payloads
+    /// on the same stream keep flowing.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn subscriber_drops_slim_payloads_without_delivering() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let network_client = Arc::new(SubscriberTestClient {
+            subscribe_calls: Mutex::new(Vec::new()),
+            block_interval: Some(Duration::from_millis(1)),
+            hang_on_subscribe: false,
+            emit_slim: true,
+        });
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client,
+            authority_service.clone(),
+            dag_state,
+        );
+
+        let peer = context.committee.to_authority_index(2).unwrap();
+        subscriber.subscribe(peer);
+
+        for _ in 0..10 {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            if authority_service.lock().handle_send_block.len() >= 20 {
+                break;
+            }
+        }
+
+        let service = authority_service.lock();
+        assert!(!service.handle_send_block.is_empty());
+        for (_, block) in service.handle_send_block.iter() {
+            assert!(
+                matches!(block.block, SerializedBlockForm::Full(_)),
+                "a slim payload must never be delivered"
+            );
+        }
+        assert!(
+            context
+                .metrics
+                .node_metrics
+                .subscribe_stream_form_failures
+                .with_label_values(&[
+                    context.committee.authority(peer).hostname.as_str(),
+                    "UnexpectedBlockForm",
+                ])
+                .get()
+                > 0,
+            "dropped slim payloads must be counted"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn subscriber_reconnects_when_stream_makes_no_progress() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let network_client = Arc::new(SubscriberTestClient::new_pending());
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client.clone(),
+            authority_service,
+            dag_state,
+        );
+
+        let peer = context.committee.to_authority_index(2).unwrap();
+        subscriber.subscribe(peer);
+
+        tokio::time::sleep(SUBSCRIPTION_TIMEOUT + Duration::from_millis(1)).await;
+
+        assert!(
+            network_client.subscribe_calls().len() >= 2,
+            "an idle subscription should be re-established"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn subscriber_retries_when_subscribing_makes_no_progress() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        // The peer accepts the subscription but never responds, so the request to establish the
+        // stream never completes.
+        let network_client = Arc::new(SubscriberTestClient::new_hanging_subscribe());
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client.clone(),
+            authority_service,
+            dag_state,
+        );
+
+        let peer = context.committee.to_authority_index(2).unwrap();
+        subscriber.subscribe(peer);
+
+        tokio::time::sleep(SUBSCRIPTION_TIMEOUT + Duration::from_millis(1)).await;
+
+        assert!(
+            network_client.subscribe_calls().len() >= 2,
+            "subscribing should be abandoned and retried when the peer never responds"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn subscriber_stays_subscribed_when_stream_progresses_within_idle_timeout() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        // Blocks arrive slower than from a healthy peer but within the idle timeout, so the
+        // timeout must reset on every received block and never tear down the subscription.
+        let network_client = Arc::new(SubscriberTestClient::new_with_block_interval(
+            SUBSCRIPTION_TIMEOUT - Duration::from_secs(1),
+        ));
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            dag_state,
+        );
+
+        let peer = context.committee.to_authority_index(2).unwrap();
+        subscriber.subscribe(peer);
+
+        tokio::time::sleep(SUBSCRIPTION_TIMEOUT * 4).await;
+
+        assert_eq!(
+            network_client.subscribe_calls().len(),
+            1,
+            "a stream that keeps delivering blocks within the idle timeout should not be re-established"
+        );
+        assert!(
+            !authority_service.lock().handle_send_block.is_empty(),
+            "blocks from the slow stream should have been processed"
+        );
+    }
+
+    // Regression test: `last_received` must be recomputed from DagState before each connection
+    // attempt. Previously it was captured once at subscribe() time and reused for every reconnect,
+    // causing already-accepted blocks to be re-streamed and re-verified.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn subscriber_recomputes_resume_round_on_reconnect() {
+        use crate::block::TestBlock;
+
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let network_client = Arc::new(SubscriberTestClient::new());
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client.clone(),
+            authority_service,
+            dag_state.clone(),
+        );
+
+        let peer = context.committee.to_authority_index(2).unwrap();
+        subscriber.subscribe(peer);
+
+        // Before any block from the peer is accepted, every reconnect resumes from genesis (0).
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        {
+            let recorded = network_client.subscribe_calls();
+            assert!(
+                !recorded.is_empty() && recorded.iter().all(|&r| r == 0),
+                "before a block is accepted, every reconnect should resume from round 0: {recorded:?}"
+            );
+        }
+
+        // Advance the locally accepted round for the peer.
+        const RESUME_ROUND: Round = 10;
+        dag_state.write().accept_block(VerifiedBlock::new_for_test(
+            TestBlock::new(RESUME_ROUND, peer.value() as u32).build(),
+        ));
+
+        // After the block is accepted, reconnects must resume from the advanced round. With the
+        // bug, `last_received` would stay at 0 forever.
+        let mut observed_resume = false;
+        for _ in 0..10 {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            if network_client.subscribe_calls().last() == Some(&RESUME_ROUND) {
+                observed_resume = true;
+                break;
+            }
+        }
+        assert!(
+            observed_resume,
+            "after accepting a block at round {RESUME_ROUND}, the subscriber should resume from it; \
+             recorded resume rounds: {:?}",
+            network_client.subscribe_calls()
+        );
     }
 }

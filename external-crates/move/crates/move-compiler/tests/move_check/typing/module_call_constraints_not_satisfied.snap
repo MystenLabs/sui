@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:28:9
    │
  3 │     struct Coin has key {}
@@ -20,7 +20,7 @@ error[E05001]: ability constraint not satisfied
    │         │         The type '0x8675309::M::Coin' does not have the ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:28:9
    │
  2 │     struct S has copy, drop {}
@@ -35,7 +35,7 @@ error[E05001]: ability constraint not satisfied
    │         │    The type '0x8675309::M::S' does not have the ability 'key'
    │         'key' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:29:9
    │
  3 │     struct Coin has key {}
@@ -50,7 +50,7 @@ error[E05001]: ability constraint not satisfied
    │         │          The type '0x8675309::M::Coin' does not have the ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:29:9
    │
 15 │     fun both<R: key, C: copy>(_r: R, _c: C) {
@@ -62,7 +62,7 @@ error[E05001]: ability constraint not satisfied
    │         │    The type 'u64' does not have the ability 'key'
    │         'key' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:33:9
    │
  7 │     fun new_box<T>(): Box<T> {
@@ -77,7 +77,7 @@ error[E05001]: ability constraint not satisfied
    │         │                          The type '0x8675309::M::Box<R>' can have the ability 'copy' but the type argument 'R' does not have the required ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:33:9
    │
  4 │     struct Box<T> has copy, drop { f: T }
@@ -92,7 +92,7 @@ error[E05001]: ability constraint not satisfied
 33 │         both(new_box<C>(), new_box<R>())
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 'key' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:37:9
    │
  5 │     struct Box3<T1, T2, T3> has copy, drop { f1: T1, f2: T2, f3: T3 }
@@ -107,7 +107,7 @@ error[E05001]: ability constraint not satisfied
 37 │         rsrc(new_box3<C, C, C>());
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ 'key' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:39:9
    │
 11 │     fun new_box3<T1, T2, T3>(): Box3<T1, T2, T3> {
@@ -122,7 +122,7 @@ error[E05001]: ability constraint not satisfied
    │         │            The type '0x8675309::M::Box3<R, C, C>' can have the ability 'copy' but the type argument 'R' does not have the required ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:40:9
    │
 11 │     fun new_box3<T1, T2, T3>(): Box3<T1, T2, T3> {
@@ -137,7 +137,7 @@ error[E05001]: ability constraint not satisfied
    │         │            The type '0x8675309::M::Box3<C, R, C>' can have the ability 'copy' but the type argument 'C' does not have the required ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:41:9
    │
 11 │     fun new_box3<T1, T2, T3>(): Box3<T1, T2, T3> {
@@ -152,7 +152,7 @@ error[E05001]: ability constraint not satisfied
    │         │            The type '0x8675309::M::Box3<C, C, R>' can have the ability 'copy' but the type argument 'C' does not have the required ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:43:9
    │
 11 │     fun new_box3<T1, T2, T3>(): Box3<T1, T2, T3> {
@@ -167,7 +167,7 @@ error[E05001]: ability constraint not satisfied
    │         │            The type '0x8675309::M::Box3<C, R, R>' can have the ability 'copy' but the type argument 'C' does not have the required ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:44:9
    │
 11 │     fun new_box3<T1, T2, T3>(): Box3<T1, T2, T3> {
@@ -182,7 +182,7 @@ error[E05001]: ability constraint not satisfied
    │         │            The type '0x8675309::M::Box3<R, C, R>' can have the ability 'copy' but the type argument 'R' does not have the required ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:45:9
    │
 11 │     fun new_box3<T1, T2, T3>(): Box3<T1, T2, T3> {
@@ -197,7 +197,7 @@ error[E05001]: ability constraint not satisfied
    │         │            The type '0x8675309::M::Box3<R, R, C>' can have the ability 'copy' but the type argument 'R' does not have the required ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:47:9
    │
 11 │     fun new_box3<T1, T2, T3>(): Box3<T1, T2, T3> {
@@ -212,7 +212,7 @@ error[E05001]: ability constraint not satisfied
    │         │            The type '0x8675309::M::Box3<R, R, R>' can have the ability 'copy' but the type argument 'R' does not have the required ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:51:9
    │
 11 │     fun new_box3<T1, T2, T3>(): Box3<T1, T2, T3> {
@@ -227,7 +227,7 @@ error[E05001]: ability constraint not satisfied
    │         │            The type '0x8675309::M::Box3<U, C, C>' can have the ability 'copy' but the type argument 'U' does not have the required ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:52:9
    │
 11 │     fun new_box3<T1, T2, T3>(): Box3<T1, T2, T3> {
@@ -242,7 +242,7 @@ error[E05001]: ability constraint not satisfied
    │         │            The type '0x8675309::M::Box3<C, U, C>' can have the ability 'copy' but the type argument 'C' does not have the required ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:53:9
    │
 11 │     fun new_box3<T1, T2, T3>(): Box3<T1, T2, T3> {
@@ -257,7 +257,7 @@ error[E05001]: ability constraint not satisfied
    │         │            The type '0x8675309::M::Box3<C, C, U>' can have the ability 'copy' but the type argument 'C' does not have the required ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:55:9
    │
 11 │     fun new_box3<T1, T2, T3>(): Box3<T1, T2, T3> {
@@ -272,7 +272,7 @@ error[E05001]: ability constraint not satisfied
    │         │            The type '0x8675309::M::Box3<C, U, U>' can have the ability 'copy' but the type argument 'C' does not have the required ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:56:9
    │
 11 │     fun new_box3<T1, T2, T3>(): Box3<T1, T2, T3> {
@@ -287,7 +287,7 @@ error[E05001]: ability constraint not satisfied
    │         │            The type '0x8675309::M::Box3<U, C, U>' can have the ability 'copy' but the type argument 'U' does not have the required ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:57:9
    │
 11 │     fun new_box3<T1, T2, T3>(): Box3<T1, T2, T3> {
@@ -302,7 +302,7 @@ error[E05001]: ability constraint not satisfied
    │         │            The type '0x8675309::M::Box3<U, U, C>' can have the ability 'copy' but the type argument 'U' does not have the required ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/module_call_constraints_not_satisfied.move:59:9
    │
 11 │     fun new_box3<T1, T2, T3>(): Box3<T1, T2, T3> {

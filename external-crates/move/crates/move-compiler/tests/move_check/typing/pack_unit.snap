@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
   ┌─ tests/move_check/typing/pack_unit.move:5:9
   │
 5 │         Box { f: () };

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/phantom_params_field_abilities_invalid.move:9:29
   │
 9 │     struct S1 has drop { a: HasDrop<NoAbilities, NoAbilities> }
@@ -15,7 +15,7 @@ error[E05001]: ability constraint not satisfied
   │                             Invalid field type. The struct was declared with the ability 'drop' so all fields require the ability 'drop'
   │                             The type '0x42::M::HasDrop<0x42::M::NoAbilities, 0x42::M::NoAbilities>' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_field_abilities_invalid.move:10:29
    │
 10 │     struct S2 has copy { a: HasCopy<NoAbilities, NoAbilities> }
@@ -25,7 +25,7 @@ error[E05001]: ability constraint not satisfied
    │                             Invalid field type. The struct was declared with the ability 'copy' so all fields require the ability 'copy'
    │                             The type '0x42::M::HasCopy<0x42::M::NoAbilities, 0x42::M::NoAbilities>' does not have the ability 'copy'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_field_abilities_invalid.move:11:30
    │
 11 │     struct S3 has store { a: HasStore<NoAbilities, NoAbilities> }
@@ -35,7 +35,7 @@ error[E05001]: ability constraint not satisfied
    │                              Invalid field type. The struct was declared with the ability 'store' so all fields require the ability 'store'
    │                              The type '0x42::M::HasStore<0x42::M::NoAbilities, 0x42::M::NoAbilities>' does not have the ability 'store'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_field_abilities_invalid.move:12:28
    │
 12 │     struct S4 has key { a: HasStore<NoAbilities, NoAbilities> }

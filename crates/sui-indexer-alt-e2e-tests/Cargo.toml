@@ -36,6 +36,7 @@ url.workspace = true
 zstd.workspace = true
 
 simulacrum.workspace = true
+sui-config.workspace = true
 sui-futures.workspace = true
 sui-indexer-alt.workspace = true
 sui-kv-rpc.workspace = true
@@ -84,6 +85,7 @@ sui-field-count.workspace = true
 sui-framework.workspace = true
 sui-json-rpc-types.workspace = true
 sui-macros.workspace = true
+sui-rpc-cursor.workspace = true
 sui-sdk.workspace = true
 sui-swarm-config.workspace = true
 sui-transactional-test-runner = { workspace = true, features = ["testing"] }

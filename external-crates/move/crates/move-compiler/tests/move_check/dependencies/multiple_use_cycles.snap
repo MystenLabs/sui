@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E02004]: invalid 'module' declaration
+error[EC02004]: invalid 'module' declaration
    ┌─ tests/move_check/dependencies/multiple_use_cycles.move:25:14
    │
 25 │     fun f(): 0x2::F::S { abort 0 }

@@ -1,0 +1,64 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 0, lines 4-32:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::enum_contains_vector_element'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::enum_contains_vector_element,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 17)],
+}
+
+task 1, lines 34-63:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::vector_contains_enum_field'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::vector_contains_enum_field,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 19)],
+}
+
+task 2, lines 65-89:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::nested_vector_element'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x4::nested_vector_element,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 19)],
+}
+
+task 3, lines 91-120:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000005::returned_inner_vector_element'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x5::returned_inner_vector_element,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 18)],
+}
+
+task 4, lines 122-148:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::swap_enum_with_field_borrow'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x6::swap_enum_with_field_borrow,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 15)],
+}
+
+task 5, lines 150-171:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000007::swap_vector_with_element_borrow'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x7::swap_vector_with_element_borrow,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 16)],
+}

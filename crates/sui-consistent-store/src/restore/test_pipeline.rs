@@ -84,14 +84,21 @@ pub(crate) struct ObjectVersionSchema {
 }
 
 impl Schema for ObjectVersionSchema {
-    fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
-        vec![CfDescriptor::new("versions", opts.options("versions"))]
-    }
-
-    fn open(db: &Db) -> Result<Self, OpenError> {
-        Ok(Self {
+    fn open(
+        path: &std::path::Path,
+        opts: &crate::CfOptionsResolver,
+        snapshot_capacity: usize,
+    ) -> Result<(Db, Self), OpenError> {
+        let db = Db::open_cfs(
+            path,
+            opts,
+            snapshot_capacity,
+            vec![CfDescriptor::new("versions", opts.options("versions"))],
+        )?;
+        let schema = Self {
             versions: DbMap::new(db.clone(), "versions")?,
-        })
+        };
+        Ok((db, schema))
     }
 }
 

@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:3:9
   │
 3 │ #[allow(ide_path_autocomplete)]
   │         ^^^^^^^^^^^^^^^^^^^^^ Unknown diagnostic filter 'ide_path_autocomplete'
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:14:24
    │
 14 │     public fun test_if(a: A) {
@@ -19,7 +19,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:16:5
    │
 16 │     }
@@ -28,7 +28,7 @@ error[E01002]: unexpected token
    │     Unexpected '}'
    │     Expected an identifier or a decimal number
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:18:5
    │
 18 │     public fun test_while() {
@@ -37,7 +37,7 @@ error[E01002]: unexpected token
    │     Unexpected 'public'
    │     Expected ';'
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:19:13
    │
 19 │         let n = (42u64 as u32);
@@ -45,7 +45,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:21:5
    │
 21 │     }
@@ -54,7 +54,7 @@ error[E01002]: unexpected token
    │     Unexpected '}'
    │     Expected an identifier or a decimal number
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:23:5
    │
 23 │     public fun test_match(n: u64) {
@@ -63,7 +63,7 @@ error[E01002]: unexpected token
    │     Unexpected 'public'
    │     Expected ';'
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:23:27
    │
 23 │     public fun test_match(n: u64) {
@@ -71,7 +71,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:25:5
    │
 25 │     }
@@ -80,7 +80,7 @@ error[E01002]: unexpected token
    │     Unexpected '}'
    │     Expected an identifier or a decimal number
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:28:1
    │
 28 │ 

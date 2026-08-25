@@ -8,12 +8,11 @@ use futures::stream::Stream;
 use mysten_common::debug_fatal;
 use std::sync::Arc;
 use sui_rpc::field::{FieldMask, FieldMaskUtil};
-use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as V2AlphaLedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2alpha::{
-    AffectedObjectFilter, EventFilter, EventLiteral, EventPredicate, EventStreamHeadFilter,
-    EventTerm, ListEventsRequest, ListTransactionsRequest, QueryEndReason, QueryOptions,
-    TransactionFilter, TransactionLiteral, TransactionPredicate, TransactionTerm,
-    list_events_response, list_transactions_response,
+use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2::{
+    AffectedObjectFilter, EventFilter, EventLiteral, EventStreamHeadFilter, EventTerm,
+    ListEventsRequest, ListTransactionsRequest, QueryEndReason, QueryOptions, TransactionFilter,
+    TransactionLiteral, TransactionTerm,
 };
 use sui_types::accumulator_root::{EventCommitment, EventStreamHead};
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -25,7 +24,7 @@ struct EventStreamState {
     stream_object_id: ObjectID,
     /// Inclusive lower bound on the next ListEvents request. Bumped only
     /// when the server reports a final `QueryEndReason` (LedgerTip /
-    /// CheckpointBound / CursorBound / Unspecified) so the next request
+    /// CheckpointBound / CursorBound / Unknown) so the next request
     /// starts past the last fully-scanned checkpoint.
     next_checkpoint: u64,
     /// Opaque resume cursor within the current scan. Set when the server
@@ -74,22 +73,31 @@ impl EventStreamState {
         let mut new_events: Vec<AuthenticatedEvent> = Vec::new();
         let start_checkpoint = self.next_checkpoint;
 
-        let mut options = QueryOptions::default().with_limit_items(self.config.page_size);
+        let mut options = QueryOptions::default().with_limit(self.config.page_size);
         if let Some(cursor) = self.next_cursor.as_ref() {
             options.set_after(cursor.clone());
         }
-        // Request every field the in-tree `AuthenticatedEvent` converter
-        // needs. The server's default event read mask drops `contents`, so
-        // we ask for the full event explicitly.
-        let read_mask =
-            FieldMask::from_paths(["package_id", "module", "sender", "event_type", "contents"]);
+        // Request every field the in-tree `AuthenticatedEvent` converter needs:
+        // the event body plus its ledger-position fields (`checkpoint`,
+        // `transaction_index`, `event_index`), which the list endpoint only
+        // populates when the read mask asks for them.
+        let read_mask = FieldMask::from_paths([
+            "package_id",
+            "module",
+            "sender",
+            "event_type",
+            "contents",
+            "checkpoint",
+            "transaction_index",
+            "event_index",
+        ]);
         let request = ListEventsRequest::default()
             .with_read_mask(read_mask)
             .with_start_checkpoint(start_checkpoint)
             .with_filter(self.filter.clone())
             .with_options(options);
 
-        let mut ledger_service = self.client.ledger_service_v2alpha();
+        let mut ledger_service = self.client.ledger_service();
         let response = ledger_service
             .list_events(request)
             .await
@@ -101,22 +109,14 @@ impl EventStreamState {
 
         while let Some(frame) = stream.next().await {
             let frame = frame.map_err(ClientError::RpcError)?;
-            match frame.response {
-                Some(list_events_response::Response::Item(item)) => {
-                    if let Some(cursor) = item.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
-                        last_cursor = Some(cursor.to_vec());
-                    }
-                    new_events.push(item.try_into()?);
-                }
-                Some(list_events_response::Response::Watermark(w)) => {
-                    if let Some(cursor) = w.cursor.as_ref() {
-                        last_cursor = Some(cursor.to_vec());
-                    }
-                }
-                Some(list_events_response::Response::End(end)) => {
-                    end_reason = QueryEndReason::try_from(end.reason).ok();
-                }
-                Some(_) | None => {}
+            if let Some(cursor) = frame.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
+                last_cursor = Some(cursor.to_vec());
+            }
+            if let Some(event) = frame.event {
+                new_events.push(event.try_into()?);
+            }
+            if let Some(end) = frame.end {
+                end_reason = Some(end.reason());
             }
         }
 
@@ -224,7 +224,7 @@ impl EventStreamState {
             (Some(first), Some(last)) => (first.checkpoint, last.checkpoint),
             _ => (up_to_checkpoint, up_to_checkpoint),
         };
-        let mut ledger_service = self.client.ledger_service_v2alpha();
+        let mut ledger_service = self.client.ledger_service();
         let settlements = fetch_settlements_for_range(
             &mut ledger_service,
             self.stream_object_id,
@@ -374,21 +374,21 @@ impl EventStreamState {
 /// ascending — the same order the events stream uses, which lets
 /// downstream bucketing walk both with a single cursor.
 async fn fetch_settlements_for_range(
-    client: &mut V2AlphaLedgerServiceClient<Channel>,
+    client: &mut LedgerServiceClient<Channel>,
     stream_object_id: ObjectID,
     start_checkpoint: u64,
     end_checkpoint_exclusive: u64,
 ) -> Result<Vec<(u64, u64)>, ClientError> {
     let filter = build_affected_object_filter(stream_object_id);
-    // We only need `checkpoint` from the embedded transaction — the
-    // `transaction_offset` is a top-level field on every `TransactionItem`.
-    let read_mask = FieldMask::from_paths(["checkpoint"]);
+    // We need `checkpoint` and the `transaction_index` position field from each
+    // settlement transaction.
+    let read_mask = FieldMask::from_paths(["checkpoint", "transaction_index"]);
 
     let mut all: Vec<(u64, u64)> = Vec::new();
     let mut cursor: Option<Vec<u8>> = None;
 
     loop {
-        let mut options = QueryOptions::default().with_limit_items(1000);
+        let mut options = QueryOptions::default().with_limit(1000);
         if let Some(c) = cursor.clone() {
             options.set_after(c);
         }
@@ -412,36 +412,24 @@ async fn fetch_settlements_for_range(
 
         while let Some(frame) = response.next().await {
             let frame = frame.map_err(ClientError::RpcError)?;
-            match frame.response {
-                Some(list_transactions_response::Response::Item(item)) => {
-                    if let Some(c) = item.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
-                        last_cursor = Some(c.to_vec());
-                    }
-                    let checkpoint = item
-                        .transaction
-                        .as_ref()
-                        .and_then(|tx| tx.checkpoint)
-                        .ok_or_else(|| {
-                            ClientError::InternalError(
-                                "settlement transaction missing checkpoint".to_string(),
-                            )
-                        })?;
-                    let tx_offset = item.transaction_offset.ok_or_else(|| {
-                        ClientError::InternalError(
-                            "settlement transaction missing transaction_offset".to_string(),
-                        )
-                    })?;
-                    all.push((checkpoint, tx_offset));
-                }
-                Some(list_transactions_response::Response::Watermark(w)) => {
-                    if let Some(c) = w.cursor.as_ref() {
-                        last_cursor = Some(c.to_vec());
-                    }
-                }
-                Some(list_transactions_response::Response::End(end)) => {
-                    end_reason = QueryEndReason::try_from(end.reason).ok();
-                }
-                Some(_) | None => {}
+            if let Some(c) = frame.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
+                last_cursor = Some(c.to_vec());
+            }
+            if let Some(transaction) = frame.transaction {
+                let checkpoint = transaction.checkpoint.ok_or_else(|| {
+                    ClientError::InternalError(
+                        "settlement transaction missing checkpoint".to_string(),
+                    )
+                })?;
+                let tx_offset = transaction.transaction_index.ok_or_else(|| {
+                    ClientError::InternalError(
+                        "settlement transaction missing transaction_index".to_string(),
+                    )
+                })?;
+                all.push((checkpoint, tx_offset));
+            }
+            if let Some(end) = frame.end {
+                end_reason = Some(end.reason());
             }
         }
 
@@ -462,16 +450,14 @@ async fn fetch_settlements_for_range(
 
 fn build_affected_object_filter(object_id: ObjectID) -> TransactionFilter {
     let object_filter = AffectedObjectFilter::default().with_object_id(object_id.to_string());
-    let predicate = TransactionPredicate::default().with_affected_object(object_filter);
-    let literal = TransactionLiteral::default().with_include(predicate);
+    let literal = TransactionLiteral::default().with_affected_object(object_filter);
     let term = TransactionTerm::default().with_literals(vec![literal]);
     TransactionFilter::default().with_terms(vec![term])
 }
 
 fn build_event_stream_head_filter(stream_id: SuiAddress) -> EventFilter {
     let head_filter = EventStreamHeadFilter::default().with_stream_id(stream_id.to_string());
-    let predicate = EventPredicate::default().with_event_stream_head(head_filter);
-    let literal = EventLiteral::default().with_include(predicate);
+    let literal = EventLiteral::default().with_event_stream_head(head_filter);
     let term = EventTerm::default().with_literals(vec![literal]);
     EventFilter::default().with_terms(vec![term])
 }

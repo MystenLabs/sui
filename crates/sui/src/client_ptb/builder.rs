@@ -24,7 +24,7 @@ use move_core_types::{
     parsing::{
         address::{NumericalAddress, ParsedAddress},
         parser::NumberFormat,
-        types::{ParsedStructType, ParsedType},
+        types::{ParsedDatatype, ParsedType},
     },
 };
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
@@ -592,7 +592,7 @@ impl<'a> PTBBuilder<'a> {
         }
 
         let mut call_args = vec![];
-        for (param, arg) in parameters.iter().zip_debug_eq(args.into_iter()) {
+        for (param, arg) in parameters.iter().zip_debug_eq(args) {
             let call_arg = self
                 .resolve_move_call_arg(&module, ty_args, arg, param)
                 .await?;
@@ -1167,11 +1167,11 @@ pub fn is_mvr_name(name: &str) -> bool {
 
 pub fn into_struct_tag(
     addresses: &BTreeMap<String, AddressData>,
-    parsed_struct_type: ParsedStructType,
+    parsed_datatype: ParsedDatatype,
     mapping: &(impl Fn(&str) -> Option<AccountAddress> + std::marker::Sync),
 ) -> anyhow::Result<StructTag> {
-    let fq_name = parsed_struct_type.fq_name;
-    let type_args = parsed_struct_type.type_args;
+    let fq_name = parsed_datatype.fq_name;
+    let type_args = parsed_datatype.type_args;
 
     let address = match fq_name.module.address {
         ParsedAddress::Named(name) if is_mvr_name(&name) => {
@@ -1230,7 +1230,9 @@ pub fn into_type_tag(
         ParsedType::Vector(inner) => {
             TypeTag::Vector(Box::new(into_type_tag(addresses, *inner, mapping)?))
         }
-        ParsedType::Struct(s) => TypeTag::Struct(Box::new(into_struct_tag(addresses, s, mapping)?)),
+        ParsedType::Datatype(s) => {
+            TypeTag::Struct(Box::new(into_struct_tag(addresses, s, mapping)?))
+        }
     })
 }
 

@@ -3,9 +3,9 @@
 
 // Drop a `Continue(loop_label)` reachable from a loop body's tail. Walks the last item of
 // a `Seq`, both arms of an `IfElse`, every case of a `Switch`/`Match`, and through `Block`
-// wrappers — anywhere the implicit fall-through at the loop's true tail is itself
+// wrappers - anywhere the implicit fall-through at the loop's true tail is itself
 // iteration:
-// `loop { …; if (t) { …; continue } else { …; continue } }` => same loop without the continues
+// `loop { ...; if (t) { ...; continue } else { ...; continue } }` => same loop without the continues
 //
 // Preconditions:
 //   - The `Continue`'s label matches the enclosing loop's (label equality).
@@ -109,7 +109,7 @@ fn elide_tail_continue(exp: &mut Exp, label: Option<Label>) -> bool {
     }
 }
 
-/// Final-position `Continue` label, if any. Walks through `Seq.last` and `Block` only —
+/// Final-position `Continue` label, if any. Walks through `Seq.last` and `Block` only -
 /// doesn't descend into `IfElse`/`Switch` (those have multiple arms; an "ends in continue"
 /// answer at that level is per-arm).
 fn tail_continue_label(exp: &Exp) -> Option<Option<Label>> {
