@@ -113,7 +113,9 @@ fn cache_package_external_package_calls_no_types() {
 /// Generate a new, dummy cachce for testing.
 #[allow(dead_code)]
 fn dummy_cache_for_testing() -> MoveCache {
-    let config = Arc::new(VMConfig::default());
+    let config = Arc::new(VMConfig::new_for_test(
+        /* allow_unpublishable_code_execution */ false, None,
+    ));
     MoveCache::new(config)
 }
 

@@ -22,12 +22,12 @@ use std::{collections::BTreeMap, sync::Arc};
 /// into. The caller is responsible for filtering by the user pkg's linkage so we only
 /// direct-resolve into a system pkg the user explicitly links at the pinned version.
 pub fn translate_package(
-    _vm_config: &VMConfig,
+    vm_config: &VMConfig,
     interner: &IdentifierInterner,
     natives: &NativeFunctions,
     system_packages: &BTreeMap<OriginalId, Arc<CachedPackage>>,
     loaded_package: verification::ast::Package,
 ) -> PartialVMResult<Package> {
     let opt_package = to_optimized_form(loaded_package)?;
-    execution::translate::package(natives, interner, system_packages, opt_package)
+    execution::translate::package(vm_config, interner, natives, system_packages, opt_package)
 }

@@ -80,7 +80,7 @@ impl VMTestSetup for DefaultVMTestSetup {
     }
 
     fn vm_config(&self) -> VMConfig {
-        VMConfig::default()
+        VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None)
     }
 
     fn native_function_table(&self) -> NativeFunctionTable {

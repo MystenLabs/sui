@@ -42,6 +42,9 @@ pub struct Test {
     /// Bound the amount of gas used by any one test.
     #[clap(name = "gas-limit", short = 'i', long = "gas-limit")]
     pub gas_limit: Option<u64>,
+    /// Bound the maximum size of a loaded package (in MB).
+    #[clap(name = "package-size", long = "package-size")]
+    pub package_size: Option<u64>,
     /// An optional filter string to determine which unit tests to run. A unit test will be run only if it
     /// contains this string in its fully qualified (<addr>::<module_name>::<fn_name>) name.
     #[clap(name = "filter")]
@@ -115,6 +118,7 @@ impl Test {
     pub fn unit_test_config(self, default_execution_bound: Option<u64>) -> UnitTestingConfig {
         let Self {
             gas_limit,
+            package_size,
             filter,
             list,
             num_threads,
@@ -127,6 +131,7 @@ impl Test {
         } = self;
         UnitTestingConfig {
             gas_limit: gas_limit.or(default_execution_bound),
+            package_size,
             filter,
             list,
             num_threads,
