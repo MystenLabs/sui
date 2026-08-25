@@ -179,8 +179,12 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
                 ephemeral_file,
             } => {
                 let mut ephemeral_file = EphemeralPubfilePath::new(ephemeral_file)?;
-                let ephemeral =
-                    Self::load_ephemeral_pubfile(build_env, &config.chain_id, &mut ephemeral_file)?;
+                let ephemeral = Self::load_ephemeral_pubfile(
+                    &*config.flavor,
+                    build_env,
+                    &config.chain_id,
+                    &mut ephemeral_file,
+                )?;
                 (
                     Environment::new(ephemeral.build_env.clone(), config.chain_id.clone()),
                     Some(ephemeral),
@@ -308,6 +312,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Load ephemeral publications from `pubfile`, checking that they have the correct `chain-id`
     /// and `build-env`. If the file does not exist, a new file is created and returned
     fn load_ephemeral_pubfile(
+        flavor: &F,
         build_env: &Option<EnvironmentName>,
         chain_id: &EnvironmentID,
         pubfile: &mut EphemeralPubfilePath,
@@ -322,7 +327,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
                     passed_build_env: build_env.clone(),
                 });
             }
-            if *chain_id != parsed.chain_id {
+            if !flavor.environment_ids_match(chain_id, &parsed.chain_id) {
                 return Err(PackageError::EphemeralChainMismatch {
                     file,
                     file_chain_id: parsed.chain_id,

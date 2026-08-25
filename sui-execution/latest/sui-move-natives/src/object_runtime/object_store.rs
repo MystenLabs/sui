@@ -16,8 +16,9 @@ use sui_types::{
     error::VMMemoryLimitExceededSubStatusCode,
     execution::DynamicallyLoadedObjectMetadata,
     metrics::ExecutionMetrics,
+    move_package::MovePackage,
     object::{Data, MoveObject, Object, Owner},
-    storage::ChildObjectResolver,
+    storage::RuntimeObjectResolver,
 };
 
 pub(super) struct ChildObject {
@@ -67,7 +68,7 @@ pub(crate) type ChildObjectEffects = BTreeMap<ObjectID, ChildObjectEffect>;
 
 struct Inner<'a> {
     // used for loading child objects
-    resolver: &'a dyn ChildObjectResolver,
+    resolver: &'a dyn RuntimeObjectResolver,
     // The version of the root object in ownership at the beginning of the transaction.
     // If it was a child object, it resolves to the root parent's sequence number.
     // Otherwise, it is just the sequence number at the beginning of the transaction.
@@ -89,7 +90,7 @@ struct Inner<'a> {
 }
 
 // maintains the runtime GlobalValues for child objects and manages the fetching of objects
-// from storage, through the `ChildObjectResolver`
+// from storage, through the `RuntimeObjectResolver`
 pub(super) struct ChildObjectStore<'a> {
     // contains object resolver and object cache
     // kept as a separate struct to deal with lifetime issues where the `store` is accessed
@@ -210,7 +211,7 @@ impl Inner<'_> {
                 previous_transaction: object.previous_transaction,
             };
 
-            // `ChildObjectResolver::receive_object_at_version` should return the object at the
+            // `RuntimeObjectResolver::receive_object_at_version` should return the object at the
             // version or nothing at all. If it returns an object with a different version, we
             // should raise an invariant violation since it should be checked by
             // `receive_object_at_version`.
@@ -410,7 +411,7 @@ fn deserialize_move_object(
 
 impl<'a> ChildObjectStore<'a> {
     pub(super) fn new(
-        resolver: &'a dyn ChildObjectResolver,
+        resolver: &'a dyn RuntimeObjectResolver,
         root_version: BTreeMap<ObjectID, SequenceNumber>,
         wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
         is_metered: bool,
@@ -433,6 +434,30 @@ impl<'a> ChildObjectStore<'a> {
             config_setting_cache: BTreeMap::new(),
             is_metered,
         }
+    }
+
+    /// When `parent` has a tracked root version, record the same root version for `id`.
+    /// Note that this is not observable at this time, but will be if we either allow for the
+    /// re-creation of derived objects, or if we grant access to the `id: UID` of a dynamic field.
+    pub(super) fn inherit_root_version_from_parent(
+        &mut self,
+        parent: ObjectID,
+        id: ObjectID,
+    ) -> PartialVMResult<()> {
+        if let Some(v) = self.inner.root_version.get(&parent).copied() {
+            let prev_v_opt = self.inner.root_version.insert(id, v);
+            if let Some(prev_v) = prev_v_opt
+                && prev_v != v
+            {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(format!(
+                            "Root version for {parent} changed from {prev_v} to {v}"
+                        )),
+                );
+            }
+        }
+        Ok(())
     }
 
     pub(super) fn receive_object(
@@ -738,6 +763,16 @@ impl<'a> ChildObjectStore<'a> {
                 self.config_setting_cache.remove(&name_df_id);
             }
         }
+    }
+
+    pub(super) fn get_package_at_version(
+        &self,
+        package_id: ObjectID,
+        package_version: SequenceNumber,
+    ) -> Option<MovePackage> {
+        self.inner
+            .resolver
+            .get_package_at_version(&package_id, package_version)
     }
 
     pub(super) fn cached_objects(&self) -> &BTreeMap<ObjectID, Option<Object>> {

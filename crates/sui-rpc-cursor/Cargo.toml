@@ -1,0 +1,20 @@
+[package]
+name = "sui-rpc-cursor"
+version = "0.1.0"
+authors = ["Mysten Labs <eng@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+bytes.workspace = true
+prost.workspace = true
+
+[dev-dependencies]
+prost-build.workspace = true
+protox.workspace = true
+walkdir.workspace = true

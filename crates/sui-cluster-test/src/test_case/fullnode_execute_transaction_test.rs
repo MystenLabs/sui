@@ -3,31 +3,10 @@
 
 use crate::{TestCaseImpl, TestContext};
 use async_trait::async_trait;
-use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
-};
-use sui_sdk::SuiClient;
-use sui_types::{
-    base_types::TransactionDigest, transaction_driver_types::ExecuteTransactionRequestType,
-};
+use sui_types::effects::TransactionEffectsAPI;
 use tracing::info;
 
 pub struct FullNodeExecuteTransactionTest;
-
-impl FullNodeExecuteTransactionTest {
-    async fn verify_transaction(fullnode: &SuiClient, tx_digest: TransactionDigest) {
-        fullnode
-            .read_api()
-            .get_transaction_with_options(tx_digest, SuiTransactionBlockResponseOptions::new())
-            .await
-            .unwrap_or_else(|e| {
-                panic!(
-                    "Failed get transaction {:?} from fullnode: {:?}",
-                    tx_digest, e
-                )
-            });
-    }
-}
 
 #[async_trait]
 impl TestCaseImpl for FullNodeExecuteTransactionTest {
@@ -36,13 +15,11 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
     }
 
     fn description(&self) -> &'static str {
-        "Test executing transaction via Fullnode Quorum Driver"
+        "Test executing transactions via the gRPC TransactionExecutionService"
     }
 
     async fn run(&self, ctx: &mut TestContext) -> Result<(), anyhow::Error> {
-        let txn_count = 4;
-        ctx.get_sui_from_faucet(Some(1)).await;
-
+        let txn_count = 2;
         let mut txns = ctx.make_transactions(txn_count).await;
         assert!(
             txns.len() >= txn_count,
@@ -51,59 +28,56 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
             txns.len(),
         );
 
-        let fullnode = ctx.get_fullnode_client();
+        // This test intentionally drives execution directly rather than through
+        // the shared `sign_and_execute` helper, because its whole purpose is to
+        // exercise both gRPC execution paths.
 
-        info!("Test execution with WaitForEffectsCert");
+        // Path 1: immediate execution (`TransactionExecutionService`). The
+        // response carries the effects immediately, before checkpointing. We
+        // then wait for ledger/checkpoint visibility and retrieve the tx.
+        info!("Test immediate execute_transaction");
         let txn = txns.swap_remove(0);
         let txn_digest = *txn.digest();
 
-        let response = fullnode
-            .quorum_driver_api()
-            .execute_transaction_block(
-                txn,
-                SuiTransactionBlockResponseOptions::new().with_effects(),
-                Some(ExecuteTransactionRequestType::WaitForEffectsCert),
-            )
-            .await?;
+        let mut client = ctx.get_grpc_client();
+        let response = client.execute_transaction(&txn).await?;
+        assert!(
+            response.effects.status().is_ok(),
+            "Failed to execute transaction {:?}: {:?}",
+            txn_digest,
+            response.effects.status(),
+        );
 
-        assert!(!response.confirmed_local_execution.unwrap());
-        assert_eq!(txn_digest, response.digest);
-        let effects = response.effects.unwrap();
-        if !matches!(effects.status(), SuiExecutionStatus::Success) {
-            panic!(
-                "Failed to execute transfer transaction {:?}: {:?}",
-                txn_digest,
-                effects.status()
-            )
-        }
-        // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![txn_digest], 5).await;
-        Self::verify_transaction(fullnode, txn_digest).await;
+        // Wait for checkpoint visibility, then retrieve the transaction from the
+        // ledger (`LedgerService`).
+        ctx.wait_for_txns(&[txn_digest]).await;
+        let fetched = client.get_transaction(&txn_digest).await?;
+        assert!(
+            fetched.effects.status().is_ok(),
+            "Fetched transaction {:?} has non-success effects",
+            txn_digest,
+        );
 
-        info!("Test execution with WaitForLocalExecution");
+        // Path 2: execute-and-wait-for-checkpoint helper. The returned result
+        // must carry a checkpoint.
+        info!("Test execute_transaction_and_wait_for_checkpoint");
         let txn = txns.swap_remove(0);
         let txn_digest = *txn.digest();
 
-        let response = fullnode
-            .quorum_driver_api()
-            .execute_transaction_block(
-                txn,
-                SuiTransactionBlockResponseOptions::new().with_effects(),
-                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-            )
+        let response = client
+            .execute_transaction_and_wait_for_checkpoint(&txn)
             .await?;
-        assert!(response.confirmed_local_execution.unwrap());
-        assert_eq!(txn_digest, response.digest);
-        let effects = response.effects.unwrap();
-        if !matches!(effects.status(), SuiExecutionStatus::Success) {
-            panic!(
-                "Failed to execute transfer transaction {:?}: {:?}",
-                txn_digest,
-                effects.status()
-            )
-        }
-        // Unlike in other execution modes, there's no need to wait for the node to sync
-        Self::verify_transaction(fullnode, txn_digest).await;
+        assert!(
+            response.effects.status().is_ok(),
+            "Failed to execute transaction {:?}: {:?}",
+            txn_digest,
+            response.effects.status(),
+        );
+        assert!(
+            response.checkpoint.is_some(),
+            "execute_transaction_and_wait_for_checkpoint should return a checkpoint for {:?}",
+            txn_digest,
+        );
 
         Ok(())
     }

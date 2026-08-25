@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_kvstore::{BigTableClient, CHECKPOINTS_PIPELINE, CheckpointData, KeyValueStoreReader};
+use sui_kvstore::{BigTableClient, CheckpointData, KeyValueStoreReader};
 use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
 use sui_rpc::proto::sui::rpc::v2::{Checkpoint, GetCheckpointRequest, GetCheckpointResponse};
@@ -21,6 +21,7 @@ pub async fn get_checkpoint(
     mut client: BigTableClient,
     limited_client: LimitedBigTableClient,
     stages: &StagesConfig,
+    service_info_watermark_pipelines: &[&str],
     request: GetCheckpointRequest,
 ) -> Result<GetCheckpointResponse, RpcError> {
     let read_mask = {
@@ -54,8 +55,13 @@ pub async fn get_checkpoint(
             .pop()
             .ok_or(CheckpointNotFoundError::sequence_number(sequence_number))?,
         _ => {
+            // Bound "latest" by the same pipeline set `GetServiceInfo` uses, not just the base
+            // checkpoints pipeline: when the List APIs are enabled, their list-index pipelines
+            // can lag behind the base pipeline, and callers resolving "latest" this way (e.g. to
+            // bound a subsequent List API call) need it to reflect what the List APIs can
+            // actually serve, not a checkpoint they haven't indexed yet.
             let sequence_number = client
-                .get_watermark_for_pipelines(&[CHECKPOINTS_PIPELINE])
+                .get_watermark_for_pipelines(service_info_watermark_pipelines)
                 .await?
                 .and_then(|wm| wm.checkpoint_hi_inclusive)
                 .ok_or(CheckpointNotFoundError::sequence_number(0))?;
@@ -109,5 +115,5 @@ async fn resolve_full_checkpoint(
     )
     .await?;
 
-    render::render_full_checkpoint(cp_data, txs, objects.as_ref(), read_mask)
+    render::render_full_checkpoint(cp_data, txs, objects, read_mask)
 }

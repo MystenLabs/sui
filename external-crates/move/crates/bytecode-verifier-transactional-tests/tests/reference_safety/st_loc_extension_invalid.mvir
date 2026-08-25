@@ -1,0 +1,168 @@
+// Reassigning a local while a reference into it is live is rejected
+
+//# publish
+mvir 0x2::prim_call {
+
+fun id(r: &mut u64): &mut u64 {
+label b0:
+    return move(r);
+}
+
+fun t() {
+    let v: u64;
+    let r: &mut u64;
+label b0:
+    v = 0;
+    r = Self::id(&mut v);
+    v = 1;
+    *move(r) = 2;
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::struct_whole_call {
+
+public struct S has drop { f: u64 }
+
+fun id(r: &mut Self::S): &mut Self::S {
+label b0:
+    return move(r);
+}
+
+fun t() {
+    let s: Self::S;
+    let r: &mut Self::S;
+label b0:
+    s = S { f: 0 };
+    r = Self::id(&mut s);
+    s = S { f: 1 };
+    *move(r) = S { f: 2 };
+    return;
+}
+
+}
+
+//# publish
+mvir 0x4::struct_field_call {
+
+public struct S has drop { f: u64 }
+
+fun borrow_f(s: &mut Self::S): &mut u64 {
+label b0:
+    return &mut move(s).S::f;
+}
+
+fun t() {
+    let s: Self::S;
+    let r: &mut u64;
+label b0:
+    s = S { f: 0 };
+    r = Self::borrow_f(&mut s);
+    s = S { f: 1 };
+    *move(r) = 2;
+    return;
+}
+
+}
+
+//# publish
+mvir 0x5::struct_field_direct {
+
+public struct S has drop { f: u64 }
+
+fun t() {
+    let s: Self::S;
+    let r: &mut u64;
+label b0:
+    s = S { f: 0 };
+    r = &mut (&mut s).S::f;
+    s = S { f: 1 };
+    *move(r) = 2;
+    return;
+}
+
+}
+
+//# publish
+mvir 0x6::enum_whole_call {
+
+public enum E has drop {
+    V { x: u64 },
+}
+
+fun id(r: &mut Self::E): &mut Self::E {
+label b0:
+    return move(r);
+}
+
+fun t() {
+    let e: Self::E;
+    let r: &mut Self::E;
+label b0:
+    e = E::V { x: 0 };
+    r = Self::id(&mut e);
+    e = E::V { x: 1 };
+    *move(r) = E::V { x: 2 };
+    return;
+}
+
+}
+
+//# publish
+mvir 0x7::enum_variant_field {
+
+public enum E has drop {
+    V { x: u64 },
+}
+
+fun t() {
+    let e: Self::E;
+    let r: &mut u64;
+label b0:
+    e = E::V { x: 0 };
+    &mut E::V { x: r } = &mut e;
+    e = E::V { x: 1 };
+    *move(r) = 2;
+    return;
+}
+
+}
+
+//# publish
+mvir 0x8::vec_elem_borrow {
+
+fun t() {
+    let v: vector<u64>;
+    let r: &mut u64;
+label b0:
+    v = vector<u64; 1>(0);
+    r = vec_mut_borrow<u64>(&mut v, 0);
+    v = vector<u64; 0>();
+    *move(r) = 1;
+    return;
+}
+
+}
+
+//# publish
+mvir 0x9::vec_whole_call {
+
+fun id(r: &mut vector<u64>): &mut vector<u64> {
+label b0:
+    return move(r);
+}
+
+fun t() {
+    let v: vector<u64>;
+    let r: &mut vector<u64>;
+label b0:
+    v = vector<u64; 1>(0);
+    r = Self::id(&mut v);
+    v = vector<u64; 0>();
+    vec_push_back<u64>(move(r), 1);
+    return;
+}
+
+}

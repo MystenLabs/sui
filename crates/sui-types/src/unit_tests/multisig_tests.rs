@@ -27,7 +27,7 @@ use fastcrypto::{
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId, OIDCProvider, ZkLoginInputs, parse_jwks};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
-use im::hashmap::HashMap as ImHashMap;
+use imbl::hashmap::HashMap as ImHashMap;
 use once_cell::sync::OnceCell;
 use rand::{SeedableRng, rngs::StdRng};
 use roaring::RoaringBitmap;
@@ -430,6 +430,7 @@ fn zklogin_in_multisig_works_with_both_addresses() {
         parsed,
         vec![],
         ZkLoginEnv::Test,
+        0, // v1 circuit mode only
         true,
         true,
         true,
@@ -574,6 +575,7 @@ fn test_zklogin_public_identifier_additional_validation() {
         parsed.clone(),
         vec![],
         ZkLoginEnv::Test,
+        0, // v1 circuit mode only
         true,
         true,
         true,
@@ -603,6 +605,7 @@ fn test_zklogin_public_identifier_additional_validation() {
         parsed,
         vec![],
         ZkLoginEnv::Test,
+        0, // v1 circuit mode only
         true,
         true,
         true,

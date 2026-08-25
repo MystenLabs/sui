@@ -50,8 +50,8 @@ mod checked {
         move_package::MovePackage,
         object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::{
-            BackingPackageStore, ChildObjectResolver, DeleteKind, DeleteKindWithOldVersion,
-            ObjectChange, WriteKind,
+            BackingPackageStore, DeleteKind, DeleteKindWithOldVersion, ObjectChange,
+            RuntimeObjectResolver, WriteKind,
         },
         transaction::{Argument, CallArg, ObjectArg},
     };
@@ -115,7 +115,7 @@ mod checked {
             gas_charger: &'a mut GasCharger,
             inputs: Vec<CallArg>,
         ) -> Result<Self, ExecutionError> {
-            let init_linkage = if protocol_config.package_upgrades_supported() {
+            let init_linkage = if protocol_config.package_upgrades() {
                 LinkageInfo::Unset
             } else {
                 LinkageInfo::Universal
@@ -938,7 +938,7 @@ mod checked {
     pub(crate) fn new_session<'state, 'vm>(
         vm: &'vm MoveVM,
         linkage: LinkageView<'state>,
-        child_resolver: &'state dyn ChildObjectResolver,
+        child_resolver: &'state dyn RuntimeObjectResolver,
         input_objects: BTreeMap<ObjectID, object_runtime::InputObject>,
         is_metered: bool,
         protocol_config: &ProtocolConfig,

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
   ┌─ tests/move_check/parser/ability_modifier_postfix_with_semi.move:4:19
   │
 4 │     struct Foo {} has store;

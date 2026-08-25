@@ -1,5 +1,5 @@
 Command `sandbox publish`:
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ ./sources/M_no_named.move:1:8
   │
 1 │ module 0x42::M {

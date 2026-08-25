@@ -1,0 +1,20 @@
+// once the epsilon alias gains a field extension, writing through it must be rejected
+
+//# publish
+mvir 0x42::m {
+    public struct S has drop { f: u64 }
+
+    fun t() {
+        let x: Self::S;
+        let r: &mut Self::S;
+        let fr: &mut u64;
+    label b0:
+        x = S { f: 1 };
+        r = &mut x;
+        x = S { f: 2 };
+        fr = &mut copy(r).S::f;
+        *move(r) = S { f: 3 };
+        *move(fr) = 4;
+        return;
+    }
+}

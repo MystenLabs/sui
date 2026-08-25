@@ -1,0 +1,168 @@
+---
+title: Interest Rates
+description: Learn how interest rates are calculated for margin pool borrowing.
+keywords:
+  - interest rate
+  - borrow rate
+  - supply rate
+  - utilization rate
+  - protocol spread
+  - margin pool
+  - deepbook margin
+  - APR
+goal:
+  description: >-
+    Reader understands how interest rates are calculated for margin pool
+    borrowing
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How are DeepBook Margin borrow interest rates calculated?
+  - What is the utilization rate of a margin pool?
+  - How much interest do margin pool suppliers earn?
+  - How often does DeepBook Margin interest compound?
+answer: >-
+  Margin pools use a kinked interest rate model where the borrow rate increases
+  gradually up to an optimal utilization point, then rises sharply to discourage
+  excessive borrowing and maintain liquidity for withdrawals.
+---
+
+Margin pools use a kinked interest rate model where the borrow rate increases gradually up to an optimal utilization point, then rises sharply to discourage excessive borrowing and maintain liquidity for withdrawals.
+
+## Utilization rate {#utilization-rate}
+
+Utilization drives every rate in the pool. It measures how much of the supplied liquidity borrowers have taken:
+
+```text
+utilization = totalBorrow / totalSupply
+```
+
+An empty pool reports a utilization of zero. As borrowing rises, so does the rate, which draws in new suppliers and discourages further borrowing. The pool's max utilization rate caps how far this can go, so suppliers can always withdraw a portion of their funds.
+
+## Borrow interest formula {#borrow-formula}
+
+The formula for the borrow interest rate (APR) is:
+
+```text
+if utilization < optimalUtilization:
+    borrowRate = baseRate + utilization × baseSlope
+else:
+    borrowRate = baseRate + optimalUtilization × baseSlope + (utilization - optimalUtilization) × excessSlope
+```
+
+Where:
+
+- **Utilization:** The ratio of total borrowed assets to total supplied assets.
+- **Base rate:** The minimum interest rate when utilization is 0%.
+- **Base slope:** The rate of increase in interest below optimal utilization.
+- **Optimal utilization:** The target utilization rate (typically 80%), also called the kink.
+- **Excess slope:** The steep rate of increase above optimal utilization.
+
+The contract holds all four values in an `InterestConfig` inside the pool's `ProtocolConfig`, as fixed-point numbers with 9 decimal places, so a base slope of 15% becomes `150_000_000`. The pool operator changes them with `update_interest_params`, and the contract rejects any configuration where the optimal utilization exceeds the max utilization rate.
+
+## Current parameters {#current-parameters}
+
+| **Asset** | **Base rate** | **Base slope** | **Optimal utilization** | **Excess slope** | **Max utilization** |
+| ----- | --------- | ---------- | ------------------- | ------------ | --------------- |
+| USDC    | 0%        | 15%        | 80%                 | 500%         | 90%             |
+| SUIUSDE | 0%        | 15%        | 80%                 | 500%         | 90%             |
+| SUI     | 3%        | 20%        | 80%                 | 500%         | 90%             |
+| DEEP    | 5%        | 25%        | 80%                 | 500%         | 90%             |
+| WAL     | 5%        | 25%        | 80%                 | 500%         | 90%             |
+
+The max utilization rate caps how much of the pool's liquidity borrowers can take, so suppliers can always withdraw a portion of their funds.
+
+:::info
+
+Treat these as example values. Each pool operator sets its own parameters and can update them, so read the live values onchain rather than hardcoding them. See [Read the current rate](#read-the-current-rate).
+
+:::
+
+## Worked examples {#examples}
+
+**At 50% utilization in the USDC pool (below optimal):**
+```text
+borrowRate = 0% + 50% × 15% = 0% + 7.5% = 7.5% APR
+```
+
+**At 80% utilization (at optimal):**
+```text
+borrowRate = 0% + 80% × 15% = 0% + 12% = 12% APR
+```
+
+**At 85% utilization (above optimal, below max):**
+```text
+borrowRate = 0% + 80% × 15% + (85% - 80%) × 500% = 0% + 12% + 25% = 37% APR
+```
+
+The jump from 12% to 37% across five points of utilization is the kink working as intended. Borrowing past the optimal point becomes expensive quickly, which pushes utilization back down before the pool runs out of withdrawable liquidity. Size a borrow against the rate you will pay after the borrow lands, not the rate you see before it.
+
+## What suppliers earn {#supply-rate}
+
+The borrow rate is not what suppliers receive. Borrowers pay interest on the borrowed portion only, and the protocol takes a spread off the top:
+
+```text
+supplyRate = borrowRate × utilization × (1 - protocolSpread)
+```
+
+The pool exposes this directly as `true_interest_rate`, alongside the borrow rate as `interest_rate`. At 50% utilization in the USDC pool with a 10% protocol spread:
+
+```text
+supplyRate = 7.5% × 50% × (1 - 10%) = 3.375% APR
+```
+
+Two suppliers in pools with identical borrow rates earn different amounts when utilization differs, because idle liquidity earns nothing. The contract caps the protocol spread at 20%, and the portion it takes splits between supply referrals, the protocol treasury, and the pool maintainer. See [Design](/onchain-finance/deepbook/deepbook-margin/design#protocol-fees) for that split.
+
+## How interest accrues {#accrual}
+
+The pool does not apply interest continuously. It recomputes interest whenever its state changes, which means on every supply, borrow, repay, and withdraw against that pool, by anyone. Each update charges simple interest over the elapsed interval:
+
+```text
+interest = totalBorrow × borrowRate × (elapsedMs / YEAR_MS)
+```
+
+`YEAR_MS` is 365 days in milliseconds. The pool then adds the full interest to `totalBorrow`, and adds the interest minus the protocol spread to `totalSupply`.
+
+Because each update grows `totalBorrow`, the next update charges interest on the larger balance. Interest therefore compounds, but at the frequency of pool activity rather than on a fixed schedule. A busy pool compounds more often than a quiet one, so the realized annual yield runs slightly above the quoted APR.
+
+For a pool with 100,000 USDC borrowed at 12% APR, one day of accrual with a 10% protocol spread produces:
+
+```text
+interest       = 100,000 × 12% × (86,400,000 / 31,536,000,000) = 32.88 USDC
+protocol fees  = 32.88 × 10%                                   =  3.29 USDC
+to suppliers   = 32.88 - 3.29                                  = 29.59 USDC
+```
+
+### Shares absorb the interest {#shares}
+
+Neither borrowers nor suppliers hold a balance that the pool rewrites. Both hold shares, and the pool tracks a ratio for each side:
+
+```text
+borrowRatio = totalBorrow / borrowShares
+supplyRatio = totalSupply / supplyShares
+```
+
+Your borrow shares never change until you borrow or repay. Your debt grows because accrued interest raises `borrowRatio`, so the same shares convert to a larger amount. That is why your debt increases and your [risk ratio](/onchain-finance/deepbook/deepbook-margin/contract-information/risk-ratio) drifts toward liquidation even when prices hold flat and you take no action.
+
+Share conversions round in the pool's favor. Borrowing rounds shares up, and converting borrow shares back to an amount rounds up, so a repayment never leaves a residual debt on the pool's side.
+
+## Read the current rate {#read-the-current-rate}
+
+Parameters are per pool and adjustable, so query them instead of assuming defaults. In Move, `MarginPool` exposes `interest_rate`, `true_interest_rate`, `total_supply`, `total_borrow`, `max_utilization_rate`, and `protocol_spread`. From TypeScript, the following helper reads the current rate alongside the supply, borrow, and utilization headroom it depends on:
+
+<ImportContent source="examples/deepbook-margin/src/pool-liquidity.ts" mode="code" tag="pool-liquidity" />
+
+Check the rate before you borrow, because utilization also determines whether a borrow succeeds at all. A pool at its max utilization rate rejects new borrows outright. The [Leveraged Position Workflow](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow#check-borrow-liquidity) shows this check in context.

@@ -1,0 +1,67 @@
+// CFG-shaped programs the new checker accepts, executed to look for VM invariant violations
+
+//# run
+mvir 0x2::run_freeze_while_mut_borrowed_loop {
+
+public enum E has copy, drop { A { x: u64 }, B { y: u64 } }
+
+entry fun t() {
+    let e: Self::E;
+    let er: &mut Self::E;
+    let p: &mut u64;
+    let n: u64;
+label b0:
+    e = E::A { x: 0 };
+    er = &mut e;
+    n = 2;
+    &mut E::A { x: p } = copy(er);
+label h:
+    *copy(p) = 1;
+    jump_if (copy(n) == 0) done;
+label sw:
+    n = move(n) - 1;
+    variant_switch E (freeze(copy(er))) { A: h, B: done };
+label done:
+    assert(*move(p) == 1, 42);
+    _ = move(er);
+    return;
+}
+
+}
+
+//# run
+mvir 0x3::run_alias_call_in_loop {
+
+public struct S has copy, drop { f: u64 }
+
+fun id(x: &mut Self::S): &mut Self::S { label b0: return move(x); }
+
+// p is repeatedly re-derived through a call
+entry fun t() {
+    let s: Self::S;
+    let sr: &mut Self::S;
+    let r: &mut Self::S;
+    let p: &mut Self::S;
+    let n: u64;
+label b0:
+    s = S { f: 0 };
+    sr = &mut s;
+    r = copy(sr);
+    p = copy(sr);
+    n = 2;
+label h:
+    jump_if (copy(n) == 0) e;
+label body:
+    n = move(n) - 1;
+    p = Self::id(move(p));
+    jump h;
+label e:
+    *copy(p) = S { f: 7 };
+    assert(*(&copy(r).S::f) == 7, 42);
+    _ = move(p);
+    _ = move(r);
+    _ = move(sr);
+    return;
+}
+
+}

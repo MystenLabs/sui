@@ -16,7 +16,7 @@
 // Combined: A sends reservation + coin_value to C through smash+send_funds;
 // C nets out paying the gas.
 
-//# init --addresses test=0x0 --accounts A B C --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
+//# init --addresses test=0x0 --accounts A B C
 
 // Seed A's address balance.
 //# programmable --sender A --inputs 100000000000 @A

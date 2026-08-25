@@ -1,0 +1,96 @@
+---
+title: Oracles for DeFi on Sui
+sidebar_label: Oracles
+description: >-
+  Integrate price oracles into DeFi apps on Sui: pull versus push feeds, the
+  shared-object model for price data, and an evenhanded comparison of Pyth and
+  Switchboard for consuming price feeds onchain.
+keywords:
+  - oracle
+  - price feed
+  - pyth
+  - switchboard
+  - defi
+  - collateral
+  - liquidation
+  - pull oracle
+goal:
+  description: >-
+    Reader understands how price oracles work on Sui, the pull and push models,
+    and how to choose between Pyth and Switchboard for a DeFi integration.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is a price oracle on Sui?
+  - What is the difference between a pull and a push oracle?
+  - Should I use Pyth or Switchboard on Sui?
+  - How does price data live in Sui objects?
+answer: >-
+  A price oracle brings offchain prices onchain. On Sui, price data lives in
+  shared objects that you update and read in the same transaction. Pyth is a
+  pull oracle: you fetch a signed update from Hermes, apply it to a
+  PriceInfoObject, and read it with a built-in staleness gate. Switchboard is
+  on-demand: you pull a fresh oracle response into your transaction and read an
+  Aggregator, checking freshness yourself. Choose by feed coverage, update
+  model, and how much control over the feed you need.
+builder_paths:
+  - path_id: oracle-integration
+    path_name: Oracles for DeFi
+    step: Oracle integration overview
+    stage: Oracles
+---
+
+A price oracle brings offchain data, most often an asset price, onchain so a smart contract can act on it. Any DeFi app that values collateral, liquidates a position, prices a swap, or settles a market against a real-world number needs one, because that number does not exist onchain until an oracle publishes it.
+
+The stakes are high: a wrong or stale price can drain a lending pool or liquidate a healthy position. Reading a feed is a few lines; reading it safely is the real work, and it is the subject of this cluster.
+
+## Pull and push models
+
+Two models put a price onchain, and the difference shapes your integration.
+
+- **Pull (on-demand).** Nobody keeps the onchain price current for you. Your transaction fetches a fresh, signed update offchain, applies it onchain, and reads it, all in one atomic transaction. You pay for the update only when you use it, and the price is as fresh as the moment you transact. Pyth and Switchboard on Sui are both pull oracles.
+- **Push.** A separate service, a keeper, posts prices to an onchain object on a schedule or when the price moves past a threshold. Consumers read the last posted value. The freshness of a push feed is only as good as the keeper's cadence, so a push consumer must still check how old the stored price is.
+
+The pull model is the default on Sui because it puts freshness in the consumer's control: the update and the read happen together, so a consumer never acts on a price the transaction did not just refresh.
+
+## Price data lives in shared objects
+
+On Sui, an oracle price is not a global variable. It lives in a shared object that your transaction references:
+
+- **Pyth** stores each feed in a `PriceInfoObject`. You update that object with a signed price, then read it.
+- **Switchboard** stores each feed in an `Aggregator` object. You pull a fresh result into the object, then read it.
+
+Because the update and the read are commands in the same [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks), the object the consumer reads is the one the transaction just refreshed. The order matters: the update command must come before the read. Freshness is a property of a single transaction, not a background guarantee, which is exactly why a consumer checks the price's publish time against the onchain clock.
+
+## Choosing a provider
+
+Both [Pyth](https://docs.pyth.network/price-feeds/contract-addresses/sui) and [Switchboard](https://docs.switchboard.xyz/product-documentation/data-feeds/sui) ship audited Move packages on Sui Mainnet and Testnet, and both use the pull model. They differ in emphasis:
+
+| Aspect | Pyth | Switchboard |
+| --- | --- | --- |
+| Update flow | Fetch a signed update from the Hermes service, apply it to the feed's `PriceInfoObject` | Pull a fresh oracle response into the feed's `Aggregator`, first in the PTB |
+| Reading | `pyth::get_price_no_older_than` returns the price and rejects it if older than a bound you pass | `aggregator::current_result` returns the latest result with timestamps; you check freshness yourself |
+| Staleness gate | Built into the read | Caller-checked against `min_timestamp_ms` / `max_timestamp_ms` |
+| Feeds | A large catalog of shared price feed IDs, the same across chains | Feeds you configure, including custom data sources |
+| TypeScript | `@pythnetwork/pyth-sui-js` | `@switchboard-xyz/sui-sdk` |
+
+Neither is a default; the right choice depends on which feeds you need and how much control over the feed definition you want. As a concrete reference point, [DeepBook Margin](/onchain-finance/deepbook/deepbook-margin/margin-integration) consumes Pyth `PriceInfoObject`s for its risk math. For custom, non-price data brought onchain through a trusted enclave rather than a price network, see [Nautilus](/sui-stack/nautilus/nautilus-overview).
+
+## In this cluster
+
+import DocCardList from '@theme/DocCardList';
+
+<DocCardList />

@@ -18,5 +18,5 @@ task 3, lines 26-30:
 //> 0: sui::package::authorize_upgrade(Input(2), Input(3), Input(4));
 //> 1: Upgrade(v1, [sui,std], v0, Result(0));
 //> sui::package::commit_upgrade(Input(2), Result(1))
-Error: Transaction Effects Status: Attempted to used feature that is not supported yet
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("`init` in new modules on upgrade is not yet supported"), command: Some(1) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: _::a::init (function index 0) at offset 1, Abort Code: 10
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: _, name: Identifier("a") }, function: 0, instruction: 1, function_name: Some("init") }, 10), source: Some(VMError { major_status: ABORTED, sub_status: Some(10), message: Some("v0::a::init at offset 1"), exec_state: None, location: Module(ModuleId { address: v0, name: Identifier("a") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(1) } }

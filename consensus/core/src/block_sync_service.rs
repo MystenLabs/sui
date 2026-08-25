@@ -10,6 +10,7 @@ use std::{
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round};
+use mysten_common::ZipDebugEqIteratorExt;
 use parking_lot::RwLock;
 use rand::seq::SliceRandom;
 use tracing::debug;
@@ -71,6 +72,12 @@ impl BlockSyncService {
         if block_refs.is_empty() && (fetch_missing_ancestors || fetch_after_rounds.is_empty()) {
             return Err(ConsensusError::InvalidFetchBlocksRequest("When no block refs are provided, fetch_after_rounds must be provided and fetch_missing_ancestors must be false".to_string()));
         }
+        if fetch_missing_ancestors && fetch_after_rounds.is_empty() {
+            return Err(ConsensusError::InvalidFetchBlocksRequest(
+                "When fetch_missing_ancestors is true, fetch_after_rounds must be provided"
+                    .to_string(),
+            ));
+        }
         if !fetch_after_rounds.is_empty()
             && fetch_after_rounds.len() != self.context.committee.size()
         {
@@ -94,8 +101,9 @@ impl BlockSyncService {
         for block in &block_refs {
             if !self.context.committee.is_valid_index(block.author) {
                 return Err(ConsensusError::InvalidAuthorityIndex {
+                    loc: format!("requested block {}", block),
                     index: block.author,
-                    max: self.context.committee.size(),
+                    max: self.context.committee.size() - 1,
                 });
             }
             if block.round == GENESIS_ROUND {
@@ -103,14 +111,23 @@ impl BlockSyncService {
             }
         }
 
-        // Get the requested blocks first.
-        let mut blocks = self
-            .dag_state
-            .read()
-            .get_blocks(&block_refs)
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
+        // Get the requested blocks first. Commit sync requests (block refs only, no
+        // fetch_after_rounds, no fetch_missing_ancestors) read old committed blocks, up
+        // to max_blocks_per_fetch of them, so they read the store first to avoid holding
+        // the DagState lock across large storage reads. Every other request shape
+        // targets recently accepted blocks, capped at max_blocks_per_sync, which are
+        // almost always in the DagState cache; reading the store first would only add a
+        // wasted store read per request.
+        let mut blocks = if fetch_after_rounds.is_empty() {
+            self.read_blocks(&block_refs)?
+        } else {
+            self.dag_state
+                .read()
+                .get_blocks(&block_refs)
+                .into_iter()
+                .flatten()
+                .collect()
+        };
 
         // When fetch_missing_ancestors is true, fetch missing ancestors of the requested blocks.
         // Otherwise, fetch additional blocks depth-first from the requested block authorities.
@@ -136,6 +153,8 @@ impl BlockSyncService {
                         .choose_multiple(&mut mysten_common::random::get_rng(), selected_num_blocks)
                         .copied()
                         .collect::<Vec<_>>();
+                    // Ancestors of recently accepted blocks are in the cache, like the
+                    // requested blocks above.
                     let ancestor_blocks = self
                         .dag_state
                         .read()
@@ -201,6 +220,38 @@ impl BlockSyncService {
             .map(|block| block.serialized().clone())
             .collect::<Vec<_>>();
         Ok(bytes)
+    }
+
+    /// Reads blocks by refs like `DagState::get_blocks`, but reads the store first so no
+    /// storage I/O happens while holding the DagState lock: commit sync requests read up
+    /// to `max_blocks_per_fetch` blocks, and a read lock held across large store reads
+    /// delays Core's writes on the consensus hot path. Blocks missing from the store are
+    /// the most recently accepted ones that are not yet flushed, which are found in
+    /// DagState's in-memory cache; only blocks that do not exist at all fall through to
+    /// `get_blocks`' internal store read, and honest requesters never ask for those.
+    /// Blocks found nowhere are dropped from the result.
+    fn read_blocks(&self, block_refs: &[BlockRef]) -> ConsensusResult<Vec<VerifiedBlock>> {
+        self.context
+            .metrics
+            .node_metrics
+            .block_sync_service_read_blocks_count
+            .inc();
+        let mut blocks = self.store.read_blocks(block_refs)?;
+        let missing: Vec<(usize, BlockRef)> = blocks
+            .iter()
+            .enumerate()
+            .filter(|(_, block)| block.is_none())
+            .map(|(index, _)| (index, block_refs[index]))
+            .collect();
+        if !missing.is_empty() {
+            let missing_refs: Vec<BlockRef> =
+                missing.iter().map(|(_, block_ref)| *block_ref).collect();
+            let cached_blocks = self.dag_state.read().get_blocks(&missing_refs);
+            for ((index, _), block) in missing.into_iter().zip_debug_eq(cached_blocks) {
+                blocks[index] = block;
+            }
+        }
+        Ok(blocks.into_iter().flatten().collect())
     }
 
     /// Fetches commits and their certifying blocks from the store.
@@ -274,8 +325,9 @@ impl BlockSyncService {
         for authority in &authorities {
             if !self.context.committee.is_valid_index(*authority) {
                 return Err(ConsensusError::InvalidAuthorityIndex {
+                    loc: format!("latest block request from peer {}", peer),
                     index: *authority,
-                    max: self.context.committee.size(),
+                    max: self.context.committee.size() - 1,
                 });
             }
         }
@@ -303,5 +355,150 @@ impl BlockSyncService {
             .collect::<Vec<_>>();
 
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        block::{TestBlock, VerifiedBlock},
+        storage::{WriteBatch, mem_store::MemStore},
+    };
+
+    fn setup_service() -> (BlockSyncService, Arc<RwLock<DagState>>, Arc<MemStore>) {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let service = BlockSyncService::new(context, dag_state.clone(), store.clone());
+        (service, dag_state, store)
+    }
+
+    fn test_blocks(round: Round) -> Vec<VerifiedBlock> {
+        (0..4)
+            .map(|author| VerifiedBlock::new_for_test(TestBlock::new(round, author).build()))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn test_fetch_blocks_from_store() {
+        let (service, _dag_state, store) = setup_service();
+
+        // Blocks in the store but not in the DagState cache, as after cache eviction.
+        let blocks = test_blocks(1);
+        store
+            .write(WriteBatch::default().blocks(blocks.clone()))
+            .unwrap();
+
+        let block_refs: Vec<_> = blocks.iter().map(|b| b.reference()).collect();
+        let fetched = service
+            .fetch_blocks(block_refs, vec![], false)
+            .await
+            .unwrap();
+        assert_eq!(
+            fetched,
+            blocks
+                .iter()
+                .map(|b| b.serialized().clone())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fetch_blocks_unflushed_from_cache() {
+        let (service, dag_state, _store) = setup_service();
+
+        // Blocks accepted into the DagState but not yet flushed to the store.
+        let blocks = test_blocks(1);
+        dag_state.write().accept_blocks(blocks.clone());
+
+        let block_refs: Vec<_> = blocks.iter().map(|b| b.reference()).collect();
+        let fetched = service
+            .fetch_blocks(block_refs, vec![], false)
+            .await
+            .unwrap();
+        assert_eq!(
+            fetched,
+            blocks
+                .iter()
+                .map(|b| b.serialized().clone())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fetch_blocks_mixed_store_and_cache() {
+        let (service, dag_state, store) = setup_service();
+
+        // Round 1 blocks are only in the store, round 2 blocks only in the cache,
+        // as when older blocks have been flushed and evicted while recent ones are
+        // not yet flushed.
+        let flushed_blocks = test_blocks(1);
+        store
+            .write(WriteBatch::default().blocks(flushed_blocks.clone()))
+            .unwrap();
+        let unflushed_blocks = test_blocks(2);
+        dag_state.write().accept_blocks(unflushed_blocks.clone());
+
+        // Interleave the refs to check the response preserves request order.
+        let all_blocks: Vec<_> = flushed_blocks
+            .into_iter()
+            .zip_debug_eq(unflushed_blocks)
+            .flat_map(|(flushed, unflushed)| [flushed, unflushed])
+            .collect();
+        let block_refs: Vec<_> = all_blocks.iter().map(|b| b.reference()).collect();
+        let fetched = service
+            .fetch_blocks(block_refs, vec![], false)
+            .await
+            .unwrap();
+        assert_eq!(
+            fetched,
+            all_blocks
+                .iter()
+                .map(|b| b.serialized().clone())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fetch_blocks_live_sync_from_cache() {
+        let (service, dag_state, _store) = setup_service();
+
+        // Live sync shape: refs + fetch_after_rounds, served from the DagState cache
+        // even when nothing has been flushed to the store.
+        let blocks = test_blocks(1);
+        dag_state.write().accept_blocks(blocks.clone());
+
+        let block_refs: Vec<_> = blocks.iter().map(|b| b.reference()).collect();
+        let fetched = service
+            .fetch_blocks(block_refs, vec![0; 4], true)
+            .await
+            .unwrap();
+        assert_eq!(
+            fetched,
+            blocks
+                .iter()
+                .map(|b| b.serialized().clone())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fetch_blocks_missing_blocks_dropped() {
+        let (service, _dag_state, store) = setup_service();
+
+        let blocks = test_blocks(1);
+        store
+            .write(WriteBatch::default().blocks(blocks.clone()))
+            .unwrap();
+
+        // Request one existing block and one unknown block.
+        let unknown_ref = VerifiedBlock::new_for_test(TestBlock::new(5, 0).build()).reference();
+        let fetched = service
+            .fetch_blocks(vec![blocks[0].reference(), unknown_ref], vec![], false)
+            .await
+            .unwrap();
+        assert_eq!(fetched, vec![blocks[0].serialized().clone()]);
     }
 }

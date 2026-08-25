@@ -4,7 +4,7 @@
 use std::{sync::Arc, time::Duration};
 
 use arc_swap::{ArcSwapOption, Guard};
-use consensus_core::{ClientError, TransactionClient};
+use consensus_core::{ClientError, Priority, TransactionClient};
 use sui_types::{
     error::{SuiErrorKind, SuiResult},
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
@@ -92,8 +92,15 @@ impl ConsensusClient for LazyMysticetiClient {
             .iter()
             .map(|t| bcs::to_bytes(t).expect("Serializing consensus transaction cannot fail"))
             .collect::<Vec<_>>();
+        // Only a lone system message uses the reserved priority lane; batches (soft
+        // bundles) and pings are user traffic. Keeps user transactions out of the lane.
+        let priority = if transactions.len() == 1 && !transactions[0].is_user_transaction() {
+            Priority::High
+        } else {
+            Priority::Normal
+        };
         let (block_ref, tx_indices, status_waiter) = client
-            .submit(transactions_bytes)
+            .submit(transactions_bytes, priority)
             .await
             .tap_err(|err| {
                 // Will be logged by caller as well.

@@ -17,6 +17,7 @@ use crate::{
     error::ConsensusResult,
     linearizer::Linearizer,
     storage::Store,
+    task::spawn_blocking,
     transaction_vote_tracker::TransactionVoteTracker,
 };
 
@@ -73,25 +74,30 @@ impl CommitObserver {
         // Recover blocks needed for future commits (and block proposals).
         // Some blocks might have been recovered as committed blocks in recover_and_send_commits().
         // They will just be ignored.
-        tokio::runtime::Handle::current()
-            .spawn_blocking({
-                let transaction_vote_tracker = observer.transaction_vote_tracker.clone();
-                let gc_round = observer.dag_state.read().gc_round();
-                move || {
-                    transaction_vote_tracker.recover_blocks_after_round(gc_round);
-                }
-            })
-            .await
-            .expect("Spawn blocking should not fail");
+        if let Err(e) = spawn_blocking({
+            let transaction_vote_tracker = observer.transaction_vote_tracker.clone();
+            let gc_round = observer.dag_state.read().gc_round();
+            move || {
+                transaction_vote_tracker.recover_blocks_after_round(gc_round);
+            }
+        })
+        .await
+        {
+            info!("Skipping block recovery for transaction voting: {e}");
+        }
 
         observer
+    }
+
+    pub(crate) async fn stop(&mut self) {
+        self.commit_finalizer_handle.stop().await;
     }
 
     /// Creates and returns a list of committed subdags containing committed blocks, from a sequence
     /// of selected leader blocks, and whether they come from local committer or commit sync remotely.
     ///
     /// Also, buffers the commits to DagState and forwards committed subdags to commit finalizer.
-    pub(crate) fn handle_commit(
+    pub(crate) fn handle_committed_leaders(
         &mut self,
         committed_leaders: Vec<VerifiedBlock>,
         local: bool,
@@ -101,7 +107,7 @@ impl CommitObserver {
             .metrics
             .node_metrics
             .scope_processing_time
-            .with_label_values(&["CommitObserver::handle_commit"])
+            .with_label_values(&["CommitObserver::handle_committed_leaders"])
             .start_timer();
 
         let mut committed_sub_dags = self.commit_interpreter.handle_commit(committed_leaders);
@@ -128,6 +134,11 @@ impl CommitObserver {
             .add_scoring_subdags(committed_sub_dags.clone());
 
         Ok(committed_sub_dags)
+    }
+
+    /// Forwards a committed subdag to the commit finalizer. Used by `Core::post_commit`.
+    pub(crate) fn send_to_finalizer(&self, subdag: CommittedSubDag) -> ConsensusResult<()> {
+        self.commit_finalizer_handle.send(subdag)
     }
 
     async fn recover_and_send_commits(&mut self, commit_consumer: &CommitConsumerArgs) {
@@ -261,38 +272,49 @@ impl CommitObserver {
         );
     }
 
-    fn report_metrics(&self, committed: &[CommittedSubDag]) {
+    /// Reports per-commit metrics and logs the commit. Called for every commit on the
+    /// legacy path via `report_metrics`, and directly by `Core::post_commit` on the v3 path.
+    pub(crate) fn report_commit_metrics(&self, commit: &CommittedSubDag) {
         let metrics = &self.context.metrics.node_metrics;
         let utc_now = self.context.clock.timestamp_utc_ms();
 
-        for commit in committed {
-            info!(
-                "Consensus commit {} with leader {} has {} blocks",
-                commit.commit_ref,
-                commit.leader,
-                commit.blocks.len()
-            );
+        info!(
+            "Consensus commit {} with leader {} has {} blocks",
+            commit.commit_ref,
+            commit.leader,
+            commit.blocks.len()
+        );
 
-            metrics
-                .last_committed_leader_round
-                .set(commit.leader.round as i64);
-            metrics
-                .last_commit_index
-                .set(commit.commit_ref.index as i64);
-            metrics
-                .blocks_per_commit_count
-                .observe(commit.blocks.len() as f64);
+        metrics
+            .last_committed_leader_round
+            .set(commit.leader.round as i64);
+        metrics
+            .last_commit_index
+            .set(commit.commit_ref.index as i64);
+        metrics
+            .blocks_per_commit_count
+            .observe(commit.blocks.len() as f64);
 
-            for block in &commit.blocks {
-                let latency_ms = utc_now
-                    .checked_sub(block.timestamp_ms())
-                    .unwrap_or_default();
+        for block in &commit.blocks {
+            let latency_ms = utc_now.saturating_sub(block.timestamp_ms());
+            metrics
+                .block_commit_latency
+                .observe(Duration::from_millis(latency_ms).as_secs_f64());
+            if block.author() == self.context.own_index {
                 metrics
-                    .block_commit_latency
+                    .proposed_block_commit_latency
                     .observe(Duration::from_millis(latency_ms).as_secs_f64());
             }
         }
+    }
 
+    fn report_metrics(&self, committed: &[CommittedSubDag]) {
+        for commit in committed {
+            self.report_commit_metrics(commit);
+        }
+        // Only the legacy path batches multiple subdags per call. The v3 path
+        // handles one commit at a time, so this metric would always observe 1
+        // and is intentionally not reported there.
         self.context
             .metrics
             .node_metrics
@@ -367,9 +389,11 @@ mod tests {
             .map(Option::unwrap)
             .collect::<Vec<_>>();
 
-        let commits = observer.handle_commit(leaders.clone(), true).unwrap();
+        let commits = observer
+            .handle_committed_leaders(leaders.clone(), true)
+            .unwrap();
 
-        // Check commits are returned by CommitObserver::handle_commit is accurate
+        // Check commits are returned by CommitObserver::handle_committed_leaders is accurate
         let mut expected_stored_refs: Vec<BlockRef> = vec![];
         for (idx, subdag) in commits.iter().enumerate() {
             tracing::info!("{subdag:?}");
@@ -382,11 +406,12 @@ mod tests {
                     .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
                     .cloned()
                     .collect::<Vec<_>>();
-                let blocks = dag_state
-                    .read()
-                    .get_blocks(&block_refs)
-                    .into_iter()
-                    .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
+                let block_opts = dag_state.read().get_blocks(&block_refs);
+                let blocks = block_opts.iter().map(|block_opt| {
+                    block_opt
+                        .as_ref()
+                        .expect("We should have all blocks in dag state.")
+                });
                 median_timestamp_by_stake(&context, blocks).unwrap()
             };
 
@@ -424,6 +449,31 @@ mod tests {
             }
         }
         assert_eq!(processed_subdag_index, leaders.len());
+
+        // Own block latencies are observed once per committed & finalized block
+        // authored by this authority.
+        let own_committed_blocks = commits
+            .iter()
+            .flat_map(|commit| commit.blocks.iter())
+            .filter(|block| block.author() == context.own_index)
+            .count() as u64;
+        assert!(own_committed_blocks > 0);
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .proposed_block_commit_latency
+                .get_sample_count(),
+            own_committed_blocks
+        );
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .proposed_block_finalization_latency
+                .get_sample_count(),
+            own_committed_blocks
+        );
 
         verify_channel_empty(&mut commit_receiver).await;
 
@@ -493,7 +543,7 @@ mod tests {
         // consumer of the consensus output channel.
         let expected_last_processed_index: usize = 2;
         let mut commits = observer
-            .handle_commit(leaders[..expected_last_processed_index].to_vec(), true)
+            .handle_committed_leaders(leaders[..expected_last_processed_index].to_vec(), true)
             .unwrap();
 
         // Check commits sent over consensus output channel is accurate
@@ -522,7 +572,7 @@ mod tests {
         // the consumer side where the commits were not persisted.
         commits.append(
             &mut observer
-                .handle_commit(leaders[expected_last_processed_index..].to_vec(), true)
+                .handle_committed_leaders(leaders[expected_last_processed_index..].to_vec(), true)
                 .unwrap(),
         );
 

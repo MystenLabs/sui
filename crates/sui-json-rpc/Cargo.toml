@@ -6,6 +6,9 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 arc-swap.workspace = true
 backoff.workspace = true
@@ -56,7 +59,7 @@ mysten-metrics.workspace = true
 shared-crypto.workspace = true
 typed-store-error.workspace = true
 cached.workspace = true
-im.workspace = true
+imbl.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true

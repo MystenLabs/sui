@@ -1,0 +1,65 @@
+// `r = f(r)` in a loop makes a reference a dot-star extension of itself. The fixed point must not
+// lose an extension that is live across the loop.
+
+//# publish
+mvir 0x2::live_extension_across_loop {
+
+public struct S has copy, drop { f: u64 }
+
+fun id(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+// f is borrowed before the loop and written after it.
+fun t(s: &mut Self::S, n: u64) {
+    let r: &mut Self::S;
+    let f: &mut u64;
+label b0:
+    r = copy(s);
+    f = &mut move(s).S::f;
+label loop_header:
+    jump_if (copy(n) == 0) loop_exit;
+    n = move(n) - 1;
+    r = Self::id(move(r));
+    jump loop_header;
+label loop_exit:
+    *copy(r) = S { f: 1 };
+    *move(f) = 2;
+    _ = move(r);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::extension_across_back_edge {
+
+public struct S has copy, drop { f: u64 }
+
+fun id(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+// f is carried around the back edge, so it is live at the header.
+fun t(s: &mut Self::S, n: u64) {
+    let r: &mut Self::S;
+    let f: &mut u64;
+label b0:
+    r = copy(s);
+    f = &mut move(s).S::f;
+label loop_header:
+    *copy(r) = S { f: 1 };
+    jump_if (copy(n) == 0) loop_exit;
+    n = move(n) - 1;
+    r = Self::id(move(r));
+    f = &mut copy(r).S::f;
+    jump loop_header;
+label loop_exit:
+    _ = move(f);
+    _ = move(r);
+    return;
+}
+
+}

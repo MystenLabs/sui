@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E01001]: invalid object construction
+error[ESC01001]: invalid object construction
    ┌─ tests/sui_mode/id_leak/through_pack.move:22:17
    │
 22 │         let c = C { id };

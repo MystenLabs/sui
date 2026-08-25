@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_2024/ide_mode/seq_item_after_incomplete.move:7:9
   │
 7 │         let _tmp1 = 42;
@@ -14,7 +14,7 @@ error[E01002]: unexpected token
   │         Unexpected 'let'
   │         Expected a variable or struct name
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/seq_item_after_incomplete.move:13:9
    │
 13 │         let _tmp1 = 42;
@@ -23,7 +23,7 @@ error[E01002]: unexpected token
    │         Unexpected 'let'
    │         Expected ';'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/seq_item_after_incomplete.move:19:9
    │
 19 │         let _tmp1 = 42;
@@ -32,13 +32,13 @@ error[E01002]: unexpected token
    │         Unexpected 'let'
    │         Expected an expression term
 
-error[E03009]: unbound variable
+error[EC03009]: unbound variable
    ┌─ tests/move_2024/ide_mode/seq_item_after_incomplete.move:24:9
    │
 24 │         f                // parses correctly but without semicolon
    │         ^ Unbound variable 'f'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/seq_item_after_incomplete.move:25:9
    │
 25 │         let _tmp1 = 42;
@@ -47,7 +47,7 @@ error[E01002]: unexpected token
    │         Unexpected 'let'
    │         Expected ';'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/seq_item_after_incomplete.move:31:9
    │
 31 │         let _tmp1 = 42;
@@ -56,7 +56,7 @@ error[E01002]: unexpected token
    │         Unexpected 'let'
    │         Expected an expression term
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/seq_item_after_incomplete.move:41:9
    │
 41 │         foo(param)     // returned value should still be correct if foo invocation parses correctly
@@ -65,13 +65,13 @@ error[E01002]: unexpected token
    │         Unexpected 'foo'
    │         Expected ';'
 
-error[E03010]: unbound field
+error[EC03010]: unbound field
    ┌─ tests/move_2024/ide_mode/seq_item_after_incomplete.move:52:9
    │
 52 │         param.bar       // parses correctly
    │         ^^^^^^^^^ Unbound field 'bar' in 'a::m::SomeStruct'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/seq_item_after_incomplete.move:53:9
    │
 53 │         param.bar()     // returned value should still be correct if foo invocation parses correctly

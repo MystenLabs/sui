@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E01003]: invalid modifier
+error[EC01003]: invalid modifier
   ┌─ tests/move_2024/naming/unresolved_type_no_args.move:2:5
   │
 2 │     struct Mine { f: Q }
@@ -13,7 +13,7 @@ error[E01003]: invalid modifier
   │
   = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
 
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
   ┌─ tests/move_2024/naming/unresolved_type_no_args.move:2:22
   │
 2 │     struct Mine { f: Q }
@@ -23,7 +23,7 @@ error[E03006]: unexpected name in this position
   │            │         Did you mean: 'Mine'
   │            Similarly named defintion found here
 
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
   ┌─ tests/move_2024/naming/unresolved_type_no_args.move:3:16
   │
 2 │     struct Mine { f: Q }
@@ -34,7 +34,7 @@ error[E03006]: unexpected name in this position
   │                Could not resolve the name 'S'
   │                Did you mean: 'Mine'
 
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
   ┌─ tests/move_2024/naming/unresolved_type_no_args.move:3:20
   │
 2 │     struct Mine { f: Q }
@@ -45,7 +45,7 @@ error[E03006]: unexpected name in this position
   │                    Could not resolve the name 'G'
   │                    Did you mean: 'Mine'
 
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
   ┌─ tests/move_2024/naming/unresolved_type_no_args.move:4:16
   │
 2 │     struct Mine { f: Q }
@@ -57,7 +57,7 @@ error[E03006]: unexpected name in this position
   │                Could not resolve the name 'R'
   │                Did you mean: 'Mine'
 
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
   ┌─ tests/move_2024/naming/unresolved_type_no_args.move:4:24
   │
 2 │     struct Mine { f: Q }

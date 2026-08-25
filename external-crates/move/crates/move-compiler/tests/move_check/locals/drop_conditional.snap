@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_check/locals/drop_conditional.move:14:11
    │
 11 │         let x = Cup<R> { f: R{} };
@@ -18,7 +18,7 @@ error[E06001]: unused value without 'drop'
 14 │         &x;
    │           ^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_check/locals/drop_conditional.move:14:11
    │
 13 │         let x = Pair<S, R> { f1: S{}, f2: R{} };

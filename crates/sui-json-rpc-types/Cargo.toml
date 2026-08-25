@@ -6,6 +6,9 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
 fastcrypto.workspace = true
@@ -39,4 +42,6 @@ sui-json.workspace = true
 sui-package-resolver.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
 insta.workspace = true
+tokio = { workspace = true, features = ["macros", "rt"] }

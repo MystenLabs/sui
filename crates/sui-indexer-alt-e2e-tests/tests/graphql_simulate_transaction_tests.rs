@@ -187,11 +187,16 @@ impl GraphQlTestCluster {
         let pipelines: Vec<String> = indexer.pipelines().map(|s| s.to_string()).collect();
         let s_indexer = indexer.run().await.expect("Failed to start indexer");
 
+        let kv_args = KvArgs {
+            ledger_grpc_url: Some(validator_cluster.rpc_url().parse().unwrap()),
+            ..Default::default()
+        };
+
         let s_graphql = start_graphql(
             Some(database_url),
             fullnode_args,
             DbArgs::default(),
-            KvArgs::default(),
+            kv_args,
             ConsistentReaderArgs::default(),
             GraphQlArgs {
                 rpc_listen_address: graphql_listen_address,

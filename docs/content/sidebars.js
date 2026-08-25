@@ -102,6 +102,7 @@ export default {
         items: [
             'develop/manage-packages/move-package-management',
             'develop/manage-packages/automated-address-management',
+            'develop/manage-packages/source-verification',
         ]
       },      
       {
@@ -129,6 +130,7 @@ export default {
             'develop/transactions/ptbs/building-ptb',
             'develop/transactions/ptbs/inputs-and-results',
             'develop/transactions/ptbs/ts-sdk-ptb-template',
+            'develop/transactions/ptbs/ptb-cookbook',
           ],
         },
         {
@@ -164,6 +166,7 @@ export default {
       link: { type: 'doc', id: 'develop/accessing-data/index' },
       items: [
         'develop/accessing-data/data-serving',
+        'develop/accessing-data/rpc-providers',
         'develop/accessing-data/json-rpc-migration',
         {
           type: 'category',
@@ -172,6 +175,7 @@ export default {
           items: [
             'develop/accessing-data/grpc/what-is-grpc',
             'develop/accessing-data/grpc/using-grpc',
+            'develop/accessing-data/grpc/grpc-migration-cookbook',
           ],
         },
         {
@@ -181,6 +185,7 @@ export default {
           items: [
             'develop/accessing-data/graphql/graphql-rpc',
             'develop/accessing-data/graphql/query-with-graphql',
+            'develop/accessing-data/graphql/graphql-migration-cookbook',
           ],
         },
         {
@@ -229,11 +234,13 @@ export default {
         'develop/security/best-practices',
       ],
     },
+    'develop/production-readiness',
   ],
 
   gettingStartedSidebar: [
     'getting-started',
     { type: 'link', label: 'Skills', href: '/skills' },
+    'getting-started/sui-mcp-server',
     {
       type: 'category',
       label: 'Hello, World!',
@@ -287,6 +294,8 @@ export default {
             'getting-started/examples/lootbox-ctf',
             'getting-started/examples/merchant-ctf',
             'getting-started/examples/staking-ctf',
+            'getting-started/examples/consumer-app-zklogin',
+            'getting-started/examples/defi-trading-zklogin',
           ],
         },
         'getting-started/examples/event-indexer',
@@ -329,6 +338,9 @@ export default {
               'onchain-finance/asset-custody/wallets/suilink',
             ],
           },
+          'onchain-finance/asset-custody/address-aliases',
+          'onchain-finance/asset-custody/fiat-on-ramps',
+          'onchain-finance/asset-custody/fiat-off-ramps',
         ],
       },
       {
@@ -352,7 +364,6 @@ export default {
                 'onchain-finance/fungible-tokens/create-a-fungible-token',
             ],
           },
-          'onchain-finance/fungible-tokens/integrating-with-stablecoins',
           'onchain-finance/fungible-tokens/regulated-tokens',
           'onchain-finance/fungible-tokens/token-vesting-strategies',
           'onchain-finance/fungible-tokens/sui-bridging',
@@ -368,6 +379,17 @@ export default {
           'onchain-finance/tokenized-assets/create-nft',
         ],
       },
+    {
+      type: 'category',
+      label: 'Payments',
+      link: { type: 'doc', id: 'onchain-finance/payments' },
+      items: [
+        'onchain-finance/choose-payments-model',
+        'onchain-finance/payment-kit',
+        'onchain-finance/payment-intents',
+        'onchain-finance/funding-wallets',
+      ],
+    },
       {
         type: 'category',
         label: 'Example Asset Patterns',
@@ -377,6 +399,7 @@ export default {
           'onchain-finance/examples-patterns/loyalty-tokens',
           'onchain-finance/examples-patterns/in-game-currency',
           'onchain-finance/examples-patterns/soulbound-tokens',
+          'onchain-finance/examples-patterns/staking-rewards',
           'onchain-finance/examples-patterns/nft-rental',
           'onchain-finance/examples-patterns/kiosk',
           'onchain-finance/examples-patterns/wasm-template',
@@ -406,98 +429,129 @@ export default {
       },
       {
       type: 'category',
-      label: 'DeepBookV3',
-      link: { type: 'doc', id: 'onchain-finance/deepbookv3/deepbook' },
+      label: 'DeepBook',
+      link: { type: 'doc', id: 'onchain-finance/deepbook/index' },
       items: [
-        'onchain-finance/deepbookv3/design',
+        'onchain-finance/deepbook/deepbookv3/design',
+        'onchain-finance/deepbook/deepbookv3/fees-and-funding',
+        'onchain-finance/deepbook/deepbookv3/spot-workflow',
         {
           type: 'category',
-          label: 'Contract Information',
-          link: { type: 'doc', id: 'onchain-finance/deepbookv3/contract-information' },
+          label: 'DeepBookV3',
+          link: { type: 'doc', id: 'onchain-finance/deepbook/deepbookv3/deepbook' },
           items: [
-            'onchain-finance/deepbookv3/contract-information/balance-manager',
-            'onchain-finance/deepbookv3/contract-information/orders',
-            'onchain-finance/deepbookv3/contract-information/flash-loans',
-            'onchain-finance/deepbookv3/contract-information/swaps',
-            'onchain-finance/deepbookv3/contract-information/staking-governance',
-            'onchain-finance/deepbookv3/contract-information/permissionless-pool',
-            'onchain-finance/deepbookv3/contract-information/query-the-pool',
-            'onchain-finance/deepbookv3/contract-information/referral',
-            'onchain-finance/deepbookv3/contract-information/ewma',
+            {
+              type: 'category',
+              label: 'Contract Information',
+              link: { type: 'doc', id: 'onchain-finance/deepbook/deepbookv3/contract-information' },
+              items: [
+                'onchain-finance/deepbook/deepbookv3/contract-information/balance-manager',
+                'onchain-finance/deepbook/deepbookv3/contract-information/orders',
+                'onchain-finance/deepbook/deepbookv3/contract-information/flash-loans',
+                'onchain-finance/deepbook/deepbookv3/contract-information/swaps',
+                'onchain-finance/deepbook/deepbookv3/contract-information/staking-governance',
+                'onchain-finance/deepbook/deepbookv3/contract-information/permissionless-pool',
+                'onchain-finance/deepbook/deepbookv3/contract-information/query-the-pool',
+                'onchain-finance/deepbook/deepbookv3/contract-information/referral',
+                'onchain-finance/deepbook/deepbookv3/contract-information/ewma',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'DeepBookV3 SDK',
+              link: { type: 'doc', id: 'onchain-finance/deepbook/deepbookv3-sdk/deepbookv3-sdk' },
+              items: [
+                'onchain-finance/deepbook/deepbookv3-sdk/balance-manager',
+                'onchain-finance/deepbook/deepbookv3-sdk/pools',
+                'onchain-finance/deepbook/deepbookv3-sdk/orders',
+                'onchain-finance/deepbook/deepbookv3-sdk/flash-loans',
+                'onchain-finance/deepbook/deepbookv3-sdk/swaps',
+                'onchain-finance/deepbook/deepbookv3-sdk/staking-governance',
+                'onchain-finance/deepbook/deepbookv3-sdk/ptb-cli-cookbook',
+                'onchain-finance/deepbook/deepbookv3-sdk/composing-transactions',
+              ],
+            },
           ],
         },
         {
           type: 'category',
-          label: 'DeepBookV3 SDK',
-          link: { type: 'doc', id: 'onchain-finance/deepbookv3-sdk/deepbookv3-sdk' },
+          label: 'Margin',
+          link: { type: 'doc', id: 'onchain-finance/deepbook/deepbook-margin/deepbook-margin' },
           items: [
-            'onchain-finance/deepbookv3-sdk/balance-manager',
-            'onchain-finance/deepbookv3-sdk/pools',
-            'onchain-finance/deepbookv3-sdk/orders',
-            'onchain-finance/deepbookv3-sdk/flash-loans',
-            'onchain-finance/deepbookv3-sdk/swaps',
-            'onchain-finance/deepbookv3-sdk/staking-governance',
+            'onchain-finance/deepbook/deepbook-margin/design',
+            'onchain-finance/deepbook/deepbook-margin/margin-risks',
+            'onchain-finance/deepbook/deepbook-margin/leveraged-workflow',
+            'onchain-finance/deepbook/deepbook-margin/margin-integration',
+            {
+              type: 'category',
+              label: 'Contract Information',
+              link: { type: 'doc', id: 'onchain-finance/deepbook/deepbook-margin/contract-information' },
+              items: [
+                'onchain-finance/deepbook/deepbook-margin/contract-information/margin-manager',
+                'onchain-finance/deepbook/deepbook-margin/contract-information/margin-pool',
+                'onchain-finance/deepbook/deepbook-margin/contract-information/orders',
+                'onchain-finance/deepbook/deepbook-margin/contract-information/maintainer',
+                'onchain-finance/deepbook/deepbook-margin/contract-information/tpsl',
+                'onchain-finance/deepbook/deepbook-margin/contract-information/interest-rates',
+                'onchain-finance/deepbook/deepbook-margin/contract-information/risk-ratio',
+                'onchain-finance/deepbook/deepbook-margin/contract-information/supply-referral',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'DeepBook Margin SDK',
+              link: { type: 'doc', id: 'onchain-finance/deepbook/deepbook-margin-sdk/deepbook-margin-sdk' },
+              items: [
+                'onchain-finance/deepbook/deepbook-margin-sdk/margin-manager',
+                'onchain-finance/deepbook/deepbook-margin-sdk/margin-pool',
+                'onchain-finance/deepbook/deepbook-margin-sdk/orders',
+                'onchain-finance/deepbook/deepbook-margin-sdk/maintainer',
+                'onchain-finance/deepbook/deepbook-margin-sdk/tpsl',
+              ],
+            },
           ],
         },
-        'onchain-finance/deepbookv3/deepbookv3-indexer',
+        {
+          type: 'category',
+          label: 'Predict',
+          link: { type: 'doc', id: 'onchain-finance/deepbook/deepbook-predict/deepbook-predict' },
+          items: [
+            'onchain-finance/deepbook/deepbook-predict/tutorial',
+            'onchain-finance/deepbook/deepbook-predict/design',
+            {
+              type: 'category',
+              label: 'Contract Information',
+              link: { type: 'doc', id: 'onchain-finance/deepbook/deepbook-predict/contract-information' },
+              items: [
+                'onchain-finance/deepbook/deepbook-predict/contract-information/predict',
+                'onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager',
+                'onchain-finance/deepbook/deepbook-predict/contract-information/market-keys',
+                'onchain-finance/deepbook/deepbook-predict/contract-information/oracle',
+                'onchain-finance/deepbook/deepbook-predict/contract-information/vault',
+                'onchain-finance/deepbook/deepbook-predict/contract-information/registry',
+              ],
+            },
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Operate',
+          items: [
+            'onchain-finance/deepbook/deepbookv3/deepbookv3-indexer',
+            'onchain-finance/deepbook/deepbook-margin/deepbook-margin-indexer',
+          ],
+        },
       ],
     },
     {
       type: 'category',
-      label: 'DeepBook Margin',
-      link: { type: 'doc', id: 'onchain-finance/deepbook-margin/deepbook-margin' },
+      label: 'Oracles',
+      link: { type: 'doc', id: 'onchain-finance/oracles/index' },
       items: [
-        'onchain-finance/deepbook-margin/design',
-        'onchain-finance/deepbook-margin/margin-risks',
-        {
-          type: 'category',
-          label: 'Contract Information',
-          link: { type: 'doc', id: 'onchain-finance/deepbook-margin/contract-information' },
-          items: [
-            'onchain-finance/deepbook-margin/contract-information/margin-manager',
-            'onchain-finance/deepbook-margin/contract-information/margin-pool',
-            'onchain-finance/deepbook-margin/contract-information/orders',
-            'onchain-finance/deepbook-margin/contract-information/maintainer',
-            'onchain-finance/deepbook-margin/contract-information/tpsl',
-            'onchain-finance/deepbook-margin/contract-information/interest-rates',
-            'onchain-finance/deepbook-margin/contract-information/risk-ratio',
-            'onchain-finance/deepbook-margin/contract-information/supply-referral',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'DeepBook Margin SDK',
-          link: { type: 'doc', id: 'onchain-finance/deepbook-margin-sdk/deepbook-margin-sdk' },
-          items: [
-            'onchain-finance/deepbook-margin-sdk/margin-manager',
-            'onchain-finance/deepbook-margin-sdk/margin-pool',
-            'onchain-finance/deepbook-margin-sdk/orders',
-            'onchain-finance/deepbook-margin-sdk/maintainer',
-            'onchain-finance/deepbook-margin-sdk/tpsl',
-          ],
-        },
-        'onchain-finance/deepbook-margin/deepbook-margin-indexer',
-      ],
-    },
-    {
-      type: 'category',
-      label: 'DeepBook Predict',
-      link: { type: 'doc', id: 'onchain-finance/deepbook-predict/deepbook-predict' },
-      items: [
-        'onchain-finance/deepbook-predict/design',
-        {
-          type: 'category',
-          label: 'Contract Information',
-          link: { type: 'doc', id: 'onchain-finance/deepbook-predict/contract-information' },
-          items: [
-            'onchain-finance/deepbook-predict/contract-information/predict',
-            'onchain-finance/deepbook-predict/contract-information/predict-manager',
-            'onchain-finance/deepbook-predict/contract-information/market-keys',
-            'onchain-finance/deepbook-predict/contract-information/oracle',
-            'onchain-finance/deepbook-predict/contract-information/vault',
-            'onchain-finance/deepbook-predict/contract-information/registry',
-          ],
-        },
+        'onchain-finance/oracles/consuming-price-feeds',
+        'onchain-finance/oracles/move-adapter',
+        'onchain-finance/oracles/oracle-safety',
+        'onchain-finance/oracles/resolution-patterns',
       ],
     },
     {
@@ -509,8 +563,6 @@ export default {
         'onchain-finance/kiosk/kiosk-apps',
       ],
     },
-    'onchain-finance/payment-kit',
-	'onchain-finance/payment-intents',
   ],
 
 suiStackSidebar: [
@@ -539,17 +591,31 @@ suiStackSidebar: [
       label: 'Seal',
       link: { type: 'doc', id: 'sui-stack/seal/index' },
       items: [
+        'sui-stack/seal/server-overview',
+        'sui-stack/seal/getting-started',
         {
-          type: 'link',
-          label: 'Seal Docs',
-          href: 'https://seal-docs.wal.app',
+          type: 'category',
+          label: 'Developer guide',
+          items: [
+            'sui-stack/seal/design',
+            'sui-stack/seal/using-seal',
+            'sui-stack/seal/example-patterns',
+            'sui-stack/seal/security-best-practices',
+          ],
         },
+        {
+          type: 'category',
+          label: 'Operator guide',
+          items: [
+            'sui-stack/seal/key-server-ops',
+            'sui-stack/seal/key-server-committee-ops',
+            'sui-stack/seal/aggregator',
+            'sui-stack/seal/seal-cli',
+          ],
+        },
+        'sui-stack/seal/pricing',
+        'sui-stack/seal/terms-of-service',
         'sui-stack/seal/sui-stack-seal',
-        {
-          type: 'link',
-          label: 'Messaging SDK Chat App Example →',
-          href: '/sui-stack/messaging/chat-app',
-        },
       ],
     },
     {
@@ -618,12 +684,34 @@ suiStackSidebar: [
       label: 'SuiNS',
       link: { type: 'doc', id: 'sui-stack/suins/index' },
       items: [
+        'sui-stack/suins/user',
+        'sui-stack/suins/communities',
+        'sui-stack/suins/developer',
         {
-          type: 'link',
-          label: 'SuiNS Docs',
-          href: 'https://docs.suins.io',
+          type: 'category',
+          label: 'SDK',
+          link: { type: 'doc', id: 'sui-stack/suins/developer/sdk' },
+          items: [
+            'sui-stack/suins/developer/sdk/querying',
+            'sui-stack/suins/developer/sdk/transactions',
+            'sui-stack/suins/developer/sdk/subnames',
+          ],
         },
+        'sui-stack/suins/node-operator',
+        'sui-stack/suins/dao',
         'sui-stack/suins/sui-stack-suins',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Move Registry (MVR)',
+      link: { type: 'doc', id: 'sui-stack/mvr/move-registry' },
+      items: [
+        'sui-stack/mvr/mvr-names',
+        'sui-stack/mvr/managing-package-info',
+        'sui-stack/mvr/maintainer-practices',
+        'sui-stack/mvr/tooling/mvr-cli',
+        'sui-stack/mvr/tooling/typescript-sdk',
       ],
     },
     {
@@ -660,17 +748,17 @@ suiStackSidebar: [
 		{
           type: 'link',
           label: 'DeepBookV3',
-          href: 'https://docs.sui.io/onchain-finance/deepbookv3/deepbook',
+          href: 'https://docs.sui.io/onchain-finance/deepbook/deepbookv3/deepbook',
         },
 		{
           type: 'link',
           label: 'DeepBook Margin',
-          href: 'https://docs.sui.io/onchain-finance/deepbook-margin/design',
+          href: 'https://docs.sui.io/onchain-finance/deepbook/deepbook-margin/design',
         },
 		{
           type: 'link',
           label: 'DeepBook Predict',
-          href: 'https://docs.sui.io/onchain-finance/deepbook-predict/design',
+          href: 'https://docs.sui.io/onchain-finance/deepbook/deepbook-predict/design',
         },
       ],
     },
@@ -679,9 +767,22 @@ suiStackSidebar: [
       label: 'zkLogin',
       link: { type: 'doc', id: 'sui-stack/zklogin-integration/index' },
       items: [
-        'sui-stack/zklogin-integration/zklogin',
+        'sui-stack/zklogin-integration/integration-guide',
         'sui-stack/zklogin-integration/developer-account',
         'sui-stack/zklogin-integration/zklogin-demo',
+        'sui-stack/zklogin-integration/zklogin',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Hashi',
+      link: { type: 'doc', id: 'sui-stack/hashi/index' },
+      items: [
+        {
+          type: 'link',
+          label: 'Hashi Docs',
+          href: 'https://mystenlabs.github.io/hashi/design/',
+        },
       ],
     },
     {
@@ -717,6 +818,7 @@ suiStackSidebar: [
       link: { type: 'doc', id: 'operators/data-management/index', },
       items: [
         'operators/data-management/managing-data',
+        'operators/data-management/available-data-stores',
         'operators/data-management/indexer-stack-setup',
         'operators/data-management/remote-store-setup',
         'operators/data-management/archival-stack-setup',

@@ -1,0 +1,43 @@
+// VecImmBorrow on a &mut vector operand behaves exactly like the explicitly frozen form
+
+//# run
+mvir 0xb1::imm_borrow_through_mut_operand {
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &mut u64;
+    let g: &u64;
+label b0:
+    v = vector<u64; 2>(0, 1);
+    vr = &mut v;
+    e = vec_mut_borrow<u64>(copy(vr), 0);
+    g = vec_imm_borrow<u64>(copy(vr), 1);
+    _ = *move(g);
+    _ = move(e);
+    _ = move(vr);
+    return;
+}
+
+}
+
+//# run
+mvir 0xb2::imm_borrow_through_frozen_operand {
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &mut u64;
+    let g: &u64;
+label b0:
+    v = vector<u64; 2>(0, 1);
+    vr = &mut v;
+    e = vec_mut_borrow<u64>(copy(vr), 0);
+    g = vec_imm_borrow<u64>(freeze(copy(vr)), 1);
+    assert(*move(g) == 1, 42);
+    _ = move(e);
+    _ = move(vr);
+    return;
+}
+
+}

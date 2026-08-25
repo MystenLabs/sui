@@ -5,7 +5,9 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use consensus_config::{ObserverParameters, Parameters as ConsensusParameters};
+use consensus_config::{
+    NetworkPublicKey, ObserverParameters, Parameters as ConsensusParameters, PeerRecord,
+};
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair;
 use sui_config::node::{
@@ -17,6 +19,7 @@ use sui_config::node::{
 };
 use sui_config::node::{RunWithRange, TransactionDriverConfig, default_zklogin_oauth_providers};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
+use sui_config::transaction_deny_config::PeerDenySyncConfig;
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{
     AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME, ConsensusConfig, FULL_NODE_DB_PATH, NodeConfig,
@@ -51,6 +54,7 @@ pub struct ValidatorConfigBuilder {
     chain_override: Option<Chain>,
     state_sync_config: Option<StateSyncConfig>,
     observer_config: Option<ObserverParameters>,
+    peer_deny_sync_config: Option<PeerDenySyncConfig>,
 }
 
 impl ValidatorConfigBuilder {
@@ -148,6 +152,11 @@ impl ValidatorConfigBuilder {
         self
     }
 
+    pub fn with_peer_deny_sync_config(mut self, config: PeerDenySyncConfig) -> Self {
+        self.peer_deny_sync_config = Some(config);
+        self
+    }
+
     pub fn build(
         self,
         validator: ValidatorGenesisConfig,
@@ -172,6 +181,7 @@ impl ValidatorConfigBuilder {
                         .server_port
                         .or_else(|| Some(local_ip_utils::get_available_port(&localhost))),
                     allowlist: observer_config.allowlist,
+                    quorum_release: observer_config.quorum_release,
                     peers: observer_config.peers,
                 },
                 ..Default::default()
@@ -222,6 +232,7 @@ impl ValidatorConfigBuilder {
 
         NodeConfig {
             recent_submission_dedup_window_ms: None,
+            address_prober: None,
             protocol_key_pair: AuthorityKeyPairWithPath::new(validator.key_pair),
             network_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(validator.network_key_pair)),
             account_key_pair: KeyPairWithPath::new(validator.account_key_pair),
@@ -255,6 +266,7 @@ impl ValidatorConfigBuilder {
             name_service_registry_id: None,
             name_service_reverse_registry_id: None,
             transaction_deny_config: Default::default(),
+            peer_deny_sync_config: self.peer_deny_sync_config.unwrap_or_default(),
             dev_inspect_disabled: false,
             certificate_deny_config: Default::default(),
             state_debug_dump_config: Default::default(),
@@ -332,7 +344,41 @@ pub struct FullnodeConfigBuilder {
     transaction_driver_config: Option<TransactionDriverConfig>,
     rpc_config: Option<sui_config::RpcConfig>,
     state_sync_config: Option<StateSyncConfig>,
-    observer_config: Option<ObserverParameters>,
+    observer_setup: Option<ObserverSetup>,
+}
+
+/// How a fullnode should be set up as a consensus observer.
+#[derive(Clone, Debug)]
+enum ObserverSetup {
+    /// Use the given observer parameters as-is. Peers must be non-empty.
+    Explicit(ObserverParameters),
+    /// Derive the observer peer from the validator at this index in the network
+    /// config, which must have its observer server enabled.
+    SubscribeToValidator { index: usize },
+}
+
+/// Builds the observer `PeerRecord` for connecting to the given validator's observer server.
+/// Panics if the validator does not have its observer server enabled.
+pub fn observer_peer_record(validator_config: &NodeConfig) -> PeerRecord {
+    let observer_port = validator_config
+        .consensus_config()
+        .and_then(|c| c.parameters.as_ref())
+        .and_then(|p| p.observer.server_port)
+        .expect("validator must have its observer server enabled");
+    let public_key = NetworkPublicKey::new(validator_config.network_key_pair().public().clone());
+    let host = validator_config
+        .network_address
+        .to_socket_addr()
+        .unwrap()
+        .ip()
+        .to_string();
+    let address = format!("/ip4/{host}/udp/{observer_port}/http")
+        .parse()
+        .unwrap();
+    PeerRecord {
+        public_key,
+        address,
+    }
 }
 
 impl FullnodeConfigBuilder {
@@ -485,7 +531,15 @@ impl FullnodeConfigBuilder {
     }
 
     pub fn with_observer_config(mut self, config: ObserverParameters) -> Self {
-        self.observer_config = Some(config);
+        self.observer_setup = Some(ObserverSetup::Explicit(config));
+        self
+    }
+
+    /// Sets up the fullnode as a consensus observer subscribed to the observer server of the
+    /// validator at `index` in the network config. The peer record is derived from the
+    /// network config at build time, so the validator must have its observer server enabled.
+    pub fn with_observer_subscribed_to_validator(mut self, index: usize) -> Self {
+        self.observer_setup = Some(ObserverSetup::SubscribeToValidator { index });
         self
     }
 
@@ -511,14 +565,33 @@ impl FullnodeConfigBuilder {
 
         let consensus_db_path = config_directory.join(CONSENSUS_DB_NAME).join(&key_path);
 
-        let fullnode_sync_mode = self
-            .observer_config
-            .as_ref()
-            .filter(|c| !c.peers.is_empty())
-            .map(|_| FullNodeSyncMode::ConsensusObserver);
+        // Resolve the observer parameters, deriving the peer record from the network config
+        // when subscribing to a validator.
+        let observer_config = self.observer_setup.map(|setup| match setup {
+            ObserverSetup::Explicit(config) => config,
+            ObserverSetup::SubscribeToValidator { index } => {
+                let validator_config = network_config
+                    .validator_configs
+                    .get(index)
+                    .unwrap_or_else(|| panic!("no validator at index {index} in network config"));
+                ObserverParameters {
+                    peers: vec![observer_peer_record(validator_config)],
+                    ..Default::default()
+                }
+            }
+        });
+
+        let fullnode_sync_mode = observer_config.as_ref().map(|c| {
+            // A consensus config without peers would make this node's intended role a validator.
+            assert!(
+                !c.peers.is_empty(),
+                "observer fullnode must be configured with at least one peer"
+            );
+            FullNodeSyncMode::ConsensusObserver
+        });
 
         // Create consensus config, if observer config is provided.
-        let consensus_config = self.observer_config.map(|observer_config| ConsensusConfig {
+        let consensus_config = observer_config.map(|observer_config| ConsensusConfig {
             db_path: consensus_db_path,
             db_retention_epochs: None,
             db_pruner_period_secs: None,
@@ -529,6 +602,7 @@ impl FullnodeConfigBuilder {
                         .server_port
                         .or_else(|| Some(local_ip_utils::get_available_port(&ip))),
                     allowlist: observer_config.allowlist,
+                    quorum_release: observer_config.quorum_release,
                     peers: observer_config.peers,
                 },
                 ..Default::default()
@@ -600,6 +674,7 @@ impl FullnodeConfigBuilder {
 
         NodeConfig {
             recent_submission_dedup_window_ms: None,
+            address_prober: None,
             protocol_key_pair: AuthorityKeyPairWithPath::new(validator_config.key_pair),
             account_key_pair: KeyPairWithPath::new(validator_config.account_key_pair),
             worker_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(
@@ -646,6 +721,7 @@ impl FullnodeConfigBuilder {
             name_service_registry_id: None,
             name_service_reverse_registry_id: None,
             transaction_deny_config: Default::default(),
+            peer_deny_sync_config: Default::default(),
             dev_inspect_disabled: false,
             certificate_deny_config: Default::default(),
             state_debug_dump_config: Default::default(),

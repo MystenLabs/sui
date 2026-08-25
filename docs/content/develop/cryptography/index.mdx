@@ -1,11 +1,59 @@
 ---
 title: Cryptography
-description: The system supports multiple cryptography algorithms and primitives and can switch between them rapidly.
-keywords: [ cryptographic primitives, public keys, signatures, aggregated signatures, hash functions, cryptographic algorithms, cryptography on sui, zkLogin, transaction authentication, passkey ]
+description: >-
+  The system supports multiple cryptography algorithms and primitives and can
+  switch between them rapidly.
+keywords:
+  - cryptographic primitives
+  - public keys
+  - signatures
+  - aggregated signatures
+  - hash functions
+  - cryptographic algorithms
+  - cryptography on sui
+  - zkLogin
+  - transaction authentication
+  - passkey
 pagination_prev: null
+goal:
+  description: >-
+    Reader can find the right cryptography subtopic for their use case,
+    including hashing, signatures, passkeys, and zkLogin
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Cryptography in Sui?
+  - What topics does Cryptography cover?
+  - How does cryptography work on Sui?
+answer: >-
+  Cryptographic agility is core to Sui. The system supports multiple
+  cryptography algorithms and primitives and can switch between them rapidly.
+  Available primitives include signing schemes, hash functions, zero-knowledge
+  proof verification, and passkey authentication.
 ---
 
-Cryptographic agility is core to Sui. The system supports multiple cryptography algorithms and primitives and can switch between them rapidly.
+Cryptographic agility is core to Sui. The system supports multiple cryptography algorithms and primitives and can switch between them rapidly. This flexibility means applications can adopt new cryptographic standards without protocol-level changes.
+
+## Available primitives
+
+Sui provides the following cryptographic capabilities for smart contracts and applications:
+
+- **[Signing](/develop/cryptography/signing):** Sui supports multiple signature schemes. User transactions authenticate with Ed25519, ECDSA (secp256k1 and secp256r1), or [passkeys](/develop/cryptography/passkeys), and [multisig](/develop/transactions/transaction-auth/multisig) addresses can combine different schemes in a single address. BLS12-381 signatures are available for validator operations and onchain verification in Move but are not used for user transaction authentication.
+- **[Hashing](/develop/cryptography/hashing):** Move modules can compute SHA2-256, SHA3-256, Keccak-256, and Blake2b-256 hashes onchain for data integrity verification, commitment schemes, and cross-chain interoperability.
+- **[Groth16 verification](/develop/cryptography/groth16):** Verify zero-knowledge proofs onchain using the Groth16 proof system over BN254 and BLS12-381 curves. This enables privacy-preserving applications that verify computations without revealing inputs.
+- **[ECVRF](/develop/cryptography/ecvrf):** Verify Elliptic Curve Verifiable Random Function outputs onchain for applications that need provably fair randomness from an external source.
+- **[Passkeys](/develop/cryptography/passkeys):** Authenticate transactions using WebAuthn passkeys (FIDO2), enabling hardware-backed authentication through biometrics or security keys without managing private keys.
+
+For transaction-level authentication including multisig and offline signing, see [Transaction Authentication](/develop/transactions/transaction-auth).
+
+Sui's cryptographic capabilities extend beyond smart contract primitives. For Bitcoin integration through threshold cryptography, see [Hashi](/sui-stack/hashi) (the Sui native Bitcoin orchestrator). For passwordless authentication using device-native key pairs, see [Passkeys](/develop/cryptography/passkeys). For zero-knowledge authentication with OAuth providers, see [zkLogin](/sui-stack/zklogin-integration).
 
 import DocCardList from '@theme/DocCardList';
 

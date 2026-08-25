@@ -3,25 +3,16 @@
 
 //! This linter rule checks for structs with an `id` field of type `UID` without the `key` ability.
 
-use super::{LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode};
+use super::SuiLintCode;
 use crate::expansion::ast::ModuleIdent;
 use crate::parser::ast::DatatypeName;
 use crate::{
     diag,
-    diagnostics::codes::{DiagnosticInfo, Severity, custom},
     naming::ast::{StructDefinition, StructFields},
     parser::ast::Ability_,
     sui_mode::{ID_FIELD_NAME, OBJECT_MODULE_NAME, SUI_ADDR_VALUE, UID_TYPE_NAME},
     typing::visitor::simple_visitor,
 };
-
-const MISSING_KEY_ABILITY_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Sui as u8,
-    LinterDiagnosticCode::MissingKey as u8,
-    "struct with id but missing key ability",
-);
 
 simple_visitor!(
     MissingKeyVisitor,
@@ -33,7 +24,7 @@ simple_visitor!(
     ) -> bool {
         if first_field_has_id_field_of_type_uid(sdef) && lacks_key_ability(sdef) {
             let uid_msg = "Struct's first field has an 'id' field of type 'sui::object::UID' but is missing the 'key' ability.";
-            let diagnostic = diag!(MISSING_KEY_ABILITY_DIAG, (sdef.loc, uid_msg));
+            let diagnostic = diag!(SuiLintCode::MissingKey.diag_info(), (sdef.loc, uid_msg));
             self.add_diag(diagnostic);
         }
         false

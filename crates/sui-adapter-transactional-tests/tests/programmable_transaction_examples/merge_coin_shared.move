@@ -3,7 +3,7 @@
 
 // test invalid usages of shared coin
 
-//# init --addresses test=0x0 --accounts A --shared-object-deletion true
+//# init --addresses test=0x0 --accounts A --enable-feature-flags shared_object_deletion
 
 //# publish
 

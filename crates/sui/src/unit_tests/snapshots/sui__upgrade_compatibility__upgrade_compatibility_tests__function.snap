@@ -2,7 +2,7 @@
 source: crates/sui/src/upgrade_compatibility/../unit_tests/upgrade_compatibility_tests.rs
 expression: normalize_path(err.to_string())
 ---
-error[Compatibility E03001]: function signature mismatch
+error[EUC03001]: function signature mismatch
   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:9:38
   │
 9 │     public fun func_with_wrong_param(a: u32): u64 {
@@ -11,7 +11,7 @@ error[Compatibility E03001]: function signature mismatch
   = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
   = Restore the original function's parameter for function 'func_with_wrong_param'.
 
-error[Compatibility E03001]: function signature mismatch
+error[EUC03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:14:42
    │
 14 │     public fun func_with_wrong_return(): u32 {
@@ -20,7 +20,7 @@ error[Compatibility E03001]: function signature mismatch
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's return type for function 'func_with_wrong_return'.
 
-error[Compatibility E03001]: function signature mismatch
+error[EUC03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:19:49
    │
 19 │     public fun func_with_wrong_param_and_return(a: u32): u32 {
@@ -29,7 +29,7 @@ error[Compatibility E03001]: function signature mismatch
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameter for function 'func_with_wrong_param_and_return'.
 
-error[Compatibility E03001]: function signature mismatch
+error[EUC03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:19:58
    │
 19 │     public fun func_with_wrong_param_and_return(a: u32): u32 {
@@ -38,7 +38,7 @@ error[Compatibility E03001]: function signature mismatch
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's return type for function 'func_with_wrong_param_and_return'.
 
-error[Compatibility E03001]: function signature mismatch
+error[EUC03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:24:16
    │
 24 │     public fun func_with_wrong_param_length(a: u64): u64 {
@@ -47,7 +47,7 @@ error[Compatibility E03001]: function signature mismatch
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameters for function 'func_with_wrong_param_length', expected 2 parameters.
 
-error[Compatibility E03001]: function signature mismatch
+error[EUC03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:29:16
    │
 29 │     public fun func_with_wrong_return_length(): u64 {
@@ -56,7 +56,7 @@ error[Compatibility E03001]: function signature mismatch
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's return types for function 'func_with_wrong_return_length'.
 
-error[Compatibility E03001]: function signature mismatch
+error[EUC03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:42:45
    │
 42 │     public fun func_with_wrong_struct_param(a: StructB): u64 {
@@ -65,7 +65,7 @@ error[Compatibility E03001]: function signature mismatch
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameter for function 'func_with_wrong_struct_param'.
 
-error[Compatibility E03001]: function signature mismatch
+error[EUC03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:47:29
    │
 47 │     public fun ref_to_value(a: u32): u64 {
@@ -74,7 +74,7 @@ error[Compatibility E03001]: function signature mismatch
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameter for function 'ref_to_value'.
 
-error[Compatibility E03001]: function signature mismatch
+error[EUC03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:52:29
    │
 52 │     public fun value_to_ref(a: &u32): u64 {
@@ -83,7 +83,7 @@ error[Compatibility E03001]: function signature mismatch
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameter for function 'value_to_ref'.
 
-error[Compatibility E03001]: function signature mismatch
+error[EUC03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:57:41
    │
 57 │     public fun mutable_to_immutable_ref(a: &u32): u64 {
@@ -92,7 +92,7 @@ error[Compatibility E03001]: function signature mismatch
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameter for function 'mutable_to_immutable_ref'.
 
-error[Compatibility E03001]: function signature mismatch
+error[EUC03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:62:41
    │
 62 │     public fun immutable_to_mutable_ref(a: &mut u32): u64 {

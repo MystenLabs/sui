@@ -1,7 +1,65 @@
 ---
 title: Signing and Sending Transactions
-description: Understanding cryptographic keys, addresses, and signatures on Sui. Sui supports multiple cryptography algorithms and primitives with rapid switching between them.
-keywords: [ authentication, keys, addresses, signatures, Ed25519, ECDSA, multisig, zkLogin, passkey, BIP-32, BIP-44, BIP-39, key derivation, signature requirements ]
+description: >-
+  Understanding cryptographic keys, addresses, and signatures on Sui. Sui
+  supports multiple cryptography algorithms and primitives with rapid switching
+  between them.
+keywords:
+  - authentication
+  - keys
+  - addresses
+  - signatures
+  - Ed25519
+  - ECDSA
+  - multisig
+  - zkLogin
+  - passkey
+  - BIP-32
+  - BIP-44
+  - BIP-39
+  - key derivation
+  - signature requirements
+goal:
+  description: 'Reader understands cryptographic keys, addresses, and signatures on Sui'
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Transaction auth
+    stage: Operations
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Auth overview
+    stage: Signing
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Auth overview
+    stage: Authorization
+questions:
+  - How do I sign and send transactions on Sui?
+  - Which signature schemes does Sui support?
+  - What is Signing and Sending Transactions in Sui?
+answer: >-
+  Understanding cryptographic keys, addresses, and signatures on Sui. Sui
+  supports multiple cryptography algorithms and primitives with rapid switching
+  between them.
 ---
 
 Transaction authentication on Sui involves three core concepts: cryptographic keys that you control, addresses that identify accounts onchain, and signatures that prove ownership. Sui implements these concepts using widely accepted wallet specifications and multiple signature schemes.
@@ -123,7 +181,7 @@ An accepted pure Ed25519 signature must follow:
 
 For more information on advanced signature schemes:
 
-- **zkLogin**: See [zkLogin](/sui-stack/zklogin-integration) for details on zero-knowledge login signatures.
+- **zkLogin**: See [zkLogin](/sui-stack/zklogin-integration) for details on zero-knowledge login signatures. The TypeScript SDK provides `ZkLoginSigner` (`@mysten/sui/zklogin`), which wraps an ephemeral signer and automatically produces zkLogin signatures. Its `getKeyScheme()` returns `'ZkLogin'` to distinguish it from other signing schemes.
 
 - **Passkey**: See [SIP-8](https://github.com/sui-foundation/sips/blob/main/sips/sip-9.md) for passkey implementation details.
 
@@ -210,7 +268,7 @@ The following high-level process describes the overall workflow for constructing
 
 If you are using the address balances feature, the feature automatically removes the need to select or merge gas coins entirely.
 
-If you want to use a specific gas coin, first find the gas coin object ID to be used to pay for gas and explicitly use that in the PTB. If there is no gas coin object, use the [splitCoin](/develop/transactions/ptbs/building-ptb#available-transactions) transaction to create a gas coin object. The split coin transaction should be the first transaction call in the PTB.
+If you want to use a specific gas coin, first find the gas coin object ID to be used to pay for gas and explicitly use that in the PTB. If there is no gas coin object, use the [splitCoin](/develop/transactions/ptbs/building-ptb) transaction to create a gas coin object. The split coin transaction should be the first transaction call in the PTB.
 
 :::
 

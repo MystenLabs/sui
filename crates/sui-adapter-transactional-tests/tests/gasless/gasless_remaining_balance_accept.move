@@ -4,7 +4,7 @@
 // Tests that gasless withdrawals not leaving a balance below the minimum are accepted.
 // gasless_verify_remaining_balance is enabled by --enable-gasless.
 
-//# init --addresses test=0x0 --accounts A B --enable-gasless --enable-accumulators
+//# init --addresses test=0x0 --accounts A B --enable-gasless
 
 //# publish --sender A
 #[allow(deprecated_usage)]

@@ -8,7 +8,7 @@
 #
 # This should fail, because we try to get the linkage table for `b` because `b` is not on-chain
 
-chain_id=$(sui client --client.config $CONFIG chain-identifier)
+chain_id=$(sui client --client.config $CONFIG chain-identifier --format=hex)
 
 add_env_to_toml() {
   echo "[environments]" >> $1/Move.toml

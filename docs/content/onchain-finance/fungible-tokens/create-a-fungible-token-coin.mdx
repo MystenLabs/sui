@@ -1,7 +1,49 @@
 ---
-title: "Create Fungible Tokens: Coin Standard"
+title: 'Create Fungible Tokens: Coin Standard'
 description: Learn how to create currencies and mint coins and tokens on the Sui network.
-keywords: [mint tokens, create tokens, use tokens, publish token, custom tokens, sui CLI, denylist, regulated coins, coin registry, currency registry]
+keywords:
+  - mint tokens
+  - create tokens
+  - use tokens
+  - publish token
+  - custom tokens
+  - sui CLI
+  - denylist
+  - regulated coins
+  - coin registry
+  - currency registry
+goal:
+  description: Reader can create currencies and mint coins and tokens on the Sui network
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Custom coin creation
+    stage: Move Contract
+    eval: covered
+builder_paths_source:
+  dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
+  snapshot: '2026-07-10'
+questions:
+  - 'How do I create fungible tokens: coin standard?'
+  - How do I use the coin standard?
+  - How do I check coin address balances?
+  - 'What is Create Fungible Tokens: Coin Standard in Sui?'
+answer: Learn how to create currencies and mint coins and tokens on the Sui network.
 ---
 
 The Coin standard uses the [`sui::coin`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin.md) module to define fungible assets called coins that have `key` and `store` abilities. Coins support wrapping and public transfer functionality.

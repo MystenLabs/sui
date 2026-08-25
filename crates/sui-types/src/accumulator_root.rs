@@ -14,15 +14,17 @@ use crate::{
     },
     error::{SuiError, SuiErrorKind, SuiResult},
     object::{MoveObject, Object, Owner},
-    storage::{ChildObjectResolver, ObjectStore},
+    storage::{ObjectStore, RuntimeObjectResolver},
 };
 use move_core_types::{
+    account_address::AccountAddress,
     ident_str,
     identifier::IdentStr,
     language_storage::{StructTag, TypeTag},
     u256::U256,
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use sui_protocol_config::ProtocolConfig;
 
 pub const ACCUMULATOR_ROOT_MODULE: &IdentStr = ident_str!("accumulator");
 pub const ACCUMULATOR_METADATA_MODULE: &IdentStr = ident_str!("accumulator_metadata");
@@ -35,6 +37,25 @@ pub const ACCUMULATOR_ROOT_SETTLEMENT_SETTLE_EVENTS_FUNC: &IdentStr = ident_str!
 
 const ACCUMULATOR_KEY_TYPE: &IdentStr = ident_str!("Key");
 const ACCUMULATOR_U128_TYPE: &IdentStr = ident_str!("U128");
+
+pub const SETTLEMENT_MAX_TYPE_INSTANTIATION_NODES: u64 = 512;
+
+pub fn is_settle_u128_call(
+    module_address: &AccountAddress,
+    module: &IdentStr,
+    function: &IdentStr,
+) -> bool {
+    *module_address == SUI_FRAMEWORK_ADDRESS
+        && module == ACCUMULATOR_SETTLEMENT_MODULE
+        && function == ACCUMULATOR_ROOT_SETTLE_U128_FUNC
+}
+
+pub fn check_accumulator_type_bounds(config: &ProtocolConfig, ty: &TypeTag) -> bool {
+    match config.max_accumulator_type_nodes_as_option() {
+        Some(max) => ty.node_count() <= max,
+        None => true,
+    }
+}
 
 pub fn get_accumulator_root_obj_initial_shared_version(
     object_store: &dyn ObjectStore,
@@ -136,7 +157,7 @@ impl AccumulatorValue {
     }
 
     pub fn exists(
-        child_object_resolver: &dyn ChildObjectResolver,
+        runtime_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         owner: SuiAddress,
         type_: &TypeTag,
@@ -155,11 +176,11 @@ impl AccumulatorValue {
             AccumulatorKey::get_type_tag(std::slice::from_ref(type_)),
         )
         .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
-        .exists(child_object_resolver)
+        .exists(runtime_object_resolver)
     }
 
     pub fn load_by_id<T>(
-        child_object_resolver: &dyn ChildObjectResolver,
+        runtime_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         id: AccumulatorObjId,
     ) -> SuiResult<Option<T>>
@@ -171,13 +192,13 @@ impl AccumulatorValue {
             id.0,
             version_bound.unwrap_or(SequenceNumber::MAX),
         )
-        .load_object(child_object_resolver)?
+        .load_object(runtime_object_resolver)?
         .map(|o| o.load_value::<T>())
         .transpose()
     }
 
     pub fn load(
-        child_object_resolver: &dyn ChildObjectResolver,
+        runtime_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         owner: SuiAddress,
         type_: &TypeTag,
@@ -194,7 +215,7 @@ impl AccumulatorValue {
 
         let Some(value) = DynamicFieldKey(SUI_ACCUMULATOR_ROOT_OBJECT_ID, key, key_type_tag)
             .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
-            .load_object(child_object_resolver)?
+            .load_object(runtime_object_resolver)?
             .map(|o| o.load_value::<U128>())
             .transpose()?
         else {
@@ -205,7 +226,7 @@ impl AccumulatorValue {
     }
 
     pub fn load_object(
-        child_object_resolver: &dyn ChildObjectResolver,
+        runtime_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         owner: SuiAddress,
         type_: &TypeTag,
@@ -216,13 +237,13 @@ impl AccumulatorValue {
         Ok(
             DynamicFieldKey(SUI_ACCUMULATOR_ROOT_OBJECT_ID, key, key_type_tag)
                 .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
-                .load_object(child_object_resolver)?
+                .load_object(runtime_object_resolver)?
                 .map(|o| o.into_object()),
         )
     }
 
     pub fn load_object_by_id(
-        child_object_resolver: &dyn ChildObjectResolver,
+        runtime_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         id: ObjectID,
     ) -> SuiResult<Option<Object>> {
@@ -231,7 +252,7 @@ impl AccumulatorValue {
             id,
             version_bound.unwrap_or(SequenceNumber::MAX),
         )
-        .load_object(child_object_resolver)?
+        .load_object(runtime_object_resolver)?
         .map(|o| o.into_object()))
     }
 

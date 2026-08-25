@@ -698,7 +698,7 @@ mod tests {
                 .filter(|task| task.task_name.starts_with(task_prefix))
                 .cloned()
                 .collect::<Vec<_>>();
-            tasks.sort_by(|t1, t2| t2.start_checkpoint.cmp(&t1.start_checkpoint));
+            tasks.sort_by_key(|t2| std::cmp::Reverse(t2.start_checkpoint));
             Ok(tasks)
         }
 

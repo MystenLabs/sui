@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09009]: unused struct field
+warning[WC09009]: unused struct field
   ┌─ tests/move_check/typing/unused_id_field.move:5:26
   │
 5 │     struct Obj has key { id: sui::object::UID }

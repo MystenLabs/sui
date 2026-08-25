@@ -5,7 +5,7 @@ info:
   edition: development
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/development/signed_ints/invalid/signed_int_mixed_type_errors.move:7:22
   │
 7 │         let _x = 1i8 + 1u8;
@@ -14,7 +14,7 @@ error[E04007]: incompatible types
   │                  │   Incompatible arguments to '+'
   │                  Found: 'i8'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/development/signed_ints/invalid/signed_int_mixed_type_errors.move:11:23
    │
 11 │         let _x = 1i16 - 1u16;
@@ -23,7 +23,7 @@ error[E04007]: incompatible types
    │                  │    Incompatible arguments to '-'
    │                  Found: 'i16'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/development/signed_ints/invalid/signed_int_mixed_type_errors.move:15:23
    │
 15 │         let _x = 1i32 * 1u32;
@@ -32,7 +32,7 @@ error[E04007]: incompatible types
    │                  │    Incompatible arguments to '*'
    │                  Found: 'i32'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/development/signed_ints/invalid/signed_int_mixed_type_errors.move:19:23
    │
 19 │         let _x = 1i64 / 1u64;
@@ -41,7 +41,7 @@ error[E04007]: incompatible types
    │                  │    Incompatible arguments to '/'
    │                  Found: 'i64'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/development/signed_ints/invalid/signed_int_mixed_type_errors.move:23:24
    │
 23 │         let _x = 1i128 % 1u128;
@@ -50,7 +50,7 @@ error[E04007]: incompatible types
    │                  │     Incompatible arguments to '%'
    │                  Found: 'i128'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/development/signed_ints/invalid/signed_int_mixed_type_errors.move:28:22
    │
 28 │         let _x = 1i8 + 1i16;
@@ -59,7 +59,7 @@ error[E04007]: incompatible types
    │                  │   Incompatible arguments to '+'
    │                  Found: 'i8'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/development/signed_ints/invalid/signed_int_mixed_type_errors.move:32:23
    │
 32 │         let _x = 1i32 - 1i64;
@@ -68,7 +68,7 @@ error[E04007]: incompatible types
    │                  │    Incompatible arguments to '-'
    │                  Found: 'i32'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/development/signed_ints/invalid/signed_int_mixed_type_errors.move:37:23
    │
 37 │         let _x = 1i64 < 1u64;
@@ -77,7 +77,7 @@ error[E04007]: incompatible types
    │                  │    Incompatible arguments to '<'
    │                  Found: 'i64'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/development/signed_ints/invalid/signed_int_mixed_type_errors.move:41:23
    │
 41 │         let _x = 1i32 == 1u32;
@@ -86,7 +86,7 @@ error[E04007]: incompatible types
    │                  │    Incompatible arguments to '=='
    │                  Found: 'i32'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/development/signed_ints/invalid/signed_int_mixed_type_errors.move:45:22
    │
 45 │         let _x = 1i8 != 1u8;
@@ -95,7 +95,7 @@ error[E04007]: incompatible types
    │                  │   Incompatible arguments to '!='
    │                  Found: 'i8'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/development/signed_ints/invalid/signed_int_mixed_type_errors.move:50:23
    │
 50 │         let _x = 1i64 & 1u64;
@@ -104,7 +104,7 @@ error[E04007]: incompatible types
    │                  │    Incompatible arguments to '&'
    │                  Found: 'i64'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/development/signed_ints/invalid/signed_int_mixed_type_errors.move:54:23
    │
 54 │         let _x = 1i32 | 1u32;
@@ -113,7 +113,7 @@ error[E04007]: incompatible types
    │                  │    Incompatible arguments to '|'
    │                  Found: 'i32'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/development/signed_ints/invalid/signed_int_mixed_type_errors.move:58:23
    │
 58 │         let _x = 1i16 ^ 1u16;

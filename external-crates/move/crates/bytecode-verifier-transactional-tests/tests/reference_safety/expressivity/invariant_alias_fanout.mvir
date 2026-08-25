@@ -1,0 +1,28 @@
+// four epsilon aliases of one &mut: an extension off one must block a write through every other
+
+//# run
+mvir 0x4::alias_writes_no_extension {
+
+public struct S has copy, drop { f: u64 }
+
+// no extension anywhere: every alias names the same cell, so the writes are safe
+entry fun t() {
+    let s: Self::S;
+    let a: &mut Self::S;
+    let b: &mut Self::S;
+    let c: &mut Self::S;
+label b0:
+    s = S { f: 0 };
+    a = &mut s;
+    b = copy(a);
+    c = copy(b);
+    *copy(a) = S { f: 1 };
+    *copy(b) = S { f: 2 };
+    *copy(c) = S { f: 3 };
+    assert(*(&move(a).S::f) == 3, 42);
+    _ = move(b);
+    _ = move(c);
+    return;
+}
+
+}

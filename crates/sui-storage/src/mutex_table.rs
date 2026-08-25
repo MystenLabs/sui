@@ -15,6 +15,9 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::info;
 
+use mysten_common::sync::execution_permit::release_execution_permit;
+#[cfg(test)]
+use mysten_common::sync::execution_permit::set_execution_permit;
 use mysten_metrics::spawn_monitored_task;
 
 type OwnedMutexGuard<T> = ArcMutexGuard<parking_lot::RawMutex, T>;
@@ -237,8 +240,33 @@ impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
         }
     }
 
+    /// Acquires the lock for `k`.
+    ///
+    /// This is a blocking API. Attempting a contended acquisition from an async
+    /// runtime worker is a caller bug in both native and msim builds. Callers that
+    /// may contend must use a blocking context, such as `spawn_blocking`.
+    ///
+    /// On contention, any installed execution permit is released before waiting;
+    /// this is a no-op for callers outside execution. Under msim, the blocking
+    /// thread yields between attempts so the lock holder can make progress.
     pub fn acquire_lock(&self, k: K) -> L::Guard {
-        self.get_lock(k).lock_owned()
+        let lock = self.get_lock(k);
+        if let Some(guard) = lock.clone().try_lock_owned() {
+            return guard;
+        }
+
+        release_execution_permit();
+
+        #[cfg(msim)]
+        loop {
+            msim::task::yield_blocking();
+            if let Some(guard) = lock.clone().try_lock_owned() {
+                return guard;
+            }
+        }
+
+        #[cfg(not(msim))]
+        lock.lock_owned()
     }
 
     pub fn try_acquire_lock(&self, k: K) -> Result<L::Guard, TryAcquireLockError> {
@@ -277,41 +305,149 @@ impl<K: Hash, L: Lock> Drop for LockTable<K, L> {
     }
 }
 
+#[cfg(test)]
+struct DropFlag(Arc<AtomicBool>);
+
+#[cfg(test)]
+impl Drop for DropFlag {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+}
+
 #[tokio::test]
+async fn test_acquire_lock_keeps_execution_permit_when_uncontended() {
+    let mutex_table = MutexTable::<String>::new(1);
+    let released = Arc::new(AtomicBool::new(false));
+    let _permit = set_execution_permit(Box::new(DropFlag(released.clone())));
+
+    let _guard = mutex_table.acquire_lock("key".to_string());
+
+    assert!(
+        !released.load(Ordering::SeqCst),
+        "permit must be kept when the lock is immediately available"
+    );
+}
+
+#[cfg(not(msim))]
+#[tokio::test]
+async fn test_acquire_lock_releases_execution_permit_when_contended() {
+    let mutex_table = Arc::new(MutexTable::<String>::new(1));
+    let holder = mutex_table.acquire_lock("key".to_string());
+    let released = Arc::new(AtomicBool::new(false));
+
+    let waiter = std::thread::spawn({
+        let mutex_table = mutex_table.clone();
+        let released = released.clone();
+        move || {
+            let _permit = set_execution_permit(Box::new(DropFlag(released)));
+            drop(mutex_table.acquire_lock("key".to_string()));
+        }
+    });
+
+    while !released.load(Ordering::SeqCst) {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    drop(holder);
+    waiter.join().unwrap();
+}
+
+#[cfg(all(msim, test))]
+#[sui_macros::sim_test]
+async fn test_contended_acquire_lock_releases_execution_permit_and_yields() {
+    let mutex_table = Arc::new(MutexTable::<String>::new(1));
+    let holder_acquired = Arc::new(AtomicBool::new(false));
+    let release_holder = Arc::new(AtomicBool::new(false));
+
+    let holder = tokio::task::spawn_blocking({
+        let mutex_table = mutex_table.clone();
+        let holder_acquired = holder_acquired.clone();
+        let release_holder = release_holder.clone();
+        move || {
+            let guard = mutex_table.acquire_lock("key".to_string());
+            holder_acquired.store(true, Ordering::SeqCst);
+            while !release_holder.load(Ordering::SeqCst) {
+                msim::task::yield_blocking();
+            }
+            drop(guard);
+        }
+    });
+
+    while !holder_acquired.load(Ordering::SeqCst) {
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+
+    let released = Arc::new(AtomicBool::new(false));
+    let waiter = tokio::task::spawn_blocking({
+        let released = released.clone();
+        move || {
+            let _permit = set_execution_permit(Box::new(DropFlag(released)));
+            drop(mutex_table.acquire_lock("key".to_string()));
+        }
+    });
+
+    while !released.load(Ordering::SeqCst) {
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+    release_holder.store(true, Ordering::SeqCst);
+
+    holder.await.unwrap();
+    waiter.await.unwrap();
+}
+
+#[cfg(test)]
+#[sui_macros::sui_test]
 // Tests that mutex table provides parallelism on the individual mutex level,
 // e.g. that locks for different entries do not block entire bucket if it needs to wait on individual lock
 async fn test_mutex_table_concurrent_in_same_bucket() {
-    use tokio::time::{sleep, timeout};
     let mutex_table = Arc::new(MutexTable::<String>::new(1));
-    let john = mutex_table.try_acquire_lock("john".to_string());
-    let _ = john.unwrap();
-    {
-        let mutex_table = mutex_table.clone();
-        std::thread::spawn(move || {
-            let _ = mutex_table.acquire_lock("john".to_string());
-        });
-    }
-    sleep(Duration::from_millis(50)).await;
-    let jane = mutex_table.try_acquire_lock("jane".to_string());
-    let _ = jane.unwrap();
+    let holder_acquired = Arc::new(AtomicBool::new(false));
+    let release_holder = Arc::new(AtomicBool::new(false));
 
-    let mutex_table = Arc::new(MutexTable::<String>::new(1));
-    let _john = mutex_table.acquire_lock("john".to_string());
-    {
+    let holder = tokio::task::spawn_blocking({
         let mutex_table = mutex_table.clone();
-        std::thread::spawn(move || {
-            let _ = mutex_table.acquire_lock("john".to_string());
-        });
+        let holder_acquired = holder_acquired.clone();
+        let release_holder = release_holder.clone();
+        move || {
+            let guard = mutex_table.acquire_lock("john".to_string());
+            holder_acquired.store(true, Ordering::SeqCst);
+            while !release_holder.load(Ordering::SeqCst) {
+                #[cfg(msim)]
+                msim::task::yield_blocking();
+                #[cfg(not(msim))]
+                std::thread::yield_now();
+            }
+            drop(guard);
+        }
+    });
+
+    while !holder_acquired.load(Ordering::SeqCst) {
+        tokio::time::sleep(Duration::from_millis(1)).await;
     }
-    sleep(Duration::from_millis(50)).await;
-    let jane = timeout(
-        Duration::from_secs(1),
-        tokio::task::spawn_blocking(move || {
-            let _ = mutex_table.acquire_lock("jane".to_string());
-        }),
-    )
-    .await;
-    let _ = jane.unwrap();
+
+    let waiter_contended = Arc::new(AtomicBool::new(false));
+
+    let waiter = tokio::task::spawn_blocking({
+        let mutex_table = mutex_table.clone();
+        let waiter_contended = waiter_contended.clone();
+        move || {
+            let _permit = set_execution_permit(Box::new(DropFlag(waiter_contended)));
+            drop(mutex_table.acquire_lock("john".to_string()));
+        }
+    });
+
+    while !waiter_contended.load(Ordering::SeqCst) {
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+
+    assert!(
+        mutex_table.try_acquire_lock("jane".to_string()).is_ok(),
+        "a waiter on one key must not hold the shared shard lock"
+    );
+
+    release_holder.store(true, Ordering::SeqCst);
+    holder.await.unwrap();
+    waiter.await.unwrap();
 }
 
 #[tokio::test]

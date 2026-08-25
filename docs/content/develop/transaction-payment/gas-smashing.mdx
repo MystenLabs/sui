@@ -1,7 +1,58 @@
 ---
 title: Gas Smashing
-description: Sui optimizes coin management by combining multiple coins into a single object to pay for gas fees.
-keywords: [ gas smashing, smash gas, combine coins, combine coins into one object, create ptb for coins, create coin ptb, group coins together, group coins into ptb, create ptb with multiple coins, coin management, multiple coin management, address balance gas payment, compatibility coin reservation ]
+description: >-
+  Sui optimizes coin management by combining multiple coins into a single object
+  to pay for gas fees.
+keywords:
+  - gas smashing
+  - smash gas
+  - combine coins
+  - combine coins into one object
+  - create ptb for coins
+  - create coin ptb
+  - group coins together
+  - group coins into ptb
+  - create ptb with multiple coins
+  - coin management
+  - multiple coin management
+  - address balance gas payment
+  - compatibility coin reservation
+goal:
+  description: >-
+    Reader understands sui optimizes coin management by combining multiple coins
+    into a single object to pay for gas fees
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Gas smashing
+    stage: Gas
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Gas smashing
+    stage: Authorization
+questions:
+  - What is Gas Smashing in Sui?
+  - How does gas smashing work on Sui?
+  - How do I optimize gas smashing performance?
+answer: >-
+  If you are using the address balances feature, then you do not need to use gas
+  smashing. Address balance gas payment removes the need to select or merge gas
+  coins entirely.
 ---
 
 <AgentPrompt

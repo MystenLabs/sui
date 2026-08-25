@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_check/expansion/invalid_unpack_assign_lhs_other_value.move:3:14
   │
 3 │         0u64 {} = 0;
@@ -14,13 +14,13 @@ error[E01002]: unexpected token
   │              Unexpected '{'
   │              Expected ';'
 
-error[E03022]: invalid usage position
+error[EC03022]: invalid usage position
   ┌─ tests/move_check/expansion/invalid_unpack_assign_lhs_other_value.move:5:9
   │
 5 │         foo() = 0u64;
   │         ^^^ Expected a struct, but found function 'foo' in current scope
 
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
   ┌─ tests/move_check/expansion/invalid_unpack_assign_lhs_other_value.move:5:9
   │
 5 │         foo() = 0u64;
@@ -28,7 +28,7 @@ error[E13001]: feature is not supported in specified edition
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E01009]: invalid assignment
+error[EC01009]: invalid assignment
   ┌─ tests/move_check/expansion/invalid_unpack_assign_lhs_other_value.move:7:9
   │
 7 │         foo().bar() = 0;

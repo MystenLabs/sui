@@ -1,7 +1,44 @@
 ---
 title: Networks
-description: Sui operates multiple networks including Mainnet for production, Testnet for staging, Devnet for developing new features, and Localnet for local development.
-keywords: [ networks, mainnet, testnet, devnet, localnet, sui networks, rpc endpoints ]
+description: >-
+  Sui operates multiple networks including Mainnet for production, Testnet for
+  staging, Devnet for developing new features, and Localnet for local
+  development.
+keywords:
+  - networks
+  - mainnet
+  - testnet
+  - devnet
+  - localnet
+  - sui networks
+  - rpc endpoints
+goal:
+  description: >-
+    Reader understands sui operates multiple networks including Mainnet for
+    production, Testnet for staging
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What networks does Sui provide?
+  - 'How do I choose between Mainnet, Testnet, Devnet, and Localnet?'
+  - What is Testnet used for on Sui?
+answer: >-
+  Sui operates multiple networks including Mainnet for production, Testnet for
+  staging, Devnet for developing new features, and Localnet for local
+  development.
 ---
 
 Sui has several networks available, each serving a different purpose. Each network is comprised of nodes. Nodes provide resources to the network and participate in activities such as validating onchain transactions through a process called [consensus](/develop/sui-architecture/consensus). There are 2 types of nodes on each Sui network:

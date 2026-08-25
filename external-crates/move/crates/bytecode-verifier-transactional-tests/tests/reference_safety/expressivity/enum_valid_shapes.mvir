@@ -1,0 +1,27 @@
+// memory-safe enum programs
+
+//# publish
+mvir 0x709::switch_on_local_with_live_field {
+
+public enum X has drop { One { a: u64 }, Two { b: u64 } }
+
+// ImmBorrowLoc on a local with a live mutable variant-field borrow
+fun t() {
+    let e: Self::X;
+    let a: &mut u64;
+label b0:
+    e = X::One { a: 0 };
+    &mut X::One { a: a } = &mut e;
+    variant_switch X (&e) {
+        One: b1,
+        Two: b2
+    };
+label b1:
+    *move(a) = 1;
+    return;
+label b2:
+    *move(a) = 2;
+    return;
+}
+
+}

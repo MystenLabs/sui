@@ -2545,6 +2545,7 @@ fn at_start_of_exp(context: &mut Context) -> bool {
             | Tok::StringValue
             | Tok::Identifier
             | Tok::RestrictedIdentifier
+            | Tok::SyntaxIdentifier
             | Tok::AtSign
             | Tok::Copy
             | Tok::Move

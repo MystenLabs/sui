@@ -14,7 +14,7 @@ Test failures:
 Failures in 0x6::M:
 
 ┌── unexpected_abort ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │   ┌─ unexpected_abort.move:4:9
 │   │
 │ 3 │     public fun unexpected_abort() {
@@ -27,7 +27,7 @@ Failures in 0x6::M:
 
 
 ┌── unexpected_abort_in_native_function ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │     ┌─ string.move:117:12
 │     │
 │ 117 │ native fun internal_sub_string(v: &vector<u8>, i: u64, j: u64): vector<u8>;
@@ -45,7 +45,7 @@ Failures in 0x6::M:
 
 
 ┌── unexpected_abort_in_other_function ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │    ┌─ unexpected_abort.move:27:9
 │    │
 │ 26 │     fun abort_in_other_function() {
@@ -61,7 +61,7 @@ Failures in 0x6::M:
 
 
 ┌── wrong_abort_code ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │    ┌─ unexpected_abort.move:10:9
 │    │
 │  9 │     public fun wrong_abort_code() {

@@ -7,6 +7,7 @@
 **/.claude/*
 !**/.claude/skills/
 **/.opencode/
+**/.omp/*
 
 # OSX
 .DS_Store
@@ -81,3 +82,11 @@ lcov.info
 .sparse
 docs/content/documentation.json
 .cache-external-docs/
+
+# Generated external docs (rebuilt at build time by fetch/transform scripts)
+docs/content/sui-stack/seal/*.mdx
+!docs/content/sui-stack/seal/sui-stack-seal.mdx
+docs/content/sui-stack/messaging/*.mdx
+!docs/content/sui-stack/messaging/index.mdx
+!docs/content/sui-stack/messaging/chat-app.mdx
+docs/site/static/sui-stack/

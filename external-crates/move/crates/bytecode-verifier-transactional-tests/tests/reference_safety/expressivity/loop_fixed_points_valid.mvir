@@ -1,0 +1,86 @@
+// Loop fixed points accepted by regex reference safety.
+
+//# run
+mvir 0x2::alias_and_stloc_loop {
+
+entry fun t() {
+    let a: u64;
+    let i: u64;
+    let x: &mut u64;
+    let y: &u64;
+label b0:
+    a = 0;
+    i = 0;
+    x = &mut a;
+    y = freeze(copy(x));
+label loop_header:
+    // Replacing the whole local is safe while only direct aliases are live.
+    a = copy(i);
+    assert(*copy(x) == copy(i), 40);
+    assert(*copy(y) == copy(i), 41);
+    // A write through one alias must be visible through every other alias.
+    *copy(x) = copy(i) + 10;
+    assert(*copy(y) == copy(i) + 10, 42);
+    jump_if (copy(i) == 2) loop_exit;
+    i = move(i) + 1;
+    jump loop_header;
+label loop_exit:
+    _ = move(y);
+    _ = move(x);
+    return;
+}
+
+}
+
+//# run
+mvir 0x3::vector_alias_loop {
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let alias: &mut vector<u64>;
+    let i: u64;
+label b0:
+    v = vector<u64; 1>(7);
+    vr = &mut v;
+    alias = copy(vr);
+    i = 0;
+label loop_header:
+    vec_push_back<u64>(copy(alias), copy(i));
+    assert(vec_len<u64>(freeze(copy(vr))) == copy(i) + 2, 50);
+    jump_if (copy(i) == 2) loop_exit;
+    i = move(i) + 1;
+    jump loop_header;
+label loop_exit:
+    assert(*vec_imm_borrow<u64>(freeze(copy(vr)), 3) == 2, 51);
+    _ = move(alias);
+    _ = move(vr);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x5::release_and_reborrow_loop {
+
+public struct S has copy, drop { f: u64 }
+
+fun t(s: &mut Self::S, cond: bool) {
+    let f: &mut u64;
+label b0:
+    f = &mut copy(s).S::f;
+label loop_header:
+    *copy(f) = 1;
+    // Once the extension is released, the parent can be replaced.
+    _ = move(f);
+    *copy(s) = S { f: 2 };
+    jump_if (copy(cond)) loop_exit;
+label loop_body:
+    f = &mut copy(s).S::f;
+    cond = true;
+    jump loop_header;
+label loop_exit:
+    return;
+}
+
+}

@@ -13,7 +13,7 @@ use tidehunter::compressed_batch::BatchCodec;
 use tidehunter::config::Config;
 use tidehunter::db::Db;
 use tidehunter::iterators::db_iterator::DbIterator;
-use tidehunter::key_shape::{KeyShape, KeySpace};
+use tidehunter::key_shape::KeyShape;
 use tidehunter::metrics::Metrics;
 pub use tidehunter::{
     Decision, WalPosition,
@@ -38,10 +38,34 @@ pub fn open(path: &Path, key_shape: KeyShape, metric_conf: &MetricConf) -> (Arc<
     let registry_id = registry_service.add(registry.clone());
     let metrics = Metrics::new_in(&registry);
     ensure_database_type(path, StorageType::TideHunter).expect("failed to open tidehunter db");
+    // `Db::open` reconciles the declared shape against the persisted registry
+    // (matching by name; supports reorder/add/remove). Callers resolve each
+    // column family's handle by name via `Db::ks`.
     let db = Db::open(path, key_shape, Arc::new(thdb_config(metric_conf)), metrics)
         .expect("failed to open tidehunter db");
+    destroy_undeclared_key_spaces(&db, path);
     db.start_periodic_snapshot();
     (db, registry_id)
+}
+
+/// Destroys key spaces that exist in the database but are no longer declared
+/// in the `KeyShape`, i.e. tables that were removed from the DBMap struct.
+/// `Db::open` retains such key spaces internally (data preserved, not
+/// exposed); destroying them persists a registry tombstone so their data is
+/// dropped and disk space is reclaimed through the regular GC cadences.
+fn destroy_undeclared_key_spaces(db: &Db, path: &Path) {
+    let registry = Db::load_key_shape(path).expect("failed to load tidehunter key shape registry");
+    for ks in registry.iter_ks() {
+        if ks.destroyed() || db.try_ks(ks.name()).is_some() {
+            continue;
+        }
+        tracing::warn!(
+            "destroying tidehunter key space '{}': present in database but not declared",
+            ks.name()
+        );
+        db.destroy_key_space(ks.name())
+            .expect("failed to destroy tidehunter key space");
+    }
 }
 
 fn new_db_registry(name: String) -> Registry {
@@ -49,14 +73,17 @@ fn new_db_registry(name: String) -> Registry {
     Registry::new_custom(None, Some(labels)).expect("failed to create registry")
 }
 
-pub fn add_key_space(builder: &mut KeyShapeBuilder, name: &str, config: &ThConfig) -> KeySpace {
+pub fn add_key_space(builder: &mut KeyShapeBuilder, name: &str, config: &ThConfig) {
+    // `add_key_space_config_indexing` returns `&mut KeyShapeBuilder`; the
+    // canonical handle is no longer assigned here. It is resolved by name from
+    // the `KeySpaces` returned by `open` (see the DBMapUtils derive macro).
     builder.add_key_space_config_indexing(
         name,
         config.key_indexing.clone(),
         config.mutexes,
         config.key_type,
         config.config.clone(),
-    )
+    );
 }
 
 fn parse_env_usize(name: &str, minimum: usize) -> Option<usize> {
@@ -126,14 +153,17 @@ fn thdb_config(metric_conf: &MetricConf) -> Config {
     let batch_codec = metric_conf
         .enable_th_batch_compression
         .then_some(BatchCodec::Lz4);
+    let compressed_batch_cache_bytes = metric_conf
+        .enable_th_batch_compression
+        .then_some(4 * 1024 * 1024 * 1024);
     let mut config = Config {
         frag_size,
-        // run snapshot every 64 Gb written to wal
+        // run snapshot every 8 Gb written to wal
         snapshot_written_bytes: parse_env_usize("TH_SNAPSHOT_WRITTEN_BYTES", 1)
-            .unwrap_or(64 * 1024 * 1024 * 1024) as u64,
-        // force unloading dirty index entries if behind 60 Gb of wal
+            .unwrap_or(8 * 1024 * 1024 * 1024) as u64,
+        // force unloading dirty index entries if behind 7.5 Gb of wal
         snapshot_unload_threshold: parse_env_usize("TH_SNAPSHOT_UNLOAD_THRESHOLD", 1)
-            .unwrap_or(60 * 1024 * 1024 * 1024) as u64,
+            .unwrap_or(15 * 1024 * 1024 * 1024 / 2) as u64,
         unload_jitter_pct: 30,
         max_dirty_keys: default_max_dirty_keys(),
         max_maps,
@@ -141,6 +171,7 @@ fn thdb_config(metric_conf: &MetricConf) -> Config {
         commit_pool_size,
         num_flusher_threads,
         batch_codec,
+        compressed_batch_cache_bytes,
         relocation_max_reclaim_pct: 100,
         ..Config::default()
     };

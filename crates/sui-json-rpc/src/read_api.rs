@@ -12,7 +12,7 @@ use backoff::future::retry;
 use fastcrypto::encoding::Base64;
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::join_all;
-use im::hashmap::HashMap as ImHashMap;
+use imbl::hashmap::HashMap as ImHashMap;
 use indexmap::map::IndexMap;
 use itertools::Itertools;
 use jsonrpsee::RpcModule;
@@ -412,10 +412,9 @@ impl ReadApi {
 
         // fill cache with the timestamp
         for (_, cache_entry) in temp_response.iter_mut() {
-            if cache_entry.checkpoint_seq.is_some() {
-                // safe to unwrap because is_some is checked
+            if let Some(checkpoint_seq) = cache_entry.checkpoint_seq.as_ref() {
                 cache_entry.timestamp = *checkpoint_to_timestamp
-                    .get(cache_entry.checkpoint_seq.as_ref().unwrap())
+                    .get(checkpoint_seq)
                     // Safe to unwrap because checkpoint_seq is guaranteed to exist in checkpoint_to_timestamp
                     .unwrap();
             }
@@ -1199,10 +1198,10 @@ impl ReadApiServer for ReadApi {
         for active_jwk in new_jwks.iter() {
             let ActiveJwk { jwk_id, jwk, .. } = active_jwk;
             match oidc_provider_jwks.entry(jwk_id.clone()) {
-                im::hashmap::Entry::Occupied(_) => {
+                imbl::hashmap::Entry::Occupied(_) => {
                     warn!("JWK with kid {:?} already exists", jwk_id);
                 }
-                im::hashmap::Entry::Vacant(entry) => {
+                imbl::hashmap::Entry::Vacant(entry) => {
                     entry.insert(jwk.clone());
                 }
             }
@@ -1211,6 +1210,7 @@ impl ReadApiServer for ReadApi {
             oidc_provider_jwks,
             vec![],
             zklogin_env_native,
+            epoch_store.protocol_config().zklogin_circuit_mode(),
             true,
             true,
             true,

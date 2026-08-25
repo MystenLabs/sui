@@ -7,10 +7,11 @@ use std::{
     time::{Duration, Instant},
 };
 
+use anyhow::bail;
 use async_trait::async_trait;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use futures::TryStreamExt;
-use mysten_common::{fatal, random::get_rng};
+use mysten_common::{fatal, in_antithesis, random::get_rng};
 use rand::{Rng, seq::IteratorRandom};
 use sui_config::genesis::Genesis;
 use sui_core::{
@@ -58,8 +59,11 @@ use sui_types::{
     execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus},
 };
 use sui_types::{gas_coin::GAS, sui_system_state::sui_system_state_summary::SuiSystemStateSummary};
-use tokio::time::sleep;
+use tokio::task::JoinSet;
+use tokio::time::{sleep, timeout};
 use tracing::{debug, info, instrument, warn};
+
+use crate::drivers::{SubmissionAmplification, SubmissionAmplificationSample, ValidatorSelection};
 
 pub mod bank;
 
@@ -353,14 +357,18 @@ pub trait ValidatorProxy {
 
     async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
 
-    /// Submit a transaction to multiple validators to cause consensus amplification.
-    /// Used to test the unpaid amplification deferral logic.
-    /// Default implementation just calls execute_transaction_block.
-    async fn execute_transaction_block_with_amplification(
+    /// Submit a transaction with optional duplicate/amplified validator traffic.
+    /// Only the local validator proxy supports this direct validator submission path.
+    async fn execute_transaction_block_with_submission_amplification(
         &self,
         tx: Transaction,
-        _num_validators: usize,
+        submission_amplification: SubmissionAmplification,
     ) -> anyhow::Result<ExecutionEffects> {
+        if submission_amplification.is_enabled() {
+            bail!(
+                "duplicate/amplified validator submissions are only supported by LocalValidatorAggregatorProxy"
+            );
+        }
         self.execute_transaction_block(tx).await
     }
 
@@ -489,45 +497,100 @@ impl LocalValidatorAggregatorProxy {
         ))
     }
 
-    /// Submit a transaction to multiple validators to cause consensus amplification.
-    /// This is used to test the unpaid amplification deferral logic.
-    ///
-    /// `num_validators` specifies how many additional validators to submit to beyond
-    /// the normal submission path. For example, if `num_validators == 2`, the transaction
-    /// will be submitted to 2 validators directly, plus once via the normal driver path.
-    pub async fn submit_transaction_with_amplification(
+    async fn submit_transaction_with_submission_amplification(
         &self,
         tx: Transaction,
-        num_validators: usize,
+        submission_amplification: SubmissionAmplification,
     ) -> anyhow::Result<ExecutionEffects> {
         use sui_core::authority_client::AuthorityAPI;
-        use sui_types::messages_grpc::SubmitTxRequest;
 
-        // Submit to multiple validators in parallel
-        let validators: Vec<_> = self
-            .clients
-            .values()
-            .take(num_validators)
-            .cloned()
-            .collect();
-        let request = SubmitTxRequest::new_transaction(tx.clone());
+        const EXTRA_SUBMIT_TIMEOUT: Duration = Duration::from_secs(2);
+        const PREFERRED_VALIDATOR_LATENCY_DELTA: f64 = 0.02;
 
-        // Fire off all submissions as spawned tasks - don't wait for responses.
-        // We just need to ensure the submissions are sent to trigger amplification.
-        // Add explicit 2s timeout to prevent unbounded task pile-up under load.
-        for client in validators {
-            let req = request.clone();
-            tokio::spawn(async move {
-                let _ = tokio::time::timeout(
-                    Duration::from_secs(2),
-                    client.submit_transaction(req, None),
-                )
-                .await;
-            });
+        let sample = {
+            let mut rng = rand::thread_rng();
+            submission_amplification.sample(&mut rng)
+        };
+        if sample.total_submissions() == 1 {
+            return self.submit_transaction_block(tx).await;
         }
 
-        // Use the normal path to get the final result
-        self.submit_transaction_block(tx).await
+        let tx_digest = *tx.digest();
+        let validators = self.select_validators_for_submission_amplification(
+            sample,
+            PREFERRED_VALIDATOR_LATENCY_DELTA,
+        )?;
+        let request = SubmitTxRequest::new_transaction(tx.clone());
+        let mut additional_requests = JoinSet::new();
+
+        for (validator_name, client) in validators.iter() {
+            for _ in 0..sample.copies_per_validator {
+                let req = request.clone();
+                let client = client.clone();
+                additional_requests.spawn(async move {
+                    let _ =
+                        timeout(EXTRA_SUBMIT_TIMEOUT, client.submit_transaction(req, None)).await;
+                });
+            }
+            debug!(
+                ?tx_digest,
+                ?validator_name,
+                copies_per_validator = sample.copies_per_validator,
+                "spawned direct validator submissions for amplification"
+            );
+        }
+
+        debug!(
+            ?tx_digest,
+            ?sample,
+            "submitting transaction with extra direct validator amplification"
+        );
+
+        let result = self.submit_transaction_block(tx).await;
+        additional_requests.abort_all();
+        result
+    }
+
+    fn select_validators_for_submission_amplification(
+        &self,
+        sample: SubmissionAmplificationSample,
+        preferred_validator_latency_delta: f64,
+    ) -> anyhow::Result<Vec<(AuthorityName, NetworkAuthorityClient)>> {
+        let num_validators = sample
+            .validators_per_tx
+            .min(self.committee.num_members())
+            .min(self.clients.len());
+
+        let validator_names = match sample.validator_selection {
+            ValidatorSelection::Random => {
+                let mut rng = rand::thread_rng();
+                self.clients
+                    .keys()
+                    .copied()
+                    .choose_multiple(&mut rng, num_validators)
+            }
+            ValidatorSelection::HighestPerformance => self
+                .td
+                .select_preferred_validators(preferred_validator_latency_delta)
+                .into_iter()
+                .filter(|name| self.clients.contains_key(name))
+                .take(num_validators)
+                .collect(),
+        };
+
+        let validators = validator_names
+            .into_iter()
+            .filter_map(|name| {
+                self.clients
+                    .get(&name)
+                    .cloned()
+                    .map(|client| (name, client))
+            })
+            .collect::<Vec<_>>();
+        if validators.is_empty() {
+            bail!("No validators available for submission amplification");
+        }
+        Ok(validators)
     }
 }
 
@@ -565,12 +628,12 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         self.submit_transaction_block(tx).await
     }
 
-    async fn execute_transaction_block_with_amplification(
+    async fn execute_transaction_block_with_submission_amplification(
         &self,
         tx: Transaction,
-        num_validators: usize,
+        submission_amplification: SubmissionAmplification,
     ) -> anyhow::Result<ExecutionEffects> {
-        self.submit_transaction_with_amplification(tx, num_validators)
+        self.submit_transaction_with_submission_amplification(tx, submission_amplification)
             .await
     }
 
@@ -935,6 +998,43 @@ impl FullNodeProxy {
             td,
         })
     }
+
+    /// Wait for the effects of a transaction that may already have executed.
+    ///
+    /// A transaction can commit while the client is unable to observe the response - the
+    /// checkpoint wait times out, or the connection drops after submission. Resubmitting then
+    /// fails input checks against objects the transaction itself consumed, which is reported as
+    /// a non-retriable error even though the transaction succeeded.
+    ///
+    /// GetTransaction only serves transactions that have been checkpointed, so one that
+    /// committed moments ago reads as not found. Poll until it lands or the budget expires.
+    async fn await_executed_effects(&self, digest: &TransactionDigest) -> Option<ExecutionEffects> {
+        let budget = rpc_retry_budget();
+        let start = Instant::now();
+        loop {
+            match self.sui_client.clone().get_transaction(digest).await {
+                Ok(txn) => return Some(ExecutionEffects::ExecutedTransaction(txn)),
+                Err(status) => {
+                    if start.elapsed() >= budget {
+                        debug!(
+                            ?digest,
+                            "transaction not observed within {:?}: {:?}", budget, status
+                        );
+                        return None;
+                    }
+                    sleep(retry_delay()).await;
+                }
+            }
+        }
+    }
+}
+
+/// A non-retriable error reporting the transaction's own inputs as consumed is the signature of
+/// a resubmission: the transaction committed, but the client never saw the result.
+fn indicates_already_executed(err: &impl std::fmt::Debug) -> bool {
+    let err_str = format!("{:?}", err);
+    err_str.contains("Error checking transaction input objects")
+        || err_str.contains("is unavailable for consumption")
 }
 
 fn is_retryable_sdk_error(err: &impl std::fmt::Debug) -> bool {
@@ -942,8 +1042,26 @@ fn is_retryable_sdk_error(err: &impl std::fmt::Debug) -> bool {
     !(err_str.contains("Error checking transaction input objects")
         || err_str.contains("Transaction Expired")
         || err_str.contains("already locked by a different transaction")
-        || err_str.contains("is not available for consumption"))
+        || err_str.contains("is unavailable for consumption"))
         || err_str.contains("Transaction executed but checkpoint wait timed out")
+}
+
+fn max_rpc_retries() -> usize {
+    if in_antithesis() { 20 } else { 10 }
+}
+
+/// Antithesis stops and partitions nodes for stretches that routinely outlast the default
+/// budget, so the client gives up while the fault is still in effect.
+fn rpc_retry_budget() -> Duration {
+    if in_antithesis() {
+        Duration::from_secs(300)
+    } else {
+        Duration::from_secs(60)
+    }
+}
+
+fn retry_delay() -> Duration {
+    Duration::from_millis(get_rng().gen_range(100..1000))
 }
 
 #[async_trait]
@@ -955,11 +1073,34 @@ impl ValidatorProxy for FullNodeProxy {
     }
 
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
-        self.sui_client
-            .clone()
-            .get_object(object_id)
-            .await
-            .map_err(Into::into)
+        // Workload init reads objects before it can generate any load, and an unretried
+        // transport failure here aborts the process. Give reads the same budget as writes.
+        let start = Instant::now();
+        let mut retry_cnt = 0;
+        let mut last_err = None;
+        while retry_cnt < max_rpc_retries() || start.elapsed() < rpc_retry_budget() {
+            match self.sui_client.clone().get_object(object_id).await {
+                Ok(object) => return Ok(object),
+                Err(err) => {
+                    let delay = retry_delay();
+                    warn!(
+                        ?object_id,
+                        retry_cnt,
+                        "get_object failed with err: {:?}. Sleeping for {:?} ...",
+                        err,
+                        delay,
+                    );
+                    last_err = Some(err);
+                    retry_cnt += 1;
+                    sleep(delay).await;
+                }
+            }
+        }
+        Err(anyhow::anyhow!(
+            "get_object {:?} failed for {retry_cnt} times, last error: {:?}",
+            object_id,
+            last_err
+        ))
     }
 
     async fn get_owned_objects(
@@ -990,7 +1131,10 @@ impl ValidatorProxy for FullNodeProxy {
         let tx_digest = *tx.digest();
         let start = Instant::now();
         let mut retry_cnt = 0;
-        while retry_cnt < 10 || start.elapsed() < Duration::from_secs(60) {
+        // Set once an attempt fails without telling us whether the transaction landed.
+        let mut outcome_unknown = false;
+        let max_retries = max_rpc_retries();
+        while retry_cnt < max_retries || start.elapsed() < rpc_retry_budget() {
             // Fullnode could time out after WAIT_FOR_FINALITY_TIMEOUT (30s) in TransactionOrchestrator
             // SuiClient times out after 60s
             match self
@@ -1004,13 +1148,23 @@ impl ValidatorProxy for FullNodeProxy {
                 }
                 Err(err) => {
                     if !is_retryable_sdk_error(&err) {
+                        // Only worth looking up when an earlier attempt left the outcome unknown.
+                        // Workloads submit conflicting transactions on purpose, so a first-attempt
+                        // rejection is the transaction being refused, not a lost response.
+                        if outcome_unknown
+                            && indicates_already_executed(&err)
+                            && let Some(effects) = self.await_executed_effects(&tx_digest).await
+                        {
+                            return Ok(effects);
+                        }
                         return Err(anyhow::anyhow!(
                             "Transaction {:?} failed with non-retriable error: {:?}",
                             tx_digest,
                             err
                         ));
                     }
-                    let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
+                    outcome_unknown = true;
+                    let delay = retry_delay();
                     warn!(
                         ?tx_digest,
                         retry_cnt,

@@ -1,0 +1,125 @@
+// aliases merged at a join: one non-epsilon alternative must block the write
+
+//# publish
+mvir 0x2::eps_alias_or_field_extension {
+
+public struct S has copy, drop { f: u64 }
+
+fun t(cond: bool, s: &mut Self::S) {
+    let x: &mut Self::S;
+    let y: &mut u64;
+    let other: u64;
+label b0:
+    x = copy(s);
+    other = 0;
+    jump_if (move(cond)) l2;
+label l1:
+    y = &mut other;
+    jump l3;
+label l2:
+    y = &mut copy(x).S::f;
+label l3:
+    // on the l2 path y extends x
+    *move(x) = S { f: 1 };
+    *move(y) = 2;
+    _ = move(s);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::imm_parent_on_one_path {
+
+public struct Inner has copy, drop { v: u64 }
+public struct Outer has copy, drop { f: Self::Inner }
+
+fun t(cond: bool) {
+    let a: Self::Outer;
+    let b: Self::Inner;
+    let p: &mut Self::Outer;
+    let c: &mut Self::Inner;
+    let i: &Self::Outer;
+label b0:
+    a = Outer { f: Inner { v: 0 } };
+    b = Inner { v: 0 };
+    p = &mut a;
+    i = freeze(copy(p));
+    jump_if (move(cond)) l2;
+label l1:
+    c = &mut b;
+    jump l3;
+label l2:
+    c = &mut copy(p).Outer::f;
+label l3:
+    // on the l2 path c is inside p
+    *move(p) = Outer { f: Inner { v: 1 } };
+    *move(c) = Inner { v: 2 };
+    _ = move(i);
+    return;
+}
+
+}
+
+//# run
+mvir 0x4::alias_only_on_both_paths {
+
+public struct S has copy, drop { f: u64 }
+
+entry fun t() {
+    let s: Self::S;
+    let x: &mut Self::S;
+    let y: &mut Self::S;
+    let c: bool;
+label b0:
+    s = S { f: 0 };
+    x = &mut s;
+    c = true;
+    jump_if (move(c)) l2;
+label l1:
+    y = copy(x);
+    jump l3;
+label l2:
+    y = Self::alias_via_call(copy(x));
+label l3:
+    // epsilon alias on both paths
+    *move(x) = S { f: 3 };
+    assert(*&mut move(y).S::f == 3, 42);
+    return;
+}
+
+fun alias_via_call(r: &mut Self::S): &mut Self::S {
+label b0:
+    return move(r);
+}
+
+}
+
+//# publish
+mvir 0x5::view_join_alias_shapes {
+
+public struct S has copy, drop { f: u64 }
+
+fun t(cond: bool, s: &mut Self::S) {
+    let x: &mut Self::S;
+    let y: &mut u64;
+    let z: u64;
+label b0:
+    x = copy(s);
+    z = 0;
+    jump_if (move(cond)) l2;
+label l1:
+    y = &mut z;
+    jump l3;
+label l2:
+    y = &mut copy(x).S::f;
+label l3:
+    _ = move(x);
+    _ = move(y);
+    _ = move(s);
+    return;
+}
+
+}
+
+//# view-abstract-state 0x5::view_join_alias_shapes::t

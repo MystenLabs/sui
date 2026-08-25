@@ -1,0 +1,23 @@
+// pyth `update_*` exact shape: a staleness check is `if (a>b) { if (a-b>=thr) {fail; goto J} }
+// else { if (b-a>=thr) {fail; goto J} }`. The inner threshold-ifs both fall through to the
+// SAME next node (4) on success, and both fail-arms (3,5) jump to the far join (7).
+//
+//   0 cond(a>b) ─true─> 1 cond(thr) ─true─> 3 (fail; goto 7)
+//   │ false             │ false
+//   │                   v
+//   │                   4 (fallthrough/rest; goto 7)
+//   v                   ^
+//   2 cond(thr) ─true─> 5 (fail; goto 7)
+//   │ false ────────────┘
+//   v
+//   (2's false also goes to 4)
+//   7 (join, sink)
+//
+// 4.idom = 0 (reached from 1.else and 2.else). 7.idom = 0. Does the inner `goto 7` survive?
+cond,0,1,2
+cond,1,3,4
+cond,2,5,4
+code,3,7
+code,5,7
+code,4,7
+code,7

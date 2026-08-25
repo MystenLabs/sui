@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E13002]: feature is deprecated in specified edition
+error[EC13002]: feature is deprecated in specified edition
   ┌─ tests/move_2024/migration/friend_decl_multiline.move:6:5
   │
 6 │     friend a::b;
   │     ^^^^^^^^^^^^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
 
-error[E13002]: feature is deprecated in specified edition
+error[EC13002]: feature is deprecated in specified edition
    ┌─ tests/move_2024/migration/friend_decl_multiline.move:14:5
    │
 14 │     friend a::c;

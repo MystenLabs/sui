@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:21:9
    │
  7 │     fun c<T: copy>() {}
@@ -20,7 +20,7 @@ error[E05001]: ability constraint not satisfied
    │         │ The type 'TnoC' does not have the ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:22:9
    │
  3 │     struct Cup<T> { f: T }
@@ -35,7 +35,7 @@ error[E05001]: ability constraint not satisfied
    │         │ The type '0x42::M::Cup<TnoK>' does not have the ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:23:9
    │
  7 │     fun c<T: copy>() {}
@@ -48,7 +48,7 @@ error[E05001]: ability constraint not satisfied
    │         │ The type '0x42::M::Box<TnoC>' does not have the ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:24:9
    │
  8 │     fun k<T: key>() {}
@@ -63,7 +63,7 @@ error[E05001]: ability constraint not satisfied
    │         │ The type 'TnoK' does not have the ability 'key'
    │         'key' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:25:9
    │
  3 │     struct Cup<T> { f: T }
@@ -78,7 +78,7 @@ error[E05001]: ability constraint not satisfied
    │         │ The type '0x42::M::Cup<TnoC>' does not have the ability 'key'
    │         'key' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:26:9
    │
  8 │     fun k<T: key>() {}
@@ -91,7 +91,7 @@ error[E05001]: ability constraint not satisfied
    │         │ The type '0x42::M::Box<0x42::M::Cup<TnoC>>' does not have the ability 'key'
    │         'key' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:27:9
    │
  9 │     fun cds<T: copy + drop + store>() {}
@@ -106,7 +106,7 @@ error[E05001]: ability constraint not satisfied
    │         │   The type 'TnoC' does not have the ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:28:9
    │
  3 │     struct Cup<T> { f: T }
@@ -121,7 +121,7 @@ error[E05001]: ability constraint not satisfied
    │         │   The type '0x42::M::Cup<TnoC>' does not have the ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:28:9
    │
  3 │     struct Cup<T> { f: T }
@@ -136,7 +136,7 @@ error[E05001]: ability constraint not satisfied
    │         │   The type '0x42::M::Cup<TnoC>' does not have the ability 'drop'
    │         'drop' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:28:9
    │
  3 │     struct Cup<T> { f: T }
@@ -151,7 +151,7 @@ error[E05001]: ability constraint not satisfied
    │         │   The type '0x42::M::Cup<TnoC>' does not have the ability 'store'
    │         'store' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:29:9
    │
  3 │     struct Cup<T> { f: T }
@@ -166,7 +166,7 @@ error[E05001]: ability constraint not satisfied
    │         │   The type '0x42::M::Cup<TnoK>' does not have the ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:29:9
    │
  3 │     struct Cup<T> { f: T }
@@ -181,7 +181,7 @@ error[E05001]: ability constraint not satisfied
    │         │   The type '0x42::M::Cup<TnoK>' does not have the ability 'drop'
    │         'drop' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:29:9
    │
  3 │     struct Cup<T> { f: T }
@@ -196,7 +196,7 @@ error[E05001]: ability constraint not satisfied
    │         │   The type '0x42::M::Cup<TnoK>' does not have the ability 'store'
    │         'store' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:30:9
    │
  9 │     fun cds<T: copy + drop + store>() {}
@@ -209,7 +209,7 @@ error[E05001]: ability constraint not satisfied
    │         │   The type '0x42::M::Pair<u64, TnoC>' does not have the ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:31:13
    │
 11 │     struct Sc<phantom T: copy> {}
@@ -223,7 +223,7 @@ error[E05001]: ability constraint not satisfied
    │             │           
    │             'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:31:21
    │
 11 │     struct Sc<phantom T: copy> {}
@@ -238,7 +238,7 @@ error[E05001]: ability constraint not satisfied
    │                     │  The type 'TnoC' does not have the ability 'copy'
    │                     'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:32:13
    │
  3 │     struct Cup<T> { f: T }
@@ -252,7 +252,7 @@ error[E05001]: ability constraint not satisfied
    │             │           
    │             'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:32:21
    │
  3 │     struct Cup<T> { f: T }
@@ -267,7 +267,7 @@ error[E05001]: ability constraint not satisfied
    │                     │  The type '0x42::M::Cup<TnoK>' does not have the ability 'copy'
    │                     'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:33:13
    │
 11 │     struct Sc<phantom T: copy> {}
@@ -280,7 +280,7 @@ error[E05001]: ability constraint not satisfied
    │             │          The type '0x42::M::Box<TnoC>' does not have the ability 'copy'
    │             'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:33:21
    │
 11 │     struct Sc<phantom T: copy> {}
@@ -293,7 +293,7 @@ error[E05001]: ability constraint not satisfied
    │                     │  The type '0x42::M::Box<TnoC>' does not have the ability 'copy'
    │                     'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:34:13
    │
 12 │     struct Sk<phantom T: key> {}
@@ -307,7 +307,7 @@ error[E05001]: ability constraint not satisfied
    │             │           
    │             'key' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:34:21
    │
 12 │     struct Sk<phantom T: key> {}
@@ -322,7 +322,7 @@ error[E05001]: ability constraint not satisfied
    │                     │  The type 'TnoK' does not have the ability 'key'
    │                     'key' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:35:13
    │
  3 │     struct Cup<T> { f: T }
@@ -336,7 +336,7 @@ error[E05001]: ability constraint not satisfied
    │             │           
    │             'key' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:35:21
    │
  3 │     struct Cup<T> { f: T }
@@ -351,7 +351,7 @@ error[E05001]: ability constraint not satisfied
    │                     │  The type '0x42::M::Cup<TnoC>' does not have the ability 'key'
    │                     'key' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:36:13
    │
 12 │     struct Sk<phantom T: key> {}
@@ -364,7 +364,7 @@ error[E05001]: ability constraint not satisfied
    │             │          The type '0x42::M::Box<0x42::M::Cup<TnoC>>' does not have the ability 'key'
    │             'key' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:36:21
    │
 12 │     struct Sk<phantom T: key> {}
@@ -377,7 +377,7 @@ error[E05001]: ability constraint not satisfied
    │                     │  The type '0x42::M::Box<0x42::M::Cup<TnoC>>' does not have the ability 'key'
    │                     'key' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:37:13
    │
 13 │     struct Scds<phantom T: copy + drop + store> {}
@@ -391,7 +391,7 @@ error[E05001]: ability constraint not satisfied
    │             │               
    │             'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:37:23
    │
 13 │     struct Scds<phantom T: copy + drop + store> {}
@@ -406,7 +406,7 @@ error[E05001]: ability constraint not satisfied
    │                       │    The type 'TnoC' does not have the ability 'copy'
    │                       'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:38:13
    │
  3 │     struct Cup<T> { f: T }
@@ -420,7 +420,7 @@ error[E05001]: ability constraint not satisfied
    │             │               
    │             'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:38:13
    │
  3 │     struct Cup<T> { f: T }
@@ -434,7 +434,7 @@ error[E05001]: ability constraint not satisfied
    │             │               
    │             'drop' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:38:13
    │
  3 │     struct Cup<T> { f: T }
@@ -448,7 +448,7 @@ error[E05001]: ability constraint not satisfied
    │             │               
    │             'store' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:38:23
    │
  3 │     struct Cup<T> { f: T }
@@ -463,7 +463,7 @@ error[E05001]: ability constraint not satisfied
    │                       │    The type '0x42::M::Cup<TnoC>' does not have the ability 'copy'
    │                       'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:38:23
    │
  3 │     struct Cup<T> { f: T }
@@ -478,7 +478,7 @@ error[E05001]: ability constraint not satisfied
    │                       │    The type '0x42::M::Cup<TnoC>' does not have the ability 'drop'
    │                       'drop' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:38:23
    │
  3 │     struct Cup<T> { f: T }
@@ -493,7 +493,7 @@ error[E05001]: ability constraint not satisfied
    │                       │    The type '0x42::M::Cup<TnoC>' does not have the ability 'store'
    │                       'store' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:39:13
    │
  3 │     struct Cup<T> { f: T }
@@ -507,7 +507,7 @@ error[E05001]: ability constraint not satisfied
    │             │               
    │             'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:39:13
    │
  3 │     struct Cup<T> { f: T }
@@ -521,7 +521,7 @@ error[E05001]: ability constraint not satisfied
    │             │               
    │             'drop' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:39:13
    │
  3 │     struct Cup<T> { f: T }
@@ -535,7 +535,7 @@ error[E05001]: ability constraint not satisfied
    │             │               
    │             'store' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:39:23
    │
  3 │     struct Cup<T> { f: T }
@@ -550,7 +550,7 @@ error[E05001]: ability constraint not satisfied
    │                       │    The type '0x42::M::Cup<TnoK>' does not have the ability 'copy'
    │                       'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:39:23
    │
  3 │     struct Cup<T> { f: T }
@@ -565,7 +565,7 @@ error[E05001]: ability constraint not satisfied
    │                       │    The type '0x42::M::Cup<TnoK>' does not have the ability 'drop'
    │                       'drop' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:39:23
    │
  3 │     struct Cup<T> { f: T }
@@ -580,7 +580,7 @@ error[E05001]: ability constraint not satisfied
    │                       │    The type '0x42::M::Cup<TnoK>' does not have the ability 'store'
    │                       'store' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:40:13
    │
 13 │     struct Scds<phantom T: copy + drop + store> {}
@@ -593,7 +593,7 @@ error[E05001]: ability constraint not satisfied
    │             │              The type '0x42::M::Pair<u64, TnoC>' does not have the ability 'copy'
    │             'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_tparams_invalid.move:40:23
    │
 13 │     struct Scds<phantom T: copy + drop + store> {}

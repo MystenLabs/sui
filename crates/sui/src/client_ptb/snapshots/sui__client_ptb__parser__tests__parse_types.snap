@@ -73,8 +73,8 @@ expression: parsed
             start: 0,
             end: 15,
         },
-        value: Struct(
-            ParsedStructType {
+        value: Datatype(
+            ParsedDatatype {
                 fq_name: ParsedFqName {
                     module: ParsedModuleId {
                         address: Named(
@@ -93,8 +93,8 @@ expression: parsed
             start: 0,
             end: 16,
         },
-        value: Struct(
-            ParsedStructType {
+        value: Datatype(
+            ParsedDatatype {
                 fq_name: ParsedFqName {
                     module: ParsedModuleId {
                         address: Numerical(
@@ -113,8 +113,8 @@ expression: parsed
             start: 0,
             end: 26,
         },
-        value: Struct(
-            ParsedStructType {
+        value: Datatype(
+            ParsedDatatype {
                 fq_name: ParsedFqName {
                     module: ParsedModuleId {
                         address: Numerical(
@@ -133,8 +133,8 @@ expression: parsed
             start: 0,
             end: 28,
         },
-        value: Struct(
-            ParsedStructType {
+        value: Datatype(
+            ParsedDatatype {
                 fq_name: ParsedFqName {
                     module: ParsedModuleId {
                         address: Numerical(
@@ -145,8 +145,8 @@ expression: parsed
                     name: "Coin",
                 },
                 type_args: [
-                    Struct(
-                        ParsedStructType {
+                    Datatype(
+                        ParsedDatatype {
                             fq_name: ParsedFqName {
                                 module: ParsedModuleId {
                                     address: Numerical(
@@ -168,8 +168,8 @@ expression: parsed
             start: 0,
             end: 68,
         },
-        value: Struct(
-            ParsedStructType {
+        value: Datatype(
+            ParsedDatatype {
                 fq_name: ParsedFqName {
                     module: ParsedModuleId {
                         address: Named(
@@ -180,8 +180,8 @@ expression: parsed
                     name: "Table",
                 },
                 type_args: [
-                    Struct(
-                        ParsedStructType {
+                    Datatype(
+                        ParsedDatatype {
                             fq_name: ParsedFqName {
                                 module: ParsedModuleId {
                                     address: Named(
@@ -195,8 +195,8 @@ expression: parsed
                         },
                     ),
                     Vector(
-                        Struct(
-                            ParsedStructType {
+                        Datatype(
+                            ParsedDatatype {
                                 fq_name: ParsedFqName {
                                     module: ParsedModuleId {
                                         address: Numerical(

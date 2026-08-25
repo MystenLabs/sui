@@ -21,11 +21,18 @@
 //!   transitions each pipeline's row to
 //!   [`restore_state::Complete`].
 //!
-//! A single asynchronous mutex serialises the per-chunk commit
-//! step, so cross-shard parallelism comes from the source-fetch
-//! and stage phases (where the real work lives). RocksDB's own
-//! WAL serialises writes anyway, so the mutex costs little
-//! beyond bookkeeping.
+//! A single asynchronous mutex serialises every `__restore`
+//! commit (per-chunk and shard-`Done`). Each batch snapshots a
+//! pipeline's full `__restore` row — including every *other*
+//! shard's cursor — at staging time, so commits must be totally
+//! ordered by the mutex: a batch committed after the lock is
+//! released could land after a peer shard's newer commit and
+//! rewind that peer's persisted cursor, making a crash-resume
+//! replay the peer's last chunk and double-apply its
+//! non-idempotent (`merge`) writes. Cross-shard parallelism
+//! comes from the source-fetch and stage phases (where the real
+//! work lives). RocksDB's own WAL serialises writes anyway, so
+//! the mutex costs little beyond bookkeeping.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -460,19 +467,23 @@ where
     }
 
     // Stream exhausted: flip the shard to Done for every pipeline.
+    // Commit while still holding the states lock (as the chunk loop
+    // above does): the staged rows snapshot peer shards' cursors, so
+    // a commit outside the lock could land after a peer's newer chunk
+    // commit and rewind its persisted cursor, making a crash-resume
+    // replay that chunk and double-apply its merge writes.
     let mut batch = db.batch();
-    {
-        let mut states = states.lock().await;
-        for (i, entry) in pipelines.iter().enumerate() {
-            update_shard_state(
-                &mut states[i],
-                shard_id,
-                ShardProgress::default().with_done(shard_progress::Done {}),
-            )?;
-            batch.put(&framework.restore, &entry.key, &states[i])?;
-        }
+    let mut states = states.lock().await;
+    for (i, entry) in pipelines.iter().enumerate() {
+        update_shard_state(
+            &mut states[i],
+            shard_id,
+            ShardProgress::default().with_done(shard_progress::Done {}),
+        )?;
+        batch.put(&framework.restore, &entry.key, &states[i])?;
     }
     batch.commit()?;
+    drop(states);
 
     metrics.restore_shards_done.inc();
     info!(shard_id, chunks, objects, "shard done");

@@ -9,7 +9,9 @@ use crate::{
     Flags,
     command_line::COLOR_MODE_ENV_VAR,
     diagnostics::{
-        codes::{Category, DiagnosticCode, DiagnosticInfo, DiagnosticsID, Severity},
+        codes::{
+            Category, DiagnosticCode, DiagnosticInfo, DiagnosticOrigin, DiagnosticsID, Severity,
+        },
         filter::{FilterName, FilterPrefix, FilterResult, FilterScope, FilterStack},
     },
     shared::{
@@ -49,6 +51,13 @@ pub struct DiagnosticReporter<'env> {
     ide_information: Arc<RwLock<IDEInfo>>,
     filter_stack: FilterStack,
 }
+
+/// A reporter restricted to internal compiler errors. Passes that should not produce any
+/// user-facing diagnostics (e.g. `to_bytecode`) carry this instead of a full
+/// [`DiagnosticReporter`] so that only `Severity::Bug` diagnostics (`ice!`, `ice_assert!`, and
+/// other `Bug` codes) can be reported through it.
+#[derive(Clone, Debug)]
+pub struct IceReporter<'env>(DiagnosticReporter<'env>);
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
 pub struct Diagnostics {
@@ -479,6 +488,28 @@ impl<'env> DiagnosticReporter<'env> {
     }
 }
 
+impl<'env> IceReporter<'env> {
+    pub fn new(reporter: DiagnosticReporter<'env>) -> Self {
+        Self(reporter)
+    }
+
+    /// Adds an internal compiler error (`Severity::Bug`) diagnostic. Reporting any other severity
+    /// through this reporter is itself an internal invariant violation, and raises an additional
+    /// ICE alongside the original diagnostic.
+    pub fn add_diag(&self, diag: Diagnostic) {
+        if diag.info().severity() != Severity::Bug {
+            self.0.add_diag(crate::ice!((
+                diag.primary_loc(),
+                format!(
+                    "non-ICE diagnostic '{}' reported through an ICE-only reporter",
+                    diag.info().message()
+                )
+            )));
+        }
+        self.0.add_diag(diag)
+    }
+}
+
 impl Diagnostics {
     pub fn new() -> Self {
         Self {
@@ -657,7 +688,7 @@ impl Diagnostics {
         inner.diagnostics.retain(f);
     }
 
-    pub fn any_with_prefix(&self, prefix: &str) -> bool {
+    pub fn any_with_origin(&self, origin: DiagnosticOrigin) -> bool {
         let Self {
             diags: Some(inner),
             format: _,
@@ -665,10 +696,7 @@ impl Diagnostics {
         else {
             return false;
         };
-        inner
-            .diagnostics
-            .iter()
-            .any(|d| d.info.external_prefix() == Some(prefix))
+        inner.diagnostics.iter().any(|d| d.info.origin() == origin)
     }
 
     /// Returns true if any diagnostic in the Syntax category have already been recorded.
@@ -687,8 +715,8 @@ impl Diagnostics {
     }
 
     /// Returns the number of diags filtered in source (user) code (not in the dependencies) that
-    /// have a given prefix and how many different unique lints were filtered.
-    pub fn filtered_source_diags_with_prefix(&self, prefix: &str) -> (usize, usize) {
+    /// have a given origin and how many different unique lints were filtered.
+    pub fn filtered_source_diags_with_origin(&self, origin: DiagnosticOrigin) -> (usize, usize) {
         let Self {
             diags: Some(inner),
             format: _,
@@ -699,7 +727,7 @@ impl Diagnostics {
         let mut filtered_diags_num = 0;
         let mut unique = HashSet::new();
         inner.filtered_source_diagnostics.iter().for_each(|d| {
-            if d.info.external_prefix() == Some(prefix) {
+            if d.info.origin() == origin {
                 filtered_diags_num += 1;
                 unique.insert((d.info.category(), d.info.code()));
             }

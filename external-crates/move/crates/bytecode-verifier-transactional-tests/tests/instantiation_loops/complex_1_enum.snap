@@ -11,7 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x6::M,
     indices: [],
     offsets: [],
-    message: "edges with constructors: [f1#1 --StructInstantiation(DatatypeHandleIndex(0), [TypeParameter(1)])--> f2#0], nodes: [f3#0, f2#1, f2#0, f1#1]",
+    message: "edges with constructors: [f6#0 --StructInstantiation(DatatypeHandleIndex(0), [TypeParameter(0)])--> f5#0], nodes: [f5#0, f6#0]",
 }
 
 task 1, lines 53-70:
@@ -22,7 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x7::M2,
     indices: [],
     offsets: [],
-    message: "edges with constructors: [f1#0 --StructInstantiation(DatatypeHandleIndex(0), [TypeParameter(0)])--> f0#0], nodes: [f1#0, f0#0]",
+    message: "edges with constructors: [f1#0 --StructInstantiation(DatatypeHandleIndex(0), [TypeParameter(0)])--> f0#0], nodes: [f0#0, f1#0]",
 }
 
 task 2, lines 72-122:
@@ -33,5 +33,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x8::M3,
     indices: [],
     offsets: [],
-    message: "edges with constructors: [f1#1 --StructInstantiation(DatatypeHandleIndex(0), [TypeParameter(1)])--> f2#0], nodes: [f3#0, f2#1, f2#0, f1#1]",
+    message: "edges with constructors: [f1#1 --StructInstantiation(DatatypeHandleIndex(0), [TypeParameter(1)])--> f2#0], nodes: [f1#1, f2#0, f2#1, f3#0]",
 }

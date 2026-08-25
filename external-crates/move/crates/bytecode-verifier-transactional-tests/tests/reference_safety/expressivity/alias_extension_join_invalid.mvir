@@ -1,0 +1,61 @@
+// A ref that is an alias of s in one branch and an extension in the other is
+// treated as possibly-extending, so writing through s is rejected.
+
+//# publish
+mvir 0x2::alias_or_extension {
+
+public struct S has copy, drop { f: u64 }
+
+fun sub(r: &mut Self::S): &mut Self::S {
+label b0:
+    return move(r);
+}
+
+fun t(s: &mut Self::S, cond: bool) {
+    let x: &mut Self::S;
+label b0:
+    jump_if (move(cond)) b2;
+label b1:
+    // alias of s
+    x = copy(s);
+    jump b3;
+label b2:
+    // extension of s via the call
+    x = Self::sub(copy(s));
+    jump b3;
+label b3:
+    // x has no extensions of its own, so it is writable
+    *copy(x) = S { f: 0 };
+    // but x might extend s, so writing through s is rejected
+    *move(s) = S { f: 1 };
+    _ = move(x);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::alias_both_branches_valid {
+
+public struct S has copy, drop { f: u64 }
+
+fun t(s: &mut Self::S, cond: bool) {
+    let x: &mut Self::S;
+label b0:
+    jump_if (move(cond)) b2;
+label b1:
+    x = copy(s);
+    jump b3;
+label b2:
+    x = copy(s);
+    jump b3;
+label b3:
+    // pure aliases in both branches: both writes are allowed while both live
+    *copy(x) = S { f: 0 };
+    *copy(s) = S { f: 1 };
+    _ = move(x);
+    _ = move(s);
+    return;
+}
+
+}

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/macro_visibility_function_error.move:5:22
    │
  5 │     public macro fun test() {
@@ -17,7 +17,7 @@ error[E04007]: incompatible types
 14 │         test!();
    │         ------- Given: 'u64'
 
-error[E04001]: restricted visibility
+error[EC04001]: restricted visibility
    ┌─ tests/move_2024/typing/macro_visibility_function_error.move:6:6
    │
  3 │     fun zero(): u64 { 0 }

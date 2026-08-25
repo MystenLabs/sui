@@ -1,0 +1,323 @@
+---
+title: Predict Manager
+description: >-
+  Learn about PredictManager accounts, deposited quote balances, binary position
+  quantities, and range quantities.
+keywords:
+  - predict manager
+  - predictmanager
+  - deepbook predict
+  - position table
+  - range position
+  - balance manager
+  - deposit
+  - withdraw
+goal:
+  description: >-
+    Reader can learn about PredictManager accounts, deposited quote balances,
+    binary position quantities, and range quantities
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is a PredictManager in DeepBook Predict?
+  - How do I create a PredictManager and get its object ID?
+  - How do I read binary position and vertical range quantities from a PredictManager?
+  - Why does a DeepBook Predict mint fail with an insufficient balance error?
+answer: >-
+  A `PredictManager` is a per-user shared account object in DeepBook Predict.
+  Create one with `predict::create_manager`, deposit an accepted quote asset
+  with `predict_manager::deposit`, and the protocol tracks your binary position
+  quantities in a `Table<MarketKey, u64>` and your vertical range quantities in
+  a `Table<RangeKey, u64>` inside the same object.
+---
+
+The `PredictManager` is a per-user shared account object. It wraps a DeepBook `BalanceManager`, stores quote balances, and tracks Predict positions internally.
+
+Each user creates one manager and reuses it. Binary positions and vertical ranges are not separate onchain objects. They are `u64` quantities stored in tables inside the manager, keyed by [`MarketKey` and `RangeKey`](/onchain-finance/deepbook/deepbook-predict/contract-information/market-keys).
+
+## Lifecycle {#lifecycle}
+
+A manager moves through four stages. Only the first stage happens once.
+
+```mermaid
+flowchart LR
+    A[Create manager] --> B[Deposit quote asset]
+    B --> C[Mint positions and ranges]
+    C --> D[Redeem into manager balance]
+    D --> B
+    D --> E[Withdraw quote asset]
+    E --> B
+```
+
+| **Stage** | **Entry point** | **What changes** |
+|---|---|---|
+| Create | `predict::create_manager` | Shares a new `PredictManager` with the caller as fixed owner. |
+| Deposit | `predict_manager::deposit` | Increases the inner `BalanceManager` balance for one coin type. |
+| Mint | `predict::mint`, `predict::mint_range` | Debits the manager balance for the cost, increases a position or range quantity. |
+| Redeem | `predict::redeem`, `predict::redeem_range`, `predict::redeem_permissionless` | Decreases a quantity, credits the payout back to the manager balance. |
+| Withdraw | `predict_manager::withdraw` | Decreases the manager balance, returns a `Coin<T>` to the caller. |
+
+Two properties shape every stage:
+
+- **Creation fixes the owner.** `predict_manager::new` sets `owner` to `ctx.sender()`, and no function changes it afterward. To move an account to a different address, create a new manager.
+- **The manager is shared, not owned.** `PredictManager` has the `key` ability only, and creation calls `transfer::share_object`. Anyone can reference it in a transaction, so authorization comes from sender checks inside each function rather than from object ownership.
+
+## Function reference {#function-reference}
+
+These are the complete public signatures. Copy them as written when you generate calls or bindings.
+
+```move title='packages/predict/sources/predict_manager.move'
+public fun owner(self: &PredictManager): address
+public fun balance<T>(self: &PredictManager): u64
+public fun position(self: &PredictManager, key: MarketKey): u64
+public fun range_position(self: &PredictManager, key: RangeKey): u64
+public fun deposit<T>(self: &mut PredictManager, coin: Coin<T>, ctx: &TxContext)
+public fun withdraw<T>(self: &mut PredictManager, amount: u64, ctx: &mut TxContext): Coin<T>
+```
+
+Manager creation lives in `predict.move`, not `predict_manager.move`:
+
+```move title='packages/predict/sources/predict.move'
+public fun create_manager(ctx: &mut TxContext): ID
+```
+
+Everything else in `predict_manager.move` is `public(package)`. `new`, `deposit_permissionless`, `increase_position`, `decrease_position`, `increase_range`, and `decrease_range` are reachable only through `predict.move` entry points, so no external package can edit your quantities directly.
+
+<details>
+<summary>Source for the read functions</summary>
+
+<ImportContent
+	source="packages/predict/sources/predict_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="owner,balance,position,range_position"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Source for `deposit` and `withdraw`</summary>
+
+<ImportContent
+	source="packages/predict/sources/predict_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="deposit,withdraw"
+	noComments
+/>
+
+</details>
+
+## Create a manager {#create-a-manager}
+
+`predict::create_manager` builds the manager, mints a `DepositCap` and a `WithdrawCap` against the inner `BalanceManager`, creates both position tables, shares the object, and emits `PredictManagerCreated`.
+
+The function returns the new `ID`, but a programmable transaction block drops Move return values. Read the ID from transaction effects or from the emitted event instead:
+
+1. Call `predict::create_manager`. It takes no arguments and no type arguments.
+1. Execute the transaction, requesting effects and object types.
+1. Find the created object whose type contains `PredictManager`, and read its `objectId`.
+1. Store that ID. Every later Predict call takes it as an argument.
+1. Wait for the transaction to finalize before you deposit, because the object does not exist as a shared input until then.
+
+The following Testnet example makes that call and recovers the ID from effects:
+
+<ImportContent source="examples/deepbook-predict/src/create-manager.ts" mode="code" tag="create-manager" />
+
+## Quote balances {#quote-balances}
+
+Deposited funds do not sit in the `PredictManager` directly. The manager wraps a DeepBook `BalanceManager` and holds a `DepositCap` and `WithdrawCap` for it. Every balance operation forwards to that inner object using those capabilities.
+
+Because the manager wraps the `BalanceManager` rather than sharing it, you cannot pass that inner object to DeepBook trading functions or read it on its own. Route all balance access through the `PredictManager`.
+
+### Supported coin types {#supported-coin-types}
+
+`deposit<T>` accepts any coin type. It checks only that the sender is the owner. The accepted-asset rule lives one level up, in `Predict`:
+
+- **Trading and liquidity calls** (`mint`, `mint_range`, `supply`) call `assert_quote_asset<Quote>()` and abort with `EQuoteAssetNotAccepted` when the type is not enabled.
+- **Accepted quote assets** must declare exactly 6 decimals. On Testnet the enabled asset is DUSDC. Read the current list with `predict::accepted_quotes()`.
+
+Depositing an unsupported coin type therefore succeeds, but you cannot trade with it. You can always withdraw it again. Match your deposit type to the `Quote` type argument you plan to pass to `mint`.
+
+### Balance limits {#balance-limits}
+
+No protocol-level deposit cap exists. Balances are `u64` in base units, so the ceiling is the `u64` maximum. The practical limits come from the operations that spend the balance:
+
+- `mint` withdraws the full cost from the manager balance in the same transaction. Insufficient balance aborts with `EBalanceManagerBalanceTooLow` from `deepbook::balance_manager`, not with a Predict error code.
+- `balance<T>()` returns `0` for a coin type the manager has never held. A zero result does not distinguish an unfunded type from an invalid one.
+
+### Deposit and withdraw {#deposit-and-withdraw}
+
+`deposit` consumes a whole `Coin<T>`, so split the exact amount first. `withdraw` takes an amount and returns a `Coin<T>` that you must transfer, otherwise the transaction fails with an unused value error.
+
+Step 1 of the [end-to-end example](#end-to-end-workflow) shows the deposit leg: split the exact amount off a coin, then pass the split coin and the quote type to `predict_manager::deposit`. Withdrawing works the same way in reverse, taking an amount rather than a coin and returning one, so transfer the returned coin before the transaction ends.
+
+Both functions abort with `EInvalidOwner` when the sender is not the manager owner. Neither takes a `ctx` argument in the transaction block, because Sui supplies `TxContext` automatically.
+
+Payouts arrive through a different path. `predict::redeem_permissionless` calls the package-internal `deposit_permissionless`, which skips the owner check so a third party can close out a settled position on your behalf. The payout still lands in your manager, and only you can withdraw it.
+
+## Binary position quantities {#binary-position-quantities}
+
+The `positions` table maps a `MarketKey` to a `u64` quantity. A `MarketKey` combines oracle ID, expiry, strike, and direction, so each row is one binary instrument.
+
+Quantity uses quote units, where `1_000_000` equals 1 contract. A winning contract pays 1 USD at settlement, so the quantity is also the payout in quote base units. Consider an up position at a 0.35 ask price:
+
+| **Value** | **Raw** | **Reads as** |
+|---|---|---|
+| Quantity | `5_000_000` | 5 contracts |
+| Ask price | `350_000_000` | 0.35, using `FLOAT_SCALING` of 1e9 |
+| Mint cost | `1_750_000` | 1.75 DUSDC, computed as `ask * quantity / 1e9` |
+| Payout if the position wins | `5_000_000` | 5.00 DUSDC |
+| Payout if the position loses | `0` | 0.00 DUSDC |
+
+Quantities only move through trading. `predict::mint` calls `increase_position` after the vault accepts payment, and `predict::redeem` calls `decrease_position` before the payout leaves the vault. `decrease_position` aborts with `EInsufficientPosition` when the key has no row or the stored quantity is smaller than the amount you redeem, so partial redemptions work but overdrafts do not.
+
+Positions are always long. The protocol represents a bearish view as a long down position at the same strike rather than as a negative quantity, which is why `u64` suffices.
+
+### Read a position quantity {#read-a-position-quantity}
+
+`position()` needs a `MarketKey` value, which you build in the same transaction block. This works in a devInspect call, so you can read quantities without spending gas:
+
+1. Call `market_key::up`, `market_key::down`, or `market_key::new` with the oracle ID, expiry, and strike.
+1. Pass the returned key into `predict_manager::position` along with the manager object.
+1. Read the returned `u64` from the inspect results.
+
+See [Market Keys](/onchain-finance/deepbook/deepbook-predict/contract-information/market-keys#market-key-example) for the key construction call and its argument order.
+
+`position()` returns `0` for a key with no row, so a zero result cannot distinguish a position you never opened from one you fully redeemed.
+
+That call tells you how much of one exact instrument you hold. It cannot tell you what you hold overall, because it requires the key up front. To enumerate a portfolio, either list the dynamic fields of the `positions` table using the table's `id`, where each field key is a BCS-serialized `MarketKey`, or read the indexed portfolio endpoint from the Predict server. The server path is the practical choice for user interfaces.
+
+## Range quantities {#range-quantities}
+
+The `range_positions` table maps a `RangeKey` to a `u64` quantity, mirroring the binary table. A `RangeKey` combines oracle ID, expiry, lower strike, and higher strike.
+
+A vertical range is one bounded instrument, not a pair of legs you manage separately. It pays out when the settlement price lands in the half-open band `(lower_strike, higher_strike]`. As with binary positions, quantity is the payout in quote base units when the range wins.
+
+Three properties distinguish ranges from binary positions:
+
+- **`range_key::new` validates strike order.** It aborts with `EInvalidStrikes` when `lower_strike` is not less than `higher_strike`. It also rejects equal strikes, so a zero-width band cannot exist.
+- **Direction is not part of the key.** A bull-call range and a bear-put range with the same strikes are identical to the vault and share one `RangeKey` row. Do not model them as separate holdings.
+- **The vault decomposes ranges internally.** The vault records a range as a long up leg at the lower strike plus a long down leg at the higher strike, plus a `range_qty` adjustment. That decomposition affects vault exposure accounting only. Your manager still holds a single range row at the full quantity. See [Vault](/onchain-finance/deepbook/deepbook-predict/contract-information/vault) for how that adjustment feeds max payout.
+
+Read a range quantity the same way you read a binary one, substituting `range_key::new` for the key constructor and `predict_manager::range_position` for the read. See [Market Keys](/onchain-finance/deepbook/deepbook-predict/contract-information/market-keys#range-key-example) for that constructor and its argument order.
+
+`predict::mint_range` calls `increase_range` and `predict::redeem_range` calls `decrease_range`. An oversized redemption aborts with `EInsufficientRangePosition`.
+
+## End-to-end workflow {#end-to-end-workflow}
+
+A complete first trade takes two transactions, because the manager must exist as a shared object before you can use it as an input.
+
+### Transaction 1: create the manager
+
+1. Call `predict::create_manager`.
+1. Read the new manager ID from the created objects in effects.
+
+### Transaction 2: deposit and mint
+
+1. Split the deposit amount off a DUSDC coin with `tx.splitCoins`.
+1. Call `predict_manager::deposit` with the split coin and `DUSDC` as the type argument.
+1. Build a `MarketKey` with `market_key::up`.
+1. Call `predict::mint` with the `Predict` object, the manager, the oracle, the key, the quantity, and the clock.
+
+Deposit and mint belong in one transaction so the balance is available when `mint` withdraws the cost. Preview the cost first with `predict::get_trade_amounts`, then deposit at or above that amount.
+
+<details>
+<summary>Deposit and mint in a single transaction</summary>
+
+<ImportContent source="examples/deepbook-predict/src/mint.ts" mode="code" tag="mint-binary" />
+
+</details>
+
+The [Testnet tutorial](/onchain-finance/deepbook/deepbook-predict/tutorial) walks through the same flow with previews, ranges, redemption, and settlement.
+
+## Structs {#structs}
+
+The module defines one struct, plus the event covered in the next section.
+
+### `PredictManager` {#predict-manager-struct}
+
+| **Field** | **Type** | **Description** |
+|---|---|---|
+| `id` | `UID` | Object ID of the shared manager. |
+| `owner` | `address` | Address that created the manager. Fixed for the object's lifetime. |
+| `balance_manager` | `BalanceManager` | Wrapped DeepBook balance account holding all deposited coins. |
+| `deposit_cap` | `DepositCap` | Capability the manager uses to credit the inner balance account. |
+| `withdraw_cap` | `WithdrawCap` | Capability the manager uses to debit the inner balance account. |
+| `positions` | `Table<MarketKey, u64>` | Binary position quantity per market key. |
+| `range_positions` | `Table<RangeKey, u64>` | Vertical range quantity per range key. |
+
+<details>
+<summary>`PredictManager` source</summary>
+
+<ImportContent
+	source="packages/predict/sources/predict_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="PredictManager"
+/>
+
+</details>
+
+## Events {#events}
+
+The module emits one event of its own. Balance movements surface through DeepBook instead, as described in the second subsection.
+
+### `PredictManagerCreated` {#predict-manager-created}
+
+Predict emits this event once per manager, inside `predict_manager::new`.
+
+| **Field** | **Type** | **Description** |
+|---|---|---|
+| `manager_id` | `ID` | Object ID of the new shared `PredictManager`. |
+| `owner` | `address` | Address that created it, taken from the transaction sender. |
+
+The event type is `PACKAGE_ID::predict_manager::PredictManagerCreated`. Both fields serialize as strings in JSON event payloads, and `manager_id` arrives as a `0x`-prefixed object ID. To index managers per user, filter events by this type and group by `owner`. To recover a lost manager ID, query the same type and match `owner` to the address. The event carries `copy`, `drop`, and `store`.
+
+<details>
+<summary>`PredictManagerCreated` source</summary>
+
+<ImportContent
+	source="packages/predict/sources/predict_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="PredictManagerCreated"
+/>
+
+</details>
+
+### Balance changes {#balance-change-events}
+
+`predict_manager` emits no deposit or withdrawal event of its own. Balance movements surface as `deepbook::balance_manager::BalanceEvent`, emitted by the inner account with the wrapped `BalanceManager` ID, the asset type, the amount, and a `deposit` boolean. Subscribe to that type when you need a ledger of manager funding, and read `PositionMinted` and `PositionRedeemed` from `predict` for the trades themselves. See [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict) for the trading event structures.
+
+## Error codes {#error-codes}
+
+| **Code** | **Constant** | **Module** | **Cause** |
+|---|---|---|---|
+| `0` | `EInvalidOwner` | `predict_manager` | The sender of `deposit` or `withdraw` is not the manager owner. |
+| `1` | `EInsufficientPosition` | `predict_manager` | A redeem asked for more binary quantity than the key holds. |
+| `2` | `EInsufficientRangePosition` | `predict_manager` | A range redeem asked for more quantity than the key holds. |
+| `1` | `ENotOwner` | `predict` | The sender of `mint`, `mint_range`, `redeem`, or `redeem_range` is not the manager owner. |
+| `3` | `EBalanceManagerBalanceTooLow` | `deepbook::balance_manager` | The manager balance cannot cover a withdrawal or a mint cost. |
+| `0` | `EInvalidStrikes` | `range_key` | `lower_strike` is not less than `higher_strike`. |
+
+Error codes repeat across modules, so always resolve an abort against the module named in the abort location, not against the number alone.

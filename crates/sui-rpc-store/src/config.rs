@@ -19,16 +19,16 @@
 
 use std::time::Duration;
 
-use sui_default_config::DefaultConfig;
+use serde::Deserialize;
+use serde::Serialize;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 
 /// Top-level configuration for the `sui-rpc-store` indexer
 /// service. Parses from TOML; every field has a sensible default
 /// for tests and for the embedded use case where most knobs are
 /// supplied programmatically.
-#[DefaultConfig]
-#[derive(Default)]
-#[serde(deny_unknown_fields)]
+#[derive(Default, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ServiceConfig {
     /// Cross-pipeline consistency knobs: how often to take
     /// snapshots and how deep the per-pipeline write buffer is.
@@ -60,9 +60,8 @@ pub struct ServiceConfig {
 ///
 /// [`Synchronizer`]: sui_consistent_store::Synchronizer
 /// [`DbOptions::snapshot_capacity`]: sui_consistent_store::DbOptions::snapshot_capacity
-#[DefaultConfig]
-#[derive(Clone)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ConsistencyConfig {
     /// Per-pipeline mpsc capacity for batches waiting to be
     /// committed. The synchronizer's slowest pipeline gates
@@ -97,9 +96,8 @@ pub struct ConsistencyConfig {
 /// ledger-history bitmap CFs. The live-set-bounded indexes
 /// (`object_by_owner`, `object_by_type`, `balance`,
 /// `package_versions`) and the tiny `epochs` CF are never pruned.
-#[DefaultConfig]
-#[derive(Clone)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct PrunerConfig {
     /// Number of most-recent epochs to retain in full. Data in
     /// epochs older than this is eligible for pruning. Must be at
@@ -166,8 +164,8 @@ impl PrunerConfig {
 /// field as a top-level key.
 ///
 /// [`RpcStoreSchema`]: crate::RpcStoreSchema
-#[DefaultConfig]
-#[derive(Default)]
+#[derive(Default, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct PipelineLayer {
     // --- Raw chain data ---
     pub epochs: Option<CommitterLayer>,
@@ -195,9 +193,8 @@ pub struct PipelineLayer {
 /// unset field inherits from the shared committer default the
 /// orchestrator passes through to
 /// [`CommitterLayer::finish`](Self::finish).
-#[DefaultConfig]
-#[derive(Default)]
-#[serde(deny_unknown_fields)]
+#[derive(Default, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
     pub collect_interval_ms: Option<u64>,
@@ -262,16 +259,18 @@ impl PipelineLayer {
     ///
     /// - **Live cohort** — restored to the fullnode's tip and
     ///   following live from there: `object_by_owner`,
-    ///   `object_by_type`, `balance`, `package_versions`.
+    ///   `object_by_type`, `balance`.
     /// - **History cohort** — seeded to the lowest available
     ///   checkpoint and backfilling upward: `epochs`,
-    ///   `object_version_by_checkpoint`, `tx_seq_by_digest`,
-    ///   `tx_metadata_by_seq`, `transaction_bitmap`, `event_bitmap`.
-    ///   These back the ledger-history list APIs (the bitmaps plus the
-    ///   `tx_seq` <-> digest maps needed to interpret bitmap results)
-    ///   and the per-epoch protocol/committee reads (`epochs`).
-    ///   `object_version_by_checkpoint` is additionally restored at the
-    ///   tip for its `from_restore` floor rows (see the cohort docs in
+    ///   `object_version_by_checkpoint`, `package_versions`,
+    ///   `tx_seq_by_digest`, `tx_metadata_by_seq`, `transaction_bitmap`,
+    ///   `event_bitmap`. These back the ledger-history list APIs (the
+    ///   bitmaps plus the `tx_seq` <-> digest maps needed to interpret
+    ///   bitmap results) and the per-epoch protocol/committee reads
+    ///   (`epochs`). `object_version_by_checkpoint` and
+    ///   `package_versions` are additionally restored at the tip for
+    ///   their floor rows, then backfill the per-checkpoint detail over
+    ///   `(L, T]` (see the cohort docs in
     ///   [`restore`](crate::indexer::restore)).
     pub fn embedded() -> Self {
         Self {
@@ -279,13 +278,13 @@ impl PipelineLayer {
             object_by_owner: Some(CommitterLayer::default()),
             object_by_type: Some(CommitterLayer::default()),
             balance: Some(CommitterLayer::default()),
-            package_versions: Some(CommitterLayer::default()),
             // History cohort: seeded to L, backfills upward.
-            // `object_version_by_checkpoint` is additionally restored at
-            // the tip for its floor rows (see the cohort docs in
-            // `restore.rs`).
+            // `object_version_by_checkpoint` and `package_versions` are
+            // additionally restored at the tip for their floor rows (see
+            // the cohort docs in `restore.rs`).
             epochs: Some(CommitterLayer::default()),
             object_version_by_checkpoint: Some(CommitterLayer::default()),
+            package_versions: Some(CommitterLayer::default()),
             tx_seq_by_digest: Some(CommitterLayer::default()),
             tx_metadata_by_seq: Some(CommitterLayer::default()),
             transaction_bitmap: Some(CommitterLayer::default()),
@@ -298,35 +297,69 @@ impl PipelineLayer {
 /// Per-pipeline registration toggles for
 /// [`restore_indexes`](crate::restore_indexes).
 ///
-/// The derived-index pipelines (`object_by_owner`, `object_by_type`,
-/// `balance`, `package_versions`) are always
-/// restored — they cannot be reconstructed from anywhere else. The
-/// raw `objects` CF is conditional: the standalone deployment
-/// needs it so version-keyed reads are served by the restored
-/// snapshot, while the embedded-fullnode deployment already has
-/// every object version in the validator's perpetual store and
-/// can skip the duplicate write.
+/// The live-cohort pipelines (`object_by_owner`, `object_by_type`,
+/// `balance`) are always restored — they cannot be reconstructed
+/// from anywhere else. The rest is conditional:
+///
+/// - The history floor rows (`object_version_by_checkpoint`,
+///   `package_versions`) matter only when some prefix of the chain
+///   is unavailable for backfill. A caller whose history cohort
+///   replays from genesis skips them — the backfill rebuilds both
+///   CFs in full, so restoring them would waste bulk-load work and
+///   stamp watermarks the backfill would have to be rewound past.
+/// - The raw `objects` CF is needed by the standalone deployment so
+///   version-keyed reads are served by the restored snapshot; the
+///   embedded-fullnode deployment already has every object version
+///   in the validator's perpetual store and skips the duplicate
+///   write.
 #[derive(Default, Clone, Debug)]
 pub struct RestoreLayer {
     /// If true, register the `objects` pipeline with the restore
     /// driver so each live object lands as an
     /// `(ObjectID, version) → StoredObject` row.
     pub objects: bool,
+
+    /// If true, register the `object_version_by_checkpoint` and
+    /// `package_versions` pipelines so their floor rows at the
+    /// restore target are bulk-loaded (see
+    /// [`HISTORY_COHORT`](crate::HISTORY_COHORT)'s docs for how the
+    /// history seed then rewinds their watermarks).
+    pub history_floors: bool,
 }
 
 impl RestoreLayer {
     /// Restore every pipeline, including the raw `objects` CF.
     /// The standalone-binary default.
     pub fn all() -> Self {
-        Self { objects: true }
+        Self {
+            objects: true,
+            history_floors: true,
+        }
     }
 
     /// Restore only the derived-index pipelines. The embedded-
-    /// fullnode default — the fullnode's perpetual store already
-    /// holds every object version, so the `objects` CF is left
-    /// untouched here.
+    /// fullnode default when the perpetual store has pruned
+    /// (`L > 0`) — the fullnode's perpetual store already holds
+    /// every object version, so the `objects` CF is left untouched
+    /// here.
     pub fn indexes_only() -> Self {
-        Self { objects: false }
+        Self {
+            objects: false,
+            history_floors: true,
+        }
+    }
+
+    /// Restore only the live-cohort index pipelines. The embedded-
+    /// fullnode choice when nothing has been pruned (`L == 0`): the
+    /// history cohort backfills from genesis and rebuilds
+    /// `object_version_by_checkpoint` and `package_versions` in
+    /// full, so their floor rows (and the restore watermarks that
+    /// come with them) must not be written.
+    pub fn live_only() -> Self {
+        Self {
+            objects: false,
+            history_floors: false,
+        }
     }
 }
 
@@ -372,10 +405,11 @@ mod tests {
         assert!(layer.object_by_owner.is_some());
         assert!(layer.object_by_type.is_some());
         assert!(layer.balance.is_some());
-        assert!(layer.package_versions.is_some());
-        // History cohort (object_version_by_checkpoint is also restored).
+        // History cohort (object_version_by_checkpoint and
+        // package_versions are also restored).
         assert!(layer.epochs.is_some());
         assert!(layer.object_version_by_checkpoint.is_some());
+        assert!(layer.package_versions.is_some());
         assert!(layer.tx_seq_by_digest.is_some());
         assert!(layer.tx_metadata_by_seq.is_some());
         assert!(layer.transaction_bitmap.is_some());

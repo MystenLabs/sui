@@ -1,0 +1,178 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, line 36:
+//# view-abstract-state 0x2::join_gap::t
+{
+  "l0": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      },
+      "s2": {
+        "Reference": "r#s2"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true,
+        "r#s2": true
+      },
+      "outgoing": {}
+    }
+  },
+  "l1": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      },
+      "s2": {
+        "Reference": "r#s2"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true,
+        "r#s2": true
+      },
+      "outgoing": {}
+    }
+  },
+  "l2": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      },
+      "s2": {
+        "Reference": "r#s2"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true,
+        "r#s2": true
+      },
+      "outgoing": {}
+    }
+  },
+  "l3": {
+    "local_root": "ROOT",
+    "locals": {
+      "a": {
+        "Reference": "r#a"
+      },
+      "b": {
+        "Reference": "r#b"
+      },
+      "c": {
+        "Reference": "r#c"
+      },
+      "s": {
+        "Reference": "r#s"
+      },
+      "s2": {
+        "Reference": "r#s2"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#a": true,
+        "r#b": true,
+        "r#c": true,
+        "r#s": true,
+        "r#s2": true
+      },
+      "outgoing": {
+        "r#a": {
+          "r#b": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#s": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#s2": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#b": {
+          "r#a": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#c": [
+            {
+              "labels": [
+                "S.f"
+              ],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#s": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#s": {
+          "r#a": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#b": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#c": [
+            {
+              "labels": [
+                "S.f"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#s2": {
+          "r#a": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#c": [
+            {
+              "labels": [
+                "S.f"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        }
+      }
+    }
+  }
+}

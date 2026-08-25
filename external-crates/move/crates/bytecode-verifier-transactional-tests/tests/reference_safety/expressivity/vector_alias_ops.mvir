@@ -1,0 +1,81 @@
+// Vector updates are allowed through an alias of the vector ref, but blocked
+// while an element borrow is live.
+
+//# run
+mvir 0x2::mutate_with_alias {
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let vr2: &mut vector<u64>;
+label b0:
+    v = vector<u64; 1>(0);
+    vr = &mut v;
+    vr2 = copy(vr);
+    // vr2 aliases vr, so updates through it are allowed
+    vec_push_back<u64>(copy(vr2), 1);
+    vec_swap<u64>(move(vr2), 0, 1);
+    assert(*vec_imm_borrow<u64>(freeze(copy(vr)), 0) == 1, 42);
+    _ = vec_pop_back<u64>(copy(vr));
+    assert(vec_len<u64>(freeze(move(vr))) == 1, 43);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::push_with_elem_borrow_invalid {
+
+fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &mut u64;
+label b0:
+    v = vector<u64; 1>(0);
+    vr = &mut v;
+    e = vec_mut_borrow<u64>(copy(vr), 0);
+    // e still borrows into the vector, so the update could dangle it
+    vec_push_back<u64>(copy(vr), 1);
+    *move(e) = 1;
+    return;
+}
+
+}
+
+//# publish
+mvir 0x4::swap_with_elem_borrow_invalid {
+
+fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &u64;
+label b0:
+    v = vector<u64; 2>(0, 1);
+    vr = &mut v;
+    e = vec_imm_borrow<u64>(freeze(copy(vr)), 0);
+    vec_swap<u64>(copy(vr), 0, 1);
+    _ = *move(e);
+    return;
+}
+
+}
+
+//# run
+mvir 0x5::len_with_elem_borrow {
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &mut u64;
+label b0:
+    v = vector<u64; 1>(7);
+    vr = &mut v;
+    e = vec_mut_borrow<u64>(copy(vr), 0);
+    // reading the length does not care about the element borrow
+    assert(vec_len<u64>(freeze(copy(vr))) == 1, 42);
+    *move(e) = 8;
+    assert(*vec_imm_borrow<u64>(freeze(move(vr)), 0) == 8, 43);
+    return;
+}
+
+}

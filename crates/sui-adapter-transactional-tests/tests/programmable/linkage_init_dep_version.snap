@@ -1,0 +1,134 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 16 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 16-21:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 23-28:
+//# publish --upgradeable --dependencies Dep_V1 --sender A
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5958400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 30-39:
+//# publish --dependencies Dep_V1 --sender A
+created: object(3,0), object(3,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7235200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 41:
+//# view-object 3,1
+Owner: Shared( 4 )
+Version: 4
+Contents: PInitV1::m::Config {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,1),
+        },
+    },
+    v: 1u64,
+}
+
+task 5, lines 43-48:
+//# upgrade --package Dep_V1 --upgrade-capability 1,1 --sender A
+created: object(5,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 6, lines 50-55:
+//# upgrade --package ConsumerV1 --upgrade-capability 2,1 --dependencies Dep_V2 --sender A
+created: object(6,0)
+mutated: object(0,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 5958400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 7, lines 57-66:
+//# publish --dependencies Dep_V1 --sender A
+created: object(7,0), object(7,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7235200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, line 68:
+//# view-object 7,1
+Owner: Shared( 7 )
+Version: 7
+Contents: PInitOld::m::Config {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,1),
+        },
+    },
+    v: 1u64,
+}
+
+task 10, lines 80-83:
+//# programmable --sender A --inputs @A
+// PTB publish with `init`, dep set to v2 => init runs against v2 => v = 2.
+//> 0: Publish(PPtb, [Dep_V2, sui, std]);
+//> 1: TransferObjects([Result(0)], Input(0));
+created: object(10,0), object(10,1), object(10,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 8869200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11, line 85:
+//# view-object 10,1
+Owner: Shared( 8 )
+Version: 8
+Contents: fake(10,0)::m::Config {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(10,1),
+        },
+    },
+    v: 2u64,
+}
+
+task 12, lines 87-91:
+//# programmable --sender A --inputs @A
+// init pins Dep exact(1); `ping` pins Dep exact(2) => exact/exact conflict => InvalidLinkage.
+//> 0: Publish(PPtb, [Dep_V1, sui, std]);
+//> 1: Dep_V2::d::ping();
+//> 2: TransferObjects([Result(0)], Input(0));
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly Dep_V1 (version 1) and Dep_V2 (version 2) to be used in the same transaction"), command: Some(1) } }
+
+task 13, lines 93-98:
+//# programmable --sender A --inputs @A
+// init pins Dep exact(2); ConsumerV1 pins Dep at_least(1) (transitive, lower) => unifies to exact(2)
+// => init runs v2 => v = 2.
+//> 0: Publish(PPtb, [Dep_V2, sui, std]);
+//> 1: ConsumerV1::c::consume();
+//> 2: TransferObjects([Result(0)], Input(0));
+created: object(13,0), object(13,1), object(13,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 8869200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 14, line 100:
+//# view-object 13,1
+Owner: Shared( 10 )
+Version: 10
+Contents: fake(13,0)::m::Config {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(13,1),
+        },
+    },
+    v: 2u64,
+}
+
+task 15, lines 102-107:
+//# programmable --sender A --inputs @A
+// init pins Dep exact(1); ConsumerV2 pins Dep at_least(2) (transitive, higher) => exact(1) < 2 =>
+// InvalidLinkage.
+//> 0: Publish(PPtb, [Dep_V1, sui, std]);
+//> 1: ConsumerV2::c::consume();
+//> 2: TransferObjects([Result(0)], Input(0));
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("Exact/AtLeast conflicting resolutions for package: linkage requires exactly this package Dep_V1 (version 1) and also at least the following version of the package Dep_V2 at version 2. However Dep_V1 is at version 1 which is less than 2."), command: Some(1) } }

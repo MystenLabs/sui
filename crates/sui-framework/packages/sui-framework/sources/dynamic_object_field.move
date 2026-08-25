@@ -12,7 +12,7 @@ use sui::dynamic_field::{
     add_child_object,
     borrow_child_object,
     borrow_child_object_mut,
-    remove_child_object
+    remove_child_object,
 };
 
 // Internal object used for storing the field and the name associated with the value

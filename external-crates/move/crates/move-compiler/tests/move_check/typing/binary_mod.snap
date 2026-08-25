@@ -5,4 +5,18 @@ info:
   edition: legacy
   lint: false
 ---
+warning[WC08002]: operation always errors
+  ┌─ tests/move_check/typing/binary_mod.move:7:9
+  │
+7 │         0u64 % 0;
+  │         ^^^^^^^^ Cannot take the remainder modulo zero. This operation always errors at runtime
+  │
+  = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
+warning[WC08002]: operation always errors
+  ┌─ tests/move_check/typing/binary_mod.move:8:9
+  │
+8 │         1 % 0u64;
+  │         ^^^^^^^^ Cannot take the remainder modulo zero. This operation always errors at runtime
+  │
+  = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

@@ -1,7 +1,42 @@
 ---
 title: Kiosk Joining Patterns
-description: Use the asset tokenization packages to create fractional NFTs and fungible tokenized assets on Sui, with support for Kiosk-based transfer policies.
-keywords: [asset tokenization, fractional NFT, tokenized asset, kiosk, transfer policy, WASM, bytecode template]
+description: >-
+  Use the asset tokenization packages to create fractional NFTs and fungible
+  tokenized assets on Sui, with support for Kiosk-based transfer policies.
+keywords:
+  - asset tokenization
+  - fractional NFT
+  - tokenized asset
+  - kiosk
+  - transfer policy
+  - WASM
+  - bytecode template
+goal:
+  description: >-
+    Reader can use the Kiosk standard to join tokenized assets while enforcing
+    transfer policies
+  requires:
+    - pattern: '```'
+      min: 1
+      label: Has at least one code example
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 200
+      label: Has enough content to explain the pattern
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Kiosk Joining Patterns in Sui?
+  - How does kiosk joining patterns work on Sui?
+  - Why should I use kiosk joining patterns?
+answer: >-
+  Use the asset tokenization packages to create fractional NFTs and fungible
+  tokenized assets on Sui, with support for Kiosk-based transfer policies.
 ---
 
 This reference implementation uses the [Kiosk standard](/onchain-finance/kiosk) to ensure that tokenized assets operate within their defined policy. Use the implementation as presented to have marketable tokenized assets that support rules like royalties and commissions.

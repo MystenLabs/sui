@@ -8,7 +8,7 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
-use consensus_types::block::{BlockRef, Round};
+use consensus_types::block::{BlockRef, Round, TransactionIndex};
 use futures::{StreamExt as _, stream::FuturesUnordered};
 use itertools::Itertools as _;
 use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
@@ -22,9 +22,8 @@ use rand::{prelude::SliceRandom as _, rngs::ThreadRng};
 use sui_macros::fail_point_async;
 use tap::TapFallible;
 use tokio::{
-    runtime::Handle,
     sync::{mpsc::error::TrySendError, oneshot},
-    task::{JoinError, JoinSet},
+    task::JoinSet,
     time::{Instant, sleep, sleep_until, timeout},
 };
 use tracing::{debug, info, trace, warn};
@@ -41,6 +40,7 @@ use crate::{
     network::{ObserverNetworkClient, PeerId, SynchronizerClient, ValidatorNetworkClient},
     peers_pool::PeersPool,
     round_tracker::RoundTracker,
+    task::{shutdown_join_set, spawn_blocking},
 };
 use crate::{core_thread::CoreThreadDispatcher, transaction_vote_tracker::TransactionVoteTracker};
 
@@ -172,6 +172,9 @@ enum Command {
     },
     FetchOwnLastBlock,
     KickOffScheduler,
+    Shutdown {
+        result: oneshot::Sender<()>,
+    },
 }
 
 pub(crate) struct SynchronizerHandle {
@@ -199,13 +202,18 @@ impl SynchronizerHandle {
         receiver.await.map_err(|_err| ConsensusError::Shutdown)?
     }
 
-    pub(crate) async fn stop(&self) -> Result<(), JoinError> {
+    pub(crate) async fn stop(&self) {
+        let (shutdown_sender, shutdown_receiver) = oneshot::channel();
+        let _ = self
+            .commands_sender
+            .send(Command::Shutdown {
+                result: shutdown_sender,
+            })
+            .await;
+        let _ = shutdown_receiver.await;
+
         let mut tasks = self.tasks.lock().await;
-        tasks.abort_all();
-        while let Some(result) = tasks.join_next().await {
-            result?
-        }
-        Ok(())
+        shutdown_join_set(&mut tasks).await;
     }
 
     #[cfg(test)]
@@ -438,6 +446,12 @@ where
                                 scheduler_timeout.as_mut().reset(timeout);
                             }
                         }
+                        Command::Shutdown { result } => {
+                            self.shutdown_tasks().await;
+                            self.fetch_block_senders.clear();
+                            let _ = result.send(());
+                            return;
+                        }
                     }
                 },
                 Some(result) = self.fetch_own_last_block_task.join_next(), if !self.fetch_own_last_block_task.is_empty() => {
@@ -472,6 +486,7 @@ where
                     if self.fetch_blocks_scheduler_task.is_empty()
                         && let Err(err) = self.start_fetch_missing_blocks_task().await {
                             debug!("Core is shutting down, synchronizer is shutting down: {err:?}");
+                            self.shutdown_tasks().await;
                             return;
                         };
 
@@ -481,6 +496,13 @@ where
                 }
             }
         }
+    }
+
+    // Must be called before exiting run(), so no task is dropped without being awaited
+    // and task panics propagate.
+    async fn shutdown_tasks(&mut self) {
+        shutdown_join_set(&mut self.fetch_own_last_block_task).await;
+        shutdown_join_set(&mut self.fetch_blocks_scheduler_task).await;
     }
 
     async fn fetch_blocks_from_peer(
@@ -569,23 +591,17 @@ where
         serialized_blocks.truncate(context.parameters.max_blocks_per_sync);
 
         // Verify all the fetched blocks
-        let blocks = Handle::current()
-            .spawn_blocking({
-                let block_verifier = block_verifier.clone();
-                let context = context.clone();
-                let peer = peer.clone();
-                move || {
-                    Self::verify_blocks(
-                        serialized_blocks,
-                        block_verifier,
-                        transaction_vote_tracker,
-                        &context,
-                        peer,
-                    )
-                }
-            })
-            .await
-            .expect("Spawn blocking should not fail")?;
+        let (blocks, voted_blocks) = spawn_blocking({
+            let block_verifier = block_verifier.clone();
+            let context = context.clone();
+            let peer = peer.clone();
+            move || Self::verify_blocks(serialized_blocks, block_verifier, &context, peer)
+        })
+        .await??;
+
+        if context.protocol_config.transaction_voting_enabled() {
+            transaction_vote_tracker.add_voted_blocks(voted_blocks);
+        }
 
         // Record commit votes from the verified blocks.
         for block in &blocks {
@@ -675,10 +691,12 @@ where
     fn verify_blocks(
         serialized_blocks: Vec<Bytes>,
         block_verifier: Arc<V>,
-        transaction_vote_tracker: TransactionVoteTracker,
         context: &Context,
         peer: PeerId,
-    ) -> ConsensusResult<Vec<VerifiedBlock>> {
+    ) -> ConsensusResult<(
+        Vec<VerifiedBlock>,
+        Vec<(VerifiedBlock, Vec<TransactionIndex>)>,
+    )> {
         let mut verified_blocks = Vec::new();
         let mut voted_blocks = Vec::new();
         for serialized_block in serialized_blocks {
@@ -726,11 +744,7 @@ where
             voted_blocks.push((verified_block, reject_txn_votes));
         }
 
-        if context.protocol_config.transaction_voting_enabled() {
-            transaction_vote_tracker.add_voted_blocks(voted_blocks);
-        }
-
-        Ok(verified_blocks)
+        Ok((verified_blocks, voted_blocks))
     }
 
     async fn fetch_blocks_request(
@@ -1579,7 +1593,7 @@ mod tests {
         async fn stream_blocks(
             &self,
             _peer: crate::network::PeerId,
-            _highest_round_per_authority: Vec<u64>,
+            _highest_round_per_authority: Vec<Round>,
             _timeout: Duration,
         ) -> ConsensusResult<crate::network::ObserverBlockStream> {
             unimplemented!("stream_blocks not implemented in mock")
@@ -2313,12 +2327,8 @@ mod tests {
             1
         );
 
-        // Ensure that no panic occurred
-        if let Err(err) = handle.stop().await
-            && err.is_panic()
-        {
-            std::panic::resume_unwind(err.into_panic());
-        }
+        // Ensure that no panic occurred: stop() propagates panics from synchronizer tasks.
+        handle.stop().await;
     }
 
     #[tokio::test]

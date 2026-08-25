@@ -20,9 +20,11 @@ export default function (path: AstPath<Node>): treeFn | null {
 /**
  * Print `name_expression` node.
  * Inside:
+ * - optional `::` prefix (global access)
  * - `module_access`
  * - `type_arguments`
  */
 function printNameExpression(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-    return path.map(print, 'nonFormattingChildren');
+    const global = path.node.child(0)?.type === '::' ? '::' : '';
+    return [global, path.map(print, 'nonFormattingChildren')];
 }

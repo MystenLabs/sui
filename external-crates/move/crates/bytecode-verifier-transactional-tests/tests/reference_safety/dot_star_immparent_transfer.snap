@@ -1,0 +1,34 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 4-23:
+//# publish
+Error: Unable to publish module '00000000000000000000000000000000000000000000000000000000000000a1::j1_ret_imm_parent_mut_ext'. Got VMError: {
+    major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0xa1::j1_ret_imm_parent_mut_ext,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 7)],
+}
+
+task 1, lines 24-52:
+//# publish
+Error: Unable to publish module '00000000000000000000000000000000000000000000000000000000000000a2::j2_call_imm_parent_mut_ext'. Got VMError: {
+    major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0xa2::j2_call_imm_parent_mut_ext,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 7)],
+}
+
+task 3, lines 82-99:
+//# publish
+Error: Unable to publish module '00000000000000000000000000000000000000000000000000000000000000a4::j4_ret_imm_whole_mut_ext'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0xa4::j4_ret_imm_whole_mut_ext,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 7)],
+}

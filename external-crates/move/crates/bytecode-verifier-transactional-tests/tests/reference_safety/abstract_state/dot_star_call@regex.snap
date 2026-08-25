@@ -1,0 +1,242 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, line 61:
+//# view-abstract-state 0x2::shapes::chained
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true
+      },
+      "outgoing": {}
+    }
+  },
+  "b1": {
+    "local_root": "ROOT",
+    "locals": {
+      "r1": {
+        "Reference": "r#r1"
+      },
+      "r2": {
+        "Reference": "r#r2"
+      },
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#r1": true,
+        "r#r2": true,
+        "r#s": true
+      },
+      "outgoing": {
+        "r#r1": {
+          "r#r2": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ],
+          "r#s": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#r2": {
+          "r#r1": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#s": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#s": {
+          "r#r1": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ],
+          "r#r2": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 2, line 63:
+//# view-abstract-state 0x2::shapes::call_after_field
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": false
+      },
+      "outgoing": {}
+    }
+  },
+  "b1": {
+    "local_root": "ROOT",
+    "locals": {
+      "fi": {
+        "Reference": "r#fi"
+      },
+      "ri": {
+        "Reference": "r#ri"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#fi": false,
+        "r#ri": false
+      },
+      "outgoing": {
+        "r#fi": {
+          "r#ri": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        },
+        "r#ri": {
+          "r#fi": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "S.f"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 3, line 65:
+//# view-abstract-state 0x2::shapes::joined
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true
+      },
+      "outgoing": {}
+    }
+  },
+  "b1": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true
+      },
+      "outgoing": {}
+    }
+  },
+  "b2": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true
+      },
+      "outgoing": {}
+    }
+  },
+  "b3": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      },
+      "x": {
+        "Reference": "r#x"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true,
+        "r#x": true
+      },
+      "outgoing": {
+        "r#s": {
+          "r#x": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        },
+        "r#x": {
+          "r#s": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        }
+      }
+    }
+  }
+}

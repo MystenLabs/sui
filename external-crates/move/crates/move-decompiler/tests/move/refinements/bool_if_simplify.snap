@@ -1,5 +1,6 @@
 ---
 source: crates/move-decompiler/tests/tests.rs
+assertion_line: 72
 ---
 module bool_if_simplify {
     public fun and_left () {

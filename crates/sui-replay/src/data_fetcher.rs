@@ -524,7 +524,7 @@ impl DataFetcher for RemoteFetcher {
             u64::from_str(&w["reference_gas_price"].to_string().replace('\"', "")).unwrap()
         } else {
             return Err(ReplayEngineError::UnexpectedEventFormat {
-                event: event.clone(),
+                event: Box::new(event.clone()),
             });
         };
 
@@ -655,7 +655,9 @@ pub fn extract_epoch_and_version(ev: SuiEvent) -> Result<(u64, u64), ReplayEngin
         return Ok((epoch, version));
     }
 
-    Err(ReplayEngineError::UnexpectedEventFormat { event: ev })
+    Err(ReplayEngineError::UnexpectedEventFormat {
+        event: Box::new(ev),
+    })
 }
 
 #[derive(Clone)]

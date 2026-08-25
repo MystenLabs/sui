@@ -178,6 +178,15 @@ message PackageVersionInfo {
   // 32-byte `ObjectID` under which this version of the package
   // is stored.
   bytes storage_id = 1;
+  // The checkpoint at which this package version was published.
+  //
+  // Absent on rows written by the live-set restore at the anchor
+  // checkpoint: those versions were published before the available
+  // window, so a checkpoint-bounded read treats them as having
+  // always existed (a restore floor). Tip indexing and the
+  // post-restore backfill of `[L, T]` set the real publish
+  // checkpoint.
+  optional uint64 checkpoint = 2;
 }
 
 // The object version live as of a checkpoint, stored in

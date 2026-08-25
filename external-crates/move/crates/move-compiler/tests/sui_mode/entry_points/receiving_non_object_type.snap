@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/sui_mode/entry_points/receiving_non_object_type.move:6:28
    │
  6 │     public entry fun no(_: Receiving<u64>) { abort 0 }

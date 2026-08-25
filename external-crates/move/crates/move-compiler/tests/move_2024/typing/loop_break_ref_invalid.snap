@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
   ┌─ tests/move_2024/typing/loop_break_ref_invalid.move:7:5
   │
 3 │ fun test(a: &u64): &mut u64 {

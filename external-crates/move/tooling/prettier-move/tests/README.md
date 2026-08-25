@@ -18,7 +18,7 @@ UB=1 pnpm test
 
 ## Test Structure
 
-The tests should be placed as `.move` files in this directory. All `.move` files will be treated as tests, and if there's no expectation file, one will be generated (`<test>.exp.move`). Ideally, tests should cover all of the CST nodes defined in the `grammar.json`.
+The tests should be placed as `.move` files in the subdirectories of this directory (one level deep — files directly in this directory are not picked up). Each test is compared against its expectation file (`<test>.exp.move`); running with `UB=1` (re)generates it. Ideally, tests should cover all of the CST nodes defined in the `grammar.json`.
 
 ## Special Features
 
@@ -32,4 +32,5 @@ You can customize behaviour of prettier for a specific file by adding a comment 
 module prettier::test {}
 ```
 
-Currently, only 2 options are supported: `tabWidth` and `printWidth`.
+Supported options: `printWidth`, `tabWidth`, `wrapComments`, `useModuleLabel`,
+`autoGroupImports` (`package` / `module` / `none`), and `enableErrorDebug`.

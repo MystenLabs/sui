@@ -30,7 +30,7 @@ impl Refine for LoopToSeq {
         };
 
         // Only fire when the trailing break exits *this* loop (label matches). If it has
-        // another loop's label, we can't drop it — it'd change meaning.
+        // another loop's label, we can't drop it - it'd change meaning.
         if matches!(seq.last().map(peek), Some(Exp::Break(l)) if *l == loop_label) {
             // If there is a continue, we cannot drop the break.
             if seq

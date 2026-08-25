@@ -13,7 +13,10 @@ use tokio::{
 };
 use tracing::{debug, warn};
 
-use crate::{context::Context, core::CoreSignalsReceivers, core_thread::CoreThreadDispatcher};
+use crate::{
+    context::Context, core::CoreSignalsReceivers, core_thread::CoreThreadDispatcher,
+    task::join_and_propagate_panic,
+};
 
 pub(crate) struct LeaderTimeoutTaskHandle {
     handle: JoinHandle<()>,
@@ -23,7 +26,7 @@ pub(crate) struct LeaderTimeoutTaskHandle {
 impl LeaderTimeoutTaskHandle {
     pub async fn stop(self) {
         self.stop.send(()).ok();
-        self.handle.await.ok();
+        join_and_propagate_panic(self.handle).await;
     }
 }
 

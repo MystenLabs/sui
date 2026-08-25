@@ -54,7 +54,6 @@ move-binary-format.workspace = true
 move-core-types.workspace = true
 mysten-common.workspace = true
 
-sui-default-config.workspace = true
 sui-display.workspace = true
 sui-futures.workspace = true
 sui-indexer-alt-consistent-store.workspace = true
@@ -69,6 +68,7 @@ sui-open-rpc-macros.workspace = true
 sui-package-resolver.workspace = true
 sui-protocol-config.workspace = true
 sui-rpc.workspace = true
+sui-sdk-types.workspace = true
 sui-sql-macro.workspace = true
 sui-types.workspace = true
 

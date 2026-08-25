@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02004]: invalid one-time witness declaration
+error[ESC02004]: invalid one-time witness declaration
   ┌─ tests/sui_mode/one_time_witness/no_drop.move:7:12
   │
 7 │     struct M { dummy: bool }

@@ -1,15 +1,9 @@
 [alias]
-# Collection of project wide clippy lints. This is done via an alias because
-# clippy doesn't currently allow for specifiying project-wide lints in a
-# configuration file. This is a similar workaround to the ones presented here:
-# <https://github.com/EmbarkStudios/rust-ecosystem/issues/59>
-xclippy = [
-    "clippy", "--all-targets", "--all-features", "--",
-    "-Wclippy::all",
-    "-Wclippy::disallowed_methods",
-    "-Wclippy::disallowed_macros",
-    "-Aclippy::unnecessary_get_then_check",
-]
+# Run clippy on all targets and features. The project-wide lint set comes from
+# `[workspace.lints]` in the root Cargo.toml; every workspace member opts in with
+# `[lints] workspace = true` (enforced by `cargo xlint`). Extra cargo options can
+# be appended, e.g. `cargo xclippy -p sui-core` or `cargo xclippy -- -D warnings`.
+xclippy = ["clippy", "--all-targets", "--all-features"]
 xlint = "run --package x --bin x -- lint"
 xtest = "run --package x --bin x -- external-crates-tests"
 
@@ -28,6 +22,7 @@ move-clippy = [
     "-Aclippy::question_mark",
     "-Aclippy::unnecessary_get_then_check",
     "-Aclippy::needless_borrows_for_generic_args",
+    "-Aclippy::collapsible_match",
 ]
 
 [build]

@@ -3,6 +3,83 @@
 
 module sui::tx_context;
 
+use sui::scratch;
+
+/// Allows calling `sui::scratch::add` as `.scratch_add(permit, key, value)`.
+public use fun scratch::add as TxContext.scratch_add;
+
+/// Allows calling `sui::scratch::read` as `.scratch_read(permit, key)`.
+public use fun scratch::read as TxContext.scratch_read;
+
+/// Allows calling `sui::scratch::remove` as `.scratch_remove(permit, key)`.
+public use fun scratch::remove as TxContext.scratch_remove;
+
+/// Allows calling `sui::scratch::exists` as `.scratch_exists(permit, key)`.
+public use fun scratch::exists as TxContext.scratch_exists;
+
+/// Allows calling `sui::scratch::exists_with_type` as `.scratch_exists_with_type(permit, key)`.
+public use fun scratch::exists_with_type as TxContext.scratch_exists_with_type;
+
+/// Allows calling `sui::scratch::read_opt` as `.scratch_read_opt(permit, key)`.
+public use fun scratch::read_opt as TxContext.scratch_read_opt;
+
+/// Allows calling `sui::scratch::remove_opt` as `.scratch_remove_opt(permit, key)`.
+public use fun scratch::remove_opt as TxContext.scratch_remove_opt;
+
+/// Allows calling `sui::scratch::replace` as `.scratch_replace(permit, key, value)`.
+public use fun scratch::replace as TxContext.scratch_replace;
+
+/// Allows calling `sui::scratch::get_do` as `.scratch_get_do!(permit, key, f)`.
+public use fun scratch::get_do as TxContext.scratch_get_do;
+
+/// Allows calling `sui::scratch::get_mut_do` as `.scratch_get_mut_do!(permit, key, f)`.
+public use fun scratch::get_mut_do as TxContext.scratch_get_mut_do;
+
+/// Allows calling `sui::scratch::get_fold` as `.scratch_get_fold!(permit, key, none, some)`.
+public use fun scratch::get_fold as TxContext.scratch_get_fold;
+
+/// Allows calling `sui::scratch::get_mut_fold` as `.scratch_get_mut_fold!(permit, key, none, some)`.
+public use fun scratch::get_mut_fold as TxContext.scratch_get_mut_fold;
+
+/// Allows calling `sui::scratch::internal_add` as `.scratch_internal_add!(key, value)`.
+public use fun scratch::internal_add as TxContext.scratch_internal_add;
+
+/// Allows calling `sui::scratch::internal_read` as `.scratch_internal_read!(key)`.
+public use fun scratch::internal_read as TxContext.scratch_internal_read;
+
+/// Allows calling `sui::scratch::internal_remove` as `.scratch_internal_remove!(key)`.
+public use fun scratch::internal_remove as TxContext.scratch_internal_remove;
+
+/// Allows calling `sui::scratch::internal_exists` as `.scratch_internal_exists!(key)`.
+public use fun scratch::internal_exists as TxContext.scratch_internal_exists;
+
+/// Allows calling `sui::scratch::internal_exists_with_type` as
+/// `.scratch_internal_exists_with_type!(key)`.
+public use fun scratch::internal_exists_with_type as TxContext.scratch_internal_exists_with_type;
+
+/// Allows calling `sui::scratch::internal_read_opt` as `.scratch_internal_read_opt!(key)`.
+public use fun scratch::internal_read_opt as TxContext.scratch_internal_read_opt;
+
+/// Allows calling `sui::scratch::internal_remove_opt` as `.scratch_internal_remove_opt!(key)`.
+public use fun scratch::internal_remove_opt as TxContext.scratch_internal_remove_opt;
+
+/// Allows calling `sui::scratch::internal_replace` as `.scratch_internal_replace!(key, value)`.
+public use fun scratch::internal_replace as TxContext.scratch_internal_replace;
+
+/// Allows calling `sui::scratch::internal_get_do` as `.scratch_internal_get_do!(key, f)`.
+public use fun scratch::internal_get_do as TxContext.scratch_internal_get_do;
+
+/// Allows calling `sui::scratch::internal_get_mut_do` as `.scratch_internal_get_mut_do!(key, f)`.
+public use fun scratch::internal_get_mut_do as TxContext.scratch_internal_get_mut_do;
+
+/// Allows calling `sui::scratch::internal_get_fold` as
+/// `.scratch_internal_get_fold!(key, none, some)`.
+public use fun scratch::internal_get_fold as TxContext.scratch_internal_get_fold;
+
+/// Allows calling `sui::scratch::internal_get_mut_fold` as
+/// `.scratch_internal_get_mut_fold!(key, none, some)`.
+public use fun scratch::internal_get_mut_fold as TxContext.scratch_internal_get_mut_fold;
+
 #[test_only]
 /// Number of bytes in an tx hash (which will be the transaction digest)
 const TX_HASH_LENGTH: u64 = 32;

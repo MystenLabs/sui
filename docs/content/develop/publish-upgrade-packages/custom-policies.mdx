@@ -1,7 +1,43 @@
 ---
 title: Custom Upgrade Policies
-description: Custom upgrade policies are used to upgrade live packages while addressing the security risks of single key ownership upgrades.
-keywords: [ upgrade policies, custom upgrade policies, immutable policy, dependency policy, additive policy, compatible policy, create an upgrade policy, isolate a policy ]
+description: >-
+  Custom upgrade policies are used to upgrade live packages while addressing the
+  security risks of single key ownership upgrades.
+keywords:
+  - upgrade policies
+  - custom upgrade policies
+  - immutable policy
+  - dependency policy
+  - additive policy
+  - compatible policy
+  - create an upgrade policy
+  - isolate a policy
+goal:
+  description: >-
+    Reader understands custom upgrade policies are used to upgrade live packages
+    while addressing the security risks of single
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What are custom upgrade policies in Sui?
+  - How do I create a custom upgrade policy for a Move package?
+  - What is the difference between UpgradeCap and UpgradeTicket?
+answer: >-
+  Protecting the ability to upgrade a package onchain using a single key can
+  pose a security risk for several reasons:.
 ---
 
 <AgentPrompt

@@ -5,10 +5,7 @@
 module sui::bulletproofs_tests;
 
 use std::unit_test::assert_eq;
-use sui::rangeproofs::{
-    verify_bulletproofs_ristretto255,
-    verify_bulletproofs_with_dst_ristretto255
-};
+use sui::rangeproofs::{verify_bulletproofs_ristretto255, verify_bulletproofs_with_dst_ristretto255};
 use sui::ristretto255;
 
 // Domain separation tag used to generate `DST_PROOF` / `DST_COMM` below.
@@ -21,8 +18,12 @@ fun test_bulletproof() {
     let commitment = ristretto255::g_from_bytes(
         &x"3881417f033fc69b256df6c73d35ca3f06649d2de98970391e39e6139fd95c44",
     );
-    assert!(verify_bulletproofs_with_dst_ristretto255(&proof, 32, &vector[commitment], &vector[], 0));
-    assert!(!verify_bulletproofs_with_dst_ristretto255(&proof, 16, &vector[commitment], &vector[], 0));
+    assert!(
+        verify_bulletproofs_with_dst_ristretto255(&proof, 32, &vector[commitment], &vector[], 0),
+    );
+    assert!(
+        !verify_bulletproofs_with_dst_ristretto255(&proof, 16, &vector[commitment], &vector[], 0),
+    );
 }
 
 #[test]
@@ -54,7 +55,9 @@ fun test_invalid_bulletproof() {
     let commitment = ristretto255::g_from_bytes(
         &x"941f91553fb6e69ac6210770762d17622804d33aaa774944719f6b02c8b19c1d",
     );
-    assert!(!verify_bulletproofs_with_dst_ristretto255(&proof, 32, &vector[commitment], &vector[], 0));
+    assert!(
+        !verify_bulletproofs_with_dst_ristretto255(&proof, 32, &vector[commitment], &vector[], 0),
+    );
 }
 
 #[test]
@@ -163,7 +166,9 @@ fun test_bulletproof_with_dst() {
     // Verification only succeeds when the same DST is supplied.
     assert!(verify_bulletproofs_with_dst_ristretto255(&proof, 32, &vector[commitment], &DST, 0));
     // A different (here, empty) DST must not verify.
-    assert!(!verify_bulletproofs_with_dst_ristretto255(&proof, 32, &vector[commitment], &vector[], 0));
+    assert!(
+        !verify_bulletproofs_with_dst_ristretto255(&proof, 32, &vector[commitment], &vector[], 0),
+    );
 }
 
 #[test]

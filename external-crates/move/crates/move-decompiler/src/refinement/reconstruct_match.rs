@@ -19,7 +19,7 @@ pub fn refine(exp: &mut Exp) -> bool {
 // Refinement
 //
 // Promote a `Switch` to a `Match` when at least one arm's body begins with an `UnpackVariant`
-// for the arm's variant — that's the source-level pattern bindings showing through, and we want
+// for the arm's variant - that's the source-level pattern bindings showing through, and we want
 // them inside the match arm's pattern:
 //
 //     match (e) {
@@ -35,8 +35,8 @@ pub fn refine(exp: &mut Exp) -> bool {
 //         Variant { f: x } => { ... body ... },
 //     }
 //
-// Per arm, only the leading unpack is lifted (later unpacks — e.g. a `&` ref-unpack followed
-// by a value unpack of the original scrutinee — stay in the body). An arm whose body doesn't
+// Per arm, only the leading unpack is lifted (later unpacks - e.g. a `&` ref-unpack followed
+// by a value unpack of the original scrutinee - stay in the body). An arm whose body doesn't
 // start with a matching unpack contributes an empty pattern. We only convert when *some* arm
 // has fields to lift; a Switch with nothing to recover stays as `Switch`.
 

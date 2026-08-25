@@ -130,6 +130,58 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
         return "Expected an entry point `0`, but none was found".to_owned();
     }
     let config = crate::config::Config::default();
-    let (structured, _unemitted) = crate::structuring::structure(&config, input, 0.into());
-    structured.to_test_string()
+    // `run_structuring_test` exercises the structurer in isolation on a tiny `.stt` fixture
+    // - there's no `terms` map (term reconstruction is part of `translate.rs`, not the
+    // structurer). Pass an empty map; `bodies_equivalent` treats every block with no entry
+    // in `terms` as "no body to compare", drops them all via `filter_map`, and the resulting
+    // empty s1/s2 lists trivially compare equal - i.e., the guard is bypassed. That's the
+    // right behavior for these `.stt` shape tests: they pin the structurer's CFG-to-AST
+    // mapping, and the content-level guard would only mask the shape regressions they
+    // exist to catch.
+    //
+    // Some fixtures pin known-pathological CFGs that the current structurer can't handle
+    // (e.g. tangled multi-loop residues that need NMG V-B). `catch_unwind` turns the panic
+    // into a stable snap so the suite still runs and the failure surfaces as a diff rather
+    // than a process-killing crash.
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        crate::structuring::structure(&config, input, 0.into())
+    }));
+    let (structured, report) = match result {
+        Ok(pair) => pair,
+        Err(panic) => {
+            let msg = panic
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string()))
+                .unwrap_or_else(|| "<non-string panic payload>".to_string());
+            return format!("// STRUCTURING PANICKED: {msg}\n");
+        }
+    };
+    // Surface structurer residue in the snapshot so a regression shows up as a snap diff
+    // rather than silently passing on shape match. Two categories:
+    //   - `dropped_blocks`: input `Block(code)` entries that never got emitted - real
+    //     source missing from the output.
+    //   - `residual_jumps`: surviving `Jump(_, label)` nodes that reach emission - the
+    //     body is present but contains explicit unstructured gotos. `.stt` fixtures pin
+    //     only the structured form, so this notice replaces the inline `goto` rendering
+    //     `to_test_string` produces.
+    let body = structured.to_test_string();
+    let mut prelude = String::new();
+    if !report.dropped_blocks.is_empty() {
+        let ids: Vec<String> = report
+            .dropped_blocks
+            .iter()
+            .map(|n| n.to_string())
+            .collect();
+        prelude.push_str(&format!("// unstructured blocks: {}\n", ids.join(", ")));
+    }
+    if !report.residual_jumps.is_empty() {
+        let ids: Vec<String> = report
+            .residual_jumps
+            .iter()
+            .map(|n| n.to_string())
+            .collect();
+        prelude.push_str(&format!("// residual jumps to: {}\n", ids.join(", ")));
+    }
+    format!("{prelude}{body}")
 }

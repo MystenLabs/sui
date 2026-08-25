@@ -16,7 +16,9 @@ use sui_types::base_types::{EpochId, ObjectID};
 use sui_types::digests::{CheckpointContentsDigest, TransactionDigest};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointSequenceNumber};
-use typed_store::rocks::{MetricConf, safe_drop_db};
+#[cfg(not(tidehunter))]
+use typed_store::rocks::MetricConf;
+use typed_store::rocks::safe_drop_db;
 pub mod db_dump;
 mod index_search;
 
@@ -249,7 +251,7 @@ pub fn print_last_consensus_index(path: &Path) -> anyhow::Result<()> {
         None,
     );
     #[cfg(tidehunter)]
-    let epoch_tables = AuthorityEpochTables::open_with_path(&path.to_path_buf(), None);
+    let epoch_tables = AuthorityEpochTables::open_with_path(path);
     let last_index = epoch_tables.get_last_consensus_index()?;
     println!("Last consensus index is {:?}", last_index);
     Ok(())

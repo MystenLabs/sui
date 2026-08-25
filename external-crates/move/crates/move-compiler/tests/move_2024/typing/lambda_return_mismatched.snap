@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_2024/typing/lambda_return_mismatched.move:9:23
   │
 8 │             if (cond) return 0u64;
@@ -16,7 +16,7 @@ error[E04007]: incompatible types
   │                       │      Found: 'bool'. It is not compatible with the other type.
   │                       Invalid return
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/lambda_return_mismatched.move:15:13
    │
 13 │             if (cond) return &0u64;
@@ -28,7 +28,7 @@ error[E04007]: incompatible types
    │             │      Found: 'u64'. It is not compatible with the other type.
    │             Invalid return
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/lambda_return_mismatched.move:19:23
    │
 18 │             if (cond) return (&0u64, vector[0u64]);
@@ -39,13 +39,13 @@ error[E04007]: incompatible types
    │                       │                         Found: 'bool'. It is not compatible with the other type.
    │                       Invalid return
 
-error[E04010]: cannot infer type
+error[EC04010]: cannot infer type
    ┌─ tests/move_2024/typing/lambda_return_mismatched.move:20:28
    │
 20 │             return (&0u64, vector[])
    │                            ^^^^^^^^ Could not infer this type. Try adding an annotation
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/lambda_return_mismatched.move:24:23
    │
 23 │             if (cond) return (&0u64, vector[0u64]);

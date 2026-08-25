@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, iter, sync::Arc, time::Duration};
+use std::{cmp::Reverse, collections::BTreeSet, iter, sync::Arc, time::Duration};
 
 use consensus_config::ProtocolKeyPair;
 use consensus_types::block::{BlockRef, BlockTimestampMs, Round};
@@ -12,15 +12,15 @@ use tracing::{debug, info, trace};
 use crate::{
     ancestor::{AncestorState, AncestorStateManager},
     block::{
-        Block, BlockAPI, BlockV1, BlockV2, ExtendedBlock, GENESIS_ROUND, SignedBlock, Slot,
-        VerifiedBlock,
+        Block, BlockAPI, BlockTransactionVotes, BlockV1, BlockV2, BlockV3, ExtendedBlock,
+        GENESIS_ROUND, SignedBlock, Slot, VerifiedBlock, max_transaction_vote_targets,
     },
     context::Context,
     dag_state::DagState,
     leader_schedule_v3::NextCommitLeaderSchedule,
     round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
-    transaction::TransactionConsumer,
+    transaction::TransactionPool,
     transaction_vote_tracker::TransactionVoteTracker,
     universal_committer::UniversalCommitter,
 };
@@ -56,7 +56,6 @@ pub(crate) trait Proposer: Send + Sync {
     fn set_propagation_scores(&mut self, scores: crate::leader_scoring::ReputationScores);
 
     /// Sets the next v3 commit leader schedule used to wait before proposing.
-    #[allow(dead_code)]
     fn set_next_commit_leader_schedule(&mut self, schedule: NextCommitLeaderSchedule);
 
     /// Notifies transaction consumer about committed own blocks (validators only)
@@ -70,7 +69,7 @@ pub(crate) trait Proposer: Send + Sync {
 /// Validator proposal engine - full block proposal implementation
 pub(crate) struct ValidatorProposer {
     context: Arc<Context>,
-    transaction_consumer: TransactionConsumer,
+    transaction_pool: Arc<dyn TransactionPool>,
     transaction_vote_tracker: TransactionVoteTracker,
     propagation_delay: Round,
     last_included_ancestors: Vec<Option<BlockRef>>,
@@ -86,7 +85,7 @@ impl ValidatorProposer {
     pub(crate) fn new(
         dag_state: Arc<RwLock<DagState>>,
         context: Arc<Context>,
-        transaction_consumer: TransactionConsumer,
+        transaction_pool: Arc<dyn TransactionPool>,
         transaction_vote_tracker: TransactionVoteTracker,
         block_signer: ProtocolKeyPair,
         last_known_proposed_round: Option<Round>,
@@ -97,7 +96,7 @@ impl ValidatorProposer {
         let last_included_ancestors = vec![None; context.committee.size()];
         Self {
             context,
-            transaction_consumer,
+            transaction_pool,
             transaction_vote_tracker,
             propagation_delay: 0,
             last_included_ancestors,
@@ -132,12 +131,21 @@ impl ValidatorProposer {
         &mut self,
         clock_round: Round,
         smart_select: bool,
+        leader_slots: &[Slot],
     ) -> (Vec<VerifiedBlock>, BTreeSet<BlockRef>) {
         let node_metrics = &self.context.metrics.node_metrics;
         let _s = node_metrics
             .scope_processing_time
             .with_label_values(&["ValidatorProposer::smart_ancestors_to_propose"])
             .start_timer();
+
+        // Only v3 keeps a leader ancestor which has the EXCLUDE state. This limit keeps v2
+        // ancestor selection the same as before v3.
+        let leader_slots: &[Slot] = if self.context.protocol_config.enable_v3() {
+            leader_slots
+        } else {
+            &[]
+        };
 
         // Now take the ancestors before the clock_round (excluded) for each authority.
         let all_ancestors = self
@@ -190,6 +198,13 @@ impl ValidatorProposer {
                             AncestorState::Include => {
                                 trace!("Found ancestor {ancestor} with INCLUDE state for round {clock_round}");
                             }
+                            AncestorState::Exclude(score)
+                                if leader_slots.contains(&ancestor.slot()) =>
+                            {
+                                trace!(
+                                    "Including leader ancestor {ancestor} despite EXCLUDE state with score {score} for round {clock_round}"
+                                );
+                            }
                             AncestorState::Exclude(score) => {
                                 trace!("Added ancestor {ancestor} with EXCLUDE state with score {score} to temporary excluded ancestors for round {clock_round}");
                                 score_and_pending_excluded_ancestors.push((score, ancestor));
@@ -223,7 +238,7 @@ impl ValidatorProposer {
 
         // Sort scores descending so we can include the best of the pending excluded
         // ancestors first until we reach the threshold.
-        score_and_pending_excluded_ancestors.sort_by(|a, b| b.0.cmp(&a.0));
+        score_and_pending_excluded_ancestors.sort_by_key(|a| std::cmp::Reverse(a.0));
 
         let mut ancestors_to_propose = included_ancestors;
         let mut excluded_ancestors = Vec::new();
@@ -418,7 +433,7 @@ impl Proposer for ValidatorProposer {
 
         // Determine the ancestors to be included in proposal.
         let (ancestors, excluded_and_equivocating_ancestors) =
-            self.smart_ancestors_to_propose(clock_round, !force);
+            self.smart_ancestors_to_propose(clock_round, !force, &leader_slots);
 
         // If we did not find enough good ancestors to propose, continue to wait before proposing.
         if ancestors.is_empty() {
@@ -510,14 +525,29 @@ impl Proposer for ValidatorProposer {
             }
         });
 
-        // Consume the next transactions to be included. Do not drop the guards yet as this would acknowledge
-        // the inclusion of transactions. Just let this be done in the end of the method.
-        let (transactions, ack_transactions, _limit_reached) = self.transaction_consumer.next();
+        // Consume the next transactions to be included. Do not drop the ack yet as this would
+        // return the transactions to the pool. Just let this be done in the end of the method.
+        let (transactions, ack_transactions, _limit_reached) = self.transaction_pool.take(
+            self.context.protocol_config.max_num_transactions_in_block() as usize,
+            self.context
+                .protocol_config
+                .max_transactions_in_block_bytes() as usize,
+        );
         self.context
             .metrics
             .node_metrics
             .proposed_block_transactions
             .observe(transactions.len() as f64);
+        self.context
+            .metrics
+            .node_metrics
+            .proposed_block_transaction_bytes
+            .observe(
+                transactions
+                    .iter()
+                    .map(|transaction| transaction.data().len())
+                    .sum::<usize>() as f64,
+            );
 
         // Consume the commit votes to be included.
         let commit_votes = self
@@ -525,22 +555,70 @@ impl Proposer for ValidatorProposer {
             .write()
             .take_commit_votes(MAX_COMMIT_VOTES_PER_BLOCK);
 
-        let transaction_votes = if self.context.protocol_config.transaction_voting_enabled() {
-            let new_causal_history = {
-                let mut dag_state = self.dag_state.write();
-                ancestors
-                    .iter()
-                    .flat_map(|ancestor| dag_state.link_causal_history(ancestor.reference()))
-                    .collect()
+        let (transaction_votes, transaction_votes_cutoff_round) =
+            if self.context.protocol_config.transaction_voting_enabled() {
+                let (new_causal_history, mut cutoff_round) = {
+                    let mut dag_state = self.dag_state.write();
+                    // Core cannot advance the DAG commit state during a proposal, so the GC round
+                    // stays the same below. Tracker GC never exceeds DAG GC, so this cutoff
+                    // covers each target which get_own_votes() omits because of GC.
+                    let cutoff_round = dag_state.gc_round();
+                    let new_causal_history: Vec<BlockRef> = ancestors
+                        .iter()
+                        .flat_map(|ancestor| dag_state.link_causal_history(ancestor.reference()))
+                        .collect();
+                    (new_causal_history, cutoff_round)
+                };
+                let vote_targets = new_causal_history
+                    .into_iter()
+                    .filter(|block_ref| block_ref.round > cutoff_round)
+                    .collect();
+                let mut transaction_votes =
+                    self.transaction_vote_tracker.get_own_votes(vote_targets);
+                // V2 blocks have no signed cutoff round, so they must keep every vote target.
+                if self.context.protocol_config.enable_v3() {
+                    cutoff_round = truncate_transaction_votes(
+                        &mut transaction_votes,
+                        max_transaction_vote_targets(&self.context),
+                        cutoff_round,
+                    );
+                }
+                // Observe the metrics after the removal, so they describe the proposed block.
+                self.context
+                    .metrics
+                    .node_metrics
+                    .proposed_block_transaction_vote_blocks
+                    .observe(transaction_votes.len() as f64);
+                self.context
+                    .metrics
+                    .node_metrics
+                    .proposed_block_transaction_vote_entries
+                    .observe(
+                        transaction_votes
+                            .iter()
+                            .map(|votes| votes.rejects.len())
+                            .sum::<usize>() as f64,
+                    );
+                (transaction_votes, cutoff_round)
+            } else {
+                (vec![], self.dag_state.read().gc_round())
             };
-            self.transaction_vote_tracker
-                .get_own_votes(new_causal_history)
-        } else {
-            vec![]
-        };
 
         // Create the block.
-        let block = if self.context.protocol_config.transaction_voting_enabled() {
+        let block = if self.context.protocol_config.enable_v3() {
+            Block::V3(BlockV3::new(
+                self.context.committee.epoch(),
+                clock_round,
+                self.context.own_index,
+                now,
+                ancestors.iter().map(|b| b.reference()).collect(),
+                transactions,
+                transaction_votes,
+                transaction_votes_cutoff_round,
+                commit_votes,
+                vec![],
+            ))
+        } else if self.context.protocol_config.transaction_voting_enabled() {
             Block::V2(BlockV2::new(
                 self.context.committee.epoch(),
                 clock_round,
@@ -716,8 +794,7 @@ impl Proposer for ValidatorProposer {
     }
 
     fn notify_own_blocks_committed(&self, block_refs: Vec<BlockRef>, gc_round: Round) {
-        self.transaction_consumer
-            .notify_own_blocks_status(block_refs, gc_round);
+        self.transaction_pool.notify_committed(block_refs, gc_round);
     }
 
     #[cfg(test)]
@@ -754,7 +831,6 @@ impl ProposalLeaderWaiter {
         }
     }
 
-    #[allow(dead_code)]
     fn update_v3_schedule(&mut self, schedule: NextCommitLeaderSchedule) {
         if let Self::V3(current) = self {
             *current = schedule;
@@ -762,9 +838,53 @@ impl ProposalLeaderWaiter {
     }
 }
 
+/// Removes transaction vote targets until at most `limit` targets remain, and returns the cutoff
+/// round which covers every removed target. The input cutoff round is the current GC round.
+///
+/// A removed target above the signed cutoff would give the transactions of the target an implicit
+/// accept vote. So the cutoff moves to the round of each removed target, and targets are removed
+/// by complete rounds. Removing a complete round also removes the targets of equivocating blocks
+/// in the round.
+///
+/// Only V3 proposals can use this function, because V2 blocks have no signed cutoff round.
+///
+/// REQUIRED: consumers of V3 blocks must use the signed cutoff round to find which targets a
+/// block votes on. This function can move the cutoff above the GC round, but `CommitFinalizer`
+/// still infers the vote coverage of a block from commit GC rounds. So it can count an implicit
+/// accept vote for a removed target which is above the GC round and at or below the cutoff.
+/// TODO: use the signed cutoff round in `CommitFinalizer` before v3 is enabled.
+fn truncate_transaction_votes(
+    transaction_votes: &mut Vec<BlockTransactionVotes>,
+    limit: usize,
+    gc_round: Round,
+) -> Round {
+    // After the sort by decreasing round, the last entry is always the oldest entry.
+    transaction_votes.sort_unstable_by_key(|votes| Reverse(votes.block_ref.round));
+    let mut cutoff_round = gc_round;
+    loop {
+        while transaction_votes
+            .last()
+            .is_some_and(|votes| votes.block_ref.round <= cutoff_round)
+        {
+            transaction_votes.pop();
+        }
+        if transaction_votes.len() <= limit {
+            return cutoff_round;
+        }
+        // Move the cutoff to the oldest remaining round. The next loop removes that round, so
+        // each iteration removes at least one target.
+        cutoff_round = transaction_votes
+            .last()
+            .expect("Target count above the limit means targets remain")
+            .block_ref
+            .round;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use consensus_config::AuthorityIndex;
+    use consensus_types::block::BlockDigest;
 
     use super::*;
 
@@ -804,5 +924,71 @@ mod tests {
                 Slot::new(4, AuthorityIndex::new_for_test(3)),
             ]
         );
+    }
+
+    fn test_votes(round: Round, author: u32) -> BlockTransactionVotes {
+        BlockTransactionVotes {
+            block_ref: BlockRef::new(
+                round,
+                AuthorityIndex::new_for_test(author),
+                BlockDigest::MIN,
+            ),
+            rejects: vec![0],
+        }
+    }
+
+    fn target_rounds(transaction_votes: &[BlockTransactionVotes]) -> Vec<Round> {
+        transaction_votes
+            .iter()
+            .map(|votes| votes.block_ref.round)
+            .collect()
+    }
+
+    #[test]
+    fn truncate_transaction_votes_keeps_the_cutoff_at_the_gc_round_within_the_limit() {
+        // No target: the cutoff stays at the GC round.
+        let mut transaction_votes = vec![];
+        assert_eq!(truncate_transaction_votes(&mut transaction_votes, 3, 5), 5);
+        assert!(transaction_votes.is_empty());
+
+        // Targets at or below the GC round are removed, and the cutoff stays at the GC round.
+        let mut transaction_votes = vec![test_votes(5, 0), test_votes(4, 1), test_votes(6, 2)];
+        assert_eq!(truncate_transaction_votes(&mut transaction_votes, 3, 5), 5);
+        assert_eq!(target_rounds(&transaction_votes), vec![6]);
+
+        // Exactly the limit: no target is removed.
+        let mut transaction_votes = vec![test_votes(7, 0), test_votes(6, 1), test_votes(8, 2)];
+        assert_eq!(truncate_transaction_votes(&mut transaction_votes, 3, 5), 5);
+        assert_eq!(target_rounds(&transaction_votes), vec![8, 7, 6]);
+    }
+
+    #[test]
+    fn truncate_transaction_votes_removes_complete_rounds_above_the_limit() {
+        // One target above the limit: the complete oldest round is removed, which can leave
+        // fewer targets than the limit.
+        let mut transaction_votes = vec![
+            test_votes(8, 0),
+            test_votes(6, 1),
+            test_votes(6, 2),
+            test_votes(7, 3),
+        ];
+        assert_eq!(truncate_transaction_votes(&mut transaction_votes, 3, 5), 6);
+        assert_eq!(target_rounds(&transaction_votes), vec![8, 7]);
+
+        // More targets than the limit in one round: the complete round is removed.
+        let mut transaction_votes = vec![test_votes(6, 0), test_votes(6, 1), test_votes(6, 2)];
+        assert_eq!(truncate_transaction_votes(&mut transaction_votes, 2, 5), 6);
+        assert!(transaction_votes.is_empty());
+
+        // The cutoff moves to each oldest remaining round, which can skip round numbers, until
+        // the target count meets the limit.
+        let mut transaction_votes = vec![
+            test_votes(6, 0),
+            test_votes(7, 1),
+            test_votes(8, 2),
+            test_votes(9, 3),
+        ];
+        assert_eq!(truncate_transaction_votes(&mut transaction_votes, 1, 5), 8);
+        assert_eq!(target_rounds(&transaction_votes), vec![9]);
     }
 }

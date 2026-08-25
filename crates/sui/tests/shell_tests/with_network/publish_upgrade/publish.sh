@@ -33,7 +33,7 @@ extract_published() {
   echo "=== End Published.toml ==="
 }
 
-chain_id=$(sui client --client.config $CONFIG chain-identifier)
+chain_id=$(sui client --client.config $CONFIG chain-identifier --format=hex)
 
 for i in a b c d e
 do

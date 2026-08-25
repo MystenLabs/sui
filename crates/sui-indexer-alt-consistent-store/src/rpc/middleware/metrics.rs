@@ -7,9 +7,9 @@ use std::sync::Arc;
 use axum::extract::MatchedPath;
 use http::StatusCode;
 use http::header::CONTENT_TYPE;
-use mysten_network::callback::MakeCallbackHandler;
-use mysten_network::callback::ResponseHandler;
 use prometheus::HistogramTimer;
+use sui_http::middleware::callback::MakeCallbackHandler;
+use sui_http::middleware::callback::ResponseHandler;
 use tonic::Code;
 use tonic::metadata::GRPC_CONTENT_TYPE;
 
@@ -33,9 +33,13 @@ impl MakeMetricsHandler {
 }
 
 impl MakeCallbackHandler for MakeMetricsHandler {
-    type Handler = Handler;
+    type RequestHandler = ();
+    type ResponseHandler = Handler;
 
-    fn make_handler(&self, request: &http::request::Parts) -> Self::Handler {
+    fn make_handler(
+        &self,
+        request: &http::request::Parts,
+    ) -> (Self::RequestHandler, Self::ResponseHandler) {
         let metrics = self.metrics.clone();
 
         let path = if let Some(matched_path) = request.extensions.get::<MatchedPath>() {
@@ -62,11 +66,14 @@ impl MakeCallbackHandler for MakeMetricsHandler {
             .with_label_values(&[path.as_ref()])
             .inc();
 
-        Handler {
-            metrics,
-            path,
-            timer: Some(timer),
-        }
+        (
+            (),
+            Handler {
+                metrics,
+                path,
+                timer: Some(timer),
+            },
+        )
     }
 }
 
@@ -113,7 +120,10 @@ impl ResponseHandler for Handler {
         }
     }
 
-    fn on_error<E>(&mut self, _error: &E) {
+    fn on_service_error<E>(&mut self, _error: &E)
+    where
+        E: std::fmt::Display + 'static,
+    {
         unreachable!("all axum services are required to have an error type of Infallible");
     }
 }

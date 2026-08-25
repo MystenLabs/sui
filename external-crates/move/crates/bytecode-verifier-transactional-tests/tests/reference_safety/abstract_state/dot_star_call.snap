@@ -1,0 +1,16 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, line 61:
+//# view-abstract-state 0x2::shapes::chained
+view-abstract-state subcommand is only available with regex reference safety
+
+task 2, line 63:
+//# view-abstract-state 0x2::shapes::call_after_field
+view-abstract-state subcommand is only available with regex reference safety
+
+task 3, line 65:
+//# view-abstract-state 0x2::shapes::joined
+view-abstract-state subcommand is only available with regex reference safety

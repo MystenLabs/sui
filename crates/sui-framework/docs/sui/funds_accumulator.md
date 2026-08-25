@@ -125,6 +125,16 @@ Attempted to withdraw funds from an object when the feature flag is not enabled.
 
 
 
+<a name="sui_funds_accumulator_EAccumulatorTypeTooLarge"></a>
+
+The accumulator type is too large to be used with the funds accumulator.
+
+
+<pre><code><b>const</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_EAccumulatorTypeTooLarge">EAccumulatorTypeTooLarge</a>: u64 = 4;
+</code></pre>
+
+
+
 <a name="sui_funds_accumulator_withdrawal_owner"></a>
 
 ## Function `withdrawal_owner`

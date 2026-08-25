@@ -1,0 +1,99 @@
+---
+title: The Move Adapter Pattern
+sidebar_label: Move Adapter Pattern
+description: >-
+  A reusable Move adapter over Pyth price feeds: one internal price interface,
+  staleness and confidence and deviation guards, and a non-aborting fallback,
+  with unit tests for each guard branch.
+keywords:
+  - move
+  - oracle adapter
+  - pyth
+  - staleness
+  - confidence interval
+  - price fallback
+  - defi
+goal:
+  description: >-
+    Reader can build a provider-neutral Move price adapter with staleness,
+    confidence, deviation, and fallback guards, and test each branch.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I wrap a Pyth price feed in a Move module?
+  - How do I check price staleness and confidence in Move?
+  - How do I fall back to a second price feed in Move?
+  - How do I unit-test an oracle adapter?
+answer: >-
+  Wrap the provider read in one Move module that normalizes the price into a
+  single Price type and centralizes the safety checks: a staleness bound through
+  get_price_no_older_than, a confidence-interval bound, a deviation bound
+  against a reference, and a non-aborting fallback that reads the primary with
+  get_price_unsafe and only calls the checked reader on the fallback if the
+  primary is stale. Unit-test the guard branches on constructed prices.
+builder_paths:
+  - path_id: oracle-integration
+    path_name: Oracles for DeFi
+    step: Build a Move price adapter
+    stage: Oracles
+---
+
+Reading a provider feed directly scatters two concerns across every call site: the provider's data shape, and the safety checks. An adapter collapses both into one module. Consumers call the adapter, never the provider, so the price shape and every guard live in one place, and swapping or adding a provider never touches a consumer.
+
+The reference module lives in `examples/oracle-adapter/move`. It builds and its tests pass against the real Pyth Testnet package with `sui move test`.
+
+## One normalized price type
+
+The adapter exposes a single provider-neutral `Price`. A consumer that values collateral or settles a market never sees a `PriceInfoObject` or a provider-specific price struct, so a second provider added later returns the same type:
+
+<ImportContent source="examples/oracle-adapter/move/sources/price_adapter.move" mode="code" struct="Price" />
+
+## Read with a staleness bound
+
+The primary reader delegates the staleness gate to Pyth's own `get_price_no_older_than`, which aborts if the feed is older than the bound, then normalizes the result. A consumer picks the maximum age that suits it: tight for a liquidation, looser for a display.
+
+<ImportContent source="examples/oracle-adapter/move/sources/price_adapter.move" mode="code" fun="price_from_pyth" />
+
+## Guard the confidence and deviation
+
+Pyth reports a price with a confidence interval. A wide interval means the sources disagree, which is a signal to pause rather than act on the midpoint. A deviation check against a second source or a time-averaged reference catches a single-feed spike before it drives a liquidation.
+
+<ImportContent source="examples/oracle-adapter/move/sources/price_adapter.move" mode="code" fun="assert_confidence" />
+
+<ImportContent source="examples/oracle-adapter/move/sources/price_adapter.move" mode="code" fun="assert_within_deviation" />
+
+## Fall back without aborting
+
+Move cannot catch an abort, so a fallback cannot wrap the checked reader in a try. Instead, read the primary with the unchecked `get_price_unsafe`, test freshness without aborting, and only call the checked reader on the fallback if the primary is stale. A consumer gets a fresh price or a clear abort, never a silently stale one.
+
+<ImportContent source="examples/oracle-adapter/move/sources/price_adapter.move" mode="code" fun="price_or_fallback" />
+
+## Test the guard branches
+
+A Move test cannot mint a `PriceInfoObject`, so Testnet execution verifies the reads that touch one. Unit tests cover the guard logic and normalization on constructed prices, one test per branch: fresh and stale, confidence within and over the bound, deviation within and over, and a rejected negative and zero price.
+
+<ImportContent source="examples/oracle-adapter/move/tests/price_adapter_tests.move" mode="code" fun="confidence_blowout_aborts" />
+
+Run the full suite with `sui move test` in `examples/oracle-adapter/move`.
+
+## Keep it provider-neutral
+
+The `Price` type and the guards name no provider, so a Switchboard reader is an additive `price_from_switchboard` that returns the same `Price` and reuses the same guards. Consumers never change. The one difference to absorb in the reader: Switchboard's `current_result` does not gate on age, so a Switchboard reader applies `assert_fresh` itself where the Pyth reader relies on `get_price_no_older_than`.
+
+With the read behind a safe interface, the remaining work is deciding what each consumer additionally requires, and how to keep push feeds fresh: [Oracle safety for high-stakes consumers](/onchain-finance/oracles/oracle-safety).

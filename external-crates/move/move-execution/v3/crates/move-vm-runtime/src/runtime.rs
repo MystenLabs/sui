@@ -172,7 +172,7 @@ impl VMRuntime {
         // each individual module in the bundle in order. But if every module in the bundle pass
         // all the checks, then the whole bundle can be published/upgraded together. Otherwise,
         // none of the module can be published/updated.
-        for (module, blob) in compiled_modules.into_iter().zip(modules.into_iter()) {
+        for (module, blob) in compiled_modules.into_iter().zip(modules) {
             let runtime_id = module.self_id();
             let storage_id = data_store
                 .relocate(&runtime_id)

@@ -48,7 +48,7 @@ async fn test_coin_reservation_validation() {
             .transfer_from_coin_to_address_balance(sender1, coin_res, vec![(1, sender1)])
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("is less than requested"));
+        assert!(err.to_string().contains("Insufficient address balance"));
     }
 
     // Verify transaction is rejected if it uses a bogus accumulator object id.
@@ -677,7 +677,7 @@ async fn test_coin_reservation_enforced_when_not_used() {
 
     // Send tx, assert it fails due to insufficient balance.
     let err = test_env.exec_tx_directly(tx).await.unwrap_err();
-    assert!(err.to_string().contains("is less than requested"));
+    assert!(err.to_string().contains("Insufficient address balance"));
 
     test_env.cluster.trigger_reconfiguration().await;
 }

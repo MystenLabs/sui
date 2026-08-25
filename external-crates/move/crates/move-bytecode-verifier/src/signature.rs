@@ -14,9 +14,9 @@ use move_binary_format::{
         StructDefinition, StructFieldInformation, TableIndex,
     },
     file_format_common::VERSION_6,
+    partial_vm_error_with_debug_message,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
-use move_core_types::vm_status::StatusCode;
 use std::collections::{HashMap, HashSet};
 
 use crate::ability_cache::AbilityCache;
@@ -223,13 +223,13 @@ impl<'env, 'a, 'b, M: Meter + ?Sized> SignatureChecker<'env, 'a, 'b, M> {
                 | VecSwap(idx) => {
                     let type_arguments = &self.module.signature_at(*idx).0;
                     if type_arguments.len() != 1 {
-                        return Err(PartialVMError::new(
-                            StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
-                        )
-                        .with_message(format!(
-                            "expected 1 type token for vector operations, got {}",
-                            type_arguments.len()
-                        )));
+                        return Err(partial_vm_error_with_debug_message!(
+                            NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+                            format!(
+                                "expected 1 type token for vector operations, got {}",
+                                type_arguments.len()
+                            )
+                        ));
                     }
                     self.check_signature_tokens(type_arguments)
                 }
@@ -347,11 +347,9 @@ impl<'env, 'a, 'b, M: Meter + ?Sized> SignatureChecker<'env, 'a, 'b, M> {
             }
             SignatureToken::TypeParameter(idx) => {
                 if type_parameters[*idx as usize].is_phantom && !is_phantom_pos {
-                    return Err(PartialVMError::new(
-                        StatusCode::INVALID_PHANTOM_TYPE_PARAM_POSITION,
-                    )
-                    .with_message(
-                        "phantom type parameter cannot be used in non-phantom position".to_string(),
+                    return Err(partial_vm_error_with_debug_message!(
+                        INVALID_PHANTOM_TYPE_PARAM_POSITION,
+                        "phantom type parameter cannot be used in non-phantom position".to_string()
                     ));
                 }
             }
@@ -405,8 +403,10 @@ impl<'env, 'a, 'b, M: Meter + ?Sized> SignatureChecker<'env, 'a, 'b, M> {
             Reference(_) | MutableReference(_) => {
                 // TODO: Prop tests expect us to NOT check the inner types.
                 // Revisit this once we rework prop tests.
-                Err(PartialVMError::new(StatusCode::INVALID_SIGNATURE_TOKEN)
-                    .with_message("reference not allowed".to_string()))
+                Err(partial_vm_error_with_debug_message!(
+                    INVALID_SIGNATURE_TOKEN,
+                    "reference not allowed".to_string()
+                ))
             }
             Vector(ty) => self.check_signature_token(ty),
             DatatypeInstantiation(inst) => {
@@ -494,15 +494,14 @@ impl<'env, 'a, 'b, M: Meter + ?Sized> SignatureChecker<'env, 'a, 'b, M> {
         global_abilities: &[AbilitySet],
     ) -> PartialVMResult<()> {
         if type_arguments.len() != constraints.len() {
-            return Err(
-                PartialVMError::new(StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH).with_message(
-                    format!(
-                        "expected {} type argument(s), got {}",
-                        constraints.len(),
-                        type_arguments.len()
-                    ),
-                ),
-            );
+            return Err(partial_vm_error_with_debug_message!(
+                NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+                format!(
+                    "expected {} type argument(s), got {}",
+                    constraints.len(),
+                    type_arguments.len()
+                )
+            ));
         }
 
         let meter: &mut M = self.meter;
@@ -511,12 +510,14 @@ impl<'env, 'a, 'b, M: Meter + ?Sized> SignatureChecker<'env, 'a, 'b, M> {
             let given =
                 module_ability_cache.abilities(Scope::Module, meter, global_abilities, ty)?;
             if !constraint.is_subset(given) {
-                return Err(PartialVMError::new(StatusCode::CONSTRAINT_NOT_SATISFIED)
-                    .with_message(format!(
+                return Err(partial_vm_error_with_debug_message!(
+                    CONSTRAINT_NOT_SATISFIED,
+                    format!(
                         "expected type with abilities {:?} got type actual {:?} with incompatible \
                         abilities {:?}",
                         constraint, ty, given
-                    )));
+                    )
+                ));
             }
         }
         Ok(())

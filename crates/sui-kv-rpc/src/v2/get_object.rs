@@ -3,10 +3,8 @@
 
 use std::collections::HashMap;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
-use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsResponse;
-use sui_rpc::proto::sui::rpc::v2::Object;
 use sui_rpc::proto::sui::rpc::v2::{GetObjectRequest, GetObjectResponse, GetObjectResult};
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc_api::{
@@ -16,7 +14,7 @@ use sui_rpc_api::{
 use sui_types::storage::ObjectKey;
 
 use crate::PackageResolver;
-use crate::render::render_json;
+use crate::render::object_to_response;
 
 pub const MAX_BATCH_REQUESTS: usize = 1000;
 
@@ -44,19 +42,7 @@ pub(crate) async fn get_object(
             .await?
             .ok_or_else(|| ObjectNotFoundError::new(object_id))?,
     };
-    let mut message = Object::default();
-    if read_mask.contains(Object::JSON_FIELD)
-        && let Some(move_object) = object.data.try_as_move()
-    {
-        message.json = render_json(
-            resolver,
-            &move_object.type_().clone().into(),
-            move_object.contents(),
-        )
-        .await
-        .map(Box::new);
-    }
-    message.merge(&object, &read_mask);
+    let message = object_to_response(&object, &read_mask, resolver).await;
     Ok(GetObjectResponse::new(message))
 }
 
@@ -104,21 +90,10 @@ pub(crate) async fn batch_get_objects(
         .map(|obj| ((obj.id(), obj.version()), obj))
         .collect();
 
-    let needs_json = read_mask.contains(Object::JSON_FIELD);
     let mut objects = Vec::with_capacity(object_keys.len());
     for object_key in object_keys {
         if let Some(object) = response.get(&(object_key.0, object_key.1)) {
-            let mut message = Object::default();
-            if needs_json && let Some(move_object) = object.data.try_as_move() {
-                message.json = render_json(
-                    resolver,
-                    &move_object.type_().clone().into(),
-                    move_object.contents(),
-                )
-                .await
-                .map(Box::new);
-            }
-            message.merge(object, &read_mask);
+            let message = object_to_response(object, &read_mask, resolver).await;
             objects.push(GetObjectResult::new_object(message));
         } else {
             let err: RpcError =

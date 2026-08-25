@@ -5,7 +5,7 @@ info:
   edition: development
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/development/signed_ints/invalid/signed_int_match_negative_nonnumeric.move:8:13
   │
 8 │             -true => 0,

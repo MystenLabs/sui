@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04023]: invalid method call
+error[EC04023]: invalid method call
   ┌─ tests/move_2024/typing/macro_duck_typing_method_invalid.move:5:9
   │
 5 │         x.foo()

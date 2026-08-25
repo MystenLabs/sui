@@ -408,7 +408,7 @@ impl TestStatistics {
         }
         for (module_id, test_result) in other.failed {
             let entry = self.failed.entry(module_id).or_default();
-            entry.extend(test_result.into_iter());
+            entry.extend(test_result);
         }
         self
     }

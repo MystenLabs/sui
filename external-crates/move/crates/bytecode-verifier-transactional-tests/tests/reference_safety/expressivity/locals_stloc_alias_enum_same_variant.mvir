@@ -1,0 +1,28 @@
+// enum local overwritten with the same variant while an epsilon alias is live
+
+//# run
+mvir 0x42::m {
+    public enum X has drop {
+        One { x: u64 },
+        Two { x: u64, y: u64 },
+    }
+
+    entry fun t() {
+        let e: Self::X;
+        let r: &mut Self::X;
+        let a: &mut u64;
+        let b: &u64;
+        let v: u64;
+    label b0:
+        e = X::One { x: 1 };
+        r = &mut e;
+        e = X::One { x: 77 };
+        &mut X::One { x: a } = move(r);
+        v = *copy(a);
+        *move(a) = 88;
+        assert(move(v) == 77, 900);
+        &X::One { x: b } = &e;
+        assert(*move(b) == 88, 901);
+        return;
+    }
+}

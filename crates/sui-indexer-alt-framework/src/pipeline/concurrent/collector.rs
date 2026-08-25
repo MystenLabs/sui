@@ -175,11 +175,7 @@ pub(super) fn collector<H: Handler>(
                 let mut watermark = Vec::new();
                 let mut batch_len = 0;
 
-                loop {
-                    let Some(mut entry) = pending.first_entry() else {
-                        break;
-                    };
-
+                while let Some(mut entry) = pending.first_entry() {
                     if watermark.len() >= max_watermark_updates {
                         break;
                     }

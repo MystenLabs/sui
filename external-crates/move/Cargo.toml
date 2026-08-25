@@ -68,7 +68,7 @@ getrandom = "0.2.9"
 heck = "0.3.2"
 hex = "0.4.3"
 hex-literal = "0.3.4"
-im = "15.1.0"
+imbl = "7.0.1"
 indexmap = "2.8.0"
 indoc = "2.0.6"
 itertools = "0.10.0"
@@ -77,7 +77,6 @@ leb128 = "0.2.5"
 lasso = { version = "0.7.3", features = ["multi-threaded", "inline-more"] }
 libfuzzer-sys = "0.4"
 log = { version = "0.4.14", features = ["serde"] }
-lru = "0.13.0"
 lsp-server = "0.7.6"
 lsp-types = "0.95.1"
 memory-stats = "1.0.0"
@@ -95,7 +94,7 @@ pretty_simple = "0.1.1"
 pretty_assertions = "1.4.1"
 primitive-types = { version = "0.10.1", features = ["impl-serde"] }
 proptest = "1.6.0"
-proptest-derive = "0.5"
+proptest-derive = { version = "0.5", features = ["boxed_union"] }
 quick_cache = { version = "0.6.18", features = ["stats"] }
 quote = "1.0.9"
 rand = "0.8.0"
@@ -168,14 +167,12 @@ move-ir-compiler = { path = "crates/move-ir-compiler" }
 move-ir-to-bytecode = { path = "crates/move-ir-to-bytecode" }
 move-ir-to-bytecode-syntax = { path = "crates/move-ir-to-bytecode-syntax" }
 move-ir-types = { path = "crates/move-ir-types" }
-move-model = { path = "crates/move-model" }
 move-model-2 = { path = "crates/move-model-2" }
 move-package = { path = "crates/move-package" }
 move-package-alt = { path = "crates/move-package-alt" }
 move-package-alt-compilation = { path = "crates/move-package-alt-compilation" }
 move-proc-macros = { path = "crates/move-proc-macros"}
 move-regex-borrow-graph = { path = "crates/move-regex-borrow-graph" }
-move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
 move-stackless-bytecode-2 = { path = "crates/move-stackless-bytecode-2" }
 move-stdlib = { path = "crates/move-stdlib" }
 move-stdlib-natives = { path = "crates/move-stdlib-natives" }
@@ -185,7 +182,6 @@ move-unit-test = { path = "crates/move-unit-test" }
 move-vm-config = { path = "crates/move-vm-config" }
 move-vm-profiler = { path = "crates/move-vm-profiler" }
 move-vm-runtime = { path = "crates/move-vm-runtime" }
-prover_bytecode = { path = "crates/move-stackless-bytecode", package = "move-stackless-bytecode" }
 
 [profile.bench]
 debug = true

@@ -4,7 +4,7 @@
 import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, doc } from 'prettier';
-import { printTrailingComment } from '../../utilities';
+import { inlineTrailingComment } from '../../utilities';
 const {
     group,
     softline,
@@ -74,7 +74,7 @@ function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: pri
         (path) => {
             let trailingComment: Doc = '';
             if (path.node.trailingComment?.type == 'line_comment') {
-                trailingComment = lineSuffix(printTrailingComment(path));
+                trailingComment = lineSuffix(inlineTrailingComment(path));
                 path.node.disableTrailingComment();
             }
 
@@ -109,7 +109,7 @@ function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: pri
                 ? path.call(print, 'nonFormattingChildren', 1)
                 : path.call(
                       (path) => {
-                          const comment = lineSuffix(printTrailingComment(path));
+                          const comment = lineSuffix(inlineTrailingComment(path));
                           path.node.disableTrailingComment();
                           return [print(path), comment];
                       },

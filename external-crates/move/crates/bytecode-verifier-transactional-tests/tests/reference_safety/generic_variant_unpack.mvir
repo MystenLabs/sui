@@ -1,0 +1,72 @@
+// the four generic variant opcodes
+
+//# publish
+mvir 0x1::gvariant_ok {
+    public enum E<T> has drop {
+        One { x: T },
+        Two { x: T, y: T },
+    }
+
+    fun mut_ref(e: &mut Self::E<u64>) {
+        let x: &mut u64;
+        let y: &mut u64;
+    label b0:
+        &mut E::Two<u64> { x: x, y: y } = move(e);
+        *move(x) = 1;
+        *move(y) = 2;
+        return;
+    }
+
+    fun imm_ref(e: &Self::E<u64>): u64 {
+        let x: &u64;
+        let y: &u64;
+    label b0:
+        &E::Two<u64> { x: x, y: y } = move(e);
+        _ = move(y);
+        return *move(x);
+    }
+
+    // PackVariantGeneric + UnpackVariantGeneric, by value
+    fun by_value(n: u64): u64 {
+        let e: Self::E<u64>;
+        let x: u64;
+    label b0:
+        e = E::One<u64> { x: move(n) };
+        E::One<u64> { x: x } = move(e);
+        return move(x);
+    }
+}
+
+//# publish
+mvir 0x2::gvariant_parent_write_invalid {
+    public enum E<T> has drop {
+        One { x: T },
+        Two { x: T, y: T },
+    }
+
+    fun bad(e: &mut Self::E<u64>) {
+        let x: &mut u64;
+    label b0:
+        &mut E::One<u64> { x: x } = copy(e);
+        *move(e) = E::Two<u64> { x: 0, y: 0 };
+        *move(x) = 1;
+        return;
+    }
+}
+
+//# publish
+mvir 0x3::gvariant_imm_ref_then_write_invalid {
+    public enum E<T> has drop {
+        One { x: T },
+        Two { x: T, y: T },
+    }
+
+    fun bad(e: &mut Self::E<u64>) {
+        let x: &u64;
+    label b0:
+        &E::One<u64> { x: x } = freeze(copy(e));
+        *move(e) = E::Two<u64> { x: 0, y: 0 };
+        _ = *move(x);
+        return;
+    }
+}

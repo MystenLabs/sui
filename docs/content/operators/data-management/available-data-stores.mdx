@@ -1,0 +1,172 @@
+---
+title: Available Data Stores
+description: >-
+  Reference for all Sui Foundation-managed checkpoint stores, snapshot buckets, and
+  archival endpoints available for Sui Mainnet and Testnet, including retention
+  policies, credential requirements, and recommended use cases.
+keywords:
+  - checkpoint store
+  - snapshot bucket
+  - GCS
+  - S3
+  - Requester Pays
+  - formal snapshot
+  - archival fallback
+  - mysten-mainnet-checkpoints
+  - mysten-testnet-checkpoints
+  - data sources
+goal:
+  description: >-
+    Operator can identify the correct Mysten-managed data store for their use
+    case and configure the appropriate credentials
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What checkpoint stores are available for Sui?
+  - Where can I download Sui snapshots?
+  - What is the difference between public HTTPS endpoints and Requester Pays buckets?
+  - What credentials do I need for Mysten-managed data stores?
+  - Which data store should I use for indexer backfill?
+answer: >-
+  Mysten Labs manages two categories of data stores for Sui operators:
+  checkpoint stores (protobuf checkpoint blobs for indexers, remote stores, and
+  archival fallback) and formal snapshot endpoints (for bootstrapping consistent
+  stores and full nodes). Each store has specific retention policies, credential
+  requirements, and recommended use cases.
+---
+
+Sui Foundation manages several categories of data stores for Sui operators and builders. Each store serves a specific purpose, has its own retention policy, and might require credentials for access.
+
+## Choosing a store
+
+| **Use case** | **Recommended store** | **Details** |
+| --- | --- | --- |
+| Indexer backfill from genesis | [GCS checkpoint buckets](#checkpoint-gcs) | Full retention, use `--remote-store-gcs` |
+| Indexer steady state | Full node through gRPC (self-hosted or third-party)  | Lowest latency, no separate egress charges (full node operating costs still apply) |
+| Full node bootstrap | [Formal snapshot free bucket](#formal-free) or [formal buckets](#formal-buckets) | Fastest path to a running node |
+| Mainnet full node archival fallback | [S3 checkpoint bucket](#checkpoint-s3) | Configure in `fullnode.yaml` with instance profile credentials |
+| Testnet full node archival fallback | [HTTPS checkpoint endpoint](#checkpoint-https) | 30-day retention is sufficient for fallback |
+| Bigtable-based archival service backfill | [GCS checkpoint buckets](#checkpoint-gcs) | Full retention, use `--remote-store-gcs` |
+| Consistent store restore | [Formal snapshot HTTPS](#formal-https) + [HTTPS checkpoint endpoint](#checkpoint-https) | `--http` for snapshot, `--remote-store-url` for epoch mapping |
+| Checkpoint remote store population | [GCS checkpoint buckets](#checkpoint-gcs) as source | Backfill, then switch to full node gRPC |
+
+## Checkpoint remote stores
+
+Checkpoint stores contain protobuf-encoded checkpoint blobs (`.binpb.zst`). They are used by [indexers](/operators/data-management/indexer-stack-setup), [remote store operators](/operators/data-management/remote-store-setup), the [archival service](/operators/data-management/archival-stack-setup), and [full node archival fallback](/operators/data-management/archives).
+
+### GCS buckets (full retention, Requester Pays) {#checkpoint-gcs}
+
+These buckets contain the complete checkpoint history from genesis. Use them for production backfill and recovery.
+
+| **Network** | **Bucket** | **CLI flag** |
+| --- | --- | --- |
+| Mainnet | `gs://mysten-mainnet-checkpoints-use4` | `--remote-store-gcs mysten-mainnet-checkpoints-use4` |
+| Testnet | `gs://mysten-testnet-checkpoints-use4` | `--remote-store-gcs mysten-testnet-checkpoints-use4` |
+
+**Retention:** Full history from genesis.
+
+**Credentials:** GCS Requester Pays. You are charged for egress. Configure Google credentials and a billing project:
+
+```sh
+$ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/gcp-credentials.json
+$ export GOOGLE_CLOUD_PROJECT=your-billing-project
+```
+
+Workload Identity or another supported Google credential source can replace the credential file. Commands that read from these buckets must include the `x-goog-user-project` header (for example, `--remote-store-header "x-goog-user-project:${GOOGLE_CLOUD_PROJECT}"`). See Google Cloud's [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays) documentation for billing and IAM requirements.
+
+### S3 bucket (full retention, Requester Pays) {#checkpoint-s3}
+
+| **Network** | **Endpoint** | **CLI usage** |
+| --- | --- | --- |
+| Mainnet | `https://s3.us-west-2.amazonaws.com/mysten-mainnet-checkpoints` | Use as `ingestion-url` in `fullnode.yaml` |
+
+**Retention:** Full history from genesis.
+
+**Credentials:** AWS Requester Pays. Use this endpoint for [Mainnet archival fallback](/operators/data-management/archives) in `fullnode.yaml`. When running on EC2, the node retrieves credentials from instance metadata (instance profile). Do not put access keys in `fullnode.yaml`.
+
+The Sui S3 client defaults `request_payer` to `false`. You must explicitly enable it in the archival fallback configuration:
+
+```yaml
+remote-store-options:
+  - ["aws_request_payer", "true"]
+```
+
+:::info
+
+This S3 endpoint is specifically for archival fallback configuration in `fullnode.yaml`. For indexer backfill and remote store population, use the [GCS buckets](#checkpoint-gcs) with `--remote-store-gcs`.
+
+:::
+
+### HTTPS endpoints (30-day retention, free) {#checkpoint-https}
+
+| **Network** | **URL** |
+| --- | --- |
+| Mainnet | `https://checkpoints.mainnet.sui.io` |
+| Testnet | `https://checkpoints.testnet.sui.io` |
+
+**Retention:** Most recent 30 days only.
+
+**Credentials:** None required.
+
+:::caution
+
+These endpoints are public-good services for testing only. Do not use them for production backfill, recovery, or steady-state indexer operation. State sync explicitly rejects `checkpoints.mainnet.sui.io` as an archive source. For full-retention access, use the [GCS](#checkpoint-gcs) or [S3](#checkpoint-s3) buckets.
+
+:::
+
+The HTTPS endpoints are acceptable for:
+- The `--remote-store-url` parameter during [consistent store restore](/operators/data-management/indexer-stack-setup#consistent-store-setup), which reads `epochs.json` and the target end-of-epoch checkpoint.
+- [Testnet archival fallback](/operators/data-management/archives), where 30-day retention is sufficient.
+
+## Snapshot stores
+
+Snapshot stores contain point-in-time database state for bootstrapping [full nodes](/operators/snapshots) and [consistent stores](/operators/data-management/indexer-stack-setup#consistent-store-setup). Formal snapshots are minimalistic, database-agnostic, and cryptographically verifiable.
+
+### Formal snapshot HTTPS endpoints {#formal-https}
+
+| **Network** | **URL** |
+| --- | --- |
+| Mainnet | `https://formal-snapshot.mainnet.sui.io` |
+| Testnet | `https://formal-snapshot.testnet.sui.io` |
+
+**Retention:** Varies by network. Mainnet currently retains approximately the last 60 epochs. Testnet retains approximately the last 90 epochs. Check the live manifest to confirm the current range before planning a restore.
+
+**Credentials:** None required.
+
+Use these endpoints for:
+- [Consistent store restore](/operators/data-management/indexer-stack-setup#consistent-store-setup) with the `--http` flag.
+- [Full node formal snapshot restore](/operators/snapshots) with `sui-tool download-formal-snapshot`.
+
+### Formal snapshot buckets (Requester Pays) {#formal-buckets}
+
+| **Network** | **S3** | **GCS** |
+| --- | --- | --- |
+| Mainnet | `s3://mysten-mainnet-formal/` | `gs://mysten-mainnet-formal/` |
+| Testnet | `s3://mysten-testnet-formal/` | `gs://mysten-testnet-formal/` |
+
+**Retention:** Same as the [HTTPS endpoints](#formal-https) (approximately 60 epochs on Mainnet, 90 on Testnet).
+
+**Credentials:** AWS or GCS Requester Pays. Provide credentials for the cloud provider you use. For the best download speeds with S3, enable [transfer acceleration](https://aws.amazon.com/s3/transfer-acceleration/).
+
+Use these buckets for:
+- [Consistent store restore](/operators/data-management/indexer-stack-setup#consistent-store-setup).
+- [Full node formal snapshot restore](/operators/snapshots) with `sui-tool download-formal-snapshot`.
+
+### Formal snapshot free bucket (Cloudflare R2) {#formal-free}
+
+Mysten Labs hosts free formal snapshots on Cloudflare R2 (currently in North America only). No credentials are required. Access through `sui-tool download-formal-snapshot --no-sign-request`.
+
+

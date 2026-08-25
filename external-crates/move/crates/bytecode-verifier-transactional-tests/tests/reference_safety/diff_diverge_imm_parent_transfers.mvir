@@ -1,0 +1,117 @@
+// both checkers reject, at a different instruction: the old graph re-parents on factor and
+// trips has_full_borrows at the field borrow, the regex graph rejects at the later transfer
+// or write
+
+//# run
+
+mvir 0x43::imm_parent_mut_field_call {
+
+public struct T has copy, drop { f: u64 }
+
+fun g(a: &Self::T, b: &mut u64) {
+label b0:
+    *move(b) = 7;
+    _ = move(a);
+    return;
+}
+
+entry fun t() {
+    let x: Self::T;
+    let i: &Self::T;
+    let s: &mut Self::T;
+    let f: &mut u64;
+label b0:
+    x = T { f: 0 };
+    i = &x;
+    s = &mut x;
+    // old: FIELD_EXISTS_MUTABLE_BORROW_ERROR
+    f = &mut move(s).T::f;
+    // new: CALL_BORROWED_MUTABLE_REFERENCE_ERROR
+    Self::g(move(i), move(f));
+    return;
+}
+
+}
+
+//# run
+
+mvir 0x44::write_through_sibling_mut {
+
+public struct T has copy, drop { f: u64 }
+
+entry fun t() {
+    let x: Self::T;
+    let s1: &mut Self::T;
+    let s2: &mut Self::T;
+    let f: &mut u64;
+label b0:
+    x = T { f: 0 };
+    s1 = &mut x;
+    s2 = &mut x;
+    // old: FIELD_EXISTS_MUTABLE_BORROW_ERROR
+    f = &mut move(s2).T::f;
+    // new: WRITEREF_EXISTS_BORROW_ERROR
+    *move(s1) = T { f: 1 };
+    *move(f) = 2;
+    return;
+}
+
+}
+
+//# run
+
+mvir 0x45::vector_imm_parent_mut_elem {
+
+fun g(a: &vector<u64>, b: &mut u64) {
+label b0:
+    *move(b) = 5;
+    _ = move(a);
+    return;
+}
+
+entry fun t() {
+    let v: vector<u64>;
+    let i: &vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &mut u64;
+label b0:
+    v = vector<u64; 2>(0, 1);
+    i = &v;
+    vr = &mut v;
+    // old: VEC_BORROW_ELEMENT_EXISTS_MUTABLE_BORROW_ERROR
+    e = vec_mut_borrow<u64>(move(vr), 0);
+    // new: CALL_BORROWED_MUTABLE_REFERENCE_ERROR
+    Self::g(move(i), move(e));
+    return;
+}
+
+}
+
+//# publish
+
+mvir 0x64::dot_star_alias_then_call {
+
+public struct Inner has copy, drop { h: u64 }
+public struct Mid has copy, drop { i: Self::Inner }
+public struct Top has copy, drop { f: u64, g: Self::Mid }
+
+fun mid(a: &mut Self::Top): &mut Self::Mid {
+label b0:
+    return &mut move(a).Top::g;
+}
+fun c(x: &mut Self::Mid, y: &mut u64) { label b0: return; }
+
+fun t(a: &mut Self::Top) {
+    let m: &mut Self::Mid;
+    let u: &mut u64;
+label b0:
+    m = Self::mid(copy(a));
+    // old: FIELD_EXISTS_MUTABLE_BORROW_ERROR
+    u = &mut copy(a).Top::f;
+    // new: CALL_BORROWED_MUTABLE_REFERENCE_ERROR
+    Self::c(move(m), move(u));
+    _ = move(a);
+    return;
+}
+
+}

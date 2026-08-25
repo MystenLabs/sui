@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/break_with_value_invalid.move:3:28
   │
 2 │     fun t0(): bool {
@@ -16,7 +16,7 @@ error[E04007]: incompatible types
   │                            Invalid return expression
   │                            Given: '()'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/break_with_value_invalid.move:7:9
   │
 6 │     fun t1(): u64 {
@@ -27,7 +27,7 @@ error[E04007]: incompatible types
   │         │            Given: 'bool'
   │         Invalid return expression
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/break_with_value_invalid.move:11:9
    │  
 11 │ ╭         if (cond) {
@@ -39,7 +39,7 @@ error[E04007]: incompatible types
 15 │ │         }
    │ ╰─────────^ Incompatible branches
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/break_with_value_invalid.move:19:24
    │
 19 │         while (cond) { break true } 
@@ -49,7 +49,7 @@ error[E04007]: incompatible types
    │         │              Invalid break
    │         Found: '()'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/break_with_value_invalid.move:23:24
    │
 23 │         while (cond) { break true }; 
@@ -59,7 +59,7 @@ error[E04007]: incompatible types
    │         │              Invalid break
    │         Found: '()'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/break_with_value_invalid.move:23:36
    │
 22 │     fun t4(cond: bool): bool {
@@ -70,7 +70,7 @@ error[E04007]: incompatible types
    │                                    Invalid return expression
    │                                    Given: '()'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/break_with_value_invalid.move:28:9
    │  
 26 │       fun t5(cond: bool): u64 {
@@ -86,7 +86,7 @@ error[E04007]: incompatible types
 34 │ │         } 
    │ ╰─────────^ Invalid return expression
 
-error[E04005]: expected a single type
+error[EC04005]: expected a single type
    ┌─ tests/move_check/typing/break_with_value_invalid.move:38:13
    │
 38 │         let x = while (cond) { };
@@ -94,7 +94,7 @@ error[E04005]: expected a single type
    │             │    
    │             Invalid type for local
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/break_with_value_invalid.move:50:11
    │
 46 │                 break true
@@ -105,7 +105,7 @@ error[E04007]: incompatible types
    │           │   
    │           Incompatible arguments to '=='
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/break_with_value_invalid.move:67:9
    │  
 64 │       struct R {f: u64}

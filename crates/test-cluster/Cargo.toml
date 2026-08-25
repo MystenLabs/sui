@@ -12,6 +12,8 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 bcs.workspace = true
+consensus-config.workspace = true
+fastcrypto-zkp.workspace = true
 futures.workspace = true
 tracing.workspace = true
 jsonrpsee.workspace = true
@@ -38,7 +40,6 @@ move-core-types.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true
-fastcrypto-zkp.workspace = true
 prometheus.workspace = true
 
 [dev-dependencies]

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/matching/raw_address_invalid.move:10:9
    │
  7 │ public fun match_e(e: &E, rx: &u64, ry: &u64): (&u64, &u64) {
@@ -17,7 +17,7 @@ error[E04007]: incompatible types
    │         Invalid pattern
    │         Given: 'u64'
 
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
    ┌─ tests/move_2024/matching/raw_address_invalid.move:11:9
    │
 11 │         0x42::m => (rx, ry),

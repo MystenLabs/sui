@@ -1,0 +1,18 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 0, lines 3-21:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::stloc_alias'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x2::stloc_alias,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 7)],
+}
+
+task 1, line 23:
+//# view-abstract-state 0x2::stloc_alias::t
+view-abstract-state subcommand is only available with regex reference safety

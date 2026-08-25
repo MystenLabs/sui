@@ -21,7 +21,7 @@ Test failures:
 Failures in std::AModule:
 
 ┌── abort_in_macro_same_module ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │    ┌─ ./sources/AModule.move:40:9
 │    │
 │ 39 │     fun abort_in_macro_same_module() {
@@ -35,7 +35,7 @@ Failures in std::AModule:
 Failures in std::AModuleTestsShouldAllFail:
 
 ┌── abort_in_macro ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │    ┌─ ./tests/AModuleTestsShouldAllFail.move:33:9
 │    │
 │ 32 │     fun abort_in_macro() {
@@ -48,7 +48,7 @@ Failures in std::AModuleTestsShouldAllFail:
 
 
 ┌── clever_error_line_abort_in_non_macro ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │    ┌─ ./tests/AModuleTestsShouldAllFail.move:38:9
 │    │
 │ 37 │     fun clever_error_line_abort_in_non_macro() {
@@ -61,7 +61,7 @@ Failures in std::AModuleTestsShouldAllFail:
 
 
 ┌── double_three_const_based_different_module_fail ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │    ┌─ ./sources/AModule.move:10:9
 │    │
 │  9 │     public fun double_except_three(x: u64): u64 {
@@ -74,7 +74,7 @@ Failures in std::AModuleTestsShouldAllFail:
 
 
 ┌── double_three_location_based_invalid ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │    ┌─ ./sources/AModule.move:10:9
 │    │
 │  9 │     public fun double_except_three(x: u64): u64 {
@@ -87,7 +87,7 @@ Failures in std::AModuleTestsShouldAllFail:
 
 
 ┌── double_three_should_fail ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │    ┌─ ./sources/AModule.move:10:9
 │    │
 │  9 │     public fun double_except_three(x: u64): u64 {
@@ -100,7 +100,7 @@ Failures in std::AModuleTestsShouldAllFail:
 
 
 ┌── double_three_should_fail_named_const ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │    ┌─ ./sources/AModule.move:10:9
 │    │
 │  9 │     public fun double_except_three(x: u64): u64 {
@@ -112,7 +112,7 @@ Failures in std::AModuleTestsShouldAllFail:
 └──────────────────
 
 Test result: FAILED. Total tests: 13; passed: 6; failed: 7
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ ./tests/AModuleTestsShouldAllFail.move:8:24
   │
 8 │     #[expected_failure(abort_code = 0)]

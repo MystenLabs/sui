@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04029]: invalid function call
+error[EC04029]: invalid function call
   ┌─ tests/move_2024/naming/var_as_fun_invalid.move:4:9
   │
 4 │         var();

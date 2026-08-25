@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_2024/matching/invalid_const_match_type.move:9:17
   │
 3 │     const Z8: u8 = 0;
@@ -17,7 +17,7 @@ error[E04007]: incompatible types
 9 │             S { n: Z8 } => n,
   │                 ^ Invalid pattern field type
 
-error[E03009]: unbound variable
+error[EC03009]: unbound variable
   ┌─ tests/move_2024/matching/invalid_const_match_type.move:9:28
   │
 7 │     fun test(s: S): u64 {

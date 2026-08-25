@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.sui.io/frontmatter.schema.json",
+  "title": "Sui docs page frontmatter",
+  "description": "Canonical schema for the YAML frontmatter on Sui documentation pages (docs/content/**/*.mdx). Validated locally via `pnpm docs:validate-frontmatter` (wiring it into the Docs Frontmatter Check CI workflow as a failing gate is a follow-up). Unknown top-level keys are allowed (additionalProperties: true) so Docusaurus-native frontmatter fields not enumerated here don't break validation; the nested `goal`, goal-check, and `builder_paths` objects are validated strictly (additionalProperties: false) because downstream tooling relies on their exact shape. See docs/README.md for prose documentation of each field.",
+  "type": "object",
+  "required": ["title", "description", "keywords"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Page title. Rendered as the H1 and used for navigation and search."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One-sentence summary of what this page covers."
+    },
+    "keywords": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Search keywords for this page."
+    },
+    "questions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "GEO/AEO: 2-5 questions this page answers. AI engines match user queries against these."
+    },
+    "answer": {
+      "type": "string",
+      "minLength": 1,
+      "description": "GEO/AEO: 1-2 sentence direct answer to the page's primary question, cited verbatim by AI engines."
+    },
+    "goal": { "$ref": "#/$defs/goal" },
+    "builder_paths": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/builderPath" },
+      "description": "Builder path(s) this page belongs to, with per-path step/stage and eval status."
+    },
+    "builder_paths_source": {
+      "type": ["string", "object", "null"],
+      "description": "Provenance for auto-generated builder_paths. Either a string marker or an object (e.g. { dashboard, snapshot })."
+    },
+    "concepts": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Concept IDs this page covers, cross-referenced against concept-map.yaml."
+    },
+    "last_verified": {
+      "type": "string",
+      "description": "Date the page content was last manually verified. Accepts YYYY-MM-DD or an ISO 8601 datetime.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})?)?$"
+    },
+    "verified_against": {
+      "type": ["string", "object", "null"],
+      "description": "Version/release/commit the content was verified against. Either a string marker or an object of component versions (e.g. { sui_ts_sdk, move_edition, ... })."
+    },
+    "sui_release": {
+      "type": "string",
+      "description": "Sui release the page content targets."
+    },
+    "example_id": {
+      "type": "string",
+      "description": "Identifier linking the page to a code example."
+    },
+    "repo": {
+      "type": "string",
+      "description": "Source repository for imported/example content."
+    },
+    "path": {
+      "type": "string",
+      "description": "Source path within the repo for imported/example content."
+    },
+    "languages": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Programming languages featured on the page."
+    },
+    "network": { "type": "string" },
+    "shape": { "type": "string" },
+    "draft": {
+      "type": "boolean",
+      "description": "When true, the page is a draft and excluded from production builds."
+    },
+    "sidebar_label": { "type": "string" },
+    "sidebar_position": { "type": "number" },
+    "pagination_prev": { "type": ["string", "null"] },
+    "pagination_next": { "type": ["string", "null"] },
+    "hide_title": { "type": "boolean" },
+    "hide_table_of_contents": { "type": "boolean" }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "goal": {
+      "type": "object",
+      "description": "Defines what the page should achieve for the reader plus mechanically verifiable checks evaluated by the audit pipeline.",
+      "required": ["description", "requires"],
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the reader can do or understand after reading the page."
+        },
+        "requires": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/goalCheck" },
+          "description": "List of mechanically verifiable checks. Each check must match exactly one check type."
+        }
+      },
+      "additionalProperties": false
+    },
+    "goalCheck": {
+      "type": "object",
+      "description": "A single goal check. Every check carries a `label` (shown in failure reports) plus exactly one check-type key (enforced via oneOf).",
+      "required": ["label"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "pattern": {
+          "type": "string",
+          "description": "Regex the body text must match at least `min` times."
+        },
+        "min": {
+          "type": "number",
+          "description": "Minimum count for `pattern`, `has_tables`, `question_headings`, `steps_present`, etc."
+        },
+        "max": { "type": "number" },
+        "headings": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "required": ["pattern"],
+                "properties": { "pattern": { "type": "string" } },
+                "additionalProperties": false
+              }
+            ]
+          },
+          "description": "Page must have headings matching each pattern."
+        },
+        "links_to": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Page must contain links to each internal path."
+        },
+        "has_tables": {
+          "description": "Page must have at least `min` markdown tables (or a count when given as a number).",
+          "type": ["boolean", "number"]
+        },
+        "has_images": {
+          "type": "boolean",
+          "description": "Whether the page has (true) or must not have (false) images."
+        },
+        "has_frontmatter": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Frontmatter fields that must be present."
+        },
+        "min_words": {
+          "type": "number",
+          "description": "Minimum body word count (outside code blocks)."
+        },
+        "has_questions": {
+          "type": "boolean",
+          "description": "Whether the page must have (true) a questions: frontmatter block."
+        },
+        "has_answer": {
+          "type": "boolean",
+          "description": "Whether the page must have (true) an answer: frontmatter field."
+        },
+        "answer_in_intro": {
+          "type": "number",
+          "description": "Minimum words in the first paragraph so it can serve as a direct answer."
+        },
+        "question_headings": {
+          "type": "number",
+          "description": "Minimum count of question-format headings (What/How/Why...)."
+        },
+        "steps_present": {
+          "type": "number",
+          "description": "Minimum count of numbered steps for procedural content."
+        },
+        "code_explanation_ratio": {
+          "type": "number",
+          "description": "Minimum ratio of explanation to code."
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        { "required": ["pattern"] },
+        { "required": ["headings"] },
+        { "required": ["links_to"] },
+        { "required": ["has_tables"] },
+        { "required": ["has_images"] },
+        { "required": ["has_frontmatter"] },
+        { "required": ["min_words"] },
+        { "required": ["has_questions"] },
+        { "required": ["has_answer"] },
+        { "required": ["answer_in_intro"] },
+        { "required": ["question_headings"] },
+        { "required": ["steps_present"] },
+        { "required": ["code_explanation_ratio"] }
+      ]
+    },
+    "builderPath": {
+      "type": "object",
+      "description": "One builder-path membership entry for the page.",
+      "required": ["path_id", "step", "stage"],
+      "properties": {
+        "path_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable builder-path identifier (e.g. defi-deepbook, p2p-payments)."
+        },
+        "path_name": {
+          "type": "string",
+          "description": "Human-readable path name (e.g. DeFi / DeepBook)."
+        },
+        "step": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The step this page fulfills within the path."
+        },
+        "stage": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The stage of the path this step belongs to (e.g. Setup, Move Contract, Tokens)."
+        },
+        "eval": {
+          "type": "string",
+          "enum": ["covered", "partial", "missing"],
+          "description": "Eval status from the evals dashboard. Omit if the page has not been scored yet."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

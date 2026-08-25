@@ -223,7 +223,118 @@
 }
 
 @media screen and (max-width: 799px) {
-  .heroText { 
+  .heroText {
     margin: 2rem 0;
   }
+}
+
+/* ---- Section layout (Developer Resources / Use Cases / Node Operators) ---- */
+.homeSection {
+  width: 100%;
+  max-width: 1098px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.homeSection:last-of-type {
+  padding-bottom: 4rem;
+}
+
+.homeSectionHeading {
+  color: #ffffff;
+  font-family: var(--headerFont);
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 1.75rem;
+  letter-spacing: -0.04em;
+  text-align: left;
+  margin: 2rem 0 1rem 0;
+}
+
+/* Hero "Developer Updates" link: box colors, pill shape like the topnav button */
+.devUpdates {
+  align-self: center;
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.75rem 1.125rem;
+  background-color: #131518;
+  border: 1px solid #343940;
+  border-radius: 2.25rem;
+  color: #ffffff;
+  font-family: var(--headerFont);
+  font-size: 0.95rem;
+  text-decoration: none;
+  transition: border-color 180ms ease, transform 180ms ease;
+}
+
+.devUpdates:hover {
+  text-decoration: none;
+  color: #ffffff;
+  border-color: rgba(41, 141, 255, 0.5);
+  transform: translateY(-2px);
+}
+
+.devUpdates:focus-visible {
+  outline: 2px solid #5CA9FF;
+  outline-offset: 3px;
+}
+
+/* Card box: single clickable destination with a title + one description line */
+.resourceCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  row-gap: 0.5rem;
+  width: 350px;
+  max-width: 100%;
+  min-height: 9rem;
+  background-color: #131518;
+  border: 1px solid #343940;
+  border-radius: 2px;
+  padding: 1.25rem 2.5rem 1.25rem 1.25rem;
+  color: #ffffff;
+  text-decoration: none;
+  transition: border-color 180ms ease, transform 180ms ease;
+}
+
+.resourceCard:hover {
+  text-decoration: none;
+  border-color: rgba(41, 141, 255, 0.5);
+  transform: translateY(-2px);
+}
+
+.resourceCard:focus-visible {
+  outline: 2px solid #5CA9FF;
+  outline-offset: 3px;
+}
+
+.resourceCardTitle {
+  color: #ffffff;
+  font-family: var(--headerFont);
+  font-size: 1.25rem;
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.resourceCardDesc {
+  color: #89919F;
+  font-family: var(--primaryFont);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.resourceCardArrow {
+  position: absolute;
+  top: 1.25rem;
+  right: 1rem;
+  color: #298DFF;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.resourceCard:hover .resourceCardArrow {
+  color: #5CA9FF;
 }

@@ -81,7 +81,7 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
 
         fn add_path_to_request_header<T>(request: &Request<T>) -> Option<HeaderValue> {
             let path = request.uri().path();
-            Some(HeaderValue::from_str(path).unwrap())
+            HeaderValue::from_str(path).ok()
         }
 
         let limiting_layers = ServiceBuilder::new()
@@ -115,7 +115,7 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
             .layer(request_metrics)
             .layer(PropagateHeaderLayer::new(GRPC_ENDPOINT_PATH_HEADER.clone()))
             .layer_fn(move |service| {
-                mysten_network::grpc_timeout::GrpcTimeout::new(service, request_timeout)
+                sui_http::middleware::grpc_timeout::GrpcTimeout::new(service, Some(request_timeout))
             });
 
         let mut builder = sui_http::Builder::new().config(self.config.http_config());

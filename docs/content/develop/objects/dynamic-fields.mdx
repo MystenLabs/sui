@@ -1,7 +1,56 @@
 ---
 title: Dynamic Fields
-description: Dynamic fields and dynamic object fields on Sui are added and removed dynamically, affect gas only when accessed, and store heterogeneous values.
-keywords: [ dynamic fields, dynamic object fields, adding dynamic fields, field names, adding dynamic object fields, accessing dynamic fields, accessing dynamic object fields, deleting an object with dynamic fields ]
+description: >-
+  Dynamic fields and dynamic object fields on Sui are added and removed
+  dynamically, affect gas only when accessed, and store heterogeneous values.
+keywords:
+  - dynamic fields
+  - dynamic object fields
+  - adding dynamic fields
+  - field names
+  - adding dynamic object fields
+  - accessing dynamic fields
+  - accessing dynamic object fields
+  - deleting an object with dynamic fields
+goal:
+  description: >-
+    Reader understands dynamic fields and dynamic object fields on Sui are added
+    and removed dynamically
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Dynamic fields
+    stage: Environment
+  - path_id: walrus-general
+    path_name: Walrus General Data Storage
+    step: Dynamic fields for metadata
+    stage: Ship
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Dynamic fields for versioning
+    stage: Agent Write
+questions:
+  - What is Dynamic Fields in Sui?
+  - How do I add dynamic fields?
+  - How does dynamic fields work on Sui?
+answer: >-
+  There are various ways to use object fields to store primitive data and other
+  objects, such as wrapping, but there are a few limitations to these:.
 ---
 
 There are various ways to use object fields to store primitive data and other objects, such as wrapping, but there are a few limitations to these:
@@ -283,3 +332,22 @@ assert!(&t1 != &t2, 1);
 ```
 
 This is unlikely to be the definition of equality that you want.
+
+## Debugging dynamic field errors
+
+Dynamic field operations are a common source of runtime `MoveAbort` errors. The following table lists all error codes defined in the [`sui::dynamic_field` module](https://docs.sui.io/references/framework/sui_sui/dynamic_field) ([source](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/dynamic_field.move)):
+
+| Error | Abort code | Cause | Fix |
+|---|---|---|---|
+| `EFieldAlreadyExists` | 0 | You called `add` with a key (parent ID + key type + key value) that already exists on the parent object. | Check with `exists` before adding, or use `remove` first if you want to overwrite. |
+| `EFieldDoesNotExist` | 1 | You called `borrow`, `borrow_mut`, or `remove` with a key that does not exist on the parent object. | Check that the field was added with `add` before accessing it. Use `exists` to verify the key is present. When the value type matters, use `exists_with_type` because `exists` only checks the key. |
+| `EFieldTypeMismatch` | 2 | The key exists but the requested `Value` type differs from the type that was stored. | Verify that the type parameters you pass to `borrow`, `borrow_mut`, or `remove` match the types used when the field was added. |
+| `EBCSSerializationFailure` | 3 | BCS serialization of the field name failed when computing the field's hash. | Ensure the key type has the correct `copy + drop + store` abilities and that its BCS encoding is valid. |
+| `ESharedObjectOperationNotSupported` | 4 | You tried to add an object that was previously shared as a dynamic field. | Shared objects cannot be stored as dynamic fields. Use a different ownership pattern for the child object. |
+
+### Common debugging patterns
+
+- **Field name type mismatch:** The most common cause of `EFieldDoesNotExist` is passing the wrong type for the field name. A field's key is the combination of the parent ID, the key's type, and the key's value. A field added with key type `vector<u8>` cannot be accessed with key type `String`, even if the underlying bytes are identical, because the types differ.
+- **Deleted parent with orphaned fields:** If you delete a parent object that still has dynamic fields attached, those fields become permanently inaccessible. The fields are not automatically cleaned up. Remove all dynamic fields before deleting the parent object.
+- **Stale or invalid parent:** If a parent object was deleted, wrapped, or has a version mismatch, the transaction fails during object input validation (before the Move function executes), not with a dynamic field `MoveAbort`. Check the transaction effects for input validation errors rather than abort codes.
+- **`dynamic_field` vs `dynamic_object_field`:** `dynamic_field::borrow` returns `&Value` and the stored object is wrapped (inaccessible by its ID externally). `dynamic_object_field::borrow` also returns `&Value` (where `Value` must be an object), but the child object remains visible and queryable by its ID. Use `dynamic_object_field` when you need the child to be independently addressable. See the [`sui::dynamic_object_field` reference](https://docs.sui.io/references/framework/sui_sui/dynamic_object_field).

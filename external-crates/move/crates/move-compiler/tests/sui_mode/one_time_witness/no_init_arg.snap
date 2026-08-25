@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02003]: invalid 'init' function
+error[ESC02003]: invalid 'init' function
   ┌─ tests/sui_mode/one_time_witness/no_init_arg.move:8:20
   │
 6 │     struct M has drop { dummy: bool }

@@ -18,18 +18,12 @@ export default function (path: AstPath<Node>): treeFn | null {
 }
 
 /**
- * Print `cast_expression` node.
+ * Print `cast_expression` node. Parentheses around a cast belong to the
+ * wrapping `expression_list`, never to this node.
  * Inside:
  * - `expression`
  * - `type`
  */
 function printCastExpression(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-    const parens = path.node.child(0)?.text == '(';
-    const children = path.map(print, 'nonFormattingChildren');
-
-    if (parens) {
-        return ['(', join(' as ', children), ')'];
-    }
-
-    return join(' as ', children);
+    return join(' as ', path.map(print, 'nonFormattingChildren'));
 }

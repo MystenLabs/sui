@@ -1,7 +1,49 @@
 ---
 title: Self-Custodial Wallets
-description: Learn about self-custodial wallets on Sui, how Phantom and Ledger work, and how to integrate any Wallet Standard wallet into your app using Sui dApp Kit.
-keywords: [ wallet, self-custodial, phantom, ledger, hardware wallet, wallet standard, dapp kit, dapp-kit-react, dapp-kit-core ]
+description: >-
+  Learn about self-custodial wallets on Sui,
+  how to integrate any Wallet Standard wallet into your app using Sui dApp Kit.
+keywords:
+  - wallet
+  - self-custodial
+  - ledger
+  - hardware wallet
+  - wallet standard
+  - dapp kit
+  - dapp-kit-react
+  - dapp-kit-core
+goal:
+  description: >-
+    Reader can learn about self-custodial wallets on Sui
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Self-custody wallets
+    stage: Wallets & Funding
+questions:
+  - What is Self-Custodial Wallets in Sui?
+  - How does self-custodial wallets work on Sui?
+  - Why should I use self-custodial wallets?
+answer: >-
+  Learn about self-custodial wallets on Sui, how to integrate any Wallet Standard wallet into your app using Sui dApp Kit.
 ---
 
 A self-custodial wallet stores your private key on a device you control. No third party holds the key, and no third party can authorize transactions on your behalf. If you lose the device and your recovery passphrase, access to your assets is permanently lost. Every self-custodial wallet compatible with Sui implements the [Wallet Standard](/onchain-finance/asset-custody/wallets/wallet-standard), which means [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) and other apps can discover and connect to them automatically, without any wallet-specific code.
@@ -11,20 +53,6 @@ A self-custodial wallet stores your private key on a device you control. No thir
 Because you are the sole custodian, have a recovery and key rotation plan before funding the wallet. Store your seed phrase securely offline (never in plaintext, cloud notes, or screenshots), prefer hardware-wallet signing so the key never touches an internet-connected device, and send a small test transfer to confirm the address before moving large amounts. See [user and operator key management](/develop/security/best-practices#user-and-operator-key-management).
 
 :::
-
-## Phantom
-
-[Phantom](https://phantom.com/) is a self-custodial, multi-chain browser extension wallet available for Chrome, Firefox, Edge, and Brave, as well as a mobile app for iOS and Android. It stores your private key on your device and encrypts it with a password.
-
-On Sui, Phantom supports the following:
-
-- Sending and receiving SUI and Sui-native tokens
-- In-app token swaps
-- NFT management
-- Staking
-- Connecting to Sui apps through the Wallet Standard
-
-To get started, install Phantom from [phantom.com](https://phantom.com) and create or import a Sui account. Phantom detects the Sui network automatically. If you already have a Sui account elsewhere, you can import it using your existing recovery passphrase or private key.
 
 ## Ledger
 
@@ -40,7 +68,7 @@ To use Ledger with Sui, install the Sui app on your Ledger device through [Ledge
 
 ## App integration
 
-The [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) is the official SDK for building Sui apps. Any wallet that implements the Wallet Standard, including Phantom and Ledger, is detected automatically and appears in the connection UI without any wallet-specific configuration.
+The [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) is the official SDK for building Sui apps. Any wallet that implements the Wallet Standard, including Ledger, is detected automatically and appears in the connection UI without any wallet-specific configuration.
 
 Sui dApp Kit 2.0 consists of two packages:
 

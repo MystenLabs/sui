@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call.move:43:18
    │
 11 │     public fun bing(_: bool, _: address, _: u64) {
@@ -17,7 +17,7 @@ error[E04016]: too few arguments
    │                  │      Found 1 argument(s) here
    │                  Invalid call of '0x2::X::bing'. The call expected 3 argument(s) but got 1
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/module_call.move:43:18
    │
  8 │     public fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -29,7 +29,7 @@ error[E04007]: incompatible types
 43 │         let () = X::bing(X::baz(X::bar(X::foo())));
    │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid call of '0x2::X::bing'. Invalid argument for parameter '_'
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call.move:43:26
    │
  8 │     public fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -41,7 +41,7 @@ error[E04016]: too few arguments
    │                          │     Found 1 argument(s) here
    │                          Invalid call of '0x2::X::baz'. The call expected 2 argument(s) but got 1
 
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
    ┌─ tests/move_check/typing/module_call.move:43:26
    │
  5 │     public fun bar(x: u64): (address, u64) {
@@ -50,7 +50,7 @@ error[E04004]: expected a single non-reference type
 43 │         let () = X::bing(X::baz(X::bar(X::foo())));
    │                          ^^^^^^^^^^^^^^^^^^^^^^^^ Invalid type argument
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call.move:44:18
    │
 11 │     public fun bing(_: bool, _: address, _: u64) {
@@ -62,7 +62,7 @@ error[E04016]: too few arguments
    │                  │       Found 1 argument(s) here
    │                  Invalid call of '0x2::X::bing'. The call expected 3 argument(s) but got 1
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/module_call.move:44:18
    │
  8 │     public fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -74,7 +74,7 @@ error[E04007]: incompatible types
 44 │         let () = X::bing (X::baz (X::bar (X::foo())));
    │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid call of '0x2::X::bing'. Invalid argument for parameter '_'
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call.move:44:27
    │
  8 │     public fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -86,7 +86,7 @@ error[E04016]: too few arguments
    │                           │      Found 1 argument(s) here
    │                           Invalid call of '0x2::X::baz'. The call expected 2 argument(s) but got 1
 
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
    ┌─ tests/move_check/typing/module_call.move:44:27
    │
  5 │     public fun bar(x: u64): (address, u64) {
@@ -95,7 +95,7 @@ error[E04004]: expected a single non-reference type
 44 │         let () = X::bing (X::baz (X::bar (X::foo())));
    │                           ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid type argument
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call.move:45:18
    │
 11 │     public fun bing(_: bool, _: address, _: u64) {
@@ -107,7 +107,7 @@ error[E04016]: too few arguments
    │                  │       Found 1 argument(s) here
    │                  Invalid call of '0x2::X::bing'. The call expected 3 argument(s) but got 1
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/module_call.move:45:18
    │
  8 │     public fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -119,7 +119,7 @@ error[E04007]: incompatible types
 45 │         let () = X::bing (X::baz (X::bar(1)));
    │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid call of '0x2::X::bing'. Invalid argument for parameter '_'
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call.move:45:27
    │
  8 │     public fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -131,7 +131,7 @@ error[E04016]: too few arguments
    │                           │      Found 1 argument(s) here
    │                           Invalid call of '0x2::X::baz'. The call expected 2 argument(s) but got 1
 
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
    ┌─ tests/move_check/typing/module_call.move:45:27
    │
  5 │     public fun bar(x: u64): (address, u64) {
@@ -140,7 +140,7 @@ error[E04004]: expected a single non-reference type
 45 │         let () = X::bing (X::baz (X::bar(1)));
    │                           ^^^^^^^^^^^^^^^^^^ Invalid type argument
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call.move:46:18
    │
 11 │     public fun bing(_: bool, _: address, _: u64) {
@@ -152,7 +152,7 @@ error[E04016]: too few arguments
    │                  │       Found 1 argument(s) here
    │                  Invalid call of '0x2::X::bing'. The call expected 3 argument(s) but got 1
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/module_call.move:46:18
    │
  8 │     public fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -164,7 +164,7 @@ error[E04007]: incompatible types
 46 │         let () = X::bing (X::baz (@0x0, 1u64));
    │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid call of '0x2::X::bing'. Invalid argument for parameter '_'
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call.move:51:18
    │
 25 │     fun bing(_: bool, _: address, _: u64) {
@@ -176,7 +176,7 @@ error[E04016]: too few arguments
    │                  │   Found 1 argument(s) here
    │                  Invalid call of '0x2::M::bing'. The call expected 3 argument(s) but got 1
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/module_call.move:51:18
    │
 22 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -188,7 +188,7 @@ error[E04007]: incompatible types
 51 │         let () = bing(baz(bar(foo())));
    │                  ^^^^^^^^^^^^^^^^^^^^^ Invalid call of '0x2::M::bing'. Invalid argument for parameter '_'
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call.move:51:23
    │
 22 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -200,7 +200,7 @@ error[E04016]: too few arguments
    │                       │  Found 1 argument(s) here
    │                       Invalid call of '0x2::M::baz'. The call expected 2 argument(s) but got 1
 
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
    ┌─ tests/move_check/typing/module_call.move:51:23
    │
 19 │     fun bar(x: u64): (address, u64) {
@@ -209,7 +209,7 @@ error[E04004]: expected a single non-reference type
 51 │         let () = bing(baz(bar(foo())));
    │                       ^^^^^^^^^^^^^^^ Invalid type argument
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call.move:52:18
    │
 25 │     fun bing(_: bool, _: address, _: u64) {
@@ -221,7 +221,7 @@ error[E04016]: too few arguments
    │                  │    Found 1 argument(s) here
    │                  Invalid call of '0x2::M::bing'. The call expected 3 argument(s) but got 1
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/module_call.move:52:18
    │
 22 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -233,7 +233,7 @@ error[E04007]: incompatible types
 52 │         let () = bing (baz (bar (foo())));
    │                  ^^^^^^^^^^^^^^^^^^^^^^^^ Invalid call of '0x2::M::bing'. Invalid argument for parameter '_'
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call.move:52:24
    │
 22 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -245,7 +245,7 @@ error[E04016]: too few arguments
    │                        │   Found 1 argument(s) here
    │                        Invalid call of '0x2::M::baz'. The call expected 2 argument(s) but got 1
 
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
    ┌─ tests/move_check/typing/module_call.move:52:24
    │
 19 │     fun bar(x: u64): (address, u64) {
@@ -254,7 +254,7 @@ error[E04004]: expected a single non-reference type
 52 │         let () = bing (baz (bar (foo())));
    │                        ^^^^^^^^^^^^^^^^^ Invalid type argument
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call.move:53:18
    │
 25 │     fun bing(_: bool, _: address, _: u64) {
@@ -266,7 +266,7 @@ error[E04016]: too few arguments
    │                  │    Found 1 argument(s) here
    │                  Invalid call of '0x2::M::bing'. The call expected 3 argument(s) but got 1
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/module_call.move:53:18
    │
 22 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -278,7 +278,7 @@ error[E04007]: incompatible types
 53 │         let () = bing (baz (bar(1)));
    │                  ^^^^^^^^^^^^^^^^^^^ Invalid call of '0x2::M::bing'. Invalid argument for parameter '_'
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call.move:53:24
    │
 22 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -290,7 +290,7 @@ error[E04016]: too few arguments
    │                        │   Found 1 argument(s) here
    │                        Invalid call of '0x2::M::baz'. The call expected 2 argument(s) but got 1
 
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
    ┌─ tests/move_check/typing/module_call.move:53:24
    │
 19 │     fun bar(x: u64): (address, u64) {
@@ -299,7 +299,7 @@ error[E04004]: expected a single non-reference type
 53 │         let () = bing (baz (bar(1)));
    │                        ^^^^^^^^^^^^ Invalid type argument
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call.move:54:18
    │
 25 │     fun bing(_: bool, _: address, _: u64) {
@@ -311,7 +311,7 @@ error[E04016]: too few arguments
    │                  │    Found 1 argument(s) here
    │                  Invalid call of '0x2::M::bing'. The call expected 3 argument(s) but got 1
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/module_call.move:54:18
    │
 22 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {

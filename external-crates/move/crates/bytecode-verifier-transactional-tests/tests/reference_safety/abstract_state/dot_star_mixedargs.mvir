@@ -1,0 +1,118 @@
+// mut results are wired only to the mut args; imm results to every arg
+
+//# publish
+mvir 0xb1::zzds_mixedargs {
+
+public struct Mid has copy, drop, store { y: u64 }
+public struct O has copy, drop, store { x: Self::Mid, z: Self::Mid }
+
+fun f(p: &mut Self::Mid, q: &Self::Mid): &mut u64 * &u64 {
+    let m: &mut u64;
+    let j: &u64;
+label b0:
+    m = &mut move(p).Mid::y;
+    j = &move(q).Mid::y;
+    return move(m), move(j);
+}
+
+fun t(a: &mut Self::O) {
+    let i: &Self::Mid;
+    let mx: &mut Self::Mid;
+    let w: &mut u64;
+    let mz: &mut Self::Mid;
+    let m: &mut u64;
+    let j: &u64;
+label b0:
+    i = &copy(a).O::x;
+    mx = &mut copy(a).O::x;
+    w = &mut move(mx).Mid::y;
+    mz = &mut copy(a).O::z;
+    m, j = Self::f(move(mz), move(i));
+    jump b1;
+label b1:
+    _ = move(w);
+    _ = move(m);
+    _ = move(j);
+    _ = move(a);
+    return;
+}
+
+}
+
+//# view-abstract-state 0xb1::zzds_mixedargs::t
+
+// write through the mut extension while the imm return is live
+//# publish
+mvir 0xb2::zzds_mixedargs_write_w {
+
+public struct Mid has copy, drop, store { y: u64 }
+public struct O has copy, drop, store { x: Self::Mid, z: Self::Mid }
+
+fun f(p: &mut Self::Mid, q: &Self::Mid): &mut u64 * &u64 {
+    let m: &mut u64;
+    let j: &u64;
+label b0:
+    m = &mut move(p).Mid::y;
+    j = &move(q).Mid::y;
+    return move(m), move(j);
+}
+
+fun t(a: &mut Self::O) {
+    let i: &Self::Mid;
+    let mx: &mut Self::Mid;
+    let w: &mut u64;
+    let mz: &mut Self::Mid;
+    let m: &mut u64;
+    let j: &u64;
+label b0:
+    i = &copy(a).O::x;
+    mx = &mut copy(a).O::x;
+    w = &mut move(mx).Mid::y;
+    mz = &mut copy(a).O::z;
+    m, j = Self::f(move(mz), move(i));
+    *move(w) = 1;
+    _ = move(m);
+    _ = move(j);
+    _ = move(a);
+    return;
+}
+
+}
+
+// write through the mut return: disjoint, allowed
+//# publish
+mvir 0xb3::zzds_mixedargs_write_m {
+
+public struct Mid has copy, drop, store { y: u64 }
+public struct O has copy, drop, store { x: Self::Mid, z: Self::Mid }
+
+fun f(p: &mut Self::Mid, q: &Self::Mid): &mut u64 * &u64 {
+    let m: &mut u64;
+    let j: &u64;
+label b0:
+    m = &mut move(p).Mid::y;
+    j = &move(q).Mid::y;
+    return move(m), move(j);
+}
+
+fun t(a: &mut Self::O) {
+    let i: &Self::Mid;
+    let mx: &mut Self::Mid;
+    let w: &mut u64;
+    let mz: &mut Self::Mid;
+    let m: &mut u64;
+    let j: &u64;
+label b0:
+    i = &copy(a).O::x;
+    mx = &mut copy(a).O::x;
+    w = &mut move(mx).Mid::y;
+    mz = &mut copy(a).O::z;
+    m, j = Self::f(move(mz), move(i));
+    *move(m) = 1;
+    *move(w) = 2;
+    _ = move(j);
+    _ = move(a);
+    return;
+}
+
+}

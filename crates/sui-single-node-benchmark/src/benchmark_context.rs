@@ -279,11 +279,7 @@ impl BenchmarkContext {
                     let component = self.benchmark_component;
                     tokio::spawn(async move {
                         validator
-                            .execute_transaction(
-                                tx,
-                                &AssignedVersions::new(vec![], None),
-                                component,
-                            )
+                            .execute_transaction(tx, &AssignedVersions::default(), component)
                             .await
                     })
                 })
@@ -495,11 +491,7 @@ impl BenchmarkContext {
                     let validator = self.validator();
                     tokio::spawn(async move {
                         validator
-                            .execute_transaction_in_memory(
-                                store,
-                                tx,
-                                &AssignedVersions::new(vec![], None),
-                            )
+                            .execute_transaction_in_memory(store, tx, &AssignedVersions::default())
                             .await
                     })
                 })

@@ -181,9 +181,13 @@ jobs:
       - name: cargo test with tidehunter
         run: |
           RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo nextest run --profile ci --cargo-quiet -p sui-core -p typed-store --features typed-store/tidehunter
-      - name: cargo check sui-tool with tidehunter + tideconsole
+      - run: rustup component add clippy
+      # Same as the main `cargo xclippy` run, denying warnings, but with USE_TIDEHUNTER=1 and
+      # scoped to the crates whose build.rs emits cfg(tidehunter) so tidehunter-only code is
+      # linted too. --all-features covers typed-store/tidehunter and sui-tool/tideconsole.
+      - name: cargo clippy with tidehunter
         run: |
-          RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo check --quiet -p sui-tool --features typed-store/tidehunter,sui-tool/tideconsole
+          USE_TIDEHUNTER=1 cargo xclippy -p sui-core -p sui-tool -p sui-benchmark -p typed-store -p consensus-core -- -D warnings
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -351,7 +355,7 @@ jobs:
     needs: [diff, rustfmt, clippy, snapshot-check]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
-    runs-on: [ windows-ghcloud-128 ]
+    runs-on: [ windows-ghcloud ]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -375,7 +379,7 @@ jobs:
     needs: [diff]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
-    runs-on: [ windows-ghcloud-128 ]
+    runs-on: [ windows-ghcloud ]
     env:
       # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
       # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
@@ -431,9 +435,9 @@ jobs:
       - name: cargo simtest
         run: |
           MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast
-      - name: check new tests for flakiness
+      - name: check determinism
         run: |
-          scripts/simtest/stress-new-tests.sh
+          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/check-determinism.sh
 
   simtest-mainnet:
     permissions:
@@ -469,9 +473,6 @@ jobs:
       - name: cargo simtest
         run: |
           MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast
-      - name: check new tests for flakiness
-        run: |
-          scripts/simtest/stress-new-tests.sh
 
   # This job ensures that Move unit tests are run if there are changes
   # to Move code but not Rust code (If there are Rust changes, they
@@ -598,9 +599,9 @@ jobs:
       #   with:
       #     path: ~/.cargo/registry/src/**/librocksdb-sys-*
 
-      # See '.cargo/config' for list of enabled/disappled clippy lints
+      # See '[workspace.lints]' in the root Cargo.toml for the project-wide lint set
       - name: cargo clippy
-        run: cargo xclippy -D warnings
+        run: cargo xclippy -- -D warnings
 
   rustfmt:
     needs: diff

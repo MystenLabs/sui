@@ -14,6 +14,7 @@ mod checked {
     use sui_types::base_types::{ObjectID, ObjectRef};
     use sui_types::error::{SuiResult, UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
+    use sui_types::gas::SuiGasStatusAPI;
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_types::object::ObjectPermission;
     use sui_types::transaction::{

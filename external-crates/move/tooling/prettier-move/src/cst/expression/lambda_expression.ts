@@ -4,9 +4,8 @@
 import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, doc } from 'prettier';
-import { printBreakableBlock, printNonBreakingBlock } from './block';
 import { list } from '../../utilities';
-const { group, join, conditionalGroup } = doc.builders;
+const { group, join } = doc.builders;
 
 /** The type of the node implemented in this file */
 const NODE_TYPE = 'lambda_expression';

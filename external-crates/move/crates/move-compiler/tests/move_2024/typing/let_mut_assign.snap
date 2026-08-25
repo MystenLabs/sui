@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/typing/let_mut_assign.move:7:9
   │
 3 │     public fun t(x: u64, s: S): u64  {
@@ -14,7 +14,7 @@ error[E04024]: invalid usage of immutable variable
 7 │         x = y + 1;
   │         ^ Invalid assignment of immutable variable 'x'
 
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/typing/let_mut_assign.move:8:9
   │
 5 │         let S { f } = s;
@@ -23,7 +23,7 @@ error[E04024]: invalid usage of immutable variable
 8 │         f = f + 1;
   │         ^ Invalid assignment of immutable variable 'f'
 
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/typing/let_mut_assign.move:9:9
   │
 4 │         let y = 0;

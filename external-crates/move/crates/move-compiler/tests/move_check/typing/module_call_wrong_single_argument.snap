@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/module_call_wrong_single_argument.move:24:9
    │
 17 │     public fun foo(_: S) {
@@ -17,7 +17,7 @@ error[E04007]: incompatible types
    │         │   Given: 'u64'
    │         Invalid call of '0x2::M::foo'. Invalid argument for parameter '_'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/module_call_wrong_single_argument.move:25:9
    │
 20 │     public fun bar(_: u64) {
@@ -29,7 +29,7 @@ error[E04007]: incompatible types
    │         │   Given: '0x2::M::S'
    │         Invalid call of '0x2::M::bar'. Invalid argument for parameter '_'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/module_call_wrong_single_argument.move:26:9
    │
 20 │     public fun bar(_: u64) {
@@ -41,7 +41,7 @@ error[E04007]: incompatible types
    │         │   Given: 'address'
    │         Invalid call of '0x2::M::bar'. Invalid argument for parameter '_'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/module_call_wrong_single_argument.move:30:9
    │
  6 │     public fun foo(_: S) {
@@ -53,7 +53,7 @@ error[E04007]: incompatible types
    │         │      Given: '0x2::M::S'
    │         Invalid call of '0x2::X::foo'. Invalid argument for parameter '_'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/module_call_wrong_single_argument.move:31:9
    │
  6 │     public fun foo(_: S) {
@@ -65,7 +65,7 @@ error[E04007]: incompatible types
    │         │      Given: 'u64'
    │         Invalid call of '0x2::X::foo'. Invalid argument for parameter '_'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/module_call_wrong_single_argument.move:32:9
    │
  9 │     public fun bar(_: u64) {
@@ -77,7 +77,7 @@ error[E04007]: incompatible types
    │         │      Given: '0x2::M::S'
    │         Invalid call of '0x2::X::bar'. Invalid argument for parameter '_'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/module_call_wrong_single_argument.move:33:9
    │
  9 │     public fun bar(_: u64) {

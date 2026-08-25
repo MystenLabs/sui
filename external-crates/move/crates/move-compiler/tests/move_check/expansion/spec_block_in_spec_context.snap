@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/expansion/spec_block_in_spec_context.move:3:5
   │  
 3 │ ╭     spec module {
@@ -15,7 +15,7 @@ warning[W00001]: DEPRECATED. will be removed
 7 │ │     }
   │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/expansion/spec_block_in_spec_context.move:10:9
    │
 10 │         spec {};

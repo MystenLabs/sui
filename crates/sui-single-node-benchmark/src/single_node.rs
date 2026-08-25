@@ -217,6 +217,7 @@ impl SingleValidator {
                 &self.epoch_store.epoch(),
                 0,
                 input_objects,
+                std::collections::BTreeMap::new(),
                 gas_data,
                 gas_status,
                 kind,

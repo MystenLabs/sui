@@ -1,10 +1,56 @@
 ---
 title: Accessing Data
 description: Overview of the types of data access mechanisms available in Sui.
-keywords: [ data types, data access, data access interfaces, json rpc, custom indexers, indexers, grpc, graphql rpc, general-purpose indexer ]
+keywords:
+  - data types
+  - data access
+  - data access interfaces
+  - json rpc
+  - custom indexers
+  - indexers
+  - grpc
+  - graphql rpc
+  - general-purpose indexer
+goal:
+  description: >-
+    Reader can choose the right mechanism (GraphQL, gRPC, indexers, archival
+    store) to access Sui transactions, checkpoints, objects, and events
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Accessing Data in Sui?
+  - What topics does Accessing Data cover?
+  - How does accessing data work on Sui?
+answer: >-
+  Sui provides multiple data access mechanisms: GraphQL RPC for flexible
+  queries, gRPC for high-throughput streaming, custom indexing pipelines for
+  application-specific data needs, and the Archival Store for historical data
+  beyond full node retention.
 ---
 
-Access Sui network data, like [transactions](/develop/transactions/txn-overview), [checkpoints](/develop/sui-architecture/checkpoint-verification), [objects](/develop/sui-architecture/object-model), and [events](/develop/accessing-data/using-events), through different interfaces to build applications, analyze network behavior, or audit network activity.
+Data access on Sui is the process of reading onchain state, including [transactions](/develop/transactions/txn-overview), [checkpoints](/develop/sui-architecture/checkpoint-verification), [objects](/develop/sui-architecture/object-model), and [events](/develop/accessing-data/using-events). Sui provides multiple interfaces for accessing this data, each optimized for different use cases.
+
+## Choosing a data access method
+
+| Method | Best for | Latency | Historical depth |
+| --- | --- | --- | --- |
+| [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) | Flexible queries, app backends, explorers | Low | Current state and recent history |
+| [gRPC](/develop/accessing-data/grpc) | High-throughput streaming, real-time pipelines | Lowest | Current state and recent history |
+| [Custom indexing](/develop/accessing-data/custom-indexer/custom-indexers) | Application-specific data models, analytics | Varies | Full history (you control retention) |
+| [Archival Store](/develop/accessing-data/archival-store) | Historical lookups after full node pruning | Higher | Complete history from genesis |
+
+For most applications, start with [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc). If you need real-time streaming or higher throughput, use [gRPC](/develop/accessing-data/grpc). If you need a custom data model or application-specific indexes, build a [custom indexing pipeline](/develop/accessing-data/custom-indexer/custom-indexers). For historical data beyond what full nodes retain, use the [Archival Store](/develop/accessing-data/archival-store).
+
+You can also subscribe to onchain activity through [events](/develop/accessing-data/using-events), which Move modules emit during transaction execution. [Authenticated events](/develop/accessing-data/authenticated-events) provide cryptographic proof of event origin for cross-system verification.
+
+For a list of hosted RPC providers, see [RPC Providers](/develop/accessing-data/rpc-providers).
 
 import DocCardList from '@theme/DocCardList';
 

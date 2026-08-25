@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E07003]: invalid operation, could create a dangling reference
+error[EC07003]: invalid operation, could create a dangling reference
   ┌─ tests/move_check/translated_ir_tests/move/borrow_tests/mutable_borrow_invalid.move:9:9
   │
 6 │         let x = if (cond) &mut root.f else &mut root.g;
@@ -14,7 +14,7 @@ error[E07003]: invalid operation, could create a dangling reference
 9 │         root.f = 1;
   │         ^^^^^^^^^^ Invalid mutation of reference.
 
-error[E07005]: invalid reference transfer
+error[EC07005]: invalid reference transfer
    ┌─ tests/move_check/translated_ir_tests/move/borrow_tests/mutable_borrow_invalid.move:17:9
    │
 14 │         let x = if (cond) &mut root.f else &mut root.g;

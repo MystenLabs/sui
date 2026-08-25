@@ -1,0 +1,50 @@
+// a ref assigned only on the back edge is released at the loop head, dropping its edges
+
+//# publish
+
+mvir 0x2::intersect_drops_extension {
+
+public struct S has copy, drop { f: u64 }
+
+// p borrows local s only on the back edge, so local#s looks unborrowed at the head
+fun t(n: u64): Self::S {
+    let s: Self::S;
+    let p: &mut u64;
+label b0:
+    s = S { f: 0 };
+label header:
+    jump_if (copy(n) == 0) exit;
+label body:
+    n = move(n) - 1;
+    p = &mut (&mut s).S::f;
+    jump header;
+label exit:
+    return move(s);
+}
+
+}
+
+//# publish
+
+mvir 0x3::intersect_drops_extension_use {
+
+public struct S has copy, drop { f: u64 }
+
+// same, but the maybe-unavailable p is read after the loop
+fun t(n: u64): Self::S {
+    let s: Self::S;
+    let p: &mut u64;
+label b0:
+    s = S { f: 0 };
+label header:
+    jump_if (copy(n) == 0) exit;
+label body:
+    n = move(n) - 1;
+    p = &mut (&mut s).S::f;
+    jump header;
+label exit:
+    *move(p) = 7;
+    return move(s);
+}
+
+}

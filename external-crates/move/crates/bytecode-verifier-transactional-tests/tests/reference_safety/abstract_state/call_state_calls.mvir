@@ -1,0 +1,73 @@
+// graph state around calls
+
+//# publish
+mvir 0x2::shapes {
+
+public struct Inner has copy, drop { v: u64 }
+public struct Outer has copy, drop { f: Self::Inner, g: u64 }
+
+fun id_outer(o: &Self::Outer): &Self::Outer {
+label b0:
+    return move(o);
+}
+
+fun split(o: &mut Self::Outer): &mut Self::Inner * &u64 {
+label b0:
+    return (&mut copy(o).Outer::f, &move(o).Outer::g);
+}
+
+fun boom(): &mut u64 {
+label b0:
+    abort 0;
+}
+
+// imm arg with a live mut extension
+fun imm_arg_with_mut_extension(o: &mut Self::Outer) {
+    let x: &mut Self::Inner;
+    let y: &Self::Outer;
+    let r: &Self::Outer;
+label b0:
+    x = &mut copy(o).Outer::f;
+    y = freeze(move(o));
+    r = Self::id_outer(move(y));
+    jump b1;
+label b1:
+    _ = move(x);
+    _ = move(r);
+    return;
+}
+
+// a mut and an imm result from the same call
+fun mixed_results(o: &mut Self::Outer) {
+    let m: &mut Self::Inner;
+    let i: &u64;
+label b0:
+    m, i = Self::split(move(o));
+    jump b1;
+label b1:
+    _ = move(m);
+    _ = move(i);
+    return;
+}
+
+// mut result with no mut source
+fun free_floating_mut(o: &Self::Outer) {
+    let m: &mut u64;
+    let r: &Self::Outer;
+label b0:
+    r = Self::id_outer(move(o));
+    m = Self::boom();
+    jump b1;
+label b1:
+    _ = move(m);
+    _ = move(r);
+    return;
+}
+
+}
+
+//# view-abstract-state 0x2::shapes::imm_arg_with_mut_extension
+
+//# view-abstract-state 0x2::shapes::mixed_results
+
+//# view-abstract-state 0x2::shapes::free_floating_mut

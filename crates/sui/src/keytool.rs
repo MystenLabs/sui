@@ -22,7 +22,7 @@ use fastcrypto_zkp::bn254::utils::{
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use fastcrypto_zkp::bn254::zk_login::{OIDCProvider, ZkLoginInputs, fetch_jwks};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
-use im::hashmap::HashMap as ImHashMap;
+use imbl::hashmap::HashMap as ImHashMap;
 use json_to_table::{Orientation, json_to_table};
 use mysten_common::ZipDebugEqIteratorExt;
 use num_bigint::BigUint;
@@ -770,7 +770,7 @@ impl KeyToolCommand {
                     multisig: vec![],
                 };
 
-                for (pk, w) in pks.into_iter().zip_debug_eq(weights.into_iter()) {
+                for (pk, w) in pks.into_iter().zip_debug_eq(weights) {
                     output.multisig.push(MultiSigOutput {
                         address: Into::<SuiAddress>::into(&pk),
                         public_base64_key: pk.encode_base64(),
@@ -1311,6 +1311,7 @@ impl KeyToolCommand {
                             parsed,
                             vec![],
                             env,
+                            1, // migration mode, try v2 then v1
                             true,
                             true,
                             true,

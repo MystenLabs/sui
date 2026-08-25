@@ -1,7 +1,60 @@
 ---
 title: Querying Data with GraphQL RPC
-description: Practical guide to making queries of the Sui RPC using the GraphQL service, with examples for common tasks.
-keywords: [ rpc, sui rpc, graphql, query transactions, query blocks, query block info, query dynamic field, execute transaction, graphql examples ]
+description: >-
+  Practical guide to making queries of the Sui RPC using the GraphQL service,
+  with examples for common tasks.
+keywords:
+  - rpc
+  - sui rpc
+  - graphql
+  - query transactions
+  - query blocks
+  - query block info
+  - query dynamic field
+  - execute transaction
+  - graphql examples
+goal:
+  description: >-
+    Reader understands practical guide to making queries of the Sui RPC using
+    the GraphQL service, with examples for common tasks
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: GraphQL queries
+    stage: History
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: GraphQL queries
+    stage: Ship
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: GraphQL queries
+    stage: Ship
+questions:
+  - How do I query data with graphql rpc?
+  - What is Querying Data with GraphQL RPC in Sui?
+  - Where can I find querying data with graphql rpc examples?
+answer: >-
+  Practical guide to making queries of the Sui RPC using the GraphQL service,
+  with examples for common tasks.
 ---
 
 <AgentPrompt

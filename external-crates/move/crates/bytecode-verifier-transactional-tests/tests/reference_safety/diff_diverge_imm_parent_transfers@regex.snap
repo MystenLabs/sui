@@ -1,0 +1,44 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 5-34:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000043::imm_parent_mut_field_call'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x43::imm_parent_mut_field_call,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 12)],
+}
+
+task 1, lines 36-59:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000044::write_through_sibling_mut'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x44::write_through_sibling_mut,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 13)],
+}
+
+task 2, lines 61-88:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000045::vector_imm_parent_mut_elem'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x45::vector_imm_parent_mut_elem,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 14)],
+}
+
+task 3, lines 90-117:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000064::dot_star_alias_then_call'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x64::dot_star_alias_then_call,
+    indices: [(FunctionDefinition, 2)],
+    offsets: [(FunctionDefinitionIndex(2), 8)],
+}

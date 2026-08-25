@@ -12,6 +12,7 @@ pub mod checked {
 
     use crate::gas::GasUsageReport;
     use crate::gas_model::gas_predicates::check_for_gas_price_too_high;
+    use crate::gas_model::gas_v2::PerObjectStorage;
     use crate::{
         ObjectID,
         effects::{TransactionEffects, TransactionEffectsAPI},
@@ -54,6 +55,14 @@ pub mod checked {
         fn charge_storage_and_rebate(&mut self) -> Result<(), ExecutionError>;
         fn adjust_computation_on_out_of_gas(&mut self);
         fn gas_usage_report(&self) -> GasUsageReport;
+        fn check_gas_balance(
+            &self,
+            gas_objs: &[&ObjectReadResult],
+            gas_budget: u64,
+            available_address_balance_gas: u64,
+        ) -> UserInputResult;
+        fn check_gas_objects(&self, gas_objs: &[&ObjectReadResult]) -> UserInputResult;
+        fn per_object_storage(&self) -> &Vec<(ObjectID, PerObjectStorage)>;
     }
 
     /// Version aware enum for gas status.
@@ -102,31 +111,6 @@ pub mod checked {
 
         pub fn new_unmetered() -> Self {
             Self::V2(SuiGasStatusV2::new_unmetered())
-        }
-
-        pub fn check_gas_balance(
-            &self,
-            gas_objs: &[&ObjectReadResult],
-            gas_budget: u64,
-            available_address_balance_gas: u64,
-        ) -> UserInputResult {
-            match self {
-                Self::V2(status) => {
-                    status.check_gas_balance(gas_objs, gas_budget, available_address_balance_gas)
-                }
-            }
-        }
-
-        pub fn check_gas_objects(&self, gas_objs: &[&ObjectReadResult]) -> UserInputResult {
-            match self {
-                Self::V2(status) => status.check_gas_objects(gas_objs),
-            }
-        }
-
-        pub fn gas_price(&self) -> u64 {
-            match self {
-                Self::V2(status) => status.gas_price(),
-            }
         }
     }
 

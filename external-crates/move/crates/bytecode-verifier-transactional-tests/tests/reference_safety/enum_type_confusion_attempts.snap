@@ -1,0 +1,64 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 0, lines 4-28:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000901::alias_via_second_unpack'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x901::alias_via_second_unpack,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 18)],
+}
+
+task 1, lines 30-51:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000902::alias_via_copy'. Got VMError: {
+    major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x902::alias_via_copy,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}
+
+task 2, lines 53-79:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000903::alias_via_call_dot_star'. Got VMError: {
+    major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x903::alias_via_call_dot_star,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 11)],
+}
+
+task 3, lines 81-108:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000904::field_from_dot_star_flip_source'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x904::field_from_dot_star_flip_source,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 16)],
+}
+
+task 4, lines 110-135:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000905::alias_created_after_field'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x905::alias_created_after_field,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 18)],
+}
+
+task 5, lines 137-161:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000906::alias_via_vector_element'. Got VMError: {
+    major_status: VEC_BORROW_ELEMENT_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x906::alias_via_vector_element,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 14)],
+}

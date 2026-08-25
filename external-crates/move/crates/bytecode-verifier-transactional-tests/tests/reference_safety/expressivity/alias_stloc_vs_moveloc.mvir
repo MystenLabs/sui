@@ -1,0 +1,33 @@
+// A whole-local alias: it is safe to reassign the local, but not to move it
+
+//# run
+mvir 0x2::stloc_alias_ok {
+
+entry fun t() {
+    let a: u64;
+    let x: &mut u64;
+label b0:
+    a = 0;
+    x = &mut a;
+    a = 1;
+    assert(*move(x) == 1, 42);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::moveloc_alias_invalid {
+
+fun t() {
+    let a: u64;
+    let x: &mut u64;
+label b0:
+    a = 0;
+    x = &mut a;
+    _ = move(a);
+    *move(x) = 1;
+    return;
+}
+
+}

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/naming/generics_shadowing_invalid.move:7:14
   │
 6 │     fun foo<S: drop>(s1: S, _: S): S {
@@ -16,7 +16,7 @@ error[E04007]: incompatible types
   │              Invalid type annotation
   │              Expected: '0x2::M::S'
 
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
   ┌─ tests/move_check/naming/generics_shadowing_invalid.move:8:20
   │
 6 │     fun foo<S: drop>(s1: S, _: S): S {
@@ -25,7 +25,7 @@ error[E03006]: unexpected name in this position
 8 │         let _: S = S {}; // TODO error? should this try to construct the generic ?
   │                    ^ Invalid construction. Expected a struct name
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/naming/generics_shadowing_invalid.move:9:9
    │
  6 │     fun foo<S: drop>(s1: S, _: S): S {
@@ -37,7 +37,7 @@ error[E04007]: incompatible types
 13 │     fun bar(_: S) {}
    │                - Expected: '0x2::M::S'
 
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
    ┌─ tests/move_check/naming/generics_shadowing_invalid.move:10:9
    │
  6 │     fun foo<S: drop>(s1: S, _: S): S {

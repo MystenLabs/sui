@@ -1,0 +1,144 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, line 69:
+//# view-abstract-state 0x2::shapes::imm_arg_with_mut_extension
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "o": {
+        "Reference": "r#o"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#o": true
+      },
+      "outgoing": {}
+    }
+  },
+  "b1": {
+    "local_root": "ROOT",
+    "locals": {
+      "r": {
+        "Reference": "r#r"
+      },
+      "x": {
+        "Reference": "r#x"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#r": false,
+        "r#x": true
+      },
+      "outgoing": {
+        "r#r": {
+          "r#x": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "Outer.f"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#x": {
+          "r#r": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 2, line 71:
+//# view-abstract-state 0x2::shapes::mixed_results
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "o": {
+        "Reference": "r#o"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#o": true
+      },
+      "outgoing": {}
+    }
+  },
+  "b1": {
+    "local_root": "ROOT",
+    "locals": {
+      "i": {
+        "Reference": "r#i"
+      },
+      "m": {
+        "Reference": "r#m"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#i": false,
+        "r#m": true
+      },
+      "outgoing": {}
+    }
+  }
+}
+
+task 3, line 73:
+//# view-abstract-state 0x2::shapes::free_floating_mut
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "o": {
+        "Reference": "r#o"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#o": false
+      },
+      "outgoing": {}
+    }
+  },
+  "b1": {
+    "local_root": "ROOT",
+    "locals": {
+      "m": {
+        "Reference": "r#m"
+      },
+      "r": {
+        "Reference": "r#r"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#m": true,
+        "r#r": false
+      },
+      "outgoing": {}
+    }
+  }
+}

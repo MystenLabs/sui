@@ -31,6 +31,7 @@ use axum::routing::post;
 use axum_extra::TypedHeader;
 use config::LoggingConfig;
 use config::RpcConfig;
+use extensions::query_limits::QueryDepth;
 use extensions::query_limits::QueryLimitsChecker;
 use extensions::query_limits::rich;
 use extensions::query_limits::show_usage::ShowUsage;
@@ -55,6 +56,7 @@ use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use task::chain_identifier;
 use task::watermark::WatermarkTask;
 use task::watermark::WatermarksLock;
+use throttle::Throttle;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tower_http::catch_panic;
@@ -82,6 +84,7 @@ const HEALTH_PATH: &str = "/graphql/health";
 mod api;
 pub use crate::api::scalars::cursor::JsonCursor;
 pub use crate::api::types::checkpoint::CCheckpoint;
+pub use crate::api::types::checkpoint::CheckpointToken;
 pub use crate::api::types::event::CEvent;
 pub use crate::api::types::event::EventCursor;
 pub use crate::api::types::transaction::CTransaction;
@@ -96,6 +99,7 @@ mod middleware;
 mod pagination;
 mod scope;
 mod task;
+mod throttle;
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct RpcArgs {
@@ -289,13 +293,16 @@ struct IdeEnabled(bool);
 #[derive(Clone, Copy)]
 struct SubscriptionsEnabled(bool);
 
+/// Per-subscriber delivery rate in output nodes per second, surfaced to the subscription handler so
+/// it can pace each payload by its cost. `0` disables pacing.
+#[derive(Clone, Copy)]
+struct SubscriptionThrottleRate(u32);
+
 /// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
 /// command-line).
 ///
 /// Access to most reads is controlled by the `database_url` -- if it is `None`, those reads will
-/// not work. KV queries can optionally be served by a Bigtable instance or Ledger gRPC service
-/// via `kv_args`. If a Bigtable instance is configured, the `GOOGLE_APPLICATION_CREDENTIALS`
-/// environment variable must point to the credentials JSON file.
+/// not work. KV point-lookups require a Ledger gRPC service, configured via `kv_args`.
 ///
 /// `version` is the version string reported in response headers by the service as part of every
 /// request.
@@ -316,7 +323,9 @@ pub async fn start_rpc(
     pg_pipelines: Vec<String>,
     registry: &Registry,
 ) -> anyhow::Result<Service> {
-    let rpc = RpcService::new(args, version, schema(), registry);
+    let schema = schema()
+        .subscription_resolution_concurrency(config.subscription.max_concurrent_resolutions);
+    let rpc = RpcService::new(args, version, schema, registry);
     let metrics = rpc.metrics();
 
     // Create gRPC full node client wrapper. If left unconfigured, the client will not be stored in
@@ -328,12 +337,13 @@ pub async fn start_rpc(
     let consistent_reader =
         ConsistentReader::new(Some("graphql_consistent"), consistent_reader_args, registry).await?;
 
-    let bigtable_reader = kv_args
-        .bigtable_reader("indexer-alt-graphql".to_owned(), registry)
-        .await?;
-
     let ledger_grpc_reader = kv_args
-        .ledger_grpc_reader(Some("graphql_ledger_grpc"), registry)
+        .ledger_grpc_reader(
+            Some("graphql_ledger_grpc"),
+            registry,
+            Some(config.limits.max_batch_get_transactions as usize),
+            Some(config.limits.max_batch_get_objects as usize),
+        )
         .await?;
 
     let alpha_ledger_grpc_reader = kv_args
@@ -345,10 +355,10 @@ pub async fn start_rpc(
 
     let pg_loader = Arc::new(pg_reader.as_data_loader());
 
-    let kv_loader = KvLoader::from_kv_sources(
-        bigtable_reader.clone(),
-        ledger_grpc_reader.clone(),
-        pg_loader.clone(),
+    let kv_loader = KvLoader::new(
+        ledger_grpc_reader
+            .clone()
+            .context("--ledger-grpc-url must be configured")?,
     );
 
     let package_store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
@@ -369,7 +379,6 @@ pub async fn start_rpc(
         config.watermark,
         pg_pipelines,
         pg_reader.clone(),
-        bigtable_reader,
         ledger_grpc_reader.clone(),
         consistent_reader.clone(),
         metrics.clone(),
@@ -381,6 +390,10 @@ pub async fn start_rpc(
                 .clone()
                 .context("Ledger gRPC reader is required when streaming is enabled")?;
 
+            alpha_ledger_grpc_reader
+                .as_ref()
+                .context("Alpha ledger gRPC reader is required when streaming is enabled")?;
+
             let streaming_packages = Arc::new(task::streaming::StreamingPackageStore::new(
                 package_store.clone(),
             ));
@@ -391,13 +404,13 @@ pub async fn start_rpc(
             let (package_eviction_tx, package_eviction_rx) = tokio::sync::mpsc::unbounded_channel();
             let readiness =
                 task::streaming::SubscriptionReadiness::new(watermark_task.watermarks_rx());
-            let stream_task = task::streaming::CheckpointStreamTask::new(
+            let (stream_task, broadcaster) = task::streaming::CheckpointStreamTask::new(
                 uri,
                 &config.subscription,
                 streaming_packages.clone(),
                 package_eviction_tx,
                 readiness.clone(),
-                ledger_grpc,
+                ledger_grpc.clone(),
                 watermark_task.watermarks_rx(),
             );
             let eviction_task = task::streaming::PackageEvictionTask::new(
@@ -406,7 +419,13 @@ pub async fn start_rpc(
                 watermark_task.watermarks(),
                 Duration::from_millis(config.subscription.package_eviction_interval_ms),
             );
-            Some((stream_task, eviction_task, streaming_packages, readiness))
+            Some((
+                stream_task,
+                broadcaster,
+                eviction_task,
+                streaming_packages,
+                readiness,
+            ))
         }
         None => None,
     };
@@ -443,8 +462,22 @@ pub async fn start_rpc(
         rpc = rpc.data(fullnode_client);
     }
 
+    if let Some(ledger_grpc_reader) = ledger_grpc_reader.clone() {
+        rpc = rpc.data(ledger_grpc_reader);
+    }
+
     let subscriptions_enabled = streaming_setup.is_some();
     rpc = rpc.layer(SubscriptionsEnabled(subscriptions_enabled));
+    rpc = rpc.layer(SubscriptionThrottleRate(
+        config
+            .subscription
+            .per_subscriber_max_output_nodes_per_second,
+    ));
+
+    // The transaction subscription backfill waits on pipeline watermarks to gate delivery, so it
+    // needs a live view of them. Captured before the watermark task is consumed by `run()`.
+    #[cfg(feature = "staging")]
+    let subscription_watermarks_rx = watermark_task.watermarks_rx();
 
     let s_system_package_task = system_package_task.run();
     let s_watermark = watermark_task.run();
@@ -452,21 +485,34 @@ pub async fn start_rpc(
     // Spawn the streaming tasks and wait for subscriptions to be ready before
     // binding the listener, so the schema is only advertised once `kv_packages`
     // has caught up to the first streamed checkpoint.
-    let streaming_handles = if let Some((
-        stream_task,
-        eviction_task,
-        streaming_packages,
-        readiness,
-    )) = streaming_setup
-    {
-        rpc = rpc.data(stream_task.broadcaster()).data(streaming_packages);
-        let s_stream = stream_task.run();
-        let s_eviction = eviction_task.run();
-        readiness.wait_for_ready().await?;
-        Some((s_stream, s_eviction))
-    } else {
-        None
-    };
+    let streaming_handles =
+        if let Some((stream_task, _broadcaster, eviction_task, streaming_packages, readiness)) =
+            streaming_setup
+        {
+            rpc = rpc.data(streaming_packages).data(config.subscription);
+            let s_stream = stream_task.run();
+            let s_eviction = eviction_task.run();
+            readiness.wait_for_ready().await?;
+            // The broadcast handle is only consumed by the (staging-gated) subscription resolvers.
+            #[cfg(feature = "staging")]
+            {
+                // `first_live_checkpoint` is the first checkpoint the live upstream stream
+                // broadcast, recorded as readiness fires.
+                let first_live_checkpoint = readiness
+                    .first_live_checkpoint()
+                    .expect("first_live_checkpoint is set before wait_for_ready returns Ok");
+                let subscription_broadcast = Arc::new(task::streaming::SubscriptionBroadcast::new(
+                    _broadcaster,
+                    first_live_checkpoint,
+                ));
+                rpc = rpc
+                    .data(subscription_broadcast)
+                    .data(subscription_watermarks_rx);
+            }
+            Some((s_stream, s_eviction))
+        } else {
+            None
+        };
 
     let s_rpc = rpc.run().await?;
 
@@ -529,6 +575,7 @@ async fn graphql_subscriptions(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Extension(schema): Extension<Schema<Query, Mutation, Subscription>>,
     Extension(SubscriptionsEnabled(subscriptions_enabled)): Extension<SubscriptionsEnabled>,
+    Extension(SubscriptionThrottleRate(nodes_per_second)): Extension<SubscriptionThrottleRate>,
     Extension(watermark): Extension<WatermarksLock>,
     request: GraphQLRequest,
 ) -> axum::response::Response {
@@ -541,20 +588,28 @@ async fn graphql_subscriptions(
     }
 
     let watermarks = watermark.read().await.clone();
+    // Query depth is computed once by the query-limits extension during validation and stashed here,
+    // so the throttle can add its depth surcharge to each payload's cost.
+    let query_depth = QueryDepth::default();
+    let throttle = Throttle::new(nodes_per_second);
     let req = request
         .into_inner()
         .data(Session::new(addr))
         .data(watermarks)
-        .data(rich::Meter::default());
+        .data(rich::Meter::default())
+        .data(query_depth.clone());
 
-    let stream = schema.execute_stream(req).map(|response| {
-        let payload = serde_json::to_string(&response).unwrap_or_else(|_| "null".into());
-        Ok::<_, std::convert::Infallible>(
-            axum::response::sse::Event::default()
-                .event("next")
-                .data(payload),
-        )
-    });
+    // Pace delivery per subscriber, then serialize each payload into an SSE event.
+    let stream = throttle
+        .wrap(schema.execute_stream(req), query_depth)
+        .map(|response| {
+            let payload = serde_json::to_string(&response).unwrap_or_else(|_| "null".into());
+            Ok::<_, std::convert::Infallible>(
+                axum::response::sse::Event::default()
+                    .event("next")
+                    .data(payload),
+            )
+        });
 
     axum::response::sse::Sse::new(stream)
         .keep_alive(

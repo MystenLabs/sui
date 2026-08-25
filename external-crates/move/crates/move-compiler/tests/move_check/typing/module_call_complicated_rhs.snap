@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04017]: too many arguments
+error[EC04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:11:9
    │
  2 │     fun foo(): u64 { 0 }
@@ -17,7 +17,7 @@ error[E04017]: too many arguments
    │         │   Found 1 argument(s) here
    │         Invalid call of '0x8675309::M::foo'. The call expected 0 argument(s) but got 1
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:13:9
    │
  6 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -29,7 +29,7 @@ error[E04016]: too few arguments
    │         │   Found 1 argument(s) here
    │         Invalid call of '0x8675309::M::baz'. The call expected 2 argument(s) but got 1
 
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:13:9
    │
 13 │         baz (if (cond) (false, @0x0) else (true, @0x1));
@@ -38,7 +38,7 @@ error[E04004]: expected a single non-reference type
    │         │                                 Expected a single non-reference type, but found: '(bool, address)'
    │         Invalid type argument
 
-error[E04017]: too many arguments
+error[EC04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:17:9
    │
  2 │     fun foo(): u64 { 0 }
@@ -50,7 +50,7 @@ error[E04017]: too many arguments
    │         │  Found 1 argument(s) here
    │         Invalid call of '0x8675309::M::foo'. The call expected 0 argument(s) but got 1
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:19:9
    │
  6 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -62,7 +62,7 @@ error[E04016]: too few arguments
    │         │  Found 1 argument(s) here
    │         Invalid call of '0x8675309::M::baz'. The call expected 2 argument(s) but got 1
 
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:19:9
    │
 19 │         baz(if (cond) (false, @0x0) else (true, @0x1));
@@ -71,7 +71,7 @@ error[E04004]: expected a single non-reference type
    │         │                                Expected a single non-reference type, but found: '(bool, address)'
    │         Invalid type argument
 
-error[E04017]: too many arguments
+error[EC04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:23:9
    │
  2 │     fun foo(): u64 { 0 }
@@ -83,7 +83,7 @@ error[E04017]: too many arguments
    │         │  Found 1 argument(s) here
    │         Invalid call of '0x8675309::M::foo'. The call expected 0 argument(s) but got 1
 
-error[E04017]: too many arguments
+error[EC04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:24:9
    │
  2 │     fun foo(): u64 { 0 }
@@ -95,7 +95,7 @@ error[E04017]: too many arguments
    │         │  Found 1 argument(s) here
    │         Invalid call of '0x8675309::M::foo'. The call expected 0 argument(s) but got 1
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:31:9
    │
  6 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -107,7 +107,7 @@ error[E04016]: too few arguments
    │         │  Found 1 argument(s) here
    │         Invalid call of '0x8675309::M::baz'. The call expected 2 argument(s) but got 1
 
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:31:9
    │
 31 │         baz({ (a, x) });
@@ -116,7 +116,7 @@ error[E04004]: expected a single non-reference type
    │         │     Expected a single non-reference type, but found: '(address, u64)'
    │         Invalid type argument
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:32:9
    │
  6 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -128,7 +128,7 @@ error[E04016]: too few arguments
    │         │  Found 1 argument(s) here
    │         Invalid call of '0x8675309::M::baz'. The call expected 2 argument(s) but got 1
 
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:32:9
    │
 32 │         baz({ let a = false; (a, x) });
@@ -137,7 +137,7 @@ error[E04004]: expected a single non-reference type
    │         │                    Expected a single non-reference type, but found: '(bool, u64)'
    │         Invalid type argument
 
-error[E04017]: too many arguments
+error[EC04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:36:9
    │
  2 │     fun foo(): u64 { 0 }
@@ -149,7 +149,7 @@ error[E04017]: too many arguments
    │         │  Found 1 argument(s) here
    │         Invalid call of '0x8675309::M::foo'. The call expected 0 argument(s) but got 1
 
-error[E04017]: too many arguments
+error[EC04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:37:9
    │
  2 │     fun foo(): u64 { 0 }
@@ -161,7 +161,7 @@ error[E04017]: too many arguments
    │         │  Found 1 argument(s) here
    │         Invalid call of '0x8675309::M::foo'. The call expected 0 argument(s) but got 1
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:44:9
    │
  6 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -173,7 +173,7 @@ error[E04016]: too few arguments
    │         │  Found 1 argument(s) here
    │         Invalid call of '0x8675309::M::baz'. The call expected 2 argument(s) but got 1
 
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:44:9
    │
 44 │         baz({ (a, x) });
@@ -182,7 +182,7 @@ error[E04004]: expected a single non-reference type
    │         │     Expected a single non-reference type, but found: '(address, u64)'
    │         Invalid type argument
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:45:9
    │
  6 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -194,7 +194,7 @@ error[E04016]: too few arguments
    │         │  Found 1 argument(s) here
    │         Invalid call of '0x8675309::M::baz'. The call expected 2 argument(s) but got 1
 
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
    ┌─ tests/move_check/typing/module_call_complicated_rhs.move:45:9
    │
 45 │         baz({ let a = false; (a, x) });

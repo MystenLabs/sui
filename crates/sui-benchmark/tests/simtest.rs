@@ -11,7 +11,7 @@ mod test {
     use std::num::NonZeroUsize;
     use std::path::PathBuf;
     use std::str::FromStr;
-    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
     use sui_benchmark::BenchmarkProxyMetrics;
@@ -27,7 +27,7 @@ mod test {
     };
     use sui_benchmark::{
         FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
-        drivers::{Interval, bench_driver::BenchDriver, driver::Driver},
+        drivers::{Interval, SubmissionAmplification, bench_driver::BenchDriver, driver::Driver},
         util::get_ed25519_keypair_from_keystore,
     };
     use sui_config::ExecutionCacheConfig;
@@ -276,17 +276,15 @@ mod test {
     /// rpc fullnode which are needed to run the benchmark.
     fn get_keep_alive_nodes(cluster: &TestCluster) -> HashSet<sui_simulator::task::NodeId> {
         let mut keep_alive_nodes = HashSet::new();
-        // The first fullnode in the swarm ins the rpc fullnode.
         keep_alive_nodes.insert(
             cluster
-                .swarm
-                .fullnodes()
-                .next()
-                .unwrap()
-                .get_node_handle()
-                .unwrap()
+                .fullnode_handle
+                .sui_node
                 .with(|n| n.get_sim_node_id()),
         );
+        // The observer fullnode is deliberately NOT kept alive: the cluster holds no
+        // handle to it, so the simulator can kill and restart it like any validator,
+        // and the final catch-up assertion covers its crash recovery.
         keep_alive_nodes.insert(sui_simulator::current_simnode_id());
         keep_alive_nodes
     }
@@ -361,7 +359,7 @@ mod test {
         }
         state
             .database_for_testing()
-            .prune_objects_and_compact_for_testing(state.get_checkpoint_store(), None)
+            .prune_objects_and_compact_for_testing(state.get_checkpoint_store())
             .await;
     }
 
@@ -569,7 +567,7 @@ mod test {
                     stored_observations_limit: rng.gen_range(1..=20),
                     stake_weighted_median_threshold: 0,
                     default_none_duration_for_new_keys: true,
-                    observations_chunk_size: None,
+                    observations_chunk_size: Some(18),
                 },
             );
             max_deferral_rounds = if rng.gen_bool(0.5) {
@@ -588,6 +586,12 @@ mod test {
         let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
             config.set_per_object_congestion_control_mode_for_testing(mode);
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
+            // With large max_deferral_rounds and low congestion budgets, transactions can be
+            // legitimately re-deferred for longer than the epoch close deadline, which would
+            // abandon them and fire debug_fatal. Disable the deadline so epoch close blocks
+            // until all deferrals resolve, which is the liveness property this test verifies.
+            // The deadline failsafe has its own dedicated tests.
+            config.disable_epoch_close_deadline_ms_for_testing();
             config
         });
 
@@ -737,8 +741,6 @@ mod test {
     // simtest has low timeout tolerance and it is not designed to test performance.
     #[sim_test(config = "test_config_low_latency()")]
     async fn test_simulated_load_large_consensus_commit_prologue_size() {
-        let test_cluster = build_test_cluster(4, 10_000, 1).await;
-
         let mut additional_cancelled_txns = Vec::new();
         let num_txns = thread_rng().gen_range(500..2000);
         info!("Adding additional {num_txns} cancelled txns in consensus commit prologue.");
@@ -758,9 +760,19 @@ mod test {
             additional_cancelled_txns.push((TransactionDigest::random(), assigned_object_versions));
         }
 
+        // Register the fail point before the cluster starts processing any consensus commits.
+        // `register_fail_point_arg` mutates process-global state with no synchronization to
+        // consensus rounds; registering it after `build_test_cluster` had already let validators
+        // start committing meant different validators could observe it becoming active on
+        // different rounds (whichever round each validator happened to be processing at the
+        // moment the registration landed), causing them to build different (but individually
+        // self-consistent) ConsensusCommitPrologue transactions for the same round - a real
+        // checkpoint fork.
         register_fail_point_arg("additional_cancelled_txns_for_tests", move || {
             Some(additional_cancelled_txns.clone())
         });
+
+        let test_cluster = build_test_cluster(4, 10_000, 1).await;
 
         test_simulated_load(test_cluster.clone(), 30).await;
     }
@@ -1010,6 +1022,73 @@ mod test {
         }
     }
 
+    fn fork_test_node_to_authority_map(
+        test_cluster: &TestCluster,
+    ) -> std::collections::HashMap<sui_simulator::task::NodeId, AuthorityName> {
+        test_cluster
+            .swarm
+            .validator_nodes()
+            .filter_map(|validator| {
+                validator.get_node_handle().map(|handle| {
+                    let node_id = handle.with(|node| node.get_sim_node_id());
+                    (node_id, validator.name())
+                })
+            })
+            .collect()
+    }
+
+    // Intercept fork fatal!s for forked validators, shutting the node down (so it can restart into
+    // recovery) instead of aborting the sim.
+    fn register_fork_kill_failpoints(
+        forked_validators: Arc<Mutex<HashSet<AuthorityName>>>,
+        checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>>,
+        resolve_authority: impl Fn(sui_simulator::task::NodeId) -> Option<AuthorityName>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    ) {
+        register_fail_point_arg("kill_checkpoint_fork_node", {
+            let forked_validators = forked_validators.clone();
+            let checkpoint_overrides = checkpoint_overrides.clone();
+            let resolve_authority = resolve_authority.clone();
+            move || {
+                let current = resolve_authority(sui_simulator::current_simnode_id())?;
+                if forked_validators.lock().unwrap().contains(&current) {
+                    Some(checkpoint_overrides.clone())
+                } else {
+                    None
+                }
+            }
+        });
+        register_fail_point_if("kill_transaction_fork_node", {
+            let forked_validators = forked_validators.clone();
+            let resolve_authority = resolve_authority.clone();
+            move || {
+                resolve_authority(sui_simulator::current_simnode_id())
+                    .is_some_and(|current| forked_validators.lock().unwrap().contains(&current))
+            }
+        });
+        // Split-brain bookkeeping: record the canonical (non-forked) digest into checkpoint_overrides.
+        register_fail_point_arg("kill_split_brain_node", {
+            let checkpoint_overrides = checkpoint_overrides.clone();
+            let forked_validators = forked_validators.clone();
+            move || Some((checkpoint_overrides.clone(), forked_validators.clone()))
+        });
+        // check_for_split_brain's debug_fatal! logs-and-continues in release; make the sim match that
+        // (instead of panicking) so validators ride through split brain.
+        register_debug_fatal_handler!(
+            "Split brain detected in checkpoint signature aggregation",
+            || {}
+        );
+    }
+
+    fn clear_fork_kill_failpoints() {
+        clear_fail_point("kill_checkpoint_fork_node");
+        clear_fail_point("kill_transaction_fork_node");
+        clear_fail_point("kill_split_brain_node");
+    }
+
     async fn build_test_cluster(
         default_num_validators: usize,
         default_epoch_duration_ms: u64,
@@ -1044,6 +1123,11 @@ mod test {
             ))
             .disable_fullnode_pruning()
             .with_synthetic_execution_time_injection();
+        // The standard setup includes an observer fullnode subscribed to the first
+        // validator, so that every scenario also exercises consensus block streaming.
+        if get_var("SIM_STRESS_TEST_OBSERVER", 1u8) != 0 {
+            builder = builder.with_observer_fullnode();
+        }
         if std::env::var("CHECKPOINTS_PER_EPOCH").is_ok() {
             eprintln!("CHECKPOINTS_PER_EPOCH env var is deprecated, use EPOCH_DURATION_MS");
         }
@@ -1129,6 +1213,74 @@ mod test {
                 ..Default::default()
             }
         }
+    }
+
+    /// Waits until the observer fullnode (if the cluster has one) has finalized at least
+    /// the highest checkpoint the rpc fullnode has executed. The rpc fullnode catches up
+    /// via checkpoint sync, while the observer finalizes checkpoints locally from streamed
+    /// consensus blocks, so reaching the same sequence number proves block streaming kept
+    /// the observer up to date with the rest of the network.
+    async fn wait_for_observer_catch_up(test_cluster: &TestCluster, catch_up_timeout: Duration) {
+        let Some(observer_node) = test_cluster.observer_node() else {
+            return;
+        };
+
+        let target_checkpoint = test_cluster.fullnode_handle.sui_node.with(|node| {
+            node.state()
+                .get_checkpoint_store()
+                .get_highest_executed_checkpoint_seq_number()
+                .expect("checkpoint store read failed")
+                .expect("fullnode should have executed checkpoints")
+        });
+        assert!(
+            target_checkpoint > 0,
+            "network should have produced checkpoints for the catch-up check to be meaningful"
+        );
+
+        info!(
+            "Waiting for Observer node to catch up to checkpoint {} via block streaming",
+            target_checkpoint
+        );
+
+        // Re-acquire the observer's node handle on every read and drop it right away:
+        // holding a handle would keep a crashed instance's stores open and prevent the
+        // simulator from restarting the node. The node may also be down mid-crash, in
+        // which case the read yields None until the node is back up.
+        let read_observer_checkpoint = || {
+            observer_node.get_node_handle().and_then(|handle| {
+                handle.with(|node| {
+                    node.state()
+                        .get_checkpoint_store()
+                        .get_highest_executed_checkpoint_seq_number()
+                        .expect("checkpoint store read failed")
+                })
+            })
+        };
+        let observer_checkpoint = tokio::time::timeout(catch_up_timeout, async {
+            loop {
+                if let Some(seq) = read_observer_checkpoint()
+                    && seq >= target_checkpoint
+                {
+                    return seq;
+                }
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Observer node failed to catch up to checkpoint {} via block streaming within \
+                 {:?}; highest finalized checkpoint was {:?}",
+                target_checkpoint,
+                catch_up_timeout,
+                read_observer_checkpoint(),
+            )
+        });
+
+        info!(
+            "Observer node caught up to checkpoint {} (target {}) via block streaming",
+            observer_checkpoint, target_checkpoint
+        );
     }
 
     async fn test_simulated_load(test_cluster: Arc<TestCluster>, test_duration_secs: u64) {
@@ -1281,11 +1433,20 @@ mod test {
         )
         .await;
 
+        // Duplicate/amplified validator submissions are only supported by the
+        // LocalValidatorAggregatorProxy, which is used when remote_env is false.
+        let submission_amplification_by_group = if config.remote_env {
+            BTreeMap::new()
+        } else {
+            BTreeMap::from([(0, SubmissionAmplification::default_enabled())])
+        };
+
         let workloads = WorkloadConfiguration::build(
             workloads_builders,
             bank,
             system_state_observer.clone(),
             gas_request_chunk_size,
+            submission_amplification_by_group,
         )
         .await
         .unwrap();
@@ -1328,6 +1489,7 @@ mod test {
         });
 
         if enable_surfer {
+            let surfer_cluster = test_cluster.clone();
             let surfer_task = tokio::spawn(async move {
                 // now do a sui-surfer test
                 let mut test_packages_dir = benchmark_move_base_dir();
@@ -1346,7 +1508,7 @@ mod test {
                     surf_strategy,
                     test_duration,
                     test_package_paths,
-                    test_cluster,
+                    surfer_cluster,
                     1, // skip first account for use by bench_task
                 )
                 .await;
@@ -1360,202 +1522,471 @@ mod test {
             info!("Surfer disabled, running only benchmark task");
             bench_task.await.unwrap();
         }
+
+        // With load stopped, the observer (when present) must be able to reach the
+        // network's latest checkpoint via block streaming, in any scenario.
+        wait_for_observer_catch_up(&test_cluster, Duration::from_secs(120)).await;
     }
 
+    // A checkpoint fork (vs the transaction fork below): one validator participates in consensus
+    // live with fork injection on all execution paths, so its builder constructs a divergent
+    // local checkpoint while the other three keep a quorum and certify the canonical one. After
+    // the injection is cleared it restarts under RecoverOncePerVersion as a corrected binary,
+    // clears its fork state, and rejoins.
     #[sim_test(config = "test_config()")]
-    async fn test_fork_recovery_transaction_effects_simulation() {
+    async fn test_auto_fork_recovery_checkpoint_fork() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = build_test_cluster(4, 10_000, 4).await;
 
-        let checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>> =
-            Arc::new(Mutex::new(BTreeMap::new()));
         let effects_overrides: Arc<Mutex<BTreeMap<String, String>>> =
             Arc::new(Mutex::new(BTreeMap::new()));
-
+        let checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>> =
+            Arc::new(Mutex::new(BTreeMap::new()));
         let forked_validators: Arc<Mutex<HashSet<AuthorityName>>> =
             Arc::new(Mutex::new(HashSet::new()));
 
-        let transaction_counter: Arc<AtomicU64> = Arc::new(AtomicU64::new(0));
+        let node_to_authority_map = fork_test_node_to_authority_map(&test_cluster);
 
-        let node_to_authority_map: std::collections::HashMap<
-            sui_simulator::task::NodeId,
-            AuthorityName,
-        > = test_cluster
-            .swarm
-            .validator_nodes()
-            .filter_map(|validator| {
-                validator.get_node_handle().map(|handle| {
-                    let node_id = handle.with(|node| node.get_sim_node_id());
-                    (node_id, validator.name())
-                })
-            })
-            .collect();
+        // Fork exactly one validator so the other three keep a quorum.
+        let target = test_cluster.swarm.validator_nodes().next().unwrap().name();
 
-        info!("Fork recovery test: Running transactions to trigger fork scenario");
-
-        let test_cluster_for_handler = test_cluster.clone();
-
-        let mut config = SimulatedLoadConfig::default();
-        // composite workload is very strict about error checking and fails during
-        // this test.
-        config.composite_weight = 0;
+        let mut load_config = SimulatedLoadConfig::default();
+        load_config.composite_weight = 0;
 
         test_simulated_load_with_test_config(
             test_cluster.clone(),
-            30,
-            config,
-            None, // target_qps
-            None, // num_workers
+            6,
+            load_config,
+            None,
+            None,
             Some({
                 let forked_validators = forked_validators.clone();
                 let checkpoint_overrides = checkpoint_overrides.clone();
                 let effects_overrides = effects_overrides.clone();
                 let node_to_authority_map = node_to_authority_map.clone();
-                let _test_cluster_for_handler = test_cluster_for_handler.clone();
                 move |_cluster: Arc<TestCluster>| async move {
-                    // Simulate fork during execution to generate divergent effects
+                    // Only the target validator forks, so the fork stays a minority.
                     register_fail_point_arg("simulate_fork_during_execution", {
                         let forked_validators = forked_validators.clone();
                         let effects_overrides = effects_overrides.clone();
-                        let _transaction_counter = transaction_counter.clone();
-                        move || {
-                            Some((
-                                forked_validators.clone(),
-                                /* full_halt: */ true,
-                                effects_overrides.clone(),
-                                0.1f32,
-                            ))
-                        }
-                    });
-
-                    // Intercept validator panic when overwriting a previously-computed digest & shutdown instead
-                    register_fail_point_arg("kill_checkpoint_fork_node", {
-                        let forked_validators: Arc<
-                            Mutex<HashSet<sui_types::crypto::AuthorityPublicKeyBytes>>,
-                        > = forked_validators.clone();
-                        let checkpoint_overrides = checkpoint_overrides.clone();
                         let node_to_authority_map = node_to_authority_map.clone();
                         move || {
-                            let current_node_id = sui_simulator::current_simnode_id();
-                            let authority_name =
-                                node_to_authority_map.get(&current_node_id).unwrap();
-
-                            if forked_validators.lock().unwrap().contains(authority_name) {
-                                Some(checkpoint_overrides.clone())
+                            let current =
+                                node_to_authority_map.get(&sui_simulator::current_simnode_id())?;
+                            if *current == target {
+                                Some((
+                                    forked_validators.clone(),
+                                    /* full_halt: */ false,
+                                    effects_overrides.clone(),
+                                    1.0f32,
+                                    /* executor_path_only: */ false,
+                                ))
                             } else {
                                 None
                             }
                         }
                     });
-                    // Intercept validator panic when txn effects fork detected & shutdown instead
-                    register_fail_point_if("kill_transaction_fork_node", {
-                        let forked_validators = forked_validators.clone();
-                        let node_to_authority_map = node_to_authority_map.clone();
-                        move || {
-                            forked_validators.lock().unwrap().contains(
-                                node_to_authority_map
-                                    .get(&sui_simulator::current_simnode_id())
-                                    .unwrap(),
-                            )
-                        }
-                    });
 
-                    // Intercept validator panic when split brain detected & shutdown instead
-                    register_fail_point_arg("kill_split_brain_node", {
-                        let checkpoint_overrides = checkpoint_overrides.clone();
-                        let forked_validators = forked_validators.clone();
-                        move || Some((checkpoint_overrides.clone(), forked_validators.clone()))
-                    });
-
-                    register_debug_fatal_handler!(
-                        "Split brain detected in checkpoint signature aggregation",
-                        move || {
-                            //noop
-                        }
+                    register_fork_kill_failpoints(
+                        forked_validators.clone(),
+                        checkpoint_overrides.clone(),
+                        {
+                            let node_to_authority_map = node_to_authority_map.clone();
+                            move |id| node_to_authority_map.get(&id).copied()
+                        },
                     );
                 }
             }),
-            false, // disable surfer for fork recovery test
+            false,
         )
         .await;
-        info!("Fork recovery test: First load gen done");
 
-        assert!(forked_validators.lock().unwrap().len() > 1);
-
-        clear_fail_point("simulate_fork_during_execution");
-
-        // The fail points have already computed the correct checkpoint overrides
-        let checkpoint_overrides_computed = checkpoint_overrides.lock().unwrap().clone();
-
-        if checkpoint_overrides_computed.is_empty() {
-            panic!(
-                "Fork should have been triggered during the test and checkpoint overrides should be computed"
-            );
-        }
-
-        let captured_effects = effects_overrides.lock().unwrap().clone();
-
-        let fork_recovery_config = ForkRecoveryConfig {
-            transaction_overrides: captured_effects,
-            checkpoint_overrides: checkpoint_overrides_computed,
-            fork_crash_behavior: ForkCrashBehavior::ReturnError,
-        };
-
-        info!(
-            "Fork recovery config created: transaction_overrides count: {}, checkpoint_overrides count: {}",
-            fork_recovery_config.transaction_overrides.len(),
-            fork_recovery_config.checkpoint_overrides.len()
+        // Exactly one validator forked and detected a checkpoint fork.
+        assert_eq!(forked_validators.lock().unwrap().len(), 1);
+        assert!(
+            !checkpoint_overrides.lock().unwrap().is_empty(),
+            "expected the forked validator to detect a checkpoint fork"
         );
 
-        // Log some details about the overrides for debugging
-        for (digest, override_val) in &fork_recovery_config.transaction_overrides {
-            info!("Transaction override: {} -> {}", digest, override_val);
-        }
+        // Corrected binary: stop injecting forks and report a new binary version, since recovery
+        // refuses to clear a fork under the version that produced it.
+        clear_fail_point("simulate_fork_during_execution");
+        register_fail_point_arg("override_binary_version", || {
+            Some(std::sync::Arc::new(std::sync::Mutex::new(
+                "corrected-binary".to_string(),
+            )))
+        });
 
-        for (checkpoint_seq, override_val) in &fork_recovery_config.checkpoint_overrides {
-            info!(
-                "Checkpoint override: {} -> {}",
-                checkpoint_seq, override_val
-            );
-        }
-
+        // Restart the forked validator under RecoverOncePerVersion (no overrides).
         for validator in test_cluster.swarm.validator_nodes() {
-            let validator_name = validator.name();
-            if forked_validators.lock().unwrap().contains(&validator_name) {
-                // Force restart each validator individually to ensure config is applied
+            if forked_validators
+                .lock()
+                .unwrap()
+                .contains(&validator.name())
+            {
                 validator.stop();
                 tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                info!("node stopped {}", validator_name.concise());
-
                 {
-                    let mut config = validator.config();
-                    config.fork_recovery = Some(fork_recovery_config.clone());
-                    info!(
-                        "Override applied for validator {}: fork_recovery={:?}",
-                        validator_name.concise(),
-                        config.fork_recovery
-                    );
+                    let mut cfg = validator.config();
+                    cfg.fork_recovery = Some(ForkRecoveryConfig {
+                        transaction_overrides: Default::default(),
+                        checkpoint_overrides: Default::default(),
+                        fork_crash_behavior: ForkCrashBehavior::RecoverOncePerVersion,
+                    });
                 }
-
                 validator.start().await.unwrap();
-                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             }
         }
-        tokio::time::sleep(std::time::Duration::from_secs(15)).await;
 
-        clear_fail_point("kill_checkpoint_fork_node");
-        clear_fail_point("kill_transaction_fork_node");
-        clear_fail_point("kill_split_brain_node");
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
-        // Send one txn to ensure liveness
-        let sender = test_cluster.get_address_0();
-        let rgp = test_cluster.get_reference_gas_price().await;
+        clear_fork_kill_failpoints();
+        clear_fail_point("override_binary_version");
+
+        let target_name = *forked_validators
+            .lock()
+            .unwrap()
+            .iter()
+            .next()
+            .expect("a validator forked");
+
+        // The forked validator auto-recovered: fork markers cleared.
         test_cluster
-            .fund_address_and_return_gas(rgp, None, sender)
-            .await;
+            .swarm
+            .validator_nodes()
+            .find(|validator| validator.name() == target_name)
+            .unwrap()
+            .get_node_handle()
+            .expect("forked validator should be running after auto-recovery")
+            .with(|node| {
+                let state = node.state();
+                let cp = state.get_checkpoint_store();
+                assert!(
+                    cp.get_checkpoint_fork_detected().unwrap().is_none(),
+                    "checkpoint fork marker should be cleared after auto-recovery"
+                );
+                assert!(
+                    cp.get_transaction_fork_detected().unwrap().is_none(),
+                    "transaction fork marker should be cleared after auto-recovery"
+                );
+            });
 
-        test_cluster.wait_for_epoch(None).await;
+        // Liveness: every node, including the recovered validator, advances an epoch, proving it
+        // rejoined (a fullnode-only wait could be satisfied by the other three).
+        test_cluster.wait_for_next_epoch_all_nodes().await;
+    }
+
+    // A quorum-breaking fork: no checkpoint digest reaches quorum, so nothing certifies (split
+    // brain). check_for_split_brain only logs in release (debug_fatal!), so recovery is manual:
+    // restart with checkpoint_overrides naming the canonical digest. Reconvergence works because the
+    // forked effects were never durably committed (the writeback dirty set is flushed only by the
+    // checkpoint executor, on certified checkpoints), so the restart discards them and re-execution
+    // is canonical; checkpoint_overrides clears the only durable forked state, locally_computed.
+    #[sim_test(config = "test_config()")]
+    async fn test_split_brain_recovery_via_checkpoint_overrides() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        let test_cluster = build_test_cluster(4, 10_000, 4).await;
+
+        let effects_overrides: Arc<Mutex<BTreeMap<String, String>>> =
+            Arc::new(Mutex::new(BTreeMap::new()));
+        let checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>> =
+            Arc::new(Mutex::new(BTreeMap::new()));
+        let forked_validators: Arc<Mutex<HashSet<AuthorityName>>> =
+            Arc::new(Mutex::new(HashSet::new()));
+
+        let node_to_authority_map = fork_test_node_to_authority_map(&test_cluster);
+
+        let mut load_config = SimulatedLoadConfig::default();
+        load_config.composite_weight = 0;
+
+        // Split brain kills liveness, so the load never returns; run it in the background just to
+        // drive traffic until the fork fires, then abort it.
+        let load_task = tokio::spawn({
+            let test_cluster = test_cluster.clone();
+            let forked_validators = forked_validators.clone();
+            let checkpoint_overrides = checkpoint_overrides.clone();
+            let effects_overrides = effects_overrides.clone();
+            let node_to_authority_map = node_to_authority_map.clone();
+            async move {
+                test_simulated_load_with_test_config(
+                    test_cluster,
+                    60,
+                    load_config,
+                    None,
+                    None,
+                    Some({
+                        let forked_validators = forked_validators.clone();
+                        let checkpoint_overrides = checkpoint_overrides.clone();
+                        let effects_overrides = effects_overrides.clone();
+                        let node_to_authority_map = node_to_authority_map.clone();
+                        move |_cluster: Arc<TestCluster>| async move {
+                            register_fail_point_arg("simulate_fork_during_execution", {
+                                let forked_validators = forked_validators.clone();
+                                let effects_overrides = effects_overrides.clone();
+                                move || {
+                                    Some((
+                                        forked_validators.clone(),
+                                        /* full_halt: */ true,
+                                        effects_overrides.clone(),
+                                        0.1f32,
+                                        /* executor_path_only: */ false,
+                                    ))
+                                }
+                            });
+                            register_fork_kill_failpoints(
+                                forked_validators.clone(),
+                                checkpoint_overrides.clone(),
+                                {
+                                    let node_to_authority_map = node_to_authority_map.clone();
+                                    move |id| node_to_authority_map.get(&id).copied()
+                                },
+                            );
+                        }
+                    }),
+                    false,
+                )
+                .await;
+            }
+        });
+
+        // Wait until split brain is detected (kill_split_brain recorded the canonical digest).
+        let mut detected = false;
+        for _ in 0..120 {
+            if forked_validators.lock().unwrap().len() > 1
+                && !checkpoint_overrides.lock().unwrap().is_empty()
+            {
+                detected = true;
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
+        load_task.abort();
+        assert!(
+            detected,
+            "expected a quorum-breaking fork with split brain detected"
+        );
+
+        // Corrected binary: stop injecting forks and clear the kill failpoints so they can't
+        // interrupt reconvergence.
+        clear_fail_point("simulate_fork_during_execution");
+        clear_fork_kill_failpoints();
+
+        // Operator recovery: stop all (discards the in-memory forked effects), then restart with
+        // checkpoint_overrides naming the canonical digest. Forked validators clear locally_computed
+        // and re-execute canonically, so quorum re-forms.
+        let overrides = checkpoint_overrides.lock().unwrap().clone();
+        for validator in test_cluster.swarm.validator_nodes() {
+            validator.stop();
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        for validator in test_cluster.swarm.validator_nodes() {
+            {
+                let mut cfg = validator.config();
+                cfg.fork_recovery = Some(ForkRecoveryConfig {
+                    transaction_overrides: Default::default(),
+                    checkpoint_overrides: overrides.clone(),
+                    fork_crash_behavior: ForkCrashBehavior::AwaitForkRecovery,
+                });
+            }
+            validator
+                .start()
+                .await
+                .expect("validator should restart under operator checkpoint_overrides recovery");
+        }
+
+        // Liveness: every node, including both recovered validators, advances an epoch — i.e. quorum
+        // re-formed and the forked validators rejoined.
+        test_cluster.wait_for_next_epoch_all_nodes().await;
+    }
+
+    // A transaction fork (vs the checkpoint fork above): a fallen-behind validator
+    // re-executes a certified checkpoint's transactions via the checkpoint executor (where
+    // expected_effects_digest is set) and diverges, tripping the per-transaction fork check. The
+    // executor_path_only injection flag forks only on that path, guaranteeing a transaction fork; it
+    // then recovers under RecoverOncePerVersion.
+    #[sim_test(config = "test_config()")]
+    async fn test_auto_fork_recovery_transaction_fork() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        let test_cluster = build_test_cluster(4, 10_000, 4).await;
+
+        let effects_overrides: Arc<Mutex<BTreeMap<String, String>>> =
+            Arc::new(Mutex::new(BTreeMap::new()));
+        let checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>> =
+            Arc::new(Mutex::new(BTreeMap::new()));
+        let forked_validators: Arc<Mutex<HashSet<AuthorityName>>> =
+            Arc::new(Mutex::new(HashSet::new()));
+
+        let target = test_cluster.swarm.validator_nodes().next().unwrap().name();
+
+        // Stop the target so it falls behind the tip.
+        test_cluster
+            .swarm
+            .validator_nodes()
+            .find(|validator| validator.name() == target)
+            .unwrap()
+            .stop();
+
+        // The fork injection skips system transactions, so the target's catch-up must
+        // re-execute a user transaction it has never executed. Land one to checkpoint
+        // finality: submitted after the stop, the target cannot have executed it. Retrying
+        // the same signed transaction on transient failures cannot equivocate the gas object.
+        let tx_data = test_cluster
+            .test_transaction_builder()
+            .await
+            .transfer_sui(Some(1), test_cluster.get_address_1())
+            .build();
+        let tx = test_cluster.sign_transaction(&tx_data).await;
+        while test_cluster
+            .wallet
+            .execute_transaction_may_fail(tx.clone())
+            .await
+            .is_err()
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+
+        // Wait for the epoch holding the transfer to close: a closed epoch can only be
+        // replayed through the checkpoint executor (peers tear down its consensus at
+        // reconfig), so the target's catch-up must re-execute the transfer there — and fork.
+        let finality_epoch = test_cluster
+            .fullnode_handle
+            .sui_node
+            .with(|node| node.state().epoch_store_for_testing().epoch());
+        test_cluster.wait_for_epoch(Some(finality_epoch + 1)).await;
+
+        // Arm the injection and kill hooks BEFORE restarting the target: its catch-up
+        // re-execution can complete inside start()'s internal awaits, so arming afterwards
+        // races the executor and loses on some schedules (the fork window closes forever once
+        // catch-up finishes — and a fork tripped before the kill hooks are armed would
+        // fatal!-abort the sim). The target's new sim node id is unknowable until start()
+        // returns, so match by exclusion instead: while the target is down, snapshot the sim
+        // ids of every running node — any id outside that set executing transactions must be
+        // the restarted target (nothing else starts during this test).
+        let known_other_ids: std::collections::HashSet<sui_simulator::task::NodeId> = test_cluster
+            .swarm
+            .all_nodes()
+            .filter_map(|node| {
+                node.get_node_handle()
+                    .map(|handle| handle.with(|n| n.get_sim_node_id()))
+            })
+            .collect();
+        let node_to_authority_map = fork_test_node_to_authority_map(&test_cluster);
+
+        // Fork the target only on the executor path, so its catch-up re-execution trips the tx check.
+        register_fail_point_arg("simulate_fork_during_execution", {
+            let forked_validators = forked_validators.clone();
+            let effects_overrides = effects_overrides.clone();
+            let known_other_ids = known_other_ids.clone();
+            move || {
+                if known_other_ids.contains(&sui_simulator::current_simnode_id()) {
+                    None
+                } else {
+                    Some((
+                        forked_validators.clone(),
+                        /* full_halt: */ false,
+                        effects_overrides.clone(),
+                        1.0f32,
+                        /* executor_path_only: */ true,
+                    ))
+                }
+            }
+        });
+        register_fork_kill_failpoints(forked_validators.clone(), checkpoint_overrides.clone(), {
+            let node_to_authority_map = node_to_authority_map.clone();
+            let known_other_ids = known_other_ids.clone();
+            move |id| {
+                node_to_authority_map
+                    .get(&id)
+                    .copied()
+                    .or_else(|| (!known_other_ids.contains(&id)).then_some(target))
+            }
+        });
+
+        test_cluster
+            .swarm
+            .validator_nodes()
+            .find(|validator| validator.name() == target)
+            .unwrap()
+            .start()
+            .await
+            .unwrap();
+
+        // Wait until the target forks (after which kill_transaction_fork_node shuts it down).
+        let mut forked = false;
+        for _ in 0..60 {
+            if forked_validators.lock().unwrap().contains(&target) {
+                forked = true;
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
+        assert!(
+            forked,
+            "target should transaction-fork while catching up on the executor path"
+        );
+
+        // Corrected binary: stop injecting forks.
+        clear_fail_point("simulate_fork_during_execution");
+
+        // Confirm it was a transaction fork: checkpoint_overrides (set only by the checkpoint/split-
+        // brain failpoints) is empty even though the target forked.
+        assert!(
+            checkpoint_overrides.lock().unwrap().is_empty(),
+            "expected a transaction fork (no checkpoint fork should have been recorded)"
+        );
+
+        // Recover under RecoverOncePerVersion with a new binary version (recovery refuses to
+        // clear a fork under the version that produced it): clears the tx fork marker and
+        // re-executes canonically.
+        register_fail_point_arg("override_binary_version", || {
+            Some(std::sync::Arc::new(std::sync::Mutex::new(
+                "corrected-binary".to_string(),
+            )))
+        });
+        {
+            let target_node = test_cluster
+                .swarm
+                .validator_nodes()
+                .find(|validator| validator.name() == target)
+                .unwrap();
+            target_node.stop();
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            {
+                let mut cfg = target_node.config();
+                cfg.fork_recovery = Some(ForkRecoveryConfig {
+                    transaction_overrides: Default::default(),
+                    checkpoint_overrides: Default::default(),
+                    fork_crash_behavior: ForkCrashBehavior::RecoverOncePerVersion,
+                });
+            }
+            target_node.start().await.unwrap();
+        }
+
+        clear_fork_kill_failpoints();
+        clear_fail_point("override_binary_version");
+
+        // The recovered validator cleared its transaction fork marker.
+        test_cluster
+            .swarm
+            .validator_nodes()
+            .find(|validator| validator.name() == target)
+            .unwrap()
+            .get_node_handle()
+            .expect("target should be running after recovery")
+            .with(|node| {
+                let state = node.state();
+                let cp = state.get_checkpoint_store();
+                assert!(
+                    cp.get_transaction_fork_detected().unwrap().is_none(),
+                    "transaction fork marker should be cleared after recovery"
+                );
+            });
+
+        // Liveness: every node, including the recovered validator, advances an epoch.
+        test_cluster.wait_for_next_epoch_all_nodes().await;
     }
 
     /// Scans every executed checkpoint on the test cluster's fullnode, finds
@@ -1632,7 +2063,7 @@ mod test {
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
-        .with_probability(SharedCounterIncrement::NAME, 0.1)
+        .with_probability(SharedCounterIncrement::NAME, 0.2)
         .with_probability(SharedCounterRead::NAME, 0.1)
         .with_probability(RandomnessRead::NAME, 0.1)
         .with_probability(AddressBalanceDeposit::NAME, 0.1)
@@ -1711,7 +2142,11 @@ mod test {
         // `> 100` bar flake ~3% of the time. A `> 50` bar still asserts that
         // shared-object congestion control actually kicked in, with comfortable
         // margin below the observed floor.
-        assert!(metrics_sum.cancellation_count > 50);
+        assert!(
+            metrics_sum.cancellation_count > 50,
+            "cancellation_count too low: {}",
+            metrics_sum.cancellation_count
+        );
 
         if address_aliases_enabled {
             let alias_add_stats = metrics
@@ -1933,6 +2368,7 @@ mod test {
             bank,
             system_state_observer.clone(),
             100,
+            BTreeMap::new(),
         )
         .await
         .unwrap();
@@ -2155,105 +2591,42 @@ mod test {
     /// Test that Observer nodes can connect to validators and stream consensus
     #[sim_test(config = "test_config()")]
     async fn test_network_with_observer_node() {
-        use consensus_config::{NetworkPublicKey, ObserverParameters, PeerRecord};
         use sui_benchmark::workloads::composite::*;
-        use sui_types::crypto::KeypairTraits;
 
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
-        info!("Setting up 4-validator network for Observer node test");
+        info!("Setting up 4-validator network with an observer fullnode");
 
-        // Build a 4-node validator network with observer server enabled on all validators
-        let mut test_cluster = init_test_cluster_builder(4, 40_000)
+        // Build a 4-node validator network with an observer fullnode subscribed to the
+        // first validator's observer server.
+        let test_cluster = init_test_cluster_builder(4, 40_000)
             .with_authority_overload_config(AuthorityOverloadConfig {
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
-            .with_validator_observer_config(Arc::new(|_idx| Some(ObserverParameters::default())))
+            .with_observer_fullnode()
             .build()
             .await;
 
-        info!("Creating Observer node configuration");
-
-        // Find the validator that has the observer server enabled
-        let observer_peers = {
-            let validator = test_cluster
-                .swarm
-                .validator_nodes()
-                .find(|v| {
-                    v.config()
-                        .consensus_config
-                        .as_ref()
-                        .and_then(|c| c.parameters.as_ref())
-                        .and_then(|p| p.observer.server_port)
-                        .is_some()
-                })
-                .expect("At least one validator should have observer server enabled");
-            let validator_config = validator.config();
-            let consensus_config = validator_config.consensus_config.as_ref().unwrap();
-
-            let observer_port = consensus_config
-                .parameters
-                .as_ref()
-                .and_then(|p| p.observer.server_port)
-                .unwrap();
-
-            let network_public_key =
-                NetworkPublicKey::new(validator_config.network_key_pair().public().clone());
-
-            let validator_host = validator_config
-                .network_address
-                .to_socket_addr()
-                .unwrap()
-                .ip()
-                .to_string();
-
-            let observer_address: sui_types::multiaddr::Multiaddr =
-                format!("/ip4/{}/udp/{}/http", validator_host, observer_port)
-                    .parse()
-                    .unwrap();
-
-            info!(
-                "Connecting Observer to validator at {} with observer port {}",
-                observer_address, observer_port
-            );
-
-            vec![PeerRecord {
-                public_key: network_public_key,
-                address: observer_address,
-            }]
-        };
-
-        info!(
-            "Creating Observer node with {} configured peers",
-            observer_peers.len()
-        );
-
-        let observer_config = test_cluster
-            .fullnode_config_builder()
-            .with_observer_config(ObserverParameters {
-                peers: observer_peers,
-                ..Default::default()
-            })
-            .build(&mut get_rng(), test_cluster.swarm.config());
-
-        info!("Starting Observer node with consensus enabled");
-
-        // Start the Observer node
-        let observer_handle = test_cluster
-            .start_fullnode_from_config(observer_config)
-            .await;
-        let observer_node_id = observer_handle.sui_node.with(|n| n.get_sim_node_id());
-        let observer_state = observer_handle.sui_node.state();
+        // Scope all node-handle access: holding a handle or state Arc across the test
+        // would prevent the simulator from restarting the observer if it crashes.
+        let (observer_node_id, observer_role) = test_cluster
+            .observer_node()
+            .expect("cluster should have an observer fullnode")
+            .get_node_handle()
+            .unwrap()
+            .with(|n| {
+                (
+                    n.get_sim_node_id(),
+                    n.state().epoch_store_for_testing().node_role(),
+                )
+            });
 
         info!(
             "Observer node started with node_id: {:?}, node_role: {:?}, runs_consensus: {}",
             observer_node_id,
-            observer_state.epoch_store_for_testing().node_role(),
-            observer_state
-                .epoch_store_for_testing()
-                .node_role()
-                .runs_consensus()
+            observer_role,
+            observer_role.runs_consensus()
         );
 
         // Let the Observer node stabilize
@@ -2298,67 +2671,15 @@ mod test {
             "observer workload must exercise object-funds insufficient execution"
         );
 
-        // Snapshot the latest checkpoint that the network has executed, as observed by the
-        // cluster's regular fullnode (which catches up via checkpoint sync). The Observer
-        // node instead catches up by streaming consensus blocks and finalizing checkpoints
-        // locally, so reaching this same sequence number proves block streaming keeps the
-        // Observer up to date with the rest of the network.
-        let target_checkpoint = test_cluster.fullnode_handle.sui_node.with(|node| {
-            node.state()
-                .get_checkpoint_store()
-                .get_highest_executed_checkpoint_seq_number()
-                .expect("checkpoint store read failed")
-                .expect("fullnode should have executed checkpoints")
-        });
-        assert!(
-            target_checkpoint > 0,
-            "network should have produced checkpoints for the catch-up check to be meaningful"
-        );
-
-        info!(
-            "Waiting for Observer node to catch up to checkpoint {} via block streaming",
-            target_checkpoint
-        );
-
-        // Poll the Observer's checkpoint store until it has finalized at least the target
-        // checkpoint. The Observer streams blocks continuously, so it should reach this
-        // snapshot quickly; failing within the timeout means block streaming did not keep
-        // the Observer caught up to the latest checkpoint.
-        let catch_up_timeout = Duration::from_secs(60);
-        let read_observer_checkpoint = || {
-            observer_state
-                .get_checkpoint_store()
-                .get_highest_executed_checkpoint_seq_number()
-                .expect("checkpoint store read failed")
-        };
-        let observer_checkpoint = tokio::time::timeout(catch_up_timeout, async {
-            loop {
-                if let Some(seq) = read_observer_checkpoint()
-                    && seq >= target_checkpoint
-                {
-                    return seq;
-                }
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-        })
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Observer node failed to catch up to checkpoint {} via block streaming within \
-                 {:?}; highest finalized checkpoint was {:?}",
-                target_checkpoint,
-                catch_up_timeout,
-                read_observer_checkpoint(),
-            )
-        });
-
-        info!(
-            "Observer node caught up to checkpoint {} (target {}) via block streaming",
-            observer_checkpoint, target_checkpoint
-        );
+        wait_for_observer_catch_up(&test_cluster, Duration::from_secs(60)).await;
 
         // The Observer must still be running with the Observer role after catching up.
-        let final_node_role = observer_state.epoch_store_for_testing().node_role();
+        let final_node_role = test_cluster
+            .observer_node()
+            .expect("cluster should have an observer fullnode")
+            .get_node_handle()
+            .unwrap()
+            .with(|n| n.state().epoch_store_for_testing().node_role());
         info!(
             "Observer node final check - node_role: {:?}, runs_consensus: {}",
             final_node_role,
@@ -2397,6 +2718,8 @@ mod test {
         // latest protocol version, but not at the older version this test targets.
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
             config.set_split_checkpoints_in_consensus_handler_for_testing(true);
+            config.set_merge_randomness_into_checkpoint_for_testing(true);
+            config.set_timestamp_based_epoch_close_for_testing(true);
             config
         });
 

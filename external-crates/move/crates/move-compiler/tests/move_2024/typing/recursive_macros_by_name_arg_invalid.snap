@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04032]: unable to expand macro function
+error[EC04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/recursive_macros_by_name_arg_invalid.move:8:9
    │
  4 │         bar!(foo!($f))
@@ -17,7 +17,7 @@ error[E04032]: unable to expand macro function
 28 │         foo!(0);
    │         ------- 'a::m::foo' previously expanded here
 
-error[E04032]: unable to expand macro function
+error[EC04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/recursive_macros_by_name_arg_invalid.move:12:14
    │
 12 │         $f + arg!($f)
@@ -26,7 +26,7 @@ error[E04032]: unable to expand macro function
 29 │         arg!({ let x = 0; x });
    │         ---------------------- 'a::m::arg' previously expanded here
 
-error[E04032]: unable to expand macro function
+error[EC04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/recursive_macros_by_name_arg_invalid.move:16:14
    │
 16 │         $f + arg_eta!({ $f })
@@ -35,7 +35,7 @@ error[E04032]: unable to expand macro function
 30 │         arg_eta!({ let x = 0; x });
    │         -------------------------- 'a::m::arg_eta' previously expanded here
 
-error[E04032]: unable to expand macro function
+error[EC04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/recursive_macros_by_name_arg_invalid.move:20:23
    │
 20 │         $f + apply!({ arg_apply!($f) })

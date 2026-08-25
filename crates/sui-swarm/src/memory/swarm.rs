@@ -66,6 +66,8 @@ pub struct SwarmBuilder<R = OsRng> {
     funds_withdraw_scheduler_type_config: Option<FundsWithdrawSchedulerTypeConfig>,
     disable_fullnode_pruning: bool,
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
+    peer_deny_sync_config:
+        Option<sui_swarm_config::network_config_builder::PeerDenySyncConfigCallback>,
     #[cfg(msim)]
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
     validator_observer_config: Option<ValidatorObserverConfigCallback>,
@@ -102,6 +104,7 @@ impl SwarmBuilder {
             funds_withdraw_scheduler_type_config: None,
             disable_fullnode_pruning: false,
             state_sync_config: None,
+            peer_deny_sync_config: None,
             #[cfg(msim)]
             execution_time_observer_config: None,
             validator_observer_config: None,
@@ -140,6 +143,7 @@ impl<R> SwarmBuilder<R> {
             funds_withdraw_scheduler_type_config: self.funds_withdraw_scheduler_type_config,
             disable_fullnode_pruning: self.disable_fullnode_pruning,
             state_sync_config: self.state_sync_config,
+            peer_deny_sync_config: self.peer_deny_sync_config,
             #[cfg(msim)]
             execution_time_observer_config: self.execution_time_observer_config,
             validator_observer_config: self.validator_observer_config,
@@ -338,6 +342,14 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
+    pub fn with_peer_deny_sync_config_per_validator(
+        mut self,
+        f: sui_swarm_config::network_config_builder::PeerDenySyncConfigCallback,
+    ) -> Self {
+        self.peer_deny_sync_config = Some(f);
+        self
+    }
+
     pub fn with_fullnode_run_with_range(mut self, run_with_range: Option<RunWithRange>) -> Self {
         if let Some(run_with_range) = run_with_range {
             self.fullnode_run_with_range = Some(run_with_range);
@@ -435,6 +447,10 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 
             if let Some(state_sync_config) = self.state_sync_config.clone() {
                 final_builder = final_builder.with_state_sync_config(state_sync_config);
+            }
+
+            if let Some(cb) = self.peer_deny_sync_config.clone() {
+                final_builder = final_builder.with_peer_deny_sync_config_per_validator(cb);
             }
 
             #[cfg(msim)]
@@ -591,12 +607,13 @@ impl Swarm {
     }
 
     /// Return an iterator over shared references of all nodes that are set up as validators.
-    /// This means that they have a consensus config. This however doesn't mean this validator is
-    /// currently active (i.e. it's not necessarily in the validator set at the moment).
+    /// This however doesn't mean this validator is currently active (i.e. it's not necessarily
+    /// in the validator set at the moment). Note that observer fullnodes also carry a consensus
+    /// config, so the intended node role is what distinguishes a validator.
     pub fn validator_nodes(&self) -> impl Iterator<Item = &Node> {
         self.nodes
             .values()
-            .filter(|node| node.config().consensus_config.is_some())
+            .filter(|node| node.config().intended_node_role().is_validator())
     }
 
     pub fn validator_node_handles(&self) -> Vec<SuiNodeHandle> {
@@ -620,6 +637,16 @@ impl Swarm {
         self.nodes
             .values()
             .filter(|node| node.config().intended_node_role().is_fullnode())
+    }
+
+    /// Return an iterator over shared references of all fullnodes that sync as
+    /// consensus observers.
+    pub fn observer_nodes(&self) -> impl Iterator<Item = &Node> {
+        use sui_types::node_role::{FullNodeSyncMode, NodeRole};
+        self.nodes.values().filter(|node| {
+            node.config().intended_node_role()
+                == NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
+        })
     }
 
     pub async fn spawn_new_node(&mut self, config: NodeConfig) -> SuiNodeHandle {

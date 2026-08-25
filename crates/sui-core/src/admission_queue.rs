@@ -324,7 +324,6 @@ impl AdmissionQueueHandle {
 /// with the new epoch store to create a fresh actor and handle.
 pub struct AdmissionQueueManager {
     capacity: usize,
-    bypass_threshold: usize,
     failover_timeout: Duration,
     metrics: Arc<AdmissionQueueMetrics>,
     consensus_adapter: Arc<ConsensusAdapter>,
@@ -336,7 +335,6 @@ impl AdmissionQueueManager {
         consensus_adapter: Arc<ConsensusAdapter>,
         metrics: Arc<AdmissionQueueMetrics>,
         capacity_fraction: f64,
-        bypass_fraction: f64,
         failover_timeout: Duration,
         slot_freed_notify: Arc<tokio::sync::Notify>,
     ) -> Self {
@@ -348,7 +346,6 @@ impl AdmissionQueueManager {
         );
         Self {
             capacity,
-            bypass_threshold: (max_pending as f64 * bypass_fraction) as usize,
             failover_timeout,
             metrics,
             consensus_adapter,
@@ -362,7 +359,6 @@ impl AdmissionQueueManager {
     ) -> Self {
         Self {
             capacity: 10_000,
-            bypass_threshold: usize::MAX,
             failover_timeout: Duration::from_secs(30),
             metrics: Arc::new(AdmissionQueueMetrics::new_for_tests()),
             consensus_adapter,
@@ -372,10 +368,6 @@ impl AdmissionQueueManager {
 
     pub fn metrics(&self) -> &Arc<AdmissionQueueMetrics> {
         &self.metrics
-    }
-
-    pub(crate) fn bypass_threshold(&self) -> usize {
-        self.bypass_threshold
     }
 
     /// Spawns a new per-epoch admission queue actor and returns a handle.
@@ -432,10 +424,6 @@ impl AdmissionQueueContext {
     /// The old actor shuts down when its handle is dropped.
     pub fn rotate_for_epoch(&self, epoch_store: Arc<AuthorityPerEpochStore>) {
         self.swap.store(Arc::new(self.manager.spawn(epoch_store)));
-    }
-
-    pub(crate) fn bypass_threshold(&self) -> usize {
-        self.manager.bypass_threshold()
     }
 
     pub(crate) fn load(&self) -> arc_swap::Guard<Arc<AdmissionQueueHandle>> {
@@ -908,7 +896,6 @@ mod tests {
             adapter,
             Arc::new(AdmissionQueueMetrics::new_for_tests()),
             0.5,
-            0.9,
             Duration::from_millis(10),
             notify,
         );
