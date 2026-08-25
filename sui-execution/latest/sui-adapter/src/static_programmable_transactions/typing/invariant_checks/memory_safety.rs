@@ -3,14 +3,843 @@
 
 use crate::{
     execution_mode::ExecutionMode,
+    sp,
     static_programmable_transactions::{env::Env, typing::ast as T},
 };
+use indexmap::IndexSet;
+use mysten_common::ZipDebugEqIteratorExt;
+use std::collections::{BTreeMap, BTreeSet};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum RootLocation {
+    Unknown { command: u16 },
+    Known(T::Location),
+}
+
+type NodeID = usize;
+
+/// A packed set of node IDs. Node `n` is stored in word `n / 64` at bit `n % 64`.
+#[derive(Debug, Clone)]
+struct BitSet {
+    words: Vec<u64>,
+}
+
+#[derive(Debug)]
+enum NodeKind {
+    Root(RootLocation),
+    Delta { command: u16 },
+}
+
+#[derive(Debug)]
+struct Node {
+    kind: NodeKind,
+    ancestors: BitSet,
+    children: Vec<NodeID>,
+}
+
+#[derive(Debug, Default)]
+struct Memory {
+    nodes: Vec<Node>,
+    roots: BTreeMap<RootLocation, NodeID>,
+}
+
+#[derive(Debug)]
+enum Value {
+    NonRef,
+    Ref { is_mut: bool, node: NodeID },
+}
+
+#[derive(Debug)]
+struct Location {
+    root: NodeID,
+    value: Option<Value>,
+}
+
+#[derive(Debug)]
+struct Context {
+    memory: Memory,
+    allow_references_in_ptbs: bool,
+    tx_context: Location,
+    gas: Location,
+    object_inputs: Vec<Location>,
+    withdrawal_inputs: Vec<Location>,
+    pure_inputs: Vec<Location>,
+    receiving_inputs: Vec<Location>,
+    results: Vec<Vec<Location>>,
+    // Temporary set of locations borrowed by arguments seen thus far for the current command.
+    // Used exclusively for checking the validity copy/move.
+    arg_roots: IndexSet<T::Location>,
+}
+
+impl BitSet {
+    /// Allocates enough zeroed 64-bit words for `bits` flags. Zero means no flags are set.
+    fn with_bits(bits: usize) -> Self {
+        Self {
+            words: vec![0; bits.div_ceil(64).max(1)],
+        }
+    }
+
+    /// Sets the flag by OR-ing its one-bit mask into the word that contains it.
+    /// Returns true iff flag was already set.
+    fn set(&mut self, bit: usize) -> anyhow::Result<bool> {
+        let word = self
+            .words
+            .get_mut(bit / 64)
+            .ok_or_else(|| anyhow::anyhow!("BitSet index {bit} is out of bounds"))?;
+        let mask = 1 << (bit % 64);
+        let was_set = *word & mask != 0;
+        *word |= mask;
+        Ok(was_set)
+    }
+
+    /// Tests the flag by AND-ing its one-bit mask with the containing word.
+    fn contains(&self, bit: usize) -> bool {
+        self.words
+            .get(bit / 64)
+            .is_some_and(|word| word & (1 << (bit % 64)) != 0)
+    }
+
+    /// Computes set union 64 flags at a time with a wordwise OR, potentially growing to hold
+    /// `other`'s flags.
+    fn union(&mut self, other: &Self) {
+        if self.words.len() < other.words.len() {
+            self.words.resize(other.words.len(), 0);
+        }
+        // After the resize `self` is at least as long as `other`, and any words past `other`'s
+        // end are unaffected by the union, so truncating to `other`'s length is correct.
+        #[allow(clippy::disallowed_methods)]
+        let words = self.words.iter_mut().zip(&other.words);
+        for (word, other_word) in words {
+            *word |= other_word;
+        }
+    }
+
+    /// Visits the intersection of two sets. `trailing_zeros` finds the lowest set bit and
+    /// `clear_lowest_bit` clears it, so only set bits are visited.
+    fn try_for_each_common(
+        &self,
+        other: &Self,
+        mut f: impl FnMut(usize) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        // Ancestor sets are sized by node ID, so the two sets can have different word counts. The
+        // missing trailing words are all zeros, so nothing past the shorter set can be common. As
+        // such, truncating to the shorter length is correct.
+        #[allow(clippy::disallowed_methods)]
+        let words = self.words.iter().zip(&other.words);
+        for (word_index, (left, right)) in words.enumerate() {
+            let mut common = left & right;
+            while common != 0 {
+                f(Self::bit_index(word_index, common)?)?;
+                common = Self::clear_lowest_bit(common)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Visits each set bit using `trailing_zeros` and clears it before the next iteration.
+    fn try_for_each_set(
+        &self,
+        mut f: impl FnMut(usize) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        for (word_index, word) in self.words.iter().enumerate() {
+            let mut bits = *word;
+            while bits != 0 {
+                f(Self::bit_index(word_index, bits)?)?;
+                bits = Self::clear_lowest_bit(bits)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Returns the absolute index of the lowest set bit of `word`, which lives in `word_index`.
+    fn bit_index(word_index: usize, word: u64) -> anyhow::Result<usize> {
+        debug_assert!(word != 0);
+        word_index
+            .checked_mul(64)
+            .and_then(|base| base.checked_add(word.trailing_zeros() as usize))
+            .ok_or_else(|| anyhow::anyhow!("BitSet index overflow for word {word_index}"))
+    }
+
+    /// Removes the lowest set bit of `word`, which must be non-zero.
+    /// Subtracting one clears the lowest set bit and sets all bits below it, so the `&` preserves
+    /// the remaining bits.
+    fn clear_lowest_bit(word: u64) -> anyhow::Result<u64> {
+        let sub = word
+            .checked_sub(1)
+            .ok_or_else(|| anyhow::anyhow!("clear_lowest_bit called on 0"))?;
+        Ok(word & sub)
+    }
+}
+
+impl Memory {
+    fn node(&self, id: NodeID) -> anyhow::Result<&Node> {
+        self.nodes
+            .get(id)
+            .ok_or_else(|| anyhow::anyhow!("Node index {id} is out of bounds"))
+    }
+
+    fn node_mut(&mut self, id: NodeID) -> anyhow::Result<&mut Node> {
+        self.nodes
+            .get_mut(id)
+            .ok_or_else(|| anyhow::anyhow!("Node index {id} is out of bounds"))
+    }
+
+    /// Creates a node whose ancestor set is itself plus every ancestor of its parents, and records
+    /// reverse parent-to-child edges for identifying extensions from distinct commands.
+    fn new_node(&mut self, kind: NodeKind, parents: &[NodeID]) -> anyhow::Result<NodeID> {
+        let id = self.nodes.len();
+        let bits = id
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("Node ID overflow"))?;
+        let mut ancestors = BitSet::with_bits(bits);
+        anyhow::ensure!(
+            !ancestors.set(id)?,
+            "Node {id} is already set in its fresh ancestor set"
+        );
+        for &parent in parents {
+            ancestors.union(&self.node(parent)?.ancestors);
+        }
+        for &parent in parents {
+            self.node_mut(parent)?.children.push(id);
+        }
+        self.nodes.push(Node {
+            kind,
+            ancestors,
+            children: vec![],
+        });
+        Ok(id)
+    }
+
+    /// Returns the unique node for a PTB location, creating it on first use.
+    fn root(&mut self, root: RootLocation) -> anyhow::Result<NodeID> {
+        if let Some(id) = self.roots.get(&root) {
+            return Ok(*id);
+        }
+        let id = self.new_node(NodeKind::Root(root), &[])?;
+        self.roots.insert(root, id);
+        Ok(id)
+    }
+
+    /// Creates a call-return delta reference, whose ancestors are derived from parent reference
+    /// arguments passed to the command.
+    /// For immutable references, the parents are all reference arguments.
+    /// For mutable references, the parents are the mutable reference arguments.
+    fn call_return(&mut self, command: u16, parents: &[NodeID]) -> anyhow::Result<NodeID> {
+        self.new_node(NodeKind::Delta { command }, parents)
+    }
+
+    /// Returns whether `node` can derive from `ancestor`.
+    fn is_ancestor(&self, node: NodeID, ancestor: NodeID) -> anyhow::Result<bool> {
+        Ok(self.node(node)?.ancestors.contains(ancestor))
+    }
+
+    /// Returns whether paths from a shared ancestor pass through delta children from different
+    /// commands. Such extensions are conservatively treated as potentially overlapping.
+    fn has_cross_command_extensions(&self, left: NodeID, right: NodeID) -> anyhow::Result<bool> {
+        let left_ancestors = &self.node(left)?.ancestors;
+        let right_ancestors = &self.node(right)?.ancestors;
+        let mut has_extensions = false;
+        left_ancestors.try_for_each_common(right_ancestors, |common| {
+            if has_extensions {
+                return Ok(());
+            }
+            let mut left_commands = IndexSet::new();
+            let mut right_commands = IndexSet::new();
+            for &child in &self.node(common)?.children {
+                let NodeKind::Delta { command } = &self.node(child)?.kind else {
+                    continue;
+                };
+                if left_ancestors.contains(child) {
+                    left_commands.insert(*command);
+                }
+                if right_ancestors.contains(child) {
+                    right_commands.insert(*command);
+                }
+            }
+            has_extensions = left_commands
+                .iter()
+                .any(|left| right_commands.iter().any(|right| left != right));
+            Ok(())
+        })?;
+        Ok(has_extensions)
+    }
+
+    /// Returns whether `left` may extend `right` through ancestry or cross-command extensions.
+    fn extends(&self, left: NodeID, right: NodeID) -> anyhow::Result<bool> {
+        Ok((left != right && self.is_ancestor(left, right)?)
+            || self.has_cross_command_extensions(left, right)?)
+    }
+
+    /// Returns whether neither node derives from the other and neither has cross-command extensions.
+    fn is_disjoint(&self, left: NodeID, right: NodeID) -> anyhow::Result<bool> {
+        Ok(left != right
+            && !self.is_ancestor(left, right)?
+            && !self.is_ancestor(right, left)?
+            && !self.has_cross_command_extensions(left, right)?)
+    }
+
+    /// Returns the known PTB locations among `node`'s ancestors, excluding unknown roots.
+    fn known_roots(&self, node: NodeID) -> anyhow::Result<IndexSet<T::Location>> {
+        let mut roots = IndexSet::new();
+        self.node(node)?.ancestors.try_for_each_set(|ancestor| {
+            if let NodeKind::Root(RootLocation::Known(location)) = &self.node(ancestor)?.kind {
+                roots.insert(*location);
+            }
+            Ok(())
+        })?;
+        Ok(roots)
+    }
+}
+
+impl Value {
+    fn copy(&self) -> Value {
+        match self {
+            Value::NonRef => Value::NonRef,
+            Value::Ref { is_mut, node } => Value::Ref {
+                is_mut: *is_mut,
+                node: *node,
+            },
+        }
+    }
+
+    fn freeze(&mut self) -> anyhow::Result<Value> {
+        match self.copy() {
+            Value::NonRef => anyhow::bail!("Cannot freeze a non-reference value"),
+            Value::Ref { is_mut, node } => {
+                anyhow::ensure!(is_mut, "Cannot freeze an immutable reference");
+                Ok(Value::Ref {
+                    is_mut: false,
+                    node,
+                })
+            }
+        }
+    }
+}
+
+impl Location {
+    fn non_ref(root: NodeID) -> Self {
+        Self {
+            root,
+            value: Some(Value::NonRef),
+        }
+    }
+
+    fn copy_value(&self) -> anyhow::Result<Value> {
+        self.value
+            .as_ref()
+            .map(Value::copy)
+            .ok_or_else(|| anyhow::anyhow!("Use of invalid memory location"))
+    }
+
+    fn move_value(&mut self) -> anyhow::Result<Value> {
+        self.value
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Use of invalid memory location"))
+    }
+
+    fn use_(&mut self, usage: &T::Usage) -> anyhow::Result<Value> {
+        match usage {
+            T::Usage::Move(_) => self.move_value(),
+            T::Usage::Copy { .. } => self.copy_value(),
+        }
+    }
+
+    fn borrow(&self, is_mut: bool) -> anyhow::Result<Value> {
+        match self.value.as_ref() {
+            None => anyhow::bail!("Borrow of invalid memory location"),
+            Some(Value::Ref { .. }) => anyhow::bail!("Cannot borrow a reference"),
+            Some(Value::NonRef) => Ok(Value::Ref {
+                is_mut,
+                node: self.root,
+            }),
+        }
+    }
+}
+
+impl Context {
+    fn new<Mode: ExecutionMode>(_env: &Env<Mode>, txn: &T::Transaction) -> anyhow::Result<Self> {
+        let T::Transaction {
+            gas_payment,
+            bytes: _,
+            objects,
+            withdrawals,
+            pure,
+            receiving,
+            withdrawal_compatibility_conversions: _,
+            original_command_len: _,
+            commands: _,
+            unified_linkage: _,
+        } = txn;
+        let mut memory = Memory::default();
+        let tx_context =
+            Location::non_ref(memory.root(RootLocation::Known(T::Location::TxContext))?);
+        let mut gas = Location::non_ref(memory.root(RootLocation::Known(T::Location::GasCoin))?);
+        if gas_payment.is_none() {
+            gas.move_value()
+                .map_err(|_| anyhow::anyhow!("gas coin should be initialized"))?;
+        }
+        let object_inputs = (0..objects.len())
+            .map(|i| {
+                Ok(Location::non_ref(memory.root(RootLocation::Known(
+                    T::Location::ObjectInput(checked_as!(i, u16)?),
+                ))?))
+            })
+            .collect::<anyhow::Result<_>>()?;
+        let withdrawal_inputs = (0..withdrawals.len())
+            .map(|i| {
+                Ok(Location::non_ref(memory.root(RootLocation::Known(
+                    T::Location::WithdrawalInput(checked_as!(i, u16)?),
+                ))?))
+            })
+            .collect::<anyhow::Result<_>>()?;
+        let pure_inputs = (0..pure.len())
+            .map(|i| {
+                Ok(Location::non_ref(memory.root(RootLocation::Known(
+                    T::Location::PureInput(checked_as!(i, u16)?),
+                ))?))
+            })
+            .collect::<anyhow::Result<_>>()?;
+        let receiving_inputs = (0..receiving.len())
+            .map(|i| {
+                Ok(Location::non_ref(memory.root(RootLocation::Known(
+                    T::Location::ReceivingInput(checked_as!(i, u16)?),
+                ))?))
+            })
+            .collect::<anyhow::Result<_>>()?;
+        Ok(Self {
+            memory,
+            allow_references_in_ptbs: _env.protocol_config.allow_references_in_ptbs(),
+            tx_context,
+            gas,
+            object_inputs,
+            withdrawal_inputs,
+            pure_inputs,
+            receiving_inputs,
+            results: vec![],
+            arg_roots: IndexSet::new(),
+        })
+    }
+
+    fn current_command(&self) -> anyhow::Result<u16> {
+        Ok(checked_as!(self.results.len(), u16)?)
+    }
+
+    fn add_result_values(
+        &mut self,
+        results: impl IntoIterator<Item = Option<Value>>,
+    ) -> anyhow::Result<()> {
+        let command = self.current_command()?;
+        self.results.push(
+            results
+                .into_iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    Ok(Location {
+                        root: self.memory.root(RootLocation::Known(T::Location::Result(
+                            command,
+                            checked_as!(i, u16)?,
+                        )))?,
+                        value: v,
+                    })
+                })
+                .collect::<anyhow::Result<_>>()?,
+        );
+        Ok(())
+    }
+
+    fn location(&self, loc: T::Location) -> anyhow::Result<&Location> {
+        Ok(match loc {
+            T::Location::TxContext => &self.tx_context,
+            T::Location::GasCoin => &self.gas,
+            T::Location::ObjectInput(i) => self
+                .object_inputs
+                .get(i as usize)
+                .ok_or_else(|| anyhow::anyhow!("Object input index out of bounds {i}"))?,
+            T::Location::WithdrawalInput(i) => self
+                .withdrawal_inputs
+                .get(i as usize)
+                .ok_or_else(|| anyhow::anyhow!("Withdrawal input index out of bounds {i}"))?,
+            T::Location::PureInput(i) => self
+                .pure_inputs
+                .get(i as usize)
+                .ok_or_else(|| anyhow::anyhow!("Pure input index out of bounds {i}"))?,
+            T::Location::ReceivingInput(i) => self
+                .receiving_inputs
+                .get(i as usize)
+                .ok_or_else(|| anyhow::anyhow!("Receiving input index out of bounds {i}"))?,
+            T::Location::Result(i, j) => self
+                .results
+                .get(i as usize)
+                .and_then(|r| r.get(j as usize))
+                .ok_or_else(|| anyhow::anyhow!("Result index out of bounds ({i},{j})"))?,
+        })
+    }
+
+    fn location_mut(&mut self, loc: T::Location) -> anyhow::Result<&mut Location> {
+        Ok(match loc {
+            T::Location::TxContext => &mut self.tx_context,
+            T::Location::GasCoin => &mut self.gas,
+            T::Location::ObjectInput(i) => self
+                .object_inputs
+                .get_mut(i as usize)
+                .ok_or_else(|| anyhow::anyhow!("Object input index out of bounds {i}"))?,
+            T::Location::WithdrawalInput(i) => self
+                .withdrawal_inputs
+                .get_mut(i as usize)
+                .ok_or_else(|| anyhow::anyhow!("Withdrawal input index out of bounds {i}"))?,
+            T::Location::PureInput(i) => self
+                .pure_inputs
+                .get_mut(i as usize)
+                .ok_or_else(|| anyhow::anyhow!("Pure input index out of bounds {i}"))?,
+            T::Location::ReceivingInput(i) => self
+                .receiving_inputs
+                .get_mut(i as usize)
+                .ok_or_else(|| anyhow::anyhow!("Receiving input index out of bounds {i}"))?,
+            T::Location::Result(i, j) => self
+                .results
+                .get_mut(i as usize)
+                .and_then(|r| r.get_mut(j as usize))
+                .ok_or_else(|| anyhow::anyhow!("Result index out of bounds ({i},{j})"))?,
+        })
+    }
+
+    fn check_usage(&self, usage: &T::Usage, location: &Location) -> anyhow::Result<()> {
+        // by marking "ignore alias" as `false`, we will also check for `Alias` paths, i.e. paths
+        // that point to the location itself without any extensions.
+        let is_borrowed = self.any_extends(location.root, /* ignore alias */ false)?
+            || self.arg_roots.contains(&usage.location());
+        match usage {
+            T::Usage::Move(_) => {
+                anyhow::ensure!(!is_borrowed, "Cannot move a value that is borrowed");
+            }
+            T::Usage::Copy {
+                borrowed: borrowed_flag,
+                ..
+            } => {
+                let Some(borrowed_flag) = borrowed_flag.get().copied() else {
+                    anyhow::bail!("Borrowed flag not set for copy usage");
+                };
+                // `verify::memory_safety` sets `borrowed` before `drop_safety` rewrites last-use
+                // copies of references into moves. Those moves release references earlier than
+                // an originally annotated copies did, which might mean that a reference that
+                // caused the `borrowed_flag` to be set might have been "optimized" to being
+                // released early.
+                // As such, we can just check that if the location `is_borrowed` then the
+                // flag must be consistent, i.e.
+                // is_borrowed ==> borrowed_flag
+                if is_borrowed {
+                    anyhow::ensure!(
+                        borrowed_flag,
+                        "Copy of borrowed location {:?} in command {} is not flagged as borrowed",
+                        location.root,
+                        self.current_command()?
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn argument(&mut self, sp!(_, (arg, _)): &T::Argument) -> anyhow::Result<Value> {
+        let location = self.location(arg.location())?;
+        match arg {
+            T::Argument__::Use(usage)
+            | T::Argument__::Freeze(usage)
+            | T::Argument__::Read(usage) => self.check_usage(usage, location)?,
+            T::Argument__::Borrow(_, _) => (),
+        };
+        let location = self.location_mut(arg.location())?;
+        let value = match arg {
+            T::Argument__::Use(usage) => location.use_(usage)?,
+            T::Argument__::Freeze(usage) => location.use_(usage)?.freeze()?,
+            T::Argument__::Borrow(is_mut, _) => location.borrow(*is_mut)?,
+            T::Argument__::Read(usage) => {
+                location.use_(usage)?;
+                Value::NonRef
+            }
+        };
+        if let Value::Ref { node, .. } = &value {
+            self.arg_roots.extend(self.memory.known_roots(*node)?);
+        }
+        Ok(value)
+    }
+
+    fn arguments(&mut self, args: &[T::Argument]) -> anyhow::Result<Vec<Value>> {
+        args.iter()
+            .map(|arg| self.argument(arg))
+            .collect::<anyhow::Result<Vec<_>>>()
+    }
+
+    fn all_references(&self) -> impl Iterator<Item = NodeID> + '_ {
+        let Self {
+            tx_context,
+            gas,
+            object_inputs,
+            withdrawal_inputs,
+            pure_inputs,
+            receiving_inputs,
+            results,
+            arg_roots: _,
+            ..
+        } = self;
+        std::iter::once(tx_context)
+            .chain(std::iter::once(gas))
+            .chain(object_inputs)
+            .chain(withdrawal_inputs)
+            .chain(pure_inputs)
+            .chain(receiving_inputs)
+            .chain(results.iter().flatten())
+            .filter_map(|v| match v.value.as_ref() {
+                Some(Value::Ref { node, .. }) => Some(*node),
+                Some(Value::NonRef) | None => None,
+            })
+    }
+
+    /// Returns whether any live reference may extend `node`. Excludes aliases when requested.
+    fn any_extends(&self, node: NodeID, ignore_aliases: bool) -> anyhow::Result<bool> {
+        for other in self.all_references() {
+            if (!ignore_aliases && other == node) || self.memory.extends(other, node)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+
+/// Verifies memory safety using an alternative implementation of `verify::memory_safety`.
+///
+/// It represents memory locations and call returns as graph nodes. Root nodes represent known PTB
+/// locations (or in rare cases unknown values from calls without reference arguments). Each node
+/// tracks its transitive ancestors in a bitset. A call-return delta records its command identity,
+/// analogous to the regex verifier's `.*` extension, while retaining enough identity to use the
+/// guarantee that mutable references returned by one call do not overlap with other references
+/// returned from that call. Extensions from distinct commands are conservatively treated as
+/// potentially overlapping. PTBs have no control flow, which makes this representation sufficient
+/// as an invariant check for the regex implementation.
+/// Checks the following
+/// - Values are not used after being moved
+/// - Reference safety is upheld (no dangling references)
 pub fn verify<Mode: ExecutionMode>(
     env: &Env<Mode>,
     txn: &T::Transaction,
 ) -> Result<(), Mode::Error> {
-    legacy::verify::<Mode>(env, txn)
+    if !env.protocol_config.memory_safety_invariant_check_v2() {
+        return legacy::verify(env, txn);
+    }
+    Ok(verify_(env, txn).map_err(|e| make_invariant_violation!("{}. Transaction {:?}", e, txn))?)
+}
+
+pub(crate) fn verify_<Mode: ExecutionMode>(
+    env: &Env<Mode>,
+    txn: &T::Transaction,
+) -> anyhow::Result<()> {
+    let mut context = Context::new(env, txn)?;
+    let T::Transaction {
+        gas_payment: _,
+        bytes: _,
+        objects: _,
+        withdrawals: _,
+        pure: _,
+        receiving: _,
+        withdrawal_compatibility_conversions: _,
+        original_command_len: _,
+        commands,
+        unified_linkage: _,
+    } = txn;
+    for c in commands {
+        command(&mut context, c)?;
+    }
+    Ok(())
+}
+
+fn command(context: &mut Context, c: &T::Command) -> anyhow::Result<()> {
+    // process the command
+    debug_assert!(context.arg_roots.is_empty());
+    let results = command_(context, c)?;
+    // drop unused result values by marking them as `None`
+    assert_invariant!(
+        results.len() == c.value.drop_values.len(),
+        "result length mismatch. expected {}, got {}",
+        c.value.drop_values.len(),
+        results.len()
+    );
+    context.add_result_values(
+        results
+            .into_iter()
+            .zip_debug_eq(c.value.drop_values.iter().copied())
+            .map(|(v, drop)| if drop { None } else { Some(v) }),
+    )?;
+    context.arg_roots.clear();
+    Ok(())
+}
+
+fn command_(context: &mut Context, sp!(_, c): &T::Command) -> anyhow::Result<Vec<Value>> {
+    let result_tys = &c.result_type;
+    let results = match &c.command {
+        T::Command__::MoveCall(move_call) => {
+            let T::MoveCall {
+                function,
+                arguments,
+            } = &**move_call;
+            let arg_values = context.arguments(arguments)?;
+            call(context, &function.signature, arg_values)?
+        }
+        T::Command__::TransferObjects(objs, recipient) => {
+            context.arguments(objs)?;
+            context.argument(recipient)?;
+            non_ref_results(result_tys)?
+        }
+        T::Command__::SplitCoins(_, coin, amounts) => {
+            context.arguments(amounts)?;
+            let coin_value = context.argument(coin)?;
+            write_ref(context, coin_value)?;
+            non_ref_results(result_tys)?
+        }
+        T::Command__::MergeCoins(_, target, coins) => {
+            context.arguments(coins)?;
+            let target_value = context.argument(target)?;
+            write_ref(context, target_value)?;
+            non_ref_results(result_tys)?
+        }
+        T::Command__::MakeMoveVec(_, arguments) => {
+            context.arguments(arguments)?;
+            non_ref_results(result_tys)?
+        }
+        T::Command__::Publish(_, _, _) => non_ref_results(result_tys)?,
+        T::Command__::Upgrade(_, _, _, ticket, _) => {
+            context.argument(ticket)?;
+            non_ref_results(result_tys)?
+        }
+    };
+    assert_invariant!(
+        result_tys.len() == results.len(),
+        "result length mismatch. Expected {}, got {}",
+        result_tys.len(),
+        results.len()
+    );
+    Ok(results)
+}
+
+fn write_ref(context: &Context, value: Value) -> anyhow::Result<()> {
+    match value {
+        Value::NonRef => {
+            anyhow::bail!("Cannot write to a non-reference value");
+        }
+
+        Value::Ref { is_mut: false, .. } => {
+            anyhow::bail!("Cannot write to an immutable reference");
+        }
+        Value::Ref { is_mut: true, node } => {
+            anyhow::ensure!(
+                !context.any_extends(node, /* ignore alias */ true)?,
+                "Cannot write to a mutable reference that has extensions"
+            );
+            Ok(())
+        }
+    }
+}
+
+fn call(
+    context: &mut Context,
+    signature: &T::LoadedFunctionInstantiation,
+    arguments: Vec<Value>,
+) -> anyhow::Result<Vec<Value>> {
+    let return_ = &signature.return_;
+    let mut all_nodes = Vec::new();
+    let mut imm_nodes = Vec::new();
+    let mut mut_nodes = Vec::new();
+    for arg in arguments {
+        match arg {
+            Value::NonRef => (),
+            Value::Ref { is_mut: true, node } => {
+                anyhow::ensure!(
+                    !context.any_extends(node, /* ignore alias */ true)?,
+                    "Cannot transfer a mutable ref with extensions"
+                );
+                for other in &mut_nodes {
+                    anyhow::ensure!(
+                        context.memory.is_disjoint(*other, node)?,
+                        "Double mutable borrow"
+                    );
+                }
+                all_nodes.push(node);
+                mut_nodes.push(node);
+            }
+            Value::Ref {
+                is_mut: false,
+                node,
+            } => {
+                all_nodes.push(node);
+                imm_nodes.push(node);
+            }
+        }
+    }
+    // All mutable references must be disjoint from all immutable references
+    for immutable in &imm_nodes {
+        for mutable in &mut_nodes {
+            anyhow::ensure!(
+                context.memory.is_disjoint(*immutable, *mutable)?,
+                "Mutable and immutable borrows cannot overlap"
+            );
+        }
+    }
+    if context.allow_references_in_ptbs {
+        // `mut_nodes` is a subset of `all_nodes`, so all candidates are covered.
+        let mut tx_context_nodes = BTreeSet::new();
+        for node in &all_nodes {
+            if context
+                .memory
+                .known_roots(*node)?
+                .contains(&T::Location::TxContext)
+            {
+                tx_context_nodes.insert(*node);
+            }
+        }
+        mut_nodes.retain(|node| !tx_context_nodes.contains(node));
+        all_nodes.retain(|node| !tx_context_nodes.contains(node));
+    }
+    let command = context.current_command()?;
+    let mut_nodes = if mut_nodes.is_empty() {
+        vec![context.memory.root(RootLocation::Unknown { command })?]
+    } else {
+        mut_nodes
+    };
+    let all_nodes = if all_nodes.is_empty() {
+        vec![context.memory.root(RootLocation::Unknown { command })?]
+    } else {
+        all_nodes
+    };
+    return_
+        .iter()
+        .enumerate()
+        .map(|(i, ty)| {
+            let _result = checked_as!(i, u16)?;
+            Ok(match ty {
+                T::Type::Reference(/* is mut */ true, _) => Value::Ref {
+                    is_mut: true,
+                    node: context.memory.call_return(command, &mut_nodes)?,
+                },
+                T::Type::Reference(/* is mut */ false, _) => Value::Ref {
+                    is_mut: false,
+                    node: context.memory.call_return(command, &all_nodes)?,
+                },
+                _ => Value::NonRef,
+            })
+        })
+        .collect::<anyhow::Result<Vec<_>>>()
+}
+
+fn non_ref_results(results: &[T::Type]) -> anyhow::Result<Vec<Value>> {
+    results
+        .iter()
+        .map(|t| {
+            anyhow::ensure!(
+                !matches!(t, T::Type::Reference(_, _)),
+                "attempted to create a non-reference result from a reference type",
+            );
+            Ok(Value::NonRef)
+        })
+        .collect()
 }
 
 mod legacy {

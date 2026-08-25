@@ -190,6 +190,7 @@ feature_flags:
   enable_allowances: true
   fix_ptb_generated_reads: true
   check_object_funds_withdraw_in_execution: true
+  memory_safety_invariant_check_v2: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
