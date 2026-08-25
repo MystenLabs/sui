@@ -220,6 +220,10 @@ pub fn reserve_object_funds_for_withdrawal(
             E_OBJECT_FUNDS_INSUFFICIENT,
         )),
         ObjectFundsSufficiency::Overflow => Ok(NativeResult::err(context.gas_used(), E_OVERFLOW)),
+        ObjectFundsSufficiency::ImplicitSystemObjectReadNotAllowed(msg) => Err(
+            PartialVMError::new(StatusCode::IMPLICIT_SYSTEM_OBJECT_READ_NOT_ALLOWED)
+                .with_message(msg),
+        ),
         ObjectFundsSufficiency::LoadError(msg) => Err(PartialVMError::new(
             StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
         )

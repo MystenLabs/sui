@@ -309,6 +309,7 @@ pub struct AuthorityMetrics {
     pub(crate) execution_driver_executed_transactions: IntCounter,
     pub(crate) execution_driver_paused_transactions: IntCounter,
     pub(crate) execution_driver_dispatch_queue: IntGauge,
+    pub(crate) execution_driver_thread_occupancy: IntGauge,
     pub(crate) execution_queueing_delay_s: Histogram,
     pub(crate) prepare_cert_gas_latency_ratio: Histogram,
     pub(crate) execution_gas_latency_ratio: Histogram,
@@ -589,6 +590,13 @@ impl AuthorityMetrics {
             execution_driver_dispatch_queue: register_int_gauge_with_registry!(
                 "execution_driver_dispatch_queue",
                 "Number of transaction pending in execution driver dispatch queue",
+                registry,
+            )
+            .unwrap(),
+            execution_driver_thread_occupancy: register_int_gauge_with_registry!(
+                "execution_driver_thread_occupancy",
+                "Number of blocking threads currently held by transaction execution, including \
+                 those parked waiting for another execution to produce a value",
                 registry,
             )
             .unwrap(),

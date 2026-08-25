@@ -42,7 +42,7 @@ use sui_types::{
     object::Object,
     object::Owner,
     storage::{BackingPackageStore, RuntimeObjectResolver, Storage},
-    transaction::InputObjects,
+    transaction::{InputObjectKind, InputObjects},
 };
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
 
@@ -118,6 +118,8 @@ pub struct TemporaryStore<'backing> {
     /// Versions of system objects this transaction may implicitly read during execution.
     system_object_versions: SystemObjectVersionRequirements,
 
+    mutates_implicitly_read_system_object: bool,
+
     /// System objects implicitly read during execution, keyed by object ID, with the version (and its
     /// digest) at which they were read.
     /// Interior-mutable because reads happen behind `&self` (`RuntimeObjectResolver`).
@@ -141,6 +143,13 @@ impl<'backing> TemporaryStore<'backing> {
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
+        let mutates_implicitly_read_system_object = input_objects.object_kinds().any(|kind| {
+            matches!(
+                kind,
+                InputObjectKind::SharedMoveObject { id, mutability, .. }
+                    if mutability.may_mutate() && id.is_implicitly_read_system_object()
+            )
+        });
 
         let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
         let stream_ended_consensus_objects = input_objects.consensus_stream_ended_objects();
@@ -181,6 +190,7 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
             invariants: InvariantChecker::new(),
             system_object_versions,
+            mutates_implicitly_read_system_object,
             loaded_system_objects: RefCell::new(BTreeMap::new()),
             unsettled_object_funds,
         }
@@ -189,8 +199,14 @@ impl<'backing> TemporaryStore<'backing> {
     /// Checks that the system object `object_id` is available at the version this transaction
     /// requires, and in exact-version mode records the read so it can be emitted into effects
     /// and reproduced on replay.
-    pub fn load_implicitly_read_system_object(&self, object_id: &ObjectID) -> Object {
-        match self.system_object_versions {
+    pub fn load_implicitly_read_system_object(&self, object_id: &ObjectID) -> SuiResult<Object> {
+        if self.mutates_implicitly_read_system_object {
+            return Err(SuiErrorKind::ImplicitSystemObjectReadNotAllowed {
+                object_id: *object_id,
+            }
+            .into());
+        }
+        Ok(match self.system_object_versions {
             SystemObjectVersionRequirements::Exact(versions) => {
                 let object = self
                     .store
@@ -211,7 +227,7 @@ impl<'backing> TemporaryStore<'backing> {
                 .store
                 .get_object(object_id)
                 .unwrap_or_else(|| panic!("system object {object_id} does not exist")),
-        }
+        })
     }
 
     pub fn unsettled_object_funds(&self) -> &dyn UnsettledObjectFundsRead {
@@ -1083,7 +1099,7 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
     /// This function is expected never to fail; an error indicates an invariant violation.
     fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128> {
         let required_version = self
-            .load_implicitly_read_system_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .load_implicitly_read_system_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)?
             .version();
 
         let settled = AccumulatorRootValue::load(self, Some(required_version), owner, type_)?

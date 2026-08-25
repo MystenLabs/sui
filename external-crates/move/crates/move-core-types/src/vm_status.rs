@@ -403,6 +403,7 @@ pub enum StatusCode {
     PACKAGE_ARENA_LIMIT_REACHED = 4031,
     INTERNER_LIMIT_REACHED = 4032,
     EXTERNAL_RESOLUTION_REQUEST_ERROR = 4033,
+    IMPLICIT_SYSTEM_OBJECT_READ_NOT_ALLOWED = 4034,
 
     // A reserved status to represent an unknown vm status.
     // this is std::u64::MAX, but we can't pattern match on that, so put the hardcoded value in

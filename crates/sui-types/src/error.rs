@@ -832,6 +832,11 @@ pub enum SuiErrorKind {
 
     #[error("Transaction {digest} has been recently submitted to this validator.")]
     TransactionSubmitted { digest: TransactionDigest },
+
+    #[error(
+        "Implicit read of system object {object_id} is not allowed in a transaction that mutates an implicitly read system object"
+    )]
+    ImplicitSystemObjectReadNotAllowed { object_id: ObjectID },
 }
 
 #[repr(u64)]

@@ -3,9 +3,10 @@
 
 use std::sync::{Arc, Weak};
 
-use mysten_common::sync::execution_permit::set_execution_permit;
+use mysten_common::sync::execution_permit::{forbid_parking, set_execution_permit};
 use mysten_common::{fatal, random::get_rng};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use prometheus::IntGauge;
 use rand::Rng;
 use sui_macros::fail_point_async;
 use sui_types::execution::ExecutionOutput;
@@ -21,6 +22,26 @@ use crate::execution_scheduler::PendingCertificate;
 mod execution_driver_tests;
 
 const QUEUEING_DELAY_SAMPLING_RATIO: f64 = 0.05;
+
+#[cfg(not(msim))]
+const EXECUTION_THREAD_OCCUPANCY_LIMIT: usize = crate::runtime::MAX_BLOCKING_THREADS / 4;
+#[cfg(msim)]
+const EXECUTION_THREAD_OCCUPANCY_LIMIT: usize = 4;
+
+struct ThreadOccupancyGuard(IntGauge);
+
+impl ThreadOccupancyGuard {
+    fn new(gauge: IntGauge) -> Self {
+        gauge.inc();
+        Self(gauge)
+    }
+}
+
+impl Drop for ThreadOccupancyGuard {
+    fn drop(&mut self) {
+        self.0.dec();
+    }
+}
 
 /// When a notification that a new pending transaction is received we activate
 /// processing the transaction in a loop.
@@ -38,6 +59,7 @@ pub async fn execution_process(
     // These transactions help unblock other transactions that read the same object.
     // Give them a dedicated permit pool so they execute as fast as possible.
     let system_object_writer_limit = Arc::new(Semaphore::new(execution_concurrency));
+    let thread_occupancy_limit = Arc::new(Semaphore::new(EXECUTION_THREAD_OCCUPANCY_LIMIT));
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
@@ -93,16 +115,17 @@ pub async fn execution_process(
             continue;
         }
 
-        let limit = if certificate
+        let is_system_object_writer = certificate
             .data()
             .transaction_data()
             .kind()
-            .mutates_implicitly_read_system_object()
-        {
+            .mutates_implicitly_read_system_object();
+        let limit = if is_system_object_writer {
             system_object_writer_limit.clone()
         } else {
             normal_limit.clone()
         };
+        let occupancy_limit = (!is_system_object_writer).then(|| thread_occupancy_limit.clone());
 
         // Certificate execution is CPU-bound and can take significant time, so run it on a
         // blocking thread to avoid stalling the async runtime's worker threads.
@@ -118,6 +141,14 @@ pub async fn execution_process(
             if authority.is_tx_already_executed(&digest) {
                 return;
             }
+
+            let occupancy_permit = match occupancy_limit {
+                Some(occupancy_limit) => {
+                    let _scope = monitored_scope("ExecutionDriver::acquire_occupancy_permit");
+                    Some(occupancy_limit.acquire_owned().await.unwrap())
+                }
+                None => None,
+            };
 
             // `permit` is moved into the blocking closure below and installed on the
             // execution thread, so that a blocking sync primitive can release it if
@@ -161,9 +192,16 @@ pub async fn execution_process(
             tokio::task::spawn_blocking(move || {
                 // Install the permit so a blocking sync primitive can release it while
                 // execution waits; otherwise it is released when this guard drops at the
-                // end of execution. Not re-acquired after a release - any transient
-                // over-subscription resolves itself as tasks complete.
+                // end of execution. Not re-acquired after a release - the occupancy permit
+                // below is what bounds how many blocking threads execution can hold.
                 let _permit_guard = set_execution_permit(Box::new(permit));
+                let _occupancy_permit = occupancy_permit;
+                let _occupancy_guard = (!is_system_object_writer).then(|| {
+                    ThreadOccupancyGuard::new(
+                        authority.metrics.execution_driver_thread_occupancy.clone(),
+                    )
+                });
+                let _forbid_parking = is_system_object_writer.then(forbid_parking);
                 let _enter = blocking_span.enter();
                 let _scope = monitored_scope("ExecutionDriver::blocking_task");
                 match authority.try_execute_immediately(

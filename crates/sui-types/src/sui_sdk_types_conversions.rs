@@ -950,6 +950,9 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
             crate::execution_status::ExecutionErrorKind::NonExclusiveWriteInputObjectModified { id } => {
                 Self::NonExclusiveWriteInputObjectModified { object: id.into() }
             }
+            crate::execution_status::ExecutionErrorKind::ImplicitSystemObjectReadNotAllowed => {
+                Self::ConsensusObjectOperationNotAllowed
+            }
         }
     }
 }

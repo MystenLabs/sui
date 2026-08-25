@@ -4,6 +4,8 @@
 use sui_config::NodeConfig;
 use tokio::runtime::Runtime;
 
+pub const MAX_BLOCKING_THREADS: usize = 512;
+
 pub struct SuiRuntimes {
     // Order in this struct is the order in which runtimes are stopped
     pub sui_node: Runtime,
@@ -14,6 +16,7 @@ impl SuiRuntimes {
     pub fn new(_confg: &NodeConfig) -> Self {
         let sui_node = tokio::runtime::Builder::new_multi_thread()
             .thread_name("sui-node-runtime")
+            .max_blocking_threads(MAX_BLOCKING_THREADS)
             .enable_all()
             .build()
             .unwrap();
