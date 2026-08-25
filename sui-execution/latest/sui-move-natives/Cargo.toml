@@ -23,7 +23,7 @@ fastcrypto.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
 
-move-vm-runtime = { path = "../../../external-crates/move/move-execution/v4/crates/move-vm-runtime", package = "move-vm-runtime-v4" }
+move-vm-runtime = { path = "../../../external-crates/move/move-execution/v5/crates/move-vm-runtime", package = "move-vm-runtime-v5" }
 
 sui-protocol-config.workspace = true
 sui-types.workspace = true

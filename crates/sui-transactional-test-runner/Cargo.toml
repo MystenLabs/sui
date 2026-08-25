@@ -44,7 +44,7 @@ telemetry-subscribers.workspace = true
 iso8601.workspace = true
 
 move-stdlib = { path = "../../external-crates/move/crates/move-stdlib" }
-move-vm-runtime = { path = "../../external-crates/move/move-execution/v4/crates/move-vm-runtime", package = "move-vm-runtime-v4" }
+move-vm-runtime = { path = "../../external-crates/move/move-execution/v5/crates/move-vm-runtime", package = "move-vm-runtime-v5" }
 
 simulacrum.workspace = true
 sui-rpc-api.workspace = true

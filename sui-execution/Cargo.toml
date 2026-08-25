@@ -51,7 +51,7 @@ move-bytecode-verifier-v1 = { path = "../external-crates/move/move-execution/v1/
 move-bytecode-verifier-v2 = { path = "../external-crates/move/move-execution/v2/crates/move-bytecode-verifier" }
 move-bytecode-verifier-v3 = { path = "../external-crates/move/move-execution/v3/crates/move-bytecode-verifier" }
 # move-bytecode-verifier-$CUT = { path = "../external-crates/move/move-execution/$CUT/crates/move-bytecode-verifier" }
-move-vm-runtime-latest = { path = "../external-crates/move/move-execution/v4/crates/move-vm-runtime", package = "move-vm-runtime-v4" }
+move-vm-runtime-latest = { path = "../external-crates/move/move-execution/v5/crates/move-vm-runtime", package = "move-vm-runtime-v5" }
 move-vm-runtime-v0 = { path = "../external-crates/move/move-execution/v0/crates/move-vm-runtime" }
 move-vm-runtime-v1 = { path = "../external-crates/move/move-execution/v1/crates/move-vm-runtime" }
 move-vm-runtime-v2 = { path = "../external-crates/move/move-execution/v2/crates/move-vm-runtime" }

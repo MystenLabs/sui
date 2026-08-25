@@ -31,7 +31,7 @@ mysten-metrics.workspace = true
 nonempty.workspace = true
 
 move-bytecode-verifier = { path = "../../../external-crates/move/crates/move-bytecode-verifier" }
-move-vm-runtime = { path = "../../../external-crates/move/move-execution/v4/crates/move-vm-runtime", package = "move-vm-runtime-v4" }
+move-vm-runtime = { path = "../../../external-crates/move/move-execution/v5/crates/move-vm-runtime", package = "move-vm-runtime-v5" }
 move-vm-profiler = { path = "../../../external-crates/move/crates/move-vm-profiler" }
 sui-move-natives = { path = "../sui-move-natives", package = "sui-move-natives-latest" }
 sui-verifier = { path = "../sui-verifier", package = "sui-verifier-latest" }
