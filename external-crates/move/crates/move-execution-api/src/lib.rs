@@ -123,6 +123,18 @@ pub trait MoveRuntimeHarness {
         serialized_args: Vec<Vec<u8>>,
     ) -> VMResult<Vec<Self::Value>>;
 
+    /// Like [`Self::execute_function`], but metered against the subsystem's standard test cost
+    /// table; also returns the gas units consumed. Subsystems may legitimately *differ* here:
+    /// gas is part of a subsystem's behavior, and changing it is exactly what freezing plus
+    /// protocol gating exist for.
+    fn execute_function_metered(
+        vm: &mut Self::Vm<'_>,
+        module: &ModuleId,
+        function: &IdentStr,
+        ty_args: Vec<Self::Type>,
+        serialized_args: Vec<Vec<u8>>,
+    ) -> VMResult<(Vec<Self::Value>, u64)>;
+
     /// Serialize a runtime value of type `ty` into its canonical (BCS) byte representation.
     fn serialize_value(vm: &Self::Vm<'_>, value: &Self::Value, ty: &TypeTag) -> VMResult<Vec<u8>>;
 }

@@ -27,8 +27,11 @@ use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::VerifierConfig;
 use move_vm_runtime::{
     dev_utils::{
-        in_memory_test_adapter::InMemoryTestAdapter, storage::StoredPackage,
-        vm_arguments::ValueFrame, vm_test_adapter::VMTestAdapter,
+        gas_schedule::{Gas, GasStatus, INITIAL_COST_SCHEDULE},
+        in_memory_test_adapter::InMemoryTestAdapter,
+        storage::StoredPackage,
+        vm_arguments::ValueFrame,
+        vm_test_adapter::VMTestAdapter,
     },
     execution::{Type, values::Value, vm::MoveVM},
     shared::{gas::UnmeteredGasMeter, linkage_context::LinkageContext},
@@ -107,6 +110,29 @@ impl MoveRuntimeHarness for LatestSubsystem {
             /* bypass_declared_entry_check */ true,
         )?;
         Ok(frame.values)
+    }
+
+    fn execute_function_metered(
+        vm: &mut Self::Vm<'_>,
+        module: &ModuleId,
+        function: &IdentStr,
+        ty_args: Vec<Self::Type>,
+        serialized_args: Vec<Vec<u8>>,
+    ) -> VMResult<(Vec<Self::Value>, u64)> {
+        const GAS_BUDGET: u64 = 1_000_000;
+        let mut gas = GasStatus::new(&INITIAL_COST_SCHEDULE, Gas::new(GAS_BUDGET));
+        let frame = ValueFrame::serialized_call(
+            vm,
+            module,
+            function,
+            ty_args,
+            serialized_args,
+            &mut gas,
+            None::<&mut MoveTraceBuilder>,
+            /* bypass_declared_entry_check */ true,
+        )?;
+        let gas_used = GAS_BUDGET - u64::from(gas.remaining_gas());
+        Ok((frame.values, gas_used))
     }
 
     fn serialize_value(vm: &Self::Vm<'_>, value: &Self::Value, ty: &TypeTag) -> VMResult<Vec<u8>> {
