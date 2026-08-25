@@ -93,8 +93,8 @@ task 12, lines 64-68:
 // signing (limits are not read there) and aborts at execution.
 //> 0: sui::allowance::balance_spend<sui::sui::SUI>(Input(1), Input(0), Input(2));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(3));
-Error: Transaction Effects Status: Move Abort in sui::allowance::charge (function index 34) at offset 79 at line 437 with clever code 4
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("allowance") }, function: 34, instruction: 79, function_name: Some("charge") }, 13836185832090238985) at command Some(0)
+Error: Transaction Effects Status: Move Abort in sui::allowance::charge (function index 34) at offset 79 at line 442 with clever code 4
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("allowance") }, function: 34, instruction: 79, function_name: Some("charge") }, 13836185853565075465) at command Some(0)
 
 task 13, lines 70-72:
 //# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(0,@A,object(4,0)) mutshared(4,0) immshared(6)

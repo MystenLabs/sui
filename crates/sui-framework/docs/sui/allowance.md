@@ -115,6 +115,12 @@ An allowance's limits can never be charged without the funds actually moving.
 <dd>
 </dd>
 <dt>
+<code>is_sponsor: bool</code>
+</dt>
+<dd>
+ Today is always false. Opens the door for future <code>ctx.sponsor()</code> based allowances.
+</dd>
+<dt>
 <code>inner: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;T&gt;</code>
 </dt>
 <dd>
@@ -654,6 +660,16 @@ Variant <code>CalendarMonths</code>
 
 <pre><code>#[error]
 <b>const</b> <a href="../sui/allowance.md#sui_allowance_ENotEnabled">ENotEnabled</a>: vector&lt;u8&gt; = b"Allowances are not enabled";
+</code></pre>
+
+
+
+<a name="sui_allowance_ESponsorWithdrawalNotEnabled"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/allowance.md#sui_allowance_ESponsorWithdrawalNotEnabled">ESponsorWithdrawalNotEnabled</a>: vector&lt;u8&gt; = b"Sponsor <a href="../sui/allowance.md#sui_allowance">allowance</a> withdrawals are not enabled";
 </code></pre>
 
 
@@ -1551,7 +1567,8 @@ spender. NB: Any app checks must be done beforehand by the caller.
     <a href="../sui/clock.md#sui_clock">clock</a>: &Clock,
     ctx: &TxContext,
 ): Withdrawal&lt;T&gt; {
-    <b>let</b> <a href="../sui/allowance.md#sui_allowance_AllowanceWithdrawal">AllowanceWithdrawal</a> { <a href="../sui/allowance.md#sui_allowance">allowance</a>, inner } = w;
+    <b>let</b> <a href="../sui/allowance.md#sui_allowance_AllowanceWithdrawal">AllowanceWithdrawal</a> { <a href="../sui/allowance.md#sui_allowance">allowance</a>, is_sponsor, inner } = w;
+    <b>assert</b>!(!is_sponsor, <a href="../sui/allowance.md#sui_allowance_ESponsorWithdrawalNotEnabled">ESponsorWithdrawalNotEnabled</a>);
     <b>assert</b>!(<a href="../sui/allowance.md#sui_allowance">allowance</a> == self.id.to_inner(), <a href="../sui/allowance.md#sui_allowance_EWrongAllowance">EWrongAllowance</a>);
     <b>assert</b>!(self.settings.<a href="../sui/allowance.md#sui_allowance_spender">spender</a>.contains(&ctx.sender()), <a href="../sui/allowance.md#sui_allowance_ENotSpender">ENotSpender</a>);
     // Defense-in-depth check <b>as</b> this should already be verified at signing.

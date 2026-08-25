@@ -227,6 +227,25 @@ fun test_wrong_spender_rejected() {
 }
 
 #[test]
+#[expected_failure(abort_code = sui::allowance::ESponsorWithdrawalNotEnabled)]
+fun test_sponsor_withdrawal_rejected() {
+    test!(FUNDER, |scenario, clock| {
+        new_allowance().lifetime_cap(1000).create<Balance<TEST>>(scenario.ctx());
+
+        scenario.next_tx(SPENDER);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        let id = object::id(&alw);
+        let b = alw.balance_spend(
+            allowance::new_sponsor_withdrawal_for_testing<Balance<TEST>>(id, FUNDER, 100),
+            clock,
+            scenario.ctx(),
+        );
+        b.destroy_for_testing();
+        ts::return_shared(alw);
+    });
+}
+
+#[test]
 #[expected_failure(abort_code = sui::allowance::ENotStarted)]
 fun test_spend_before_start_rejected() {
     test!(FUNDER, |scenario, clock| {

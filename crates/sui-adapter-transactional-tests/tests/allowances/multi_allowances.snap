@@ -87,8 +87,8 @@ task 9, lines 53-58:
 // aborts in `consume`, and nothing is debited.
 //> 0: sui::allowance::balance_spend<sui::sui::SUI>(Input(3), Input(0), Input(4));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(5));
-Error: Transaction Effects Status: Move Abort in sui::allowance::consume (function index 32) at offset 16 at line 393 with clever code 6
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("allowance") }, function: 32, instruction: 16, function_name: Some("consume") }, 13836748593065361421) at command Some(0)
+Error: Transaction Effects Status: Move Abort in sui::allowance::consume (function index 32) at offset 31 at line 398 with clever code 6
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("allowance") }, function: 32, instruction: 31, function_name: Some("consume") }, 13836748614540197901) at command Some(0)
 
 task 10, lines 60-61:
 //# view-object 4,0

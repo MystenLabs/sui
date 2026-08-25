@@ -58,6 +58,8 @@ const EBadTimeWindow: vector<u8> = "Expiration must be after the start time";
 const ENoExpiration: vector<u8> = "Allowance must have an expiration or a rate limit";
 #[error(code = 16)]
 const ENotEnabled: vector<u8> = "Allowances are not enabled";
+#[error(code = 17)]
+const ESponsorWithdrawalNotEnabled: vector<u8> = "Sponsor allowance withdrawals are not enabled";
 
 const MAX_NAME_LENGTH: u64 = 128;
 const MS_PER_DAY: u64 = 86_400_000;
@@ -68,6 +70,8 @@ const MS_PER_DAY: u64 = 86_400_000;
 /// An allowance's limits can never be charged without the funds actually moving.
 public struct AllowanceWithdrawal<phantom T: store> has drop {
     allowance: ID,
+    /// Today is always false. Opens the door for future `ctx.sponsor()` based allowances.
+    is_sponsor: bool,
     inner: Withdrawal<T>,
 }
 
@@ -389,7 +393,8 @@ fun consume<T: store>(
     clock: &Clock,
     ctx: &TxContext,
 ): Withdrawal<T> {
-    let AllowanceWithdrawal { allowance, inner } = w;
+    let AllowanceWithdrawal { allowance, is_sponsor, inner } = w;
+    assert!(!is_sponsor, ESponsorWithdrawalNotEnabled);
     assert!(allowance == self.id.to_inner(), EWrongAllowance);
     assert!(self.settings.spender.contains(&ctx.sender()), ENotSpender);
     // Defense-in-depth check as this should already be verified at signing.
@@ -524,6 +529,21 @@ public fun new_withdrawal_for_testing<T: store>(
 ): AllowanceWithdrawal<T> {
     AllowanceWithdrawal {
         allowance,
+        is_sponsor: false,
+        inner: sui::funds_accumulator::create_withdrawal<T>(funder, amount),
+    }
+}
+
+/// Sponsor-bound variant; no protocol path mints these yet.
+#[test_only]
+public fun new_sponsor_withdrawal_for_testing<T: store>(
+    allowance: ID,
+    funder: address,
+    amount: u256,
+): AllowanceWithdrawal<T> {
+    AllowanceWithdrawal {
+        allowance,
+        is_sponsor: true,
         inner: sui::funds_accumulator::create_withdrawal<T>(funder, amount),
     }
 }

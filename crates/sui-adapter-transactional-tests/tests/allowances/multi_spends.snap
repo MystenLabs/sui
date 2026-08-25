@@ -112,8 +112,8 @@ task 6, lines 36-42:
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(4));
 //> 2: sui::allowance::balance_spend<sui::sui::SUI>(Input(2), Input(1), Input(3));
 //> 3: sui::balance::send_funds<sui::sui::SUI>(Result(2), Input(4));
-Error: Transaction Effects Status: Move Abort in sui::allowance::charge (function index 34) at offset 79 at line 437 with clever code 4
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("allowance") }, function: 34, instruction: 79, function_name: Some("charge") }, 13836185832090238985) at command Some(2)
+Error: Transaction Effects Status: Move Abort in sui::allowance::charge (function index 34) at offset 79 at line 442 with clever code 4
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("allowance") }, function: 34, instruction: 79, function_name: Some("charge") }, 13836185853565075465) at command Some(2)
 
 task 7, lines 44-45:
 //# view-object 3,0
@@ -257,8 +257,8 @@ task 11, lines 59-65:
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(4));
 //> 2: sui::allowance::balance_spend<sui::sui::SUI>(Input(2), Input(1), Input(3));
 //> 3: sui::balance::send_funds<sui::sui::SUI>(Result(2), Input(4));
-Error: Transaction Effects Status: Move Abort in sui::allowance::charge (function index 34) at offset 79 at line 437 with clever code 4
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("allowance") }, function: 34, instruction: 79, function_name: Some("charge") }, 13836185832090238985) at command Some(2)
+Error: Transaction Effects Status: Move Abort in sui::allowance::charge (function index 34) at offset 79 at line 442 with clever code 4
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("allowance") }, function: 34, instruction: 79, function_name: Some("charge") }, 13836185853565075465) at command Some(2)
 
 task 12, lines 67-68:
 //# view-object 3,0

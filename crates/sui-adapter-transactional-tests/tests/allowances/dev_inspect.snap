@@ -52,8 +52,8 @@ task 6, lines 33-37:
 // sign-time funder check, and `consume` aborts on it instead.
 //> 0: sui::allowance::balance_spend<sui::sui::SUI>(Input(1), Input(0), Input(2));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(3));
-Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("allowance") }, function: 32, instruction: 49, function_name: Some("consume") }, 13837874505857630229) in command 0
-Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("allowance") }, function: 32, instruction: 49, function_name: Some("consume") }, 13837874505857630229) in command 0
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("allowance") }, function: 32, instruction: 64, function_name: Some("consume") }, 13837874527332466709) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("allowance") }, function: 32, instruction: 64, function_name: Some("consume") }, 13837874527332466709) in command 0
 
 task 7, line 39:
 //# create-checkpoint

@@ -58,8 +58,8 @@ task 7, lines 75-78:
 // A plain spend on the app-bound allowance: aborts.
 //> 0: sui::allowance::balance_spend<sui::sui::SUI>(Input(1), Input(0), Input(2));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(3));
-Error: Transaction Effects Status: Move Abort in sui::allowance::balance_spend (function index 10) at offset 13 at line 262 with clever code 9
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("allowance") }, function: 10, instruction: 13, function_name: Some("balance_spend") }, 13837592455355170835) at command Some(0)
+Error: Transaction Effects Status: Move Abort in sui::allowance::balance_spend (function index 10) at offset 13 at line 266 with clever code 9
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("allowance") }, function: 10, instruction: 13, function_name: Some("balance_spend") }, 13837592472535040019) at command Some(0)
 
 task 8, lines 80-82:
 //# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(250,@A,object(5,0)) mutshared(5,0) immshared(6) @B

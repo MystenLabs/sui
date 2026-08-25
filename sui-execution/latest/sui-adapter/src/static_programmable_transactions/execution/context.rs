@@ -1710,7 +1710,8 @@ fn load_withdrawal_arg<Mode: ExecutionMode>(
             Value::funds_accumulator_withdrawal(*owner, *amount)
         }
         T::WithdrawalSource::Allowance { funder, id } => {
-            Value::allowance_withdrawal(*id, *funder, *amount)
+            // Leaves room for a future `SponsorAllowance` with `is_sponsor` set
+            Value::allowance_withdrawal(*id, *funder, *amount, /* is_sponsor */ false)
         }
     };
     charge_gas_!(meter, env, charge_copy_loc, &loaded)?;
