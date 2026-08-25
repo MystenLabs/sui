@@ -9,20 +9,22 @@ use sui_package_resolver::Package;
 use sui_package_resolver::PackageStore;
 use sui_package_resolver::Result;
 
-/// Package store for streaming subscriptions that holds packages not yet indexed by the DB.
+/// Package store for streaming subscriptions that holds packages not yet indexed by the
+/// ledger gRPC service.
 ///
-/// Packages from streamed checkpoints are indexed here. Once the `kv_packages` pipeline
+/// Packages from streamed checkpoints are indexed here. Once the `ledger_grpc` pipeline
 /// catches up, a separate eviction task removes them — at that point the inner store
-/// (LRU → PackageCache → DB) can serve them instead.
+/// (LRU → PackageCache → ledger gRPC) can serve them instead.
 ///
 /// Each package entry stores the checkpoint that introduced it, so that eviction of an
 /// older checkpoint does not accidentally remove a system package that was upgraded at a
 /// later checkpoint.
 pub(crate) struct StreamedPackageStore<S> {
-    /// Primary index: packages from streamed checkpoints not yet in the DB.
+    /// Primary index: packages from streamed checkpoints not yet indexed by the ledger
+    /// gRPC service.
     packages: DashMap<AccountAddress, IndexedPackage>,
 
-    /// Fallback store (typically the shared PackageCache → DB).
+    /// Fallback store (typically the shared PackageCache → ledger gRPC).
     inner: S,
 }
 

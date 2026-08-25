@@ -13,10 +13,12 @@ use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::package_resolver::DbPackageStore;
+use sui_indexer_alt_reader::package_resolver::GrpcPackageStore;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_schema::schema::kv_genesis;
+use sui_package_resolver::PackageStore;
 use sui_package_resolver::Resolver;
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::CheckpointDigest;
@@ -84,14 +86,22 @@ impl Context {
         let pg_reader = PgReader::new(None, database_url, db_args, registry).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
-        let kv_loader = KvLoader::new(
+        let ledger_grpc_reader = kv_args
+            .ledger_grpc_reader(Some("jsonrpc_ledger_grpc"), registry, None, None)
+            .await?
+            .context("--ledger-grpc-url must be configured")?;
+
+        let kv_loader = KvLoader::from_kv_sources(
             kv_args
-                .ledger_grpc_reader(Some("jsonrpc_ledger_grpc"), registry, None, None)
-                .await?
-                .context("--ledger-grpc-url must be configured")?,
+                .bigtable_reader("indexer-alt-jsonrpc".to_owned(), registry)
+                .await?,
+            ledger_grpc_reader.clone(),
+            pg_loader.clone(),
         );
 
-        let store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
+        let store = Arc::new(PackageCache::new(Box::new(GrpcPackageStore::new(
+            ledger_grpc_reader.as_ref(),
+        ))));
         let package_resolver = Arc::new(Resolver::new_with_limits(
             store,
             config.package_resolver.clone(),

@@ -483,9 +483,9 @@ impl CheckpointStreamTask {
 
     /// Index packages from the checkpoint into the streaming store, signal eviction,
     /// then process and broadcast. Indexing exposes the checkpoint's packages to
-    /// subscribers immediately, ahead of `kv_packages`. Recovered checkpoints from
-    /// `recover_gap` skip this step because the gate already waits for both
-    /// `ledger_grpc` and `kv_packages` to catch up.
+    /// subscribers immediately, ahead of the ledger gRPC service's indexing. Recovered
+    /// checkpoints from `recover_gap` skip this step because the gate already waits
+    /// for `ledger_grpc` to catch up.
     fn index_and_broadcast(&self, checkpoint: ProtoCheckpoint, seq: u64) -> anyhow::Result<()> {
         let packages = extract_packages(&checkpoint);
         if !packages.is_empty() {
