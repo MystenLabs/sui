@@ -29,7 +29,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 135;
+const MAX_PROTOCOL_VERSION: u64 = 136;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -382,6 +382,8 @@ const MAINNET_USDB: &str =
 //              times immutably (never by value), and never in return position.
 //              Enable allowed_proposers on devnet.
 //              Add move_execution_version (Version(4): the frozen v4 Move subsystem).
+// Version 136: Switch to Move subsystem v5: TyParam-less runtime types, with signature
+//              substitution inside the VM. (v4 frozen at move-execution/v4.)
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4656,6 +4658,13 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.allowed_proposers = true;
                     }
+                }
+                136 => {
+                    // Switch to the frozen v5 Move subsystem: runtime types carry no type
+                    // parameters and signature substitution happens inside the VM -- a pure
+                    // contract refactor of v4 (observational equivalence is asserted by
+                    // sui-execution's dispatch test and the move-execution-api-demo suite).
+                    cfg.move_execution_version = Some(MoveExecutionVersion::Version(5));
                 }
                 // Use this template when making changes:
                 //

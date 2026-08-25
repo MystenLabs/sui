@@ -149,13 +149,13 @@ impl Packages {
 
 /// The `move_execution_version` protocol config value drives which Move subsystem serves
 /// execution. Until the adapter is generic over `move-execution-api`, `latest::Executor::new`
-/// hardwires the frozen v4 subsystem (and panics on anything else); this test exercises the
-/// future dispatch through the harness demo driver: the subsystem the config names, and the
-/// `Latest` subsystem it can be swapped to, produce identical observable behavior today.
+/// hardwires the frozen v5 subsystem (and panics on unregistered selectors); this test
+/// exercises the future dispatch through the harness demo driver, keyed off the *actual*
+/// protocol config values across the version bump that switched subsystems.
 #[test]
 fn test_move_subsystem_dispatch_follows_protocol_config() {
     use move_execution_api_demo::{MoveExecutionVersion as Dispatch, demo_for_version};
-    use sui_protocol_config::MoveExecutionVersion as Configured;
+    use sui_protocol_config::{Chain, MoveExecutionVersion as Configured, ProtocolVersion};
 
     // The boundary translation: config vocabulary into the execution layer's dispatch
     // vocabulary (sui-protocol-config cannot depend on execution crates, so each side carries
@@ -167,18 +167,28 @@ fn test_move_subsystem_dispatch_follows_protocol_config() {
             Configured::Latest => Dispatch::Latest,
         }
     }
+    fn configured_at(protocol: u64) -> Configured {
+        sui_protocol_config::ProtocolConfig::get_for_version(
+            ProtocolVersion::new(protocol),
+            Chain::Unknown,
+        )
+        .move_execution_version()
+    }
 
-    let config = sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE();
-    let configured = config.move_execution_version();
-    assert_eq!(
-        configured,
-        Configured::Version(4),
-        "latest currently pins the frozen v4 subsystem"
-    );
+    // Protocol 135 introduced the selector naming the frozen v4 subsystem; protocol 136
+    // switched to v5 (the TyParam-less runtime). Each bump is one config line.
+    assert_eq!(configured_at(135), Configured::Version(4));
+    assert_eq!(configured_at(136), Configured::Version(5));
 
-    let frozen = demo_for_version(to_dispatch(configured)).unwrap();
-    // The swap: the config line flips Version(4) -> Latest and the tip subsystem serves
-    // execution instead -- with identical observable behavior today.
+    // The subsystem switch at 135 -> 136 was a pure contract refactor: observationally
+    // identical, results and gas.
+    let v4 = demo_for_version(to_dispatch(configured_at(135))).unwrap();
+    let v5 = demo_for_version(to_dispatch(configured_at(136))).unwrap();
+    assert_eq!(v4, v5);
+
+    // The tip subsystem (selectable as Latest, e.g. on devnet) has diverged again -- LdConst
+    // charges by abstract size -- so it matches on results but not on gas.
     let latest = demo_for_version(to_dispatch(Configured::Latest)).unwrap();
-    assert_eq!(frozen, latest);
+    assert_eq!(v5.results_only(), latest.results_only());
+    assert_ne!(v5.big_constant_gas, latest.big_constant_gas);
 }

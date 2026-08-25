@@ -50,12 +50,16 @@ pub(crate) struct Verifier<'m> {
 
 impl Executor {
     pub(crate) fn new(protocol_config: &ProtocolConfig, silent: bool) -> Result<Self, SuiError> {
-        // This executor is hardwired to the frozen v4 Move subsystem until the adapter is
+        // This executor is hardwired to the frozen v5 Move subsystem until the adapter is
         // generic over move-execution-api; at that point this check becomes the dispatch over
         // registered subsystems (mirroring how the generated multiplexer dispatches on
         // `execution_version`, including the panic on an unregistered value).
         match protocol_config.move_execution_version() {
-            // Protocol versions predating the selector ran what is now frozen as subsystem 4.
+            MoveExecutionVersion::Version(5) => (),
+            // Pre-selector protocol versions and Version(4) epochs are served by the hardwired
+            // v5 subsystem: v5 is a pure contract refactor of v4 (TyParam removal, substitution
+            // moved into the VM), and the dispatch test plus the move-execution-api-demo suite
+            // assert the two are observationally identical -- results and gas.
             MoveExecutionVersion::Unspecified | MoveExecutionVersion::Version(4) => (),
             v => panic!("Unsupported Move execution version {v:?}"),
         }
