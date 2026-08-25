@@ -32,7 +32,7 @@ You need to instantiate it once in every programmable transaction block (PTB) th
 
 SuiNS names are priced in USDC. Paying in SUI or NS needs a live exchange rate, which the contracts read from the [Pyth](https://docs.pyth.network/price-feeds) oracle, so those transactions must include a price info object.
 
-Pyth serves its price updates from Hermes, which requires an access token. Create a free [Pyth Terminal](https://pythdata.app) account and copy the key from **View your API key**. Keep it out of browser code, so the fetch always happens on a server.
+Pyth serves its price updates from Hermes, which requires an access token. Create a free [Pyth](https://app.pyth.com/explore) account and copy the key from **View your API key**. Keep it out of browser code, so the fetch always happens on a server.
 
 You can get a price info object into your transaction in two ways.
 
