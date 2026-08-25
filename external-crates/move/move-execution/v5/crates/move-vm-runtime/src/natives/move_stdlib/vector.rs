@@ -1,0 +1,366 @@
+// Copyright (c) The Diem Core Contributors
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::{
+    execution::values::{Value, Vector, VectorRef},
+    jit::execution::ast::Type,
+    native_charge_gas_early_exit,
+    natives::{
+        functions::{NativeContext, NativeFunction, NativeResult},
+        make_module_natives,
+    },
+    pop_arg,
+    shared::{
+        safe_ops::SafeIndex as _,
+        views::{SizeConfig, ValueView},
+    },
+};
+use move_binary_format::{
+    checked_as,
+    errors::{PartialVMError, PartialVMResult},
+    partial_vm_error,
+};
+use move_core_types::{
+    gas_algebra::{InternalGas, InternalGasPerAbstractMemoryUnit},
+    vm_status::StatusCode,
+};
+use std::{collections::VecDeque, sync::Arc};
+
+/***************************************************************************************************
+ * native fun empty
+ *
+ *   gas cost: base_cost
+ *
+ **************************************************************************************************/
+#[derive(Debug, Clone)]
+pub struct EmptyGasParameters {
+    pub base: InternalGas,
+}
+
+pub fn native_empty(
+    gas_params: &EmptyGasParameters,
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.is_empty());
+
+    native_charge_gas_early_exit!(context, gas_params.base);
+
+    let ty = ty_args.first().ok_or_else(|| {
+        partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "native vector::empty must have one type argument"
+        )
+    })?;
+
+    NativeResult::map_partial_vm_result_one(
+        context.gas_used(),
+        ty.try_into().and_then(Vector::empty),
+    )
+}
+
+pub fn make_native_empty(gas_params: EmptyGasParameters) -> NativeFunction {
+    Arc::new(
+        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+            native_empty(&gas_params, context, ty_args, args)
+        },
+    )
+}
+
+/***************************************************************************************************
+ * native fun length
+ *
+ *   gas cost: base_cost
+ *
+ **************************************************************************************************/
+#[derive(Debug, Clone)]
+pub struct LengthGasParameters {
+    pub base: InternalGas,
+}
+
+pub fn native_length(
+    gas_params: &LengthGasParameters,
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 1);
+
+    native_charge_gas_early_exit!(context, gas_params.base);
+
+    let r = pop_arg!(args, VectorRef);
+    NativeResult::map_partial_vm_result_one(context.gas_used(), r.len(ty_args.safe_get(0)?))
+}
+
+pub fn make_native_length(gas_params: LengthGasParameters) -> NativeFunction {
+    Arc::new(
+        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+            native_length(&gas_params, context, ty_args, args)
+        },
+    )
+}
+
+/***************************************************************************************************
+ * native fun push_back
+ *
+ *   gas cost: base_cost + legacy_unit_cost * max(1, size_of(val))
+ *
+ **************************************************************************************************/
+#[derive(Debug, Clone)]
+pub struct PushBackGasParameters {
+    pub base: InternalGas,
+    pub legacy_per_abstract_memory_unit: InternalGasPerAbstractMemoryUnit,
+}
+
+pub fn native_push_back(
+    gas_params: &PushBackGasParameters,
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 2);
+
+    native_charge_gas_early_exit!(context, gas_params.base);
+
+    let Some(e) = args.pop_back() else {
+        return Err(partial_vm_error!(
+            VECTOR_OPERATION_ERROR,
+            "Internal error: missing argument in native push_back"
+        ));
+    };
+
+    let r = pop_arg!(args, VectorRef);
+
+    if gas_params.legacy_per_abstract_memory_unit != 0.into() {
+        let size = e.abstract_memory_size(&SizeConfig {
+            traverse_references: false,
+            include_vector_size: false,
+        })?;
+        let cost = gas_params.legacy_per_abstract_memory_unit * std::cmp::max(size, 1.into());
+        native_charge_gas_early_exit!(context, cost);
+    }
+
+    NativeResult::map_partial_vm_result_empty(
+        context.gas_used(),
+        r.push_back(
+            e,
+            ty_args.safe_get(0)?,
+            context.runtime_limits_config().vector_len_max,
+        ),
+    )
+}
+
+pub fn make_native_push_back(gas_params: PushBackGasParameters) -> NativeFunction {
+    Arc::new(
+        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+            native_push_back(&gas_params, context, ty_args, args)
+        },
+    )
+}
+
+/***************************************************************************************************
+ * native fun borrow
+ *
+ *   gas cost: base_cost
+ *
+ **************************************************************************************************/
+#[derive(Debug, Clone)]
+pub struct BorrowGasParameters {
+    pub base: InternalGas,
+}
+
+pub fn native_borrow(
+    gas_params: &BorrowGasParameters,
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 2);
+
+    native_charge_gas_early_exit!(context, gas_params.base);
+    let idx = checked_as!(pop_arg!(args, u64), usize)?;
+    let r = pop_arg!(args, VectorRef);
+    NativeResult::map_partial_vm_result_one(
+        context.gas_used(),
+        r.borrow_elem(idx, ty_args.safe_get(0)?)
+            .map_err(native_error_to_abort),
+    )
+}
+
+pub fn make_native_borrow(gas_params: BorrowGasParameters) -> NativeFunction {
+    Arc::new(
+        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+            native_borrow(&gas_params, context, ty_args, args)
+        },
+    )
+}
+
+/***************************************************************************************************
+ * native fun pop
+ *
+ *   gas cost: base_cost
+ *
+ **************************************************************************************************/
+#[derive(Debug, Clone)]
+pub struct PopBackGasParameters {
+    pub base: InternalGas,
+}
+
+pub fn native_pop_back(
+    gas_params: &PopBackGasParameters,
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 1);
+
+    native_charge_gas_early_exit!(context, gas_params.base);
+    let r = pop_arg!(args, VectorRef);
+    NativeResult::map_partial_vm_result_one(
+        context.gas_used(),
+        r.pop(ty_args.safe_get(0)?).map_err(native_error_to_abort),
+    )
+}
+
+pub fn make_native_pop_back(gas_params: PopBackGasParameters) -> NativeFunction {
+    Arc::new(
+        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+            native_pop_back(&gas_params, context, ty_args, args)
+        },
+    )
+}
+
+/***************************************************************************************************
+ * native fun destroy_empty
+ *
+ *   gas cost: base_cost
+ *
+ **************************************************************************************************/
+#[derive(Debug, Clone)]
+pub struct DestroyEmptyGasParameters {
+    pub base: InternalGas,
+}
+
+pub fn native_destroy_empty(
+    gas_params: &DestroyEmptyGasParameters,
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 1);
+
+    native_charge_gas_early_exit!(context, gas_params.base);
+
+    let v = pop_arg!(args, Vector);
+    NativeResult::map_partial_vm_result_empty(
+        context.gas_used(),
+        v.destroy_empty(ty_args.safe_get(0)?)
+            .map_err(native_error_to_abort),
+    )
+}
+
+pub fn make_native_destroy_empty(gas_params: DestroyEmptyGasParameters) -> NativeFunction {
+    Arc::new(
+        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+            native_destroy_empty(&gas_params, context, ty_args, args)
+        },
+    )
+}
+
+/***************************************************************************************************
+ * native fun swap
+ **************************************************************************************************/
+#[derive(Debug, Clone)]
+pub struct SwapGasParameters {
+    pub base: InternalGas,
+}
+
+pub fn native_swap(
+    gas_params: &SwapGasParameters,
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 3);
+
+    native_charge_gas_early_exit!(context, gas_params.base);
+    let idx2 = checked_as!(pop_arg!(args, u64), usize)?;
+    let idx1 = checked_as!(pop_arg!(args, u64), usize)?;
+    let r = pop_arg!(args, VectorRef);
+    NativeResult::map_partial_vm_result_empty(
+        context.gas_used(),
+        r.swap(idx1, idx2, ty_args.safe_get(0)?)
+            .map_err(native_error_to_abort),
+    )
+}
+
+pub fn make_native_swap(gas_params: SwapGasParameters) -> NativeFunction {
+    Arc::new(
+        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+            native_swap(&gas_params, context, ty_args, args)
+        },
+    )
+}
+
+fn native_error_to_abort(err: PartialVMError) -> PartialVMError {
+    let (major_status, sub_status_opt, message_opt, exec_state_opt, indices, offsets) =
+        err.all_data();
+    let new_err = match major_status {
+        StatusCode::VECTOR_OPERATION_ERROR => partial_vm_error!(ABORTED),
+        _ => PartialVMError::new(major_status),
+    };
+    let new_err = match sub_status_opt {
+        None => new_err,
+        Some(code) => new_err.with_sub_status(code),
+    };
+    let new_err = match message_opt {
+        None => new_err,
+        Some(message) => new_err.with_message(message),
+    };
+    let new_err = match exec_state_opt {
+        None => new_err,
+        Some(stacktrace) => new_err.with_exec_state(stacktrace),
+    };
+    new_err.at_indices(indices).at_code_offsets(offsets)
+}
+
+/***************************************************************************************************
+ * module
+ **************************************************************************************************/
+#[derive(Debug, Clone)]
+pub struct GasParameters {
+    pub empty: EmptyGasParameters,
+    pub length: LengthGasParameters,
+    pub push_back: PushBackGasParameters,
+    pub borrow: BorrowGasParameters,
+    pub pop_back: PopBackGasParameters,
+    pub destroy_empty: DestroyEmptyGasParameters,
+    pub swap: SwapGasParameters,
+}
+
+pub fn make_all(gas_params: GasParameters) -> impl Iterator<Item = (String, NativeFunction)> {
+    let natives = [
+        ("empty", make_native_empty(gas_params.empty)),
+        ("length", make_native_length(gas_params.length)),
+        ("push_back", make_native_push_back(gas_params.push_back)),
+        ("borrow", make_native_borrow(gas_params.borrow.clone())),
+        ("borrow_mut", make_native_borrow(gas_params.borrow)),
+        ("pop_back", make_native_pop_back(gas_params.pop_back)),
+        (
+            "destroy_empty",
+            make_native_destroy_empty(gas_params.destroy_empty),
+        ),
+        ("swap", make_native_swap(gas_params.swap)),
+    ];
+
+    make_module_natives(natives)
+}

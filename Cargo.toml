@@ -36,6 +36,9 @@ exclude = [
     "external-crates/move/crates/move-coverage",
     "external-crates/move/crates/move-disassembler",
     "external-crates/move/crates/move-docgen",
+    "external-crates/move/crates/move-execution-api",
+    "external-crates/move/crates/move-execution-api-demo",
+    "external-crates/move/crates/move-execution-latest",
     "external-crates/move/crates/move-ir-compiler",
     "external-crates/move/crates/move-ir-compiler-transactional-tests",
     "external-crates/move/crates/move-ir-to-bytecode",
@@ -77,13 +80,14 @@ exclude = [
     "external-crates/move/move-execution/v3/crates/move-stdlib-natives",
     "external-crates/move/move-execution/v3/crates/move-vm-runtime",
     "external-crates/move/move-execution/v3/crates/move-vm-types",
-    "external-crates/move/crates/move-execution-api",
-    "external-crates/move/crates/move-execution-api-demo",
-    "external-crates/move/crates/move-execution-latest",
-    "external-crates/move/move-execution/v4/crates/move-execution-v4",
     "external-crates/move/move-execution/v4/crates/move-abstract-interpreter",
     "external-crates/move/move-execution/v4/crates/move-bytecode-verifier",
+    "external-crates/move/move-execution/v4/crates/move-execution-v4",
     "external-crates/move/move-execution/v4/crates/move-vm-runtime",
+    "external-crates/move/move-execution/v5/crates/move-execution-v5",
+    "external-crates/move/move-execution/v5/crates/move-abstract-interpreter",
+    "external-crates/move/move-execution/v5/crates/move-bytecode-verifier",
+    "external-crates/move/move-execution/v5/crates/move-vm-runtime",
 ]
 
 members = [

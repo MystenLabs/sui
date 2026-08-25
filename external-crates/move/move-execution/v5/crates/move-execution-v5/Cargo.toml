@@ -1,0 +1,18 @@
+[package]
+name = "move-execution-v5"
+version = "0.1.0"
+authors = ["Mysten Labs <opensource@mystenlabs.com>"]
+description = "Glue crate implementing the move-execution-api harnesses for the frozen v5 Move subsystem"
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[dependencies]
+move-binary-format.workspace = true
+move-bytecode-verifier = { path = "../move-bytecode-verifier", package = "move-bytecode-verifier-v5" }
+move-bytecode-verifier-meter.workspace = true
+move-core-types.workspace = true
+move-execution-api = { path = "../../../../crates/move-execution-api" }
+move-trace-format.workspace = true
+move-vm-config.workspace = true
+move-vm-runtime = { path = "../move-vm-runtime", package = "move-vm-runtime-v5" }

@@ -1,0 +1,762 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+//! This module defines the abstract state for the type and memory safety analysis.
+use crate::absint::{AbstractDomain, FunctionContext, JoinResult};
+use move_binary_format::{
+    errors::{PartialVMError, PartialVMResult},
+    file_format::{
+        CodeOffset, EnumDefinitionIndex, FieldHandleIndex, FunctionDefinitionIndex, LocalIndex,
+        MemberCount, Signature, SignatureToken, VariantDefinition, VariantTag,
+    },
+    safe_assert, safe_unwrap,
+};
+use move_bytecode_verifier_meter::{Meter, Scope};
+use move_core_types::vm_status::StatusCode;
+use move_regex_borrow_graph::references::Ref;
+use std::{
+    cmp::max,
+    collections::{BTreeMap, BTreeSet},
+};
+
+pub(super) type Graph = move_regex_borrow_graph::collections::Graph<(), Label>;
+
+/// AbstractValue represents a reference or a non reference value, both on the stack and stored
+/// in a local
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum AbstractValue {
+    Reference(Ref),
+    NonReference,
+}
+
+/// ValueKind is used for specifying the type of value expected to be returned
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ValueKind {
+    Reference(/* is_mut */ bool),
+    NonReference,
+}
+
+impl AbstractValue {
+    /// checks if self is a reference
+    #[allow(unused)]
+    pub fn is_ref(&self) -> bool {
+        match self {
+            AbstractValue::Reference(_) => true,
+            AbstractValue::NonReference => false,
+        }
+    }
+
+    pub fn is_non_ref(&self) -> bool {
+        match self {
+            AbstractValue::Reference(_) => false,
+            AbstractValue::NonReference => true,
+        }
+    }
+
+    /// possibly extracts ref from self
+    pub fn to_ref(self) -> Option<Ref> {
+        match self {
+            AbstractValue::Reference(r) => Some(r),
+            AbstractValue::NonReference => None,
+        }
+    }
+}
+
+impl ValueKind {
+    pub fn for_signature(s: &Signature) -> Vec<Self> {
+        s.0.iter().map(Self::for_type).collect()
+    }
+
+    pub fn for_type(s: &SignatureToken) -> Self {
+        match s {
+            SignatureToken::Reference(_) => Self::Reference(false),
+            SignatureToken::MutableReference(_) => Self::Reference(true),
+            SignatureToken::Bool
+            | SignatureToken::U8
+            | SignatureToken::U64
+            | SignatureToken::U128
+            | SignatureToken::Address
+            | SignatureToken::Signer
+            | SignatureToken::Vector(_)
+            | SignatureToken::Datatype(_)
+            | SignatureToken::DatatypeInstantiation(_)
+            | SignatureToken::TypeParameter(_)
+            | SignatureToken::U16
+            | SignatureToken::U32
+            | SignatureToken::U256 => Self::NonReference,
+        }
+    }
+}
+
+/// Label is used to specify path extensions
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub(super) enum Label {
+    /// A reference created by borrowing a local variable
+    Local(LocalIndex),
+    /// A reference that is the struct field extension of another reference
+    Field(FieldHandleIndex),
+    /// A reference that is the enum field extension of another reference
+    VariantField(EnumDefinitionIndex, VariantTag, MemberCount),
+}
+
+// Needed for debugging with the borrow graph
+impl std::fmt::Display for Label {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Label::Local(i) => write!(f, "local#{i}"),
+            Label::Field(i) => write!(f, "field#{i}"),
+            Label::VariantField(eidx, tag, field_idx) => {
+                write!(f, "variant_field#{}#{}#{}", eidx, tag, field_idx)
+            }
+        }
+    }
+}
+
+pub(crate) const STEP_BASE_COST: u128 = 1;
+pub(crate) const JOIN_BASE_COST: u128 = 10;
+
+pub(crate) const PER_GRAPH_ITEM: u128 = 4;
+
+// pub(crate) const JOIN_ITEM_COST: u128 = 4;
+
+// Macro for making a "g"raph "m"eter
+macro_rules! gm {
+    ($meter:ident) => {
+        &mut GraphMeter($meter)
+    };
+}
+
+/// AbstractState is the analysis state over which abstract interpretation is performed.
+#[derive(Clone, Debug)]
+pub struct AbstractState {
+    current_function: Option<FunctionDefinitionIndex>,
+    local_root: Ref,
+    locals: BTreeMap<LocalIndex, Ref>,
+    graph: Graph,
+}
+
+impl AbstractState {
+    /// create a new abstract state
+    pub fn new(
+        function_context: &FunctionContext,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<Self> {
+        let param_refs = function_context
+            .parameters()
+            .0
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, ty)| {
+                let mutable = match ty {
+                    SignatureToken::MutableReference(_) => true,
+                    SignatureToken::Reference(_) => false,
+                    _ => return None,
+                };
+                let idx = idx as LocalIndex;
+                Some((idx, (), mutable))
+            });
+        // count number of references at the end of a block (parameters + locals + 1 for local root)
+        let num_canonical_refs = function_context
+            .parameters()
+            .0
+            .iter()
+            .chain(&function_context.locals().0)
+            .filter(|ty| {
+                matches!(
+                    ty,
+                    SignatureToken::Reference(_) | SignatureToken::MutableReference(_)
+                )
+            })
+            .count()
+            + 1;
+        let (mut graph, locals) = Graph::new(num_canonical_refs, param_refs)?;
+        let local_root =
+            graph.extend_by_epsilon((), std::iter::empty(), /* is_mut */ true, gm!(meter))?;
+
+        let mut state = AbstractState {
+            current_function: function_context.index(),
+            local_root,
+            locals,
+            graph,
+        };
+        state.canonicalize()?;
+        Ok(state)
+    }
+
+    pub(super) fn local_root(&self) -> Ref {
+        self.local_root
+    }
+
+    pub(super) fn locals(&self) -> &BTreeMap<LocalIndex, Ref> {
+        &self.locals
+    }
+
+    pub(super) fn graph(&self) -> &Graph {
+        &self.graph
+    }
+
+    fn error(&self, status: StatusCode, offset: CodeOffset) -> PartialVMError {
+        PartialVMError::new(status).at_code_offset(
+            self.current_function.unwrap_or(FunctionDefinitionIndex(0)),
+            offset,
+        )
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn display(&self) {
+        self.graph.print();
+        println!()
+    }
+
+    //**********************************************************************************************
+    // Core Predicates
+    //**********************************************************************************************
+
+    // Writable if
+    // No imm equal
+    // No extensions
+    fn is_writable(&self, r: Ref, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<bool> {
+        debug_assert!(self.graph.is_mutable(r)?);
+
+        Ok(self
+            .graph
+            .borrowed_by(r, gm!(meter))?
+            .values()
+            .all(|paths| paths.iter().all(|path| path.is_epsilon())))
+    }
+
+    // are the references able to be used in a call or return
+    fn are_transferrable(
+        &self,
+        refs: &BTreeSet<Ref>,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<bool> {
+        let borrows = refs
+            .iter()
+            .copied()
+            .map(|r| Ok((r, self.graph.borrowed_by(r, gm!(meter))?)))
+            .collect::<PartialVMResult<BTreeMap<_, _>>>()?;
+        let mut_refs = {
+            let mut s = BTreeSet::new();
+            for r in refs.iter().copied() {
+                if self.graph.is_mutable(r)? {
+                    s.insert(r);
+                }
+            }
+            s
+        };
+        for (r, borrowed_by) in borrows {
+            let is_mut = mut_refs.contains(&r);
+            for (borrower, paths) in borrowed_by {
+                if !is_mut {
+                    if mut_refs.contains(&borrower) {
+                        // If the ref is imm, but is borrowed by a mut ref in the set
+                        // the mut ref is not transferrable
+                        // In other words, the mut ref is an extension of the imm ref
+                        return Ok(false);
+                    }
+                } else {
+                    for path in paths {
+                        if !path.is_epsilon() || refs.contains(&borrower) {
+                            // If the ref is mut, it cannot have any non-epsilon extensions
+                            // If extension is epsilon (an alias), it cannot be in the transfer set
+                            return Ok(false);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(true)
+    }
+
+    /// checks if local#idx is borrowed
+    fn is_local_borrowed(
+        &self,
+        idx: LocalIndex,
+        exclude_alias: bool,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<bool> {
+        let lbl = Label::Local(idx);
+        let borrowed_by = self.graph.borrowed_by(self.local_root, gm!(meter))?;
+        let mut paths = borrowed_by.values().flatten();
+        Ok(if exclude_alias {
+            // the path starts with the label but is not the label itself
+            paths.any(|p| p.starts_with(&lbl) && !p.is_label(&lbl))
+        } else {
+            // the path starts with the label (possibly nothing more than the label itself)
+            paths.any(|p| p.starts_with(&lbl))
+        })
+    }
+
+    /// checks if any local#_ is borrowed
+    fn is_any_local_borrowed(&self, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<bool> {
+        Ok(!self
+            .graph
+            .borrowed_by(self.local_root, gm!(meter))?
+            .is_empty())
+    }
+
+    //**********************************************************************************************
+    // Extension
+    //**********************************************************************************************
+
+    fn extend_by_epsilon(
+        &mut self,
+        r: Ref,
+        is_mut: bool,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<Ref> {
+        let new_r = self
+            .graph
+            .extend_by_epsilon((), std::iter::once(r), is_mut, gm!(meter))?;
+        Ok(new_r)
+    }
+
+    fn extend_by_label(
+        &mut self,
+        r: Ref,
+        is_mut: bool,
+        extension: Label,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<Ref> {
+        let new_r =
+            self.graph
+                .extend_by_label((), std::iter::once(r), is_mut, extension, gm!(meter))?;
+        Ok(new_r)
+    }
+
+    fn extend_by_dot_star_for_call(
+        &mut self,
+        sources: &BTreeSet<Ref>,
+        mutabilities: Vec<bool>,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<Vec<Ref>> {
+        let new_refs =
+            self.graph
+                .extend_by_dot_star_for_call((), sources, mutabilities, gm!(meter))?;
+        Ok(new_refs)
+    }
+
+    //**********************************************************************************************
+    // Instruction Entry Points
+    //**********************************************************************************************
+
+    /// destroys local@idx
+    pub(crate) fn release_value(
+        &mut self,
+        value: AbstractValue,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<()> {
+        match value {
+            AbstractValue::Reference(r) => Ok(self.graph.release(r, gm!(meter))?),
+            AbstractValue::NonReference => Ok(()),
+        }
+    }
+
+    pub(crate) fn copy_loc(
+        &mut self,
+        _offset: CodeOffset,
+        local: LocalIndex,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<AbstractValue> {
+        match self.locals.get(&local) {
+            Some(r) => {
+                let r = *r;
+                let new_r = self.extend_by_epsilon(r, self.graph.is_mutable(r)?, meter)?;
+                Ok(AbstractValue::Reference(new_r))
+            }
+            None => Ok(AbstractValue::NonReference),
+        }
+    }
+
+    pub(crate) fn move_loc(
+        &mut self,
+        offset: CodeOffset,
+        local: LocalIndex,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<AbstractValue> {
+        match self.locals.remove(&local) {
+            Some(r) => Ok(AbstractValue::Reference(r)),
+            None if self.is_local_borrowed(local, /* exclude alias */ false, meter)? => {
+                Err(self.error(StatusCode::MOVELOC_EXISTS_BORROW_ERROR, offset))
+            }
+            None => Ok(AbstractValue::NonReference),
+        }
+    }
+
+    pub(crate) fn st_loc(
+        &mut self,
+        offset: CodeOffset,
+        local: LocalIndex,
+        new_value: AbstractValue,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<()> {
+        if self.is_local_borrowed(local, /* exclude alias */ true, meter)? {
+            return Err(self.error(StatusCode::STLOC_UNSAFE_TO_DESTROY_ERROR, offset));
+        }
+
+        if let Some(old_r) = self.locals.remove(&local) {
+            self.graph.release(old_r, gm!(meter))?;
+        }
+        if let Some(new_r) = new_value.to_ref() {
+            let old = self.locals.insert(local, new_r);
+            debug_assert!(old.is_none());
+        }
+        Ok(())
+    }
+
+    pub(crate) fn freeze_ref(
+        &mut self,
+        _offset: CodeOffset,
+        r: Ref,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<AbstractValue> {
+        let frozen = self.extend_by_epsilon(r, /* is_mut */ false, meter)?;
+        self.graph.release(r, gm!(meter))?;
+        Ok(AbstractValue::Reference(frozen))
+    }
+
+    pub(crate) fn comparison(
+        &mut self,
+        _offset: CodeOffset,
+        v1: AbstractValue,
+        v2: AbstractValue,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<AbstractValue> {
+        self.release_value(v1, meter)?;
+        self.release_value(v2, meter)?;
+        Ok(AbstractValue::NonReference)
+    }
+
+    pub(crate) fn read_ref(
+        &mut self,
+        _offset: CodeOffset,
+        r: Ref,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<AbstractValue> {
+        self.graph.release(r, gm!(meter))?;
+        Ok(AbstractValue::NonReference)
+    }
+
+    pub(crate) fn write_ref(
+        &mut self,
+        offset: CodeOffset,
+        r: Ref,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<()> {
+        if !self.is_writable(r, meter)? {
+            return Err(self.error(StatusCode::WRITEREF_EXISTS_BORROW_ERROR, offset));
+        }
+
+        self.graph.release(r, gm!(meter))?;
+        Ok(())
+    }
+
+    pub(crate) fn borrow_loc(
+        &mut self,
+        _offset: CodeOffset,
+        mut_: bool,
+        local: LocalIndex,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<AbstractValue> {
+        let local_root = self.local_root;
+        let new_r = self.extend_by_label(local_root, mut_, Label::Local(local), meter)?;
+        Ok(AbstractValue::Reference(new_r))
+    }
+
+    pub(crate) fn borrow_field(
+        &mut self,
+        _offset: CodeOffset,
+        mut_: bool,
+        r: Ref,
+        field: FieldHandleIndex,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<AbstractValue> {
+        let new_r = self.extend_by_label(r, mut_, Label::Field(field), meter)?;
+        self.graph.release(r, gm!(meter))?;
+        Ok(AbstractValue::Reference(new_r))
+    }
+
+    pub(crate) fn unpack_enum_variant_ref(
+        &mut self,
+        _offset: CodeOffset,
+        enum_def_idx: EnumDefinitionIndex,
+        variant_tag: VariantTag,
+        variant_def: &VariantDefinition,
+        mut_: bool,
+        r: Ref,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<Vec<AbstractValue>> {
+        let field_label =
+            |field_index| Label::VariantField(enum_def_idx, variant_tag, field_index as u16);
+        let field_borrows = variant_def
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(field_index, _)| {
+                let new_r = self.graph.extend_by_label(
+                    (),
+                    std::iter::once(r),
+                    mut_,
+                    field_label(field_index),
+                    gm!(meter),
+                )?;
+                Ok(AbstractValue::Reference(new_r))
+            })
+            .collect::<PartialVMResult<_>>()?;
+
+        self.graph.release(r, gm!(meter))?;
+        Ok(field_borrows)
+    }
+
+    pub(crate) fn vector_op(
+        &mut self,
+        offset: CodeOffset,
+        vector: AbstractValue,
+        mut_: bool,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<()> {
+        let r = safe_unwrap!(vector.to_ref());
+        if mut_ && !self.is_writable(r, meter)? {
+            return Err(self.error(StatusCode::VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR, offset));
+        }
+        self.graph.release(r, gm!(meter))?;
+        Ok(())
+    }
+
+    pub(crate) fn call(
+        &mut self,
+        offset: CodeOffset,
+        arguments: Vec<AbstractValue>,
+        return_: &[ValueKind],
+        meter: &mut (impl Meter + ?Sized),
+        code: StatusCode,
+    ) -> PartialVMResult<Vec<AbstractValue>> {
+        // Check mutable references can be transferred
+        let sources = arguments
+            .iter()
+            .filter_map(|v| v.to_ref())
+            .collect::<BTreeSet<_>>();
+
+        if !self.are_transferrable(&sources, meter)? {
+            return Err(self.error(code, offset));
+        }
+        let mutabilities = return_
+            .iter()
+            .filter_map(|return_kind| match return_kind {
+                ValueKind::Reference(is_mut) => Some(*is_mut),
+                ValueKind::NonReference => None,
+            })
+            .collect::<Vec<_>>();
+        let _mutabilities_len = mutabilities.len();
+        let mut return_references =
+            self.extend_by_dot_star_for_call(&sources, mutabilities, meter)?;
+        debug_assert_eq!(return_references.len(), _mutabilities_len);
+
+        let mut return_values: Vec<_> = return_
+            .iter()
+            .rev()
+            .map(|return_kind| match return_kind {
+                ValueKind::Reference(_is_mut) => {
+                    let new_ref = safe_unwrap!(return_references.pop());
+                    debug_assert_eq!(self.graph.is_mutable(new_ref)?, *_is_mut);
+                    Ok(AbstractValue::Reference(new_ref))
+                }
+                ValueKind::NonReference => Ok(AbstractValue::NonReference),
+            })
+            .collect::<PartialVMResult<Vec<_>>>()?;
+        return_values.reverse();
+        debug_assert!(return_references.is_empty());
+
+        // Release input references
+        for r in sources {
+            self.graph.release(r, gm!(meter))?
+        }
+        Ok(return_values)
+    }
+
+    pub(crate) fn ret(
+        &mut self,
+        offset: CodeOffset,
+        values: Vec<AbstractValue>,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<()> {
+        // release all local variables
+        for (_, r) in std::mem::take(&mut self.locals) {
+            self.graph.release(r, gm!(meter))?
+        }
+
+        // Check that no local or global is borrowed
+        if self.is_any_local_borrowed(meter)? {
+            return Err(self.error(
+                StatusCode::UNSAFE_RET_LOCAL_OR_RESOURCE_STILL_BORROWED,
+                offset,
+            ));
+        }
+
+        // Check mutable references can be transferred
+        let returned_refs: BTreeSet<Ref> = values.iter().filter_map(|v| v.to_ref()).collect();
+        if !self.are_transferrable(&returned_refs, meter)? {
+            return Err(self.error(StatusCode::RET_BORROWED_MUTABLE_REFERENCE_ERROR, offset));
+        }
+        for r in returned_refs {
+            self.graph.release(r, gm!(meter))?
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn abort(&mut self) -> PartialVMResult<()> {
+        // release all references
+        self.locals.clear();
+        self.graph.release_all()?;
+        Ok(())
+    }
+
+    //**********************************************************************************************
+    // Abstract Interpreter Entry Points
+    //**********************************************************************************************
+
+    pub(crate) fn canonicalize(&mut self) -> PartialVMResult<()> {
+        self.check_invariants();
+        let mut old_to_new = BTreeMap::new();
+        old_to_new.insert(self.local_root, 0);
+        for (&local, old_r) in &self.locals {
+            let new_r = safe_unwrap!((local as u32).checked_add(1));
+            let old_value = old_to_new.insert(*old_r, new_r);
+            safe_assert!(old_value.is_none());
+        }
+        self.local_root = self.local_root.canonicalize(&old_to_new)?;
+        for old in self.locals.values_mut() {
+            *old = (*old).canonicalize(&old_to_new)?;
+        }
+        self.graph.canonicalize(&old_to_new)?;
+        debug_assert!(self.is_canonical());
+        Ok(())
+    }
+
+    pub(crate) fn refresh(&mut self) -> PartialVMResult<()> {
+        self.check_invariants();
+        self.local_root = self.local_root.refresh()?;
+        for old in self.locals.values_mut() {
+            *old = (*old).refresh()?;
+        }
+        self.graph.refresh_refs()?;
+        debug_assert!(self.is_fresh());
+        Ok(())
+    }
+
+    pub(crate) fn is_canonical(&self) -> bool {
+        self.local_root.is_canonical()
+            && self.locals.values().copied().all(|r| r.is_canonical())
+            && self.graph.is_canonical()
+    }
+
+    pub(crate) fn is_fresh(&self) -> bool {
+        self.local_root.is_fresh()
+            && self.locals.values().copied().all(|r| r.is_fresh())
+            && self.graph.is_fresh()
+    }
+
+    #[inline(always)]
+    pub(crate) fn check_invariants(&self) {
+        #[cfg(debug_assertions)]
+        {
+            // We use a dummy meter because these only happen in debug mode, and we
+            // do not want to impact metering behavior to check them.
+            let dummy_meter = &mut move_regex_borrow_graph::meter::DummyMeter;
+            self.graph.check_invariants();
+            debug_assert!(self.is_canonical() || self.is_fresh());
+            let refs: BTreeSet<_> = self.graph.keys().collect();
+            let mut local_refs = BTreeSet::new();
+            for r in self.locals.values() {
+                debug_assert_ne!(*r, self.local_root, "local root should not be a local");
+                // locals are unique
+                debug_assert!(local_refs.insert(*r), "duplicate local ref {r}");
+                // all locals are in the graph
+                debug_assert!(refs.contains(r), "local ref {r} not in graph");
+            }
+            // local root should only be gone if the graph is empty from an abort
+            debug_assert!(self.graph.is_empty() || refs.contains(&self.local_root));
+            // the local root is not borrowed by epsilon or dotstar, i.e. all extensions of the
+            // local root begin with a label
+            if refs.contains(&self.local_root) {
+                for (borrower, paths) in self
+                    .graph
+                    .borrowed_by(self.local_root, dummy_meter)
+                    .unwrap()
+                {
+                    debug_assert_ne!(borrower, self.local_root);
+                    for path in paths {
+                        debug_assert!(!path.is_epsilon());
+                        debug_assert!(!path.is_dot_star());
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) fn join_(
+        &mut self,
+        other: &Self,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult</* changed */ bool> {
+        let mut changed = false;
+        safe_assert!(self.current_function == other.current_function);
+        safe_assert!(self.local_root == other.local_root);
+        self.check_invariants();
+        other.check_invariants();
+        safe_assert!(self.is_canonical());
+        safe_assert!(other.is_canonical());
+        for (local, r) in self.locals.clone() {
+            if !other.locals.contains_key(&local) {
+                self.locals.remove(&local);
+                self.graph.release(r, gm!(meter))?;
+                changed = true;
+            } else {
+                safe_assert!(Some(r) == other.locals.get(&local).copied());
+            }
+        }
+
+        let graph_changed = self.graph.join(&other.graph, gm!(meter))?;
+        changed = changed || graph_changed;
+        safe_assert!(self.is_canonical());
+        self.check_invariants();
+        Ok(changed)
+    }
+}
+
+impl AbstractDomain for AbstractState {
+    /// attempts to join state to self and returns the result
+    fn join(
+        &mut self,
+        state: &AbstractState,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<JoinResult> {
+        meter.add(Scope::Function, JOIN_BASE_COST)?;
+        let changed = Self::join_(self, state, meter)?;
+        meter.add(Scope::Function, JOIN_BASE_COST)?;
+        if changed {
+            Ok(JoinResult::Changed)
+        } else {
+            Ok(JoinResult::Unchanged)
+        }
+    }
+}
+
+pub struct GraphMeter<'a, M: Meter + ?Sized>(&'a mut M);
+
+impl<M: Meter + ?Sized> move_regex_borrow_graph::meter::Meter for GraphMeter<'_, M> {
+    type Error = PartialVMError;
+
+    fn visit_nodes_impl(&mut self, num_nodes: usize) -> Result<(), Self::Error> {
+        let num_nodes = max(num_nodes, 1);
+        self.0.add_items(Scope::Function, PER_GRAPH_ITEM, num_nodes)
+    }
+
+    fn visit_edges_impl(&mut self, total_edge_size: usize) -> Result<(), Self::Error> {
+        let total_edge_size = max(total_edge_size, 1);
+        self.0
+            .add_items(Scope::Function, PER_GRAPH_ITEM, total_edge_size)
+    }
+}

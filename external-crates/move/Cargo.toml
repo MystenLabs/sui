@@ -13,14 +13,17 @@ members = [
     "move-execution/v2/crates/move-bytecode-verifier",
     "move-execution/v3/crates/move-bytecode-verifier",
     "move-execution/v4/crates/move-bytecode-verifier",
+    "move-execution/v5/crates/move-bytecode-verifier",
     # "move-execution/$CUT/crates/move-bytecode-verifier",
     "move-execution/v0/crates/move-vm-runtime",
     "move-execution/v1/crates/move-vm-runtime",
     "move-execution/v2/crates/move-vm-runtime",
     "move-execution/v3/crates/move-vm-runtime",
     "move-execution/v4/crates/move-vm-runtime",
+    "move-execution/v5/crates/move-vm-runtime",
     # "move-execution/$CUT/crates/move-vm-runtime",
     "move-execution/v4/crates/move-execution-v4",
+    "move-execution/v5/crates/move-execution-v5",
     # "move-execution/$CUT/crates/move-execution-$CUT",
     "move-execution/v0/crates/move-stdlib-natives",
     "move-execution/v1/crates/move-stdlib-natives",
@@ -30,6 +33,7 @@ members = [
     "move-execution/v2/crates/move-abstract-interpreter",
     "move-execution/v3/crates/move-abstract-interpreter",
     "move-execution/v4/crates/move-abstract-interpreter",
+    "move-execution/v5/crates/move-abstract-interpreter",
     # "move-execution/$CUT/crates/move-abstract-interpreter",
     "move-execution/v0/crates/move-vm-types",
     "move-execution/v1/crates/move-vm-types",
@@ -187,9 +191,10 @@ move-unit-test = { path = "crates/move-unit-test" }
 move-vm-config = { path = "crates/move-vm-config" }
 move-vm-profiler = { path = "crates/move-vm-profiler" }
 # The Move subsystem consumed by everything not yet behind move-execution-api: pinned to the
-# frozen v4 subsystem so that tip divergence cannot change behavior until protocol dispatch
-# selects it. The tip crate is reachable only via move-execution-latest (explicit path).
-move-vm-runtime = { path = "move-execution/v4/crates/move-vm-runtime", package = "move-vm-runtime-v4" }
+# frozen v5 subsystem (what protocol 136's move_execution_version names) so that tip divergence
+# cannot change behavior until protocol dispatch selects it. The tip crate is reachable only via
+# move-execution-latest (explicit path); v4 only via move-execution-v4.
+move-vm-runtime = { path = "move-execution/v5/crates/move-vm-runtime", package = "move-vm-runtime-v5" }
 
 [profile.bench]
 debug = true
