@@ -26,6 +26,7 @@ use move_vm_runtime::runtime::MoveRuntime;
 use mysten_common::debug_fatal;
 
 use sui_types::TypeTag;
+use sui_types::allowance::parse_allowance_object;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::coin_reservation::ParsedDigest;
 use sui_types::effects::{AccumulatorOperation, AccumulatorValue};
@@ -42,6 +43,11 @@ use crate::gas_charger::{GasCharger, PaymentLocation};
 use crate::temporary_store::TemporaryStore;
 use crate::type_layout_resolver::TypeLayoutResolver;
 
+/// Withdrawal budget per `(owner, funds type)` key.
+type Reservations = BTreeMap<(SuiAddress, TypeTag), u64>;
+/// Declared allowance ids per `(funder, funds type)` key.
+type AllowanceIds = BTreeMap<(SuiAddress, TypeTag), Vec<ObjectID>>;
+
 /// The per-transaction inputs the invariant checks need that are derived from the raw transaction
 /// (rather than accumulated during execution). Built once, up front, by
 /// [`InvariantChecker::set_transaction_inputs`] so the checks read them off the store instead of
@@ -49,10 +55,13 @@ use crate::type_layout_resolver::TypeLayoutResolver;
 #[derive(Default)]
 struct InvariantInputs {
     /// Per-`(address, type)` funds-accumulator reservation budget authorized by this transaction.
-    /// Sources: PTB `FundsWithdrawalArg`s (sender/sponsor as owner), gas paid entirely from an
-    /// address balance, and gas-data coin-reservation digests. Consumed by
+    /// Sources: PTB `FundsWithdrawalArg`s (sender, sponsor, or allowance funder as owner), gas
+    /// paid entirely from an address balance, and gas-data coin-reservation digests. Consumed by
     /// `check_address_balance_changes` and `check_ownership_invariants`.
     input_reservations: BTreeMap<(SuiAddress, TypeTag), u64>,
+    /// The allowance ids declared per `WithdrawFrom::Allowance` reservation key. Consumed by
+    /// `check_ownership_invariants` to authorize Splits at non-signer keys.
+    allowance_ids: AllowanceIds,
     /// For the advance-epoch transaction, `(epoch_fees minted, epoch_rebates burned)`; `None`
     /// for every other transaction. Needed by `check_sui_conserved_expensive`, which must account
     /// for the SUI the epoch change mints and burns.
@@ -99,12 +108,11 @@ impl InvariantChecker {
         gas_data: &GasData,
         transaction_signer: SuiAddress,
     ) {
+        let (input_reservations, allowance_ids) =
+            compute_input_reservations(transaction_kind, gas_data, transaction_signer);
         self.inputs = InvariantInputs {
-            input_reservations: compute_input_reservations(
-                transaction_kind,
-                gas_data,
-                transaction_signer,
-            ),
+            input_reservations,
+            allowance_ids,
             advance_epoch_gas_summary: transaction_kind.get_advance_epoch_tx_gas_summary(),
             is_genesis: matches!(transaction_kind, TransactionKind::Genesis(_)),
         };
@@ -494,35 +502,43 @@ fn get_input_sui(
 }
 
 /// Compute the per-`(address, type)` funds-accumulator reservation budget authorized by the
-/// transaction. Today every funds accumulator is a `Balance<T>`, but the `(address, TypeTag)`
-/// keying lets this generalize as more accumulator types are added. Sources:
-/// - PTB `FundsWithdrawalArg`s for any supported accumulator type (sender or sponsor as owner).
+/// transaction, and the allowance ids declared per key. Today every funds accumulator is a
+/// `Balance<T>`, but the `(address, TypeTag)` keying lets this generalize as more accumulator
+/// types are added. Budget sources:
+/// - PTB `FundsWithdrawalArg`s for any supported accumulator type (sender, sponsor, or
+///   allowance funder as owner).
 /// - Gas paid entirely from address balance (credits `(gas_owner, Balance<SUI>)`).
 /// - Gas-data entries with coin-reservation digests (also credit `(gas_owner, Balance<SUI>)`).
 fn compute_input_reservations(
     transaction_kind: &TransactionKind,
     gas_data: &GasData,
     transaction_signer: SuiAddress,
-) -> BTreeMap<(SuiAddress, TypeTag), u64> {
+) -> (Reservations, AllowanceIds) {
     use sui_types::balance::Balance;
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::{Reservation, WithdrawFrom, is_gas_paid_from_address_balance};
 
-    let mut reservations: BTreeMap<(SuiAddress, TypeTag), u64> = BTreeMap::new();
+    let mut reservations = Reservations::new();
+    let mut allowance_ids = AllowanceIds::new();
     let sui_balance_type = Balance::type_tag(GAS::type_tag());
 
     for arg in transaction_kind.get_funds_withdrawals() {
+        let ty = arg.type_arg.to_type_tag();
         let owner = match arg.withdraw_from {
             WithdrawFrom::Sender => transaction_signer,
             WithdrawFrom::Sponsor => gas_data.owner,
             // The funder will differ from the signer/sponsor, but permission
             // is verified at signing
-            WithdrawFrom::Allowance { funder, .. } => funder,
+            WithdrawFrom::Allowance { funder, allowance } => {
+                allowance_ids
+                    .entry((funder, ty.clone()))
+                    .or_default()
+                    .push(allowance);
+                funder
+            }
         };
         let Reservation::MaxAmountU64(reservation) = arg.reservation;
-        *reservations
-            .entry((owner, arg.type_arg.to_type_tag()))
-            .or_insert(0) += reservation;
+        *reservations.entry((owner, ty)).or_insert(0) += reservation;
     }
 
     if is_gas_paid_from_address_balance(gas_data, transaction_kind) {
@@ -539,7 +555,7 @@ fn compute_input_reservations(
         }
     }
 
-    reservations
+    (reservations, allowance_ids)
 }
 
 impl InvariantChecker {
@@ -759,6 +775,17 @@ impl InvariantChecker {
                     PaymentLocation::Coin(_) => None,
                     PaymentLocation::AddressBalance(address) => Some(address),
                 });
+        // A Split at a non-signer key requires every allowance id declared for it as a loaded,
+        // matching input.
+        let is_allowance_backed = |key: &(SuiAddress, TypeTag)| {
+            let Some(allowance_ids) = self.inputs.allowance_ids.get(key) else {
+                return false;
+            };
+            allowance_ids.iter().all(|id| {
+                let resolved = store.input_objects.get(id).map(parse_allowance_object);
+                matches!(resolved, Some(Ok(a)) if a.funder == key.0 && a.funds_type == key.1)
+            })
+        };
         let mut funds_net_changes: BTreeMap<(SuiAddress, TypeTag), i128> = BTreeMap::new();
         for event in store.execution_results.accumulator_events.iter() {
             let amount = match event.write.value {
@@ -782,13 +809,17 @@ impl InvariantChecker {
             // Authorized if it is:
             // - A merge/deposit (anyone can deposit)
             // - A withdrawal
-            //   - with a corresponding input reservation
+            //   - with a corresponding input reservation (the signer's or allowance-backed)
             //   - from an object authenticated for mutation
             //   - for the gas payment (potentially from a GasCoin send_funds transfer)
             let authorized = match event.write.operation {
                 AccumulatorOperation::Merge => true,
                 AccumulatorOperation::Split => {
-                    input_reservations.contains_key(&key)
+                    let is_authorized_input_reservation = input_reservations.contains_key(&key)
+                        && (address == *sender
+                            || address == *gas_owner
+                            || is_allowance_backed(&key));
+                    is_authorized_input_reservation
                         || objects_authenticated_for_mutation.contains(&address)
                         || (*type_tag == sui_balance_type
                             && gas_payment_address_balance
@@ -798,8 +829,8 @@ impl InvariantChecker {
             assert!(
                 authorized,
                 "Unauthenticated funds-accumulator Split at address {address} for type \
-                 {type_tag}: no input reservation, address is not an authenticated object, and \
-                 it is not the final gas payment address balance"
+                 {type_tag}: no signer or allowance-backed input reservation, address is not an \
+                 authenticated object, and it is not the final gas payment address balance"
             );
         }
 
