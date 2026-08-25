@@ -193,6 +193,7 @@ pub enum ObjectFundsSufficiency {
     Sufficient,
     Insufficient,
     Overflow,
+    ImplicitSystemObjectReadNotAllowed(String),
     LoadError(String),
 }
 

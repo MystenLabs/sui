@@ -668,6 +668,8 @@ ExecutionErrorKind:
         STRUCT:
           - id:
               TYPENAME: ObjectID
+    42:
+      ImplicitSystemObjectReadNotAllowed: UNIT
 ExecutionFailure:
   STRUCT:
     - error:

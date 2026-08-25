@@ -1419,6 +1419,7 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
                 message.set_object_id(id.to_canonical_string(true));
                 ExecutionErrorKind::NonExclusiveWriteInputObjectModified
             }
+            E::ImplicitSystemObjectReadNotAllowed => ExecutionErrorKind::Unknown,
         };
 
         message.set_kind(kind);

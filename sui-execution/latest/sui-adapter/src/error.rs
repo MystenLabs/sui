@@ -45,6 +45,9 @@ pub(crate) fn convert_vm_error_impl(
             )
         }
         (StatusCode::OUT_OF_GAS, _, _) => ExecutionErrorKind::InsufficientGas,
+        (StatusCode::IMPLICIT_SYSTEM_OBJECT_READ_NOT_ALLOWED, _, _) => {
+            ExecutionErrorKind::ImplicitSystemObjectReadNotAllowed
+        }
         (_, _, location) => match error.major_status().status_type() {
             StatusType::Execution => {
                 debug_assert!(error.major_status() != StatusCode::ABORTED);

@@ -12,16 +12,18 @@
 //! To avoid this, the permit is installed on the thread with [`set_execution_permit`],
 //! and the blocking sync primitives in this crate call [`release_execution_permit`] the
 //! first time they must actually block (after a non-blocking `try_` check fails). The
-//! permit is intentionally *not* re-acquired afterwards: this may briefly exceed the
-//! configured concurrency, but the excess resolves itself as tasks complete.
+//! permit is intentionally *not* re-acquired afterwards; the number of blocking threads
+//! execution may occupy while parked is bounded separately by its caller.
 //!
 //! The permit is stored type-erased (`Box<dyn Send>`) so this crate need not depend on
 //! the specific semaphore; releasing it simply drops the box.
 
-use std::cell::RefCell;
+use crate::debug_fatal;
+use std::cell::{Cell, RefCell};
 
 thread_local! {
     static EXECUTION_PERMIT: RefCell<Option<Box<dyn Send>>> = const { RefCell::new(None) };
+    static PARKING_FORBIDDEN: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Guard returned by [`set_execution_permit`]. Releases the thread's permit on drop if a
@@ -47,6 +49,16 @@ pub fn set_execution_permit(permit: Box<dyn Send>) -> ExecutionPermitGuard {
 /// Idempotent, and a no-op when no permit is installed. Called by blocking primitives
 /// immediately before they park or spin.
 pub fn release_execution_permit() {
+    if PARKING_FORBIDDEN.with(|forbidden| forbidden.get()) {
+        debug_fatal!(
+            "execution parked on a thread that must never park; the executions waiting on \
+             it can no longer be unblocked"
+        );
+    }
+    take_execution_permit();
+}
+
+fn take_execution_permit() {
     // Take the permit out before dropping it so its `Drop` does not run while the
     // thread-local is still borrowed (a permit's drop must not re-enter this module,
     // but taking first keeps that guarantee local).
@@ -54,9 +66,29 @@ pub fn release_execution_permit() {
     drop(permit);
 }
 
+#[must_use = "parking stays forbidden until this guard is dropped"]
+pub struct ForbidParkingGuard(());
+
+pub fn forbid_parking() -> ForbidParkingGuard {
+    PARKING_FORBIDDEN.with(|forbidden| {
+        assert!(
+            !forbidden.get(),
+            "parking is already forbidden on this thread"
+        );
+        forbidden.set(true);
+    });
+    ForbidParkingGuard(())
+}
+
+impl Drop for ForbidParkingGuard {
+    fn drop(&mut self) {
+        PARKING_FORBIDDEN.with(|forbidden| forbidden.set(false));
+    }
+}
+
 impl Drop for ExecutionPermitGuard {
     fn drop(&mut self) {
-        release_execution_permit();
+        take_execution_permit();
     }
 }
 
@@ -97,5 +129,25 @@ mod tests {
     #[test]
     fn release_without_permit_is_noop() {
         release_execution_permit();
+    }
+
+    #[test]
+    fn forbid_parking_guard_scopes_the_flag() {
+        assert!(!PARKING_FORBIDDEN.with(|forbidden| forbidden.get()));
+        {
+            let _guard = forbid_parking();
+            assert!(PARKING_FORBIDDEN.with(|forbidden| forbidden.get()));
+        }
+        assert!(!PARKING_FORBIDDEN.with(|forbidden| forbidden.get()));
+    }
+
+    #[test]
+    fn permit_guard_drop_does_not_count_as_parking() {
+        let released = Arc::new(AtomicBool::new(false));
+        let _forbid = forbid_parking();
+        {
+            let _guard = set_execution_permit(Box::new(DropFlag(released.clone())));
+        }
+        assert!(released.load(Ordering::SeqCst));
     }
 }

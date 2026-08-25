@@ -1871,10 +1871,7 @@ impl SharedInputObject {
 
     /// Whether this input object may be mutated by the transaction, either exclusively or non-exclusively.
     pub fn may_mutate(&self) -> bool {
-        match self.mutability {
-            SharedObjectMutability::Immutable => false,
-            SharedObjectMutability::Mutable | SharedObjectMutability::NonExclusiveWrite => true,
-        }
+        self.mutability.may_mutate()
     }
 }
 
@@ -4636,6 +4633,13 @@ impl SharedObjectMutability {
             SharedObjectMutability::Mutable => true,
             SharedObjectMutability::Immutable => false,
             SharedObjectMutability::NonExclusiveWrite => false,
+        }
+    }
+
+    pub fn may_mutate(&self) -> bool {
+        match self {
+            SharedObjectMutability::Immutable => false,
+            SharedObjectMutability::Mutable | SharedObjectMutability::NonExclusiveWrite => true,
         }
     }
 }

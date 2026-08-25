@@ -40,7 +40,7 @@ use sui_types::{
     SUI_SYSTEM_STATE_OBJECT_ID, TypeTag,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     committee::EpochId,
-    error::{ExecutionError, VMMemoryLimitExceededSubStatusCode},
+    error::{ExecutionError, SuiErrorKind, VMMemoryLimitExceededSubStatusCode},
     execution::DynamicallyLoadedObjectMetadata,
     execution_status::ExecutionErrorKind,
     id::UID,
@@ -264,7 +264,14 @@ impl<'a> ObjectRuntime<'a> {
             {
                 Ok(balance) => balance,
                 Err(e) => {
-                    return ObjectFundsSufficiency::LoadError(e.to_string());
+                    return match e.as_inner() {
+                        SuiErrorKind::ImplicitSystemObjectReadNotAllowed { .. } => {
+                            ObjectFundsSufficiency::ImplicitSystemObjectReadNotAllowed(
+                                e.to_string(),
+                            )
+                        }
+                        _ => ObjectFundsSufficiency::LoadError(e.to_string()),
+                    };
                 }
             };
             let Some(available) = entry.available.checked_add(U256::from(settled_available)) else {

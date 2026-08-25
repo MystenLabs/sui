@@ -298,6 +298,11 @@ pub enum ExecutionErrorKind {
 
     #[error("Non-exclusive write input object {id} has been modified")]
     NonExclusiveWriteInputObjectModified { id: ObjectID },
+
+    #[error(
+        "Implicit read of a system object is not allowed in a transaction that mutates an implicitly read system object"
+    )]
+    ImplicitSystemObjectReadNotAllowed,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }
