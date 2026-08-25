@@ -381,7 +381,7 @@ const MAINNET_USDB: &str =
 //              PTB Move call signature at most once mutably or any number of
 //              times immutably (never by value), and never in return position.
 //              Enable allowed_proposers on devnet.
-//              Add move_execution_version (4: the frozen v4 Move subsystem).
+//              Add move_execution_version (Version(4): the frozen v4 Move subsystem).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2180,11 +2180,29 @@ pub struct ProtocolConfig {
     /// Bounds the persistent storage impact of each admitted gasless transaction.
     gasless_max_tx_size_bytes: Option<u64>,
 
-    /// The Move subsystem version (`move-execution/vN`: the Move VM and bytecode verifier, cut
-    /// whole) that the execution layer must use. Selects among the subsystems registered in the
-    /// current execution version's dispatch; versions before this field predate the
-    /// move-execution-api harness and are hardwired to their subsystem.
-    move_execution_version: Option<u64>,
+    /// The Move subsystem (the Move VM and bytecode verifier, cut whole into `move-execution/vN`)
+    /// that the execution layer must use. Selects among the subsystems registered in the current
+    /// execution version's dispatch. Stored as `None` for protocol versions predating the
+    /// selector; the getter reports those as [`MoveExecutionVersion::Unspecified`].
+    #[skip_accessor]
+    move_execution_version: Option<MoveExecutionVersion>,
+}
+
+/// Identifies a Move subsystem for `move_execution_version`.
+///
+/// `move-execution-api` carries the execution-layer mirror of this enum (execution crates cannot
+/// be depended on from here); the execution layer translates this value at its boundary, the same
+/// way other `ProtocolConfig` values are projected into `VMConfig`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MoveExecutionVersion {
+    /// Predates the selector: the execution layer's hardwired subsystem, whatever it was.
+    Unspecified,
+    /// The frozen subsystem at `move-execution/vN`.
+    Version(u64),
+    /// The tip subsystem, which has no number until it is frozen. A config that says `Latest`
+    /// tracks the tip as it evolves, so it is only suitable for networks that are wiped
+    /// regularly (devnet), like feature cuts before it.
+    Latest,
 }
 
 /// An aliased address.
@@ -2203,6 +2221,14 @@ impl ProtocolConfig {
     /// The chain this config was instantiated for (see the `chain` field).
     pub fn chain(&self) -> Chain {
         self.chain
+    }
+
+    /// The Move subsystem the execution layer must use. Protocol versions predating the selector
+    /// report [`MoveExecutionVersion::Unspecified`]: their execution layer is hardwired to its
+    /// subsystem.
+    pub fn move_execution_version(&self) -> MoveExecutionVersion {
+        self.move_execution_version
+            .unwrap_or(MoveExecutionVersion::Unspecified)
     }
 
     // Add checks for feature flag support here, e.g.:
@@ -4622,9 +4648,10 @@ impl ProtocolConfig {
                 135 => {
                     cfg.feature_flags.ptb_tx_context_restrictions = true;
 
-                    // The frozen v4 Move subsystem: identical to pre-harness behavior. The tip
-                    // subsystem (v5) becomes selectable once registered in latest's dispatch.
-                    cfg.move_execution_version = Some(4);
+                    // The frozen v4 Move subsystem: identical to pre-selector behavior. The
+                    // tip subsystem (`Latest`) becomes selectable once registered in latest's
+                    // dispatch.
+                    cfg.move_execution_version = Some(MoveExecutionVersion::Version(4));
 
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.allowed_proposers = true;

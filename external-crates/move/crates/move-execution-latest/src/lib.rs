@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Harness glue for the *tip* Move subsystem: the in-development `move-vm-runtime` and
-//! `move-bytecode-verifier` at `external-crates/move/crates`. The tip always serves the highest
-//! registered `move_execution_version`.
+//! Harness glue for the *latest* (tip) Move subsystem: the in-development `move-vm-runtime`
+//! and `move-bytecode-verifier` at `external-crates/move/crates`. The tip carries no version
+//! number until it is frozen; it is selected as `MoveExecutionVersion::Latest`.
 //!
 //! The tip VM's `Type` has no type-parameter variant and `function_information` substitutes type
 //! arguments internally, so this glue implements the harness contract directly, with no
@@ -20,7 +20,9 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
     vm_status::StatusCode,
 };
-use move_execution_api::{FunctionSignature, Linkage, MoveRuntimeHarness, MoveVerifierHarness};
+use move_execution_api::{
+    FunctionSignature, Linkage, MoveExecutionVersion, MoveRuntimeHarness, MoveVerifierHarness,
+};
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::VerifierConfig;
 use move_vm_runtime::{
@@ -32,10 +34,10 @@ use move_vm_runtime::{
     shared::{gas::UnmeteredGasMeter, linkage_context::LinkageContext},
 };
 
-pub struct TipSubsystem;
+pub struct LatestSubsystem;
 
-impl MoveRuntimeHarness for TipSubsystem {
-    const SUBSYSTEM_VERSION: u64 = 5;
+impl MoveRuntimeHarness for LatestSubsystem {
+    const SUBSYSTEM_VERSION: MoveExecutionVersion = MoveExecutionVersion::Latest;
 
     type Runtime = InMemoryTestAdapter;
     type Vm<'e> = MoveVM<'e>;
@@ -117,7 +119,7 @@ impl MoveRuntimeHarness for TipSubsystem {
     }
 }
 
-impl MoveVerifierHarness for TipSubsystem {
+impl MoveVerifierHarness for LatestSubsystem {
     fn verify_module(
         module: &CompiledModule,
         config: &VerifierConfig,

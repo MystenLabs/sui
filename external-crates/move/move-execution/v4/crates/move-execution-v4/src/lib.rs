@@ -22,7 +22,9 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
     vm_status::StatusCode,
 };
-use move_execution_api::{FunctionSignature, Linkage, MoveRuntimeHarness, MoveVerifierHarness};
+use move_execution_api::{
+    FunctionSignature, Linkage, MoveExecutionVersion, MoveRuntimeHarness, MoveVerifierHarness,
+};
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::VerifierConfig;
 use move_vm_runtime::{
@@ -37,7 +39,7 @@ use move_vm_runtime::{
 pub struct V4Subsystem;
 
 impl MoveRuntimeHarness for V4Subsystem {
-    const SUBSYSTEM_VERSION: u64 = 4;
+    const SUBSYSTEM_VERSION: MoveExecutionVersion = MoveExecutionVersion::Version(4);
 
     type Runtime = InMemoryTestAdapter;
     type Vm<'e> = MoveVM<'e>;

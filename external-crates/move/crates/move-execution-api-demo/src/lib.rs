@@ -4,10 +4,10 @@
 //! Demonstration of the `move-execution-api` architecture: one generic driver, written purely
 //! against the harness traits, runs unchanged over two Move subsystem versions --
 //!
-//! - **v4** (`move-execution/v4`): the frozen subsystem, whose VM still has `Type::TyParam` and
-//!   returns declared (unsubstituted) function signatures;
-//! - **tip** (serving as version 5): the in-development subsystem, whose `Type` has no
-//!   type-parameter variant and substitutes signatures internally.
+//! - **`Version(4)`** (`move-execution/v4`): the frozen subsystem, whose VM still has
+//!   `Type::TyParam` and returns declared (unsubstituted) function signatures;
+//! - **`Latest`** (the tip): the in-development subsystem, whose `Type` has no type-parameter
+//!   variant and substitutes signatures internally.
 //!
 //! [`demo_for_version`] is the mock of the dispatch that, in the real design, lives in
 //! `sui-execution/latest`'s executor constructor and matches on
@@ -26,8 +26,9 @@ use move_core_types::{
     ident_str,
     language_storage::{ModuleId, TypeTag},
 };
+pub use move_execution_api::MoveExecutionVersion;
 use move_execution_api::{Linkage, MoveRuntimeHarness, MoveVerifierHarness};
-use move_execution_tip::TipSubsystem;
+use move_execution_latest::LatestSubsystem;
 use move_execution_v4::V4Subsystem;
 use move_vm_config::verifier::VerifierConfig;
 
@@ -180,11 +181,13 @@ where
 /// Mock of the per-epoch dispatch: in the full design this match lives in
 /// `sui-execution/latest`'s executor constructor, keyed by
 /// `protocol_config.move_execution_version()`.
-pub fn demo_for_version(move_execution_version: u64) -> Result<DemoReport> {
+pub fn demo_for_version(move_execution_version: MoveExecutionVersion) -> Result<DemoReport> {
     match move_execution_version {
-        4 => demo::<V4Subsystem>(),
-        5 => demo::<TipSubsystem>(),
-        v => panic!("Unsupported Move execution version {v}"),
+        MoveExecutionVersion::Version(4) => demo::<V4Subsystem>(),
+        MoveExecutionVersion::Latest => demo::<LatestSubsystem>(),
+        // `Unspecified` predates the selector: those protocol versions never reach a dispatch
+        // like this one -- their execution layer is hardwired to its subsystem.
+        v => panic!("Unsupported Move execution version {v:?}"),
     }
 }
 
@@ -192,29 +195,32 @@ pub fn demo_for_version(move_execution_version: u64) -> Result<DemoReport> {
 mod tests {
     use super::*;
 
-    /// The payoff line: the same generic driver, dispatched by version number, produces
-    /// identical observable results on the frozen and tip subsystems.
+    /// The payoff line: the same generic driver, dispatched by the selector, produces
+    /// identical observable results on the frozen and latest subsystems.
     #[test]
     fn subsystems_agree() {
-        let v4 = demo_for_version(4).expect("v4 subsystem runs");
-        let v5 = demo_for_version(5).expect("tip subsystem runs");
-        assert_eq!(v4, v5);
+        let frozen = demo_for_version(MoveExecutionVersion::Version(4)).expect("v4 runs");
+        let latest = demo_for_version(MoveExecutionVersion::Latest).expect("latest runs");
+        assert_eq!(frozen, latest);
     }
 
     /// Both subsystems honor the post-substitution signature contract, including substitution
     /// into a generic datatype instantiation.
     #[test]
     fn signatures_are_substituted() {
-        for version in [4, 5] {
+        for version in [
+            MoveExecutionVersion::Version(4),
+            MoveExecutionVersion::Latest,
+        ] {
             let report = demo_for_version(version).unwrap();
             assert_eq!(
                 report.id_signature,
                 (vec!["u64".to_string()], vec!["u64".to_string()]),
-                "subsystem {version}"
+                "subsystem {version:?}"
             );
             assert_eq!(
                 report.box_return, "0x42::demo::Box<u64>",
-                "subsystem {version}"
+                "subsystem {version:?}"
             );
         }
     }
@@ -222,7 +228,10 @@ mod tests {
     /// Execution agrees in the shared BCS vocabulary.
     #[test]
     fn execution_results() {
-        for version in [4, 5] {
+        for version in [
+            MoveExecutionVersion::Version(4),
+            MoveExecutionVersion::Latest,
+        ] {
             let report = demo_for_version(version).unwrap();
             assert_eq!(report.id_result, bcs::to_bytes(&42u64).unwrap());
             assert_eq!(report.add_result, bcs::to_bytes(&3u64).unwrap());

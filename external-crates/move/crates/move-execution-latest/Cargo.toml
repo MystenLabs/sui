@@ -1,8 +1,8 @@
 [package]
-name = "move-execution-tip"
+name = "move-execution-latest"
 version = "0.1.0"
 authors = ["Mysten Labs <opensource@mystenlabs.com>"]
-description = "Glue crate implementing the move-execution-api harnesses for the tip Move subsystem"
+description = "Glue crate implementing the move-execution-api harnesses for the latest (tip) Move subsystem"
 license = "Apache-2.0"
 publish = false
 edition = "2024"

@@ -149,20 +149,36 @@ impl Packages {
 
 /// The `move_execution_version` protocol config value drives which Move subsystem serves
 /// execution. Until the adapter is generic over `move-execution-api`, `latest::Executor::new`
-/// hardwires subsystem 4 (and panics on anything else); this test exercises the future dispatch
-/// through the harness demo driver: the version the config names, and the tip subsystem it will
-/// name after the flip, produce identical observable behavior today.
+/// hardwires the frozen v4 subsystem (and panics on anything else); this test exercises the
+/// future dispatch through the harness demo driver: the subsystem the config names, and the
+/// `Latest` subsystem it can be swapped to, produce identical observable behavior today.
 #[test]
 fn test_move_subsystem_dispatch_follows_protocol_config() {
+    use move_execution_api_demo::{MoveExecutionVersion as Dispatch, demo_for_version};
+    use sui_protocol_config::MoveExecutionVersion as Configured;
+
+    // The boundary translation: config vocabulary into the execution layer's dispatch
+    // vocabulary (sui-protocol-config cannot depend on execution crates, so each side carries
+    // its own copy of the enum).
+    fn to_dispatch(v: Configured) -> Dispatch {
+        match v {
+            Configured::Unspecified => Dispatch::Unspecified,
+            Configured::Version(n) => Dispatch::Version(n),
+            Configured::Latest => Dispatch::Latest,
+        }
+    }
+
     let config = sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE();
     let configured = config.move_execution_version();
     assert_eq!(
-        configured, 4,
+        configured,
+        Configured::Version(4),
         "latest currently pins the frozen v4 subsystem"
     );
 
-    let frozen = move_execution_api_demo::demo_for_version(configured).unwrap();
-    // The flip to the tip subsystem is this one line in the protocol config: 4 -> 5.
-    let tip = move_execution_api_demo::demo_for_version(5).unwrap();
-    assert_eq!(frozen, tip);
+    let frozen = demo_for_version(to_dispatch(configured)).unwrap();
+    // The swap: the config line flips Version(4) -> Latest and the tip subsystem serves
+    // execution instead -- with identical observable behavior today.
+    let latest = demo_for_version(to_dispatch(Configured::Latest)).unwrap();
+    assert_eq!(frozen, latest);
 }

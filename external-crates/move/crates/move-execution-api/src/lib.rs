@@ -39,6 +39,22 @@ use move_core_types::{
 };
 use move_vm_config::verifier::VerifierConfig;
 
+/// Identifies a Move subsystem: the dispatch vocabulary for `move_execution_version`.
+///
+/// `sui-protocol-config` carries a mirror of this enum (it cannot depend on execution-layer
+/// crates); the execution layer translates the config value into this one at its boundary, the
+/// same way `ProtocolConfig` values are projected into `VMConfig`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MoveExecutionVersion {
+    /// Predates the selector: the execution layer's hardwired subsystem, whatever it was.
+    Unspecified,
+    /// The frozen subsystem at `move-execution/vN`.
+    Version(u64),
+    /// The tip subsystem (`crates/move-vm-runtime` and friends). It has no number until it is
+    /// frozen; a config that says `Latest` tracks the tip as it evolves.
+    Latest,
+}
+
 /// A linkage: the mapping from original (runtime) package IDs to the package versions that
 /// satisfy them for one execution.
 ///
@@ -60,9 +76,8 @@ pub struct FunctionSignature<T> {
 /// The execution facet of a Move subsystem: runtime construction, package publication, per-linkage
 /// VM instances, type resolution, and function execution.
 pub trait MoveRuntimeHarness {
-    /// The `move-execution/` version this harness serves (the value `move_execution_version`
-    /// dispatches on).
-    const SUBSYSTEM_VERSION: u64;
+    /// The subsystem this harness serves (the value `move_execution_version` dispatches on).
+    const SUBSYSTEM_VERSION: MoveExecutionVersion;
 
     /// The long-lived runtime: package cache plus natives. (In this mock, the subsystem's
     /// in-memory test adapter, which bundles the runtime with a package store.)

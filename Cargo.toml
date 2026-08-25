@@ -79,7 +79,7 @@ exclude = [
     "external-crates/move/move-execution/v3/crates/move-vm-types",
     "external-crates/move/crates/move-execution-api",
     "external-crates/move/crates/move-execution-api-demo",
-    "external-crates/move/crates/move-execution-tip",
+    "external-crates/move/crates/move-execution-latest",
     "external-crates/move/move-execution/v4/crates/move-execution-v4",
     "external-crates/move/move-execution/v4/crates/move-abstract-interpreter",
     "external-crates/move/move-execution/v4/crates/move-bytecode-verifier",

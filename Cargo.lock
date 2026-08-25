@@ -8973,14 +8973,14 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-execution-api",
- "move-execution-tip",
+ "move-execution-latest",
  "move-execution-v4",
  "move-vm-config",
  "tempfile",
 ]
 
 [[package]]
-name = "move-execution-tip"
+name = "move-execution-latest"
 version = "0.1.0"
 dependencies = [
  "move-binary-format",
