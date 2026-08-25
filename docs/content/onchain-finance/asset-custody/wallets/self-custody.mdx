@@ -110,8 +110,8 @@ npm i @mysten/dapp-kit-core @mysten/sui
 
 Create a configuration file to initialize your dApp Kit instance. The `createDAppKit` function manages wallet connections, network configuration, and Sui client access.
 
-`<ImportContent
-  source="/packages/dapp-kit-next/packages/dapp-kit-core/src/core/index.ts"
+<ImportContent
+  source="/packages/dapp-kit/packages/dapp-kit-core/src/core/index.ts"
   mode="code"
   org="MystenLabs"
   repo="ts-sdks"
@@ -135,7 +135,7 @@ Create a configuration file to initialize your dApp Kit instance. The `createDAp
 Wrap your application with `DAppKitProvider` to make all hooks available throughout the component tree:
 
 <ImportContent
-  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/components/DAppKitProvider.tsx"
+  source="/packages/dapp-kit/packages/dapp-kit-react/src/components/DAppKitProvider.tsx"
   mode="code"
   org="MystenLabs"
   repo="ts-sdks"
@@ -158,7 +158,7 @@ Use hooks to access information about the connected wallet and account:
 | `useDAppKit` | Returns the dApp Kit instance and its actions |
 
 <ImportContent
-  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/hooks/useWalletConnection.ts"
+  source="/packages/dapp-kit/packages/dapp-kit-react/src/hooks/useWalletConnection.ts"
   mode="code"
   org="MystenLabs"
   repo="ts-sdks"
@@ -167,7 +167,7 @@ Use hooks to access information about the connected wallet and account:
 />
 
 <ImportContent
-  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/hooks/useCurrentWallet.ts"
+  source="/packages/dapp-kit/packages/dapp-kit-react/src/hooks/useCurrentWallet.ts"
   mode="code"
   org="MystenLabs"
   repo="ts-sdks"
@@ -176,7 +176,7 @@ Use hooks to access information about the connected wallet and account:
 />
 
 <ImportContent
-  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/hooks/useCurrentAccount.ts"
+  source="/packages/dapp-kit/packages/dapp-kit-react/src/hooks/useCurrentAccount.ts"
   mode="code"
   org="MystenLabs"
   repo="ts-sdks"
@@ -187,7 +187,7 @@ Use hooks to access information about the connected wallet and account:
 ### List available wallets
 
 <ImportContent
-  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/hooks/useWallets.ts"
+  source="/packages/dapp-kit/packages/dapp-kit-react/src/hooks/useWallets.ts"
   mode="code"
   org="MystenLabs"
   repo="ts-sdks"
@@ -198,7 +198,7 @@ Use hooks to access information about the connected wallet and account:
 ### Sign and execute a transaction
 
 <ImportContent
-  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/hooks/useDAppKit.ts"
+  source="/packages/dapp-kit/packages/dapp-kit-react/src/hooks/useDAppKit.ts"
   mode="code"
   org="MystenLabs"
   repo="ts-sdks"
