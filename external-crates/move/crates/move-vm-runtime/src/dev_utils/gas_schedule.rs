@@ -26,7 +26,7 @@ use move_binary_format::{
 use move_core_types::{
     gas_algebra::{
         AbstractMemorySize, GasQuantity, InternalGas, InternalGasPerAbstractMemoryUnit,
-        InternalGasUnit, NumArgs, NumBytes, ToUnit, ToUnitFractional,
+        InternalGasUnit, NumArgs, ToUnit, ToUnitFractional,
     },
     u256,
 };
@@ -305,8 +305,11 @@ impl GasMeter for GasStatus<'_> {
         self.charge_instr_with_size(Opcodes::CALL_GENERIC, (args.len() as u64).into())
     }
 
-    fn charge_ld_const(&mut self, size: NumBytes) -> PartialVMResult<()> {
-        self.charge_instr_with_size(Opcodes::LD_CONST, u64::from(size).into())
+    fn charge_ld_const(&mut self, val: impl ValueView) -> PartialVMResult<()> {
+        self.charge_instr_with_size(
+            Opcodes::LD_CONST,
+            val.abstract_memory_size(&MOVE_TEST_SIZE_CONFIG)?,
+        )
     }
 
     fn charge_ld_const_after_deserialization(

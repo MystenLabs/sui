@@ -1029,8 +1029,7 @@ fn constants(
                 })?
                 .into_constant_value(&context.package_arena)?;
             let type_ = make_arena_type(context, module, &constant.type_)?;
-            let size = constant.data.len() as u64;
-            let const_ = Constant { value, type_, size };
+            let const_ = Constant { value, type_ };
             Ok(const_)
         })
         .collect::<PartialVMResult<Vec<_>>>()?;

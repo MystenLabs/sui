@@ -138,8 +138,6 @@ impl Drop for Module {
 pub(crate) struct Constant {
     pub(crate) value: ConstantValue,
     pub(crate) type_: ArenaType,
-    // Size of constant -- used for gas charging.
-    pub size: u64,
 }
 
 // A runtime function

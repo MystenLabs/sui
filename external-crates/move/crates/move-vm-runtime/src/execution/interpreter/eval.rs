@@ -31,10 +31,7 @@ use crate::{
 };
 
 use move_binary_format::{checked_as, errors::*, partial_vm_error};
-use move_core_types::{
-    gas_algebra::{NumArgs, NumBytes},
-    vm_status::StatusType,
-};
+use move_core_types::{gas_algebra::NumArgs, vm_status::StatusType};
 use move_vm_config::runtime::{VMConfig, VMRuntimeLimitsConfig};
 
 use fail::fail_point;
@@ -468,8 +465,10 @@ fn op_step_impl(
             state.push_operand(Value::u256(**int_const))?;
         }
         Bytecode::LdConst(const_ptr) => {
-            gas_meter.charge_ld_const(NumBytes::new(const_ptr.size))?;
             let val = const_ptr.value.to_value();
+            // Charged by the value's abstract size (what the load materializes), not the
+            // constant's serialized byte length.
+            gas_meter.charge_ld_const(&val)?;
             gas_meter.charge_ld_const_after_deserialization(&val)?;
             state.push_operand(val)?
         }
