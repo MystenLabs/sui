@@ -26,10 +26,12 @@ COPY crates crates
 # GIT_REVISION declared late so SHA changes don't invalidate the COPYs above.
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
+# Also build the `subscribe_bench` SSE load client (used by the subscription benchmark Job); it shares
+# this image so the benchmark deploys one image as both the streaming server and the load generator.
 RUN if [ -n "$FEATURES" ]; then \
-        cargo build --locked --profile ${PROFILE} --bin sui-indexer-alt-graphql --features "$FEATURES"; \
+        cargo build --locked --profile ${PROFILE} --bin sui-indexer-alt-graphql --example subscribe_bench --features "$FEATURES"; \
     else \
-        cargo build --locked --profile ${PROFILE} --bin sui-indexer-alt-graphql; \
+        cargo build --locked --profile ${PROFILE} --bin sui-indexer-alt-graphql --example subscribe_bench; \
     fi
 
 # Production Image
@@ -41,6 +43,7 @@ RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates curl
 ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
 WORKDIR "$WORKDIR/sui"
 COPY --from=builder /sui/target/${PROFILE}/sui-indexer-alt-graphql /usr/local/bin
+COPY --from=builder /sui/target/${PROFILE}/examples/subscribe_bench /usr/local/bin
 RUN apt update && apt install -y ca-certificates postgresql
 
 ARG BUILD_DATE

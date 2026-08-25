@@ -22,26 +22,50 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-/// (live, backfill-from-genesis) query pair selected by the `QUERY_TYPE` env (tx | checkpoint | event).
+/// (live, backfill) query pair selected by the `QUERY_TYPE` env (tx | checkpoint | event | tx_prev).
+/// The backfill query resumes after `BACKFILL_FROM` (env, default 0 = from genesis); set it to a
+/// recent checkpoint to measure a realistic small-gap resume (the `checkpoints` subscription backfills
+/// via gap-recovery, which a genesis-sized gap starves).
 fn queries() -> (&'static str, &'static str) {
+    let from: u64 = std::env::var("BACKFILL_FROM")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
     match std::env::var("QUERY_TYPE").as_deref().unwrap_or("tx") {
         "checkpoint" | "cp" => (
             "subscription { checkpoints { cursor node { sequenceNumber } } }",
-            "subscription { checkpoints(afterCheckpoint: 0) { cursor node { sequenceNumber } } }",
+            leak(format!(
+                "subscription {{ checkpoints(afterCheckpoint: {from}) {{ cursor node {{ sequenceNumber }} }} }}"
+            )),
         ),
         "event" | "ev" => (
             "subscription { events { cursor node { sequenceNumber } } }",
-            "subscription { events(filter: { afterCheckpoint: 0 }) { cursor node { sequenceNumber } } }",
+            leak(format!(
+                "subscription {{ events(filter: {{ afterCheckpoint: {from} }}) {{ cursor node {{ sequenceNumber }} }} }}"
+            )),
+        ),
+        // Realistic: the common fields a typical consumer selects (digest + sender + effects status),
+        // moderate resolution cost, between the trivial digest and the heavy object descent.
+        "tx_realistic" | "realistic" => (
+            "subscription { transactions { cursor node { digest sender { address } effects { status } } } }",
+            leak(format!(
+                "subscription {{ transactions(filter: {{ afterCheckpoint: {from} }}) {{ cursor node {{ digest sender {{ address }} effects {{ status }} }} }} }}"
+            )),
         ),
         // Complex: descending into object contents (objectChanges → outputState → previousTransaction) forces
         // a per-delivered-tx BatchGetObjects to the ledger (not in the scan payload). Exercises the resolution path.
         "tx_prev" | "complex" => (
             "subscription { transactions { cursor node { digest effects { objectChanges { nodes { outputState { previousTransaction { digest } } } } } } } }",
-            "subscription { transactions(filter: { afterCheckpoint: 0 }) { cursor node { digest effects { objectChanges { nodes { outputState { previousTransaction { digest } } } } } } } }",
+            leak(format!(
+                "subscription {{ transactions(filter: {{ afterCheckpoint: {from} }}) {{ cursor node {{ digest effects {{ objectChanges {{ nodes {{ outputState {{ previousTransaction {{ digest }} }} }} }} }} }} }} }}"
+            )),
         ),
         _ => (
             "subscription { transactions { cursor node { digest } } }",
-            "subscription { transactions(filter: { afterCheckpoint: 0 }) { cursor node { digest } } }",
+            leak(format!(
+                "subscription {{ transactions(filter: {{ afterCheckpoint: {from} }}) {{ cursor node {{ digest }} }} }}"
+            )),
         ),
     }
 }
@@ -86,7 +110,8 @@ fn metric_sum(text: &str, name: &str) -> f64 {
         if line.starts_with('#') {
             continue;
         }
-        let matches = line.starts_with(&format!("{name} ")) || line.starts_with(&format!("{name}{{"));
+        let matches =
+            line.starts_with(&format!("{name} ")) || line.starts_with(&format!("{name}{{"));
         if matches {
             if let Some(v) = line.rsplit(' ').next().and_then(|v| v.parse::<f64>().ok()) {
                 total += v;
@@ -98,7 +123,9 @@ fn metric_sum(text: &str, name: &str) -> f64 {
 
 fn terminations_lagged(text: &str) -> f64 {
     text.lines()
-        .filter(|l| l.starts_with("graphql_subscription_terminations{") && l.contains("reason=\"lagged\""))
+        .filter(|l| {
+            l.starts_with("graphql_subscription_terminations{") && l.contains("reason=\"lagged\"")
+        })
         .filter_map(|l| l.rsplit(' ').next().and_then(|v| v.parse::<f64>().ok()))
         .sum()
 }
@@ -128,13 +155,25 @@ fn server_rss_cpu() -> (u64, f64) {
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 12)]
 async fn main() -> anyhow::Result<()> {
-    let n: usize = std::env::var("N").ok().and_then(|s| s.parse().ok()).unwrap_or(10);
-    let secs: u64 = std::env::var("SECS").ok().and_then(|s| s.parse().ok()).unwrap_or(60);
+    let n: usize = std::env::var("N")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10);
+    let secs: u64 = std::env::var("SECS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(60);
     // Connections opened per second (0 = all at once). Paced opening avoids a thundering-herd connect
     // burst that saturates the client runtime and starves the sampling loop at high N.
-    let ramp: usize = std::env::var("RAMP").ok().and_then(|s| s.parse().ok()).unwrap_or(0);
+    let ramp: usize = std::env::var("RAMP")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
     // Percent of subscribers that backfill (rest are live). 100 = all backfill, 0 = all live, 50 = interleaved.
-    let bf_pct: usize = std::env::var("BACKFILL_PCT").ok().and_then(|s| s.parse().ok()).unwrap_or(50);
+    let bf_pct: usize = std::env::var("BACKFILL_PCT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(50);
     let server = std::env::var("SERVER")
         .unwrap_or_else(|_| "http://127.0.0.1:8123/graphql/subscriptions".into());
     let metrics_url =
@@ -178,7 +217,10 @@ async fn main() -> anyhow::Result<()> {
     let client = reqwest::Client::new();
     let path = format!("{out_dir}/{name}.csv");
     let mut f = std::fs::File::create(&path)?;
-    writeln!(f, "t_ms,active,opened,delivered,lag_sum,lag_count,term_lagged,client_delivered,delivered_backfill,delivered_live,rss_kb,cpu_pct,processed_cp")?;
+    writeln!(
+        f,
+        "t_ms,active,opened,delivered,lag_sum,lag_count,term_lagged,client_delivered,delivered_backfill,delivered_live,rss_kb,cpu_pct,processed_cp"
+    )?;
 
     eprintln!(
         "[client] {name}: {n} subscribers ({} backfill / {} live) -> {server} for {secs}s",

@@ -332,7 +332,14 @@ async fn bench_subscription_scaling() {
             for _ in 0..50 {
                 let _ = transfer_coins(&mut cluster.validator, &[1_000_000; 4]).await;
             }
-            run_scenario(&mut cluster, "backfill_50", vec![Some(0); 50], dur, &out_dir).await;
+            run_scenario(
+                &mut cluster,
+                "backfill_50",
+                vec![Some(0); 50],
+                dur,
+                &out_dir,
+            )
+            .await;
         }
         "stress" => {
             run_scenario(&mut cluster, "stress_500", vec![None; 500], dur, &out_dir).await;
@@ -347,7 +354,14 @@ async fn bench_subscription_scaling() {
             }
             let mut specs = vec![None; 50];
             specs.extend(vec![Some(0); 50]);
-            run_scenario(&mut cluster, "mixed_50live_50backfill", specs, dur, &out_dir).await;
+            run_scenario(
+                &mut cluster,
+                "mixed_50live_50backfill",
+                specs,
+                dur,
+                &out_dir,
+            )
+            .await;
         }
         _ => {
             run_scenario(&mut cluster, "baseline_1", vec![None; 1], dur, &out_dir).await;

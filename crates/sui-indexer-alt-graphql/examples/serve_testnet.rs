@@ -124,7 +124,10 @@ async fn main() -> anyhow::Result<()> {
         rpc_config.subscription.max_concurrent_resolutions = p;
         eprintln!("[serve] BENCH: scan page (max_concurrent_resolutions) = {p}");
     }
-    if let Some(v) = std::env::var("SCAN_QPS").ok().and_then(|v| v.parse::<u32>().ok()) {
+    if let Some(v) = std::env::var("SCAN_QPS")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+    {
         rpc_config.subscription.per_subscriber_scan_max_qps = v;
         eprintln!("[serve] BENCH: per_subscriber_scan_max_qps = {v}");
     }
@@ -132,7 +135,9 @@ async fn main() -> anyhow::Result<()> {
         .ok()
         .and_then(|v| v.parse::<usize>().ok())
     {
-        rpc_config.subscription.per_subscriber_scan_max_concurrent_fetches = v;
+        rpc_config
+            .subscription
+            .per_subscriber_scan_max_concurrent_fetches = v;
         eprintln!("[serve] BENCH: per_subscriber_scan_max_concurrent_fetches = {v}");
     }
 

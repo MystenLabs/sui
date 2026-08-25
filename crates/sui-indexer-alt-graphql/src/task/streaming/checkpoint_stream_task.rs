@@ -439,9 +439,13 @@ impl CheckpointStreamTask {
         self.streaming_transactions
             .index_transactions(seq, &processed.transactions);
         // `execution_objects` only exists under the staging feature (it's the streamed object source).
+        // BENCH-ONLY: `GRAPHQL_BENCH_DISABLE_OBJECT_STORE` skips object indexing to isolate the object
+        // store's memory contribution in A/B cache-growth measurements.
         #[cfg(feature = "staging")]
-        self.streaming_objects
-            .index_objects(seq, &processed.execution_objects);
+        if std::env::var_os("GRAPHQL_BENCH_DISABLE_OBJECT_STORE").is_none() {
+            self.streaming_objects
+                .index_objects(seq, &processed.execution_objects);
+        }
 
         self.metrics.record_processed_checkpoint(
             "live",
