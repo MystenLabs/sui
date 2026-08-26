@@ -1,0 +1,20 @@
+// chained vector element borrows, each a dot-star extension
+
+// same, imm released before the second write
+//# publish
+mvir 0xc5::l5_imm_released_then_write {
+
+fun t(r: &mut vector<u64>) {
+    let e1: &mut u64;
+    let e2: &u64;
+label b0:
+    e1 = vec_mut_borrow<u64>(copy(r), 0);
+    *copy(e1) = 9;
+    e2 = vec_imm_borrow<u64>(freeze(copy(r)), 1);
+    _ = *move(e2);
+    _ = move(r);
+    *move(e1) = 10;
+    return;
+}
+
+}

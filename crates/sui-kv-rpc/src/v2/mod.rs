@@ -12,8 +12,7 @@ use sui_rpc::proto::sui::rpc::v2::{
 };
 use sui_rpc_api::proto::timestamp_ms_to_proto;
 use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};
-use sui_sdk_types::Digest;
-use sui_types::digests::ChainIdentifier;
+use sui_types::digests::{ChainIdentifier, CheckpointDigest};
 use tonic::codegen::BoxStream;
 
 use crate::KvRpcServer;
@@ -117,6 +116,7 @@ impl LedgerService for KvRpcServer {
             self.client.clone(),
             self.limited_client("GetCheckpoint"),
             &self.stages,
+            &self.service_info_watermark_pipelines,
             request.into_inner(),
         )
         .await
@@ -204,7 +204,7 @@ pub(crate) async fn get_service_info(
         return Err(CheckpointNotFoundError::sequence_number(0).into());
     };
     let mut message = GetServiceInfoResponse::default();
-    message.chain_id = Some(Digest::new(chain_id.as_bytes().to_owned()).to_string());
+    message.chain_id = Some(CheckpointDigest::new(*chain_id.as_bytes()).base58_encode());
     message.chain = Some(chain_id.chain().as_str().into());
     message.epoch = Some(wm.epoch_hi_inclusive);
     message.checkpoint_height = Some(checkpoint_hi_inclusive);

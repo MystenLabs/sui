@@ -1,0 +1,120 @@
+// a VariantField extension that reaches the loop header only via the back edge
+
+//# publish
+mvir 0x611::backedge_only_extension {
+
+public enum X has drop { One { a: u64 }, Two { b: u64 } }
+
+// a is seeded from an unrelated local, so only a second pass sees the extension
+fun t(e: &mut Self::X, n: u64) {
+    let k: u64;
+    let a: &mut u64;
+label b0:
+    k = 0;
+    a = &mut k;
+    jump l1;
+label l1:
+    *copy(e) = X::One { a: 0 };
+    &mut X::One { a: a } = copy(e);
+    jump_if (copy(n) == 0) done;
+    n = move(n) - 1;
+    jump l1;
+label done:
+    *move(a) = 1;
+    _ = move(e);
+    return;
+}
+
+}
+
+//# run
+mvir 0x612::loop_only_local_is_invisible {
+
+public enum X has drop { One { a: u64 }, Two { b: u64 } }
+
+// a is assigned only inside the loop, so the header never learns about it
+entry fun t() {
+    let e: Self::X;
+    let n: u64;
+    let a: &mut u64;
+label b0:
+    e = X::One { a: 0 };
+    n = 3;
+    jump l1;
+label l1:
+    *(&mut e) = X::One { a: 0 };
+    &mut X::One { a: a } = &mut e;
+    jump_if (copy(n) == 0) done;
+    n = move(n) - 1;
+    jump l1;
+label done:
+    *move(a) = 1;
+    return;
+}
+
+}
+
+//# run
+mvir 0x613::dot_star_self_extension_with_variant {
+
+public enum X has drop { One { a: u64 }, Two { b: address } }
+
+fun id(x: &mut Self::X): &mut Self::X {
+label b0:
+    return move(x);
+}
+
+// r becomes a dot-star self extension; the extension is released each iteration
+entry fun t() {
+    let e: Self::X;
+    let r: &mut Self::X;
+    let a: &mut u64;
+    let n: u64;
+label b0:
+    e = X::One { a: 0 };
+    r = &mut e;
+    n = 3;
+label loop_header:
+    jump_if (copy(n) == 0) loop_exit;
+    n = move(n) - 1;
+    &mut X::One { a: a } = copy(r);
+    *move(a) = 1;
+    r = Self::id(move(r));
+    jump loop_header;
+label loop_exit:
+    *copy(r) = X::Two { b: 0x0 };
+    _ = move(r);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x614::dot_star_self_extension_with_variant_invalid {
+
+public enum X has drop { One { a: u64 }, Two { b: address } }
+
+fun id(x: &mut Self::X): &mut Self::X {
+label b0:
+    return move(x);
+}
+
+// same, but the extension is live across the call and the back edge
+fun t(e: &mut Self::X, n: u64) {
+    let r: &mut Self::X;
+    let a: &mut u64;
+label b0:
+    r = move(e);
+label loop_header:
+    jump_if (copy(n) == 0) loop_exit;
+    n = move(n) - 1;
+    &mut X::One { a: a } = copy(r);
+    r = Self::id(move(r));
+    *move(a) = 1;
+    jump loop_header;
+label loop_exit:
+    _ = move(r);
+    return;
+}
+
+}

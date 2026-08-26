@@ -29,7 +29,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 133;
+const MAX_PROTOCOL_VERSION: u64 = 136;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -373,7 +373,18 @@ const MAINNET_USDB: &str =
 //              root version of hash-derived UIDs (`new_uid_from_hash`).
 //              Create the ForwardingAddressRegistry system object on devnet.
 //              Make upgrade-init linkage checks independent of PTB command order.
-// Version 133: Add `package::original_package_id` and its native costs.
+// Version 133: Include function signatures in type-node limits.
+//              Bound type nodes in accumulators.
+// Version 134: Add `package::original_package_id` and its native costs.
+//              Reduce the consensus block transaction count and payload limits.
+//              (Both gated to non-mainnet chains.)
+//              Disable defer_unpaid_amplification on mainnet.
+// Version 135: Apply the v134 config changes on mainnet.
+//              Disable defer_unpaid_amplification everywhere.
+// Version 136: Enable ptb_tx_context_restrictions: `TxContext` may appear in a
+//              PTB Move call signature at most once mutably or any number of
+//              times immutably (never by value), and never in return position.
+//              Enable allowed_proposers on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -487,6 +498,12 @@ struct FeatureFlags {
     // been deployed everywhere.
     #[serde(skip_serializing_if = "is_false")]
     consensus_order_end_of_epoch_last: bool,
+
+    // If true, validators emit slim (ancestor-compressed) blocks on the consensus block
+    // subscription stream, framed in a block envelope. Gates the wire framing on both
+    // ends of the stream.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_slim_block_propagation: bool,
 
     // Disallow adding abilities to types during package upgrades.
     #[serde(skip_serializing_if = "is_false")]
@@ -1039,6 +1056,17 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     framework_tx_context_mut_restrictions: bool,
 
+    // Count function and local signatures towards type-node budgets.
+    #[serde(skip_serializing_if = "is_false")]
+    include_function_signatures_in_instantiation_limits: bool,
+
+    // If true, the static PTB verifier restricts `TxContext` in Move call
+    // signatures: it may appear at most once as `&mut TxContext`, or any
+    // number of times as `&TxContext`, never by value, and never in return
+    // position (it can never become a PTB result).
+    #[serde(skip_serializing_if = "is_false")]
+    ptb_tx_context_restrictions: bool,
+
     // Enable display registry protocol
     #[serde(skip_serializing_if = "is_false")]
     enable_display_registry: bool,
@@ -1141,6 +1169,11 @@ struct FeatureFlags {
     // in the same commit attempted to lock the same object (double-spend attempt).
     #[serde(skip_serializing_if = "is_false")]
     defer_owned_object_double_spend: bool,
+
+    // If true, `TransactionExpiration::Validity` is accepted, allowing a transaction to
+    // restrict which validators may propose it in consensus.
+    #[serde(skip_serializing_if = "is_false")]
+    allowed_proposers: bool,
 
     #[serde(skip_serializing_if = "is_false")]
     randomize_checkpoint_tx_limit_in_tests: bool,
@@ -1485,6 +1518,9 @@ pub struct ProtocolConfig {
 
     /// Maximum number of "type nodes" that can be instantiated in a module.
     max_generic_instantiation_type_nodes_per_module: Option<u64>,
+
+    /// Maximum number of "type nodes" allowed in an accumulator.
+    max_accumulator_type_nodes: Option<u64>,
 
     /// Maximum number of push instructions in one function. Enforced by the Move bytecode verifier.
     max_push_size: Option<u64>,
@@ -2528,6 +2564,7 @@ impl ProtocolConfig {
             max_type_nodes: Some(256),
             max_generic_instantiation_type_nodes_per_function: None,
             max_generic_instantiation_type_nodes_per_module: None,
+            max_accumulator_type_nodes: None,
             max_push_size: Some(10000),
             max_struct_definitions: Some(200),
             max_function_definitions: Some(1000),
@@ -4564,10 +4601,50 @@ impl ProtocolConfig {
                         .enable_order_independent_upgrade_init_linkage = true;
                 }
                 133 => {
+                    cfg.feature_flags
+                        .include_function_signatures_in_instantiation_limits = true;
+                    cfg.max_accumulator_type_nodes = Some(16);
+                }
+                134 => {
+                    // v134 was released to testnet with this content before the 1.77
+                    // branch backfilled its own v134 to disable defer_unpaid_amplification
+                    // on mainnet. To keep (v134, Mainnet) identical across the 1.77 and
+                    // 1.78 branches, the original v134 content is gated off mainnet here
+                    // (it applies to mainnet in v135 instead), and mainnet's v134 carries
+                    // only the deferral disable.
+                    if chain != Chain::Mainnet {
+                        cfg.package_original_package_id_impl_cost_base = Some(52);
+                        let package_read_cost_per_byte = cfg.obj_access_cost_read_per_byte();
+                        cfg.package_original_package_id_impl_cost_per_byte =
+                            Some(package_read_cost_per_byte);
+
+                        cfg.consensus_max_transactions_in_block_bytes = Some(288 * 1024);
+                        cfg.consensus_max_num_transactions_in_block = Some(128);
+                    }
+
+                    if chain == Chain::Mainnet {
+                        cfg.feature_flags.defer_unpaid_amplification = false;
+                    }
+                }
+                135 => {
+                    // Apply the original v134 content on mainnet (no-op re-assignment on
+                    // chains that already applied it in v134).
                     cfg.package_original_package_id_impl_cost_base = Some(52);
                     let package_read_cost_per_byte = cfg.obj_access_cost_read_per_byte();
                     cfg.package_original_package_id_impl_cost_per_byte =
                         Some(package_read_cost_per_byte);
+
+                    cfg.consensus_max_transactions_in_block_bytes = Some(288 * 1024);
+                    cfg.consensus_max_num_transactions_in_block = Some(128);
+
+                    cfg.feature_flags.defer_unpaid_amplification = false;
+                }
+                136 => {
+                    cfg.feature_flags.ptb_tx_context_restrictions = true;
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.allowed_proposers = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -4655,6 +4732,8 @@ impl ProtocolConfig {
             max_generic_instantiation_type_nodes_per_module: self
                 .max_generic_instantiation_type_nodes_per_module_as_option()
                 .map(|v| v as usize),
+            include_function_signatures_in_instantiation_limits: self
+                .include_function_signatures_in_instantiation_limits(),
             max_push_size: Some(self.max_push_size() as usize),
             max_dependency_depth: Some(self.max_dependency_depth() as usize),
             max_fields_in_struct: Some(self.max_fields_in_struct() as usize),

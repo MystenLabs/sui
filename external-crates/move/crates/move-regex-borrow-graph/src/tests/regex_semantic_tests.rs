@@ -197,7 +197,12 @@ proptest! {
     ) {
         let loses_precision =
             regex.ends_in_dot_star && matches!(extension, Extension::Label(_));
-        prop_assume!(!loses_precision);
+        // An early return rather than `prop_assume!`: this case is rejected roughly one time in
+        // six, so with a raised case count the reject accounting aborts the test instead of
+        // giving it more coverage.
+        if loses_precision {
+            return Ok(());
+        }
 
         let result = regex.clone().extend(&extension);
         for path in universe() {

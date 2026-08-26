@@ -1,11 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// FlexCommitter will be wired into Core in a follow-up PR.
-#![allow(dead_code)]
-
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     sync::Arc,
 };
 
@@ -74,41 +71,70 @@ impl FlexCommitter {
         &mut self,
         next_commit_leaders: NextCommitLeaderSchedule,
     ) {
-        // pending_commit_state.next_commit_leaders contain the schedule for next commit,
-        // and are associated with the other internal state.
-        if self
-            .pending_commit_state
-            .next_commit_leaders
-            .next_commit_index
-            == next_commit_leaders.next_commit_index
-        {
-            // Use cached pending commit state for the same commit index.
+        let current = &self.pending_commit_state.next_commit_leaders;
+        if current.next_commit_index == next_commit_leaders.next_commit_index {
+            assert_eq!(
+                current.min_next_leader_round, next_commit_leaders.min_next_leader_round,
+                "minimum leader round must not change at the same commit index"
+            );
+            assert_eq!(
+                current.allowed_leaders, next_commit_leaders.allowed_leaders,
+                "leader schedule must not change at the same commit index"
+            );
             return;
         }
+        let current_commit_index = current.next_commit_index;
+        let current_min_next_leader_round = current.min_next_leader_round;
+        let leader_schedule_changed =
+            current.allowed_leaders != next_commit_leaders.allowed_leaders;
         assert!(
-            self.pending_commit_state
-                .next_commit_leaders
-                .next_commit_index
-                < next_commit_leaders.next_commit_index,
+            current_commit_index < next_commit_leaders.next_commit_index,
             "next_commit_index should only move forward: {} vs {}",
-            self.pending_commit_state
-                .next_commit_leaders
-                .next_commit_index,
+            current_commit_index,
             next_commit_leaders.next_commit_index
         );
-        tracing::debug!(
-            "Refreshing pending commit state: old_commit_index={}, new_commit_index={}, min_next_leader_round={}, num_leaders={}",
-            self.pending_commit_state
-                .next_commit_leaders
-                .next_commit_index,
-            next_commit_leaders.next_commit_index,
-            next_commit_leaders.min_next_leader_round,
-            next_commit_leaders.num_leaders(),
+        assert!(
+            current_min_next_leader_round < next_commit_leaders.min_next_leader_round,
+            "min_next_leader_round should only move forward: {} vs {}",
+            current_min_next_leader_round,
+            next_commit_leaders.min_next_leader_round
         );
-        self.pending_commit_state = PendingCommitState {
-            next_commit_leaders,
-            rounds: vec![],
-        };
+
+        if leader_schedule_changed {
+            tracing::debug!(
+                "Resetting pending commit state for a leader schedule change: old_commit_index={}, new_commit_index={}, min_next_leader_round={}, num_leaders={}",
+                current_commit_index,
+                next_commit_leaders.next_commit_index,
+                next_commit_leaders.min_next_leader_round,
+                next_commit_leaders.num_leaders(),
+            );
+            self.pending_commit_state = PendingCommitState {
+                next_commit_leaders,
+                rounds: VecDeque::new(),
+            };
+            return;
+        }
+
+        let min_next_leader_round = next_commit_leaders.min_next_leader_round;
+        while self
+            .pending_commit_state
+            .rounds
+            .front()
+            .is_some_and(|state| state.round < min_next_leader_round)
+        {
+            self.pending_commit_state.rounds.pop_front();
+        }
+        if let Some(first) = self.pending_commit_state.rounds.front() {
+            assert_eq!(first.round, min_next_leader_round);
+        }
+        tracing::debug!(
+            "Advancing pending commit state: old_commit_index={}, new_commit_index={}, min_next_leader_round={}, retained_rounds={}",
+            current_commit_index,
+            next_commit_leaders.next_commit_index,
+            min_next_leader_round,
+            self.pending_commit_state.rounds.len(),
+        );
+        self.pending_commit_state.next_commit_leaders = next_commit_leaders;
     }
 
     /// Runs the direct commit rule on every leader slot pending to be decided.
@@ -232,6 +258,51 @@ impl FlexCommitter {
         None
     }
 
+    /// Reports the leader decisions of every round through `commit_leader_round`.
+    ///
+    /// Each decision is reported one time: the next `maybe_refresh_pending_commit_state`
+    /// sets `min_next_leader_round` to `commit_leader_round + 1`, so exactly these rounds
+    /// are dropped from the pending state before the next commit is built.
+    ///
+    /// This does not count every decision the committer makes. A decision is counted only
+    /// when a commit covers its round, so these stay unreported: rounds that are decided
+    /// when the node stops committing, and rounds dropped because a certified commit moved
+    /// `min_next_leader_round` past them. This is accepted, because commits cover almost
+    /// all leader decisions, and tracking the remainder needs bookkeeping that this metric
+    /// does not justify.
+    fn report_decided_prefix_metrics(&self, commit_leader_round: Round) {
+        for round_state in &self.pending_commit_state.rounds {
+            if round_state.round > commit_leader_round {
+                break;
+            }
+            for leader_slot in &round_state.leader_slots {
+                let (authority, outcome) = match &leader_slot.leader_status {
+                    LeaderStatus::Commit(block) => (block.author(), "commit"),
+                    LeaderStatus::Skip(slot) => (slot.authority, "skip"),
+                    LeaderStatus::Undecided(slot) => {
+                        panic!("Unexpected undecided slot {}", slot)
+                    }
+                };
+                let decision = match leader_slot
+                    .decision
+                    .expect("Decided slot must have a decision")
+                {
+                    Decision::Direct => "direct",
+                    Decision::Indirect => "indirect",
+                    Decision::Certified => "certified",
+                };
+                let commit_type = format!("{decision}-{outcome}");
+                let leader_host = &self.context.committee.authority(authority).hostname;
+                self.context
+                    .metrics
+                    .node_metrics
+                    .committed_leaders_total
+                    .with_label_values(&[leader_host, &commit_type])
+                    .inc();
+            }
+        }
+    }
+
     /// Builds a single commit with leaders from `commit_leader_round`.
     ///
     /// Traversal starts from all committed leaders in `commit_leader_round`,
@@ -245,37 +316,24 @@ impl FlexCommitter {
         &mut self,
         commit_leader_round: Round,
     ) -> Option<(TrustedCommit, CommittedSubDag)> {
-        let round_state = self
-            .pending_commit_state
-            .get_round_state(commit_leader_round);
-        let mut committed_leaders = Vec::new();
-        for s in &round_state.leader_slots {
-            // Record every decided leader slot in the commit round: the authority
-            // whose slot it is, how it was decided (direct/indirect), and whether
-            // it was committed or skipped.
-            let (authority, outcome) = match &s.leader_status {
-                LeaderStatus::Commit(block) => {
-                    committed_leaders.push(block.clone());
-                    (block.author(), "commit")
+        let committed_leaders = {
+            let round_state = self
+                .pending_commit_state
+                .get_round_state(commit_leader_round);
+            let mut committed_leaders = Vec::new();
+            for s in &round_state.leader_slots {
+                match &s.leader_status {
+                    LeaderStatus::Commit(block) => {
+                        committed_leaders.push(block.clone());
+                    }
+                    LeaderStatus::Skip(_) => {}
+                    LeaderStatus::Undecided(slot) => panic!("Unexpected undecided slot {}", slot),
                 }
-                LeaderStatus::Skip(slot) => (slot.authority, "skip"),
-                LeaderStatus::Undecided(slot) => panic!("Unexpected undecided slot {}", slot),
-            };
-            let decision = match s.decision.expect("Decided slot must have a decision") {
-                Decision::Direct => "direct",
-                Decision::Indirect => "indirect",
-                Decision::Certified => "certified",
-            };
-            let commit_type = format!("{decision}-{outcome}");
-            let leader_host: &str = &self.context.committee.authority(authority).hostname;
-            self.context
-                .metrics
-                .node_metrics
-                .committed_leaders_total
-                .with_label_values(&[leader_host, &commit_type])
-                .inc();
-        }
+            }
+            committed_leaders
+        };
         assert!(!committed_leaders.is_empty(), "No committed leaders found");
+        self.report_decided_prefix_metrics(commit_leader_round);
 
         let mut dag_state = self.dag_state.write();
         let last_commit_digest = dag_state.last_commit_digest();
@@ -286,6 +344,11 @@ impl FlexCommitter {
         // frontier is empty.
         for leader in &committed_leaders {
             assert!(
+                leader.round() > gc_round,
+                "Leader block {:?} at or below gc_round {gc_round} should not be committed",
+                leader.reference()
+            );
+            assert!(
                 dag_state.set_committed(&leader.reference()),
                 "Leader block {:?} attempted to be committed twice",
                 leader.reference()
@@ -295,23 +358,13 @@ impl FlexCommitter {
         let mut to_commit: Vec<VerifiedBlock> = Vec::new();
         while let Some(block) = to_visit.pop() {
             to_commit.push(block.clone());
-            let uncommitted_ancestor_refs: Vec<BlockRef> = block
-                .ancestors()
-                .iter()
-                .copied()
-                .filter(|a| a.round > gc_round && !dag_state.is_committed(a))
-                .collect();
-            for ancestor_ref in uncommitted_ancestor_refs {
-                if !dag_state.set_committed(&ancestor_ref) {
+            for ancestor_ref in block.ancestors().iter().copied() {
+                if ancestor_ref.round <= gc_round || !dag_state.set_committed(&ancestor_ref) {
                     continue;
                 }
                 to_visit.push(dag_state.get_block(&ancestor_ref).unwrap());
             }
         }
-        assert!(
-            to_commit.iter().all(|b| b.round() > gc_round),
-            "No blocks at or below gc_round {gc_round} should be committed"
-        );
         drop(dag_state);
 
         // Sort the committed blocks deterministically, first by round ascending,
@@ -395,6 +448,22 @@ impl FlexCommitter {
             .collect();
         drop(dag_state);
 
+        // Every block in the commit's leader round is a committed leader (same-round
+        // blocks cannot be ancestors of each other, so they can only appear in the
+        // commit as leaders). Report them like `build_commit` does for local
+        // decisions, so `committed_leaders_total` covers the commit sync path too.
+        for block in &blocks {
+            if block.round() == commit.leader().round {
+                let leader_host = &self.context.committee.authority(block.author()).hostname;
+                self.context
+                    .metrics
+                    .node_metrics
+                    .committed_leaders_total
+                    .with_label_values(&[leader_host, "certified-commit"])
+                    .inc();
+            }
+        }
+
         let mut subdag = CommittedSubDag::new(
             commit.leader(),
             blocks,
@@ -406,14 +475,16 @@ impl FlexCommitter {
     }
 }
 
-/// Tracks intermediate state related to generating the next commit.
-/// This state resets when encountering a more advanced leader schedule.
+/// Tracks intermediate state for future commits.
+///
+/// An advanced commit removes the old round prefix. The remaining decisions stay valid while the
+/// ordered leader schedule is unchanged. A schedule change resets all round state.
 #[derive(Clone, Debug, Default)]
 struct PendingCommitState {
     // Leader schedule for generating the upcoming commit.
     next_commit_leaders: NextCommitLeaderSchedule,
     // Intermediate state per round.
-    rounds: Vec<RoundState>,
+    rounds: VecDeque<RoundState>,
 }
 
 impl PendingCommitState {
@@ -430,7 +501,7 @@ impl PendingCommitState {
     fn get_or_create_round_state(&mut self, round: Round) -> &mut RoundState {
         let add_from_round = self
             .rounds
-            .last()
+            .back()
             .map(|state| state.round + 1)
             .unwrap_or(self.next_commit_leaders.min_next_leader_round);
         // No-op if the round's state exists.
@@ -452,7 +523,7 @@ impl PendingCommitState {
                 })
                 .collect();
             let undecided_slots: BTreeSet<Slot> = leader_slots.iter().map(|s| s.slot).collect();
-            self.rounds.push(RoundState {
+            self.rounds.push_back(RoundState {
                 round: r,
                 leader_slots,
                 undecided_slots,

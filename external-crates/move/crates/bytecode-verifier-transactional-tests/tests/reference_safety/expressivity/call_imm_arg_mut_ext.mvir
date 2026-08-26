@@ -1,0 +1,32 @@
+// an imm argument with a live mut extension outside the call may be passed; the result must
+// still be related to that extension
+
+//# publish
+mvir 0x3::imm_arg_live_mut_ext_release_first {
+
+public struct Inner has copy, drop { v: u64 }
+public struct Outer has copy, drop { f: Self::Inner }
+
+fun id(o: &Self::Outer): &Self::Outer {
+label b0:
+    return move(o);
+}
+
+fun t() {
+    let a: Self::Outer;
+    let x: &mut Self::Inner;
+    let y: &Self::Outer;
+    let ri: &Self::Outer;
+label b0:
+    a = Outer { f: Inner { v: 0 } };
+    x = &mut (&mut a).Outer::f;
+    y = &a;
+    ri = Self::id(move(y));
+    // release the call result before writing
+    _ = *move(ri);
+    *copy(x) = Inner { v: 7 };
+    _ = move(x);
+    return;
+}
+
+}

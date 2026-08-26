@@ -1,0 +1,20 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+task 1, line 93:
+//# view-abstract-state 0x2::zzds_shapes::c_two_mut
+view-abstract-state subcommand is only available with regex reference safety
+
+task 2, line 95:
+//# view-abstract-state 0x2::zzds_shapes::c_mut_imm
+view-abstract-state subcommand is only available with regex reference safety
+
+task 3, line 97:
+//# view-abstract-state 0x2::zzds_shapes::c_two_imm
+view-abstract-state subcommand is only available with regex reference safety
+
+task 4, line 99:
+//# view-abstract-state 0x2::zzds_shapes::c_extend_return
+view-abstract-state subcommand is only available with regex reference safety

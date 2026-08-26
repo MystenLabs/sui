@@ -1,0 +1,16 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, line 69:
+//# view-abstract-state 0x51::zzds_loopshape::l1
+view-abstract-state subcommand is only available with regex reference safety
+
+task 2, line 71:
+//# view-abstract-state 0x51::zzds_loopshape::l2
+view-abstract-state subcommand is only available with regex reference safety
+
+task 3, line 73:
+//# view-abstract-state 0x51::zzds_loopshape::l3
+view-abstract-state subcommand is only available with regex reference safety

@@ -19,7 +19,7 @@ mod consensus_tests {
     use consensus_core::NoopTransactionVerifier;
     use consensus_core::{
         BlockAPI, BlockStatus, CommitIndex, CommitRef, CommittedSubDag, Priority,
-        TransactionVerifier, ValidationError,
+        TransactionVerifier, ValidationError, storage::Store,
     };
     use consensus_simtests::node::{AuthorityNode, Config};
     use consensus_types::block::{BlockRef, BlockTimestampMs, TransactionIndex};
@@ -325,6 +325,73 @@ mod consensus_tests {
         }
 
         load_handle.abort();
+    }
+
+    // Restart one validator as a new process without its local store. The new process must
+    // recover its last own block from peers before it proposes another block.
+    #[sim_test(config = "test_config()")]
+    async fn test_consensus_amnesia_recovery() {
+        telemetry_subscribers::init_for_testing();
+        let db_registry = Registry::new();
+        DBMetrics::init(RegistryService::new(db_registry));
+        const NUM_OF_AUTHORITIES: usize = 4;
+        const RESTARTED_AUTHORITY: usize = 0;
+        let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_gc_depth_for_testing(3);
+
+        let authorities = start_committee(
+            &committee,
+            &keypairs,
+            &protocol_config,
+            &[0; NUM_OF_AUTHORITIES],
+            Arc::new(NoopTransactionVerifier {}),
+            |_, _| {},
+        )
+        .await;
+
+        sleep(Duration::from_secs(10)).await;
+        let authority = &authorities[RESTARTED_AUTHORITY];
+        let authority_index = authority.index();
+        let store_before_restart = authority.store();
+
+        authority.stop().await;
+        let own_round_before_restart = store_before_restart
+            .scan_last_blocks_by_author(authority_index, 1, None)
+            .unwrap()
+            .last()
+            .expect("Restarted authority did not propose a block before restart")
+            .round();
+        assert!(
+            own_round_before_restart > 0,
+            "Authority {RESTARTED_AUTHORITY} proposed no non-genesis block before restart"
+        );
+
+        authority.start_with_empty_store().await.unwrap();
+        authority.spawn_committed_subdag_consumer().unwrap();
+        let mut commit_receiver = authority.commit_consumer_receiver();
+
+        // The empty-store node first replays old commits. Wait for a committed own block above
+        // its highest pre-restart proposal to prove that recovery finished and proposing resumed.
+        let committed_own_round_after_restart = timeout(Duration::from_secs(120), async {
+            while let Some(subdag) = commit_receiver.recv().await {
+                if let Some(round) = subdag.blocks.iter().find_map(|block| {
+                    (block.author() == authority_index && block.round() > own_round_before_restart)
+                        .then_some(block.round())
+                }) {
+                    return Some(round);
+                }
+            }
+            None
+        })
+        .await
+        .ok()
+        .flatten();
+        assert!(
+            committed_own_round_after_restart.is_some(),
+            "Authority {RESTARTED_AUTHORITY} did not commit an own block above pre-restart round \
+             {own_round_before_restart} within 120s after an empty-store restart"
+        );
     }
 
     // Tests consensus transaction voting with randomized votes and random crashes. The test
@@ -728,6 +795,178 @@ mod consensus_tests {
         }
     }
 
+    /// An observer starting mid-run must catch up while its block stream subscription is
+    /// suspended on commit lag, and resume the live stream once caught up: commits arrive via
+    /// commit sync during catch-up, and via the block stream afterwards.
+    #[sim_test(config = "test_config()")]
+    async fn test_observer_catchup_with_suspended_block_stream() {
+        telemetry_subscribers::init_for_testing();
+        let db_registry = Registry::new();
+        DBMetrics::init(RegistryService::new(db_registry));
+
+        const NUM_OF_AUTHORITIES: usize = 4;
+        const NUM_TRANSACTIONS: u16 = 300;
+        // Give commit sync production-like throughput: the msim defaults (batch size 3,
+        // 10 blocks per fetch) trigger the intra-fetch chunk pacing on every range and
+        // cap pull sync below the commit production rate, so a late observer could never
+        // converge, with or without subscription suspension.
+        const COMMIT_SYNC_BATCH_SIZE: u32 = 10;
+        const MAX_BLOCKS_PER_FETCH: usize = 1000;
+        // Validators must be at least this far ahead before the observer starts, so it
+        // begins commit-lagging (suspension threshold is COMMIT_SYNC_BATCH_SIZE * 5).
+        const CATCHUP_START_COMMITS: u32 = 60;
+
+        let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_gc_depth_for_testing(5);
+
+        let mut authorities = Vec::with_capacity(committee.size());
+        let mut transaction_clients = Vec::with_capacity(committee.size());
+
+        for (authority_index, _) in committee.authorities() {
+            let db_dir = Arc::new(TempDir::new().unwrap());
+            let mut parameters = default_parameters();
+            parameters.db_path = db_dir.path().to_path_buf();
+            parameters.observer.server_port = Some(9600 + authority_index.value() as u16);
+            parameters.commit_sync_batch_size = COMMIT_SYNC_BATCH_SIZE;
+            parameters.max_blocks_per_fetch = MAX_BLOCKS_PER_FETCH;
+
+            let config = Config {
+                authority_index,
+                db_dir,
+                committee: committee.clone(),
+                keypairs: keypairs.clone(),
+                boot_counter: 0,
+                protocol_config: protocol_config.clone(),
+                clock_drift: 0,
+                transaction_verifier: Arc::new(NoopTransactionVerifier {}),
+                parameters,
+                observer_network_keypair: None,
+                observer_ip: None,
+            };
+            let node = AuthorityNode::new(config);
+            node.start().await.unwrap();
+            node.spawn_committed_subdag_consumer().unwrap();
+            transaction_clients.push(node.transaction_client());
+            authorities.push(node);
+        }
+
+        // Submit transactions and wait until validators build up a commit history for
+        // the observer to catch up on.
+        tracing::info!("Submitting {} transactions", NUM_TRANSACTIONS);
+        for i in 0..NUM_TRANSACTIONS {
+            let txn = vec![i as u8; 16];
+            transaction_clients[i as usize % transaction_clients.len()]
+                .submit(vec![txn], Priority::Normal)
+                .await
+                .unwrap();
+            if i % 50 == 0 {
+                sleep(Duration::from_millis(100)).await;
+            }
+        }
+        timeout(Duration::from_secs(120), async {
+            while authorities[0]
+                .commit_consumer_monitor()
+                .highest_handled_commit()
+                < CATCHUP_START_COMMITS
+            {
+                sleep(Duration::from_millis(500)).await;
+            }
+        })
+        .await
+        .expect("Validators should reach the catch-up start commit index");
+        let catchup_target = authorities[0]
+            .commit_consumer_monitor()
+            .highest_handled_commit();
+        tracing::info!("Starting observer, catch-up target is commit {catchup_target}");
+
+        // Late-start the observer against validator 0.
+        let observer_dir = Arc::new(TempDir::new().unwrap());
+        let observer_keypair =
+            NetworkKeyPair::generate(&mut rand::rngs::StdRng::from_seed([42; 32]));
+        let observer_ip = local_ip_utils::get_new_ip();
+        let validator_info = committee.authority(AuthorityIndex::new_for_test(0));
+        let validator_observer_address = replace_port_in_multiaddr(&validator_info.address, 9600)
+            .expect("Failed to create observer address");
+
+        let mut observer_params = default_parameters();
+        observer_params.db_path = observer_dir.path().to_path_buf();
+        observer_params.commit_sync_batch_size = COMMIT_SYNC_BATCH_SIZE;
+        observer_params.max_blocks_per_fetch = MAX_BLOCKS_PER_FETCH;
+        observer_params.observer = consensus_config::ObserverParameters {
+            peers: vec![consensus_config::PeerRecord {
+                public_key: validator_info.network_key.clone(),
+                address: validator_observer_address,
+            }],
+            ..Default::default()
+        };
+
+        let observer_config = Config {
+            authority_index: AuthorityIndex::new_for_test(100),
+            db_dir: observer_dir,
+            committee: committee.clone(),
+            keypairs: keypairs.clone(),
+            boot_counter: 0,
+            protocol_config: protocol_config.clone(),
+            clock_drift: 0,
+            transaction_verifier: Arc::new(NoopTransactionVerifier {}),
+            parameters: observer_params,
+            observer_network_keypair: Some(observer_keypair),
+            observer_ip: Some(observer_ip),
+        };
+        let observer = AuthorityNode::new(observer_config);
+        observer.start().await.unwrap();
+        observer.spawn_committed_subdag_consumer().unwrap();
+        let observer_monitor = observer.commit_consumer_monitor();
+
+        // The observer must catch up to the target even with its block stream suspended
+        // during commit sync.
+        timeout(Duration::from_secs(180), async {
+            while observer_monitor.highest_handled_commit() < catchup_target {
+                sleep(Duration::from_millis(500)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Observer did not catch up to commit {} in time, reached {}",
+                catchup_target,
+                observer_monitor.highest_handled_commit(),
+            )
+        });
+
+        // After catching up, the observer must keep up via the resumed block stream.
+        tracing::info!("Submitting more transactions to verify the observer keeps up");
+        for i in 0..NUM_TRANSACTIONS {
+            let txn = vec![i as u8; 16];
+            transaction_clients[i as usize % transaction_clients.len()]
+                .submit(vec![txn], Priority::Normal)
+                .await
+                .unwrap();
+            if i % 50 == 0 {
+                sleep(Duration::from_millis(100)).await;
+            }
+        }
+        sleep(Duration::from_secs(10)).await;
+        let validator_commits = authorities[0]
+            .commit_consumer_monitor()
+            .highest_handled_commit();
+        let observer_commits = observer_monitor.highest_handled_commit();
+        const MAX_COMMIT_DIFFERENCE: u32 = 10;
+        assert!(
+            validator_commits.saturating_sub(observer_commits) <= MAX_COMMIT_DIFFERENCE,
+            "Observer should keep up with validators after catch-up: {} vs {}",
+            observer_commits,
+            validator_commits,
+        );
+
+        // Clean up
+        observer.stop().await;
+        for authority in authorities {
+            authority.stop().await;
+        }
+    }
+
     /// Creates a committee for local testing, and the corresponding key pairs for the authorities.
     pub fn local_committee_and_keys(
         epoch: Epoch,
@@ -1054,7 +1293,11 @@ mod consensus_tests {
     }
 
     impl TransactionVerifier for RandomizedTransactionVerifier {
-        fn verify_batch(&self, _transactions: &[&[u8]]) -> Result<(), ValidationError> {
+        fn verify_batch(
+            &self,
+            _block_ref: &BlockRef,
+            _transactions: &[&[u8]],
+        ) -> Result<(), ValidationError> {
             Ok(())
         }
 

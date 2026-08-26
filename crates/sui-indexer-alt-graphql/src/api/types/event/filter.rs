@@ -82,11 +82,11 @@ impl EventFilter {
         );
 
         if let Some(sender) = self.sender {
-            query += query!(" AND sender = {Bytea}", sender.into_vec());
+            query += query!(" AND sender = {Bytea}", sender.to_inner());
         }
 
         if let Some(package) = self.module.as_ref().map(|m| m.package()) {
-            query += query!(" AND package = {Bytea}", package.into_vec());
+            query += query!(" AND package = {Bytea}", package.to_inner());
         }
 
         if let Some(module) = self.module.as_ref().and_then(|m| m.module()) {
@@ -94,7 +94,7 @@ impl EventFilter {
         }
 
         if let Some(package) = self.type_.as_ref().map(|t| t.package()) {
-            query += query!(" AND package = {Bytea}", package.into_vec());
+            query += query!(" AND package = {Bytea}", package.to_inner());
         }
 
         if let Some(module) = self.type_.as_ref().and_then(|t| t.module()) {

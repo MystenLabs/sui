@@ -1,0 +1,65 @@
+---
+title: Funding Wallets
+description: >-
+  Get SUI and tokens into user or through exchanges,
+  bridges, and faucets.
+keywords:
+  - funding
+  - fiat
+  - bridge
+  - exchange
+  - faucet
+  - wallet funding
+goal:
+  description: >-
+    Reader can choose a method to fund user with SUI
+    and tokens
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 200
+      label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments
+    step: Funding wallets
+    stage: Onboarding
+questions:
+  - How do I get SUI into a wallet?
+  - How do I bridge tokens from Ethereum to Sui?
+answer: >-
+  Fund wallets through exchange withdrawals, cross-chain bridges
+  (Wormhole, Sui Bridge), or
+  Testnet faucets. For agents, use a gas station to sponsor transactions
+  instead of direct funding.
+---
+
+Before users or agents can transact on Sui, their wallets need tokens. Users who already hold SUI on a centralized exchange can withdraw to their Sui wallet address:
+
+1. Copy the Sui address from the wallet.
+2. In the exchange, initiate a withdrawal for SUI on the **Sui network**.
+3. Paste the Sui address as the withdrawal destination.
+4. The SUI arrives in the wallet after the exchange processes the withdrawal.
+
+## Bridging from other chains
+
+To move assets from Ethereum, Solana, or other blockchains to Sui, use a cross-chain bridge:
+
+- [Wormhole](https://wormhole.com/): Supports bridging tokens between Sui and multiple chains including Ethereum, Solana, and others.
+
+- [Sui Bridge](https://bridge.sui.io/): Native bridge between Sui and Ethereum.
+
+Bridged assets arrive as wrapped tokens on Sui. The wrapped token's coin type address differs from the native token's address on the source chain.
+
+## Testnet and Devnet faucets
+
+For development and testing on Testnet and Devnet, see [Get SUI from Faucet](/getting-started/onboarding/get-coins) for CLI and programmatic faucet access.
+
+Faucet tokens have no monetary value and cannot be transferred to Mainnet.

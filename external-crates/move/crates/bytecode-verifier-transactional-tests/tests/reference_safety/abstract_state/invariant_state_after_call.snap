@@ -1,0 +1,12 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 1, line 46:
+//# view-abstract-state 0x2::call_shapes::one_result
+view-abstract-state subcommand is only available with regex reference safety
+
+task 2, line 48:
+//# view-abstract-state 0x2::call_shapes::imm_pair
+view-abstract-state subcommand is only available with regex reference safety

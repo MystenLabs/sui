@@ -1,0 +1,45 @@
+// a 3-level field chain releasing each intermediate: the top-level ref must still look borrowed
+
+//# publish
+mvir 0x2::write_through_ancestor {
+
+public struct Inner has copy, drop { v: u64 }
+public struct Mid has copy, drop { i: Self::Inner }
+public struct Outer has copy, drop { m: Self::Mid }
+
+fun t() {
+    let o: Self::Outer;
+    let a: &mut Self::Outer;
+    let deep: &mut u64;
+label b0:
+    o = Outer { m: Mid { i: Inner { v: 0 } } };
+    a = &mut o;
+    deep = &mut (&mut (&mut copy(a).Outer::m).Mid::i).Inner::v;
+    // a --m.i.v--> deep must still be a direct edge
+    *copy(a) = Outer { m: Mid { i: Inner { v: 1 } } };
+    _ = move(deep);
+    _ = move(a);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::stloc_over_deep_borrow {
+
+public struct Inner has copy, drop { v: u64 }
+public struct Mid has copy, drop { i: Self::Inner }
+public struct Outer has copy, drop { m: Self::Mid }
+
+fun t() {
+    let o: Self::Outer;
+    let deep: &mut u64;
+label b0:
+    o = Outer { m: Mid { i: Inner { v: 0 } } };
+    deep = &mut (&mut (&mut (&mut o).Outer::m).Mid::i).Inner::v;
+    o = Outer { m: Mid { i: Inner { v: 1 } } };
+    _ = move(deep);
+    return;
+}
+
+}

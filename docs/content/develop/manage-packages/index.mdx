@@ -12,8 +12,9 @@ keywords:
 pagination_prev: null
 goal:
   description: >-
-    Reader can manage Move packages safely, understanding how the UpgradeCap
-    governs future upgrades and how to verify dependency package IDs
+    Orient developers to the package management section by highlighting
+    UpgradeCap security considerations and guiding them to subtopics on
+    publishing, upgrading, and dependency management
   requires:
     - has_frontmatter:
         - title
@@ -27,16 +28,21 @@ questions:
   - What is Managing Packages in Sui?
   - What topics does Managing Packages cover?
   - How does managing packages work on Sui?
-answer: Learn how to manage Move packages on Sui.
+answer: >-
+  Package management on Sui covers dependency resolution, automated address
+  management across networks, and source verification. These tools help you
+  maintain reproducible builds and verify that deployed packages match their
+  source code.
 ---
 
-Learn how to manage Move packages on Sui.
+Package management on Sui covers the tools and workflows for maintaining Move packages after initial development. This includes resolving dependencies, managing package addresses across networks, and verifying that deployed packages match their published source code.
 
 :::caution Package security
 
 An upgradeable package's `UpgradeCap` controls all of its future behavior, so treat package management as a security-sensitive activity. Verify the exact package IDs of your dependencies, and deliberately choose between an immutable package and a [custom upgrade policy](/develop/publish-upgrade-packages/custom-policies) rather than defaulting to single-key upgrade authority. See [Security Best Practices](/develop/security/best-practices) for guidance.
 
 :::
+
 
 import DocCardList from '@theme/DocCardList';
 

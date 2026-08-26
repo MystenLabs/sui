@@ -53,9 +53,8 @@ graph LR
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
 
-- Access to a checkpoint source:
-   - **Mysten's public checkpoint endpoints**: `https://checkpoints.mainnet.sui.io` and `https://checkpoints.testnet.sui.io`. Both HTTPS endpoints retain only the most recent 30 days of checkpoints and should be used only as fallback sources.
-   - **Full-retention backfill buckets**: `gs://mysten-mainnet-checkpoints-use4` for Mainnet and `gs://mysten-testnet-checkpoints-use4` for Testnet. These buckets are Requester Pays enabled and must be accessed through `--remote-store-gcs mysten-mainnet-checkpoints-use4` or `--remote-store-gcs mysten-testnet-checkpoints-use4`.
+- Access to a checkpoint source (see [Available Data Stores](/operators/data-management/available-data-stores) for the full list):
+   - **Full-retention GCS buckets (recommended for backfill):** `gs://mysten-mainnet-checkpoints-use4` or `gs://mysten-testnet-checkpoints-use4` ([Requester Pays](/operators/data-management/available-data-stores#checkpoint-gcs)).
    - **Your own full node:** Must have gRPC enabled for steady-state streaming.
 - A destination object store with write credentials (S3 or GCS).
 - The `sui-checkpoint-blob-indexer` binary.
@@ -87,15 +86,7 @@ sui-checkpoint-blob-indexer \
     --compression-level 3
 ```
 
-The Mainnet bucket is `gs://mysten-mainnet-checkpoints-use4`. For Testnet, use `--remote-store-gcs mysten-testnet-checkpoints-use4` to read from `gs://mysten-testnet-checkpoints-use4`. Both buckets are Requester Pays enabled.
-
-Do not use `--remote-store-url https://checkpoints.mainnet.sui.io` or `--remote-store-url https://checkpoints.testnet.sui.io` for full-retention backfill. The public HTTPS endpoints retain only the latest 30 days of checkpoints. Use `--remote-store-gcs mysten-mainnet-checkpoints-use4` for Mainnet or `--remote-store-gcs mysten-testnet-checkpoints-use4` for Testnet instead.
-
-:::info
-
-`gs://mysten-mainnet-checkpoints-use4` and `gs://mysten-testnet-checkpoints-use4` are Requester Pays enabled. Configure credentials and a billing project when reading from either bucket. For the lowest steady-state cost and latency, stream from your own full node after backfill completes.
-
-:::
+For Testnet, use `--remote-store-gcs mysten-testnet-checkpoints-use4`. Both buckets are [GCS Requester Pays](/operators/data-management/available-data-stores#checkpoint-gcs). Do not use the public HTTPS endpoints (`checkpoints.mainnet.sui.io` / `checkpoints.testnet.sui.io`) for full-retention backfill because they retain only the most recent 30 days.
 
 ## Alternative: Backfill from a full node
 
@@ -142,8 +133,8 @@ Writes are idempotent, so multiple indexer instances can safely write to the sam
 
 | Flag | Description |
 |------|-------------|
-| `--remote-store-gcs <BUCKET>` | Fetch checkpoints from a GCS bucket. Required for full-retention backfill from `gs://mysten-mainnet-checkpoints-use4` or `gs://mysten-testnet-checkpoints-use4`. |
-| `--remote-store-url <URL>` | Fetch checkpoints from an HTTPS remote store URL. Public HTTPS endpoints retain only the most recent 30 days of checkpoints. |
+| `--remote-store-gcs <BUCKET>` | Fetch checkpoints from a GCS bucket. Required for full-retention backfill. See [Available Data Stores](/operators/data-management/available-data-stores#checkpoint-gcs). |
+| `--remote-store-url <URL>` | Fetch checkpoints from an HTTPS remote store URL. [Public HTTPS endpoints](/operators/data-management/available-data-stores#checkpoint-https) retain only the most recent 30 days. |
 | `--remote-store-s3 <BUCKET>` | Fetch checkpoints from an S3 bucket. |
 | `--rpc-api-url <URL>` | Fetch checkpoints from a full node gRPC endpoint. |
 

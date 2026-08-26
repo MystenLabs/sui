@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.78.0"
+    "version": "1.79.0"
   },
   "methods": [
     {
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "133",
+              "maxSupportedProtocolVersion": "136",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1312,6 +1312,7 @@
                 "allow_receiving_object_id": false,
                 "allow_references_in_ptbs": false,
                 "allow_unbounded_system_objects": false,
+                "allowed_proposers": false,
                 "always_advance_dkg_to_resolution": false,
                 "authority_capabilities_v2": false,
                 "ban_entry_init": false,
@@ -1332,6 +1333,7 @@
                 "consensus_round_prober_probe_accepted_rounds": false,
                 "consensus_skip_gced_accept_votes": false,
                 "consensus_skip_gced_blocks_in_direct_finalization": false,
+                "consensus_slim_block_propagation": false,
                 "consensus_smart_ancestor_selection": false,
                 "consensus_zstd_compression": false,
                 "convert_type_argument_error": false,
@@ -1401,6 +1403,7 @@
                 "include_cancelled_randomness_txns_in_prologue": false,
                 "include_checkpoint_artifacts_digest_in_summary": false,
                 "include_consensus_digest_in_prologue": false,
+                "include_function_signatures_in_instantiation_limits": false,
                 "limit_groth16_pvk_inputs": false,
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
@@ -1427,6 +1430,7 @@
                 "per_command_shared_object_transfer_rules": false,
                 "prepend_prologue_tx_in_consensus_commit_in_checkpoints": false,
                 "private_generics_verifier_v2": false,
+                "ptb_tx_context_restrictions": false,
                 "random_beacon": false,
                 "randomize_checkpoint_tx_limit_in_tests": false,
                 "receive_objects": false,
@@ -1820,6 +1824,7 @@
                 "max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit": null,
                 "max_accumulated_txn_cost_per_object_in_mysticeti_commit": null,
                 "max_accumulated_txn_cost_per_object_in_narwhal_commit": null,
+                "max_accumulator_type_nodes": null,
                 "max_age_of_jwk_in_epochs": null,
                 "max_arguments": {
                   "u32": "512"
@@ -2146,6 +2151,7 @@
                 "allow_receiving_object_id": false,
                 "allow_references_in_ptbs": false,
                 "allow_unbounded_system_objects": false,
+                "allowed_proposers": false,
                 "always_advance_dkg_to_resolution": false,
                 "authority_capabilities_v2": false,
                 "ban_entry_init": false,
@@ -2175,6 +2181,7 @@
                 "consensus_round_prober_probe_accepted_rounds": false,
                 "consensus_skip_gced_accept_votes": false,
                 "consensus_skip_gced_blocks_in_direct_finalization": false,
+                "consensus_slim_block_propagation": false,
                 "consensus_smart_ancestor_selection": false,
                 "consensus_zstd_compression": false,
                 "convert_type_argument_error": false,
@@ -2315,6 +2322,7 @@
                 "include_cancelled_randomness_txns_in_prologue": false,
                 "include_checkpoint_artifacts_digest_in_summary": false,
                 "include_consensus_digest_in_prologue": false,
+                "include_function_signatures_in_instantiation_limits": false,
                 "limit_groth16_pvk_inputs": false,
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
@@ -2401,6 +2409,7 @@
                 "per_command_shared_object_transfer_rules": false,
                 "prepend_prologue_tx_in_consensus_commit_in_checkpoints": false,
                 "private_generics_verifier_v2": false,
+                "ptb_tx_context_restrictions": false,
                 "random_beacon": false,
                 "randomize_checkpoint_tx_limit_in_tests": false,
                 "receive_objects": false,

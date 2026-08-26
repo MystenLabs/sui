@@ -82,6 +82,12 @@ $ cargo install --git https://github.com/MystenLabs/sui.git sui-move-lsp
 
 By default, the Move extension expects to find the `move-analyzer` binary in `~/.sui/bin`. You can either copy the binary to this location, or configure the extension to use a different path. 
 
+### Install the Sui binary
+
+Several features of the Move extension and the extensions included with it use the `sui` binary: the build, test, and trace commands, as well as source verification in the [Move Trace Debugger](/references/ide/debugger). See [Install Sui](/getting-started/onboarding/sui-install) for installation instructions.
+
+The extensions search for the `sui` binary on the system path. To use a binary in a different location, set the `move.sui.path` setting to point to it.
+
 ## Features
 
 The Move extension supports most Language Server Protocol features, as well as basic commands for building, testing, and tracing Move code.
@@ -94,7 +100,7 @@ The Move extension installs command palette commands for building, testing, and 
 
 These commands find the `Move.toml` file for the open Move source file and open a terminal to run the appropriate `sui move` command.
 
-To execute these commands you must have `sui` binary installed, in particular, to generate a trace, the `sui` binary version must be trace-generation capable. See [Debugger](/references/ide/debugger#install) for installation instructions. The extension will search for the `sui` binary on a system path but you can configure the extension to use a different path.
+To execute these commands you must have the `sui` binary [installed](#install-the-sui-binary); to generate a trace, the binary must also be trace-generation capable (see [Debugger](/references/ide/debugger#install)).
 
 ### Syntax highlighting
 

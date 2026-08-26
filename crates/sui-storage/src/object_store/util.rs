@@ -35,7 +35,6 @@ use std::time::Duration;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use tokio::time::Instant;
 use tracing::{error, warn};
 use url::Url;
 
@@ -146,25 +145,24 @@ pub async fn copy_files<S: ObjectStoreGetExt, D: ObjectStorePutExt>(
     concurrency: NonZeroUsize,
     progress_bar: Option<ProgressBar>,
 ) -> Result<Vec<()>> {
-    let mut instant = Instant::now();
-    let progress_bar_clone = progress_bar.clone();
-    let results = futures::stream::iter(src.iter().zip_debug_eq(dest.iter()))
-        .map(|(path_in, path_out)| async move {
-            let ret = copy_file(path_in, path_out, src_store, dest_store).await;
-            Ok((path_out.clone(), ret))
+    futures::stream::iter(src.iter().zip_debug_eq(dest.iter()))
+        .map(|(path_in, path_out)| {
+            let progress_bar = progress_bar.clone();
+            async move {
+                copy_file(path_in, path_out, src_store, dest_store)
+                    .await
+                    .with_context(|| format!("Failed to copy {path_in} to {path_out}"))?;
+                if let Some(progress_bar) = progress_bar {
+                    progress_bar.inc(1);
+                    progress_bar.set_message(format!("file: {path_out}"));
+                }
+                Ok(())
+            }
         })
         .boxed()
         .buffer_unordered(concurrency.get())
-        .try_for_each(|(path, ret)| {
-            if let Some(progress_bar_clone) = &progress_bar_clone {
-                progress_bar_clone.inc(1);
-                progress_bar_clone.set_message(format!("file: {}", path));
-                instant = Instant::now();
-            }
-            futures::future::ready(ret)
-        })
-        .await;
-    Ok(results.into_iter().collect())
+        .try_collect()
+        .await
 }
 
 pub async fn copy_recursively<S: ObjectStoreGetExt + ObjectStoreListExt, D: ObjectStorePutExt>(

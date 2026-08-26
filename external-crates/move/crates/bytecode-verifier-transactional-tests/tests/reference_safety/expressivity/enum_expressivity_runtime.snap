@@ -1,0 +1,34 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 0, lines 3-27:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000d01::aliased_mut_unpacks'. Got VMError: {
+    major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0xd01::aliased_mut_unpacks,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 8)],
+}
+
+task 1, lines 29-50:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000d02::copy_enum_with_live_field'. Got VMError: {
+    major_status: COPYLOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0xd02::copy_enum_with_live_field,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}
+
+task 2, lines 52-79:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000d03::switch_while_field_live'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0xd03::switch_while_field_live,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 9)],
+}

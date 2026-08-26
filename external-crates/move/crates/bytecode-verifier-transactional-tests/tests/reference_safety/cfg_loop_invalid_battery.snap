@@ -1,0 +1,104 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+task 0, lines 3-22:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::a_write_head_live_ext'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::a_write_head_live_ext,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}
+
+task 1, lines 24-42:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::b_move_local_live_ext'. Got VMError: {
+    major_status: MOVELOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::b_move_local_live_ext,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 15)],
+}
+
+task 2, lines 44-64:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::c_call_mut_live_ext'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x4::c_call_mut_live_ext,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 4)],
+}
+
+task 3, lines 66-84:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000005::d_vec_push_live_elem'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x5::d_vec_push_live_elem,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}
+
+task 4, lines 86-106:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::e_stloc_live_ext'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x6::e_stloc_live_ext,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 8)],
+}
+
+task 5, lines 108-128:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000007::f_join_ext_one_branch'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x7::f_join_ext_one_branch,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 11)],
+}
+
+task 6, lines 130-149:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000008::g_enum_variant_write_live_field'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x8::g_enum_variant_write_live_field,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}
+
+task 7, lines 151-177:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000009::h_nested_loop_inner_ext_outer_write'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x9::h_nested_loop_inner_ext_outer_write,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 25)],
+}
+
+task 8, lines 179-197:
+//# publish
+Error: Unable to publish module '000000000000000000000000000000000000000000000000000000000000000a::i_ret_local_ref_from_loop'. Got VMError: {
+    major_status: UNSAFE_RET_LOCAL_OR_RESOURCE_STILL_BORROWED,
+    sub_status: None,
+    location: 0xa::i_ret_local_ref_from_loop,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 16)],
+}
+
+task 9, lines 199-217:
+//# publish
+Error: Unable to publish module '000000000000000000000000000000000000000000000000000000000000000b::j_write_after_abort_join'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0xb::j_write_after_abort_join,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}

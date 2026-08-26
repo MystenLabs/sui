@@ -1769,7 +1769,18 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // Check for unpaid amplification before other deferral checks.
         // SIP-45: Paid amplification allows (gas_price / RGP + 1) submissions.
         // Transactions with more duplicates than paid for are deferred.
-        if protocol_config.defer_unpaid_amplification() {
+        //
+        // A transaction that names its proposers has already had its amplification bounded by
+        // validity_check, which sizes the proposer set against the gas price, so there is nothing
+        // left to charge for here. A set recorded for another epoch is ignored and so bounds
+        // nothing, leaving the transaction subject to deferral like any other.
+        if protocol_config.defer_unpaid_amplification()
+            && !transaction
+                .tx()
+                .transaction_data()
+                .expiration()
+                .restricts_proposers(self.epoch_store.epoch())
+        {
             let occurrence_count = state
                 .occurrence_counts
                 .get(&tx_digest)
@@ -2640,10 +2651,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     .consensus_handler_processed
                     .with_label_values(&[kind, outcome])
                     .inc();
-                self.metrics
-                    .consensus_handler_transaction_sizes
-                    .with_label_values(&[kind, outcome])
-                    .observe(parsed.serialized_len as f64);
+                self.metrics.observe_consensus_handler_transaction_size(
+                    kind,
+                    outcome,
+                    parsed.serialized_len,
+                );
                 // Per-author breakdown is only tracked for user transactions, since that is where
                 // rejections and author-attributable spam are meaningful. Keeping the block author
                 // label scoped to user transactions also bounds metric cardinality.
@@ -3633,6 +3645,40 @@ mod tests {
             protocol_config.disable_epoch_close_deadline_ms_for_testing();
         }
         protocol_config
+    }
+
+    #[tokio::test]
+    async fn test_consensus_handler_max_transaction_size() {
+        let metrics = AuthorityMetrics::new(&Registry::new());
+
+        metrics.observe_consensus_handler_transaction_size("class_a", "accepted", 100);
+        metrics.observe_consensus_handler_transaction_size("class_a", "rejected", 80);
+        metrics.observe_consensus_handler_transaction_size("class_b", "accepted", 50);
+
+        assert_eq!(
+            metrics
+                .consensus_handler_max_transaction_size
+                .with_label_values(&["class_a"])
+                .get(),
+            100
+        );
+        assert_eq!(
+            metrics
+                .consensus_handler_max_transaction_size
+                .with_label_values(&["class_b"])
+                .get(),
+            50
+        );
+
+        metrics.observe_consensus_handler_transaction_size("class_a", "rejected", 120);
+
+        assert_eq!(
+            metrics
+                .consensus_handler_max_transaction_size
+                .with_label_values(&["class_a"])
+                .get(),
+            120
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]

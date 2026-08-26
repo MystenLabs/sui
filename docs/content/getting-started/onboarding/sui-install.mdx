@@ -75,19 +75,34 @@ answer: Install the Sui framework and its required prerequisites on your system.
   prompt="Set up this machine for Sui development: Install the Sui CLI with curl -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh, then run suiup install sui@testnet to get the Testnet-compatible toolchain. Run sui client to generate your keys and config, then prompt me to visit faucet.sui.io, enter the generated address, and fund it with test tokens."
 />
 
-Sui is a scalable and performant layer-1 blockchain that is home to a complete stack of native primitives ideal for building decentralized applications. Such primitives, such as those for [encryption](https://seal-docs.wal.app/UsingSeal/), [data storage](https://docs.wal.app/usage/setup), verification, and access control, provide developers with every piece of the application stack without needing to use layer-2 chains or offchain solutions. 
+Install the [Sui CLI](/references/cli) and verify it works. The CLI creates and manages address balances, builds and publishes smart contracts, and queries information from the network.
 
-In contrast to other chains, Sui uses an [object-centric model](/develop/sui-architecture/object-model), where every item on the network is an object. [Transactions](/develop/transactions/txn-overview) use objects as input, which mutate an existing object or create new objects. Each object has a unique onchain ID.
+:::tip Looking for something else?
 
-To create objects, submit transactions, and start building an application on Sui, first you must install Sui. This installation includes the [Sui CLI](/references/cli), a tool that creates and manages address balances, builds and publishes smart contracts, and queries information from the network. 
+This page covers installation only. For other common tasks:
 
-<Tabs className="tabsHeadingCentered--small">
-<TabItem value="prereq" label="Prerequisites">
+- [Configure a Sui Client](/getting-started/onboarding/configure-sui-client)
+- [Get SUI from Faucet](/getting-started/onboarding/get-coins)
+- [Hello, World!](/getting-started/onboarding/hello-world)
+- [Sui Full Node](/operators/full-node/sui-full-node)
+- [Data Access](/develop/accessing-data/data-serving)
 
-- [x] Have a machine with one of the following supported operating systems:
-    - Linux: Ubuntu version 22.04 (Jammy Jellyfish) or newer
-    - macOS: macOS Monterey or newer
-    - Microsoft Windows: Windows 10 or 11
+:::
+
+<Tabs>
+<TabItem value="linux" label="Linux">
+
+- [x] Ubuntu 22.04 (Jammy Jellyfish) or newer
+
+</TabItem>
+<TabItem value="macos" label="macOS">
+
+- [x] macOS Monterey or newer
+
+</TabItem>
+<TabItem value="windows" label="Windows">
+
+- [x] Windows 10 or 11
 
 </TabItem>
 </Tabs>
@@ -148,6 +163,73 @@ Regardless of whether you used `suiup`, Homebrew, or Chocolately, Sui stores a p
 - Active address, which specifies the Sui address the CLI uses for transactions and queries.
 
 - Keystore location, which specifies where Sui stores your address' private keys.
+
+## Troubleshooting
+
+<details>
+<summary><code>sui: command not found</code> after installation</summary>
+
+Open a new terminal window after installing. If the issue persists, verify that the shell can find the `sui` binary:
+
+```sh
+$ command -v sui
+```
+
+If no path is printed, the install directory is not in your `PATH`. The default `suiup` install location is `~/.local/bin` (see [`suiup` README](https://github.com/MystenLabs/suiup?tab=readme-ov-file#paths-used-by-the-suiup-tool)). Add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile (`~/.bashrc`, `~/.zshrc`, or `~/.bash_profile`), then restart your terminal.
+
+</details>
+
+<details>
+<summary>Client/server API version mismatch</summary>
+
+Your local Sui CLI version does not match the network you are targeting. Switch to the correct version with [`suiup`](https://github.com/MystenLabs/suiup):
+
+```sh
+$ suiup install sui@testnet
+```
+
+Replace `testnet` with `mainnet` or `devnet` as needed.
+
+</details>
+
+<details>
+<summary>Homebrew or Chocolatey installation is slow</summary>
+
+Homebrew and Chocolatey might compile dependencies from source if the package manager has not cached prebuilt binaries. This can take several minutes. For a faster installation, use `suiup` instead:
+
+```sh
+$ curl -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh
+$ suiup install sui@testnet
+```
+
+</details>
+
+<details>
+<summary>Permission denied during installation</summary>
+
+Do not use `sudo` to install Sui. The `suiup` installer writes to your home directory and does not require elevated privileges. If a previous installation used `sudo`, remove it first:
+
+```sh
+$ sudo rm -f /usr/local/bin/sui
+```
+
+Then reinstall with `suiup`.
+
+</details>
+
+<details>
+<summary>Multiple Sui versions installed</summary>
+
+If you previously installed Sui through Homebrew, Cargo, or a manual binary and also have `suiup`, you might have conflicting versions. Check which binary is active:
+
+```sh
+$ which sui
+$ sui --version
+```
+
+Remove the older installation method and use [`suiup`](https://github.com/MystenLabs/suiup) exclusively to manage versions. Run `suiup install sui@<network>` to switch between network-compatible versions.
+
+</details>
 
 <div className="next-steps-module">
   <div className="next-steps-header">

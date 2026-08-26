@@ -1,0 +1,184 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, line 31:
+//# view-abstract-state 0x2::joinclosure::t
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {},
+    "graph": {
+      "nodes": {
+        "ROOT": true
+      },
+      "outgoing": {}
+    }
+  },
+  "loop_body": {
+    "local_root": "ROOT",
+    "locals": {
+      "r1": {
+        "Reference": "r#r1"
+      },
+      "r2": {
+        "Reference": "r#r2"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#r1": true,
+        "r#r2": true
+      },
+      "outgoing": {
+        "ROOT": {
+          "r#r1": [
+            {
+              "labels": [
+                "x"
+              ],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "y"
+              ],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#r2": [
+            {
+              "labels": [
+                "y",
+                "S.f"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#r1": {
+          "r#r2": [
+            {
+              "labels": [
+                "S.f"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        }
+      }
+    }
+  },
+  "loop_cond": {
+    "local_root": "ROOT",
+    "locals": {
+      "r1": {
+        "Reference": "r#r1"
+      },
+      "r2": {
+        "Reference": "r#r2"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#r1": true,
+        "r#r2": true
+      },
+      "outgoing": {
+        "ROOT": {
+          "r#r1": [
+            {
+              "labels": [
+                "x"
+              ],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "y"
+              ],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#r2": [
+            {
+              "labels": [
+                "y",
+                "S.f"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#r1": {
+          "r#r2": [
+            {
+              "labels": [
+                "S.f"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        }
+      }
+    }
+  },
+  "loop_end": {
+    "local_root": "ROOT",
+    "locals": {
+      "r1": {
+        "Reference": "r#r1"
+      },
+      "r2": {
+        "Reference": "r#r2"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#r1": true,
+        "r#r2": true
+      },
+      "outgoing": {
+        "ROOT": {
+          "r#r1": [
+            {
+              "labels": [
+                "x"
+              ],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "y"
+              ],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#r2": [
+            {
+              "labels": [
+                "y",
+                "S.f"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#r1": {
+          "r#r2": [
+            {
+              "labels": [
+                "S.f"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        }
+      }
+    }
+  }
+}

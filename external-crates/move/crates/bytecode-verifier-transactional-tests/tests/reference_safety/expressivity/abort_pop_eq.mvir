@@ -1,0 +1,20 @@
+// Abort with live references, Pop of a reference with a live extension, and Eq/Neq on
+// references with live extensions
+
+//# publish
+mvir 0x3::eq_with_live_extension {
+    public struct S has drop { f: u64, g: u64 }
+
+    fun t(r: &mut Self::S, s: &mut Self::S): bool {
+        let a: &mut u64;
+        let b: &mut u64;
+        let c: bool;
+    label b0:
+        a = &mut copy(r).S::f;
+        b = &mut copy(s).S::f;
+        c = copy(r) == copy(s);
+        *move(a) = 1;
+        *move(b) = 2;
+        return move(c);
+    }
+}

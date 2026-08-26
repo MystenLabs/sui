@@ -68,7 +68,7 @@ impl Loader<PackageKey> for PgReader {
             serialized_object: Vec<u8>,
         }
 
-        let ids: Vec<_> = keys.iter().map(|PackageKey(id)| id.to_vec()).collect();
+        let ids: Vec<_> = keys.iter().map(|PackageKey(id)| id.into_bytes()).collect();
         let query = diesel::sql_query(
             r#"
                 SELECT

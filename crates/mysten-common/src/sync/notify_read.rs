@@ -24,7 +24,37 @@ use tokio::time::Instant;
 use tokio::time::interval_at;
 use tracing::warn;
 
-type Registrations<V> = Vec<oneshot::Sender<V>>;
+use crate::sync::oneshot as blocking_oneshot;
+
+/// A registered waiter: async waiters hold a tokio oneshot, blocking waiters (see
+/// [`NotifyRead::register_one_blocking`]) hold a [`blocking_oneshot`] whose receiver
+/// blocks the OS thread.
+enum NotifySender<V> {
+    Async(oneshot::Sender<V>),
+    Blocking(blocking_oneshot::Sender<V>),
+}
+
+impl<V> NotifySender<V> {
+    fn send(self, value: V) {
+        match self {
+            NotifySender::Async(sender) => {
+                sender.send(value).ok();
+            }
+            NotifySender::Blocking(sender) => {
+                sender.send(value).ok();
+            }
+        }
+    }
+
+    fn is_closed(&self) -> bool {
+        match self {
+            NotifySender::Async(sender) => sender.is_closed(),
+            NotifySender::Blocking(sender) => sender.is_closed(),
+        }
+    }
+}
+
+type Registrations<V> = Vec<NotifySender<V>>;
 
 /// Interval duration for logging waiting keys when reads take too long
 const LONG_WAIT_LOG_INTERVAL_SECS: u64 = 10;
@@ -85,7 +115,7 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
             .count_pending
             .fetch_sub(registrations.len(), Ordering::Relaxed);
         for registration in registrations {
-            registration.send(value.clone()).ok();
+            registration.send(value.clone());
         }
         rem
     }
@@ -107,9 +137,21 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
     {
         self.count_pending.fetch_add(1, Ordering::Relaxed);
         let (sender, receiver) = oneshot::channel();
-        self.register(key, sender);
+        self.register(key, NotifySender::Async(sender));
         Registration {
             this,
+            registration: Some((key.clone(), receiver)),
+        }
+    }
+
+    /// Register a waiter whose receiver blocks the OS thread (see
+    /// [`BlockingRegistration::wait`]). Must not be awaited from async code.
+    pub fn register_one_blocking(&self, key: &K) -> BlockingRegistration<'_, K, V> {
+        self.count_pending.fetch_add(1, Ordering::Relaxed);
+        let (sender, receiver) = blocking_oneshot::channel();
+        self.register(key, NotifySender::Blocking(sender));
+        BlockingRegistration {
+            this: self,
             registration: Some((key.clone(), receiver)),
         }
     }
@@ -118,7 +160,7 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
         keys.iter().map(|key| self.register_one(key)).collect()
     }
 
-    fn register(&self, key: &K, sender: oneshot::Sender<V>) {
+    fn register(&self, key: &K, sender: NotifySender<V>) {
         self.pending(key)
             .entry(key.clone())
             .or_default()
@@ -138,6 +180,30 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
 
     pub fn num_pending(&self) -> usize {
         self.count_pending.load(Ordering::Relaxed)
+    }
+
+    /// Blocking version of [`Self::read`] for a single key: returns `fetch(key)` if the
+    /// value is already available, and otherwise blocks the calling OS thread until the
+    /// key is notified.
+    ///
+    /// Must not be called from an async context. Under msim it may only be called from
+    /// a blocking-pool thread (e.g. inside `spawn_blocking`), where the wait yields the
+    /// thread's quantum between readiness checks.
+    pub fn read_one_blocking(
+        &self,
+        task_name: &'static str,
+        key: &K,
+        fetch: impl FnOnce(&K) -> Option<V>,
+    ) -> V {
+        let _metrics_scope = mysten_metrics::monitored_scope(task_name);
+        let registration = self.register_one_blocking(key);
+        // As in `read`, fetch after registering so that a concurrent notify cannot be
+        // missed. If the value is already available the registration is dropped, which
+        // de-registers it.
+        if let Some(value) = fetch(key) {
+            return value;
+        }
+        registration.wait()
     }
 
     fn cleanup(&self, key: &K) {
@@ -310,6 +376,41 @@ where
         }
     }
 }
+
+/// Blocking counterpart of [`Registration`]: resolved via [`Self::wait`], which blocks
+/// the calling OS thread. Dropping it before waiting de-registers from the pending
+/// list.
+pub struct BlockingRegistration<'a, K: Eq + Hash + Clone, V: Clone> {
+    this: &'a NotifyRead<K, V>,
+    registration: Option<(K, blocking_oneshot::Receiver<V>)>,
+}
+
+impl<K: Eq + Hash + Clone, V: Clone> BlockingRegistration<'_, K, V> {
+    /// Block the calling thread until the key is notified. See
+    /// [`NotifyRead::read_one_blocking`] for the msim constraints.
+    pub fn wait(mut self) -> V {
+        let (_key, receiver) = self
+            .registration
+            .take()
+            .expect("registration is only taken here, and wait consumes self");
+        // No cleanup needed after this point: a successful recv means notify() removed
+        // the registration, and on panic the sender is already gone.
+        receiver
+            .blocking_recv()
+            .expect("Sender never drops when registration is pending")
+    }
+}
+
+impl<K: Eq + Hash + Clone, V: Clone> Drop for BlockingRegistration<'_, K, V> {
+    fn drop(&mut self) {
+        if let Some((key, receiver)) = self.registration.take() {
+            mem::drop(receiver);
+            // Receiver is dropped before cleanup
+            self.this.cleanup(&key)
+        }
+    }
+}
+
 impl<K: Eq + Hash + Clone, V: Clone> Default for NotifyRead<K, V> {
     fn default() -> Self {
         Self::new()

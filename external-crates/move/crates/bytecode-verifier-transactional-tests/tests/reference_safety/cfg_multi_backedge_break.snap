@@ -1,0 +1,44 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+task 0, lines 4-31:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::a_violation_at_first_head'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::a_violation_at_first_head,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}
+
+task 1, lines 33-60:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::b_violation_at_second_head'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::b_violation_at_second_head,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}
+
+task 2, lines 62-89:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::c_violation_after_loops'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x4::c_violation_after_loops,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 23)],
+}
+
+task 3, lines 91-130:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000005::d_triple_nested_inner_ext_outer_write'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x5::d_triple_nested_inner_ext_outer_write,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}

@@ -1,0 +1,23 @@
+// after StLoc over an epsilon alias, r keeps the exact local#x path
+
+//# publish
+mvir 0x2::stloc_alias {
+    public struct S has drop { f: u64 }
+
+    fun t(c: bool) {
+        let x: Self::S;
+        let r: &mut Self::S;
+    label b0:
+        x = S { f: 1 };
+        r = &mut x;
+        x = S { f: 2 };
+        jump_if (move(c)) done;
+    label mid:
+        jump done;
+    label done:
+        _ = move(r);
+        return;
+    }
+}
+
+//# view-abstract-state 0x2::stloc_alias::t

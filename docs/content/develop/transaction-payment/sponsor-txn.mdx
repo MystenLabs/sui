@@ -277,4 +277,15 @@ Sponsorship is not the same as multi-sig. A sponsor pays gas but does not co-aut
 
 :::
 
+## Production hardening
+
+When you sponsor transactions in production, protect your gas budget from abuse:
+
+- **Set per-user rate limits.** Track how many sponsored transactions each user address submits per time window (for example, 10 transactions per minute). Reject requests that exceed the limit. Without rate limiting, a single user can drain your gas balance.
+- **Allowlist eligible transaction types.** Only sponsor transactions that match your expected patterns (for example, specific `moveCall` targets or transfer amounts). Reject unexpected transaction shapes before signing.
+- **Cap the gas budget per transaction.** Set a maximum gas budget that your sponsor address signs for (for example, 50,000,000 MIST). Do not sponsor transactions with arbitrarily large gas budgets.
+- **Monitor sponsored transaction volume.** Track daily gas spend, unique users, and transaction success rates. Set alerts when spend exceeds thresholds. Use the `gas_cost_summary` field in transaction effects to calculate actual costs ([Security Best Practices](/develop/security/best-practices)).
+- **Use a dedicated sponsor address.** Do not sponsor from your main admin address. Create a separate address funded with a limited gas balance. Refill it periodically rather than holding a large balance.
+- **Separate Testnet and Mainnet sponsors.** Use different sponsor addresses and rate limits per network to prevent Testnet testing from affecting production gas budgets ([Security Best Practices](/develop/security/best-practices)).
+
 For more working examples including sponsored kiosk purchases and address-balance gas, see the [PTB Cookbook](/develop/transactions/ptbs/ptb-cookbook).

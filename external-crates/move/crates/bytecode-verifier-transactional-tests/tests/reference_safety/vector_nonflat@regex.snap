@@ -1,0 +1,64 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+task 0, lines 3-24:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000021::elem_field_then_push'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x21::elem_field_then_push,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 16)],
+}
+
+task 1, lines 26-47:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000022::elem_variant_field_then_pop'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x22::elem_variant_field_then_pop,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 14)],
+}
+
+task 2, lines 49-70:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000023::struct_field_vector_overwrite'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x23::struct_field_vector_overwrite,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 16)],
+}
+
+task 3, lines 72-91:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000024::inner_elem_push_outer'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x24::inner_elem_push_outer,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 16)],
+}
+
+task 4, lines 93-110:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000025::inner_ref_pop_outer'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x25::inner_ref_pop_outer,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 11)],
+}
+
+task 5, lines 112-129:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000026::inner_ref_swap_outer'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x26::inner_ref_swap_outer,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 15)],
+}

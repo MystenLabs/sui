@@ -419,7 +419,7 @@ enum UserSubmissionMode {
 }
 
 /// The user-transaction submission infrastructure this validator runs, fixed at
-/// startup from `NodeConfig`. Contrast with [`UserSubmissionMode`], the
+/// startup from `NodeConfig`. Contrast with `UserSubmissionMode`, the
 /// per-request routing decision derived from this configuration.
 #[derive(Clone)]
 pub enum UserSubmissionPath {
@@ -810,6 +810,10 @@ impl ValidatorService {
             // Ok to fail the request when any transaction is invalid.
             let tx_size = transaction.validity_check(&epoch_store.tx_validity_check_context())?;
             let tx_digest = *transaction.digest();
+
+            // Reject up front rather than proposing a block that peers would reject: the client
+            // must submit to one of the proposers the transaction allows.
+            epoch_store.check_self_allowed_proposer(transaction.data().transaction_data())?;
 
             // A request must not repeat a transaction.
             if !request_digests.insert(tx_digest) {

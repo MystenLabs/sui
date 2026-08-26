@@ -696,6 +696,8 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
         match value {
             crate::transaction::TransactionExpiration::None => Self::None,
             crate::transaction::TransactionExpiration::Epoch(epoch) => Self::Epoch(epoch),
+            // TODO: `Validity`'s allowed_proposers has no sdk representation yet, so a
+            // `Validity` expiration is reported as `ValidDuring`.
             crate::transaction::TransactionExpiration::ValidDuring {
                 min_epoch,
                 max_epoch,
@@ -703,6 +705,15 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
                 max_timestamp,
                 chain,
                 nonce,
+            }
+            | crate::transaction::TransactionExpiration::Validity {
+                min_epoch,
+                max_epoch,
+                min_timestamp,
+                max_timestamp,
+                chain,
+                nonce,
+                allowed_proposers: _,
             } => Self::ValidDuring {
                 min_epoch,
                 max_epoch,
@@ -853,6 +864,8 @@ impl From<crate::execution_status::CommandArgumentError> for CommandArgumentErro
                 Self::CannotWriteToExtendedReference,
             crate::execution_status::CommandArgumentError::InvalidReferenceArgument =>
                 Self::InvalidReferenceArgument,
+            crate::execution_status::CommandArgumentError::InvalidTxContext =>
+                Self::InvalidTxContext,
         }
     }
 }

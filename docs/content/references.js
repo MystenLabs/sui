@@ -122,6 +122,11 @@ const references = [
 			'references/sdk-comparison',
 			{
 				type: 'link',
+				label: 'TypeScript SDK v1 -> v2 Migration Guide',
+				href: 'https://sdk.mystenlabs.com/sui/migrations/sui-2.0',
+			},
+			{
+				type: 'link',
 				label: 'dApp Kit',
 				href: 'https://sdk.mystenlabs.com/dapp-kit',
 			},
@@ -212,7 +217,6 @@ const references = [
 				label: 'Submit a SIP',
 				href: 'https://sips.sui.io',
 			},
-			'references/contribute/localize-sui-docs',
 			'references/contribute/code-of-conduct',
 			'references/contribute/style-guide',
 			'references/contribute/mdx-components',

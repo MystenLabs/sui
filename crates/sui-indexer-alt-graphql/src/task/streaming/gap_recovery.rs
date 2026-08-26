@@ -20,11 +20,7 @@ use tracing::warn;
 use super::ProcessedCheckpoint;
 use super::checkpoint_stream_task::checkpoint_field_mask;
 use super::checkpoint_stream_task::process_checkpoint;
-use crate::task::watermark::KV_PACKAGES_PIPELINE;
 use crate::task::watermark::Watermarks;
-
-/// Pipeline name under which `WatermarkTask` tracks the kv-rpc / LedgerService source.
-const LEDGER_GRPC_PIPELINE: &str = "ledger_grpc";
 
 /// Abstraction over the source that gap recovery fetches checkpoints from. The production
 /// implementation talks to kv-rpc via `LedgerGrpcReader`; tests use an in-memory mock.
@@ -92,11 +88,9 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
     Ok(())
 }
 
-/// Block until both indexer pipelines that gap recovery depends on have caught up to
-/// `target`: `ledger_grpc` (kv-rpc, serves checkpoint contents) and `kv_packages`
-/// (Postgres, serves package resolution from the DB). Recovered checkpoints don't go
-/// through `index_and_broadcast`, so subscribers resolving their packages fall through
-/// to the DB and need `kv_packages` to be ready.
+/// Block until every indexer pipeline has caught up to `target`. A delivered item's nested
+/// queries can read any data source, so waiting on all pipelines avoids tracking a specific set
+/// that would drift from the schema.
 pub(crate) async fn wait_for_pipelines_catching_up_at(
     target: u64,
     watermarks_rx: &mut watch::Receiver<Arc<Watermarks>>,
@@ -104,12 +98,7 @@ pub(crate) async fn wait_for_pipelines_catching_up_at(
     watermarks_rx
         .wait_for(|w| {
             let pipelines = w.per_pipeline();
-            let caught_up = |name| {
-                pipelines
-                    .get(name)
-                    .is_some_and(|p| p.hi().checkpoint() >= target)
-            };
-            caught_up(LEDGER_GRPC_PIPELINE) && caught_up(KV_PACKAGES_PIPELINE)
+            !pipelines.is_empty() && pipelines.values().all(|p| p.hi().checkpoint() >= target)
         })
         .await
         .ok()
@@ -194,6 +183,10 @@ mod tests {
     use super::*;
     use crate::task::streaming::test_utils::FetcherBehavior;
     use crate::task::streaming::test_utils::MockFetcher;
+    use crate::task::watermark::KV_PACKAGES_PIPELINE;
+
+    /// Pipeline name under which `WatermarkTask` tracks the kv-rpc / LedgerService source.
+    const LEDGER_GRPC_PIPELINE: &str = "ledger_grpc";
 
     fn fetcher(setup: &[(u64, FetcherBehavior)]) -> MockFetcher {
         MockFetcher::from_setup(setup)

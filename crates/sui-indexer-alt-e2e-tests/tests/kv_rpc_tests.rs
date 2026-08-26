@@ -163,6 +163,88 @@ async fn wait_for_kv_checkpoint(cluster: &FullCluster, required_checkpoint: u64)
     });
 }
 
+/// A cluster whose kv-rpc server also binds a second, unencrypted listener
+/// (`cluster.kv_rpc_plaintext_url()`), for tests that connect to it directly.
+async fn plaintext_kv_rpc_cluster() -> FullCluster {
+    FullCluster::new_with_configs(
+        Simulacrum::new(),
+        OffchainClusterConfig {
+            kv_rpc_plaintext_listener: true,
+            ..Default::default()
+        },
+        &prometheus::Registry::new(),
+    )
+    .await
+    .expect("Failed to create cluster")
+}
+
+/// The second, unencrypted listener independently serves the same `LedgerService` as the primary
+/// one -- confirmed here without going through JSON-RPC, in case that path masks a failure to
+/// bind or serve the second listener at all.
+#[tokio::test]
+async fn test_plaintext_kv_rpc_listener_serves_get_service_info() {
+    let cluster = plaintext_kv_rpc_cluster().await;
+    let plaintext_url = cluster
+        .kv_rpc_plaintext_url()
+        .expect("plaintext listener must be configured");
+
+    let mut client = LedgerServiceClient::connect(plaintext_url.to_string())
+        .await
+        .expect("connect to KV RPC's plaintext listener");
+
+    // `GetServiceInfo` is served from a cache that kv-rpc populates asynchronously after start-up
+    // (see `wait_for_kv_checkpoint`), so retry past the initial `NotFound` while it warms up.
+    tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            if client
+                .get_service_info(GetServiceInfoRequest::default())
+                .await
+                .is_ok()
+            {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .expect("GetServiceInfo over the plaintext listener never succeeded within 30s");
+}
+
+/// A transaction executed and checkpointed while the cluster is up can be read back over the
+/// plaintext listener with a plain gRPC client, with no TLS/cert negotiated anywhere -- proving
+/// the listener serves real ledger data, not just `GetServiceInfo`.
+#[tokio::test]
+async fn test_get_transaction_over_plaintext_kv_rpc_listener() {
+    let mut cluster = plaintext_kv_rpc_cluster().await;
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+
+    let (digest, _) = transfer_self(&mut cluster, sender, &kp, gas).await;
+    cluster.create_checkpoint().await;
+
+    let plaintext_url = cluster
+        .kv_rpc_plaintext_url()
+        .expect("plaintext listener must be configured");
+    let mut client = LedgerServiceClient::connect(plaintext_url.to_string())
+        .await
+        .expect("connect to KV RPC's plaintext listener");
+
+    let tx = client
+        .get_transaction({
+            let mut req = GetTransactionRequest::default();
+            req.digest = Some(digest.to_string());
+            req.read_mask = Some(FieldMask::from_paths(["digest", "effects"]));
+            req
+        })
+        .await
+        .expect("GetTransaction over the plaintext listener")
+        .into_inner()
+        .transaction
+        .expect("transaction should be present");
+
+    assert_eq!(tx.digest.as_deref(), Some(digest.to_string().as_str()));
+    assert!(tx.effects.is_some(), "Missing effects: {tx:#?}");
+}
+
 /// The event's ledger position now lives on the embedded `Event`, not the
 /// response frame; these accessors read it back for assertions.
 fn event_transaction_digest(item: &ListEventsResponse) -> Option<String> {
@@ -4074,6 +4156,33 @@ async fn test_get_checkpoint_with_transactions_and_objects() {
     assert!(
         saw_gas_object,
         "expected gas object {gas_id_string} in checkpoint objects[]"
+    );
+
+    // Balance changes are stored on transaction rows and must be populated even
+    // when checkpoint objects are not requested.
+    let mut balance_changes_req = GetCheckpointRequest::default();
+    balance_changes_req.checkpoint_id = Some(CheckpointId::SequenceNumber(seq));
+    balance_changes_req.read_mask = Some(FieldMask::from_paths([
+        "transactions.digest",
+        "transactions.balance_changes",
+    ]));
+
+    let balance_changes_checkpoint = client
+        .get_checkpoint(balance_changes_req)
+        .await
+        .unwrap()
+        .into_inner()
+        .checkpoint
+        .expect("checkpoint populated");
+    let digest = digest.to_string();
+    let transaction = balance_changes_checkpoint
+        .transactions
+        .iter()
+        .find(|transaction| transaction.digest.as_deref() == Some(digest.as_str()))
+        .unwrap_or_else(|| panic!("expected transaction {digest} in checkpoint"));
+    assert!(
+        !transaction.balance_changes.is_empty(),
+        "expected transaction {digest} to include balance changes"
     );
 }
 

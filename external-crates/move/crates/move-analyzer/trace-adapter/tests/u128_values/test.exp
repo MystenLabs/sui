@@ -1,0 +1,14 @@
+current frame stack:
+  function: test (m.move:18)
+    scope 0 :
+  function: observe (m.move:13)
+    scope 0 :
+      small : 9007199254740993
+      type: u128
+
+      big : 18446744073709551615
+      type: u128
+
+      max : 340282366920938463463374607431768211455
+      type: u128
+

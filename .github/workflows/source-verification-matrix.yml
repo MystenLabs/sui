@@ -76,9 +76,6 @@ jobs:
           cargo test -p sui-source-verification --test version_matrix
           -- --ignored --nocapture historical_sweep
 
-  # A scheduled failure means an old toolchain stopped verifying against the current CLI; alert via the
-  # same sui-operations dispatch the nightly build uses, so it lands in the existing failure channel.
-  # On-demand sweeps are not alerted.
   notify:
     name: Notify on failure
     needs: [version-matrix]
@@ -92,7 +89,7 @@ jobs:
         with:
           token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
           repository: MystenLabs/sui-operations
-          event-type: nightly-build-failure
+          event-type: source-verification-failure
           client-payload: |-
             {
               "commit_sha": "${{ github.sha }}",

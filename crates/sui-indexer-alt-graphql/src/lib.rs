@@ -54,6 +54,15 @@ use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTask;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use task::chain_identifier;
+use task::streaming::CheckpointStreamTask;
+use task::streaming::StreamedCacheEvictionTask;
+use task::streaming::StreamedCaches;
+use task::streaming::StreamedObjectStore;
+use task::streaming::StreamedTransactionStore;
+use task::streaming::StreamingPackageStore;
+#[cfg(feature = "staging")]
+use task::streaming::SubscriptionBroadcast;
+use task::streaming::SubscriptionReadiness;
 use task::watermark::WatermarkTask;
 use task::watermark::WatermarksLock;
 use throttle::Throttle;
@@ -302,9 +311,7 @@ struct SubscriptionThrottleRate(u32);
 /// command-line).
 ///
 /// Access to most reads is controlled by the `database_url` -- if it is `None`, those reads will
-/// not work. KV queries can optionally be served by a Bigtable instance or Ledger gRPC service
-/// via `kv_args`. If a Bigtable instance is configured, the `GOOGLE_APPLICATION_CREDENTIALS`
-/// environment variable must point to the credentials JSON file.
+/// not work. KV point-lookups require a Ledger gRPC service, configured via `kv_args`.
 ///
 /// `version` is the version string reported in response headers by the service as part of every
 /// request.
@@ -339,10 +346,6 @@ pub async fn start_rpc(
     let consistent_reader =
         ConsistentReader::new(Some("graphql_consistent"), consistent_reader_args, registry).await?;
 
-    let bigtable_reader = kv_args
-        .bigtable_reader("indexer-alt-graphql".to_owned(), registry)
-        .await?;
-
     let ledger_grpc_reader = kv_args
         .ledger_grpc_reader(
             Some("graphql_ledger_grpc"),
@@ -361,10 +364,10 @@ pub async fn start_rpc(
 
     let pg_loader = Arc::new(pg_reader.as_data_loader());
 
-    let kv_loader = KvLoader::from_kv_sources(
-        bigtable_reader.clone(),
-        ledger_grpc_reader.clone(),
-        pg_loader.clone(),
+    let kv_loader = KvLoader::new(
+        ledger_grpc_reader
+            .clone()
+            .context("--ledger-grpc-url must be configured")?,
     );
 
     let package_store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
@@ -385,7 +388,6 @@ pub async fn start_rpc(
         config.watermark,
         pg_pipelines,
         pg_reader.clone(),
-        bigtable_reader,
         ledger_grpc_reader.clone(),
         consistent_reader.clone(),
         metrics.clone(),
@@ -397,38 +399,36 @@ pub async fn start_rpc(
                 .clone()
                 .context("Ledger gRPC reader is required when streaming is enabled")?;
 
-            let streaming_packages = Arc::new(task::streaming::StreamingPackageStore::new(
-                package_store.clone(),
-            ));
-            // Unbounded is intentional: if `kv_packages` lags long enough for this queue to
-            // grow without bound, the indexer infrastructure itself has a bigger problem and
-            // OOM on this service is one failure mode among many. Monitor via metrics.
-            #[allow(clippy::disallowed_methods)]
-            let (package_eviction_tx, package_eviction_rx) = tokio::sync::mpsc::unbounded_channel();
-            let readiness =
-                task::streaming::SubscriptionReadiness::new(watermark_task.watermarks_rx());
-            let (stream_task, broadcaster) = task::streaming::CheckpointStreamTask::new(
+            alpha_ledger_grpc_reader
+                .as_ref()
+                .context("Alpha ledger gRPC reader is required when streaming is enabled")?;
+
+            let streaming_packages = Arc::new(StreamingPackageStore::new(package_store.clone()));
+            let streaming_transactions = Arc::new(StreamedTransactionStore::new());
+            let streaming_objects = Arc::new(StreamedObjectStore::new());
+            let readiness = SubscriptionReadiness::new(watermark_task.watermarks_rx());
+            let (stream_task, broadcaster) = CheckpointStreamTask::new(
                 uri,
                 &config.subscription,
                 streaming_packages.clone(),
-                package_eviction_tx,
+                streaming_transactions.clone(),
+                streaming_objects.clone(),
                 readiness.clone(),
                 ledger_grpc.clone(),
                 watermark_task.watermarks_rx(),
             );
-            let eviction_task = task::streaming::PackageEvictionTask::new(
-                streaming_packages.clone(),
-                package_eviction_rx,
+            let caches = Arc::new(StreamedCaches::new(
+                streaming_packages,
+                streaming_transactions,
+                streaming_objects,
+            ));
+            // One task flushes every streamed cache once its backing index catches up.
+            let eviction_task = StreamedCacheEvictionTask::new(
+                caches.to_evictable(),
                 watermark_task.watermarks(),
                 Duration::from_millis(config.subscription.package_eviction_interval_ms),
             );
-            Some((
-                stream_task,
-                broadcaster,
-                eviction_task,
-                streaming_packages,
-                readiness,
-            ))
+            Some((stream_task, broadcaster, eviction_task, caches, readiness))
         }
         None => None,
     };
@@ -488,34 +488,38 @@ pub async fn start_rpc(
     // Spawn the streaming tasks and wait for subscriptions to be ready before
     // binding the listener, so the schema is only advertised once `kv_packages`
     // has caught up to the first streamed checkpoint.
-    let streaming_handles =
-        if let Some((stream_task, _broadcaster, eviction_task, streaming_packages, readiness)) =
-            streaming_setup
+    let streaming_handles = if let Some((
+        stream_task,
+        _broadcaster,
+        eviction_task,
+        caches,
+        readiness,
+    )) = streaming_setup
+    {
+        rpc = rpc.data(caches).data(config.subscription);
+        let s_stream = stream_task.run();
+        let s_eviction = eviction_task.run();
+        readiness.wait_for_ready().await?;
+        // The broadcast handle is only consumed by the (staging-gated) subscription resolvers.
+        #[cfg(feature = "staging")]
         {
-            rpc = rpc.data(streaming_packages).data(config.subscription);
-            let s_stream = stream_task.run();
-            let s_eviction = eviction_task.run();
-            readiness.wait_for_ready().await?;
-            // The broadcast handle is only consumed by the (staging-gated) subscription resolvers.
-            #[cfg(feature = "staging")]
-            {
-                // `first_live_checkpoint` is the first checkpoint the live upstream stream
-                // broadcast, recorded as readiness fires.
-                let first_live_checkpoint = readiness
-                    .first_live_checkpoint()
-                    .expect("first_live_checkpoint is set before wait_for_ready returns Ok");
-                let subscription_broadcast = Arc::new(task::streaming::SubscriptionBroadcast::new(
-                    _broadcaster,
-                    first_live_checkpoint,
-                ));
-                rpc = rpc
-                    .data(subscription_broadcast)
-                    .data(subscription_watermarks_rx);
-            }
-            Some((s_stream, s_eviction))
-        } else {
-            None
-        };
+            // `first_live_checkpoint` is the first checkpoint the live upstream stream
+            // broadcast, recorded as readiness fires.
+            let first_live_checkpoint = readiness
+                .first_live_checkpoint()
+                .expect("first_live_checkpoint is set before wait_for_ready returns Ok");
+            let subscription_broadcast = Arc::new(SubscriptionBroadcast::new(
+                _broadcaster,
+                first_live_checkpoint,
+            ));
+            rpc = rpc
+                .data(subscription_broadcast)
+                .data(subscription_watermarks_rx);
+        }
+        Some((s_stream, s_eviction))
+    } else {
+        None
+    };
 
     let s_rpc = rpc.run().await?;
 

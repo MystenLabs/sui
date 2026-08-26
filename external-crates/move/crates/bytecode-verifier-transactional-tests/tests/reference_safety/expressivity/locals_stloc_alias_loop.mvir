@@ -1,0 +1,29 @@
+// StLoc over a live epsilon alias inside a loop
+
+//# run
+mvir 0x42::m {
+    public struct S has drop { f: u64 }
+
+    entry fun t() {
+        let x: Self::S;
+        let r: &mut Self::S;
+        let i: u64;
+        let v: u64;
+    label b0:
+        x = S { f: 100 };
+        r = &mut x;
+        i = 0;
+    label loop:
+        jump_if (copy(i) >= 3) done;
+    label body:
+        x = S { f: copy(i) };
+        i = move(i) + 1;
+        jump loop;
+    label done:
+        v = *(&copy(r).S::f);
+        _ = move(r);
+        _ = move(i);
+        assert(move(v) == 2, 700);
+        return;
+    }
+}

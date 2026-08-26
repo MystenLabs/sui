@@ -161,3 +161,11 @@ tx.moveCall({
 ```
 
 If the coin type isn't allowlisted or the PTB shape isn't eligible, the transaction fails at validation.
+
+## Compliance considerations
+
+When you integrate stablecoins into your app, be aware of issuer-specific compliance requirements:
+
+- **USDC (Circle):** Circle maintains a blacklist of addresses. If an address is blacklisted by Circle, transactions involving USDC to or from that address fail onchain. Your app should handle this gracefully by checking transaction results and displaying a clear error when a transfer is rejected. See [Circle's compliance documentation](https://www.circle.com/en/legal/usdc-user-agreement) for details.
+- **Regulated tokens on Sui:** Some stablecoins on Sui use the [regulated token standard](/onchain-finance/fungible-tokens/regulated-tokens) with `DenyCapV2`. The issuer can block specific addresses from transacting with the token through the `DenyList` object (`0x403`). Check whether the stablecoins you integrate use deny-listing and account for denied transactions in your error handling ([Security Best Practices](/develop/security/best-practices)).
+- **Provider responsibility:** Sui documentation covers onchain primitives (coin types, transfer functions, deny-listing). Compliance obligations such as KYC verification, sanctions screening, and reporting are the responsibility of the stablecoin issuer and your app. Consult your legal team and the issuer's compliance documentation for your specific jurisdiction.

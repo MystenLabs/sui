@@ -991,7 +991,7 @@ fn valid_during_transaction_expiration_round_trips_through_proto() {
         nonce: 0xc0ffee,
     };
 
-    let proto = ProtoTransactionExpiration::from(original);
+    let proto = ProtoTransactionExpiration::from(original.clone());
     let round_tripped = TransactionExpiration::try_from(&proto).unwrap();
 
     assert_eq!(round_tripped, original);

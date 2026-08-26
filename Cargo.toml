@@ -179,7 +179,6 @@ members = [
     "crates/sui-rpc-resolver",
     "crates/sui-rpc-store",
     "crates/sui-sdk",
-    "crates/sui-security-watchdog",
     "crates/sui-simulator",
     "crates/sui-single-node-benchmark",
     "crates/sui-snapshot",
@@ -230,7 +229,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.78.0"
+version = "1.79.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -402,7 +401,7 @@ hyper-rustls = { version = "0.27", default-features = false, features = [
   "ring",
   "tls12",
 ] }
-im = "15"
+imbl = "7.0.1"
 indexmap = { version = "2.8.0", features = ["serde"] }
 indoc = "2.0.6"
 indicatif = "0.18.3"
@@ -426,7 +425,7 @@ jsonrpsee = { version = "0.24.9", features = [
 ] }
 json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4" }
 leb128 = "0.2.5"
-lru = "0.10"
+lru = "0.18.2"
 miette = { version = "7", features = ["fancy"] }
 mime = "0.3"
 mockall = "0.11.4"
@@ -453,6 +452,7 @@ object_store = { version = "0.13.0", features = [
   "http",
 ] }
 once_cell = "1.18.0"
+oneshot = { version = "0.2.1", features = ["std"] }
 ouroboros = "0.17"
 parking_lot = { version = "0.12.3", features = ["arc_lock"] }
 parquet = "57.3"
@@ -528,7 +528,6 @@ tar = "0.4.45"
 tempfile = "3.20.0"
 test-fuzz = "3.0.4"
 thiserror = "1.0.40"
-timeout-tracing = "0.1.2"
 tiny-bip39 = "1.0.0"
 tokio = "=1.52.1"
 tokio-rustls = { version = "0.26", default-features = false, features = [
@@ -594,7 +593,7 @@ webpki = { version = "0.103.10", package = "rustls-webpki", features = [
 ] }
 which = "8.0.2"
 winnow = "0.7"
-wiremock = "0.5"
+wiremock = "0.6"
 x509-parser = { version = "0.17.0", features = ["verify"] }
 zstd = "0.12.3"
 versions = "4.1.0"
@@ -627,10 +626,10 @@ move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack"
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 move-trace-format = { path = "external-crates/move/crates/move-trace-format" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3273734b9791df0c3d1655509476e10a49978528" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3273734b9791df0c3d1655509476e10a49978528" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3273734b9791df0c3d1655509476e10a49978528", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3273734b9791df0c3d1655509476e10a49978528", features = [
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a9f994cd6b2882c7e916786943712fce1f2b6013" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a9f994cd6b2882c7e916786943712fce1f2b6013" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a9f994cd6b2882c7e916786943712fce1f2b6013", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a9f994cd6b2882c7e916786943712fce1f2b6013", features = [
   "experimental",
 ] }
 passkey-types = { version = "0.4.0" }
@@ -653,9 +652,9 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "68adc31d4e
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "68adc31d4ea1f4573f08c2c75317fcb205b823de" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5781b718f2dbe43c8ce3de6f84fbd82c90f52aa8", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5781b718f2dbe43c8ce3de6f84fbd82c90f52aa8", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5781b718f2dbe43c8ce3de6f84fbd82c90f52aa8", features = [ "unstable" ] }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "c406a6ca42f4cc7b1409e133421eec123b7875d6", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "c406a6ca42f4cc7b1409e133421eec123b7875d6", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "c406a6ca42f4cc7b1409e133421eec123b7875d6", features = [ "unstable" ] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }

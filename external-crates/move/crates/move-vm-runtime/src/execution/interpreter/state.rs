@@ -13,6 +13,7 @@ use crate::{
     },
     jit::execution::ast::{Function, InternedDisplay, Type},
     shared::{
+        TypeLimits,
         constants::{CALL_STACK_SIZE_LIMIT, OPERAND_STACK_SIZE_LIMIT},
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
         vm_pointer::VMPointer,
@@ -49,6 +50,7 @@ pub(crate) struct MachineState {
     /// Operand stack, where Move `Value`s are stored for stack operations.
     pub(crate) operand_stack: ValueStack,
     pub(crate) interner: Arc<IdentifierInterner>,
+    pub(crate) type_limits: TypeLimits,
     pub(crate) callstack_highwatermark: usize,
     pub(crate) valuestack_highwatermark: usize,
 }
@@ -84,12 +86,17 @@ pub(crate) struct CallFrame {
 // -------------------------------------------------------------------------------------------------
 
 impl MachineState {
-    pub(super) fn new(interner: Arc<IdentifierInterner>, call_stack: CallStack) -> Self {
+    pub(super) fn new(
+        interner: Arc<IdentifierInterner>,
+        type_limits: TypeLimits,
+        call_stack: CallStack,
+    ) -> Self {
         let callstack_highwatermark = call_stack.heap.cur_size();
         MachineState {
             operand_stack: ValueStack::new(),
             call_stack,
             interner,
+            type_limits,
             callstack_highwatermark,
             valuestack_highwatermark: 0,
         }

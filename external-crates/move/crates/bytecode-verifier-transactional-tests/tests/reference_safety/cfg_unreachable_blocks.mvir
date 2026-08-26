@@ -1,0 +1,94 @@
+// unreachable blocks are never analyzed; both checkers share the driver
+
+//# publish
+mvir 0x2::dead_code_after_abort {
+
+public struct S has copy, drop { f: u64 }
+
+fun t() {
+    let s: Self::S;
+    let p: &mut u64;
+label b0:
+    abort 1;
+label dead:
+    // blatant violation, but unreachable
+    s = S { f: 0 };
+    p = &mut (&mut s).S::f;
+    s = S { f: 1 };
+    *move(p) = 2;
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::dead_code_after_ret {
+
+public struct S has copy, drop { f: u64 }
+
+fun t() {
+    let s: Self::S;
+    let p: &mut u64;
+label b0:
+    return;
+label dead:
+    s = S { f: 0 };
+    p = &mut (&mut s).S::f;
+    s = S { f: 1 };
+    *move(p) = 2;
+    return;
+}
+
+}
+
+//# publish
+mvir 0x4::impossible_but_reachable {
+
+public struct S has copy, drop { f: u64 }
+
+// the body can never execute but is reachable in the CFG, so this must still be caught
+fun t() {
+    let s: Self::S;
+    let p: &mut u64;
+label b0:
+    s = S { f: 0 };
+    p = &mut (&mut s).S::f;
+label h:
+    jump_if (false) body;
+label e:
+    _ = move(p);
+    return;
+label body:
+    s = S { f: 1 };
+    jump h;
+}
+
+}
+
+//# publish
+mvir 0x5::loop_head_is_ret {
+
+public struct S has copy, drop { f: u64 }
+
+// two back edges into a head whose fall-through is the return
+fun t(c1: bool, c2: bool, s: &mut Self::S) {
+    let p: &mut u64;
+label b0:
+    p = &mut copy(s).S::f;
+label h:
+    jump_if (copy(c1)) l1;
+label l0:
+    jump_if (copy(c2)) l2;
+label ret_:
+    _ = move(p);
+    _ = move(s);
+    return;
+label l1:
+    p = &mut copy(s).S::f;
+    jump h;
+label l2:
+    *copy(s) = S { f: 1 };
+    jump h;
+}
+
+}

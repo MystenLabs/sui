@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashSet;
+use std::num::NonZeroUsize;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -11,6 +12,7 @@ use std::time::Duration;
 use consensus_core::{BlockStatus, TransactionPool as _};
 use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX};
 use fastcrypto::traits::KeyPair;
+use nonempty::NonEmpty;
 use shared_crypto::intent::{Intent, IntentScope};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectRef, SuiAddress, random_object_ref};
@@ -29,7 +31,7 @@ use sui_types::messages_grpc::{
 use sui_types::object::Object;
 use sui_types::traffic_control::ClientIdSource;
 use sui_types::transaction::{
-    Transaction, TransactionDataAPI, TransactionExpiration, VerifiedTransaction,
+    AllowedProposers, Transaction, TransactionDataAPI, TransactionExpiration, VerifiedTransaction,
 };
 use sui_types::utils::to_sender_signed_transaction;
 
@@ -100,18 +102,33 @@ impl TestContext {
     async fn new_with_adapter(
         make_adapter: impl FnOnce(Arc<AuthorityState>) -> Arc<ConsensusAdapter>,
     ) -> Self {
+        Self::new_with_committee_size_and_adapter(None, make_adapter).await
+    }
+
+    async fn new_with_committee_size_and_adapter(
+        committee_size: Option<NonZeroUsize>,
+        make_adapter: impl FnOnce(Arc<AuthorityState>) -> Arc<ConsensusAdapter>,
+    ) -> Self {
         telemetry_subscribers::init_for_testing();
         let (sender, keypair) = get_account_key_pair();
         let gas_object = Object::with_owner_for_testing(sender);
         let gas_object_ref = gas_object.compute_object_reference();
-        let authority = TestAuthorityBuilder::new()
-            .with_starting_objects(&[gas_object])
+        let builder = TestAuthorityBuilder::new()
             // Several tests assert that a resubmission is still suppressed as a recent duplicate;
             // pin a dedup window far longer than any test's runtime so entries cannot expire
             // mid-test under CI load (the default window is only 1s of wall-clock time).
-            .with_recent_submission_dedup_window_ms(600_000)
-            .build()
-            .await;
+            .with_recent_submission_dedup_window_ms(600_000);
+        // Hold the config alive for as long as the builder borrows it.
+        let network_config = committee_size.map(|size| {
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .committee_size(size)
+                .with_objects(vec![gas_object.clone()])
+                .build()
+        });
+        let authority = match &network_config {
+            Some(network_config) => builder.with_network_config(network_config, 0).build().await,
+            None => builder.with_starting_objects(&[gas_object]).build().await,
+        };
 
         let adapter = make_adapter(authority.clone());
         let server =
@@ -681,6 +698,69 @@ async fn test_submit_transaction_wrong_epoch() {
 
     let response = test_context.client.submit_transaction(request, None).await;
     assert!(response.is_err());
+}
+
+/// A transaction that does not name this validator among its proposers must be rejected at
+/// admission rather than submitted to consensus.
+#[tokio::test]
+async fn test_submit_transaction_disallowed_proposer() {
+    const COMMITTEE_SIZE: u32 = 4;
+    let test_context = TestContext::new_with_committee_size_and_adapter(
+        NonZeroUsize::new(COMMITTEE_SIZE as usize),
+        |authority| {
+            make_consensus_adapter_for_test(
+                authority,
+                HashSet::new(),
+                true,
+                vec![with_block_status(BlockStatus::Sequenced(BlockRef::MIN))],
+            )
+        },
+    )
+    .await;
+
+    let epoch_store = test_context.state.epoch_store_for_testing();
+    assert!(epoch_store.protocol_config().allowed_proposers());
+    let own_index = epoch_store.own_committee_index().unwrap();
+    let others: Vec<u32> = (0..COMMITTEE_SIZE).filter(|i| *i != own_index).collect();
+
+    let build = |proposers: Vec<u32>| {
+        let mut tx_data = TestTransactionBuilder::new(
+            test_context.sender,
+            test_context.gas_object_ref,
+            test_context
+                .state
+                .reference_gas_price_for_testing()
+                .unwrap(),
+        )
+        .transfer_sui(None, test_context.sender)
+        .build();
+        *tx_data.expiration_mut_for_testing() = TransactionExpiration::Validity {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: test_context.state.get_chain_identifier(),
+            nonce: 0,
+            allowed_proposers: Some(AllowedProposers {
+                epoch: epoch_store.epoch(),
+                proposers: NonEmpty::from_vec(proposers).unwrap(),
+            }),
+        };
+        test_context
+            .build_submit_request(to_sender_signed_transaction(tx_data, &test_context.keypair))
+    };
+
+    let response = test_context
+        .client
+        .submit_transaction(build(others.clone()), None)
+        .await;
+    assert!(response.is_err(), "{response:?}");
+
+    let response = test_context
+        .client
+        .submit_transaction(build(vec![own_index]), None)
+        .await;
+    assert!(response.is_ok(), "{response:?}");
 }
 
 #[tokio::test]

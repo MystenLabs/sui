@@ -1433,6 +1433,9 @@ Query.events (filter: module)
 Query.multiGetAddresses
   => {}
 
+Query.multiGetBalances
+  => {"consistent"}
+
 Query.multiGetCheckpoints
   => {}
 
@@ -1725,10 +1728,10 @@ TransactionEffects.events
   => {}
 
 TransactionEffects.balanceChanges
-  => {"tx_balance_changes", "tx_digests"}
+  => {}
 
 TransactionEffects.balanceChangesJson
-  => {"tx_balance_changes", "tx_digests"}
+  => {}
 
 TransactionEffects.effectsBcs
   => {}

@@ -3,7 +3,7 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 6 tasks
 
-task 1, lines 40-47:
+task 1, lines 41-48:
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
@@ -13,7 +13,7 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 2, lines 49-56:
+task 2, lines 50-57:
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
@@ -23,7 +23,7 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(1), 2)],
 }
 
-task 3, lines 58-65:
+task 3, lines 59-66:
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
@@ -33,7 +33,7 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(2), 2)],
 }
 
-task 4, lines 67-74:
+task 4, lines 68-75:
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
@@ -43,7 +43,7 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(3), 2)],
 }
 
-task 5, lines 76-83:
+task 5, lines 77-84:
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,

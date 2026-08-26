@@ -216,7 +216,9 @@ pub fn redirect_input(inp: D::Input, remap: &HashMap<NodeIndex, NodeIndex>) -> D
         ),
         D::Input::Code(l, c, Some(n)) => D::Input::Code(l, c, Some(map(n))),
         D::Input::Code(l, c, None) => D::Input::Code(l, c, None),
-        D::Input::Reduced(l, succs) => D::Input::Reduced(l, succs.into_iter().map(map).collect()),
+        D::Input::Reduced(l, succs) => {
+            D::Input::Reduced(l, succs.into_iter().map(|(t, f)| (map(t), f)).collect())
+        }
     }
 }
 
@@ -347,6 +349,18 @@ fn edge_condition(pred_input: Option<&D::Input>, p: NodeIndex, n: NodeIndex) -> 
             } else {
                 predicates::or(matching)
             }
+        }
+        Some(D::Input::Reduced(_, succs)) => {
+            // NMG §V-B: the abstract loop node's outgoing edges carry the reaching condition
+            // of the exit path from the loop body's projection. Reading it here is what lets
+            // the outer scope's `reaching_conditions` propagate the per-exit distinction into
+            // the post-loop items list without a bespoke cascade emitter. `True` fallback for
+            // markers installed before Phase 4 wires real formulas through.
+            succs
+                .iter()
+                .find(|(target, _)| *target == n)
+                .map(|(_, f)| f.clone())
+                .unwrap_or_else(predicates::true_)
         }
         _ => predicates::true_(),
     }

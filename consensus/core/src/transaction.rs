@@ -533,7 +533,7 @@ impl TransactionPool for TransactionConsumerPool {
 pub trait TransactionVerifier: Send + Sync + 'static {
     /// Determines if this batch of transactions is valid.
     /// Fails if any one of the transactions is invalid.
-    fn verify_batch(&self, batch: &[&[u8]]) -> Result<(), ValidationError>;
+    fn verify_batch(&self, block_ref: &BlockRef, batch: &[&[u8]]) -> Result<(), ValidationError>;
 
     /// Returns indices of transactions to reject, or a transaction validation error.
     /// Currently only uncertified user transactions can be voted to reject, which are created
@@ -562,7 +562,7 @@ pub struct NoopTransactionVerifier;
 
 #[cfg(any(test, msim))]
 impl TransactionVerifier for NoopTransactionVerifier {
-    fn verify_batch(&self, _batch: &[&[u8]]) -> Result<(), ValidationError> {
+    fn verify_batch(&self, _block_ref: &BlockRef, _batch: &[&[u8]]) -> Result<(), ValidationError> {
         Ok(())
     }
 

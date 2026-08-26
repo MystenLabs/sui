@@ -351,6 +351,7 @@ Run `sui-kv-rpc --config-schema` to print the full JSON Schema with per-field do
 | `bigtable-project` | credentials' project | GCP project ID. |
 | `app-profile-id` | none | Bigtable app profile ID. |
 | `tls-cert` / `tls-key` | none | PEM cert and key. TLS activates only when both are set. |
+| `plaintext-address` | none | Second, unencrypted gRPC listener serving the same API as `address`, for trusted internal callers that shouldn't need to negotiate TLS. Disabled unless set. Bind it to a private network interface only. |
 | `bigtable-channel-timeout-ms` | 60000 | Channel-level Bigtable gRPC timeout. |
 | `bigtable-initial-pool-size` | 10 | Channels created at startup. |
 | `bigtable-min-pool-size` | 1 | Minimum channels. |
@@ -415,7 +416,7 @@ Production hardening checklist:
 - **Least-privilege service accounts.** `roles/bigtable.user` for the indexer, `roles/bigtable.reader` for the service. Do not share one account.
 - **Credentials in a secret manager.** Prefer [Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) on GKE over key files.
 - **Test backup and restore.** Configure [Bigtable backups](#backup-policy) and verify you can restore, not just that backups exist.
-- **TLS.** Set `tls-cert` and `tls-key`, and restrict the gRPC and health endpoints to trusted networks.
+- **TLS.** Set `tls-cert` and `tls-key`, and restrict the gRPC and health endpoints to trusted networks. If `plaintext-address` is also set for internal callers, it has no TLS or authentication of its own, so bind it to a private network interface, exactly as if it were the health endpoint.
 - **Single-cluster-routing app profile for the indexer.** Nothing validates this at runtime.
 
 See [Security Best Practices](/develop/security/best-practices).

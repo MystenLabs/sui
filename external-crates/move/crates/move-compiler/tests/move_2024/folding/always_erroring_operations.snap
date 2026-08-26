@@ -1,0 +1,94 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[WC08002]: operation always errors
+   ┌─ tests/move_2024/folding/always_erroring_operations.move:12:29
+   │
+12 │     public fun div(): u64 { 1u64 / 0 }
+   │                             ^^^^^^^^ Cannot divide by zero. This operation always errors at runtime
+   │
+   = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[WC08002]: operation always errors
+   ┌─ tests/move_2024/folding/always_erroring_operations.move:16:30
+   │
+16 │     public fun mod_(): u64 { 1u64 % 0 }
+   │                              ^^^^^^^^ Cannot take the remainder modulo zero. This operation always errors at runtime
+   │
+   = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[WC08002]: operation always errors
+   ┌─ tests/move_2024/folding/always_erroring_operations.move:18:28
+   │
+18 │     public fun add(): u8 { 255u8 + 1u8 }
+   │                            ^^^^^^^^^^^ The sum of '255' and '1' is outside the range of 'u8'. This operation always errors at runtime
+   │
+   = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[WC08002]: operation always errors
+   ┌─ tests/move_2024/folding/always_erroring_operations.move:20:28
+   │
+20 │     public fun sub(): u8 { 0u8 - 1u8 }
+   │                            ^^^^^^^^^ Subtracting '1' from '0' is less than zero. This operation always errors at runtime
+   │
+   = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[WC08002]: operation always errors
+   ┌─ tests/move_2024/folding/always_erroring_operations.move:22:28
+   │
+22 │     public fun mul(): u8 { 128u8 * 2u8 }
+   │                            ^^^^^^^^^^^ The product of '128' and '2' is outside the range of 'u8'. This operation always errors at runtime
+   │
+   = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[WC08002]: operation always errors
+   ┌─ tests/move_2024/folding/always_erroring_operations.move:24:28
+   │
+24 │     public fun shl(): u8 { 1u8 << 8 }
+   │                            ^^^^^^^^ The shift amount '8' is greater than or equal to the number of bits in 'u8'. This operation always errors at runtime
+   │
+   = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[WC08002]: operation always errors
+   ┌─ tests/move_2024/folding/always_erroring_operations.move:26:29
+   │
+26 │     public fun shr(): u16 { 1u16 >> 16 }
+   │                             ^^^^^^^^^^ The shift amount '16' is greater than or equal to the number of bits in 'u16'. This operation always errors at runtime
+   │
+   = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[WC08002]: operation always errors
+   ┌─ tests/move_2024/folding/always_erroring_operations.move:28:29
+   │
+28 │     public fun cast(): u8 { 256u64 as u8 }
+   │                             ^^^^^^^^^^^^ The 'u64' value '256' is outside the range of 'u8'. This operation always errors at runtime
+   │
+   = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[WC08002]: operation always errors
+   ┌─ tests/move_2024/folding/always_erroring_operations.move:49:33
+   │
+49 │     public fun nested(): u64 { (1u64 / 0) + 1 }
+   │                                 ^^^^^^^^ Cannot divide by zero. This operation always errors at runtime
+   │
+   = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[WC08002]: operation always errors
+   ┌─ tests/move_2024/folding/always_erroring_operations.move:54:9
+   │
+54 │         1u64 / x
+   │         ^^^^^^^^ Cannot divide by zero. This operation always errors at runtime
+   │
+   = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[WC08002]: operation always errors
+   ┌─ tests/move_2024/folding/always_erroring_operations.move:58:57
+   │
+58 │     public fun conditional(cond: bool): u64 { if (cond) 1u64 / 0 else 0 }
+   │                                                         ^^^^^^^^ Cannot divide by zero. This operation always errors at runtime
+   │
+   = This warning can be suppressed with '#[allow(always_errors)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

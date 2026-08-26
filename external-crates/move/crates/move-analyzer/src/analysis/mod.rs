@@ -13,7 +13,7 @@ use crate::{
     utils::expansion_mod_ident_to_map_key,
 };
 
-use im::ordmap::OrdMap;
+use imbl::ordmap::OrdMap;
 use lsp_types::Position;
 use move_command_line_common::files::FileHash;
 use std::{

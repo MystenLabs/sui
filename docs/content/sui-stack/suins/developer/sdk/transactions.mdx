@@ -28,6 +28,54 @@ answer: >-
 `SuinsTransaction` is the client you use similar to `Transaction`, and helps in building a transaction.
 You need to instantiate it once in every programmable transaction block (PTB) that you are building.
 
+## Pyth price feeds
+
+SuiNS names are priced in USDC. Paying in SUI or NS needs a live exchange rate, which the contracts read from the [Pyth](https://docs.pyth.network/price-feeds) oracle, so those transactions must include a price info object.
+
+Pyth serves its price updates from Hermes, which requires an access token. Create a free [Pyth](https://app.pyth.com/explore) account and copy the key from **View your API key**. Keep it out of browser code, so the fetch always happens on a server.
+
+You can get a price info object into your transaction in two ways.
+
+### Fetch and build on a server
+
+Initialize the `SuinsClient` with the token and call `getPriceInfoObject`. It fetches the update and adds the update calls to the transaction you pass it, so this approach builds the whole PTB server-side.
+
+```js
+const suinsClient = new SuinsClient({
+    client,
+    network: 'testnet',
+    pythAccessToken: process.env.PYTH_ACCESS_TOKEN,
+});
+
+const priceInfoObjectId = (await suinsClient.getPriceInfoObject(transaction, coinConfig.feed))[0];
+```
+
+### Fetch on a server, build on the client
+
+To keep building the PTB in the browser, split the work across [`@pythnetwork/pyth-sui-js`](https://www.npmjs.com/package/@pythnetwork/pyth-sui-js). Fetch the update bytes on your backend:
+
+```js
+const connection = new SuiPriceServiceConnection('https://pyth.dourolabs.app/hermes', {
+    accessToken: process.env.PYTH_ACCESS_TOKEN,
+});
+
+const updates = await connection.getPriceFeedsUpdateData([coinConfig.feed]);
+```
+
+Then add the update to the transaction on the client:
+
+```js
+const pythClient = new SuiPythClient(
+    suinsClient.client,
+    suinsClient.config.pyth.pythStateId,
+    suinsClient.config.pyth.wormholeStateId,
+);
+
+const [priceInfoObjectId] = await pythClient.updatePriceFeeds(transaction, updates, [coinConfig.feed]);
+```
+
+Either way, pass the resulting `priceInfoObjectId` to the `register` and `renew` commands described in the following section.
+
 ## Available functions
 
 This is a list of all the available PTB commands supported through the SDK.

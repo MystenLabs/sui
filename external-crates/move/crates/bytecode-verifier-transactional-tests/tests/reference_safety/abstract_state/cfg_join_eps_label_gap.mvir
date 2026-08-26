@@ -1,0 +1,36 @@
+// a --eps--> b on one path, b --f--> c on the other; the join has no a --f--> c edge
+
+//# publish
+
+mvir 0x2::join_gap {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun t(cond: bool, s: &mut Self::S, s2: &mut Self::S) {
+    let a: &mut Self::S;
+    let b: &mut Self::S;
+    let c: &mut u64;
+label l0:
+    jump_if_false (move(cond)) l2;
+label l1:
+    a = copy(s);
+    b = copy(s);
+    c = &mut copy(s2).S::f;
+    jump l3;
+label l2:
+    a = copy(s2);
+    b = copy(s);
+    c = &mut copy(b).S::f;
+label l3:
+    *copy(a) = S { f: 1, g: 2 };
+    _ = move(a);
+    _ = move(b);
+    _ = move(c);
+    _ = move(s);
+    _ = move(s2);
+    return;
+}
+
+}
+
+//# view-abstract-state 0x2::join_gap::t

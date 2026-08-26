@@ -1,0 +1,53 @@
+// Basic VecUnpack coverage
+
+//# run
+mvir 0x1::vunpack_ok {
+
+entry fun t() {
+    let v: vector<u64>;
+    let a: u64;
+    let b: u64;
+label b0:
+    v = vector<u64; 2>(1, 2);
+    vector<u64; 2>(a, b) = move(v);
+    assert(move(a) == 1, 100);
+    assert(move(b) == 2, 101);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x2::vunpack_after_elem_borrow_invalid {
+
+fun t() {
+    let v: vector<u64>;
+    let r: &u64;
+    let a: u64;
+    let b: u64;
+label b0:
+    v = vector<u64; 2>(1, 2);
+    r = vec_imm_borrow<u64>(&v, 0);
+    vector<u64; 2>(a, b) = move(v);
+    _ = *move(r);
+    _ = move(a);
+    _ = move(b);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::vunpack_through_ref {
+
+fun t(vr: &mut vector<u64>) {
+    let a: u64;
+    let b: u64;
+label b0:
+    vector<u64; 2>(a, b) = *move(vr);
+    _ = move(a);
+    _ = move(b);
+    return;
+}
+
+}

@@ -1,0 +1,86 @@
+// the caller gives a mut and an imm result no edge, so the callee Ret check must reject every
+// overlapping pair
+
+//# publish
+mvir 0x2::mut_and_dotstar_imm_invalid {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun id_imm(r: &Self::S): &Self::S {
+label b0:
+    return move(r);
+}
+
+// i covers all of s, so it may overlap m = &mut s.f
+fun t(s: &mut Self::S): &mut u64 * &Self::S {
+    let m: &mut u64;
+    let i: &Self::S;
+label b0:
+    m = &mut copy(s).S::f;
+    i = Self::id_imm(freeze(copy(s)));
+    _ = move(s);
+    return (move(m), move(i));
+}
+
+}
+
+//# publish
+mvir 0x3::mut_and_disjoint_imm_valid {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun id_imm(r: &u64): &u64 {
+label b0:
+    return move(r);
+}
+
+// disjoint fields: accepted
+fun t(s: &mut Self::S): &mut u64 * &u64 {
+    let m: &mut u64;
+    let i: &u64;
+label b0:
+    m = &mut copy(s).S::f;
+    i = Self::id_imm(&copy(s).S::g);
+    _ = move(s);
+    return (move(m), move(i));
+}
+
+}
+
+//# publish
+mvir 0x4::mut_and_same_field_imm_invalid {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun t(s: &mut Self::S): &mut u64 * &u64 {
+    let m: &mut u64;
+    let i: &u64;
+label b0:
+    m = &mut copy(s).S::f;
+    i = &copy(s).S::f;
+    _ = move(s);
+    return (move(m), move(i));
+}
+
+}
+
+//# publish
+mvir 0x5::two_mut_from_two_calls_invalid {
+
+fun id_mut(r: &mut u64): &mut u64 {
+label b0:
+    return move(r);
+}
+
+// two dot-star mut results from the same source may alias
+fun t(s: &mut u64): &mut u64 * &mut u64 {
+    let a: &mut u64;
+    let b: &mut u64;
+label b0:
+    a = Self::id_mut(copy(s));
+    b = Self::id_mut(copy(s));
+    _ = move(s);
+    return (move(a), move(b));
+}
+
+}

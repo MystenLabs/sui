@@ -1,0 +1,24 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 0, lines 3-22:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000502::stloc_same_variant_under_alias'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x502::stloc_same_variant_under_alias,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 7)],
+}
+
+task 1, lines 24-45:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000504::alias_write_keeps_variant'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x504::alias_write_keeps_variant,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}

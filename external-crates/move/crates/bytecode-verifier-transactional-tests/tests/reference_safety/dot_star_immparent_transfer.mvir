@@ -1,0 +1,99 @@
+// an imm parent / mut extension pair built purely from field borrows of a &mut parameter
+
+// Ret: return (&a.x, &mut a.x.y)
+//# publish
+mvir 0xa1::j1_ret_imm_parent_mut_ext {
+
+public struct Mid has copy, drop, store { y: u64 }
+public struct O has copy, drop, store { x: Self::Mid, z: Self::Mid }
+
+fun h(a: &mut Self::O): &Self::Mid * &mut u64 {
+    let i: &Self::Mid;
+    let mx: &mut Self::Mid;
+    let m: &mut u64;
+label b0:
+    i = &copy(a).O::x;
+    mx = &mut move(a).O::x;
+    m = &mut move(mx).Mid::y;
+    return move(i), move(m);
+}
+
+}
+
+// Call: pass (&a.x, &mut a.x.y)
+//# publish
+mvir 0xa2::j2_call_imm_parent_mut_ext {
+
+public struct Mid has copy, drop, store { y: u64 }
+public struct O has copy, drop, store { x: Self::Mid, z: Self::Mid }
+
+fun consume(i: &Self::Mid, m: &mut u64) {
+label b0:
+    _ = move(i);
+    _ = move(m);
+    return;
+}
+
+fun t(a: &mut Self::O) {
+    let i: &Self::Mid;
+    let mx: &mut Self::Mid;
+    let m: &mut u64;
+label b0:
+    i = &copy(a).O::x;
+    mx = &mut copy(a).O::x;
+    m = &mut move(mx).Mid::y;
+    Self::consume(move(i), move(m));
+    _ = move(a);
+    return;
+}
+
+}
+
+// control: disjoint siblings
+//# publish
+mvir 0xa3::j3_disjoint_control {
+
+public struct Mid has copy, drop, store { y: u64 }
+public struct O has copy, drop, store { x: Self::Mid, z: Self::Mid }
+
+fun consume(i: &Self::Mid, m: &mut u64) {
+label b0:
+    _ = move(i);
+    _ = move(m);
+    return;
+}
+
+fun t(a: &mut Self::O) {
+    let i: &Self::Mid;
+    let mz: &mut Self::Mid;
+    let m: &mut u64;
+label b0:
+    i = &copy(a).O::x;
+    mz = &mut copy(a).O::z;
+    m = &mut move(mz).Mid::y;
+    Self::consume(move(i), move(m));
+    _ = move(a);
+    return;
+}
+
+}
+
+// imm parent is the whole struct
+//# publish
+mvir 0xa4::j4_ret_imm_whole_mut_ext {
+
+public struct Mid has copy, drop, store { y: u64 }
+public struct O has copy, drop, store { x: Self::Mid, z: Self::Mid }
+
+fun h(a: &mut Self::O): &Self::O * &mut u64 {
+    let i: &Self::O;
+    let mx: &mut Self::Mid;
+    let m: &mut u64;
+label b0:
+    mx = &mut copy(a).O::x;
+    m = &mut move(mx).Mid::y;
+    i = freeze(move(a));
+    return move(i), move(m);
+}
+
+}
