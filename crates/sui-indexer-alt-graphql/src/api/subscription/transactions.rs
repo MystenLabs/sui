@@ -30,8 +30,6 @@ use crate::task::streaming::StreamedCaches;
 use super::scan_then_live::Subscribable;
 
 impl Subscribable for Transaction {
-    const SUBSCRIPTION_TYPE: &'static str = "transactions";
-
     type Item = Self;
     type Cursor = CTransaction;
     type Filter = TransactionFilter;

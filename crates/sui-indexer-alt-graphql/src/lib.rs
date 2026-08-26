@@ -61,6 +61,8 @@ use task::streaming::StreamedObjectStore;
 use task::streaming::StreamedTransactionStore;
 use task::streaming::StreamingPackageStore;
 #[cfg(feature = "staging")]
+use task::streaming::SubscriberLimit;
+#[cfg(feature = "staging")]
 use task::streaming::SubscriptionBroadcast;
 use task::streaming::SubscriptionReadiness;
 use task::watermark::WatermarkTask;
@@ -506,6 +508,8 @@ pub async fn start_rpc(
         readiness,
     )) = streaming_setup
     {
+        #[cfg(feature = "staging")]
+        let max_subscribers = config.subscription.max_subscribers;
         rpc = rpc.data(caches).data(config.subscription);
         let s_stream = stream_task.run();
         let s_eviction = eviction_task.run();
@@ -525,7 +529,8 @@ pub async fn start_rpc(
             ));
             rpc = rpc
                 .data(subscription_broadcast)
-                .data(subscription_watermarks_rx);
+                .data(subscription_watermarks_rx)
+                .data(SubscriberLimit::new(max_subscribers));
         }
         Some((s_stream, s_eviction))
     } else {

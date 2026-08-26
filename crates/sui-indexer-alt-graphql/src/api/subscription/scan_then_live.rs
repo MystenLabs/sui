@@ -57,9 +57,6 @@ const BACKFILL_POLL_INTERVAL: Duration = Duration::from_millis(100);
 /// GraphQL type (transactions, events) supplies its cursor, filter, and matching, and the free
 /// functions here drive the shared machinery over it.
 pub(super) trait Subscribable {
-    /// The subscription kind, used to label this feed's aggregate subscriber metrics.
-    const SUBSCRIPTION_TYPE: &'static str;
-
     /// The GraphQL node delivered in each edge.
     type Item: OutputType + Send + 'static;
     /// The opaque cursor minted for resumption.
@@ -130,6 +127,7 @@ pub(super) fn subscribe<S: Subscribable>(
     after: Option<S::Cursor>,
     after_checkpoint: Option<u64>,
     config: SubscriptionConfig,
+    guard: SubscriptionLifecycleGuard,
 ) -> impl Stream<Item = Result<Edge<String, S::Item, EmptyFields>, RpcError>> {
     // Size the backfill scan page to the resolve concurrency. Scans are sequential (each needs the
     // previous page's cursor), so feeding one window of `n` concurrent resolutions takes ceil(n /
@@ -142,7 +140,6 @@ pub(super) fn subscribe<S: Subscribable>(
     let handoff_threshold = config.broadcast_buffer as u64 / 2;
 
     stream! {
-        let guard = SubscriptionLifecycleGuard::new(S::SUBSCRIPTION_TYPE, broadcast.metrics());
         let mut pending_receiver = None;
         let mut handoff: Option<u64> = None;
         let mut last_checkpoint: Option<u64> = None;
