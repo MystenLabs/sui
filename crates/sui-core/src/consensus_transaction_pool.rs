@@ -342,6 +342,8 @@ impl ConsensusTransactionPool {
     /// group were newly inserted.
     /// Fails fast on epoch mismatch, a closed pool/user lane, block-limit
     /// violations, or when outbid by the eviction policy.
+    /// `gas_price` is the entry's priority in the user lane (proposed first, and
+    /// outbids lower prices when the lane is full).
     pub fn try_insert(
         &self,
         caller_epoch: EpochId,

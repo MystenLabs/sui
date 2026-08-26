@@ -21,6 +21,7 @@ use consensus_core::{
 use core::panic;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair as _;
+use mysten_common::debug_fatal;
 use mysten_metrics::{RegistryID, RegistryService};
 use mysten_network::Multiaddr;
 use prometheus::{
@@ -291,10 +292,16 @@ impl ConsensusManager {
             protocol_config.version
         );
 
+        let is_validator = epoch_store.is_validator();
+        if is_validator && self.protocol_keypair.is_none() {
+            // The manager was built for a non-validator role and reused across a
+            // promotion to validator; consensus cannot sign proposals in this state.
+            debug_fatal!("validator epoch {epoch} started without a protocol keypair");
+        }
         let pool_context = self
             .transaction_pool_context
             .as_ref()
-            .filter(|_| self.protocol_keypair.is_some() && epoch_store.is_validator());
+            .filter(|_| is_validator);
         let transaction_pool: Option<Arc<dyn TransactionPool>> = if let Some(context) = pool_context
         {
             let config = node_config
