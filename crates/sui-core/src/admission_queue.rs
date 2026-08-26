@@ -52,6 +52,82 @@ pub trait AdmissionQueueEntry {
     fn notify_rejected(self, min_gas_price: u64);
 }
 
+/// Outcome of [`PriorityAdmissionQueue::try_insert`]. Any displaced entry is
+/// carried here unnotified so that the caller can deliver the notification
+/// outside of any held locks.
+#[must_use = "call `notify` to deliver the outcome to the displaced entry"]
+pub struct InsertOutcome<E> {
+    outcome: Option<Outcome<E>>,
+    created_at: &'static std::panic::Location<'static>,
+}
+
+enum Outcome<E> {
+    Inserted {
+        /// False if an entry sharing one of the transaction keys was already queued.
+        newly_inserted: bool,
+        /// The lowest-priced entry evicted to make room, if any.
+        evicted: Option<E>,
+        /// The inserted entry's gas price.
+        gas_price: u64,
+    },
+    /// Rejected: the queue is full and `min_gas_price` was not met.
+    Rejected { entry: E, min_gas_price: u64 },
+}
+
+impl<E: AdmissionQueueEntry> InsertOutcome<E> {
+    #[track_caller]
+    fn new(outcome: Outcome<E>) -> Self {
+        Self {
+            outcome: Some(outcome),
+            created_at: std::panic::Location::caller(),
+        }
+    }
+
+    /// Notifies the displaced entry, if any, then reports the insert result.
+    /// `try_insert(e).notify()` is equivalent to `insert(e)`.
+    pub fn notify(mut self) -> SuiResult<bool> {
+        match self
+            .outcome
+            .take()
+            .expect("outcome is pending until notified")
+        {
+            Outcome::Inserted {
+                newly_inserted,
+                evicted,
+                gas_price,
+            } => {
+                if let Some(evicted) = evicted {
+                    evicted.notify_evicted(gas_price);
+                }
+                Ok(newly_inserted)
+            }
+            Outcome::Rejected {
+                entry,
+                min_gas_price,
+            } => {
+                entry.notify_rejected(min_gas_price);
+                Err(
+                    SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion {
+                        min_gas_price,
+                    }
+                    .into(),
+                )
+            }
+        }
+    }
+}
+
+impl<E> Drop for InsertOutcome<E> {
+    fn drop(&mut self) {
+        if self.outcome.is_some() && !std::thread::panicking() {
+            debug_fatal!(
+                "InsertOutcome from try_insert at {} dropped without notify",
+                self.created_at
+            );
+        }
+    }
+}
+
 impl AdmissionQueueEntry for QueueEntry {
     fn gas_price(&self) -> u64 {
         self.gas_price
@@ -234,35 +310,47 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
     /// value was newly inserted. Returns `Err` if the queue was full and the
     /// tx's gas price was not high enough to evict an existing entry.
     pub fn insert(&mut self, entry: E) -> SuiResult<bool> {
+        self.try_insert(entry).notify()
+    }
+
+    /// Same as `insert`, without notifying displaced entries. The evicted entry (on
+    /// success) or the refused entry itself (on rejection) is handed back in the
+    /// outcome for the caller to notify manually.
+    #[track_caller]
+    pub fn try_insert(&mut self, entry: E) -> InsertOutcome<E> {
         let keys: Vec<_> = entry.transaction_keys().collect();
         let newly_inserted = !keys.iter().any(|k| self.queued_keys.contains_key(k));
         if !newly_inserted {
             self.metrics.duplicate_inserts.inc();
         }
 
+        let gas_price = entry.gas_price();
         if self.total_len < self.capacity {
             self.push_entry(entry, keys, false);
-            return Ok(newly_inserted);
+            return InsertOutcome::new(Outcome::Inserted {
+                newly_inserted,
+                evicted: None,
+                gas_price,
+            });
         }
 
-        let min_price = self.min_gas_price().unwrap();
-        if entry.gas_price() > min_price {
-            let evicter_price = entry.gas_price();
+        let min_gas_price = self.min_gas_price().unwrap();
+        if gas_price > min_gas_price {
             let evicted = self.evict_lowest();
             self.push_entry(entry, keys, false);
             self.metrics.evictions.inc();
-            evicted.notify_evicted(evicter_price);
-            return Ok(newly_inserted);
+            return InsertOutcome::new(Outcome::Inserted {
+                newly_inserted,
+                evicted: Some(evicted),
+                gas_price,
+            });
         }
 
         self.metrics.rejections.inc();
-        entry.notify_rejected(min_price);
-        Err(
-            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion {
-                min_gas_price: min_price,
-            }
-            .into(),
-        )
+        InsertOutcome::new(Outcome::Rejected {
+            entry,
+            min_gas_price,
+        })
     }
 
     /// Pop up to `count` entries, highest gas price first.
@@ -701,6 +789,42 @@ mod tests {
     ) {
         let (tx, rx) = oneshot::channel();
         (QueueEntry::new_for_test(gas_price, tx), rx)
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "dropped without notify")]
+    fn dropped_insert_outcome_without_notify_panics() {
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let mut q = PriorityAdmissionQueue::new(1, metrics);
+        let (entry, _rx) = make_test_entry(100);
+        let _ = q.try_insert(entry);
+    }
+
+    #[test]
+    fn try_insert_notify_matches_insert() {
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let mut q = PriorityAdmissionQueue::new(1, metrics);
+        let (low, mut low_rx) = make_test_entry(100);
+        let (high, _) = make_test_entry(200);
+        let (rejected, mut rejected_rx) = make_test_entry(50);
+
+        assert!(q.try_insert(low).notify().unwrap());
+        // Eviction is delivered only by `notify`.
+        let outcome = q.try_insert(high);
+        assert!(low_rx.try_recv().is_err());
+        assert!(outcome.notify().unwrap());
+        assert!(matches!(
+            low_rx.try_recv(),
+            Ok(Err(status)) if status.message().contains("minimum gas price required: 200")
+        ));
+
+        assert!(matches!(
+            q.try_insert(rejected).notify().unwrap_err().as_inner(),
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: 200 }
+        ));
+        assert_eq!(q.len(), 1);
+        assert!(rejected_rx.try_recv().is_err());
     }
 
     fn build_queue(capacity: usize, gas_prices: &[u64]) -> PriorityAdmissionQueue<QueueEntry> {

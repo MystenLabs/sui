@@ -389,7 +389,10 @@ impl ConsensusTransactionPool {
                 return Err(error);
             }
         };
-        let newly_inserted = user.insert(entry)?;
+        let outcome = user.try_insert(entry);
+        drop(inner);
+
+        let newly_inserted = outcome.notify()?;
         self.metrics.pool_depth.with_label_values(&["user"]).inc();
         self.metrics
             .pool_bytes
@@ -775,6 +778,7 @@ impl Drop for TakenTransactionsGuard {
         };
 
         let mut requeued = 0;
+        let mut halted = Vec::new();
         // Capacity is bypassed because these entries were already admitted. Concurrent
         // inserts can put us over capacity, which we accept transiently.
         for taken in entries.into_iter().rev() {
@@ -798,10 +802,7 @@ impl Drop for TakenTransactionsGuard {
                             .add(taken.entry.total_bytes as i64);
                         user.reinsert_front(taken.entry);
                     }
-                    UserLane::Closed => taken
-                        .entry
-                        .ack
-                        .resolve_error(SuiErrorKind::ValidatorHaltedAtEpochEnd.into()),
+                    UserLane::Closed => halted.push(taken.entry),
                 },
             }
         }
@@ -812,6 +813,13 @@ impl Drop for TakenTransactionsGuard {
         self.metrics
             .pool_requeued_on_dropped_ack
             .inc_by(requeued as u64);
+        drop(inner);
+
+        for entry in halted {
+            entry
+                .ack
+                .resolve_error(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
+        }
     }
 }
 
