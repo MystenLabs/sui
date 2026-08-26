@@ -66,7 +66,6 @@ use backoff::ExponentialBackoff;
 #[cfg(any(feature = "staging", test))]
 use futures::Stream;
 use futures::StreamExt;
-use move_core_types::account_address::AccountAddress;
 use sui_futures::service::Service;
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
@@ -89,7 +88,6 @@ use sui_types::object::Object as NativeObject;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 use tokio::sync::broadcast;
-use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::watch;
 use tonic::Streaming;
 use tonic::transport::Endpoint;
@@ -102,6 +100,8 @@ use crate::config::SubscriptionConfig;
 use crate::error::RpcError;
 use crate::task::watermark::Watermarks;
 
+use super::StreamedObjectStore;
+use super::StreamedTransactionStore;
 use super::StreamingPackageStore;
 use super::SubscriptionReadiness;
 #[cfg(any(feature = "staging", test))]
@@ -335,7 +335,10 @@ pub(crate) struct CheckpointStreamTask {
     uri: Uri,
     sender: broadcast::Sender<Arc<ProcessedCheckpoint>>,
     streaming_packages: Arc<StreamingPackageStore>,
-    package_eviction_tx: UnboundedSender<(u64, Vec<AccountAddress>)>,
+    streaming_transactions: Arc<StreamedTransactionStore>,
+    // Populated only under the staging feature (from the checkpoint's `execution_objects`).
+    #[cfg_attr(not(feature = "staging"), allow(dead_code))]
+    streaming_objects: Arc<StreamedObjectStore>,
     readiness: Arc<SubscriptionReadiness>,
     /// kv-rpc reader used to fill upstream gaps. Required: streaming subscriptions need a
     /// fallback source to recover from disconnects. lib.rs ensures this is configured when
@@ -356,7 +359,8 @@ impl CheckpointStreamTask {
         uri: Uri,
         config: &SubscriptionConfig,
         streaming_packages: Arc<StreamingPackageStore>,
-        package_eviction_tx: UnboundedSender<(u64, Vec<AccountAddress>)>,
+        streaming_transactions: Arc<StreamedTransactionStore>,
+        streaming_objects: Arc<StreamedObjectStore>,
         readiness: Arc<SubscriptionReadiness>,
         ledger_grpc_reader: LedgerGrpcReader,
         watermarks_rx: watch::Receiver<Arc<Watermarks>>,
@@ -366,7 +370,8 @@ impl CheckpointStreamTask {
             uri,
             sender,
             streaming_packages,
-            package_eviction_tx,
+            streaming_transactions,
+            streaming_objects,
             readiness,
             ledger_grpc_reader,
             watermarks_rx,
@@ -487,15 +492,18 @@ impl CheckpointStreamTask {
     /// `recover_gap` skip this step because the gate already waits for both
     /// `ledger_grpc` and `kv_packages` to catch up.
     fn index_and_broadcast(&self, checkpoint: ProtoCheckpoint, seq: u64) -> anyhow::Result<()> {
-        let packages = extract_packages(&checkpoint);
-        if !packages.is_empty() {
-            self.streaming_packages.index_packages(seq, &packages);
-            let ids = packages.iter().map(|p| p.storage_id()).collect();
-            // Send errors only if the eviction task has exited; nothing will drain the
-            // store, but we keep serving.
-            let _ = self.package_eviction_tx.send((seq, ids));
-        }
+        // Index this checkpoint's packages and transactions into the streaming caches so subscribers
+        // resolve them (e.g. `Object.previousTransaction`) while the checkpoint is ahead of the
+        // persistent index; the eviction task drains each cache once the index catches up.
+        self.streaming_packages
+            .index_packages(seq, &extract_packages(&checkpoint));
         let processed = process_checkpoint(checkpoint)?;
+        self.streaming_transactions
+            .index_transactions(seq, &processed.transactions);
+        // `execution_objects` only exists under the staging feature (it's the streamed object source).
+        #[cfg(feature = "staging")]
+        self.streaming_objects
+            .index_objects(seq, &processed.execution_objects);
         // Ignore send errors: no active subscribers is a normal state.
         let _ = self.sender.send(Arc::new(processed));
         Ok(())
