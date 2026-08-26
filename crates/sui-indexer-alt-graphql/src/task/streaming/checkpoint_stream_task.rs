@@ -110,6 +110,10 @@ use super::checkpoint_resume::scan_checkpoints;
 #[cfg(any(feature = "staging", test))]
 use super::gap_recovery::CheckpointFetcher;
 use super::gap_recovery::recover_gap;
+#[cfg(any(feature = "staging", test))]
+use super::lifecycle::SubscriptionLifecycleGuard;
+#[cfg(any(feature = "staging", test))]
+use super::lifecycle::SubscriptionTerminationReason;
 use super::processed_checkpoint::ProcessedCheckpoint;
 use super::processed_checkpoint::ProcessedTransaction;
 
@@ -188,15 +192,28 @@ pub(crate) struct SubscriptionBroadcast {
     /// channel. Distinct from any `resume_from` arg passed by subscribers (those refer to the
     /// kv-rpc resume fallback, not the live broadcast).
     first_live_checkpoint: u64,
+    /// Per-subscriber metrics, shared with every stream this broadcast spawns.
+    metrics: Arc<SubscriptionMetrics>,
 }
 
 #[cfg(any(feature = "staging", test))]
 impl SubscriptionBroadcast {
-    pub(crate) fn new(broadcaster: CheckpointBroadcaster, first_live_checkpoint: u64) -> Self {
+    pub(crate) fn new(
+        broadcaster: CheckpointBroadcaster,
+        first_live_checkpoint: u64,
+        metrics: Arc<SubscriptionMetrics>,
+    ) -> Self {
         Self {
             broadcaster,
             first_live_checkpoint,
+            metrics,
         }
+    }
+
+    /// Per-subscriber metrics shared by every stream this broadcast spawns.
+    #[cfg(feature = "staging")]
+    pub(crate) fn metrics(&self) -> &SubscriptionMetrics {
+        &self.metrics
     }
 
     /// Direct access to the broadcast receiver template. Subscribers should call
@@ -233,6 +250,7 @@ impl SubscriptionBroadcast {
         let config = config.clone();
 
         stream! {
+            let guard = SubscriptionLifecycleGuard::new("checkpoints", &self.metrics);
             let mut last_yielded: Option<u64> = resume_from;
             let mut receiver = self.broadcaster.resubscribe();
             // `resubscribe` is future-only (delivers `handoff + 1`), so Phase 1 stops exactly at
@@ -242,7 +260,14 @@ impl SubscriptionBroadcast {
             // Phase 1: scan toward the tip; within `handoff_threshold`, resubscribe + pin, stop at it.
             if let Some(start_after) = last_yielded {
                 for await item in scan_checkpoints(fetcher, self.clone(), start_after, &config) {
-                    let processed = item?;
+                    let processed = match item {
+                        Ok(processed) => processed,
+                        Err(e) => {
+                            guard.terminate(SubscriptionTerminationReason::BackfillError);
+                            yield Err(e);
+                            return;
+                        }
+                    };
                     let seq = processed.summary.sequence_number;
                     last_yielded = Some(seq);
                     yield Ok(processed);
@@ -276,6 +301,7 @@ impl SubscriptionBroadcast {
                                 received = processed.summary.sequence_number,
                                 "Unexpected gap between scan and live; disconnecting"
                             );
+                            guard.terminate(SubscriptionTerminationReason::UnexpectedGap);
                             yield Err(reconnect_error());
                             return;
                         }
@@ -287,11 +313,13 @@ impl SubscriptionBroadcast {
                     },
                     Err(broadcast::error::RecvError::Lagged(missed)) if !delivered_live => {
                         warn!(missed, "Subscriber fell behind during catch-up (likely kv-rpc lag)");
+                        guard.terminate(SubscriptionTerminationReason::Lagged);
                         yield Err(reconnect_error());
                         return;
                     }
                     // Slow subscriber (Lagged after going live) or closed channel: disconnect.
                     Err(e) => {
+                        guard.terminate(SubscriptionTerminationReason::from_recv_error(&e));
                         yield Err(broadcast_error(e));
                         return;
                     }

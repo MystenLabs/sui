@@ -32,6 +32,8 @@ use crate::task::streaming::StreamedCaches;
 use super::scan_then_live::Subscribable;
 
 impl Subscribable for Event {
+    const SUBSCRIPTION_TYPE: &'static str = "events";
+
     type Item = Self;
     type Cursor = CEvent;
     type Filter = EventFilter;
