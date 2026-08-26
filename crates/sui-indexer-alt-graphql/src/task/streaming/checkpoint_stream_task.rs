@@ -98,7 +98,6 @@ use tracing::warn;
 use crate::config::SubscriptionConfig;
 #[cfg(any(feature = "staging", test))]
 use crate::error::RpcError;
-use crate::metrics::ProcessedCheckpointMetricReporter;
 use crate::metrics::SubscriptionMetrics;
 use crate::task::watermark::Watermarks;
 
@@ -351,7 +350,6 @@ pub(crate) struct CheckpointStreamTask {
     watermarks_rx: watch::Receiver<Arc<Watermarks>>,
     gap_recovery_chunk_size: usize,
     metrics: Arc<SubscriptionMetrics>,
-    upstream_processed_checkpoint_metrics: ProcessedCheckpointMetricReporter,
 }
 
 impl CheckpointStreamTask {
@@ -371,12 +369,6 @@ impl CheckpointStreamTask {
         metrics: Arc<SubscriptionMetrics>,
     ) -> (Self, CheckpointBroadcaster) {
         let (sender, broadcaster) = broadcast::channel(config.broadcast_buffer);
-        let upstream_processed_checkpoint_metrics = ProcessedCheckpointMetricReporter::new(
-            &metrics.upstream_processed_checkpoints,
-            &metrics.upstream_latest_processed_checkpoint,
-            &metrics.upstream_processed_checkpoint_timestamp_lag,
-            &metrics.upstream_latest_processed_checkpoint_timestamp_ms,
-        );
         let task = Self {
             uri,
             sender,
@@ -388,7 +380,6 @@ impl CheckpointStreamTask {
             watermarks_rx,
             gap_recovery_chunk_size: config.gap_recovery_chunk_size,
             metrics,
-            upstream_processed_checkpoint_metrics,
         };
         (task, broadcaster)
     }
@@ -496,7 +487,7 @@ impl CheckpointStreamTask {
                     &self.ledger_grpc_reader,
                     &self.watermarks_rx,
                     &self.sender,
-                    &self.upstream_processed_checkpoint_metrics,
+                    &self.metrics,
                     last + 1,
                     seq - 1,
                     self.gap_recovery_chunk_size,
@@ -532,7 +523,7 @@ impl CheckpointStreamTask {
         self.streaming_objects
             .index_objects(seq, &processed.execution_objects);
 
-        self.upstream_processed_checkpoint_metrics.report(
+        self.metrics.record_processed_checkpoint(
             "live",
             processed.summary.sequence_number,
             processed.summary.timestamp_ms,

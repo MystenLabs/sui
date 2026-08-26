@@ -82,6 +82,7 @@ use crate::extensions::logging::ClientInfo;
 use crate::extensions::logging::Logging;
 use crate::extensions::logging::Session;
 use crate::metrics::RpcMetrics;
+use crate::metrics::SubscriptionMetrics;
 use crate::middleware::version::Version;
 #[cfg(not(feature = "staging"))]
 use async_graphql::EmptySubscription as Subscription;
@@ -416,7 +417,7 @@ pub async fn start_rpc(
                 readiness.clone(),
                 ledger_grpc.clone(),
                 watermark_task.watermarks_rx(),
-                metrics.subscription.clone(),
+                Arc::new(SubscriptionMetrics::new(registry)),
             );
             let caches = Arc::new(StreamedCaches::new(
                 streaming_packages,

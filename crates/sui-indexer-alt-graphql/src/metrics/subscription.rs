@@ -33,18 +33,8 @@ pub struct SubscriptionMetrics {
     pub upstream_malformed_checkpoints: IntCounter,
 }
 
-/// Reports the metrics for each processed checkpoint: a running count, the sequence number and raw
-/// timestamp of the most recent one, and the distribution of how far behind wall-clock each
-/// checkpoint's timestamp was. Each `report` call selects the series by `phase`.
-pub struct ProcessedCheckpointMetricReporter {
-    processed_checkpoints: IntCounterVec,
-    latest_sequence_number: IntGaugeVec,
-    timestamp_lag: HistogramVec,
-    latest_timestamp_ms: IntGaugeVec,
-}
-
 impl SubscriptionMetrics {
-    pub(super) fn new(registry: &Registry) -> Self {
+    pub(crate) fn new(registry: &Registry) -> Self {
         Self {
             upstream_connection_failures: register_int_counter_vec_with_registry!(
                 "graphql_subscription_upstream_connection_failures",
@@ -128,48 +118,29 @@ impl SubscriptionMetrics {
             .with_label_values(&[reason])
             .inc();
     }
-}
 
-impl ProcessedCheckpointMetricReporter {
-    pub(crate) fn new(
-        processed_checkpoints: &IntCounterVec,
-        latest_sequence_number: &IntGaugeVec,
-        timestamp_lag: &HistogramVec,
-        latest_timestamp_ms: &IntGaugeVec,
-    ) -> Self {
-        Self {
-            processed_checkpoints: processed_checkpoints.clone(),
-            latest_sequence_number: latest_sequence_number.clone(),
-            timestamp_lag: timestamp_lag.clone(),
-            latest_timestamp_ms: latest_timestamp_ms.clone(),
-        }
-    }
-
-    /// Record a processed checkpoint under `phase`: bump the count, and set the sequence number,
-    /// raw `timestamp_ms` (epoch milliseconds), and wall-clock lag of the most recent one.
-    pub(crate) fn report(&self, phase: &str, sequence_number: u64, timestamp_ms: u64) {
-        self.processed_checkpoints.with_label_values(&[phase]).inc();
-        self.latest_sequence_number
+    /// Record a checkpoint processed by the upstream stream under `phase` (`live` or `recovery`):
+    /// bump the count, and set the sequence number, raw `timestamp_ms` (epoch milliseconds), and
+    /// wall-clock lag of the most recent one.
+    pub(crate) fn record_processed_checkpoint(
+        &self,
+        phase: &str,
+        sequence_number: u64,
+        timestamp_ms: u64,
+    ) {
+        self.upstream_processed_checkpoints
+            .with_label_values(&[phase])
+            .inc();
+        self.upstream_latest_processed_checkpoint
             .with_label_values(&[phase])
             .set(sequence_number as i64);
-        self.latest_timestamp_ms
+        self.upstream_latest_processed_checkpoint_timestamp_ms
             .with_label_values(&[phase])
             .set(timestamp_ms as i64);
         let lag_ms = chrono::Utc::now().timestamp_millis() - timestamp_ms as i64;
-        self.timestamp_lag
+        self.upstream_processed_checkpoint_timestamp_lag
             .with_label_values(&[phase])
             .observe(lag_ms as f64 / 1000.0);
-    }
-
-    #[cfg(test)]
-    pub(crate) fn new_for_test() -> Self {
-        let metrics = SubscriptionMetrics::new(&Registry::new());
-        Self::new(
-            &metrics.upstream_processed_checkpoints,
-            &metrics.upstream_latest_processed_checkpoint,
-            &metrics.upstream_processed_checkpoint_timestamp_lag,
-            &metrics.upstream_latest_processed_checkpoint_timestamp_ms,
-        )
     }
 }
 

@@ -20,7 +20,7 @@ use tracing::warn;
 use super::ProcessedCheckpoint;
 use super::checkpoint_stream_task::checkpoint_field_mask;
 use super::checkpoint_stream_task::process_checkpoint;
-use crate::metrics::ProcessedCheckpointMetricReporter;
+use crate::metrics::SubscriptionMetrics;
 use crate::task::watermark::Watermarks;
 
 /// Abstraction over the source that gap recovery fetches checkpoints from. The production
@@ -59,7 +59,7 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
     fetcher: &F,
     watermarks_rx: &watch::Receiver<Arc<Watermarks>>,
     sender: &broadcast::Sender<Arc<ProcessedCheckpoint>>,
-    reporter: &ProcessedCheckpointMetricReporter,
+    metrics: &SubscriptionMetrics,
     lo: u64,
     hi_inclusive: u64,
     chunk_size: usize,
@@ -80,7 +80,7 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
 
         let processed = fetch_and_process(fetcher, &mask, cursor..=chunk_hi_inclusive).await?;
         for cp in processed {
-            reporter.report(
+            metrics.record_processed_checkpoint(
                 "recovery",
                 cp.summary.sequence_number,
                 cp.summary.timestamp_ms,
@@ -299,7 +299,7 @@ mod tests {
             &mock,
             &rx,
             &sender,
-            &ProcessedCheckpointMetricReporter::new_for_test(),
+            &SubscriptionMetrics::new(&prometheus::Registry::new()),
             5,
             4,
             10,
@@ -330,7 +330,7 @@ mod tests {
                 &*mock_for_task,
                 &rx,
                 &sender,
-                &ProcessedCheckpointMetricReporter::new_for_test(),
+                &SubscriptionMetrics::new(&prometheus::Registry::new()),
                 1,
                 6,
                 3,
@@ -389,7 +389,7 @@ mod tests {
                 &*mock_for_task,
                 &rx,
                 &sender,
-                &ProcessedCheckpointMetricReporter::new_for_test(),
+                &SubscriptionMetrics::new(&prometheus::Registry::new()),
                 1,
                 3,
                 3,
