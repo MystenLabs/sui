@@ -122,7 +122,7 @@ proptest! {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Signed integer little-endian round-trips (VERSION_8 readers)
+// Signed integer little-endian round-trips (SIGNED_INT_VERSION readers)
 // ---------------------------------------------------------------------------------------------
 
 use crate::deserializer::signed_read_test_entries as signed_read;

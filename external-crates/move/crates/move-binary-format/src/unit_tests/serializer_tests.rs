@@ -312,7 +312,7 @@ mod signed_integers {
     }
 
     // The serializer's version gate lives at the signature-token peel-off, so every position
-    // `module_uses_signed_integers` covers must also refuse to serialize below VERSION_8.
+    // `module_uses_signed_integers` covers must also refuse to serialize below SIGNED_INT_VERSION.
     #[test]
     fn serializer_gates_every_signed_position_below_version_8() {
         let cases: Vec<(CompiledModule, &str)> = vec![
@@ -326,7 +326,7 @@ mod signed_integers {
             let mut v = vec![];
             assert!(
                 module.serialize_with_version(VERSION_7, &mut v).is_err(),
-                "expected serialization failure below VERSION_8 for signed content in {what}"
+                "expected serialization failure below SIGNED_INT_VERSION for signed content in {what}"
             );
         }
     }

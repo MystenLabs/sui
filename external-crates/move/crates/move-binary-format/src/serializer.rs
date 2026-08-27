@@ -694,7 +694,7 @@ fn serialize_signature_token_single_node_impl(
     // signature, a struct/enum field definition, or a constant type — serializes through this
     // function, so gating here covers all positions by construction. (Signed-integer *opcodes*
     // do not flow through this path; they are gated separately in `serialize_instruction_inner`.)
-    if major_version < VERSION_8 && token.is_signed_integer() {
+    if major_version < SIGNED_INT_VERSION && token.is_signed_integer() {
         bail!(
             "Signed integer types (i8..i256) not supported in bytecode version {}",
             major_version
@@ -880,7 +880,7 @@ fn serialize_instruction_inner(
         | Bytecode::CastI128
         | Bytecode::CastI256
         | Bytecode::Neg
-            if (major_version < VERSION_8) =>
+            if (major_version < SIGNED_INT_VERSION) =>
         {
             return Err(anyhow!(
                 "Signed integer bytecodes not supported in bytecode version {}",

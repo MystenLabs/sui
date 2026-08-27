@@ -613,6 +613,10 @@ pub const VERSION_7: u32 = 7;
 ///  + signed integer bytecodes (i8–i256): LdI8–LdI256, CastI8–CastI256, Neg
 pub const VERSION_8: u32 = 8;
 
+/// The bytecode version that introduces signed integers. The serializer and deserializer
+/// gates for signed tokens and bytecodes key off this constant.
+pub const SIGNED_INT_VERSION: u32 = VERSION_8;
+
 // Mark which version is the latest version
 pub const VERSION_MAX: u32 = VERSION_7;
 
