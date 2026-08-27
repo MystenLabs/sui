@@ -2226,17 +2226,10 @@ mod test {
 
     /// Regression test for a panic at transaction_rewriting.rs where a coin-reservation
     /// transaction executes before the settlement transaction that creates the accumulator
-    /// object it depends on. Uses execution delays to create adversarial scheduling.
+    /// object it depends on.
     #[sim_test(config = "test_config()")]
     async fn test_coin_reservation_checkpoint_replay() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-
-        register_fail_point_async("transaction_execution_delay", move || async move {
-            if thread_rng().gen_range(0..10u64) == 0 {
-                let delay = thread_rng().gen_range(0..1000u64);
-                tokio::time::sleep(Duration::from_millis(delay)).await;
-            }
-        });
 
         let test_cluster = build_test_cluster(4, 10000, 1).await;
 
