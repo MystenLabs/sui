@@ -8,7 +8,7 @@ use prometheus::IntGauge;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use tokio::time::Instant;
 
-pub(crate) mod causal_order;
+pub mod causal_order;
 pub(crate) mod execution_scheduler_impl;
 pub(crate) mod funds_withdraw_scheduler;
 mod overload_tracker;
@@ -34,6 +34,8 @@ pub struct PendingCertificate {
     // Stores stats about this transaction.
     pub stats: PendingCertificateStats,
     pub executing_guard: Option<ExecutingGuard>,
+    // The transaction's position in causal order; retires the index when dropped.
+    pub causal_guard: causal_order::CausalIndexGuard,
 }
 
 #[derive(Debug)]
