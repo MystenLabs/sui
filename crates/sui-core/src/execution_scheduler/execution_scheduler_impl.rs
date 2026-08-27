@@ -10,6 +10,7 @@ use crate::{
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{
         ExecutingGuard, PendingCertificateStats,
+        causal_order::{CausalIndexGuard, CausalWindow},
         funds_withdraw_scheduler::{
             AddressFundsSchedulerMetrics, FundsSettlement, ScheduleStatus, TxFundsWithdraw,
             WithdrawReservations, scheduler::FundsWithdrawScheduler,
@@ -92,6 +93,7 @@ pub struct ExecutionScheduler {
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     overload_tracker: Arc<OverloadTracker>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
+    causal_window: Arc<CausalWindow>,
     address_funds_withdraw_scheduler: Arc<Mutex<Option<FundsWithdrawScheduler>>>,
     funds_withdraw_scheduler_type: FundsWithdrawSchedulerType,
     metrics: Arc<AuthorityMetrics>,
@@ -157,6 +159,7 @@ impl ExecutionScheduler {
             transaction_cache_read,
             overload_tracker: Arc::new(OverloadTracker::new()),
             tx_ready_certificates,
+            causal_window: CausalWindow::new_with_default_sizing(),
             address_funds_withdraw_scheduler: Arc::new(Mutex::new(
                 address_funds_withdraw_scheduler,
             )),
@@ -192,11 +195,17 @@ impl ExecutionScheduler {
         Some(address_funds_withdraw_scheduler)
     }
 
+    /// The causal-order state shared with the execution driver.
+    pub fn causal_window(&self) -> &Arc<CausalWindow> {
+        &self.causal_window
+    }
+
     #[instrument(level = "debug", skip_all, fields(tx_digest = ?cert.digest()))]
     async fn schedule_transaction(
         self,
         cert: VerifiedExecutableTransaction,
         execution_env: ExecutionEnv,
+        causal_guard: CausalIndexGuard,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         let enqueue_time = Instant::now();
@@ -278,7 +287,7 @@ impl ExecutionScheduler {
                 .with_label_values(&["ready"])
                 .inc();
             debug!(?tx_digest, "Input objects already available");
-            self.send_transaction_for_execution(&cert, execution_env, enqueue_time);
+            self.send_transaction_for_execution(&cert, execution_env, enqueue_time, causal_guard);
             return;
         }
 
@@ -314,6 +323,7 @@ impl ExecutionScheduler {
                         &cert,
                         execution_env,
                         enqueue_time,
+                        causal_guard,
                     );
                 }
             _ = self.transaction_cache_read.notify_read_executed_effects_digests(
@@ -330,6 +340,7 @@ impl ExecutionScheduler {
         cert: &VerifiedExecutableTransaction,
         execution_env: ExecutionEnv,
         enqueue_time: Instant,
+        causal_guard: CausalIndexGuard,
     ) {
         let pending_cert = PendingCertificate {
             certificate: cert.clone(),
@@ -343,13 +354,18 @@ impl ExecutionScheduler {
                     .transaction_manager_num_executing_certificates
                     .clone(),
             )),
+            causal_guard,
         };
         let _ = self.tx_ready_certificates.send(pending_cert);
     }
 
     fn schedule_funds_withdraws(
         &self,
-        certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
+        certs: Vec<(
+            VerifiedExecutableTransaction,
+            ExecutionEnv,
+            CausalIndexGuard,
+        )>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         if certs.is_empty() {
@@ -357,7 +373,7 @@ impl ExecutionScheduler {
         }
         let mut withdraws = BTreeMap::new();
         let mut prev_version = None;
-        for (cert, env) in &certs {
+        for (cert, env, _) in &certs {
             let tx_withdraws = cert
                 .transaction_data()
                 .process_funds_withdrawals_for_execution(epoch_store.get_chain_identifier());
@@ -398,8 +414,8 @@ impl ExecutionScheduler {
         let epoch_store = epoch_store.clone();
         spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
             let mut cert_map = HashMap::new();
-            for (cert, env) in certs {
-                cert_map.insert(*cert.digest(), (cert, env));
+            for (cert, env, guard) in certs {
+                cert_map.insert(*cert.digest(), (cert, env, guard));
             }
             while let Some(result) = receivers.next().await {
                 match result {
@@ -410,19 +426,30 @@ impl ExecutionScheduler {
                                 ?tx_digest,
                                 "Funds withdraw scheduling result: Insufficient funds"
                             );
-                            let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
+                            let (cert, env, guard) =
+                                cert_map.remove(&tx_digest).expect("cert must exist");
                             let env = env.with_insufficient_funds();
-                            scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
+                            scheduler.enqueue_transactions_with_guards(
+                                vec![(cert, env, guard)],
+                                &epoch_store,
+                            );
                         }
                         ScheduleStatus::SufficientFunds => {
                             assert_reachable!("tx scheduled, sufficient funds");
                             debug!(?tx_digest, "Funds withdraw scheduling result: Success");
-                            let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
-                            scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
+                            let (cert, env, guard) =
+                                cert_map.remove(&tx_digest).expect("cert must exist");
+                            scheduler.enqueue_transactions_with_guards(
+                                vec![(cert, env, guard)],
+                                &epoch_store,
+                            );
                         }
                         ScheduleStatus::SkipSchedule => {
                             assert_reachable!("tx withdrawal scheduling skipped");
                             debug!(?tx_digest, "Skip scheduling funds withdraw");
+                            // The tx will not execute via this enqueue; retire its
+                            // index promptly rather than at task end.
+                            cert_map.remove(&tx_digest);
                         }
                     },
                     Err(e) => {
@@ -435,7 +462,7 @@ impl ExecutionScheduler {
 
     fn schedule_tx_keys(
         &self,
-        tx_with_keys: Vec<(TransactionKey, ExecutionEnv)>,
+        tx_with_keys: Vec<(TransactionKey, ExecutionEnv, CausalIndexGuard)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         if tx_with_keys.is_empty() {
@@ -445,7 +472,11 @@ impl ExecutionScheduler {
         let scheduler = self.clone();
         let epoch_store = epoch_store.clone();
         spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
-            let tx_keys: Vec<_> = tx_with_keys.iter().map(|(key, _)| key).cloned().collect();
+            let tx_keys: Vec<_> = tx_with_keys
+                .iter()
+                .map(|(key, _, _)| key)
+                .cloned()
+                .collect();
             let digests = epoch_store
                 .notify_read_tx_key_to_digest(&tx_keys)
                 .await
@@ -458,9 +489,10 @@ impl ExecutionScheduler {
                     let tx = tx.expect("tx must exist").as_ref().clone();
                     VerifiedExecutableTransaction::new_system(tx, epoch_store.epoch())
                 })
-                .zip_debug_eq(tx_with_keys.into_iter().map(|(_, env)| env))
+                .zip_debug_eq(tx_with_keys.into_iter().map(|(_, env, guard)| (env, guard)))
+                .map(|(tx, (env, guard))| (tx, env, guard))
                 .collect::<Vec<_>>();
-            scheduler.enqueue_transactions(transactions, &epoch_store);
+            scheduler.enqueue_transactions_with_guards(transactions, &epoch_store);
         }));
     }
 
@@ -505,16 +537,22 @@ impl ExecutionScheduler {
         let mut tx_with_withdraws = Vec::new();
 
         for (schedulable, env) in certs {
+            // Assigned here, in enqueue order, for every unit - including keys whose
+            // transactions materialize only later. A key's transactions must run under
+            // the key's index: units enqueued after it may already be parked waiting
+            // for its outputs, and a later-assigned index would sit above them, out of
+            // the admission window's reach.
+            let causal_guard = self.causal_window.assign();
             match schedulable {
                 Schedulable::Transaction(tx) => {
                     if tx.transaction_data().has_funds_withdrawals() {
-                        tx_with_withdraws.push((tx, env));
+                        tx_with_withdraws.push((tx, env, causal_guard));
                     } else {
-                        ordinary_txns.push((tx, env));
+                        ordinary_txns.push((tx, env, causal_guard));
                     }
                 }
                 s @ Schedulable::RandomnessStateUpdate(..) => {
-                    tx_with_keys.push((s.key(), env));
+                    tx_with_keys.push((s.key(), env, causal_guard));
                 }
                 Schedulable::AccumulatorSettlement(_, _) => {
                     unreachable!("handled by SettlementScheduler");
@@ -528,17 +566,40 @@ impl ExecutionScheduler {
             }
         }
 
-        self.enqueue_transactions(ordinary_txns, epoch_store);
+        self.enqueue_transactions_with_guards(ordinary_txns, epoch_store);
         self.schedule_tx_keys(tx_with_keys, epoch_store);
         self.schedule_funds_withdraws(tx_with_withdraws, epoch_store);
     }
 
+    /// Entry point for transactions that do not yet have a causal index (checkpoint
+    /// executor, tests). Internal re-enqueues of already-indexed transactions must use
+    /// [`Self::enqueue_transactions_with_guards`] to keep their original index.
     pub fn enqueue_transactions(
         &self,
         certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
-        // Filter out certificates from wrong epoch.
+        let certs = certs
+            .into_iter()
+            .map(|(cert, env)| {
+                let causal_guard = self.causal_window.assign();
+                (cert, env, causal_guard)
+            })
+            .collect();
+        self.enqueue_transactions_with_guards(certs, epoch_store);
+    }
+
+    pub(crate) fn enqueue_transactions_with_guards(
+        &self,
+        certs: Vec<(
+            VerifiedExecutableTransaction,
+            ExecutionEnv,
+            CausalIndexGuard,
+        )>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        // Filter out certificates from wrong epoch. Dropping a filtered certificate
+        // retires its causal index via the guard.
         let certs: Vec<_> = certs
             .into_iter()
             .filter_map(|cert| {
@@ -557,15 +618,15 @@ impl ExecutionScheduler {
                 }
             })
             .collect();
-        let digests: Vec<_> = certs.iter().map(|(cert, _)| *cert.digest()).collect();
+        let digests: Vec<_> = certs.iter().map(|(cert, _, _)| *cert.digest()).collect();
         let executed = self
             .transaction_cache_read
             .multi_get_executed_effects_digests(&digests);
         let mut already_executed_certs_num = 0;
         let pending_certs = certs.into_iter().zip_debug_eq(executed).filter_map(
-            |((cert, execution_env), executed)| {
+            |((cert, execution_env, causal_guard), executed)| {
                 if executed.is_none() {
-                    Some((cert, execution_env))
+                    Some((cert, execution_env, causal_guard))
                 } else {
                     already_executed_certs_num += 1;
                     None
@@ -573,13 +634,14 @@ impl ExecutionScheduler {
             },
         );
 
-        for (cert, execution_env) in pending_certs {
+        for (cert, execution_env, causal_guard) in pending_certs {
             let scheduler = self.clone();
             let epoch_store = epoch_store.clone();
             spawn_monitored_task!(
                 epoch_store.within_alive_epoch(scheduler.schedule_transaction(
                     cert,
                     execution_env,
+                    causal_guard,
                     &epoch_store,
                 ))
             );
