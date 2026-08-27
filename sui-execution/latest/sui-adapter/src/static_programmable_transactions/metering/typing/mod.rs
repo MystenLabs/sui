@@ -17,7 +17,7 @@ mod live_references;
 /// - number of type nodes (including nested)
 /// - number of type references. These are charged non-linearly
 /// - number of references live at each command. These are charged non-linearly and limited, along
-///   with the number of references returned by each command. See [`live_references`]
+///   with the number of references returned by each command. See `live_references` module.
 pub fn meter<Mode: ExecutionMode>(
     meter: &mut TranslationMeter,
     protocol_config: &ProtocolConfig,
