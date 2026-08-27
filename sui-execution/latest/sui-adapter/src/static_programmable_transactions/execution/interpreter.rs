@@ -97,6 +97,7 @@ where
         withdrawal_compatibility_conversions: _,
         original_command_len: _,
         commands,
+        unified_linkage: _,
     } = ast;
     let mut context = Context::new(
         env,

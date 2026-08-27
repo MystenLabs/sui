@@ -304,6 +304,7 @@ impl Context {
             withdrawal_compatibility_conversions: _,
             original_command_len: _,
             commands: _,
+            unified_linkage: _,
         } = txn;
         let tx_context = Location::non_ref(T::Location::TxContext);
         let mut gas = Location::non_ref(T::Location::GasCoin);
@@ -583,6 +584,7 @@ fn verify_<Mode: ExecutionMode>(env: &Env<Mode>, txn: &T::Transaction) -> anyhow
         withdrawal_compatibility_conversions: _,
         original_command_len: _,
         commands,
+        unified_linkage: _,
     } = txn;
     for c in commands {
         command(&mut context, c)?;

@@ -190,13 +190,29 @@ where
         module: &IdentStr,
         function: &IdentStr,
         type_arguments: Vec<Type>,
+        unified_linkage: Option<&ExecutableLinkage>,
     ) -> Result<LoadedFunction, Mode::Error> {
-        self.load_function(
+        let mut loaded = self.load_function(
             SUI_FRAMEWORK_PACKAGE_ID,
             module.to_string(),
             function.to_string(),
             type_arguments,
-        )
+        )?;
+        if let Some(unified_linkage) = unified_linkage {
+            assert_invariant!(
+                loaded
+                    .linkage
+                    .0
+                    .linkage
+                    .iter()
+                    .all(|(original_id, version_id)| {
+                        unified_linkage.0.linkage.get(original_id) == Some(version_id)
+                    }),
+                "transaction linkage drops a package resolved by a framework MoveCall"
+            );
+            loaded.linkage = unified_linkage.clone();
+        }
+        Ok(loaded)
     }
 
     pub fn load_function(
