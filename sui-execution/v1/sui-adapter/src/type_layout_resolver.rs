@@ -20,13 +20,13 @@ pub struct TypeLayoutResolver<'state, 'vm> {
     linkage_view: LinkageView<'state>,
 }
 
-/// Implements SuiResolver traits by providing null implementations for module and resource
+/// Implements BackingPackageStore traits by providing null implementations for module and resource
 /// resolution and delegating backing package resolution to the trait object.
-struct NullSuiResolver<'state>(Box<dyn TypeLayoutStore + 'state>);
+struct NullPackageStore<'state>(Box<dyn TypeLayoutStore + 'state>);
 
 impl<'state, 'vm> TypeLayoutResolver<'state, 'vm> {
     pub fn new(vm: &'vm MoveVM, state_view: Box<dyn TypeLayoutStore + 'state>) -> Self {
-        let linkage_view = LinkageView::new(Box::new(NullSuiResolver(state_view)));
+        let linkage_view = LinkageView::new(Box::new(NullPackageStore(state_view)));
         Self { vm, linkage_view }
     }
 }
@@ -53,7 +53,7 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
     }
 }
 
-impl BackingPackageStore for NullSuiResolver<'_> {
+impl BackingPackageStore for NullPackageStore<'_> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         self.0.get_package_object(package_id)
     }

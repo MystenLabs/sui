@@ -6,15 +6,15 @@ pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 mod checked {
 
+    use sui_types::storage::StorageView;
+
     use std::{
         collections::{BTreeMap, BTreeSet},
         fmt,
         sync::Arc,
     };
 
-    use crate::execution_value::{
-        CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
-    };
+    use crate::execution_value::{CommandKind, ObjectContents, ObjectValue, RawValueType, Value};
     use crate::gas_charger::GasCharger;
     use crate::{execution_mode::ExecutionMode, gas_meter::SuiGasMeter};
     use move_binary_format::{
@@ -70,7 +70,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<ExecutionMetrics>,
         vm: &MoveVM,
-        state_view: &mut dyn ExecutionState,
+        state_view: &mut dyn StorageView,
         tx_context: &mut TxContext,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,

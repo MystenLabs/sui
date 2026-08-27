@@ -5,13 +5,13 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+
     use crate::{
         adapter::substitute_package_id,
         data_store::{PackageStore, legacy::sui_data_store::SuiDataStore},
         execution_mode::ExecutionMode,
         execution_value::{
-            CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
-            ensure_serialized_size,
+            CommandKind, ObjectContents, ObjectValue, RawValueType, Value, ensure_serialized_size,
         },
         gas_charger::GasCharger,
         programmable_transactions::{context::*, trace_utils},
@@ -50,6 +50,7 @@ mod checked {
     };
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
+    use sui_types::storage::StorageView;
     use sui_types::{
         SUI_FRAMEWORK_ADDRESS,
         base_types::{
@@ -85,7 +86,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<ExecutionMetrics>,
         vm: &MoveVM,
-        state_view: &mut dyn ExecutionState,
+        state_view: &mut dyn StorageView,
         package_store: &dyn BackingPackageStore,
         tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &mut GasCharger,
@@ -136,7 +137,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<ExecutionMetrics>,
         vm: &MoveVM,
-        state_view: &mut dyn ExecutionState,
+        state_view: &mut dyn StorageView,
         tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,

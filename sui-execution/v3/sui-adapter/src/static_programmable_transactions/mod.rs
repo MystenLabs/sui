@@ -8,7 +8,6 @@
 use crate::{
     data_store::cached_package_store::CachedPackageStore,
     execution_mode::ExecutionMode,
-    execution_value::ExecutionState,
     gas_charger::GasCharger,
     static_programmable_transactions::{
         env::Env, linkage::analysis::LinkageAnalyzer, metering::translation_meter,
@@ -19,8 +18,12 @@ use move_vm_runtime::move_vm::MoveVM;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::TxContext, error::ExecutionError, execution::ResultWithTimings,
-    metrics::ExecutionMetrics, storage::BackingPackageStore, transaction::ProgrammableTransaction,
+    base_types::TxContext,
+    error::ExecutionError,
+    execution::ResultWithTimings,
+    metrics::ExecutionMetrics,
+    storage::{BackingPackageStore, StorageView},
+    transaction::ProgrammableTransaction,
 };
 
 // TODO we might replace this with a new one
@@ -38,7 +41,7 @@ pub fn execute<Mode: ExecutionMode>(
     protocol_config: &ProtocolConfig,
     metrics: Arc<ExecutionMetrics>,
     vm: &MoveVM,
-    state_view: &mut dyn ExecutionState,
+    state_view: &mut dyn StorageView,
     package_store: &dyn BackingPackageStore,
     tx_context: Rc<RefCell<TxContext>>,
     gas_charger: &mut GasCharger,

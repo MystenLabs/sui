@@ -269,7 +269,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             None => None,
         };
         let native_extensions = adapter::new_native_extensions(
-            env.state_view.as_child_resolver(),
+            env.state_view,
             input_object_map,
             !gas_charger.is_unmetered(),
             env.protocol_config,

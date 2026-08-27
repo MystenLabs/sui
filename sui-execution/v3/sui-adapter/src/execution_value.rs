@@ -14,42 +14,8 @@ use sui_types::{
     execution_status::{CommandArgumentError, ExecutionErrorKind},
     funds_accumulator::Withdrawal,
     object::Owner,
-    storage::{BackingPackageStore, RuntimeObjectResolver, StorageView},
     transfer::Receiving,
 };
-
-pub trait SuiResolver: BackingPackageStore {
-    fn as_backing_package_store(&self) -> &dyn BackingPackageStore;
-}
-
-impl<T> SuiResolver for T
-where
-    T: BackingPackageStore,
-{
-    fn as_backing_package_store(&self) -> &dyn BackingPackageStore {
-        self
-    }
-}
-
-/// Interface with the store necessary to execute a programmable transaction
-pub trait ExecutionState: StorageView + SuiResolver {
-    fn as_sui_resolver(&self) -> &dyn SuiResolver;
-    fn as_child_resolver(&self) -> &dyn RuntimeObjectResolver;
-}
-
-impl<T> ExecutionState for T
-where
-    T: StorageView,
-    T: SuiResolver,
-{
-    fn as_sui_resolver(&self) -> &dyn SuiResolver {
-        self
-    }
-
-    fn as_child_resolver(&self) -> &dyn RuntimeObjectResolver {
-        self
-    }
-}
 
 #[derive(Clone, Debug)]
 pub enum Mutability {
