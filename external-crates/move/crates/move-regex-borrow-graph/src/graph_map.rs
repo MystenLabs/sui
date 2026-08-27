@@ -33,8 +33,9 @@ impl<N, E> GraphMap<N, E> {
     /// Creates a new graph with a given capacity for the nodes. This number is assumed to be
     /// the maximum number of canonical references at the end of a block
     pub fn new(canonical_reference_capacity: usize) -> Self {
-        debug_assert!(canonical_reference_capacity <= 512);
-        let canonical_reference_capacity = canonical_reference_capacity.min(512);
+        debug_assert!(canonical_reference_capacity <= crate::MAX_CANONICAL_REFERENCE_CAPACITY);
+        let canonical_reference_capacity =
+            canonical_reference_capacity.min(crate::MAX_CANONICAL_REFERENCE_CAPACITY);
         Self {
             generation: 0,
             next: 0,
