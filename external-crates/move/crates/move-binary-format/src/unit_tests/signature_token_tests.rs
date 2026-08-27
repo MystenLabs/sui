@@ -6,7 +6,8 @@ use crate::{
     deserializer::{load_signature_token_test_entry, load_signature_token_test_entry_with_version},
     file_format::{DatatypeHandleIndex, SignatureToken},
     file_format_common::{
-        BinaryData, SIGNATURE_TOKEN_DEPTH_MAX, SerializedType, VERSION_7, VERSION_8, VERSION_MAX,
+        BinaryData, SIGNATURE_TOKEN_DEPTH_MAX, SIGNED_INT_VERSION, SerializedType, VERSION_7,
+        VERSION_MAX,
     },
     serializer::{serialize_signature_token, serialize_signature_token_unchecked},
 };
@@ -107,7 +108,7 @@ fn serialize_signed_token_rejected_below_version_8() {
     for ty in SIGNED_TOKENS {
         let mut binary = BinaryData::new();
         let err = serialize_signature_token(VERSION_7, &mut binary, &ty)
-            .expect_err("signed tokens must not serialize below VERSION_8");
+            .expect_err("signed tokens must not serialize below SIGNED_INT_VERSION");
         assert!(
             err.to_string().contains("Signed integer types"),
             "unexpected error for {ty:?}: {err}"
@@ -119,7 +120,7 @@ fn serialize_signed_token_rejected_below_version_8() {
             &mut binary,
             &SignatureToken::Vector(Box::new(ty.clone())),
         )
-        .expect_err("nested signed tokens must not serialize below VERSION_8");
+        .expect_err("nested signed tokens must not serialize below SIGNED_INT_VERSION");
     }
 }
 
@@ -128,19 +129,19 @@ fn signed_token_round_trips_at_version_8() {
     for ty in SIGNED_TOKENS {
         let ty = SignatureToken::Vector(Box::new(ty));
         let mut binary = BinaryData::new();
-        serialize_signature_token(VERSION_8, &mut binary, &ty)
-            .expect("signed tokens serialize at VERSION_8");
+        serialize_signature_token(SIGNED_INT_VERSION, &mut binary, &ty)
+            .expect("signed tokens serialize at SIGNED_INT_VERSION");
 
-        // A VERSION_8 reader accepts the token...
+        // A SIGNED_INT_VERSION reader accepts the token...
         let cursor = Cursor::new(binary.as_inner());
-        let loaded = load_signature_token_test_entry_with_version(VERSION_8, cursor)
-            .expect("signed tokens deserialize at VERSION_8");
+        let loaded = load_signature_token_test_entry_with_version(SIGNED_INT_VERSION, cursor)
+            .expect("signed tokens deserialize at SIGNED_INT_VERSION");
         assert_eq!(loaded, ty);
 
         // ...while a VERSION_7 reader rejects the same bytes as MALFORMED.
         let cursor = Cursor::new(binary.as_inner());
         let err = load_signature_token_test_entry_with_version(VERSION_7, cursor)
-            .expect_err("signed tokens must not deserialize below VERSION_8");
+            .expect_err("signed tokens must not deserialize below SIGNED_INT_VERSION");
         assert_eq!(err.major_status(), StatusCode::MALFORMED);
     }
 }

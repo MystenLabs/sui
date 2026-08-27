@@ -1082,7 +1082,7 @@ pub(crate) fn load_signature_token_test_entry_with_version(
     load_signature_token(&mut VersionedCursor::new_for_test(version, cursor))
 }
 
-// Test entry points for the signed-integer readers, fixed at `VERSION_8` (the version that
+// Test entry points for the signed-integer readers, fixed at `SIGNED_INT_VERSION` (the version that
 // introduces signed values). Used by the LE round-trip tests against `write_i*`.
 #[cfg(test)]
 pub(crate) mod signed_read_test_entries {
@@ -1092,7 +1092,7 @@ pub(crate) mod signed_read_test_entries {
         ($name:ident, $reader:ident, $ty:ty) => {
             pub(crate) fn $name(bytes: &[u8]) -> BinaryLoaderResult<$ty> {
                 $reader(&mut VersionedCursor::new_for_test(
-                    VERSION_8,
+                    SIGNED_INT_VERSION,
                     std::io::Cursor::new(bytes),
                 ))
             }
@@ -1202,7 +1202,7 @@ fn load_signature_token(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Sign
                     );
                 }
                 S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256
-                    if (cursor.version() < VERSION_8) =>
+                    if (cursor.version() < SIGNED_INT_VERSION) =>
                 {
                     return Err(
                         PartialVMError::new(StatusCode::MALFORMED).with_message(format!(
@@ -1826,7 +1826,7 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
             | Opcodes::CAST_I128
             | Opcodes::CAST_I256
             | Opcodes::NEG
-                if (cursor.version() < VERSION_8) =>
+                if (cursor.version() < SIGNED_INT_VERSION) =>
             {
                 return Err(
                     PartialVMError::new(StatusCode::MALFORMED).with_message(format!(

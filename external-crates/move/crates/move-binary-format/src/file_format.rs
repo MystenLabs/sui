@@ -2212,7 +2212,7 @@ impl Bytecode {
     }
 
     /// Returns true if this bytecode instruction operates on signed integers and therefore
-    /// requires bytecode version `VERSION_8` or later.
+    /// requires bytecode version `SIGNED_INT_VERSION` or later.
     pub fn is_signed_integer_instruction(&self) -> bool {
         matches!(
             self,
@@ -2934,7 +2934,7 @@ impl CompiledModule {
 /// Returns true if the module uses signed integer types or instructions anywhere they can
 /// occur: signature tokens in the signature pool, constant types, struct/enum field definition
 /// types, or code-unit bytecodes. A module for which this returns true requires bytecode
-/// version `VERSION_8` or later (version selection and the serializer's version gates key off
+/// version `SIGNED_INT_VERSION` or later (version selection and the serializer's version gates key off
 /// exactly these positions).
 pub fn module_uses_signed_integers(module: &CompiledModule) -> bool {
     fn token_uses_signed_integers(token: &SignatureToken) -> bool {

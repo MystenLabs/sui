@@ -467,7 +467,7 @@ fn serializer_rejects_signed_signature_token_below_version_8() {
 /// Serializes `base` and `variant` (which must differ in exactly one byte — the byte of
 /// interest) at `VERSION_MAX`, then overwrites that byte in `base`'s blob with `patch`.
 /// This lets the tests plant byte tags (signed type tags / signed opcodes) that the
-/// serializer itself refuses to emit below `VERSION_8`.
+/// serializer itself refuses to emit below `SIGNED_INT_VERSION`.
 fn serialize_and_patch_single_byte(
     base: &CompiledModule,
     variant: &CompiledModule,
@@ -499,7 +499,7 @@ fn serialize_and_patch_single_byte(
 
 fn assert_signed_rejected_below_version_8(bytes: &[u8], what: &str) {
     let err = CompiledModule::deserialize_with_defaults(bytes)
-        .expect_err("blob with signed content must not deserialize below VERSION_8");
+        .expect_err("blob with signed content must not deserialize below SIGNED_INT_VERSION");
     assert_eq!(
         err.major_status(),
         StatusCode::MALFORMED,
@@ -514,7 +514,7 @@ fn assert_signed_rejected_below_version_8(bytes: &[u8], what: &str) {
 
 // The fail-closed property this PR rests on: a max-version-7 deserializer rejects blobs
 // containing signed integer types or opcodes as MALFORMED, wherever they occur. The
-// serializer refuses to emit them below VERSION_8, so each test serializes a valid v7
+// serializer refuses to emit them below SIGNED_INT_VERSION, so each test serializes a valid v7
 // module and byte-patches the position of interest to a signed tag.
 
 #[test]
