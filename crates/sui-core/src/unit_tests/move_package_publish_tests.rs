@@ -358,6 +358,7 @@ async fn test_publish_deserialize_error_phasing() {
     async fn run(unified_linkage: bool) -> (ExecutionErrorKind, Option<usize>) {
         let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
             config.set_enable_unified_linkage_for_testing(unified_linkage);
+            config.set_harden_linkage_consistency_for_testing(unified_linkage);
             config
         });
 

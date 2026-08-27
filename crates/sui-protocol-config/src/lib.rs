@@ -385,6 +385,7 @@ const MAINNET_USDB: &str =
 //              PTB Move call signature at most once mutably or any number of
 //              times immutably (never by value), and never in return position.
 //              Enable allowed_proposers on devnet.
+//              Add additional linkage invariant hardening/invariant checks in PTBs.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -994,6 +995,11 @@ struct FeatureFlags {
     // If true, analyze upgrade-init linkage after all other PTB linkage constraints.
     #[serde(skip_serializing_if = "is_false")]
     enable_order_independent_upgrade_init_linkage: bool,
+
+    // If true, adds additional hardening and checks to upgrade-init linkage entries, and adds
+    // additional linkage invariant checks around linkage.
+    #[serde(skip_serializing_if = "is_false")]
+    harden_linkage_consistency: bool,
 
     // Check shared object transfer restrictions per command.
     #[serde(skip_serializing_if = "is_false")]
@@ -4645,6 +4651,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.allowed_proposers = true;
                     }
+                    cfg.feature_flags.harden_linkage_consistency = true;
                 }
                 // Use this template when making changes:
                 //

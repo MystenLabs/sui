@@ -186,6 +186,7 @@ mod refine {
                     COIN_MODULE_NAME,
                     SEND_FUNDS_FUNC_NAME,
                     vec![inner_ty.clone()],
+                    ast.unified_linkage.as_ref(),
                 )?,
                 arguments: vec![move_result, owner_arg],
             }));
