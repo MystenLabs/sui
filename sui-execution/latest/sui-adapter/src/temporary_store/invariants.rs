@@ -35,7 +35,7 @@ use sui_types::gas::GasCostSummary;
 use sui_types::is_system_package;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::object::{Object, ObjectPermissions, Owner};
-use sui_types::transaction::{GasData, TransactionKind};
+use sui_types::transaction::{Command, GasData, TransactionKind};
 
 use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::{GasCharger, PaymentLocation};
@@ -59,6 +59,9 @@ struct InvariantInputs {
     advance_epoch_gas_summary: Option<(u64, u64)>,
     /// The genesis transaction mints the initial SUI supply and so is exempt from conservation.
     is_genesis: bool,
+    /// What each `Publish`/`Upgrade` command in the PTB says the package it writes should look like.
+    /// `None` when the transaction is not a PTB.
+    declared_packages: Option<Vec<(usize, BTreeSet<ObjectID>)>>,
 }
 
 /// Holds the invariant-check-only bookkeeping accumulated during execution and exposes the
@@ -107,6 +110,7 @@ impl InvariantChecker {
             ),
             advance_epoch_gas_summary: transaction_kind.get_advance_epoch_tx_gas_summary(),
             is_genesis: matches!(transaction_kind, TransactionKind::Genesis(_)),
+            declared_packages: declared_packages(transaction_kind),
         };
     }
 
@@ -572,6 +576,53 @@ impl InvariantChecker {
             .and_then(|()| self.check_address_balance_changes(store))
     }
 
+    /// If the transaction executed successfully, every package written by the transaction must
+    /// correspond to exactly one `Publish`/`Upgrade` command and must contain the modules that
+    /// command supplied and record the dependencies it declared as the package's dependencies.
+    ///
+    /// Compared as multisets rather than pairwise: written packages are keyed by id, so they
+    /// cannot be correlated back to their originating command by position.
+    pub(crate) fn check_published_packages(
+        &self,
+        store: &TemporaryStore<'_>,
+    ) -> Result<(), ExecutionError> {
+        if !store.protocol_config().harden_linkage_consistency() {
+            return Ok(());
+        }
+
+        let Some(declared) = &self.inputs.declared_packages else {
+            return Ok(());
+        };
+
+        let mut written: Vec<(usize, BTreeSet<ObjectID>)> = store
+            .execution_results
+            .written_objects
+            .values()
+            .filter_map(|object| object.data.try_as_package())
+            .map(|package| {
+                (
+                    package.serialized_module_map().len(),
+                    package
+                        .linkage_table()
+                        .values()
+                        .map(|upgrade_info| upgrade_info.upgraded_id)
+                        .collect(),
+                )
+            })
+            .collect();
+        let mut declared = declared.clone();
+        written.sort();
+        declared.sort();
+
+        if written != declared {
+            return Err(ExecutionError::invariant_violation(format!(
+                "packages written by this transaction do not correspond to its publish and upgrade \
+                 commands: commands declared {declared:?}, packages recorded {written:?}"
+            )));
+        }
+        Ok(())
+    }
+
     // check that every object read is owned directly or indirectly by sender, sponsor,
     // or a shared object input
     pub(crate) fn check_ownership_invariants(
@@ -820,4 +871,25 @@ impl InvariantChecker {
 
         Ok(())
     }
+}
+
+/// What each `Publish`/`Upgrade` command declares about the package it writes, in command order.
+/// `None` for transaction kinds that are not PTBs.
+fn declared_packages(
+    transaction_kind: &TransactionKind,
+) -> Option<Vec<(usize, BTreeSet<ObjectID>)>> {
+    let TransactionKind::ProgrammableTransaction(pt) = transaction_kind else {
+        return None;
+    };
+    Some(
+        pt.commands
+            .iter()
+            .filter_map(|command| match command {
+                Command::Publish(modules, dep_ids) | Command::Upgrade(modules, dep_ids, _, _) => {
+                    Some((modules.len(), dep_ids.iter().copied().collect()))
+                }
+                _ => None,
+            })
+            .collect(),
+    )
 }
