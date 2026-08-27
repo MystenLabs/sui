@@ -25,8 +25,10 @@ use sui_types::error::SuiError;
 use sui_types::error::SuiErrorKind;
 use sui_types::execution_status::ExecutionFailure;
 use sui_types::execution_status::ExecutionStatus;
+use sui_types::transaction::AllowedProposers;
 use sui_types::transaction::InputObjectKind;
 use sui_types::transaction::InputObjects;
+use sui_types::transaction::MAX_UNPAID_ALLOWED_PROPOSERS;
 use sui_types::transaction::ObjectReadResult;
 use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::TransactionExpiration;
@@ -130,8 +132,9 @@ pub fn simulate_transaction(
                 let mut gasless_tx = transaction.clone();
                 gasless_tx.gas_data_mut().price = 0;
                 gasless_tx.gas_data_mut().budget = 0;
-                // All gassless txns have to have a correct `ValidDuring` TransactionExpiration.
-                set_valid_during_transaction_expiration(service, &mut gasless_tx)?;
+                // All gasless txns must carry an epoch-scoped validity window for replay
+                // protection.
+                configure_transaction_validity(service, &protocol_config, &mut gasless_tx)?;
 
                 let simulation_result = executor
                     .simulate_transaction(gasless_tx.clone(), checks, false)
@@ -210,6 +213,11 @@ pub fn simulate_transaction(
                     &protocol_config,
                 )?;
             }
+
+            // Coin-paid transactions get a proposer restriction too, so that nobody else can
+            // amplify them into consensus. A no-op on the address-balance paths, which already
+            // set their expiration above.
+            restrict_transaction_proposers(service, &protocol_config, &mut transaction)?;
         }
 
         executor
@@ -468,29 +476,113 @@ fn mock_gas_storage_cost(
         .unwrap_or(0)
 }
 
-/// Populate a `ValidDuring` expiration covering the current epoch and the next one.
-fn set_valid_during_transaction_expiration(
+/// How many proposers a simulated transaction is restricted to.
+///
+/// Enough that the transaction stays submittable when some of them are offline, and no more than
+/// `MAX_UNPAID_ALLOWED_PROPOSERS` so that it remains valid at the reference gas price.
+const MAX_ALLOWED_PROPOSERS: usize = MAX_UNPAID_ALLOWED_PROPOSERS as usize;
+
+/// Populate an expiration covering the current epoch and the next one.
+///
+/// When this node can name the validators it would submit to, the expiration also restricts the
+/// transaction to them, so that nobody else can amplify it into consensus.
+fn configure_transaction_validity(
     service: &RpcService,
+    protocol_config: &ProtocolConfig,
     transaction: &mut sui_types::transaction::TransactionData,
 ) -> Result<()> {
-    // Early return if the TransactionExpiration is already set to `ValidDuring`
+    // Early return if the caller already chose an expiration with a validity window.
     if matches!(
         transaction.expiration(),
-        TransactionExpiration::ValidDuring { .. }
+        TransactionExpiration::ValidDuring { .. } | TransactionExpiration::Validity { .. }
     ) {
         return Ok(());
     }
 
     let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
-    *transaction.expiration_mut() = TransactionExpiration::ValidDuring {
+    let min_epoch = Some(current_epoch);
+    let max_epoch = Some(current_epoch.saturating_add(1));
+    let chain = service.chain_id;
+    let nonce = rand::random();
+
+    *transaction.expiration_mut() =
+        match select_allowed_proposers(service, protocol_config, current_epoch) {
+            Some(allowed_proposers) => TransactionExpiration::Validity {
+                min_epoch,
+                max_epoch,
+                min_timestamp: None,
+                max_timestamp: None,
+                chain,
+                nonce,
+                allowed_proposers: Some(allowed_proposers),
+            },
+            None => TransactionExpiration::ValidDuring {
+                min_epoch,
+                max_epoch,
+                min_timestamp: None,
+                max_timestamp: None,
+                chain,
+                nonce,
+            },
+        };
+    Ok(())
+}
+
+/// Restrict the transaction to the validators this node would submit to, even though its gas
+/// coins already provide replay protection.
+///
+/// Unlike the address-balance paths there is no window the transaction needs, so the expiration
+/// is only touched when the caller left it unset and a proposer set is actually available;
+/// otherwise the transaction is returned exactly as resolved.
+fn restrict_transaction_proposers(
+    service: &RpcService,
+    protocol_config: &ProtocolConfig,
+    transaction: &mut sui_types::transaction::TransactionData,
+) -> Result<()> {
+    if !matches!(transaction.expiration(), TransactionExpiration::None) {
+        return Ok(());
+    }
+
+    let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
+    let Some(allowed_proposers) = select_allowed_proposers(service, protocol_config, current_epoch)
+    else {
+        return Ok(());
+    };
+
+    *transaction.expiration_mut() = TransactionExpiration::Validity {
         min_epoch: Some(current_epoch),
         max_epoch: Some(current_epoch.saturating_add(1)),
         min_timestamp: None,
         max_timestamp: None,
         chain: service.chain_id,
         nonce: rand::random(),
+        allowed_proposers: Some(allowed_proposers),
     };
     Ok(())
+}
+
+/// The proposer set this node would restrict a transaction to, if one can be formed.
+///
+/// Only offered where the network accepts the `Validity` variant at all — otherwise
+/// validity_check would reject the very transaction simulate just handed back. `None` on nodes
+/// without a transaction driver, or before the driver has observed validator latencies.
+///
+/// Proposer sets are resolved against the committee of the epoch they name, so one selected now
+/// is only usable while this epoch lasts; a set naming any other epoch is not emitted, and the
+/// transaction simply stays unrestricted rather than becoming unproposable.
+fn select_allowed_proposers(
+    service: &RpcService,
+    protocol_config: &ProtocolConfig,
+    current_epoch: u64,
+) -> Option<AllowedProposers> {
+    if !protocol_config.allowed_proposers() {
+        return None;
+    }
+    service
+        .proposer_selector
+        .as_ref()
+        .and_then(|selector| selector.preferred_proposers(MAX_ALLOWED_PROPOSERS))
+        .filter(|allowed| allowed.epoch == current_epoch)
 }
 
 fn select_gas(
@@ -555,7 +647,7 @@ fn select_gas(
         transaction.gas_data_mut().payment.clear();
 
         if matches!(transaction.expiration(), TransactionExpiration::None) {
-            set_valid_during_transaction_expiration(service, transaction)?;
+            configure_transaction_validity(service, protocol_config, transaction)?;
         }
 
         budget
@@ -629,7 +721,7 @@ fn select_gas(
             selected_gas_value += ab_value;
 
             if matches!(transaction.expiration(), TransactionExpiration::None) {
-                set_valid_during_transaction_expiration(service, transaction)?;
+                configure_transaction_validity(service, protocol_config, transaction)?;
             }
         }
 

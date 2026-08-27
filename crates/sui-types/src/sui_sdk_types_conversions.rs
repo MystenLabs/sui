@@ -9,6 +9,7 @@
 //! directly to avoid going through the BCS machinery.
 
 use fastcrypto::traits::ToFromBytes;
+use nonempty::NonEmpty;
 use sui_sdk_types::{
     self, AccumulatorWrite, ActiveJwk, Address, Argument, AuthenticatorStateExpire, Bitmap,
     Bls12381PublicKey, Bls12381Signature, CanceledTransaction, CanceledTransactionV2, ChangeEpoch,
@@ -696,8 +697,6 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
         match value {
             crate::transaction::TransactionExpiration::None => Self::None,
             crate::transaction::TransactionExpiration::Epoch(epoch) => Self::Epoch(epoch),
-            // TODO: `Validity`'s allowed_proposers has no sdk representation yet, so a
-            // `Validity` expiration is reported as `ValidDuring`.
             crate::transaction::TransactionExpiration::ValidDuring {
                 min_epoch,
                 max_epoch,
@@ -705,15 +704,6 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
                 max_timestamp,
                 chain,
                 nonce,
-            }
-            | crate::transaction::TransactionExpiration::Validity {
-                min_epoch,
-                max_epoch,
-                min_timestamp,
-                max_timestamp,
-                chain,
-                nonce,
-                allowed_proposers: _,
             } => Self::ValidDuring {
                 min_epoch,
                 max_epoch,
@@ -721,6 +711,28 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
                 max_timestamp,
                 chain: Digest::new(*chain.as_bytes()),
                 nonce,
+            },
+            crate::transaction::TransactionExpiration::Validity {
+                min_epoch,
+                max_epoch,
+                min_timestamp,
+                max_timestamp,
+                chain,
+                nonce,
+                allowed_proposers,
+            } => Self::Validity {
+                min_epoch,
+                max_epoch,
+                min_timestamp,
+                max_timestamp,
+                chain: Digest::new(*chain.as_bytes()),
+                nonce,
+                allowed_proposers: allowed_proposers.map(|allowed| {
+                    sui_sdk_types::AllowedProposers {
+                        epoch: allowed.epoch,
+                        proposers: allowed.proposers.into(),
+                    }
+                }),
             },
         }
     }
@@ -745,6 +757,30 @@ impl From<TransactionExpiration> for crate::transaction::TransactionExpiration {
                 max_timestamp,
                 chain: crate::digests::CheckpointDigest::from(chain).into(),
                 nonce,
+            },
+            TransactionExpiration::Validity {
+                min_epoch,
+                max_epoch,
+                min_timestamp,
+                max_timestamp,
+                chain,
+                nonce,
+                allowed_proposers,
+            } => Self::Validity {
+                min_epoch,
+                max_epoch,
+                min_timestamp,
+                max_timestamp,
+                chain: crate::digests::CheckpointDigest::from(chain).into(),
+                nonce,
+                // An empty set is rejected by the sdk's deserializer, so it can only appear on a
+                // value built in memory; drop the restriction rather than fabricating one.
+                allowed_proposers: allowed_proposers.and_then(|allowed| {
+                    Some(crate::transaction::AllowedProposers {
+                        epoch: allowed.epoch,
+                        proposers: NonEmpty::from_vec(allowed.proposers)?,
+                    })
+                }),
             },
             _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
