@@ -27,7 +27,10 @@ impl MoveVM {
     pub fn new(
         natives: impl IntoIterator<Item = (AccountAddress, Identifier, Identifier, NativeFunction)>,
     ) -> VMResult<Self> {
-        Self::new_with_config(natives, VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None))
+        Self::new_with_config(
+            natives,
+            VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None),
+        )
     }
 
     pub fn new_with_config(

@@ -47,7 +47,7 @@ impl ArenaBuilder {
         let size = config
             .runtime_limits_config
             .package_arena_size
-            .map(|size| size as usize)
+            .map(|size| usize::try_from(size).unwrap_or(usize::MAX))
             .unwrap_or(DEFAULT_ARENA_SIZE);
         bump.set_allocation_limit(Some(size));
         ArenaBuilder(bump)
