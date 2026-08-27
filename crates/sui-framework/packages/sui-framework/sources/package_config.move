@@ -8,11 +8,13 @@
 /// PackageConfig
 ///   └── PackageMetadataKey(original package ID)
 ///         └── Config<PackageConfigCap>
-///               └── VersionForbiddenKey(package version number)
-///                     └── Setting<u64> value
+///               ├── VersionForbiddenKey(package version number)
+///               │     └── Setting<u64> value
+///               └── GlobalPauseKey()
+///                     └── Setting<bool> value
 /// ```
 /// Each version has an independent `Setting`: `1` means the version is forbidden and `0` means it
-/// is allowed.
+/// is allowed. The global-pause setting applies to every version in the package family.
 module sui::package_config;
 
 use sui::config::{Self, Config};
@@ -33,6 +35,9 @@ public struct PackageMetadataKey(ID) has copy, drop, store;
 
 /// Setting key used to store the forbid-list value for one package version.
 public struct VersionForbiddenKey(u64) has copy, drop, store;
+
+/// Setting key used to store the global-pause value for a package family.
+public struct GlobalPauseKey() has copy, drop, store;
 
 /// Trying to create the package config object when not called by the system address.
 const ENotSystemAddress: u64 = 0;
@@ -84,6 +89,37 @@ public(package) fun is_version_forbidden_for_next_epoch(
     is_version_forbidden(value.destroy_some())
 }
 
+/// Enable the global pause for every version of the package controlled by `cap`.
+public fun enable_global_pause(
+    package_config: &mut PackageConfig,
+    cap: &UpgradeCap,
+    ctx: &mut TxContext,
+) {
+    package_config.enable_global_pause_impl(cap.original_package_id(), ctx);
+}
+
+/// Disable the global pause for every version of the package controlled by `cap`.
+///
+/// If the setting exists, it is retained with a value of `false`.
+public fun disable_global_pause(
+    package_config: &mut PackageConfig,
+    cap: &UpgradeCap,
+    ctx: &mut TxContext,
+) {
+    package_config.disable_global_pause_impl(cap.original_package_id(), ctx);
+}
+
+public(package) fun is_global_pause_enabled_for_next_epoch(
+    package_config: &PackageConfig,
+    original_id: ID,
+): bool {
+    if (!package_config.per_package_metadata_exists(original_id)) return false;
+    let config = package_config.borrow_per_package_config(original_id);
+    config
+        .read_setting_for_next_epoch<_, _, bool>(GlobalPauseKey())
+        .destroy_or!(false)
+}
+
 #[allow(unused_function)]
 fun create(ctx: &TxContext) {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
@@ -127,8 +163,42 @@ fun is_version_forbidden(value: u64): bool {
     value == VERSION_FORBIDDEN
 }
 
+fun enable_global_pause_impl(
+    package_config: &mut PackageConfig,
+    original_id: ID,
+    ctx: &mut TxContext,
+) {
+    let config = package_config.per_package_config_entry!(original_id, ctx);
+    let next_epoch_entry = config.entry!<_, GlobalPauseKey, bool>(
+        &mut PackageConfigCap(),
+        GlobalPauseKey(),
+        |_package_config, _cap, _ctx| true,
+        ctx,
+    );
+    *next_epoch_entry = true;
+}
+
+fun disable_global_pause_impl(
+    package_config: &mut PackageConfig,
+    original_id: ID,
+    ctx: &mut TxContext,
+) {
+    if (!package_config.per_package_metadata_exists(original_id)) return;
+
+    let config = package_config.borrow_per_package_config_mut(original_id);
+    let setting_name = GlobalPauseKey();
+    if (!config.exists_with_type<_, GlobalPauseKey, bool>(setting_name)) return;
+    config.update!(
+        &mut PackageConfigCap(),
+        setting_name,
+        |_package_config, _cap, _ctx| false,
+        |_old_value, value| *value = false,
+        ctx,
+    );
+}
+
 fun cap_package_info(cap: &UpgradeCap): (ID, u64) {
-    (package::original_package_id(cap), package::version(cap))
+    (cap.original_package_id(), package::version(cap))
 }
 
 fun assert_historical_version(version: u64, current_version: u64) {
@@ -179,6 +249,35 @@ public(package) fun create_for_testing(ctx: &TxContext) {
 public(package) fun destroy_for_testing(package_config: PackageConfig) {
     let PackageConfig { id } = package_config;
     id.delete();
+}
+
+#[mode(test)]
+public(package) fun global_pause_setting_exists_for_testing(
+    package_config: &PackageConfig,
+    original_id: ID,
+): bool {
+    if (!package_config.per_package_metadata_exists(original_id)) return false;
+    package_config
+        .borrow_per_package_config(original_id)
+        .exists_with_type<_, GlobalPauseKey, bool>(GlobalPauseKey())
+}
+
+#[mode(test)]
+public(package) fun enable_global_pause_for_testing(
+    package_config: &mut PackageConfig,
+    original_id: ID,
+    ctx: &mut TxContext,
+) {
+    package_config.enable_global_pause_impl(original_id, ctx);
+}
+
+#[mode(test)]
+public(package) fun disable_global_pause_for_testing(
+    package_config: &mut PackageConfig,
+    original_id: ID,
+    ctx: &mut TxContext,
+) {
+    package_config.disable_global_pause_impl(original_id, ctx);
 }
 
 #[mode(test)]
@@ -236,7 +335,7 @@ fun allow_version_impl(
     config.update!(
         &mut PackageConfigCap(),
         setting_name,
-        |_package_config, _cap, _ctx| 0,
+        |_package_config, _cap, _ctx| 0u64,
         |_old_value, value| *value = 0,
         ctx,
     );

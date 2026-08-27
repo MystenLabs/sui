@@ -3187,6 +3187,9 @@ PackageMetadataKey
 VersionForbiddenKey
 	public struct
 	0x2::package_config
+GlobalPauseKey
+	public struct
+	0x2::package_config
 forbid_version
 	public fun
 	0x2::package_config
@@ -3194,6 +3197,15 @@ forbid_version_range
 	public fun
 	0x2::package_config
 is_version_forbidden_for_next_epoch
+	public(package) fun
+	0x2::package_config
+enable_global_pause
+	public fun
+	0x2::package_config
+disable_global_pause
+	public fun
+	0x2::package_config
+is_global_pause_enabled_for_next_epoch
 	public(package) fun
 	0x2::package_config
 create
@@ -3212,6 +3224,12 @@ per_package_metadata_exists
 	fun
 	0x2::package_config
 is_version_forbidden
+	fun
+	0x2::package_config
+enable_global_pause_impl
+	fun
+	0x2::package_config
+disable_global_pause_impl
 	fun
 	0x2::package_config
 cap_package_info
