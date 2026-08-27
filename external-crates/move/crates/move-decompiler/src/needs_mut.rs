@@ -30,6 +30,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use move_symbol_pool::Symbol;
+
 use crate::ast::{Exp, Function, Label, MatchArm, UnstructuredNode};
 
 // -------------------------------------------------------------------------------------------------
@@ -73,10 +75,12 @@ struct LoopFrame {
     head_env: Env,
 }
 
-/// A statement that binds names: the names, whether they are initialized at the binder, and
-/// the right-hand side evaluated before the binding takes effect.
+/// A statement that binds names: which names, whether they are initialized at the binder,
+/// and the right-hand side evaluated before the binding takes effect. `names` and `fields`
+/// are the two shapes a binder's names come in; one is always empty.
 struct Binder<'a> {
-    names: Vec<&'a String>,
+    names: &'a [String],
+    fields: &'a [(Symbol, String)],
     initialized: bool,
     rhs: Option<&'a Exp>,
 }
@@ -210,15 +214,21 @@ impl Env {
     }
 }
 
+impl<'a> Binder<'a> {
+    fn names(&self) -> impl Iterator<Item = &'a String> {
+        self.names.iter().chain(self.fields.iter().map(|(_, n)| n))
+    }
+}
+
 impl Context {
     /// Record which of `names`, bound at `(node, arm_idx)`, the incoming fact forces `mut`.
     /// Code inside a loop records once per fixpoint pass; the fact only grows between
     /// passes, so earlier passes record a subset of the last.
-    fn record(
+    fn record<'a>(
         &mut self,
         node: &Exp,
         arm_idx: usize,
-        names: &[&String],
+        names: impl Iterator<Item = &'a String>,
         initialized: bool,
         env: &Env,
     ) {
@@ -227,7 +237,7 @@ impl Context {
                 self.mut_binders
                     .entry((node_id(node), arm_idx))
                     .or_default()
-                    .insert((*name).clone());
+                    .insert(name.clone());
             }
         }
     }
@@ -244,20 +254,12 @@ impl Context {
         self.loops.pop();
     }
 
-    /// The fact a jump resumes at: its target loop's exit (`break`) or head (`continue`).
-    fn jump_env(&self, label: Option<Label>, is_break: bool) -> Env {
-        let frame = match label {
+    /// Resolve a `Break`/`Continue` label: `None` targets the innermost frame, `Some(L)`
+    /// the nearest frame with that label.
+    fn find_loop(&self, label: Option<Label>) -> Option<&LoopFrame> {
+        match label {
             None => self.loops.last(),
             Some(l) => self.loops.iter().rev().find(|f| f.label == Some(l)),
-        };
-        let Some(frame) = frame else {
-            debug_assert!(false, "jump outside its loop");
-            return Env::poisoned();
-        };
-        if is_break {
-            frame.break_env.clone()
-        } else {
-            frame.head_env.clone()
         }
     }
 }
@@ -276,7 +278,7 @@ fn scope_env(context: &mut Context, root: &Exp, after: Env) -> Env {
     }
     for stmt in &stmts {
         let Some(binder) = binder(stmt) else { continue };
-        for name in binder.names {
+        for name in binder.names() {
             let u = env.get(name).then(after.get(name));
             env.set(name, u);
         }
@@ -290,8 +292,8 @@ fn stmt_env(context: &mut Context, stmt: &Exp, mut env: Env) -> Env {
     let Some(binder) = binder(stmt) else {
         return exp_env(context, stmt, env);
     };
-    context.record(stmt, 0, &binder.names, binder.initialized, &env);
-    for name in &binder.names {
+    context.record(stmt, 0, binder.names(), binder.initialized, &env);
+    for name in binder.names() {
         env.kill(name);
     }
     match binder.rhs {
@@ -302,34 +304,42 @@ fn stmt_env(context: &mut Context, stmt: &Exp, mut env: Env) -> Env {
 
 /// Backward transfer of one expression: `env` is the fact after it.
 fn exp_env(context: &mut Context, exp: &Exp, mut env: Env) -> Env {
+    use Exp as E;
     match exp {
-        Exp::Variable(_) | Exp::Value(_) | Exp::Constant(_) | Exp::Declare(_) => env,
-        // A jump discards the incoming fact for its target's.
-        Exp::Break(label) => context.jump_env(*label, /* is_break */ true),
-        Exp::Continue(label) => context.jump_env(*label, /* is_break */ false),
-        Exp::Return(items) => eval_list(context, items, Env::default()),
-        Exp::Abort(e) => exp_env(context, e, Env::default()),
+        E::Variable(_) | E::Value(_) | E::Constant(_) | E::Declare(_) => env,
+        // A jump discards the incoming fact for its target's: the loop's exit for `break`,
+        // its head for `continue`.
+        E::Break(label) => match context.find_loop(*label) {
+            Some(frame) => frame.break_env.clone(),
+            None => orphan_jump_env(),
+        },
+        E::Continue(label) => match context.find_loop(*label) {
+            Some(frame) => frame.head_env.clone(),
+            None => orphan_jump_env(),
+        },
+        E::Return(items) => seq_backward(context, items, Env::default()),
+        E::Abort(e) => exp_env(context, e, Env::default()),
         // Binding, not assignment: only the right-hand side can mutate an outer name.
         // Statement-position binders (with their shadowing) go through `stmt_env`.
-        Exp::LetBind(_, rhs)
-        | Exp::VecUnpack(_, rhs)
-        | Exp::Unpack(_, _, rhs)
-        | Exp::UnpackVariant(_, _, _, rhs) => exp_env(context, rhs, env),
-        Exp::Assign(targets, rhs) => {
+        E::LetBind(_, rhs)
+        | E::VecUnpack(_, rhs)
+        | E::Unpack(_, _, rhs)
+        | E::UnpackVariant(_, _, _, rhs) => exp_env(context, rhs, env),
+        E::Assign(targets, rhs) => {
             for target in targets {
                 env.add_assign(target);
             }
             exp_env(context, rhs, env)
         }
-        Exp::Borrow(is_mut, inner) => match inner.as_ref() {
-            Exp::Variable(name) if *is_mut => {
+        E::Borrow(is_mut, inner) => match inner.as_ref() {
+            E::Variable(name) if *is_mut => {
                 env.add_borrow(name);
                 env
             }
             _ => exp_env(context, inner, env),
         },
-        Exp::Seq(_) | Exp::Block(_, _) => scope_env(context, exp, env),
-        Exp::IfElse(cond, conseq, alt) => {
+        E::Seq(_) | E::Block(_, _) => scope_env(context, exp, env),
+        E::IfElse(cond, conseq, alt) => {
             let taken = scope_env(context, conseq, env.clone());
             let joined = match alt.as_ref() {
                 Some(alt) => taken.join(scope_env(context, alt, env)),
@@ -337,18 +347,18 @@ fn exp_env(context: &mut Context, exp: &Exp, mut env: Env) -> Env {
             };
             exp_env(context, cond, joined)
         }
-        Exp::Loop(_, _) | Exp::While(_, _, _) => loop_head_env(context, exp, env),
-        Exp::Switch(subject, _, arms) => {
+        E::Loop(_, _) | E::While(_, _, _) => loop_head_env(context, exp, env),
+        E::Switch(subject, _, arms) => {
             let arms_env =
                 join_scopes(context, arms.iter().map(|(_, body)| body), &env).unwrap_or(env);
             exp_env(context, subject, arms_env)
         }
-        Exp::MatchLit(subject, arms) => {
+        E::MatchLit(subject, arms) => {
             let arms_env =
                 join_scopes(context, arms.iter().map(|(_, body)| body), &env).unwrap_or(env);
             exp_env(context, subject, arms_env)
         }
-        Exp::Match(subject, _, arms) => {
+        E::Match(subject, _, arms) => {
             let mut joined: Option<Env> = None;
             for (arm_idx, arm) in arms.iter().enumerate() {
                 let arm_env = match_arm_env(context, exp, arm_idx, arm, &env);
@@ -359,12 +369,12 @@ fn exp_env(context: &mut Context, exp: &Exp, mut env: Env) -> Env {
             }
             exp_env(context, subject, joined.unwrap_or(env))
         }
-        Exp::Call(_, items)
-        | Exp::Primitive { args: items, .. }
-        | Exp::Data { args: items, .. } => eval_list(context, items, env),
+        E::Call(_, items) | E::Primitive { args: items, .. } | E::Data { args: items, .. } => {
+            seq_backward(context, items, env)
+        }
         // Unmodeled goto control flow: poison the fact so every name reads as fully used,
         // and walk the bodies so binders inside them still get (all-`mut`) records.
-        Exp::Unstructured(nodes) => {
+        E::Unstructured(nodes) => {
             let mut env = Env::poisoned();
             for node in nodes.iter().rev() {
                 match node {
@@ -379,8 +389,15 @@ fn exp_env(context: &mut Context, exp: &Exp, mut env: Env) -> Env {
     }
 }
 
+/// The fact for a jump with no enclosing frame. Loud where `liveness`'s `find_loop` shrugs:
+/// structuring never emits an orphan jump.
+fn orphan_jump_env() -> Env {
+    debug_assert!(false, "jump outside its loop");
+    Env::poisoned()
+}
+
 /// Expressions evaluated in sequence (call arguments and the like), walked backward.
-fn eval_list(context: &mut Context, items: &[Exp], mut env: Env) -> Env {
+fn seq_backward(context: &mut Context, items: &[Exp], mut env: Env) -> Env {
     for item in items.iter().rev() {
         env = exp_env(context, item, env);
     }
@@ -417,26 +434,25 @@ fn match_arm_env(
     after: &Env,
 ) -> Env {
     let mut env = after.clone();
-    let field_names: Vec<&String> = arm.fields.iter().map(|(_, n)| n).collect();
-    let saved: Vec<Use> = field_names.iter().map(|n| env.take(n)).collect();
+    let saved: Vec<Use> = arm.fields.iter().map(|(_, n)| env.take(n)).collect();
     let mut env = scope_env(context, &arm.rhs, env);
     context.record(
         match_exp,
         arm_idx,
-        &field_names,
+        arm.fields.iter().map(|(_, n)| n),
         /* initialized */ true,
         &env,
     );
-    for name in &field_names {
+    for (_, name) in &arm.fields {
         env.kill(name);
     }
     if let Some(guard) = &arm.guard {
         env = exp_env(context, guard, env);
-        for name in &field_names {
+        for (_, name) in &arm.fields {
             env.kill(name);
         }
     }
-    for (name, u) in field_names.iter().zip(saved) {
+    for ((_, name), u) in arm.fields.iter().zip(saved) {
         env.set(name, u);
     }
     env
@@ -444,16 +460,15 @@ fn match_arm_env(
 
 /// The fact at a loop's head, as the fixpoint over its back edge. Transfers are per-name
 /// independent and monotone on a chain of height four (assign count 0/1/2, then the borrow
-/// bit), so the head is stable within five passes; the cap is slack.
+/// bit), so iteration terminates, as in `liveness::Builder::fixpoint_loop`.
 fn loop_head_env(context: &mut Context, exp: &Exp, break_env: Env) -> Env {
-    const FIXPOINT_CAP: usize = 8;
     let (label, cond, body) = match exp {
         Exp::Loop(label, body) => (*label, None, body),
         Exp::While(label, cond, body) => (*label, Some(cond), body),
         _ => unreachable!("loop_head_env is only called on loops"),
     };
     let mut head = Env::default();
-    for _ in 0..FIXPOINT_CAP {
+    loop {
         context.push_loop(label, break_env.clone(), head.clone());
         // The body falls through to the back edge; a `while` also runs its condition
         // (with the exit path joined in) every iteration.
@@ -467,8 +482,6 @@ fn loop_head_env(context: &mut Context, exp: &Exp, break_env: Env) -> Env {
         }
         head = next;
     }
-    debug_assert!(false, "loop fixpoint did not converge");
-    Env::poisoned()
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -515,17 +528,20 @@ fn push_flat_stmt<'a>(exp: &'a Exp, out: &mut Vec<&'a Exp>) {
 fn binder(stmt: &Exp) -> Option<Binder<'_>> {
     match stmt {
         Exp::LetBind(names, rhs) | Exp::VecUnpack(names, rhs) => Some(Binder {
-            names: names.iter().collect(),
+            names,
+            fields: &[],
             initialized: true,
             rhs: Some(rhs),
         }),
         Exp::Declare(names) => Some(Binder {
-            names: names.iter().collect(),
+            names,
+            fields: &[],
             initialized: false,
             rhs: None,
         }),
         Exp::Unpack(_, fields, rhs) | Exp::UnpackVariant(_, _, fields, rhs) => Some(Binder {
-            names: fields.iter().map(|(_, n)| n).collect(),
+            names: &[],
+            fields,
             initialized: true,
             rhs: Some(rhs),
         }),
