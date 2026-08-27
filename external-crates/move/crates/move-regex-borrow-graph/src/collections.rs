@@ -80,6 +80,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         initial_refs: impl IntoIterator<Item = (K, Loc, /* is_mut */ bool)>,
     ) -> Result<(Self, BTreeMap<K, Ref>)> {
         let mut map = BTreeMap::new();
+        let canonical_reference_capacity = canonical_reference_capacity.min(512);
         let mut graph = Self {
             canonical_reference_capacity,
             fresh_id: 0,

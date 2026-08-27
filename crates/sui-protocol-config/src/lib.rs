@@ -385,6 +385,7 @@ const MAINNET_USDB: &str =
 //              PTB Move call signature at most once mutably or any number of
 //              times immutably (never by value), and never in return position.
 //              Enable allowed_proposers on devnet.
+//              Add limits for references used by programmable transactions.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2182,6 +2183,22 @@ pub struct ProtocolConfig {
     /// Maximum serialized size in bytes of a gasless transaction (SenderSignedData).
     /// Bounds the persistent storage impact of each admitted gasless transaction.
     gasless_max_tx_size_bytes: Option<u64>,
+
+    /// The multiplier for each live reference charging per-command. Only used when
+    /// `allow_references_in_ptbs` is enabled.
+    translation_per_live_reference_charge: Option<u64>,
+
+    /// The maximum number of live references while checking a command. Only used when
+    /// `allow_references_in_ptbs` is enabled.
+    max_ptb_live_references: Option<u64>,
+
+    /// The maximum number of references returned by a command. Only used when
+    /// `allow_references_in_ptbs` is enabled.
+    max_ptb_returned_references: Option<u64>,
+
+    /// The maximum number of references returned over the course of the transaction. Only used
+    /// when `allow_references_in_ptbs` is enabled.
+    max_ptb_total_returned_references: Option<u64>,
 }
 
 /// An aliased address.
@@ -2992,6 +3009,10 @@ impl ProtocolConfig {
             translation_per_type_node_charge: None,
             translation_per_reference_node_charge: None,
             translation_per_linkage_entry_charge: None,
+            translation_per_live_reference_charge: None,
+            max_ptb_live_references: None,
+            max_ptb_returned_references: None,
+            max_ptb_total_returned_references: None,
 
             max_updates_per_settlement_txn: None,
 
@@ -4641,6 +4662,11 @@ impl ProtocolConfig {
                 }
                 136 => {
                     cfg.feature_flags.ptb_tx_context_restrictions = true;
+
+                    cfg.translation_per_live_reference_charge = Some(1);
+                    cfg.max_ptb_live_references = Some(64);
+                    cfg.max_ptb_returned_references = Some(16);
+                    cfg.max_ptb_total_returned_references = Some(256);
 
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.allowed_proposers = true;

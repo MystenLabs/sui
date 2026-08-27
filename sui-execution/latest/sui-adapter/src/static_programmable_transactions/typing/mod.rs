@@ -20,7 +20,7 @@ pub fn translate_and_verify<Mode: ExecutionMode>(
     lt: L::Transaction,
 ) -> Result<ast::Transaction, Mode::Error> {
     let mut ast = translate::transaction::<Mode>(env, lt)?;
-    metering::typing::meter::<Mode::Error>(meter, &ast)?;
+    metering::typing::meter::<Mode>(meter, env.protocol_config, &ast)?;
     verify::transaction::<Mode>(env, &mut ast)?;
     invariant_checks::transaction::<Mode>(env, &ast)?;
     Ok(ast)

@@ -572,6 +572,13 @@ pub fn verify<Mode: ExecutionMode>(
 }
 
 fn verify_<Mode: ExecutionMode>(env: &Env<Mode>, txn: &T::Transaction) -> anyhow::Result<()> {
+    if env
+        .protocol_config
+        .max_ptb_live_references_as_option()
+        .is_some()
+    {
+        return Ok(());
+    }
     let mut context = Context::new(env, txn)?;
     let T::Transaction {
         gas_payment: _,
