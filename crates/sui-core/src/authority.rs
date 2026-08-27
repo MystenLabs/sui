@@ -2686,10 +2686,12 @@ impl AuthorityState {
 
         // Start a task to execute ready certificates.
         let authority_state = Arc::downgrade(&state);
+        let causal_window = state.execution_scheduler.causal_window().clone();
         spawn_monitored_task!(execution_process(
             authority_state,
             rx_ready_certificates,
             rx_execution_shutdown,
+            causal_window,
         ));
         if epoch_store
             .protocol_config()
