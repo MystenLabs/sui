@@ -32,17 +32,17 @@ use sui_types::{
     transaction_executor::{SimulateTransactionResult, TransactionChecks},
 };
 
-use super::{DEV_INSPECT_GAS_COIN_VALUE, pre_object_load_checks};
 use crate::{
     accumulators::{
         funds_read::AccountFundsRead,
         transaction_rewriting::rewrite_transaction_for_coin_reservations,
     },
+    authority::{DEV_INSPECT_GAS_COIN_VALUE, pre_object_load_checks},
     transaction_input_loader::TransactionInputLoader,
     transaction_outputs::unchanged_loaded_runtime_objects,
 };
 
-pub(super) fn simulate_transaction(
+pub(crate) fn simulate_transaction(
     mut transaction: TransactionData,
     checks: TransactionChecks,
     allow_mock_gas_coin: bool,

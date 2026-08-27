@@ -269,7 +269,6 @@ pub mod submitted_transaction_cache;
 pub mod test_authority_builder;
 pub mod transaction_deferral;
 pub mod transaction_reject_reason_cache;
-mod transaction_simulation;
 mod weighted_moving_average;
 
 pub(crate) mod authority_store;
@@ -1067,7 +1066,7 @@ pub struct AuthorityState {
 }
 
 /// Run deny list checks and process funds withdrawals before loading input objects.
-fn pre_object_load_checks(
+pub(crate) fn pre_object_load_checks(
     tx_data: &TransactionData,
     tx_signatures: &[GenericSignature],
     input_object_kinds: &[InputObjectKind],
@@ -2492,7 +2491,7 @@ impl AuthorityState {
             .congestion_tracker
             .get_suggested_gas_prices(&transaction);
 
-        transaction_simulation::simulate_transaction(
+        crate::transaction_simulation::simulate_transaction(
             transaction,
             checks,
             allow_mock_gas_coin,
