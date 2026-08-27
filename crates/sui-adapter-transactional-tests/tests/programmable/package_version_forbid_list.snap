@@ -1,0 +1,73 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 14 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-13:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5616400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 15-20:
+//# upgrade --package BaseV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5616400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, lines 22-27:
+//# publish --sender A
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3549200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 28-30:
+//# run BaseV1::base::ping --sender A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 31:
+//# run BaseV2::base::ping --sender A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 33-35:
+//# run sui::package_config::forbid_version --args object(0x426) object(1,1) 1 --sender A
+created: object(6,0), object(6,1), object(6,2)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 11392400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 7, lines 36-38:
+//# run BaseV1::base::ping --sender A
+Error: Error checking transaction input objects: Transaction is denied: Package object(1,0) version 1 is forbidden
+
+task 8, lines 39-41:
+//# run TypeUser::type_user::use_type --type-args BaseV1::base::Type --sender A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, line 42:
+//# run BaseV2::base::ping --sender A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10, lines 44-46:
+//# advance-epoch
+Epoch advanced: 1
+
+task 11, lines 47-49:
+//# run BaseV1::base::ping --sender A
+Error: Error checking transaction input objects: Transaction is denied: Package object(1,0) version 1 is forbidden
+
+task 12, lines 50-52:
+//# run TypeUser::type_user::use_type --type-args BaseV1::base::Type --sender A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13, line 53:
+//# run BaseV2::base::ping --sender A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

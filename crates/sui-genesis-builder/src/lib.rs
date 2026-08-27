@@ -1126,6 +1126,16 @@ pub fn generate_genesis_system_object(
             )?;
         }
 
+        if protocol_config.enable_package_version_forbid_list() {
+            builder.move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ident_str!("package_config").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![],
+            )?;
+        }
+
         if protocol_config.bridge() {
             let bridge_uid = builder
                 .input(CallArg::Pure(UID::new(SUI_BRIDGE_OBJECT_ID).to_bcs_bytes()))

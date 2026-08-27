@@ -1,0 +1,109 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
+---
+processed 15 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 9-14:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5593600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 16-20:
+//# publish --dependencies LeafV1 --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4286400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 22-32:
+//# publish --dependencies Mid LeafV1 --sender A
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6771600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 34-37:
+//# publish --sender A
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3427600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 39:
+//# run Root::r::make --sender A
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 41-49:
+//# upgrade --package LeafV1 --upgrade-capability 1,1 --sender A
+created: object(6,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5935600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 7, lines 51-54:
+//# programmable --sender A --inputs object(5,0)
+// The Leaf-v2 type argument lifts Root's transitive Leaf dependency to v2.
+//> 0: Root::r::public_go(Input(0));
+//> 1: Generic::g::use_type<LeafV2::l::B>();
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
+
+task 8, lines 56-58:
+//# view-object 5,0
+Owner: Shared( 6 )
+Version: 8
+Contents: Root::r::R {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    v: 2u64,
+}
+
+task 9, lines 59-66:
+//# upgrade --package LeafV2 --upgrade-capability 1,1 --sender A
+created: object(9,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5935600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 10, lines 68-70:
+//# run sui::package_config::forbid_version --args object(0x426) object(1,1) 2 --sender A
+created: object(10,0), object(10,1), object(10,2)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 11392400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 11, line 71:
+//# run Generic::g::use_type --type-args LeafV2::l::B --sender A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, lines 73-75:
+//# programmable --sender A --inputs object(5,0)
+// Without the type argument, Root's transitive Leaf dependency still resolves to v1.
+//> Root::r::public_go(Input(0));
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
+
+task 13, line 77:
+//# view-object 5,0
+Owner: Shared( 6 )
+Version: 12
+Contents: Root::r::R {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    v: 1u64,
+}
+
+task 14, lines 79-82:
+//# programmable --sender A --inputs object(5,0)
+// The type argument lifts Root's executable transitive dependency to forbidden Leaf v2.
+//> 0: Root::r::public_go(Input(0));
+//> 1: Generic::g::use_type<LeafV2::l::B>();
+Error: Error checking transaction input objects: Transaction is denied: Package object(1,0) version 2 is forbidden

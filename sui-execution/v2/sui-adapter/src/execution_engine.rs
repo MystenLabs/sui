@@ -612,6 +612,11 @@ mod checked {
                             assert!(protocol_config.enable_coin_deny_list());
                             builder = setup_coin_deny_list_state_create(builder);
                         }
+                        EndOfEpochTransactionKind::PackageConfigCreate => {
+                            panic!(
+                                "EndOfEpochTransactionKind::PackageConfigCreate should not exist in v2"
+                            );
+                        }
                         EndOfEpochTransactionKind::BridgeStateCreate(_) => {
                             panic!(
                                 "EndOfEpochTransactionKind::BridgeStateCreate should not exist in v2"
