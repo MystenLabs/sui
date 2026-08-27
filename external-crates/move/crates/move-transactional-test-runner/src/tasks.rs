@@ -14,6 +14,7 @@ use move_core_types::parsing::{
     types::ParsedType,
     values::{ParsableValue, ParsedValue},
 };
+use regex::Regex;
 use std::{convert::TryInto, fmt::Debug, path::Path, str::FromStr};
 use tempfile::NamedTempFile;
 
@@ -27,10 +28,113 @@ pub struct TaskInput<Command> {
     pub stop_line: usize,
     pub data: Option<NamedTempFile>,
     pub task_text: String,
+    pub unattached_comments_before: Vec<Vec<String>>,
+    pub unattached_comments_after: Vec<Vec<String>>,
+}
+
+type SourceLine = (usize, String);
+type CommentBlocks = Vec<Vec<SourceLine>>;
+
+fn is_task_comment(line: &str, comment_pattern: &Regex) -> bool {
+    comment_pattern.is_match(line) && !line.trim_start().starts_with("//>")
+}
+
+fn flush_comments(
+    text: &mut Vec<SourceLine>,
+    blocks: &mut CommentBlocks,
+    block: &mut Vec<SourceLine>,
+) {
+    for comments in blocks.drain(..) {
+        text.extend(comments);
+    }
+    text.append(block);
+}
+
+type BucketedTask = (
+    // Standalone comment blocks before this task.
+    CommentBlocks,
+    // Comment lines directly attached to this task's directive.
+    Vec<SourceLine>,
+    // The task's directive lines.
+    Vec<SourceLine>,
+    // Non-directive source or input lines belonging to this task.
+    Vec<SourceLine>,
+    // Standalone comment blocks after this task.
+    CommentBlocks,
+);
+
+struct TaskifyState {
+    bucketed_lines: Vec<BucketedTask>,
+    cur_unattached_before: CommentBlocks,
+    cur_comments: Vec<SourceLine>,
+    cur_commands: Vec<SourceLine>,
+    cur_text: Vec<SourceLine>,
+    pending_comments: CommentBlocks,
+    pending_comment_block: Vec<SourceLine>,
+    source_body_started: bool,
+    has_task: bool,
+    in_command: bool,
+}
+
+impl TaskifyState {
+    fn new() -> Self {
+        Self {
+            bucketed_lines: vec![],
+            cur_unattached_before: CommentBlocks::new(),
+            cur_comments: vec![],
+            cur_commands: vec![],
+            cur_text: vec![],
+            pending_comments: CommentBlocks::new(),
+            pending_comment_block: vec![],
+            source_body_started: false,
+            has_task: false,
+            in_command: true,
+        }
+    }
+
+    fn start_new_task(&mut self) {
+        if self.has_task {
+            if self.source_body_started {
+                for comments in self.pending_comments.drain(..) {
+                    self.cur_text.extend(comments);
+                }
+            }
+            self.bucketed_lines.push((
+                std::mem::take(&mut self.cur_unattached_before),
+                std::mem::take(&mut self.cur_comments),
+                std::mem::take(&mut self.cur_commands),
+                std::mem::take(&mut self.cur_text),
+                CommentBlocks::new(),
+            ));
+        }
+        self.cur_unattached_before = std::mem::take(&mut self.pending_comments);
+        self.cur_comments = std::mem::take(&mut self.pending_comment_block);
+        self.source_body_started = false;
+        self.in_command = true;
+    }
+
+    fn finish(mut self) -> Vec<BucketedTask> {
+        if self.source_body_started {
+            flush_comments(
+                &mut self.cur_text,
+                &mut self.pending_comments,
+                &mut self.pending_comment_block,
+            );
+        } else if !self.pending_comment_block.is_empty() {
+            self.pending_comments.push(self.pending_comment_block);
+        }
+        self.bucketed_lines.push((
+            self.cur_unattached_before,
+            self.cur_comments,
+            self.cur_commands,
+            self.cur_text,
+            self.pending_comments,
+        ));
+        self.bucketed_lines
+    }
 }
 
 pub fn taskify<Command: Debug + Parser>(filename: &Path) -> Result<Vec<TaskInput<Command>>> {
-    use regex::Regex;
     use std::{
         fs::File,
         io::{self, BufRead, Write},
@@ -39,7 +143,7 @@ pub fn taskify<Command: Debug + Parser>(filename: &Path) -> Result<Vec<TaskInput
     let re_whitespace = Regex::new(r"^\s*$").unwrap();
     // checks for lines that start with // comments
     // here the next character is whitespace or an ASCII character other than #
-    let re_comment = Regex::new(r"^\s*//(\s|[\x20-\x22]|[[\x24-\x7E]])").unwrap();
+    let re_comment = Regex::new(r"^\s*//(?:$|\s|[\x20-\x22]|[\x24-\x7E])").unwrap();
     // checks for lines that start with //# commands
     // cutting leading/trailing whitespace
     // capturing the command text
@@ -52,20 +156,14 @@ pub fn taskify<Command: Debug + Parser>(filename: &Path) -> Result<Vec<TaskInput
         .collect();
 
     let lines_iter = lines.into_iter().enumerate().map(|(idx, l)| (idx + 1, l));
-    let skipped_whitespace = lines_iter.skip_while(|(_line_number, line)| {
-        re_whitespace.is_match(line) || re_comment.is_match(line)
-    });
-    let mut bucketed_lines = vec![];
-    let mut cur_commands = vec![];
-    let mut cur_text = vec![];
-    let mut in_command = true;
+    let skipped_header = lines_iter.skip_while(|(_line_number, line)| re_comment.is_match(line));
+    let skipped_whitespace =
+        skipped_header.skip_while(|(_line_number, line)| re_whitespace.is_match(line));
+    let mut state = TaskifyState::new();
     for (line_number, line) in skipped_whitespace {
         if let Some(captures) = re_command_text.captures(&line) {
-            if !in_command {
-                bucketed_lines.push((cur_commands, cur_text));
-                cur_commands = vec![];
-                cur_text = vec![];
-                in_command = true;
+            if !state.in_command {
+                state.start_new_task();
             }
             let command_text = match captures.len() {
                 1 => continue,
@@ -75,29 +173,54 @@ pub fn taskify<Command: Debug + Parser>(filename: &Path) -> Result<Vec<TaskInput
             if command_text.is_empty() {
                 continue;
             }
-            cur_commands.push((line_number, command_text))
+            state.cur_commands.push((line_number, command_text));
+            state.has_task = true;
         } else if re_whitespace.is_match(&line) {
-            in_command = false;
-            continue;
+            if !state.pending_comment_block.is_empty() {
+                state
+                    .pending_comments
+                    .push(std::mem::take(&mut state.pending_comment_block));
+            }
+            state.in_command = false;
+        } else if is_task_comment(&line, &re_comment) {
+            if state.has_task && state.in_command {
+                state.cur_text.push((line_number, line));
+            } else {
+                state.pending_comment_block.push((line_number, line));
+            }
+            state.in_command = false;
         } else {
-            in_command = false;
-            cur_text.push((line_number, line))
+            flush_comments(
+                &mut state.cur_text,
+                &mut state.pending_comments,
+                &mut state.pending_comment_block,
+            );
+            // Once source begins, later comments remain task data even after a module closes.
+            // Identifying standalone trailing comments would require parsing Move source.
+            state.source_body_started = !line.trim_start().starts_with("//>");
+            state.cur_text.push((line_number, line));
+            state.in_command = false;
         }
     }
-    bucketed_lines.push((cur_commands, cur_text));
+    let bucketed_lines = state.finish();
 
     if bucketed_lines.is_empty() {
         return Ok(vec![]);
     }
 
     let mut tasks = vec![];
-    for (number, (commands, text)) in bucketed_lines.into_iter().enumerate() {
+    for (number, (unattached_before, comments, commands, text, unattached_after)) in
+        bucketed_lines.into_iter().enumerate()
+    {
         if commands.is_empty() {
             assert!(number == 0);
             bail!("No initial command")
         }
 
-        let start_line = commands.first().unwrap().0;
+        let start_line = comments
+            .first()
+            .map(|(line, _)| *line)
+            .unwrap_or(commands.first().unwrap().0);
         let command_lines_stop = commands.last().unwrap().0;
         let mut command_text = "".to_string();
         for (line_number, text) in commands {
@@ -158,7 +281,13 @@ pub fn taskify<Command: Debug + Parser>(filename: &Path) -> Result<Vec<TaskInput
             Some(data)
         };
 
-        let task_text = "//#".to_owned() + command_text.replace('\n', "\n//#").as_str();
+        let command_text = "//#".to_owned() + command_text.replace('\n', "\n//#").as_str();
+        let task_text = comments
+            .into_iter()
+            .map(|(_, comment)| comment)
+            .chain(std::iter::once(command_text))
+            .collect::<Vec<_>>()
+            .join("\n");
 
         tasks.push(TaskInput {
             command,
@@ -169,6 +298,14 @@ pub fn taskify<Command: Debug + Parser>(filename: &Path) -> Result<Vec<TaskInput
             stop_line,
             data,
             task_text,
+            unattached_comments_before: unattached_before
+                .into_iter()
+                .map(|block| block.into_iter().map(|(_, line)| line).collect())
+                .collect(),
+            unattached_comments_after: unattached_after
+                .into_iter()
+                .map(|block| block.into_iter().map(|(_, line)| line).collect())
+                .collect(),
         })
     }
     Ok(tasks)
@@ -185,6 +322,8 @@ impl<T> TaskInput<T> {
             stop_line,
             data,
             task_text,
+            unattached_comments_before,
+            unattached_comments_after,
         } = self;
         TaskInput {
             command: f(command),
@@ -195,6 +334,8 @@ impl<T> TaskInput<T> {
             stop_line,
             data,
             task_text,
+            unattached_comments_before,
+            unattached_comments_after,
         }
     }
 }

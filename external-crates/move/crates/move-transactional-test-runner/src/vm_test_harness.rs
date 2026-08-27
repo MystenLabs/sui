@@ -467,6 +467,8 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
             stop_line: _,
             data: _,
             task_text: _,
+            unattached_comments_before: _,
+            unattached_comments_after: _,
         } = task;
         match command {
             Subcommand::ViewAbstractState(view_abstract_state_command) => {

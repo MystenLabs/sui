@@ -720,6 +720,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             stop_line,
             data,
             task_text,
+            unattached_comments_before: _,
+            unattached_comments_after: _,
         } = task;
         macro_rules! get_obj {
             ($fake_id:ident, $version:expr) => {{
@@ -1135,10 +1137,13 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     .into_iter()
                     .map(|arg| arg.into_call_arg(self))
                     .collect::<anyhow::Result<_>>()?;
-                let file = data.ok_or_else(|| {
-                    anyhow::anyhow!("Missing commands for programmable transaction")
-                })?;
-                let contents = std::fs::read_to_string(file.path())?;
+                // `data` is absent when taskification finds no input text (rather than creating an
+                // empty temporary file), including when comments are rendered separately in
+                // snapshots. Treat it as empty input instead of rejecting an empty transaction.
+                let contents = match data {
+                    Some(file) => std::fs::read_to_string(file.path())?,
+                    None => String::new(),
+                };
                 let commands = ParsedCommand::parse_vec(&contents)?;
                 let staged = &self.staged_modules;
                 let state = &self.compiled_state;

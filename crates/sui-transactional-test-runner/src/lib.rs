@@ -18,7 +18,7 @@ pub mod test_adapter;
 
 #[cfg(feature = "testing")]
 pub use move_transactional_test_runner::framework::{
-    create_adapter, run_tasks_with_adapter, run_test_impl,
+    create_adapter_and_taskify, run_tasks_with_adapter, run_test_impl,
 };
 
 #[cfg(feature = "testing")]
