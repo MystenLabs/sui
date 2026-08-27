@@ -359,11 +359,15 @@ async fn test_has_ab_no_coins() {
         gas_payment
     );
 
-    // Verify expiration is set (ValidDuring for pure AB payment)
+    // Verify an epoch-scoped expiration is set for pure AB payment. Simulate returns `Validity`
+    // when it can also name the transaction's proposers, and `ValidDuring` otherwise.
     let expiration = response.transaction.transaction.expiration();
     assert!(
-        matches!(expiration, TransactionExpiration::ValidDuring { .. }),
-        "Expected ValidDuring expiration for pure AB payment, got: {:?}",
+        matches!(
+            expiration,
+            TransactionExpiration::ValidDuring { .. } | TransactionExpiration::Validity { .. }
+        ),
+        "Expected ValidDuring or Validity expiration for pure AB payment, got: {:?}",
         expiration
     );
 
@@ -388,6 +392,8 @@ async fn test_has_ab_no_coins() {
 
 #[sim_test]
 async fn test_no_ab_has_coins() {
+    use sui_types::transaction::TransactionExpiration;
+
     let test_env = TestEnvBuilder::new().build().await;
 
     let (sender, _gas) = test_env.get_sender_and_gas(0);
@@ -428,6 +434,21 @@ async fn test_no_ab_has_coins() {
             "Gas payment[{}] should NOT be a coin reservation when no AB exists",
             i
         );
+    }
+
+    // Even a coin-paid transaction gets a proposer restriction when the fullnode can name its
+    // preferred validators; otherwise the expiration stays untouched. When a set is present it
+    // must be well-formed, or the transaction we execute below would be rejected outright.
+    match response.transaction.transaction.expiration() {
+        TransactionExpiration::None => (),
+        TransactionExpiration::Validity {
+            allowed_proposers: Some(allowed),
+            ..
+        } => {
+            assert!(allowed.proposers.iter().is_sorted_by(|a, b| a < b));
+            assert!(allowed.proposers.len() <= 3);
+        }
+        other => panic!("unexpected expiration for coin-paid transaction: {other:?}"),
     }
 
     // Execute the simulated transaction to verify it's valid
@@ -753,9 +774,9 @@ async fn test_ab_only_budget_exceeds_half_balance() {
     assert!(
         matches!(
             response.transaction.transaction.expiration(),
-            TransactionExpiration::ValidDuring { .. }
+            TransactionExpiration::ValidDuring { .. } | TransactionExpiration::Validity { .. }
         ),
-        "Expected ValidDuring expiration for pure AB payment, got: {:?}",
+        "Expected ValidDuring or Validity expiration for pure AB payment, got: {:?}",
         response.transaction.transaction.expiration()
     );
 

@@ -241,6 +241,12 @@ pub struct NodeConfig {
     #[serde(default = "bool_true")]
     pub enable_soft_bundle: bool,
 
+    /// Whether the simulate API restricts returned transactions to this node's preferred
+    /// proposers (`TransactionExpiration::Validity`). Disabling falls back to `ValidDuring`,
+    /// or no expiration for coin-paid transactions.
+    #[serde(default = "bool_true")]
+    pub enable_simulate_allowed_proposers: bool,
+
     #[serde(default)]
     pub verifier_signing_config: VerifierSigningConfig,
 

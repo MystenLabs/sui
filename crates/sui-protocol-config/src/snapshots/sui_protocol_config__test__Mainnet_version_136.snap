@@ -129,6 +129,7 @@ feature_flags:
   check_for_init_during_upgrade: true
   enable_init_on_upgrade: true
   enable_order_independent_upgrade_init_linkage: true
+  harden_linkage_consistency: true
   include_checkpoint_artifacts_digest_in_summary: true
   use_mfp_txns_in_load_initial_object_debts: true
   cancel_for_failed_dkg_early: true
@@ -1272,3 +1273,7 @@ include_special_package_amendments:
     "0000000000000000000000000000000000000000000000000000000000000003": "0000000000000000000000000000000000000000000000000000000000000003"
     859de5e155d57462d3fe0aeb980b9a3f9cdccf76522d9499f372789183440aca: 859de5e155d57462d3fe0aeb980b9a3f9cdccf76522d9499f372789183440aca
 gasless_max_tx_size_bytes: 16384
+translation_per_live_reference_charge: 1
+max_ptb_live_references: 64
+max_ptb_returned_references: 16
+max_ptb_total_returned_references: 256

@@ -1398,6 +1398,7 @@
                 "gasless_verify_remaining_balance": false,
                 "generate_df_type_layouts": false,
                 "granular_post_execution_checks": false,
+                "harden_linkage_consistency": false,
                 "hardened_otw_check": false,
                 "ignore_execution_time_observations_after_certs_closed": false,
                 "include_cancelled_randomness_txns_in_prologue": false,
@@ -1924,6 +1925,9 @@
                 "max_programmable_tx_commands": {
                   "u32": "1024"
                 },
+                "max_ptb_live_references": null,
+                "max_ptb_returned_references": null,
+                "max_ptb_total_returned_references": null,
                 "max_ptb_value_size": null,
                 "max_publish_or_upgrade_per_ptb": null,
                 "max_pure_argument_size": {
@@ -2085,6 +2089,7 @@
                 "translation_per_command_base_charge": null,
                 "translation_per_input_base_charge": null,
                 "translation_per_linkage_entry_charge": null,
+                "translation_per_live_reference_charge": null,
                 "translation_per_reference_node_charge": null,
                 "translation_per_type_node_charge": null,
                 "translation_pure_input_per_byte_charge": null,
@@ -2309,6 +2314,7 @@
                 "groth16_verify_groth16_proof_internal_bn254_cost_base": "52",
                 "groth16_verify_groth16_proof_internal_bn254_cost_per_public_input": "2",
                 "groth16_verify_groth16_proof_internal_public_input_cost_per_byte": "2",
+                "harden_linkage_consistency": false,
                 "hardened_otw_check": false,
                 "hash_blake2b256_cost_base": "52",
                 "hash_blake2b256_data_cost_per_block": "2",

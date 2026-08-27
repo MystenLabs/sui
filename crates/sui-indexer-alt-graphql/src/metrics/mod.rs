@@ -15,6 +15,10 @@ use prometheus::register_int_counter_with_registry;
 use prometheus::register_int_gauge_vec_with_registry;
 use prometheus::register_int_gauge_with_registry;
 
+mod subscription;
+
+pub use subscription::SubscriptionMetrics;
+
 /// Histogram buckets for the distribution of latency (time between receiving a request and sending
 /// a response).
 const LATENCY_SEC_BUCKETS: &[f64] = &[

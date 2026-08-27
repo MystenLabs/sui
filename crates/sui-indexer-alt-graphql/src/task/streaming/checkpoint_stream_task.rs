@@ -66,7 +66,6 @@ use backoff::ExponentialBackoff;
 #[cfg(any(feature = "staging", test))]
 use futures::Stream;
 use futures::StreamExt;
-use move_core_types::account_address::AccountAddress;
 use sui_futures::service::Service;
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
@@ -89,7 +88,6 @@ use sui_types::object::Object as NativeObject;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 use tokio::sync::broadcast;
-use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::watch;
 use tonic::Streaming;
 use tonic::transport::Endpoint;
@@ -100,8 +98,11 @@ use tracing::warn;
 use crate::config::SubscriptionConfig;
 #[cfg(any(feature = "staging", test))]
 use crate::error::RpcError;
+use crate::metrics::SubscriptionMetrics;
 use crate::task::watermark::Watermarks;
 
+use super::StreamedObjectStore;
+use super::StreamedTransactionStore;
 use super::StreamingPackageStore;
 use super::SubscriptionReadiness;
 #[cfg(any(feature = "staging", test))]
@@ -109,6 +110,12 @@ use super::checkpoint_resume::scan_checkpoints;
 #[cfg(any(feature = "staging", test))]
 use super::gap_recovery::CheckpointFetcher;
 use super::gap_recovery::recover_gap;
+#[cfg(test)]
+use super::lifecycle::SubscriberLimit;
+#[cfg(any(feature = "staging", test))]
+use super::lifecycle::SubscriptionLifecycleGuard;
+#[cfg(any(feature = "staging", test))]
+use super::lifecycle::SubscriptionTerminationReason;
 use super::processed_checkpoint::ProcessedCheckpoint;
 use super::processed_checkpoint::ProcessedTransaction;
 
@@ -187,15 +194,28 @@ pub(crate) struct SubscriptionBroadcast {
     /// channel. Distinct from any `resume_from` arg passed by subscribers (those refer to the
     /// kv-rpc resume fallback, not the live broadcast).
     first_live_checkpoint: u64,
+    /// Per-subscriber metrics, shared with every stream this broadcast spawns.
+    metrics: Arc<SubscriptionMetrics>,
 }
 
 #[cfg(any(feature = "staging", test))]
 impl SubscriptionBroadcast {
-    pub(crate) fn new(broadcaster: CheckpointBroadcaster, first_live_checkpoint: u64) -> Self {
+    pub(crate) fn new(
+        broadcaster: CheckpointBroadcaster,
+        first_live_checkpoint: u64,
+        metrics: Arc<SubscriptionMetrics>,
+    ) -> Self {
         Self {
             broadcaster,
             first_live_checkpoint,
+            metrics,
         }
+    }
+
+    /// Per-subscriber metrics shared by every stream this broadcast spawns.
+    #[cfg(feature = "staging")]
+    pub(crate) fn metrics(&self) -> &SubscriptionMetrics {
+        &self.metrics
     }
 
     /// Direct access to the broadcast receiver template. Subscribers should call
@@ -224,6 +244,7 @@ impl SubscriptionBroadcast {
         resume_from: Option<u64>,
         fetcher: F,
         config: &SubscriptionConfig,
+        guard: SubscriptionLifecycleGuard,
     ) -> impl Stream<Item = Result<Arc<ProcessedCheckpoint>, RpcError>> + 'static {
         // Resubscribe and pin the handoff once the scan is within this many checkpoints of the tip.
         // Half the buffer leaves room for checkpoints arriving during the handoff, so it won't lag.
@@ -241,7 +262,14 @@ impl SubscriptionBroadcast {
             // Phase 1: scan toward the tip; within `handoff_threshold`, resubscribe + pin, stop at it.
             if let Some(start_after) = last_yielded {
                 for await item in scan_checkpoints(fetcher, self.clone(), start_after, &config) {
-                    let processed = item?;
+                    let processed = match item {
+                        Ok(processed) => processed,
+                        Err(e) => {
+                            guard.terminate(SubscriptionTerminationReason::BackfillError);
+                            yield Err(e);
+                            return;
+                        }
+                    };
                     let seq = processed.summary.sequence_number;
                     last_yielded = Some(seq);
                     yield Ok(processed);
@@ -275,6 +303,7 @@ impl SubscriptionBroadcast {
                                 received = processed.summary.sequence_number,
                                 "Unexpected gap between scan and live; disconnecting"
                             );
+                            guard.terminate(SubscriptionTerminationReason::UnexpectedGap);
                             yield Err(reconnect_error());
                             return;
                         }
@@ -286,11 +315,13 @@ impl SubscriptionBroadcast {
                     },
                     Err(broadcast::error::RecvError::Lagged(missed)) if !delivered_live => {
                         warn!(missed, "Subscriber fell behind during catch-up (likely kv-rpc lag)");
+                        guard.terminate(SubscriptionTerminationReason::Lagged);
                         yield Err(reconnect_error());
                         return;
                     }
                     // Slow subscriber (Lagged after going live) or closed channel: disconnect.
                     Err(e) => {
+                        guard.terminate(SubscriptionTerminationReason::from_recv_error(&e));
                         yield Err(broadcast_error(e));
                         return;
                     }
@@ -335,7 +366,10 @@ pub(crate) struct CheckpointStreamTask {
     uri: Uri,
     sender: broadcast::Sender<Arc<ProcessedCheckpoint>>,
     streaming_packages: Arc<StreamingPackageStore>,
-    package_eviction_tx: UnboundedSender<(u64, Vec<AccountAddress>)>,
+    streaming_transactions: Arc<StreamedTransactionStore>,
+    // Populated only under the staging feature (from the checkpoint's `execution_objects`).
+    #[cfg_attr(not(feature = "staging"), allow(dead_code))]
+    streaming_objects: Arc<StreamedObjectStore>,
     readiness: Arc<SubscriptionReadiness>,
     /// kv-rpc reader used to fill upstream gaps. Required: streaming subscriptions need a
     /// fallback source to recover from disconnects. lib.rs ensures this is configured when
@@ -345,6 +379,7 @@ pub(crate) struct CheckpointStreamTask {
     /// before fetching.
     watermarks_rx: watch::Receiver<Arc<Watermarks>>,
     gap_recovery_chunk_size: usize,
+    metrics: Arc<SubscriptionMetrics>,
 }
 
 impl CheckpointStreamTask {
@@ -356,21 +391,25 @@ impl CheckpointStreamTask {
         uri: Uri,
         config: &SubscriptionConfig,
         streaming_packages: Arc<StreamingPackageStore>,
-        package_eviction_tx: UnboundedSender<(u64, Vec<AccountAddress>)>,
+        streaming_transactions: Arc<StreamedTransactionStore>,
+        streaming_objects: Arc<StreamedObjectStore>,
         readiness: Arc<SubscriptionReadiness>,
         ledger_grpc_reader: LedgerGrpcReader,
         watermarks_rx: watch::Receiver<Arc<Watermarks>>,
+        metrics: Arc<SubscriptionMetrics>,
     ) -> (Self, CheckpointBroadcaster) {
         let (sender, broadcaster) = broadcast::channel(config.broadcast_buffer);
         let task = Self {
             uri,
             sender,
             streaming_packages,
-            package_eviction_tx,
+            streaming_transactions,
+            streaming_objects,
             readiness,
             ledger_grpc_reader,
             watermarks_rx,
             gap_recovery_chunk_size: config.gap_recovery_chunk_size,
+            metrics,
         };
         (task, broadcaster)
     }
@@ -408,13 +447,23 @@ impl CheckpointStreamTask {
             loop {
                 info!("Connecting to checkpoint stream at {}...", self.uri);
                 let stream = backoff::future::retry(reconnect_backoff(), || async {
-                    self.connect().await.map_err(classify_connect_error)
+                    self.connect().await.map_err(|e| {
+                        self.metrics.record_connect_failure(&e);
+                        classify_connect_error(e)
+                    })
                 })
-                .await?;
+                .await
+                .inspect_err(|_| {
+                    self.metrics.record_termination("connect_error");
+                })?;
                 info!("Connected to checkpoint stream at {}", self.uri);
 
                 self.consume_stream(stream, &mut last_broadcast, &mut first_live_recorded)
-                    .await?;
+                    .await
+                    .inspect_err(|_| {
+                        self.metrics.record_termination("stream_error");
+                    })?;
+                self.metrics.upstream_disconnections.inc();
                 warn!("Checkpoint stream ended, reconnecting");
             }
         })
@@ -463,10 +512,12 @@ impl CheckpointStreamTask {
                 && seq > last + 1
             {
                 info!(from = last + 1, to = seq - 1, "Recovering gap");
+                self.metrics.upstream_gap_recoveries.inc();
                 recover_gap(
                     &self.ledger_grpc_reader,
                     &self.watermarks_rx,
                     &self.sender,
+                    &self.metrics,
                     last + 1,
                     seq - 1,
                     self.gap_recovery_chunk_size,
@@ -487,15 +538,27 @@ impl CheckpointStreamTask {
     /// `recover_gap` skip this step because the gate already waits for both
     /// `ledger_grpc` and `kv_packages` to catch up.
     fn index_and_broadcast(&self, checkpoint: ProtoCheckpoint, seq: u64) -> anyhow::Result<()> {
-        let packages = extract_packages(&checkpoint);
-        if !packages.is_empty() {
-            self.streaming_packages.index_packages(seq, &packages);
-            let ids = packages.iter().map(|p| p.storage_id()).collect();
-            // Send errors only if the eviction task has exited; nothing will drain the
-            // store, but we keep serving.
-            let _ = self.package_eviction_tx.send((seq, ids));
-        }
-        let processed = process_checkpoint(checkpoint)?;
+        // Index this checkpoint's packages and transactions into the streaming caches so subscribers
+        // resolve them (e.g. `Object.previousTransaction`) while the checkpoint is ahead of the
+        // persistent index; the eviction task drains each cache once the index catches up.
+        self.streaming_packages
+            .index_packages(seq, &extract_packages(&checkpoint));
+        let processed = process_checkpoint(checkpoint).inspect_err(|_| {
+            self.metrics.upstream_malformed_checkpoints.inc();
+        })?;
+        self.streaming_transactions
+            .index_transactions(seq, &processed.transactions);
+        // `execution_objects` only exists under the staging feature (it's the streamed object source).
+        #[cfg(feature = "staging")]
+        self.streaming_objects
+            .index_objects(seq, &processed.execution_objects);
+
+        self.metrics.record_processed_checkpoint(
+            "live",
+            processed.summary.sequence_number,
+            processed.summary.timestamp_ms,
+        );
+
         // Ignore send errors: no active subscribers is a normal state.
         let _ = self.sender.send(Arc::new(processed));
         Ok(())
@@ -793,6 +856,15 @@ mod tests {
         tx.send(Arc::new(processed)).ok();
     }
 
+    fn test_guard() -> SubscriptionLifecycleGuard {
+        SubscriptionLifecycleGuard::new(
+            "checkpoints",
+            &SubscriptionMetrics::new_for_test(),
+            &SubscriberLimit::new(10),
+        )
+        .unwrap()
+    }
+
     #[tokio::test]
     async fn subscribe_no_resume_yields_live_only() {
         use futures::FutureExt;
@@ -801,7 +873,8 @@ mod tests {
         // Fetcher is unused since resume_from is None.
         let fetcher = MockFetcher::success_for_range(0..=0);
 
-        let stream = broadcast.subscribe(None, fetcher, &SubscriptionConfig::default());
+        let stream =
+            broadcast.subscribe(None, fetcher, &SubscriptionConfig::default(), test_guard());
         tokio::pin!(stream);
 
         // Poll once so the receiver gets pinned at tail=0 before any sends.
@@ -825,7 +898,12 @@ mod tests {
 
         // resume_from = 2 → Phase 1 yields 3, 4, 5; then Phase 2 picks up live items.
         let fetcher = MockFetcher::success_for_range(3..=5);
-        let stream = broadcast.subscribe(Some(2), fetcher, &SubscriptionConfig::default());
+        let stream = broadcast.subscribe(
+            Some(2),
+            fetcher,
+            &SubscriptionConfig::default(),
+            test_guard(),
+        );
         tokio::pin!(stream);
 
         // Phase 1 catches up via scan.
@@ -841,7 +919,8 @@ mod tests {
     async fn subscribe_yields_error_when_channel_closes() {
         let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
         let fetcher = MockFetcher::success_for_range(0..=0);
-        let stream = broadcast.subscribe(None, fetcher, &SubscriptionConfig::default());
+        let stream =
+            broadcast.subscribe(None, fetcher, &SubscriptionConfig::default(), test_guard());
         tokio::pin!(stream);
 
         // Dropping the sender closes the channel; subscriber should yield an error and end.

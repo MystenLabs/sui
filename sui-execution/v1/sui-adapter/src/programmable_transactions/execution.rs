@@ -5,10 +5,9 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+
     use crate::execution_mode::ExecutionMode;
-    use crate::execution_value::{
-        CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
-    };
+    use crate::execution_value::{CommandKind, ObjectContents, ObjectValue, RawValueType, Value};
     use crate::gas_charger::GasCharger;
     use move_binary_format::{
         compatibility::{Compatibility, InclusionCheck},
@@ -37,6 +36,7 @@ mod checked {
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::execution_status::{CommandArgumentError, PackageUpgradeError};
+    use sui_types::storage::StorageView;
     use sui_types::storage::{get_package_objects, PackageObject};
     use sui_types::{
         base_types::{
@@ -70,7 +70,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<ExecutionMetrics>,
         vm: &MoveVM,
-        state_view: &mut dyn ExecutionState,
+        state_view: &mut dyn StorageView,
         tx_context: &mut TxContext,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,

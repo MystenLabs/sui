@@ -5,18 +5,19 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+
     use std::{
         borrow::Borrow,
         collections::{BTreeMap, HashMap},
         sync::Arc,
     };
+    use sui_types::storage::StorageView;
 
     use crate::error::convert_vm_error;
     use crate::execution_mode::ExecutionMode;
     use crate::execution_value::{CommandKind, ObjectContents, TryFromValue, Value};
     use crate::execution_value::{
-        ExecutionState, InputObjectMetadata, InputValue, ObjectValue, RawValueType, ResultValue,
-        UsageKind,
+        InputObjectMetadata, InputValue, ObjectValue, RawValueType, ResultValue, UsageKind,
     };
     use crate::gas_charger::GasCharger;
     use crate::programmable_transactions::linkage_view::LinkageView;
@@ -76,7 +77,7 @@ mod checked {
         pub linkage_view: LinkageView<'state>,
         pub native_extensions: NativeContextExtensions<'state>,
         /// The global state, used for resolving packages
-        pub state_view: &'state dyn ExecutionState,
+        pub state_view: &'state dyn StorageView,
         /// A shared transaction context, contains transaction digest information and manages the
         /// creation of new object IDs
         pub tx_context: &'a mut TxContext,
@@ -120,12 +121,12 @@ mod checked {
             protocol_config: &'a ProtocolConfig,
             metrics: Arc<ExecutionMetrics>,
             vm: &'vm MoveVM,
-            state_view: &'state dyn ExecutionState,
+            state_view: &'state dyn StorageView,
             tx_context: &'a mut TxContext,
             gas_charger: &'a mut GasCharger,
             inputs: Vec<CallArg>,
         ) -> Result<Self, ExecutionError> {
-            let mut linkage_view = LinkageView::new(Box::new(state_view.as_sui_resolver()));
+            let mut linkage_view = LinkageView::new(Box::new(state_view));
             let mut input_object_map = BTreeMap::new();
             let inputs = inputs
                 .into_iter()
@@ -181,7 +182,7 @@ mod checked {
                 }
             };
             let native_extensions = new_native_extensions(
-                state_view.as_child_resolver(),
+                state_view,
                 input_object_map,
                 !gas_charger.is_unmetered(),
                 protocol_config,
@@ -1127,7 +1128,7 @@ mod checked {
     fn load_object(
         protocol_config: &ProtocolConfig,
         vm: &MoveVM,
-        state_view: &dyn ExecutionState,
+        state_view: &dyn StorageView,
         linkage_view: &mut LinkageView,
         new_packages: &[MovePackage],
         input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
@@ -1196,7 +1197,7 @@ mod checked {
     fn load_call_arg(
         protocol_config: &ProtocolConfig,
         vm: &MoveVM,
-        state_view: &dyn ExecutionState,
+        state_view: &dyn StorageView,
         linkage_view: &mut LinkageView,
         new_packages: &[MovePackage],
         input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
@@ -1223,7 +1224,7 @@ mod checked {
     fn load_object_arg(
         protocol_config: &ProtocolConfig,
         vm: &MoveVM,
-        state_view: &dyn ExecutionState,
+        state_view: &dyn StorageView,
         linkage_view: &mut LinkageView,
         new_packages: &[MovePackage],
         input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,

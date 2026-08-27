@@ -84,7 +84,7 @@ named-lock = "0.2.0"
 num = "0.4.0"
 num_cpus = "1.13.0"
 once_cell = "1.7.2"
-ouroboros = "0.17.2"
+ouroboros = "0.18.4"
 packed_struct = "0.10.1"
 parking_lot = "0.11.1"
 path-clean = "1.0.1"
@@ -92,7 +92,7 @@ petgraph = "0.8.1"
 phf = { version = "0.11", features = ["macros"] }
 pretty_simple = "0.1.1"
 pretty_assertions = "1.4.1"
-primitive-types = { version = "0.10.1", features = ["impl-serde"] }
+primitive-types = { version = "0.12.2", features = ["impl-serde"] }
 proptest = "1.6.0"
 proptest-derive = { version = "0.5", features = ["boxed_union"] }
 quick_cache = { version = "0.6.18", features = ["stats"] }

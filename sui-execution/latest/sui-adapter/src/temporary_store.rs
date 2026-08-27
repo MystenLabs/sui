@@ -849,6 +849,11 @@ impl<'backing> TemporaryStore<'backing> {
 
     /// Check that every modified object traces back to an authenticated owner.
     /// See [`invariants::InvariantChecker::check_ownership_invariants`].
+    /// See [`invariants::InvariantChecker::check_published_packages`].
+    pub(crate) fn check_published_packages(&self) -> Result<(), ExecutionError> {
+        self.invariants.check_published_packages(self)
+    }
+
     pub(crate) fn check_ownership_invariants(
         &self,
         sender: &SuiAddress,
@@ -958,10 +963,10 @@ impl TemporaryStore<'_> {
         params: &AdvanceEpochParams,
         protocol_config: &ProtocolConfig,
     ) {
-        let wrapper = get_sui_system_state_wrapper(self.store.as_object_store())
+        let wrapper = get_sui_system_state_wrapper(self.store)
             .expect("System state wrapper object must exist");
         let (old_object, new_object) =
-            wrapper.advance_epoch_safe_mode(params, self.store.as_object_store(), protocol_config);
+            wrapper.advance_epoch_safe_mode(params, self.store, protocol_config);
         self.mutate_child_object(old_object, new_object);
     }
 }
@@ -1138,7 +1143,7 @@ impl Storage for TemporaryStore<'_> {
         let result = check_coin_deny_list_v2_during_execution(
             receiving_funds_type_and_owners,
             self.cur_epoch,
-            self.store.as_object_store(),
+            self.store,
         );
         // The denylist object is only loaded if there are regulated transfers.
         // And also if we already have it in the input there is no need to commit it again in the effects.

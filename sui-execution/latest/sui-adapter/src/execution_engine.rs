@@ -8,7 +8,6 @@ pub(crate) mod checked {
 
     use crate::adapter::new_move_runtime;
     use crate::execution_mode::{self, ExecutionMode};
-    use crate::execution_value::SuiResolver;
     use crate::gas_charger::{PaymentKind, PaymentMethod};
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
@@ -294,7 +293,7 @@ pub(crate) mod checked {
             metrics,
             move_vm,
             &mut temporary_store,
-            store.as_backing_package_store(),
+            store,
             tx_context,
             &mut gas_charger,
             None,
@@ -536,6 +535,7 @@ pub(crate) mod checked {
                 &sponsor,
                 &mutable_inputs,
                 is_epoch_change,
+                execution_result.is_ok(),
             ) {
                 // FIXME: we cannot fail the transaction if this is an epoch change transaction.
                 execution_result = Err(e);
@@ -747,6 +747,7 @@ pub(crate) mod checked {
             sponsor: &Option<SuiAddress>,
             mutable_inputs: &HashSet<ObjectID>,
             is_epoch_change: bool,
+            execution_succeeded: bool,
         ) -> Result<(), Mode::Error> {
             let conservation = run_conservation_checks::<Mode>(
                 temporary_store,
@@ -768,6 +769,10 @@ pub(crate) mod checked {
                     )
                     .unwrap()
             } // else, in dev inspect mode and anything goes--don't check
+
+            if execution_succeeded {
+                temporary_store.check_published_packages()?;
+            }
             conservation
         }
 
@@ -1049,7 +1054,7 @@ pub(crate) mod checked {
                 metrics,
                 move_vm,
                 temporary_store,
-                store.as_backing_package_store(),
+                store,
                 tx_ctx,
                 gas_charger,
                 rewritten_inputs,
@@ -1062,7 +1067,7 @@ pub(crate) mod checked {
                     metrics,
                     move_vm,
                     temporary_store,
-                    store.as_backing_package_store(),
+                    store,
                     tx_ctx,
                     gas_charger,
                     None,
@@ -1367,7 +1372,7 @@ pub(crate) mod checked {
             metrics.clone(),
             move_vm,
             temporary_store,
-            store.as_backing_package_store(),
+            store,
             tx_ctx.clone(),
             gas_charger,
             None,
@@ -1445,7 +1450,7 @@ pub(crate) mod checked {
                     metrics.clone(),
                     move_vm,
                     temporary_store,
-                    store.as_backing_package_store(),
+                    store,
                     tx_ctx.clone(),
                     gas_charger,
                     None,
@@ -1519,7 +1524,7 @@ pub(crate) mod checked {
             metrics,
             move_vm,
             temporary_store,
-            store.as_backing_package_store(),
+            store,
             tx_ctx,
             gas_charger,
             None,
@@ -1667,7 +1672,7 @@ pub(crate) mod checked {
             metrics,
             move_vm,
             temporary_store,
-            store.as_backing_package_store(),
+            store,
             tx_ctx,
             gas_charger,
             None,
@@ -1740,7 +1745,7 @@ pub(crate) mod checked {
             metrics,
             move_vm,
             temporary_store,
-            store.as_backing_package_store(),
+            store,
             tx_ctx,
             gas_charger,
             None,
