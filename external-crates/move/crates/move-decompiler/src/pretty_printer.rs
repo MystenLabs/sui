@@ -37,7 +37,7 @@ impl ModuleContext<'_> {
 
     /// Suffix for a match pattern that names no fields: fielded variants must still
     /// acknowledge their fields (`{ .. }`), while unit variants must stay bare.
-    fn empty_pattern_suffix(&self, enum_ty: &ast::TypeRef, variant: Symbol) -> &'static str {
+    fn empty_pattern_suffix(&self, enum_ty: &ast::TypeRef, variant: Symbol) -> Doc {
         let enum_name = match enum_ty {
             ast::TypeRef::Qualified(_, name) => *name,
             ast::TypeRef::Aliased(name) => *name,
@@ -48,12 +48,12 @@ impl ModuleContext<'_> {
             .and_then(|e| e.variants.iter().find(|v| v.name == variant))
             .map(|v| v.fields.len());
         match arity {
-            Some(0) => "",
-            Some(_) => " { .. }",
+            Some(0) => D::nil(),
+            Some(_) => D::text(" { .. }"),
             None => {
                 // Enum destructuring is module-local, so every head must resolve here.
                 debug_assert!(false, "unknown variant {enum_name}::{variant}");
-                ""
+                D::nil()
             }
         }
     }
@@ -242,11 +242,11 @@ pub fn module<S: SourceKind>(
 fn function(context: &ModuleContext<'_>, fun: &Function) -> Doc {
     // Keyed by node identity: `fun.code` must not change before the `exp` calls below.
     let muts = MutAnnotations::analyze(fun);
-    let header = fun_header_doc(fun, &muts);
     let context = FunctionContext {
         module: context,
         muts: &muts,
     };
+    let header = fun_header_doc(context, fun);
     let code = &fun.code;
 
     // Notices for structurer residue. Prepending them inside the function braces puts the
@@ -338,7 +338,7 @@ fn peek_block(exp: &Exp) -> &Exp {
 // in the same shape as `move_model_2::pretty_printer::fun_header` etc. - the difference is the
 // types they read have been through `collect_uses`.
 
-fn fun_header_doc(fun: &Function, muts: &MutAnnotations) -> Doc {
+fn fun_header_doc(context: FunctionContext<'_>, fun: &Function) -> Doc {
     let Function {
         name,
         visibility,
@@ -387,7 +387,7 @@ fn fun_header_doc(fun: &Function, muts: &MutAnnotations) -> Doc {
         // Parameter names follow the same `l{i}` scheme as `term_reconstruction::local_name`.
         let parts = parameters.iter().enumerate().map(|(i, ty)| {
             let name = format!("l{i}");
-            mut_name_doc(&name, muts.param_needs_mut(&name))
+            mut_name_doc(&name, context.muts.param_needs_mut(&name))
                 .concat(D::text(":"))
                 .group()
                 .concat_space(type_doc(ty))
@@ -732,14 +732,14 @@ fn exp(context: FunctionContext<'_>, exp: &Exp) -> Doc {
                 }
             },
             Exp::LetBind(lhs, rhs) => {
-                let lhs_doc = let_lhs_doc(lhs, |n| context.muts.needs_mut(e, n));
+                let lhs_doc = let_lhs_doc(context, e, lhs);
                 D::text("let")
                     .concat_space(lhs_doc)
                     .concat_space(D::text("="))
                     .concat_space(recur(context, rhs))
             }
             Exp::Declare(lhs) => {
-                let lhs_doc = let_lhs_doc(lhs, |n| context.muts.needs_mut(e, n));
+                let lhs_doc = let_lhs_doc(context, e, lhs);
                 D::text("let").concat_space(lhs_doc)
             }
             Exp::Call((m, f), args) => {
@@ -784,8 +784,8 @@ fn exp(context: FunctionContext<'_>, exp: &Exp) -> Doc {
             Exp::Switch(subject, enum_ty, arms) => {
                 let arms_doc = Doc::intersperse(
                     arms.iter().map(|(variant, body)| {
-                        let dots = context.module.empty_pattern_suffix(enum_ty, *variant);
-                        D::text(format!("{enum_ty}::{variant}{dots}"))
+                        D::text(format!("{enum_ty}::{variant}"))
+                            .concat(context.module.empty_pattern_suffix(enum_ty, *variant))
                             .concat_space(D::text("=>"))
                             .concat_space(e_block(context, body))
                     }),
@@ -796,15 +796,14 @@ fn exp(context: FunctionContext<'_>, exp: &Exp) -> Doc {
                     .concat_space(braces_block(arms_doc))
             }
             Exp::Match(subject, enum_ty, arms) => {
+                let if_kw = D::text("if");
                 let arms_doc = Doc::intersperse(
                     arms.iter().enumerate().map(|(arm_idx, arm)| {
-                        let mut pat = if arm.fields.is_empty() {
-                            let dots = context.module.empty_pattern_suffix(enum_ty, arm.variant);
-                            D::text(format!("{enum_ty}::{}{dots}", arm.variant))
+                        let mut pat = D::text(format!("{enum_ty}::{}", arm.variant));
+                        if arm.fields.is_empty() {
+                            pat = pat
+                                .concat(context.module.empty_pattern_suffix(enum_ty, arm.variant));
                         } else {
-                            D::text(format!("{enum_ty}::{}", arm.variant))
-                        };
-                        if !arm.fields.is_empty() {
                             let field_doc = Doc::intersperse(
                                 arm.fields.iter().map(|(sym, name)| {
                                     D::text(format!("{sym}:")).concat_space(mut_name_doc(
@@ -821,7 +820,7 @@ fn exp(context: FunctionContext<'_>, exp: &Exp) -> Doc {
                         }
                         if let Some(guard) = &arm.guard {
                             pat = pat
-                                .concat_space(D::text("if"))
+                                .concat_space(if_kw.clone())
                                 .concat_space(recur(context, guard).parens());
                         }
                         pat.concat_space(D::text("=>"))
@@ -849,7 +848,7 @@ fn exp(context: FunctionContext<'_>, exp: &Exp) -> Doc {
             Exp::Primitive { op, args } => primitive_op_doc(context, op, args),
             Exp::Data { op, args } => data_op_doc(context, op, args),
             Exp::Unpack(struct_ty, items, exp) => {
-                let items_doc = binder_fields(items, |n| context.muts.needs_mut(e, n));
+                let items_doc = binder_fields(context, e, items);
                 D::text("let")
                     .concat_space(D::text(format!("{struct_ty}")))
                     .concat_space(items_doc)
@@ -866,7 +865,7 @@ fn exp(context: FunctionContext<'_>, exp: &Exp) -> Doc {
                 }
             }
             Exp::UnpackVariant(_unpack_kind, (enum_ty, variant), items, exp) => {
-                let items_doc = binder_fields(items, |n| context.muts.needs_mut(e, n));
+                let items_doc = binder_fields(context, e, items);
                 // No `&`/`&mut` prefix: by-ref unpack operands are already references in
                 // verifier-typed bytecode.
                 let rhs = recur(context, exp);
@@ -1002,9 +1001,9 @@ fn mut_name_doc(name: &str, is_mut: bool) -> Doc {
 }
 
 /// Render a `let` left-hand side (`_` when empty, a bare name, or a parenthesized tuple)
-/// with `mut` on each binding `needs_mut` selects.
-fn let_lhs_doc(lhs: &[String], needs_mut: impl Fn(&str) -> bool) -> Doc {
-    let name_doc = |n: &String| mut_name_doc(n, needs_mut(n));
+/// with `mut` on each binding that needs it at `binder`.
+fn let_lhs_doc(context: FunctionContext<'_>, binder: &Exp, lhs: &[String]) -> Doc {
+    let name_doc = |n: &String| mut_name_doc(n, context.muts.needs_mut(binder, n));
     match lhs {
         [] => D::text("_"),
         [x] => name_doc(x),
@@ -1017,8 +1016,8 @@ fn let_lhs_doc(lhs: &[String], needs_mut: impl Fn(&str) -> bool) -> Doc {
 }
 
 /// Render an unpack binder's field list (`{ field: name, ... }`), with `mut` on each binding
-/// `needs_mut` selects.
-fn binder_fields(fields: &[(Symbol, String)], needs_mut: impl Fn(&str) -> bool) -> Doc {
+/// that needs it at `binder`.
+fn binder_fields(context: FunctionContext<'_>, binder: &Exp, fields: &[(Symbol, String)]) -> Doc {
     if fields.is_empty() {
         return D::nil().braces();
     };
@@ -1026,7 +1025,7 @@ fn binder_fields(fields: &[(Symbol, String)], needs_mut: impl Fn(&str) -> bool) 
         fields.iter().map(|(field, name)| {
             D::text(field.as_str())
                 .concat(D::text(":"))
-                .concat_space(mut_name_doc(name, needs_mut(name)))
+                .concat_space(mut_name_doc(name, context.muts.needs_mut(binder, name)))
         }),
         D::text(",").concat(D::space()),
     );

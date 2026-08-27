@@ -3,7 +3,10 @@
 
 //! Helpers shared between refinements.
 
-use crate::ast::{Exp, Label};
+use crate::{
+    ast::{Exp, Label, UnstructuredNode},
+    refinement::Refine,
+};
 use move_stackless_bytecode_2::ast::PrimitiveOp;
 
 /// Look through any `Exp::Block` wrappers to reach the inner expression. Used by refinements
@@ -21,6 +24,17 @@ pub(super) fn peek_mut(exp: &mut Exp) -> &mut Exp {
     match exp {
         Exp::Block(_, body) => peek_mut(body),
         _ => exp,
+    }
+}
+
+/// The first statement position of `exp`: through `Block` wrappers, and into the head of a
+/// top-level `Seq`. A nested `Seq` head is not entered: it renders braced, opening its own
+/// scope.
+pub(super) fn first_stmt(exp: &Exp) -> &Exp {
+    let inner = peek(exp);
+    match inner {
+        Exp::Seq(items) => items.first().map_or(inner, peek),
+        _ => inner,
     }
 }
 
@@ -170,5 +184,128 @@ pub(super) fn seq_or_singleton(mut items: Vec<Exp>) -> Exp {
         0 => Exp::Seq(vec![]),
         1 => items.pop().unwrap(),
         _ => Exp::Seq(items),
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Name-based traversals
+
+/// Replace every *free* `Variable(name)` in `exp` with `replacement`: a statement that
+/// rebinds `name` shadows the rest of its statement list, and a match arm whose pattern
+/// binds `name` shadows its guard and body.
+pub(super) fn substitute_free(exp: &mut Exp, name: &str, replacement: &Exp) {
+    struct Subst<'a> {
+        name: &'a str,
+        replacement: &'a Exp,
+    }
+    impl Refine for Subst<'_> {
+        fn refine_custom(&mut self, exp: &mut Exp) -> bool {
+            match exp {
+                Exp::Variable(n) if n == self.name => {
+                    *exp = self.replacement.clone();
+                    true
+                }
+                Exp::Match(subject, _, arms) => {
+                    self.refine(subject);
+                    for arm in arms {
+                        if arm.fields.iter().any(|(_, binding)| binding == self.name) {
+                            continue;
+                        }
+                        arm.guard.iter_mut().for_each(|g| {
+                            self.refine(g);
+                        });
+                        self.refine(&mut arm.rhs);
+                    }
+                    true
+                }
+                _ => false,
+            }
+        }
+
+        fn refine_seq(&mut self, exps: &mut Vec<Exp>) -> bool {
+            for exp in exps.iter_mut() {
+                self.refine(exp);
+                if rebinds(exp, self.name) {
+                    break;
+                }
+            }
+            false
+        }
+    }
+    let _ = Subst { name, replacement }.refine(exp);
+}
+
+/// Does `stmt` rebind `name` for the statements after it? `Block` contents are spliced
+/// into the enclosing statement list, so a rebinding anywhere in one leaks out; a bare
+/// `Seq` renders braced and does not.
+pub(super) fn rebinds(stmt: &Exp, name: &str) -> bool {
+    match stmt {
+        Exp::Block(_, body) => rebinds_spliced(body, name),
+        Exp::LetBind(names, _) | Exp::Declare(names) | Exp::VecUnpack(names, _) => {
+            names.iter().any(|n| n == name)
+        }
+        Exp::Unpack(_, fields, _) | Exp::UnpackVariant(_, _, fields, _) => {
+            fields.iter().any(|(_, n)| n == name)
+        }
+        _ => false,
+    }
+}
+
+fn rebinds_spliced(exp: &Exp, name: &str) -> bool {
+    match exp {
+        Exp::Seq(items) => items.iter().any(|item| rebinds(item, name)),
+        other => rebinds(other, name),
+    }
+}
+
+/// Any `Assign` targeting `name` anywhere in `exp`.
+pub(super) fn assigns_name(exp: &Exp, name: &str) -> bool {
+    match exp {
+        Exp::Assign(targets, rhs) => targets.iter().any(|t| t == name) || assigns_name(rhs, name),
+        Exp::Break(_)
+        | Exp::Continue(_)
+        | Exp::Declare(_)
+        | Exp::Value(_)
+        | Exp::Variable(_)
+        | Exp::Constant(_) => false,
+        Exp::Loop(_, e)
+        | Exp::LetBind(_, e)
+        | Exp::Abort(e)
+        | Exp::Borrow(_, e)
+        | Exp::VecUnpack(_, e)
+        | Exp::Unpack(_, _, e)
+        | Exp::UnpackVariant(_, _, _, e)
+        | Exp::Block(_, e) => assigns_name(e, name),
+        Exp::While(_, cond, body) => assigns_name(cond, name) || assigns_name(body, name),
+        Exp::IfElse(cond, conseq, alt) => {
+            assigns_name(cond, name)
+                || assigns_name(conseq, name)
+                || alt.as_ref().as_ref().is_some_and(|a| assigns_name(a, name))
+        }
+        Exp::Seq(items) | Exp::Return(items) | Exp::Call(_, items) => {
+            items.iter().any(|e| assigns_name(e, name))
+        }
+        Exp::Primitive { args, .. } | Exp::Data { args, .. } => {
+            args.iter().any(|e| assigns_name(e, name))
+        }
+        Exp::Switch(subject, _, arms) => {
+            assigns_name(subject, name) || arms.iter().any(|(_, e)| assigns_name(e, name))
+        }
+        Exp::Match(subject, _, arms) => {
+            assigns_name(subject, name)
+                || arms.iter().any(|arm| {
+                    arm.guard.as_ref().is_some_and(|g| assigns_name(g, name))
+                        || assigns_name(&arm.rhs, name)
+                })
+        }
+        Exp::MatchLit(subject, arms) => {
+            assigns_name(subject, name) || arms.iter().any(|(_, e)| assigns_name(e, name))
+        }
+        Exp::Unstructured(nodes) => nodes.iter().any(|node| match node {
+            UnstructuredNode::Labeled(_, body) | UnstructuredNode::Statement(body) => {
+                assigns_name(body, name)
+            }
+            UnstructuredNode::Goto(_) => false,
+        }),
     }
 }

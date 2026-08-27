@@ -18,12 +18,19 @@
 //! mutable borrow: writes through a reference held in a local (`WriteRef`) do not mutate
 //! the local.
 //!
+//! The analysis is a backward walk, a la liveness: the fact at each point maps every name
+//! to its future free uses (an assignment count saturated at two, plus a mutable-borrow
+//! bit), and a binder reads its `mut` need off the fact flowing in from after it. Loop back
+//! edges run to a fixpoint; `break` and `continue` take the fact at their target loop's
+//! exit or head. Imprecision errs toward a spurious `mut` (a warning), never a missing one
+//! (a compile error).
+//!
 //! Results key on node pointer identity (plus arm index for `Match`): valid only for the
 //! exact tree analyzed, like `liveness::Liveness`.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::ast::{Exp, Function, UnstructuredNode};
+use crate::ast::{Exp, Function, Label, MatchArm, UnstructuredNode};
 
 pub struct MutAnnotations {
     /// (binder node id, arm index) -> names bound at that binder that need `mut`. Arm index
@@ -33,27 +40,26 @@ pub struct MutAnnotations {
     params: BTreeSet<String>,
 }
 
-/// Saturating path-assignment count: we only ever need to distinguish 0, 1, and "2 or more".
+/// Saturating assignment count: we only ever need to distinguish 0, 1, and "2 or more".
 const MANY: u8 = 2;
 
 impl MutAnnotations {
     pub fn analyze(fun: &Function) -> Self {
-        let mut annots = MutAnnotations {
+        let mut walk = Walk {
             mut_binders: BTreeMap::new(),
-            params: BTreeSet::new(),
+            loops: Vec::new(),
         };
-        let top = flatten_scope(&fun.code);
+        let entry = walk.scope_env(&fun.code, Env::default());
         // Parameters share `term_reconstruction::local_name`'s `l{i}` scheme and are
-        // initialized on entry; a shadowing `let l{i}` stops the scan.
-        for i in 0..fun.parameters.len() {
-            let name = format!("l{i}");
-            let (assigns, mut_borrowed) = scan_stmts(&top, &name);
-            if assigns >= 1 || mut_borrowed {
-                annots.params.insert(name);
-            }
+        // initialized on entry.
+        let params = (0..fun.parameters.len())
+            .map(|i| format!("l{i}"))
+            .filter(|name| entry.get(name).forces_mut(/* initialized */ true))
+            .collect();
+        MutAnnotations {
+            mut_binders: walk.mut_binders,
+            params,
         }
-        annots.visit_scope(&fun.code);
-        annots
     }
 
     pub fn param_needs_mut(&self, name: &str) -> bool {
@@ -71,141 +77,6 @@ impl MutAnnotations {
         self.mut_binders
             .get(&(node_id(match_exp), arm_idx))
             .is_some_and(|s| s.contains(name))
-    }
-
-    /// Flatten `root` into its rendered statement list, record each binder's `mut` needs
-    /// against its tail, then descend into sub-scopes.
-    fn visit_scope(&mut self, root: &Exp) {
-        let stmts = flatten_scope(root);
-        for (i, stmt) in stmts.iter().enumerate() {
-            self.record_binder(stmt, &stmts[i + 1..]);
-            self.visit_children(stmt);
-        }
-    }
-
-    fn record_binder(&mut self, stmt: &Exp, tail: &[&Exp]) {
-        // (initialized-at-binder?, bound names)
-        let (initialized, names): (bool, Vec<&String>) = match stmt {
-            Exp::LetBind(names, _) | Exp::VecUnpack(names, _) => (true, names.iter().collect()),
-            Exp::Declare(names) => (false, names.iter().collect()),
-            Exp::Unpack(_, fields, _) | Exp::UnpackVariant(_, _, fields, _) => {
-                (true, fields.iter().map(|(_, n)| n).collect())
-            }
-            Exp::Break(_)
-            | Exp::Continue(_)
-            | Exp::Loop(_, _)
-            | Exp::Seq(_)
-            | Exp::While(_, _, _)
-            | Exp::IfElse(_, _, _)
-            | Exp::Switch(_, _, _)
-            | Exp::Match(_, _, _)
-            | Exp::MatchLit(_, _)
-            | Exp::Return(_)
-            | Exp::Assign(_, _)
-            | Exp::Call(_, _)
-            | Exp::Abort(_)
-            | Exp::Primitive { .. }
-            | Exp::Data { .. }
-            | Exp::Borrow(_, _)
-            | Exp::Value(_)
-            | Exp::Variable(_)
-            | Exp::Constant(_)
-            | Exp::Unstructured(_)
-            | Exp::Block(_, _) => return,
-        };
-        let threshold = if initialized { 1 } else { MANY };
-        for name in names {
-            let (assigns, mut_borrowed) = scan_stmts(tail, name);
-            if assigns >= threshold || mut_borrowed {
-                self.mut_binders
-                    .entry((node_id(stmt), 0))
-                    .or_default()
-                    .insert(name.clone());
-            }
-        }
-    }
-
-    /// Descend into sub-expressions as new scopes. `Block`s never reach here: flattening
-    /// unwraps them.
-    fn visit_children(&mut self, stmt: &Exp) {
-        match stmt {
-            Exp::Break(_)
-            | Exp::Continue(_)
-            | Exp::Declare(_)
-            | Exp::Value(_)
-            | Exp::Variable(_)
-            | Exp::Constant(_) => {}
-            Exp::Loop(_, body) => self.visit_scope(body),
-            Exp::While(_, cond, body) => {
-                self.visit_scope(cond);
-                self.visit_scope(body);
-            }
-            Exp::IfElse(cond, conseq, alt) => {
-                self.visit_scope(cond);
-                self.visit_scope(conseq);
-                if let Some(alt) = alt.as_ref() {
-                    self.visit_scope(alt);
-                }
-            }
-            Exp::Switch(subject, _, arms) => {
-                self.visit_scope(subject);
-                for (_, body) in arms {
-                    self.visit_scope(body);
-                }
-            }
-            Exp::Match(subject, _, arms) => {
-                self.visit_scope(subject);
-                for (arm_idx, arm) in arms.iter().enumerate() {
-                    arm.guard.iter().for_each(|g| self.visit_scope(g));
-                    // Pattern bindings scope over the arm body only; the guard sees
-                    // immutable references, so it never forces `mut`.
-                    let body_stmts = flatten_scope(&arm.rhs);
-                    for (_, name) in &arm.fields {
-                        let (assigns, mut_borrowed) = scan_stmts(&body_stmts, name);
-                        if assigns >= 1 || mut_borrowed {
-                            self.mut_binders
-                                .entry((node_id(stmt), arm_idx))
-                                .or_default()
-                                .insert(name.clone());
-                        }
-                    }
-                    self.visit_scope(&arm.rhs);
-                }
-            }
-            Exp::MatchLit(subject, arms) => {
-                self.visit_scope(subject);
-                for (_, body) in arms {
-                    self.visit_scope(body);
-                }
-            }
-            Exp::Seq(items) | Exp::Return(items) | Exp::Call(_, items) => {
-                for item in items {
-                    self.visit_scope(item);
-                }
-            }
-            Exp::Primitive { args, .. } | Exp::Data { args, .. } => {
-                for arg in args {
-                    self.visit_scope(arg);
-                }
-            }
-            Exp::Assign(_, rhs) | Exp::LetBind(_, rhs) => self.visit_scope(rhs),
-            Exp::VecUnpack(_, e)
-            | Exp::Unpack(_, _, e)
-            | Exp::UnpackVariant(_, _, _, e)
-            | Exp::Abort(e)
-            | Exp::Borrow(_, e)
-            | Exp::Block(_, e) => self.visit_scope(e),
-            Exp::Unstructured(nodes) => {
-                for node in nodes {
-                    match node {
-                        UnstructuredNode::Labeled(_, body) | UnstructuredNode::Statement(body) => {
-                            self.visit_scope(body)
-                        }
-                        UnstructuredNode::Goto(_) => {}
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -249,292 +120,407 @@ fn push_flat_stmt<'a>(exp: &'a Exp, out: &mut Vec<&'a Exp>) {
     }
 }
 
-// -------------------------------------------------------------------------------------------------
-// Mutation scan
+/// A statement that binds names: the names, whether they are initialized at the binder, and
+/// the right-hand side evaluated before the binding takes effect.
+struct Binder<'a> {
+    names: Vec<&'a String>,
+    initialized: bool,
+    rhs: Option<&'a Exp>,
+}
 
-/// Does `stmt` rebind `name`, shadowing it for the rest of the statement list?
-fn shadows(stmt: &Exp, name: &str) -> bool {
+fn binder(stmt: &Exp) -> Option<Binder<'_>> {
     match stmt {
-        Exp::LetBind(names, _) | Exp::Declare(names) | Exp::VecUnpack(names, _) => {
-            names.iter().any(|n| n == name)
-        }
-        Exp::Unpack(_, fields, _) | Exp::UnpackVariant(_, _, fields, _) => {
-            fields.iter().any(|(_, n)| n == name)
-        }
-        _ => false,
+        Exp::LetBind(names, rhs) | Exp::VecUnpack(names, rhs) => Some(Binder {
+            names: names.iter().collect(),
+            initialized: true,
+            rhs: Some(rhs),
+        }),
+        Exp::Declare(names) => Some(Binder {
+            names: names.iter().collect(),
+            initialized: false,
+            rhs: None,
+        }),
+        Exp::Unpack(_, fields, rhs) | Exp::UnpackVariant(_, _, fields, rhs) => Some(Binder {
+            names: fields.iter().map(|(_, n)| n).collect(),
+            initialized: true,
+            rhs: Some(rhs),
+        }),
+        _ => None,
     }
 }
 
-/// Mutation summary for one name over one construct: per-continuation maximum free-assignment
-/// counts, saturated at [`MANY`] (`None` = no path exits that way). Flow-sensitive like the
-/// compiler's check: an assignment repeats only if a back edge is reachable after it, so
-/// `l = e; break` counts once but `l = e; continue` counts many.
-///
-/// `brk`/`cont` are label-blind: a labeled form may target an outer loop, so `Loop` both
-/// consumes and re-propagates them. All imprecision errs toward a spurious `mut` (a warning),
-/// never a missing one (a compile error).
-#[derive(Clone, Copy)]
-struct Paths {
-    /// Paths that fall through to the next statement.
-    fall: Option<u8>,
-    /// Paths that reach a `break` (any label).
-    brk: Option<u8>,
-    /// Paths that reach a `continue` (any label).
-    cont: Option<u8>,
-    /// Paths that leave the function (`return`/`abort`).
-    ret: Option<u8>,
-    /// Maximum count at any point inside: an upper bound on the fields above, and the only
-    /// witness on diverging paths (a `loop` with no `break`).
-    seen: u8,
-    /// Any free `&mut name` anywhere in the construct, on any path.
-    borrow: bool,
+// -------------------------------------------------------------------------------------------------
+// Dataflow facts
+
+/// Future free uses of one name at one program point.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+struct Use {
+    /// Free assignments on some path from here, saturated at [`MANY`].
+    assigns: u8,
+    /// A free `&mut name` on some path from here.
+    borrowed: bool,
 }
 
-impl Paths {
-    /// Straight-line code with `n` assignments and no borrow.
-    fn pure(n: u8) -> Self {
-        Paths {
-            fall: Some(n),
-            brk: None,
-            cont: None,
-            ret: None,
-            seen: n,
-            borrow: false,
-        }
-    }
-
-    /// Sequence: `next` runs only on `self`'s fall-through paths, their assignments already
-    /// counted.
-    fn then(self, next: Paths) -> Paths {
-        let Some(c) = self.fall else {
-            return self;
-        };
-        Paths {
-            fall: add_assigns(next.fall, c),
-            brk: max_assigns(self.brk, add_assigns(next.brk, c)),
-            cont: max_assigns(self.cont, add_assigns(next.cont, c)),
-            ret: max_assigns(self.ret, add_assigns(next.ret, c)),
-            seen: self.seen.max((c + next.seen).min(MANY)),
-            borrow: self.borrow || next.borrow,
-        }
-    }
-
-    /// Merge sibling branches: one of `self` or `other` runs.
-    fn or(self, other: Paths) -> Paths {
-        Paths {
-            fall: max_assigns(self.fall, other.fall),
-            brk: max_assigns(self.brk, other.brk),
-            cont: max_assigns(self.cont, other.cont),
-            ret: max_assigns(self.ret, other.ret),
-            seen: self.seen.max(other.seen),
-            borrow: self.borrow || other.borrow,
-        }
-    }
-
-    /// A loop back edge with at least one assignment makes every count unbounded.
-    fn saturate(self) -> Paths {
-        let many = |o: Option<u8>| o.map(|_| MANY);
-        Paths {
-            fall: many(self.fall),
-            brk: many(self.brk),
-            cont: many(self.cont),
-            ret: many(self.ret),
-            seen: MANY,
-            borrow: self.borrow,
-        }
-    }
-}
-
-fn add_assigns(o: Option<u8>, c: u8) -> Option<u8> {
-    o.map(|v| (v + c).min(MANY))
-}
-
-fn max_assigns(a: Option<u8>, b: Option<u8>) -> Option<u8> {
-    match (a, b) {
-        (None, x) | (x, None) => x,
-        (Some(a), Some(b)) => Some(a.max(b)),
-    }
-}
-
-/// Maximum free assignments of `name` along any path in a statement tail, and whether any
-/// free `&mut name` occurs. Stops after a shadowing rebinding (whose right-hand side still
-/// scans).
-fn scan_stmts(stmts: &[&Exp], name: &str) -> (u8, bool) {
-    let paths = stmt_list_paths(stmts, name);
-    (paths.seen, paths.borrow)
-}
-
-fn stmt_list_paths(stmts: &[&Exp], name: &str) -> Paths {
-    let mut acc = Paths::pure(0);
-    for stmt in stmts {
-        if acc.fall.is_none() {
-            break;
-        }
-        acc = acc.then(exp_paths(stmt, name));
-        if shadows(stmt, name) {
-            break;
-        }
-    }
-    acc
-}
-
-/// `stmt_list_paths` over the rendered statement list of a body/branch position.
-fn scope_paths(root: &Exp, name: &str) -> Paths {
-    stmt_list_paths(&flatten_scope(root), name)
-}
-
-/// Paths of expressions evaluated in sequence (call arguments and the like).
-fn seq_paths(items: &[Exp], name: &str) -> Paths {
-    items
-        .iter()
-        .fold(Paths::pure(0), |acc, item| acc.then(exp_paths(item, name)))
-}
-
-/// Fall-through and `continue` feed the back edge; `break` exits. Any back-edge assignment
-/// repeats, saturating counts; `brk`/`cont` re-propagate for labeled forms.
-fn loop_paths(body: Paths) -> Paths {
-    let back_edge = max_assigns(body.fall, body.cont);
-    let out = Paths {
-        fall: body.brk,
-        brk: body.brk,
-        cont: body.cont,
-        ret: body.ret,
-        seen: body.seen,
-        borrow: body.borrow,
+impl Use {
+    const SATURATED: Use = Use {
+        assigns: MANY,
+        borrowed: true,
     };
-    if back_edge.is_some_and(|c| c > 0) {
-        out.saturate()
-    } else {
-        out
+
+    /// Alternative paths: the worse of the two.
+    fn join(self, other: Use) -> Use {
+        Use {
+            assigns: self.assigns.max(other.assigns),
+            borrowed: self.borrowed || other.borrowed,
+        }
+    }
+
+    /// Sequential paths: `self`'s uses, then `later`'s.
+    fn then(self, later: Use) -> Use {
+        Use {
+            assigns: (self.assigns + later.assigns).min(MANY),
+            borrowed: self.borrowed || later.borrowed,
+        }
+    }
+
+    fn forces_mut(self, initialized: bool) -> bool {
+        let threshold = if initialized { 1 } else { MANY };
+        self.borrowed || self.assigns >= threshold
     }
 }
 
-/// Free mutations of `name` in one expression; nested `Seq`/`Block` reopen scope handling.
-fn exp_paths(exp: &Exp, name: &str) -> Paths {
-    match exp {
-        Exp::Variable(_) | Exp::Value(_) | Exp::Constant(_) | Exp::Declare(_) => Paths::pure(0),
-        Exp::Break(_) => Paths {
-            fall: None,
-            brk: Some(0),
-            cont: None,
-            ret: None,
-            seen: 0,
-            borrow: false,
-        },
-        Exp::Continue(_) => Paths {
-            fall: None,
-            brk: None,
-            cont: Some(0),
-            ret: None,
-            seen: 0,
-            borrow: false,
-        },
-        Exp::Return(items) => {
-            let p = seq_paths(items, name);
-            Paths {
-                fall: None,
-                ret: max_assigns(p.ret, p.fall),
-                ..p
+/// The backward fact: every name's future free uses. Absent names have none. `poisoned`
+/// models unstructured goto flow: every lookup answers [`Use::SATURATED`].
+#[derive(Clone, Default, PartialEq, Eq)]
+struct Env {
+    uses: BTreeMap<String, Use>,
+    poisoned: bool,
+}
+
+impl Env {
+    fn poisoned() -> Env {
+        Env {
+            uses: BTreeMap::new(),
+            poisoned: true,
+        }
+    }
+
+    fn get(&self, name: &str) -> Use {
+        if self.poisoned {
+            Use::SATURATED
+        } else {
+            self.uses.get(name).copied().unwrap_or_default()
+        }
+    }
+
+    /// Set `name`'s raw entry. Default entries are removed, keeping the map canonical so
+    /// the loop fixpoint's equality check cannot see two forms of the same fact.
+    fn set(&mut self, name: &str, u: Use) {
+        if u == Use::default() {
+            self.uses.remove(name);
+        } else {
+            self.uses.insert(name.to_string(), u);
+        }
+    }
+
+    /// Remove `name`'s raw entry (crossing its binder, or masking a shadowed region).
+    fn kill(&mut self, name: &str) {
+        self.uses.remove(name);
+    }
+
+    /// Remove and return `name`'s raw entry.
+    fn take(&mut self, name: &str) -> Use {
+        self.uses.remove(name).unwrap_or_default()
+    }
+
+    fn add_assign(&mut self, name: &str) {
+        let u = self.uses.entry(name.to_string()).or_default();
+        u.assigns = (u.assigns + 1).min(MANY);
+    }
+
+    fn add_borrow(&mut self, name: &str) {
+        self.uses.entry(name.to_string()).or_default().borrowed = true;
+    }
+
+    /// Alternative paths: pointwise [`Use::join`].
+    fn join(mut self, other: Env) -> Env {
+        for (name, u) in other.uses {
+            let entry = self.uses.entry(name).or_default();
+            *entry = entry.join(u);
+        }
+        self.poisoned = self.poisoned || other.poisoned;
+        self
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Backward walk
+
+/// An enclosing loop during the walk: the facts a jump to it resumes at.
+struct LoopFrame {
+    label: Option<Label>,
+    /// The fact after the loop: where `break` resumes.
+    break_env: Env,
+    /// The fact at the loop head: where `continue` and the back edge resume. The current
+    /// fixpoint iterate while the loop's body is being walked.
+    head_env: Env,
+}
+
+struct Walk {
+    mut_binders: BTreeMap<(usize, usize), BTreeSet<String>>,
+    loops: Vec<LoopFrame>,
+}
+
+impl Walk {
+    /// Backward walk of a scope's rendered statement list; `after` is the fact at the
+    /// scope's exit. A rebinding shadows only to the end of the list: on the way out, a
+    /// rebound name's uses resume with the outer binding's, sequentially.
+    fn scope_env(&mut self, root: &Exp, after: Env) -> Env {
+        let stmts = flatten_scope(root);
+        let mut env = after.clone();
+        for stmt in stmts.iter().rev() {
+            env = self.stmt_env(stmt, env);
+        }
+        for stmt in &stmts {
+            let Some(binder) = binder(stmt) else { continue };
+            for name in binder.names {
+                let u = env.get(name).then(after.get(name));
+                env.set(name, u);
             }
         }
-        Exp::Abort(e) => {
-            let p = exp_paths(e, name);
-            Paths {
-                fall: None,
-                ret: max_assigns(p.ret, p.fall),
-                ..p
+        env
+    }
+
+    /// One statement backward: a binder reads its `mut` need off the incoming fact, then
+    /// kills its names so earlier statements see the shadow.
+    fn stmt_env(&mut self, stmt: &Exp, mut env: Env) -> Env {
+        let Some(binder) = binder(stmt) else {
+            return self.exp_env(stmt, env);
+        };
+        self.record(stmt, 0, &binder.names, binder.initialized, &env);
+        for name in &binder.names {
+            env.kill(name);
+        }
+        match binder.rhs {
+            Some(rhs) => self.exp_env(rhs, env),
+            None => env,
+        }
+    }
+
+    /// Record which of `names`, bound at `(node, arm_idx)`, the incoming fact forces `mut`.
+    /// Code inside a loop records once per fixpoint pass; the fact only grows between
+    /// passes, so earlier passes record a subset of the last.
+    fn record(
+        &mut self,
+        node: &Exp,
+        arm_idx: usize,
+        names: &[&String],
+        initialized: bool,
+        env: &Env,
+    ) {
+        for name in names {
+            if env.get(name).forces_mut(initialized) {
+                self.mut_binders
+                    .entry((node_id(node), arm_idx))
+                    .or_default()
+                    .insert((*name).clone());
             }
         }
-        // Binding, not assignment: only the right-hand side can mutate the outer `name`.
-        Exp::LetBind(_, rhs) => exp_paths(rhs, name),
-        Exp::VecUnpack(_, e) | Exp::Unpack(_, _, e) | Exp::UnpackVariant(_, _, _, e) => {
-            exp_paths(e, name)
-        }
-        Exp::Assign(targets, rhs) => {
-            let hit = targets.iter().any(|t| t == name) as u8;
-            exp_paths(rhs, name).then(Paths::pure(hit))
-        }
-        Exp::Borrow(is_mut, inner) => {
-            if *is_mut && matches!(inner.as_ref(), Exp::Variable(n) if n == name) {
-                Paths {
-                    borrow: true,
-                    ..Paths::pure(0)
+    }
+
+    /// Backward transfer of one expression: `env` is the fact after it.
+    fn exp_env(&mut self, exp: &Exp, mut env: Env) -> Env {
+        match exp {
+            Exp::Variable(_) | Exp::Value(_) | Exp::Constant(_) | Exp::Declare(_) => env,
+            // A jump discards the incoming fact for its target's.
+            Exp::Break(label) => self.jump_env(*label, /* is_break */ true),
+            Exp::Continue(label) => self.jump_env(*label, /* is_break */ false),
+            Exp::Return(items) => self.eval_list(items, Env::default()),
+            Exp::Abort(e) => self.exp_env(e, Env::default()),
+            // Binding, not assignment: only the right-hand side can mutate an outer name.
+            // Statement-position binders (with their shadowing) go through `stmt_env`.
+            Exp::LetBind(_, rhs)
+            | Exp::VecUnpack(_, rhs)
+            | Exp::Unpack(_, _, rhs)
+            | Exp::UnpackVariant(_, _, _, rhs) => self.exp_env(rhs, env),
+            Exp::Assign(targets, rhs) => {
+                for target in targets {
+                    env.add_assign(target);
                 }
-            } else {
-                exp_paths(inner, name)
+                self.exp_env(rhs, env)
+            }
+            Exp::Borrow(is_mut, inner) => match inner.as_ref() {
+                Exp::Variable(name) if *is_mut => {
+                    env.add_borrow(name);
+                    env
+                }
+                _ => self.exp_env(inner, env),
+            },
+            Exp::Seq(_) | Exp::Block(_, _) => self.scope_env(exp, env),
+            Exp::IfElse(cond, conseq, alt) => {
+                let taken = self.scope_env(conseq, env.clone());
+                let joined = match alt.as_ref() {
+                    Some(alt) => taken.join(self.scope_env(alt, env)),
+                    None => taken.join(env),
+                };
+                self.exp_env(cond, joined)
+            }
+            Exp::Loop(_, _) | Exp::While(_, _, _) => self.loop_head_env(exp, env),
+            Exp::Switch(subject, _, arms) => {
+                let arms_env = self
+                    .join_scopes(arms.iter().map(|(_, body)| body), &env)
+                    .unwrap_or(env);
+                self.exp_env(subject, arms_env)
+            }
+            Exp::MatchLit(subject, arms) => {
+                let arms_env = self
+                    .join_scopes(arms.iter().map(|(_, body)| body), &env)
+                    .unwrap_or(env);
+                self.exp_env(subject, arms_env)
+            }
+            Exp::Match(subject, _, arms) => {
+                let mut joined: Option<Env> = None;
+                for (arm_idx, arm) in arms.iter().enumerate() {
+                    let arm_env = self.match_arm_env(exp, arm_idx, arm, &env);
+                    joined = Some(match joined {
+                        Some(j) => j.join(arm_env),
+                        None => arm_env,
+                    });
+                }
+                self.exp_env(subject, joined.unwrap_or(env))
+            }
+            Exp::Call(_, items)
+            | Exp::Primitive { args: items, .. }
+            | Exp::Data { args: items, .. } => self.eval_list(items, env),
+            // Unmodeled goto control flow: poison the fact so every name reads as fully
+            // used, and walk the bodies so binders inside them still get (all-`mut`)
+            // records.
+            Exp::Unstructured(nodes) => {
+                let mut env = Env::poisoned();
+                for node in nodes.iter().rev() {
+                    match node {
+                        UnstructuredNode::Labeled(_, body) | UnstructuredNode::Statement(body) => {
+                            env = self.scope_env(body, env);
+                        }
+                        UnstructuredNode::Goto(_) => {}
+                    }
+                }
+                env
             }
         }
-        Exp::Seq(_) | Exp::Block(_, _) => scope_paths(exp, name),
-        Exp::IfElse(cond, conseq, alt) => {
-            let arms = match alt.as_ref() {
-                Some(alt) => scope_paths(conseq, name).or(scope_paths(alt, name)),
-                None => scope_paths(conseq, name).or(Paths::pure(0)),
-            };
-            exp_paths(cond, name).then(arms)
+    }
+
+    /// Expressions evaluated in sequence (call arguments and the like), walked backward.
+    fn eval_list(&mut self, items: &[Exp], mut env: Env) -> Env {
+        for item in items.iter().rev() {
+            env = self.exp_env(item, env);
         }
-        Exp::Loop(_, body) => loop_paths(scope_paths(body, name)),
-        Exp::While(_, cond, body) => {
-            // `loop { if (cond) { body } else { break } }`: the condition runs every
-            // iteration.
-            let cond_paths = exp_paths(cond, name);
-            let exit = Paths {
-                fall: None,
-                brk: Some(0),
-                cont: None,
-                ret: None,
-                seen: 0,
-                borrow: false,
-            };
-            let iteration = cond_paths.then(scope_paths(body, name).or(exit));
-            loop_paths(iteration)
+        env
+    }
+
+    /// Join the walks of alternative scope bodies (`Switch`/`MatchLit` arms). `None` when
+    /// there are no bodies.
+    fn join_scopes<'a>(
+        &mut self,
+        bodies: impl Iterator<Item = &'a Exp>,
+        after: &Env,
+    ) -> Option<Env> {
+        let mut joined: Option<Env> = None;
+        for body in bodies {
+            let env = self.scope_env(body, after.clone());
+            joined = Some(match joined {
+                Some(j) => j.join(env),
+                None => env,
+            });
         }
-        Exp::Switch(subject, _, arms) => {
-            let arm_paths = arms
-                .iter()
-                .map(|(_, body)| scope_paths(body, name))
-                .reduce(Paths::or)
-                .unwrap_or(Paths::pure(0));
-            exp_paths(subject, name).then(arm_paths)
+        joined
+    }
+
+    /// One `Match` arm backward. Pattern names shadow the guard and whole body: their
+    /// entries are set aside for the walk, the pattern's `mut` needs read off the body-only
+    /// fact, and the guard's pattern-name uses are discarded (the guard sees immutable
+    /// references, so it never forces `mut`).
+    fn match_arm_env(
+        &mut self,
+        match_exp: &Exp,
+        arm_idx: usize,
+        arm: &MatchArm,
+        after: &Env,
+    ) -> Env {
+        let mut env = after.clone();
+        let field_names: Vec<&String> = arm.fields.iter().map(|(_, n)| n).collect();
+        let saved: Vec<Use> = field_names.iter().map(|n| env.take(n)).collect();
+        let mut env = self.scope_env(&arm.rhs, env);
+        self.record(
+            match_exp,
+            arm_idx,
+            &field_names,
+            /* initialized */ true,
+            &env,
+        );
+        for name in &field_names {
+            env.kill(name);
         }
-        Exp::Match(subject, _, arms) => {
-            let arm_paths = arms
-                .iter()
-                .map(|arm| {
-                    if arm.fields.iter().any(|(_, n)| n == name) {
-                        // The arm pattern shadows `name` for its guard and whole body.
-                        Paths::pure(0)
-                    } else {
-                        let body = scope_paths(&arm.rhs, name);
-                        match &arm.guard {
-                            Some(g) => exp_paths(g, name).then(body),
-                            None => body,
-                        }
-                    }
-                })
-                .reduce(Paths::or)
-                .unwrap_or(Paths::pure(0));
-            exp_paths(subject, name).then(arm_paths)
+        if let Some(guard) = &arm.guard {
+            env = self.exp_env(guard, env);
+            for name in &field_names {
+                env.kill(name);
+            }
         }
-        Exp::MatchLit(subject, arms) => {
-            let arm_paths = arms
-                .iter()
-                .map(|(_, body)| scope_paths(body, name))
-                .reduce(Paths::or)
-                .unwrap_or(Paths::pure(0));
-            exp_paths(subject, name).then(arm_paths)
+        for (name, u) in field_names.iter().zip(saved) {
+            env.set(name, u);
         }
-        Exp::Call(_, items) => seq_paths(items, name),
-        Exp::Primitive { args, .. } | Exp::Data { args, .. } => seq_paths(args, name),
-        // Unmodeled goto control flow: assume the worst, since spurious `mut` is only a
-        // warning.
-        Exp::Unstructured(_) => Paths {
-            fall: Some(MANY),
-            brk: Some(MANY),
-            cont: Some(MANY),
-            ret: Some(MANY),
-            seen: MANY,
-            borrow: true,
-        },
+        env
+    }
+
+    /// The fact a jump resumes at: its target loop's exit (`break`) or head (`continue`).
+    fn jump_env(&self, label: Option<Label>, is_break: bool) -> Env {
+        let frame = match label {
+            None => self.loops.last(),
+            Some(l) => self.loops.iter().rev().find(|f| f.label == Some(l)),
+        };
+        let Some(frame) = frame else {
+            debug_assert!(false, "jump outside its loop");
+            return Env::poisoned();
+        };
+        if is_break {
+            frame.break_env.clone()
+        } else {
+            frame.head_env.clone()
+        }
+    }
+
+    /// The fact at a loop's head, as the fixpoint over its back edge. Transfers are
+    /// per-name independent and monotone on a chain of height four (assign count 0/1/2,
+    /// then the borrow bit), so the head is stable within five passes; the cap is slack.
+    fn loop_head_env(&mut self, exp: &Exp, break_env: Env) -> Env {
+        const FIXPOINT_CAP: usize = 8;
+        let (label, cond, body) = match exp {
+            Exp::Loop(label, body) => (*label, None, body),
+            Exp::While(label, cond, body) => (*label, Some(cond), body),
+            _ => unreachable!("loop_head_env is only called on loops"),
+        };
+        let mut head = Env::default();
+        for _ in 0..FIXPOINT_CAP {
+            self.loops.push(LoopFrame {
+                label,
+                break_env: break_env.clone(),
+                head_env: head.clone(),
+            });
+            // The body falls through to the back edge; a `while` also runs its condition
+            // (with the exit path joined in) every iteration.
+            let mut next = self.scope_env(body, head.clone());
+            if let Some(cond) = cond {
+                next = self.exp_env(cond, next.join(break_env.clone()));
+            }
+            self.loops.pop();
+            if next == head {
+                return head;
+            }
+            head = next;
+        }
+        debug_assert!(false, "loop fixpoint did not converge");
+        Env::poisoned()
     }
 }
 
@@ -659,6 +645,15 @@ mod tests {
             vec![letb("x", num()), Exp::Loop(None, Box::new(body))],
             0,
         ));
+    }
+
+    #[test]
+    fn labeled_break_exits_both_loops() {
+        // let x; 'outer: loop { loop { x = 1; break 'outer } }: the assignment exits both
+        // loops, so it never repeats.
+        let inner = seq(vec![assign("x", num()), Exp::Break(Some(0))]);
+        let outer = Exp::Loop(Some(0), Box::new(Exp::Loop(None, Box::new(inner))));
+        assert!(!binder_mut(vec![declare("x"), outer], 0));
     }
 
     #[test]

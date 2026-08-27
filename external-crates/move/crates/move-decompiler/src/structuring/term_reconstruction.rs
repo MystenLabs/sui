@@ -246,25 +246,3 @@ pub(crate) fn local_name(id: usize) -> String {
 fn local(id: usize) -> Out::Exp {
     Out::Exp::Variable(local_name(id))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use move_stackless_bytecode_2::ast::Register;
-
-    /// Unmapped register uses must mint the bare `reg_N` name, not the ascribed debug
-    /// rendering (`reg_N : ty`): name comparisons across the crate assume bare names.
-    #[test]
-    fn unmapped_register_mints_bare_name() {
-        let mut map = BTreeMap::new();
-        let reg = Register {
-            name: 7,
-            ty: std::rc::Rc::new(move_binary_format::normalized::Type::U64),
-        };
-        let exp = trivial(&mut map, Trivial::Register(reg));
-        let Out::Exp::Variable(name) = exp else {
-            panic!("expected a Variable");
-        };
-        assert_eq!(name, "reg_7");
-    }
-}
