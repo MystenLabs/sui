@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use rand::distributions::Distribution;
 use std::net::SocketAddr;
 use std::time::Duration;
 use sui_macros::sim_test;
@@ -304,7 +303,6 @@ async fn party_object_transfer_multiple_times() {
 
 /// Test for execution of party object certs that are sequenced after a party object is transferred.
 /// The test strategy is:
-/// 0. Inject a random delay just before execution of a transaction.
 /// 1. Create a shared object
 /// 2. Create three transfer certs, but do not execute any of them yet.
 /// 3. Execute one.
