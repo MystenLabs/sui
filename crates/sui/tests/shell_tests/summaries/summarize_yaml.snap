@@ -74,6 +74,7 @@ object.yaml
 object_bag.yaml
 object_table.yaml
 package.yaml
+package_config.yaml
 party.yaml
 pay.yaml
 poseidon.yaml
