@@ -13,6 +13,7 @@ pub mod random;
 pub mod random_util;
 pub mod rpc_format;
 pub mod sync;
+pub mod thread_pool;
 pub mod zip_debug_eq;
 
 pub use random_util::tempdir;
