@@ -1167,7 +1167,7 @@ fn annotated_constant_layout(ty: &normalized::Type) -> runtime_value::MoveTypeLa
         T::Vector(inner) => L::Vector(Box::new(annotated_constant_layout(inner))),
 
         T::I8 | T::I16 | T::I32 | T::I64 | T::I128 | T::I256 => {
-            move_core_types::signed_ints_todo!("signed integer constants in move-model-2")
+            todo!("[signed-ints] signed integer constants in move-model-2")
         }
 
         T::Datatype(_) | T::Reference(_, _) | T::TypeParameter(_) | T::Signer => {

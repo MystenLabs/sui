@@ -157,7 +157,7 @@ impl Type {
             | normalized::Type::I64
             | normalized::Type::I128
             | normalized::Type::I256 => {
-                move_core_types::signed_ints_todo!("signed integer types in the decompiler")
+                todo!("[signed-ints] signed integer types in the decompiler")
             }
             normalized::Type::Datatype(dt) => Type::Datatype(Box::new(Datatype {
                 type_ref: TypeRef::Qualified(ModuleRef::Qualified(dt.module), dt.name),
