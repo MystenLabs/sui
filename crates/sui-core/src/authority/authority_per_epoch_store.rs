@@ -367,7 +367,9 @@ pub struct AuthorityPerEpochStore {
     /// Crash recovery note: we write next epoch in the database first, and then use this lock to
     /// wait for in-memory tasks for the epoch to finish. If node crashes at this stage validator
     /// will start with the new epoch(and will open instance of per-epoch store for a new epoch).
-    epoch_alive: tokio::sync::RwLock<bool>,
+    /// Arc'd so that owned read guards can be held by non-async execution jobs on the
+    /// dedicated execution thread pool (see `enter_alive_epoch_owned`).
+    epoch_alive: Arc<tokio::sync::RwLock<bool>>,
     pub(crate) end_of_publish: Mutex<StakeAggregator<(), true>>,
 
     /// MutexTable for transaction locks (prevent concurrent execution of same transaction)
@@ -1032,7 +1034,7 @@ impl AuthorityPerEpochStore {
             db_options,
             reconfig_state_mem: RwLock::new(reconfig_state),
             epoch_alive_token,
-            epoch_alive: tokio::sync::RwLock::new(true),
+            epoch_alive: Arc::new(tokio::sync::RwLock::new(true)),
             consensus_notify_read: Arc::new(NotifyRead::new()),
             executed_transactions_to_checkpoint_notify_read: Arc::new(NotifyRead::new()),
             signature_verifier,
@@ -2944,6 +2946,13 @@ impl AuthorityPerEpochStore {
     /// epoch rather than being detached at epoch end.
     pub async fn enter_alive_epoch(&self) -> Option<tokio::sync::RwLockReadGuard<'_, bool>> {
         let guard = self.epoch_alive.read().await;
+        if *guard { Some(guard) } else { None }
+    }
+
+    /// Like `enter_alive_epoch`, but the guard is not lifetime-bound to `self`, so it
+    /// can move into a `'static` job on the execution thread pool.
+    pub async fn enter_alive_epoch_owned(&self) -> Option<tokio::sync::OwnedRwLockReadGuard<bool>> {
+        let guard = self.epoch_alive.clone().read_owned().await;
         if *guard { Some(guard) } else { None }
     }
 

@@ -26,7 +26,7 @@ use crate::{
         funds_read::AccountFundsRead, unsettled_object_withdrawals::UnsettledObjectWithdrawals,
     },
     authority::{ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore},
-    execution_scheduler::ExecutionScheduler,
+    execution_scheduler::{ExecutionScheduler, causal_order},
 };
 
 #[cfg(test)]
@@ -203,6 +203,13 @@ impl ObjectFundsChecker {
                 let cert = certificate.clone();
                 let mut execution_env = execution_env.clone();
                 let epoch_store = epoch_store.clone();
+                // Keep the transaction's causal index across the retry: transactions
+                // enqueued after this one may already be parked waiting on its outputs,
+                // and a freshly assigned (higher) index could sit beyond the execution
+                // driver's admission window forever. We are on the execution thread
+                // here, so the driver's installed guard is available; direct callers
+                // (tests) have none and the resend falls back to a fresh index.
+                let causal_guard = causal_order::take_guard_for_retry();
                 tokio::task::spawn(async move {
                     // It is possible that checkpoint executor finished executing
                     // the current epoch and went ahead with epoch change asynchronously,
@@ -241,12 +248,15 @@ impl ObjectFundsChecker {
                                     );
                                 }
                             }
+                            let causal_guard =
+                                causal_guard.unwrap_or_else(|| scheduler.causal_window().assign());
                             scheduler.send_transaction_for_execution(
                                 &cert,
                                 execution_env,
                                 // TODO: Should the enqueue_time be the original enqueue time
                                 // of this transaction?
                                 Instant::now(),
+                                causal_guard,
                             );
                         })
                         .await;
