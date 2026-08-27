@@ -1472,7 +1472,34 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .lock();
             for (key, txns) in deferred_txns.into_iter() {
                 total_deferred_txns += txns.len();
-                deferred_transactions.insert(key, txns.clone());
+                if let Some(prev) = deferred_transactions.insert(key, txns.clone()) {
+                    // Keys reloaded by this commit cannot be here: reloads cover
+                    // future_round <= round while re-deferrals use round + 1, and a
+                    // randomness reload and a randomness re-deferral are mutually
+                    // exclusive per commit. A re-deferral does keep its original
+                    // deferred_from_round, though: a randomness-using transaction
+                    // deferred at round F by a check that precedes the randomness check
+                    // (unpaid amplification, owned-object double spend) gets
+                    // ConsensusRound{F + 1, F}, and when reloaded at F + 1 without
+                    // randomness it lands on Randomness{F} - the key still holding
+                    // round F's fresh randomness deferrals. This insert and the write
+                    // batch below overwrite that entry: the displaced transactions are
+                    // finalized but never reloaded or executed this epoch, and their
+                    // owned inputs stay locked until epoch end.
+                    let new_digests: HashSet<_> = txns.iter().map(|t| *t.tx().digest()).collect();
+                    let displaced: Vec<_> = prev
+                        .iter()
+                        .map(|t| *t.tx().digest())
+                        .filter(|d| !new_digests.contains(d))
+                        .collect();
+                    if !displaced.is_empty() {
+                        debug_fatal!(
+                            "Deferral key collision displaced finalized transactions: key {:?}, displaced {:?}",
+                            key,
+                            displaced
+                        );
+                    }
+                }
                 state.output.defer_transactions(key, txns);
             }
         }
