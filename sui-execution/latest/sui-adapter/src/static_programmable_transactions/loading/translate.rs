@@ -64,6 +64,8 @@ pub fn transaction<Mode: ExecutionMode>(
         inputs,
         original_command_len,
         commands,
+        // Set by `linkage::refine_linkage` below if unified linkage is enabled.
+        unified_linkage: None,
     };
     metering::loading::meter::<Mode::Error>(meter, &loaded_tx)?;
     linkage::refine_linkage::<Mode>(

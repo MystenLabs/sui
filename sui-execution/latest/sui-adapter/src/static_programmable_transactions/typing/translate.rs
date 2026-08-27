@@ -342,6 +342,7 @@ pub fn transaction<Mode: ExecutionMode>(
         mut inputs,
         original_command_len,
         mut commands,
+        unified_linkage: _,
     } = lt;
     let withdrawal_compatability_inputs =
         determine_withdrawal_compatibility_inputs(env, &mut inputs)?;

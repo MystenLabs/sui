@@ -631,11 +631,11 @@ where
             dep_ids,
             /* hash_modules */ true,
         );
-        Ok(DeserializedPackage {
+        Ok(DeserializedPackage::new(
             deserialized_modules,
             total_bytes,
             computed_digest,
-        })
+        ))
     }
 }
 

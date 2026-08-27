@@ -19,9 +19,10 @@ pub fn translate_and_verify<Mode: ExecutionMode>(
     env: &env::Env<Mode>,
     lt: L::Transaction,
 ) -> Result<ast::Transaction, Mode::Error> {
+    let unified_linkage = lt.unified_linkage.clone();
     let mut ast = translate::transaction::<Mode>(env, lt)?;
     metering::typing::meter::<Mode::Error>(meter, &ast)?;
     verify::transaction::<Mode>(env, &mut ast)?;
-    invariant_checks::transaction::<Mode>(env, &ast)?;
+    invariant_checks::transaction::<Mode>(env, &ast, unified_linkage.as_ref())?;
     Ok(ast)
 }

@@ -536,6 +536,7 @@ pub(crate) mod checked {
                 &sponsor,
                 &mutable_inputs,
                 is_epoch_change,
+                execution_result.is_ok(),
             ) {
                 // FIXME: we cannot fail the transaction if this is an epoch change transaction.
                 execution_result = Err(e);
@@ -747,6 +748,7 @@ pub(crate) mod checked {
             sponsor: &Option<SuiAddress>,
             mutable_inputs: &HashSet<ObjectID>,
             is_epoch_change: bool,
+            execution_succeeded: bool,
         ) -> Result<(), Mode::Error> {
             let conservation = run_conservation_checks::<Mode>(
                 temporary_store,
@@ -768,6 +770,10 @@ pub(crate) mod checked {
                     )
                     .unwrap()
             } // else, in dev inspect mode and anything goes--don't check
+
+            if execution_succeeded {
+                temporary_store.check_published_packages()?;
+            }
             conservation
         }
 

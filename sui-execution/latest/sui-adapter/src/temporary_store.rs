@@ -849,6 +849,11 @@ impl<'backing> TemporaryStore<'backing> {
 
     /// Check that every modified object traces back to an authenticated owner.
     /// See [`invariants::InvariantChecker::check_ownership_invariants`].
+    /// See [`invariants::InvariantChecker::check_published_packages`].
+    pub(crate) fn check_published_packages(&self) -> Result<(), ExecutionError> {
+        self.invariants.check_published_packages(self)
+    }
+
     pub(crate) fn check_ownership_invariants(
         &self,
         sender: &SuiAddress,
