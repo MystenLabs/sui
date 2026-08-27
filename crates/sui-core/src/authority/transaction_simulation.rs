@@ -1,44 +1,78 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::*;
+use std::{
+    collections::{BTreeSet, HashSet},
+    sync::Arc,
+};
+
+use nonempty::NonEmpty;
+use sui_config::{
+    transaction_deny_config::TransactionDenyConfig, verifier_signing_config::VerifierSigningConfig,
+};
+use sui_execution::Executor;
+use sui_transaction_checks::{check_dev_inspect_input, check_transaction_input};
+use sui_types::{
+    base_types::{EpochId, ObjectID},
+    coin_reservation::{CoinReservationResolverTrait, ParsedDigest},
+    digests::{ChainIdentifier, TransactionDigest},
+    effects::TransactionEffectsAPI,
+    error::{SuiErrorKind, SuiResult},
+    execution_params::{ExecutionOrEarlyError, FundsWithdrawStatus, get_early_execution_error},
+    execution_status::ExecutionErrorKind,
+    full_checkpoint_content::ObjectSet,
+    gas::SuiGasStatus,
+    messages_checkpoint::CheckpointTimestamp,
+    metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
+    object::{MoveObject, OBJECT_START_VERSION, Object, Owner},
+    storage::{
+        BackingPackageStore, BackingStore, TrackingBackingStore, get_transaction_object_set,
+    },
+    transaction::{ObjectReadResult, TransactionData, TransactionDataAPI, TxValidityCheckContext},
+    transaction_executor::{SimulateTransactionResult, TransactionChecks},
+};
+
+use super::{DEV_INSPECT_GAS_COIN_VALUE, pre_object_load_checks};
+use crate::{
+    accumulators::{
+        funds_read::AccountFundsRead,
+        transaction_rewriting::rewrite_transaction_for_coin_reservations,
+    },
+    transaction_input_loader::TransactionInputLoader,
+    transaction_outputs::unchanged_loaded_runtime_objects,
+};
 
 pub(super) fn simulate_transaction(
-    state: &AuthorityState,
     mut transaction: TransactionData,
     checks: TransactionChecks,
     allow_mock_gas_coin: bool,
+    suggested_gas_price: Option<u64>,
+    validity_check_context: TxValidityCheckContext<'_>,
+    execution_epoch_id: EpochId,
+    epoch_timestamp_ms: CheckpointTimestamp,
+    chain_identifier: ChainIdentifier,
+    transaction_deny_config: &TransactionDenyConfig,
+    certificate_deny_set: &HashSet<TransactionDigest>,
+    input_loader: &TransactionInputLoader,
+    backing_store: &(dyn BackingStore + Send + Sync),
+    backing_package_store: &(dyn BackingPackageStore + Send + Sync),
+    executor: &(dyn Executor + Send + Sync),
+    coin_reservation_resolver: &dyn CoinReservationResolverTrait,
+    account_funds_read: &dyn AccountFundsRead,
+    verifier_signing_config: &VerifierSigningConfig,
+    bytecode_verifier_metrics: &Arc<BytecodeVerifierMetrics>,
+    execution_metrics: &Arc<ExecutionMetrics>,
 ) -> SuiResult<SimulateTransactionResult> {
-    if transaction.kind().is_system_tx() {
-        return Err(SuiErrorKind::UnsupportedFeatureError {
-            error: "simulate does not support system transactions".to_string(),
-        }
-        .into());
-    }
-
-    let epoch_store = state.load_epoch_store_one_call_per_task();
-    if !state.is_fullnode(&epoch_store) {
-        return Err(SuiErrorKind::UnsupportedFeatureError {
-            error: "simulate is only supported on fullnodes".to_string(),
-        }
-        .into());
-    }
-
     let dev_inspect = checks.disabled();
-    if dev_inspect && state.config.dev_inspect_disabled {
-        return Err(SuiErrorKind::UnsupportedFeatureError {
-            error: "simulate with checks disabled is not allowed on this node".to_string(),
-        }
-        .into());
-    }
 
     // Reject coin reservations in gas payment when the execution engine
     // doesn't support them.
-    let protocol_config = epoch_store.protocol_config();
+    let protocol_config = validity_check_context.config;
     if !protocol_config.enable_coin_reservation_obj_refs()
-        && transaction.gas().iter().any(|obj_ref| {
-            sui_types::coin_reservation::ParsedDigest::is_coin_reservation_digest(&obj_ref.2)
-        })
+        && transaction
+            .gas()
+            .iter()
+            .any(|obj_ref| ParsedDigest::is_coin_reservation_digest(&obj_ref.2))
     {
         return Err(SuiErrorKind::UnsupportedFeatureError {
             error: "coin reservations in gas payment are not supported at this protocol version"
@@ -79,23 +113,28 @@ pub(super) fn simulate_transaction(
     };
 
     // Full validity check including gas budget and price.
-    transaction.validity_check(&epoch_store.tx_validity_check_context())?;
+    transaction.validity_check(&validity_check_context)?;
 
-    let declared_withdrawals = state.pre_object_load_checks(
+    let declared_withdrawals = pre_object_load_checks(
         &transaction,
         &[],
         &input_object_kinds,
         &receiving_object_refs,
-        epoch_store.protocol_config(),
+        protocol_config,
+        transaction_deny_config,
+        backing_package_store,
+        chain_identifier,
+        coin_reservation_resolver,
+        account_funds_read,
     )?;
     let address_funds: BTreeSet<_> = declared_withdrawals.keys().cloned().collect();
 
-    let (mut input_objects, receiving_objects) = state.input_loader.read_objects_for_signing(
+    let (mut input_objects, receiving_objects) = input_loader.read_objects_for_signing(
         // We don't want to cache this transaction since it's a simulation.
         None,
         &input_object_kinds,
         &receiving_object_refs,
-        epoch_store.epoch(),
+        validity_check_context.epoch,
     )?;
 
     // Add mock gas to input objects after loading (it doesn't exist in the store).
@@ -105,34 +144,30 @@ pub(super) fn simulate_transaction(
         id
     });
 
-    let protocol_config = epoch_store.protocol_config();
-
     let (gas_status, checked_input_objects) = if dev_inspect {
-        sui_transaction_checks::check_dev_inspect_input(
+        check_dev_inspect_input(
             protocol_config,
             &transaction,
             input_objects,
             receiving_objects,
-            epoch_store.reference_gas_price(),
+            validity_check_context.reference_gas_price,
         )?
     } else {
-        sui_transaction_checks::check_transaction_input(
-            epoch_store.protocol_config(),
-            epoch_store.reference_gas_price(),
+        check_transaction_input(
+            protocol_config,
+            validity_check_context.reference_gas_price,
             &transaction,
             input_objects,
             &receiving_objects,
-            &state.metrics.bytecode_verifier_metrics,
-            &state.config.verifier_signing_config,
+            bytecode_verifier_metrics,
+            verifier_signing_config,
         )?
     };
 
-    let executor = epoch_store.simulate_executor();
-
     let (mut kind, signer, gas_data) = transaction.execution_parts();
     let rewritten_inputs = rewrite_transaction_for_coin_reservations(
-        state.chain_identifier,
-        &*state.coin_reservation_resolver,
+        chain_identifier,
+        coin_reservation_resolver,
         signer,
         &mut kind,
         None,
@@ -140,7 +175,7 @@ pub(super) fn simulate_transaction(
     let early_execution_error = get_early_execution_error(
         &transaction.digest(),
         &checked_input_objects,
-        state.config.certificate_deny_config.certificate_deny_set(),
+        certificate_deny_set,
         &FundsWithdrawStatus::MaybeSufficient,
     );
     // Dev-inspect/simulation path (not committed): no assigned accumulator version here, so the
@@ -150,25 +185,20 @@ pub(super) fn simulate_transaction(
         Some(errors) => ExecutionOrEarlyError::failed(errors, None),
     };
 
-    let tracking_store = TrackingBackingStore::new(state.get_backing_store().as_ref());
+    let tracking_store = TrackingBackingStore::new(backing_store);
 
     // Clone inputs for potential retry if object funds check fails post-execution.
     let cloned_input_objects = checked_input_objects.clone();
     let cloned_gas = gas_data.clone();
     let cloned_kind = kind.clone();
     let tx_digest = transaction.digest();
-    let epoch_id = epoch_store.epoch_start_config().epoch_data().epoch_id();
-    let epoch_timestamp_ms = epoch_store
-        .epoch_start_config()
-        .epoch_data()
-        .epoch_start_timestamp();
     let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
         &tracking_store,
         protocol_config,
-        state.metrics.execution_metrics.clone(),
+        execution_metrics.clone(),
         false, // expensive_checks
         execution_params,
-        &epoch_id,
+        &execution_epoch_id,
         epoch_timestamp_ms,
         checked_input_objects,
         gas_data,
@@ -187,7 +217,7 @@ pub(super) fn simulate_transaction(
             .iter()
             .filter(|(id, _)| !address_funds.contains(id))
             .any(|(id, max_withdraw)| {
-                let balance = state.get_account_funds_read().get_latest_account_amount(id);
+                let balance = account_funds_read.get_latest_account_amount(id);
                 balance < *max_withdraw
             });
 
@@ -195,19 +225,19 @@ pub(super) fn simulate_transaction(
             let retry_gas_status = SuiGasStatus::new(
                 cloned_gas.budget,
                 cloned_gas.price,
-                epoch_store.reference_gas_price(),
+                validity_check_context.reference_gas_price,
                 protocol_config,
             )?;
             let (store, _, effects, result) = executor.dev_inspect_transaction(
                 &tracking_store,
                 protocol_config,
-                state.metrics.execution_metrics.clone(),
+                execution_metrics.clone(),
                 false,
                 ExecutionOrEarlyError::failed(
                     NonEmpty::new(ExecutionErrorKind::InsufficientFundsForWithdraw),
                     None,
                 ),
-                &epoch_id,
+                &execution_epoch_id,
                 epoch_timestamp_ms,
                 cloned_input_objects,
                 cloned_gas,
@@ -228,11 +258,7 @@ pub(super) fn simulate_transaction(
 
     let loaded_runtime_objects = tracking_store.into_read_objects();
     let unchanged_loaded_runtime_objects =
-        crate::transaction_outputs::unchanged_loaded_runtime_objects(
-            &transaction,
-            &effects,
-            &loaded_runtime_objects,
-        );
+        unchanged_loaded_runtime_objects(&transaction, &effects, &loaded_runtime_objects);
 
     let object_set = {
         let objects = {
@@ -249,13 +275,10 @@ pub(super) fn simulate_transaction(
             objects
         };
 
-        let object_keys = sui_types::storage::get_transaction_object_set(
-            &transaction,
-            &effects,
-            &unchanged_loaded_runtime_objects,
-        );
+        let object_keys =
+            get_transaction_object_set(&transaction, &effects, &unchanged_loaded_runtime_objects);
 
-        let mut set = sui_types::full_checkpoint_content::ObjectSet::default();
+        let mut set = ObjectSet::default();
         for k in object_keys {
             if let Some(o) = objects.get(&k) {
                 set.insert(o.clone());
@@ -272,8 +295,6 @@ pub(super) fn simulate_transaction(
         execution_result,
         mock_gas_id,
         unchanged_loaded_runtime_objects,
-        suggested_gas_price: state
-            .congestion_tracker
-            .get_suggested_gas_prices(&transaction),
+        suggested_gas_price,
     })
 }

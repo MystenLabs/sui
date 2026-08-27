@@ -37,7 +37,6 @@ use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::{assert_reachable, fatal};
-use nonempty::NonEmpty;
 use parking_lot::Mutex;
 use prometheus::{
     Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
@@ -130,7 +129,7 @@ use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::authenticator_state::get_authenticator_state;
 use sui_types::balance::Balance;
-use sui_types::coin_reservation;
+use sui_types::coin_reservation::{self, CoinReservationResolverTrait};
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{AuthoritySignInfo, Signer};
 use sui_types::deny_list_v1::check_coin_deny_list_v1;
@@ -143,7 +142,6 @@ use sui_types::effects::{
 use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
 use sui_types::event::EventID;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::execution_status::ExecutionErrorKind;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::inner_temporary_store::{InnerTemporaryStore, ObjectMap, TxCoins, WrittenObjects};
 use sui_types::message_envelope::Message;
@@ -158,7 +156,9 @@ use sui_types::messages_grpc::{
     TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
 };
 use sui_types::metrics::{BytecodeVerifierMetrics, ExecutionMetrics};
-use sui_types::object::{MoveObject, OBJECT_START_VERSION, Owner, PastObjectRead};
+#[cfg(test)]
+use sui_types::object::MoveObject;
+use sui_types::object::{OBJECT_START_VERSION, Owner, PastObjectRead};
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{
     BackingPackageStore, BackingStore, ObjectKey, ObjectOrTombstone, ObjectStore, WriteKind,
@@ -1066,6 +1066,45 @@ pub struct AuthorityState {
     transaction_deny_config_manager: Arc<TransactionDenyConfigManager>,
 }
 
+/// Run deny list checks and process funds withdrawals before loading input objects.
+fn pre_object_load_checks(
+    tx_data: &TransactionData,
+    tx_signatures: &[GenericSignature],
+    input_object_kinds: &[InputObjectKind],
+    receiving_objects_refs: &[ObjectRef],
+    protocol_config: &ProtocolConfig,
+    transaction_deny_config: &TransactionDenyConfig,
+    backing_package_store: &dyn BackingPackageStore,
+    chain_identifier: ChainIdentifier,
+    coin_reservation_resolver: &dyn CoinReservationResolverTrait,
+    account_funds_read: &dyn AccountFundsRead,
+) -> SuiResult<BTreeMap<AccumulatorObjId, (u64, TypeTag, SuiAddress)>> {
+    // Note: the deny checks may do redundant package loads but:
+    // - they only load packages when there is an active package deny map
+    // - the loads are cached anyway
+    sui_transaction_checks::deny::check_transaction_for_signing(
+        tx_data,
+        tx_signatures,
+        input_object_kinds,
+        receiving_objects_refs,
+        transaction_deny_config,
+        backing_package_store,
+    )?;
+
+    let declared_withdrawals = tx_data
+        .process_funds_withdrawals_for_signing(chain_identifier, coin_reservation_resolver)?;
+
+    account_funds_read.check_amounts_available(&declared_withdrawals)?;
+
+    if protocol_config.gasless_verify_remaining_balance() && tx_data.is_gasless_transaction() {
+        let min_amounts = sui_types::transaction::get_gasless_allowed_token_types(protocol_config);
+        account_funds_read
+            .check_remaining_amounts_after_withdrawal(&declared_withdrawals, &min_amounts)?;
+    }
+
+    Ok(declared_withdrawals)
+}
+
 /// The authority state encapsulates all state, drives execution, and ensures safety.
 ///
 /// Note the authority operations can be accessed through a read ref (&) and do not
@@ -1104,52 +1143,6 @@ impl AuthorityState {
         self.checkpoint_store.get_epoch_state_commitments(epoch)
     }
 
-    /// Runs deny list checks and processes funds withdrawals. Called before loading input
-    /// objects, since these checks don't depend on object state.
-    fn pre_object_load_checks(
-        &self,
-        tx_data: &TransactionData,
-        tx_signatures: &[GenericSignature],
-        input_object_kinds: &[InputObjectKind],
-        receiving_objects_refs: &[ObjectRef],
-        protocol_config: &ProtocolConfig,
-    ) -> SuiResult<BTreeMap<AccumulatorObjId, (u64, TypeTag, SuiAddress)>> {
-        // Note: the deny checks may do redundant package loads but:
-        // - they only load packages when there is an active package deny map
-        // - the loads are cached anyway
-        let deny_config = self
-            .transaction_deny_config_manager
-            .effective_config()
-            .load();
-        sui_transaction_checks::deny::check_transaction_for_signing(
-            tx_data,
-            tx_signatures,
-            input_object_kinds,
-            receiving_objects_refs,
-            &deny_config,
-            self.get_backing_package_store().as_ref(),
-        )?;
-
-        let declared_withdrawals = tx_data.process_funds_withdrawals_for_signing(
-            self.chain_identifier,
-            self.coin_reservation_resolver.as_ref(),
-        )?;
-
-        self.execution_cache_trait_pointers
-            .account_funds_read
-            .check_amounts_available(&declared_withdrawals)?;
-
-        if protocol_config.gasless_verify_remaining_balance() && tx_data.is_gasless_transaction() {
-            let min_amounts =
-                sui_types::transaction::get_gasless_allowed_token_types(protocol_config);
-            self.execution_cache_trait_pointers
-                .account_funds_read
-                .check_remaining_amounts_after_withdrawal(&declared_withdrawals, &min_amounts)?;
-        }
-
-        Ok(declared_withdrawals)
-    }
-
     fn handle_transaction_deny_checks(
         &self,
         transaction: &VerifiedTransaction,
@@ -1161,12 +1154,21 @@ impl AuthorityState {
         let input_object_kinds = tx_data.input_objects()?;
         let receiving_objects_refs = tx_data.receiving_objects();
 
-        self.pre_object_load_checks(
+        let transaction_deny_config = self
+            .transaction_deny_config_manager
+            .effective_config()
+            .load();
+        pre_object_load_checks(
             tx_data,
             transaction.tx_signatures(),
             &input_object_kinds,
             &receiving_objects_refs,
             epoch_store.protocol_config(),
+            transaction_deny_config.as_ref(),
+            self.get_backing_package_store().as_ref(),
+            self.chain_identifier,
+            self.coin_reservation_resolver.as_ref(),
+            self.get_account_funds_read().as_ref(),
         )?;
 
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
@@ -2459,7 +2461,58 @@ impl AuthorityState {
         checks: TransactionChecks,
         allow_mock_gas_coin: bool,
     ) -> SuiResult<SimulateTransactionResult> {
-        transaction_simulation::simulate_transaction(self, transaction, checks, allow_mock_gas_coin)
+        if transaction.kind().is_system_tx() {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
+                error: "simulate does not support system transactions".to_string(),
+            }
+            .into());
+        }
+
+        let epoch_store = self.load_epoch_store_one_call_per_task();
+        if !self.is_fullnode(&epoch_store) {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
+                error: "simulate is only supported on fullnodes".to_string(),
+            }
+            .into());
+        }
+
+        if checks.disabled() && self.config.dev_inspect_disabled {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
+                error: "simulate with checks disabled is not allowed on this node".to_string(),
+            }
+            .into());
+        }
+
+        let transaction_deny_config = self
+            .transaction_deny_config_manager
+            .effective_config()
+            .load();
+        let epoch_data = epoch_store.epoch_start_config().epoch_data();
+        let suggested_gas_price = self
+            .congestion_tracker
+            .get_suggested_gas_prices(&transaction);
+
+        transaction_simulation::simulate_transaction(
+            transaction,
+            checks,
+            allow_mock_gas_coin,
+            suggested_gas_price,
+            epoch_store.tx_validity_check_context(),
+            epoch_data.epoch_id(),
+            epoch_data.epoch_start_timestamp(),
+            self.chain_identifier,
+            transaction_deny_config.as_ref(),
+            self.config.certificate_deny_config.certificate_deny_set(),
+            &self.input_loader,
+            self.get_backing_store().as_ref(),
+            self.get_backing_package_store().as_ref(),
+            epoch_store.simulate_executor().as_ref(),
+            self.coin_reservation_resolver.as_ref(),
+            self.get_account_funds_read().as_ref(),
+            &self.config.verifier_signing_config,
+            &self.metrics.bytecode_verifier_metrics,
+            &self.metrics.execution_metrics,
+        )
     }
 
     /// The object ID for gas can be any object ID, even for an uncreated object
