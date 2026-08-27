@@ -62,6 +62,22 @@ struct WindowInner {
 }
 
 impl CausalWindow {
+    /// Default sizing: execution parallelism K at half the CPUs (leaving the rest for
+    /// consensus, networking and checkpointing), window W at 4K so run-ahead past a
+    /// slow-to-materialize unit (e.g. a settlement awaiting its batch) is not throttled
+    /// by K. Under msim both are fixed: host CPU count must not influence simulation
+    /// behavior, and the sim's blocking pool (default 32 threads, shared with other
+    /// spawn_blocking users) must accommodate K plus slack.
+    pub fn new_with_default_sizing() -> Arc<Self> {
+        #[cfg(msim)]
+        return Self::new(4, 16);
+        #[cfg(not(msim))]
+        {
+            let concurrency_limit = std::cmp::max(1, num_cpus::get() / 2);
+            Self::new(concurrency_limit, 4 * concurrency_limit as u64)
+        }
+    }
+
     pub fn new(concurrency_limit: usize, window_size: u64) -> Arc<Self> {
         assert!(concurrency_limit > 0);
         // W must exceed 1 or the second admission branch is empty and execution
