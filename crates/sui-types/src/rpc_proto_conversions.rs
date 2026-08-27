@@ -3088,6 +3088,10 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
                 .collect();
         }
 
+        if mask.contains(Self::LAMPORT_VERSION_FIELD.name) {
+            self.lamport_version = Some(value.lamport_version().value());
+        }
+
         if mask.contains(Self::CHANGED_OBJECTS_FIELD.name)
             || mask.contains(Self::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name)
             || mask.contains(Self::GAS_OBJECT_FIELD.name)
@@ -3624,5 +3628,20 @@ impl TryFrom<&ObjectSet> for crate::full_checkpoint_content::ObjectSet {
         }
 
         Ok(objects)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::effects::TransactionEffectsAPI;
+
+    #[test]
+    fn transaction_effects_v1_proto_includes_lamport_version() {
+        let effects = crate::effects::TransactionEffectsV1::default();
+        let lamport_version = effects.lamport_version().value();
+        let proto: sui_rpc::proto::sui::rpc::v2::TransactionEffects =
+            crate::effects::TransactionEffects::V1(effects).into();
+
+        assert_eq!(proto.lamport_version, Some(lamport_version));
     }
 }
