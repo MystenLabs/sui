@@ -26,6 +26,8 @@ use sui_types::{
 
 use crate::SimulatorStore;
 
+mod simulation;
+
 pub struct EpochState {
     epoch_start_state: EpochStartSystemState,
     committee: Committee,
@@ -33,6 +35,8 @@ pub struct EpochState {
     execution_metrics: Arc<ExecutionMetrics>,
     bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
     executor: Arc<dyn Executor + Send + Sync>,
+    /// Keeps arbitrary simulated packages out of committed execution's VM cache.
+    simulation_executor: Arc<dyn Executor + Send + Sync>,
     chain_identifier: ChainIdentifier,
     /// A counter that advances each time we advance the clock in order to ensure that each update
     /// txn has a unique digest. This is reset on epoch changes
@@ -57,6 +61,7 @@ impl EpochState {
         let execution_metrics = Arc::new(ExecutionMetrics::new(&registry));
         let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(&registry));
         let executor = sui_execution::executor(&protocol_config, true).unwrap();
+        let simulation_executor = sui_execution::executor(&protocol_config, true).unwrap();
 
         Self {
             epoch_start_state,
@@ -65,6 +70,7 @@ impl EpochState {
             execution_metrics,
             bytecode_verifier_metrics,
             executor,
+            simulation_executor,
             chain_identifier,
             next_consensus_round: 0,
         }
