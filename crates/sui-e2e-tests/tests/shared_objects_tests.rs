@@ -3,10 +3,9 @@
 
 use futures::future::join_all;
 use futures::join;
-use rand::distributions::Distribution;
 use std::net::SocketAddr;
 use std::time::{Duration, SystemTime};
-use sui_macros::{register_fail_point_async, sim_test};
+use sui_macros::sim_test;
 use sui_protocol_config::ProtocolVersion;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::{
@@ -22,7 +21,6 @@ use sui_types::execution_status::{
 use sui_types::messages_grpc::WaitForEffectsResponse;
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use test_cluster::TestClusterBuilder;
-use tokio::time::sleep;
 use tracing::info;
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
@@ -188,28 +186,17 @@ async fn shared_object_deletion_multiple_times_cert_racing() {
 
 /// Test for execution of shared object certs that are sequenced after a shared object is deleted.
 /// The test strategy is:
-/// 0. Inject a random delay just before execution of a transaction.
 /// 1. Create a shared object
 /// 2. Create a delete cert and two increment certs, but do not execute any of them yet.
 /// 3. Execute the delete cert.
 /// 4. Execute the two increment certs.
 ///
 /// The two execution certs should be immediately executable (because they have a missing
-/// input). Therefore validators may execute them in either order. The injected delay ensures that
-/// we will explore all possible orders, and `submit_and_execute` verifies that we
-/// get the same effects regardless of the order. (checkpoint fork detection will also test this).
+/// input). Therefore validators may execute them in either order, and `submit_and_execute`
+/// verifies that we get the same effects regardless of the order. (checkpoint fork
+/// detection will also test this).
 #[sim_test]
 async fn shared_object_deletion_multi_certs() {
-    // cause random delay just before tx is executed
-    register_fail_point_async("transaction_execution_delay", move || async move {
-        let delay = {
-            let dist = rand::distributions::Uniform::new(0, 1000);
-            let mut rng = rand::thread_rng();
-            dist.sample(&mut rng)
-        };
-        sleep(Duration::from_millis(delay)).await;
-    });
-
     let mut test_cluster = TestClusterBuilder::new().build().await;
 
     let (package, counter) = publish_basics_package_and_make_counter(&test_cluster.wallet).await;
@@ -496,20 +483,11 @@ async fn assert_checkpoint_order_with_effects_dependencies(
     );
 }
 
-/// Regression coverage for checkpoint ordering when effects dependencies are absent. The
-/// transaction_execution_delay failpoint allows independent execution to finish out of consensus
-/// order; checkpoint construction and settlement must nevertheless retain the shared schedule.
+/// Regression coverage for checkpoint ordering when effects dependencies are absent. Execution
+/// may finish out of consensus order under the simulator's scheduling randomness; checkpoint
+/// construction and settlement must nevertheless retain the shared schedule.
 #[sim_test]
 async fn shared_checkpoint_order_without_effects_dependencies() {
-    register_fail_point_async("transaction_execution_delay", move || async move {
-        let delay = {
-            let dist = rand::distributions::Uniform::new(0, 1000);
-            let mut rng = rand::thread_rng();
-            dist.sample(&mut rng)
-        };
-        sleep(Duration::from_millis(delay)).await;
-    });
-
     // Mainnet simulation runs retain the flag-off protocol configuration.
     let flag_enabled = sui_types::digests::ChainIdentifier::default().chain()
         != sui_protocol_config::Chain::Mainnet;
