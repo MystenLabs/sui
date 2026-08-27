@@ -35,19 +35,28 @@ pub struct DedicatedThreadPool {
 
 impl DedicatedThreadPool {
     /// Creates a pool of `num_threads` OS threads named `{name}-{i}`.
+    ///
+    /// When created from within a tokio runtime, each worker thread enters that
+    /// runtime's context so jobs can use `tokio::spawn` and other handle-based APIs
+    /// (like `spawn_blocking` threads can).
     #[allow(unused_variables)]
     pub fn new(name: &str, num_threads: usize) -> Self {
         #[cfg(not(msim))]
         {
             assert!(num_threads > 0, "thread pool must have at least one thread");
+            let runtime_handle = tokio::runtime::Handle::try_current().ok();
             let (sender, receiver) = mpsc::channel::<Job>();
             let receiver = Arc::new(Mutex::new(receiver));
             let threads = (0..num_threads)
                 .map(|i| {
                     let receiver = receiver.clone();
+                    let runtime_handle = runtime_handle.clone();
                     std::thread::Builder::new()
                         .name(format!("{name}-{i}"))
-                        .spawn(move || worker_loop(receiver))
+                        .spawn(move || {
+                            let _guard = runtime_handle.as_ref().map(|h| h.enter());
+                            worker_loop(receiver)
+                        })
                         .expect("failed to spawn pool thread")
                 })
                 .collect();
