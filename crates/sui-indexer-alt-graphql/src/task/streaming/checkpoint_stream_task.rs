@@ -106,9 +106,9 @@ use super::StreamedTransactionStore;
 use super::StreamingPackageStore;
 use super::SubscriptionReadiness;
 #[cfg(any(feature = "staging", test))]
-use super::checkpoint_resume::scan_checkpoints;
+use super::checkpoint_resume::CheckpointPageFetcher;
 #[cfg(any(feature = "staging", test))]
-use super::gap_recovery::CheckpointFetcher;
+use super::checkpoint_resume::scan_checkpoints;
 use super::gap_recovery::recover_gap;
 #[cfg(test)]
 use super::lifecycle::SubscriberLimit;
@@ -239,7 +239,7 @@ impl SubscriptionBroadcast {
     /// Linear "catch up, then follow": Phase 1 scans toward the tip and pins a `handoff` near it,
     /// Phase 2 follows the live broadcast from `handoff + 1`, so the phases meet with no gap. Any
     /// anomaly disconnects (the client reconnects from its last cursor), logged by reason.
-    pub(crate) fn subscribe<F: CheckpointFetcher + Clone + Send + 'static>(
+    pub(crate) fn subscribe<F: CheckpointPageFetcher + Clone + Send + 'static>(
         self: Arc<Self>,
         resume_from: Option<u64>,
         fetcher: F,
@@ -830,7 +830,7 @@ fn add_tombstones(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::task::streaming::test_utils::MockFetcher;
+    use crate::task::streaming::test_utils::MockPageFetcher;
     use crate::task::streaming::test_utils::make_test_proto_checkpoint;
     use crate::task::streaming::test_utils::test_broadcast;
 
@@ -871,7 +871,7 @@ mod tests {
 
         let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
         // Fetcher is unused since resume_from is None.
-        let fetcher = MockFetcher::success_for_range(0..=0);
+        let fetcher = MockPageFetcher::success_for_range(0..=0);
 
         let stream =
             broadcast.subscribe(None, fetcher, &SubscriptionConfig::default(), test_guard());
@@ -897,7 +897,7 @@ mod tests {
         assert_eq!(broadcast.network_tip(), 5);
 
         // resume_from = 2 → Phase 1 yields 3, 4, 5; then Phase 2 picks up live items.
-        let fetcher = MockFetcher::success_for_range(3..=5);
+        let fetcher = MockPageFetcher::success_for_range(3..=5);
         let stream = broadcast.subscribe(
             Some(2),
             fetcher,
@@ -918,7 +918,7 @@ mod tests {
     #[tokio::test]
     async fn subscribe_yields_error_when_channel_closes() {
         let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
-        let fetcher = MockFetcher::success_for_range(0..=0);
+        let fetcher = MockPageFetcher::success_for_range(0..=0);
         let stream =
             broadcast.subscribe(None, fetcher, &SubscriptionConfig::default(), test_guard());
         tokio::pin!(stream);

@@ -9,7 +9,6 @@ use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
 use futures::StreamExt;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
-use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use tokio::sync::watch;
 
 use crate::api::scalars::uint53::UInt53;
@@ -72,7 +71,7 @@ impl Subscription {
         let limits: &Limits = ctx.data()?;
         let config: &SubscriptionConfig = ctx.data()?;
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
-        let fetcher: &LedgerGrpcReader = ctx.data()?;
+        let reader: &AlphaLedgerGrpcReader = ctx.data()?;
 
         let start_from: Option<u64> = match (
             after.map(|c| c.sequence_number()),
@@ -89,7 +88,7 @@ impl Subscription {
 
         let stream = broadcast
             .clone()
-            .subscribe(start_from, fetcher.clone(), config, guard);
+            .subscribe(start_from, reader.clone(), config, guard);
 
         Ok(stream.map(move |item| {
             item.map(|processed| {
