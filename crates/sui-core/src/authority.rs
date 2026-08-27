@@ -1065,45 +1065,6 @@ pub struct AuthorityState {
     transaction_deny_config_manager: Arc<TransactionDenyConfigManager>,
 }
 
-/// Run deny list checks and process funds withdrawals before loading input objects.
-pub(crate) fn pre_object_load_checks(
-    tx_data: &TransactionData,
-    tx_signatures: &[GenericSignature],
-    input_object_kinds: &[InputObjectKind],
-    receiving_objects_refs: &[ObjectRef],
-    protocol_config: &ProtocolConfig,
-    transaction_deny_config: &TransactionDenyConfig,
-    backing_package_store: &dyn BackingPackageStore,
-    chain_identifier: ChainIdentifier,
-    coin_reservation_resolver: &dyn CoinReservationResolverTrait,
-    account_funds_read: &dyn AccountFundsRead,
-) -> SuiResult<BTreeMap<AccumulatorObjId, (u64, TypeTag, SuiAddress)>> {
-    // Note: the deny checks may do redundant package loads but:
-    // - they only load packages when there is an active package deny map
-    // - the loads are cached anyway
-    sui_transaction_checks::deny::check_transaction_for_signing(
-        tx_data,
-        tx_signatures,
-        input_object_kinds,
-        receiving_objects_refs,
-        transaction_deny_config,
-        backing_package_store,
-    )?;
-
-    let declared_withdrawals = tx_data
-        .process_funds_withdrawals_for_signing(chain_identifier, coin_reservation_resolver)?;
-
-    account_funds_read.check_amounts_available(&declared_withdrawals)?;
-
-    if protocol_config.gasless_verify_remaining_balance() && tx_data.is_gasless_transaction() {
-        let min_amounts = sui_types::transaction::get_gasless_allowed_token_types(protocol_config);
-        account_funds_read
-            .check_remaining_amounts_after_withdrawal(&declared_withdrawals, &min_amounts)?;
-    }
-
-    Ok(declared_withdrawals)
-}
-
 /// The authority state encapsulates all state, drives execution, and ensures safety.
 ///
 /// Note the authority operations can be accessed through a read ref (&) and do not
@@ -6725,4 +6686,43 @@ impl NodeStateDump {
         let file = File::open(path)?;
         serde_json::from_reader(file).map_err(|e| anyhow::anyhow!(e))
     }
+}
+
+/// Run deny list checks and process funds withdrawals before loading input objects.
+pub(crate) fn pre_object_load_checks(
+    tx_data: &TransactionData,
+    tx_signatures: &[GenericSignature],
+    input_object_kinds: &[InputObjectKind],
+    receiving_objects_refs: &[ObjectRef],
+    protocol_config: &ProtocolConfig,
+    transaction_deny_config: &TransactionDenyConfig,
+    backing_package_store: &dyn BackingPackageStore,
+    chain_identifier: ChainIdentifier,
+    coin_reservation_resolver: &dyn CoinReservationResolverTrait,
+    account_funds_read: &dyn AccountFundsRead,
+) -> SuiResult<BTreeMap<AccumulatorObjId, (u64, TypeTag, SuiAddress)>> {
+    // Note: the deny checks may do redundant package loads but:
+    // - they only load packages when there is an active package deny map
+    // - the loads are cached anyway
+    sui_transaction_checks::deny::check_transaction_for_signing(
+        tx_data,
+        tx_signatures,
+        input_object_kinds,
+        receiving_objects_refs,
+        transaction_deny_config,
+        backing_package_store,
+    )?;
+
+    let declared_withdrawals = tx_data
+        .process_funds_withdrawals_for_signing(chain_identifier, coin_reservation_resolver)?;
+
+    account_funds_read.check_amounts_available(&declared_withdrawals)?;
+
+    if protocol_config.gasless_verify_remaining_balance() && tx_data.is_gasless_transaction() {
+        let min_amounts = sui_types::transaction::get_gasless_allowed_token_types(protocol_config);
+        account_funds_read
+            .check_remaining_amounts_after_withdrawal(&declared_withdrawals, &min_amounts)?;
+    }
+
+    Ok(declared_withdrawals)
 }
