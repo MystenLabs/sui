@@ -201,7 +201,6 @@ fn bytecode(code: &FF::Bytecode) -> PartialVMResult<ast::Bytecode> {
         FF::Bytecode::UnpackVariantGenericMutRef(ndx) => Bytecode::UnpackVariantGenericMutRef(*ndx),
         FF::Bytecode::VariantSwitch(ndx) => Bytecode::VariantSwitch(*ndx),
 
-        // Signed integer bytecodes are not yet supported in the VM runtime
         FF::Bytecode::LdI8(_)
         | FF::Bytecode::LdI16(_)
         | FF::Bytecode::LdI32(_)
@@ -215,13 +214,7 @@ fn bytecode(code: &FF::Bytecode) -> PartialVMResult<ast::Bytecode> {
         | FF::Bytecode::CastI128
         | FF::Bytecode::CastI256
         | FF::Bytecode::Neg => {
-            return Err(partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "{}",
-                move_core_types::signed_ints_unsupported!(
-                    "signed integer bytecodes in the VM runtime"
-                )
-            ));
+            todo!("[signed-ints] signed integer bytecodes in the VM runtime")
         }
 
         // Deprecated bytecodes -- bail

@@ -3227,9 +3227,9 @@ impl Value {
             S::Vector(inner) => L::Vector(Box::new(Self::constant_sig_token_to_layout(inner)?)),
             // Not yet supported
             S::Datatype(_) | S::DatatypeInstantiation(_) => return None,
-            // TODO [signed-ints]: signed integer constants are not yet supported in the VM
-            // runtime; flip when the value layer lands.
-            S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => return None,
+            S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => {
+                todo!("[signed-ints] signed integer constants in the VM runtime")
+            }
             // Not allowed/Not meaningful
             S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) => return None,
         })
