@@ -32,6 +32,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::ast::{Exp, Function, Label, MatchArm, UnstructuredNode};
 
+// -------------------------------------------------------------------------------------------------
+// Types
+
 pub struct MutAnnotations {
     /// (binder node id, arm index) -> names bound at that binder that need `mut`. Arm index
     /// is 0 for every binder except `Match`, where each arm's pattern is its own binder.
@@ -42,6 +45,49 @@ pub struct MutAnnotations {
 
 /// Saturating assignment count: we only ever need to distinguish 0, 1, and "2 or more".
 const MANY: u8 = 2;
+
+/// Future free uses of one name at one program point.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+struct Use {
+    /// Free assignments on some path from here, saturated at [`MANY`].
+    assigns: u8,
+    /// A free `&mut name` on some path from here.
+    borrowed: bool,
+}
+
+/// The backward fact: every name's future free uses. Absent names have none. `poisoned`
+/// models unstructured goto flow: every lookup answers [`Use::SATURATED`].
+#[derive(Clone, Default, PartialEq, Eq)]
+struct Env {
+    uses: BTreeMap<String, Use>,
+    poisoned: bool,
+}
+
+/// An enclosing loop during the walk: the facts a jump to it resumes at.
+struct LoopFrame {
+    label: Option<Label>,
+    /// The fact after the loop: where `break` resumes.
+    break_env: Env,
+    /// The fact at the loop head: where `continue` and the back edge resume. The current
+    /// fixpoint iterate while the loop's body is being walked.
+    head_env: Env,
+}
+
+struct Walk {
+    mut_binders: BTreeMap<(usize, usize), BTreeSet<String>>,
+    loops: Vec<LoopFrame>,
+}
+
+/// A statement that binds names: the names, whether they are initialized at the binder, and
+/// the right-hand side evaluated before the binding takes effect.
+struct Binder<'a> {
+    names: Vec<&'a String>,
+    initialized: bool,
+    rhs: Option<&'a Exp>,
+}
+
+// -------------------------------------------------------------------------------------------------
+// Impls
 
 impl MutAnnotations {
     pub fn analyze(fun: &Function) -> Self {
@@ -80,87 +126,6 @@ impl MutAnnotations {
     }
 }
 
-fn node_id(exp: &Exp) -> usize {
-    exp as *const Exp as usize
-}
-
-// -------------------------------------------------------------------------------------------------
-// Scope flattening (mirrors the printer's `push_stmt`/`e_block` Block inlining)
-
-/// The rendered statement list: `Block` wrappers peel, `Block(Seq)` items splice in as
-/// siblings. Bare `Seq`s stay single statements; they render braced, opening a scope.
-fn flatten_scope(root: &Exp) -> Vec<&Exp> {
-    let mut inner = root;
-    while let Exp::Block(_, body) = inner {
-        inner = body;
-    }
-    let mut out = Vec::new();
-    match inner {
-        Exp::Seq(items) => {
-            for item in items {
-                push_flat_stmt(item, &mut out);
-            }
-        }
-        other => out.push(other),
-    }
-    out
-}
-
-fn push_flat_stmt<'a>(exp: &'a Exp, out: &mut Vec<&'a Exp>) {
-    match exp {
-        Exp::Block(_, body) => match body.as_ref() {
-            Exp::Seq(items) => {
-                for item in items {
-                    push_flat_stmt(item, out);
-                }
-            }
-            inner => push_flat_stmt(inner, out),
-        },
-        other => out.push(other),
-    }
-}
-
-/// A statement that binds names: the names, whether they are initialized at the binder, and
-/// the right-hand side evaluated before the binding takes effect.
-struct Binder<'a> {
-    names: Vec<&'a String>,
-    initialized: bool,
-    rhs: Option<&'a Exp>,
-}
-
-fn binder(stmt: &Exp) -> Option<Binder<'_>> {
-    match stmt {
-        Exp::LetBind(names, rhs) | Exp::VecUnpack(names, rhs) => Some(Binder {
-            names: names.iter().collect(),
-            initialized: true,
-            rhs: Some(rhs),
-        }),
-        Exp::Declare(names) => Some(Binder {
-            names: names.iter().collect(),
-            initialized: false,
-            rhs: None,
-        }),
-        Exp::Unpack(_, fields, rhs) | Exp::UnpackVariant(_, _, fields, rhs) => Some(Binder {
-            names: fields.iter().map(|(_, n)| n).collect(),
-            initialized: true,
-            rhs: Some(rhs),
-        }),
-        _ => None,
-    }
-}
-
-// -------------------------------------------------------------------------------------------------
-// Dataflow facts
-
-/// Future free uses of one name at one program point.
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
-struct Use {
-    /// Free assignments on some path from here, saturated at [`MANY`].
-    assigns: u8,
-    /// A free `&mut name` on some path from here.
-    borrowed: bool,
-}
-
 impl Use {
     const SATURATED: Use = Use {
         assigns: MANY,
@@ -187,14 +152,6 @@ impl Use {
         let threshold = if initialized { 1 } else { MANY };
         self.borrowed || self.assigns >= threshold
     }
-}
-
-/// The backward fact: every name's future free uses. Absent names have none. `poisoned`
-/// models unstructured goto flow: every lookup answers [`Use::SATURATED`].
-#[derive(Clone, Default, PartialEq, Eq)]
-struct Env {
-    uses: BTreeMap<String, Use>,
-    poisoned: bool,
 }
 
 impl Env {
@@ -255,21 +212,6 @@ impl Env {
 
 // -------------------------------------------------------------------------------------------------
 // Backward walk
-
-/// An enclosing loop during the walk: the facts a jump to it resumes at.
-struct LoopFrame {
-    label: Option<Label>,
-    /// The fact after the loop: where `break` resumes.
-    break_env: Env,
-    /// The fact at the loop head: where `continue` and the back edge resume. The current
-    /// fixpoint iterate while the loop's body is being walked.
-    head_env: Env,
-}
-
-struct Walk {
-    mut_binders: BTreeMap<(usize, usize), BTreeSet<String>>,
-    loops: Vec<LoopFrame>,
-}
 
 impl Walk {
     /// Backward walk of a scope's rendered statement list; `after` is the fact at the
@@ -521,6 +463,68 @@ impl Walk {
         }
         debug_assert!(false, "loop fixpoint did not converge");
         Env::poisoned()
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Utils
+
+fn node_id(exp: &Exp) -> usize {
+    exp as *const Exp as usize
+}
+
+/// The rendered statement list (mirrors the printer's `push_stmt`/`e_block` Block inlining):
+/// `Block` wrappers peel, `Block(Seq)` items splice in as siblings. Bare `Seq`s stay single
+/// statements; they render braced, opening a scope.
+fn flatten_scope(root: &Exp) -> Vec<&Exp> {
+    let mut inner = root;
+    while let Exp::Block(_, body) = inner {
+        inner = body;
+    }
+    let mut out = Vec::new();
+    match inner {
+        Exp::Seq(items) => {
+            for item in items {
+                push_flat_stmt(item, &mut out);
+            }
+        }
+        other => out.push(other),
+    }
+    out
+}
+
+fn push_flat_stmt<'a>(exp: &'a Exp, out: &mut Vec<&'a Exp>) {
+    match exp {
+        Exp::Block(_, body) => match body.as_ref() {
+            Exp::Seq(items) => {
+                for item in items {
+                    push_flat_stmt(item, out);
+                }
+            }
+            inner => push_flat_stmt(inner, out),
+        },
+        other => out.push(other),
+    }
+}
+
+fn binder(stmt: &Exp) -> Option<Binder<'_>> {
+    match stmt {
+        Exp::LetBind(names, rhs) | Exp::VecUnpack(names, rhs) => Some(Binder {
+            names: names.iter().collect(),
+            initialized: true,
+            rhs: Some(rhs),
+        }),
+        Exp::Declare(names) => Some(Binder {
+            names: names.iter().collect(),
+            initialized: false,
+            rhs: None,
+        }),
+        Exp::Unpack(_, fields, rhs) | Exp::UnpackVariant(_, _, fields, rhs) => Some(Binder {
+            names: fields.iter().map(|(_, n)| n).collect(),
+            initialized: true,
+            rhs: Some(rhs),
+        }),
+        _ => None,
     }
 }
 
