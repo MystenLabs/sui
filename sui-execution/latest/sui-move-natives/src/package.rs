@@ -57,7 +57,7 @@ pub fn original_package_id_impl(
     native_charge_gas_early_exit!(
         context,
         package_original_package_id_impl_cost_per_byte
-            * checked_as!(package.object_size_for_gas_metering(), u64)?.into()
+            .saturating_mul(checked_as!(package.object_size_for_gas_metering(), u64)?)
     );
     let original_id = package.original_package_id();
 

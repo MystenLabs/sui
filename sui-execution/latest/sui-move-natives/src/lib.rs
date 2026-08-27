@@ -888,7 +888,10 @@ pub fn make_stdlib_gas_params_for_protocol_config(
             debug_assert!(
                 protocol_config.version.as_u64() < 53 || protocol_config.$name().is_some()
             );
-            protocol_config.$name().map(Into::into).unwrap_or(0.into())
+            protocol_config
+                .$name()
+                .map(Into::into)
+                .unwrap_or(0u64.into())
         }};
     }
     macro_rules! get_gas_cost_or_default_since {

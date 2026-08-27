@@ -63,13 +63,16 @@ pub fn hmac_sha3_256(
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
         context,
-        hmac_hmac_sha3_256_cost_params.hmac_hmac_sha3_256_input_cost_per_byte
+        hmac_hmac_sha3_256_cost_params
+            .hmac_hmac_sha3_256_input_cost_per_byte
             // same cost for msg and key
-            * ((msg_len + key_len) as u64).into()
-            + hmac_hmac_sha3_256_cost_params.hmac_hmac_sha3_256_input_cost_per_block
-                * ((((msg_len + key_len) + (2 * HMAC_SHA3_256_BLOCK_SIZE - 2))
-                    / HMAC_SHA3_256_BLOCK_SIZE) as u64)
-                    .into()
+            .saturating_mul((msg_len + key_len) as u64)
+            + hmac_hmac_sha3_256_cost_params
+                .hmac_hmac_sha3_256_input_cost_per_block
+                .saturating_mul(
+                    (((msg_len + key_len) + (2 * HMAC_SHA3_256_BLOCK_SIZE - 2))
+                        / HMAC_SHA3_256_BLOCK_SIZE) as u64,
+                )
     );
 
     let hmac_key = hmac::HmacKey::from_bytes(&key.as_bytes_ref())

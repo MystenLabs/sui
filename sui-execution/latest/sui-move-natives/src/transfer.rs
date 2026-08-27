@@ -64,7 +64,7 @@ pub fn receive_object_internal(
         context,
         transfer_receive_object_internal_cost_params
             .transfer_receive_object_internal_type_cost_per_byte
-            * u64::from(child_ty.size()?).into()
+            .saturating_mul(u64::from(child_ty.size()?))
     );
     let child_receiver_sequence_number: SequenceNumber = pop_arg!(args, u64).into();
     let child_receiver_object_id = safe_unwrap!(args.pop_back());
@@ -117,8 +117,9 @@ pub fn receive_object_internal(
 
     native_charge_gas_early_exit!(
         context,
-        transfer_receive_object_internal_cost_params.transfer_receive_object_internal_cost_per_byte
-            * u64::from(child_size).into()
+        transfer_receive_object_internal_cost_params
+            .transfer_receive_object_internal_cost_per_byte
+            .saturating_mul(u64::from(child_size))
     );
 
     Ok(NativeResult::ok(context.gas_used(), smallvec![child]))
