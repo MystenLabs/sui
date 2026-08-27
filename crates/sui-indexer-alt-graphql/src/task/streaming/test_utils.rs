@@ -4,16 +4,10 @@
 //! Shared test helpers for the streaming submodule.
 
 use std::collections::HashMap;
-use std::ops::RangeInclusive;
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 
 use anyhow::anyhow;
-use bytes::Bytes;
 use dashmap::DashMap;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::PageItem;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_rpc::field::FieldMask;
 use sui_rpc::proto::sui::rpc::v2 as grpc;
 use sui_rpc::proto::sui::rpc::v2::Checkpoint as ProtoCheckpoint;
@@ -24,13 +18,8 @@ use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::CheckpointContents as NativeCheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSummary as NativeCheckpointSummary;
-use tokio::sync::broadcast;
 
-use super::checkpoint_resume::CheckpointPageFetcher;
-use super::checkpoint_stream_task::SubscriptionBroadcast;
 use super::gap_recovery::CheckpointFetcher;
-use super::processed_checkpoint::ProcessedCheckpoint;
-use crate::metrics::SubscriptionMetrics;
 
 /// Per-key behavior of the mock fetcher.
 #[derive(Debug, Clone)]
@@ -45,7 +34,7 @@ pub(super) enum FetcherBehavior {
 
 /// Mock fetcher with per-seq behavior, tracking call counts. Panics on unconfigured seqs so
 /// tests fail loudly if unexpected fetches happen. `Clone` shares the underlying state, so
-/// call counts are aggregated across clones (`scan_checkpoints` clones the fetcher per item).
+/// call counts are aggregated across clones (the caller may clone the fetcher per item).
 #[derive(Clone)]
 pub(super) struct MockFetcher {
     state: Arc<DashMap<u64, (FetcherBehavior, usize)>>,
@@ -101,121 +90,6 @@ impl CheckpointFetcher for MockFetcher {
             }
         }
     }
-}
-
-/// Mock backfill page source over a fixed, sorted set of available checkpoint sequence numbers.
-/// Pages the set in ascending order from the resume point, marking the final page with a `LedgerTip`
-/// end-reason. Tracks call counts and can inject a fixed number of leading transient failures.
-/// `Clone` shares state so counts and injected failures aggregate across clones.
-#[derive(Clone)]
-pub(super) struct MockPageFetcher {
-    available: Arc<Vec<u64>>,
-    page_size: usize,
-    fail_remaining: Arc<AtomicUsize>,
-    calls: Arc<AtomicUsize>,
-}
-
-impl MockPageFetcher {
-    /// Serve every sequence number in `range`, one page (unbounded) per fetch by default.
-    pub(super) fn success_for_range(range: RangeInclusive<u64>) -> Self {
-        Self {
-            available: Arc::new(range.collect()),
-            page_size: usize::MAX,
-            fail_remaining: Arc::new(AtomicUsize::new(0)),
-            calls: Arc::new(AtomicUsize::new(0)),
-        }
-    }
-
-    /// Cap items returned per fetch, forcing the scan to page.
-    pub(super) fn with_page_size(mut self, page_size: usize) -> Self {
-        self.page_size = page_size;
-        self
-    }
-
-    /// Fail the first `n` fetches with a transient error before serving pages.
-    pub(super) fn with_transient_failures(self, n: usize) -> Self {
-        self.fail_remaining.store(n, Ordering::SeqCst);
-        self
-    }
-
-    pub(super) fn calls(&self) -> usize {
-        self.calls.load(Ordering::SeqCst)
-    }
-}
-
-impl CheckpointPageFetcher for MockPageFetcher {
-    async fn list_checkpoints_page(
-        &self,
-        start_checkpoint: u64,
-        after: Option<Bytes>,
-        limit: usize,
-    ) -> anyhow::Result<StreamPage<ProtoCheckpoint>> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        if self.fail_remaining.load(Ordering::SeqCst) > 0 {
-            self.fail_remaining.fetch_sub(1, Ordering::SeqCst);
-            anyhow::bail!("simulated transient ListCheckpoints error");
-        }
-
-        // Resume one past the `after` cursor if paging, else from the requested range floor.
-        let resume = match &after {
-            Some(bytes) => decode_mock_cursor(bytes) + 1,
-            None => start_checkpoint,
-        };
-        let take = limit.min(self.page_size);
-        let remaining: Vec<u64> = self
-            .available
-            .iter()
-            .copied()
-            .filter(|&seq| seq >= resume)
-            .collect();
-        let selected: Vec<u64> = remaining.iter().copied().take(take).collect();
-
-        let items: Vec<PageItem<ProtoCheckpoint>> = selected
-            .iter()
-            .map(|&seq| PageItem {
-                payload: make_test_proto_checkpoint(seq),
-                cursor: encode_mock_cursor(seq),
-            })
-            .collect();
-
-        // The final page (nothing left beyond it) carries the `LedgerTip` terminal.
-        let exhausted = selected.len() == remaining.len();
-        let end_reason = exhausted.then_some(grpc::QueryEndReason::LedgerTip);
-
-        Ok(StreamPage::for_test(items, None, None, end_reason))
-    }
-}
-
-/// Encode a checkpoint sequence number as an opaque mock resume cursor.
-fn encode_mock_cursor(seq: u64) -> Bytes {
-    Bytes::copy_from_slice(&seq.to_be_bytes())
-}
-
-/// Decode a mock resume cursor back to its checkpoint sequence number.
-fn decode_mock_cursor(bytes: &Bytes) -> u64 {
-    let mut buf = [0u8; 8];
-    buf.copy_from_slice(&bytes[..8]);
-    u64::from_be_bytes(buf)
-}
-
-/// Build a `SubscriptionBroadcast` with the given `first_live_checkpoint` and a buffer large
-/// enough that tests do not trigger lag incidentally. Returns the sender so tests can drive
-/// the channel directly to advance `network_tip()`.
-pub(super) fn test_broadcast(
-    first_live_checkpoint: u64,
-) -> (
-    broadcast::Sender<Arc<ProcessedCheckpoint>>,
-    Arc<SubscriptionBroadcast>,
-) {
-    let (tx, rx) = broadcast::channel(256);
-    (
-        tx,
-        Arc::new(SubscriptionBroadcast::new(
-            rx,
-            first_live_checkpoint,
-            SubscriptionMetrics::new_for_test(),
-        )),
-    )
 }
 
 /// Build a fully deserializable test `ProtoCheckpoint` at the given sequence number.

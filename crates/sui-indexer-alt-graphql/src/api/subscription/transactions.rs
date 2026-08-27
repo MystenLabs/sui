@@ -35,6 +35,14 @@ impl Subscribable for Transaction {
     type Filter = TransactionFilter;
     type ScanItem = v2::ExecutedTransaction;
 
+    fn cursor_checkpoint(cursor: &CTransaction) -> u64 {
+        cursor.checkpoint()
+    }
+
+    fn subscription_type() -> &'static str {
+        "transactions"
+    }
+
     fn scan<'a>(
         reader: &'a AlphaLedgerGrpcReader,
         cp_bounds: RangeInclusive<u64>,
@@ -45,8 +53,13 @@ impl Subscribable for Transaction {
         Transaction::scan_grpc(reader, cp_bounds, page, filter)
     }
 
-    fn build_node(scope: &Scope, payload: &v2::ExecutedTransaction) -> Result<Self, RpcError> {
-        transaction_from_stream_item(scope.clone(), payload)
+    fn build_node(
+        caches: &Arc<StreamedCaches>,
+        resolver_limits: &sui_package_resolver::Limits,
+        payload: &v2::ExecutedTransaction,
+    ) -> Result<Self, RpcError> {
+        let scope = Scope::for_indexed(caches.clone(), resolver_limits.clone());
+        transaction_from_stream_item(scope, payload)
     }
 
     fn matching_edges(
