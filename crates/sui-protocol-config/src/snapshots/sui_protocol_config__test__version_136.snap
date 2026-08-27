@@ -533,3 +533,7 @@ gasless_max_unused_inputs: 1
 gasless_max_pure_input_bytes: 32
 gasless_max_tps: 300
 gasless_max_tx_size_bytes: 16384
+translation_per_live_reference_charge: 1
+max_ptb_live_references: 64
+max_ptb_returned_references: 16
+max_ptb_total_returned_references: 256
