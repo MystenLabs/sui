@@ -896,14 +896,10 @@ where
         Adapter::init(default_syntax, pre_compiled_program, init_opt, path).await;
 
     if let Some(result) = result_opt {
-        if !init_comments.is_empty()
-            && let Err(e) = write!(output, "\n{init_comments}")
-        {
-            return Err(Box::new(e));
+        if !init_comments.is_empty() {
+            write!(output, "\n{init_comments}").map_err(Box::new)?;
         }
-        if let Err(e) = writeln!(output, "\ninit:\n{}", result) {
-            return Err(Box::new(e));
-        }
+        writeln!(output, "\ninit:\n{}", result).map_err(Box::new)?;
     }
     Ok((output, adapter, tasks))
 }
@@ -988,6 +984,7 @@ fn normalize_snapshot_comment_whitespace(text: &str) -> String {
         .join("\n")
 }
 
+/// Writes standalone comment blocks with one blank line before the first block and between blocks.
 fn write_unattached_comments(output: &mut String, comments: &[Vec<String>]) {
     if comments.is_empty() {
         return;

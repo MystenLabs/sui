@@ -50,18 +50,18 @@ fn flush_comments(
     text.append(block);
 }
 
-type BucketedTask = (
-    // Standalone comment blocks before this task.
-    CommentBlocks,
-    // Comment lines directly attached to this task's directive.
-    Vec<SourceLine>,
-    // The task's directive lines.
-    Vec<SourceLine>,
-    // Non-directive source or input lines belonging to this task.
-    Vec<SourceLine>,
-    // Standalone comment blocks after this task.
-    CommentBlocks,
-);
+struct BucketedTask {
+    /// Standalone comment blocks before this task.
+    unattached_comments_before: CommentBlocks,
+    /// Comment lines directly attached to this task's directive.
+    comments: Vec<SourceLine>,
+    /// The task's directive lines.
+    commands: Vec<SourceLine>,
+    /// Non-directive source or input lines belonging to this task.
+    text: Vec<SourceLine>,
+    /// Standalone comment blocks after this task.
+    unattached_comments_after: CommentBlocks,
+}
 
 struct TaskifyState {
     bucketed_lines: Vec<BucketedTask>,
@@ -92,6 +92,16 @@ impl TaskifyState {
         }
     }
 
+    fn take_bucketed(&mut self, unattached_after: CommentBlocks) -> BucketedTask {
+        BucketedTask {
+            unattached_comments_before: std::mem::take(&mut self.cur_unattached_before),
+            comments: std::mem::take(&mut self.cur_comments),
+            commands: std::mem::take(&mut self.cur_commands),
+            text: std::mem::take(&mut self.cur_text),
+            unattached_comments_after: unattached_after,
+        }
+    }
+
     fn start_new_task(&mut self) {
         if self.has_task {
             if self.source_body_started {
@@ -99,13 +109,8 @@ impl TaskifyState {
                     self.cur_text.extend(comments);
                 }
             }
-            self.bucketed_lines.push((
-                std::mem::take(&mut self.cur_unattached_before),
-                std::mem::take(&mut self.cur_comments),
-                std::mem::take(&mut self.cur_commands),
-                std::mem::take(&mut self.cur_text),
-                CommentBlocks::new(),
-            ));
+            let bucketed = self.take_bucketed(CommentBlocks::new());
+            self.bucketed_lines.push(bucketed);
         }
         self.cur_unattached_before = std::mem::take(&mut self.pending_comments);
         self.cur_comments = std::mem::take(&mut self.pending_comment_block);
@@ -121,15 +126,12 @@ impl TaskifyState {
                 &mut self.pending_comment_block,
             );
         } else if !self.pending_comment_block.is_empty() {
-            self.pending_comments.push(self.pending_comment_block);
+            let pending_comment_block = std::mem::take(&mut self.pending_comment_block);
+            self.pending_comments.push(pending_comment_block);
         }
-        self.bucketed_lines.push((
-            self.cur_unattached_before,
-            self.cur_comments,
-            self.cur_commands,
-            self.cur_text,
-            self.pending_comments,
-        ));
+        let unattached_after = std::mem::take(&mut self.pending_comments);
+        let bucketed = self.take_bucketed(unattached_after);
+        self.bucketed_lines.push(bucketed);
         self.bucketed_lines
     }
 }
@@ -209,8 +211,16 @@ pub fn taskify<Command: Debug + Parser>(filename: &Path) -> Result<Vec<TaskInput
     }
 
     let mut tasks = vec![];
-    for (number, (unattached_before, comments, commands, text, unattached_after)) in
-        bucketed_lines.into_iter().enumerate()
+    for (
+        number,
+        BucketedTask {
+            unattached_comments_before,
+            comments,
+            commands,
+            text,
+            unattached_comments_after,
+        },
+    ) in bucketed_lines.into_iter().enumerate()
     {
         if commands.is_empty() {
             assert!(number == 0);
@@ -298,11 +308,11 @@ pub fn taskify<Command: Debug + Parser>(filename: &Path) -> Result<Vec<TaskInput
             stop_line,
             data,
             task_text,
-            unattached_comments_before: unattached_before
+            unattached_comments_before: unattached_comments_before
                 .into_iter()
                 .map(|block| block.into_iter().map(|(_, line)| line).collect())
                 .collect(),
-            unattached_comments_after: unattached_after
+            unattached_comments_after: unattached_comments_after
                 .into_iter()
                 .map(|block| block.into_iter().map(|(_, line)| line).collect())
                 .collect(),
