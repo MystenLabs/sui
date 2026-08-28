@@ -1201,7 +1201,9 @@ impl SuiNode {
                     Some(config.db_path().join("discovery_peer_cache.yaml"));
             }
         }
-        let mut discovery_builder = discovery::Builder::new().config(p2p_config.clone());
+        let mut discovery_builder = discovery::Builder::new()
+            .config(p2p_config.clone())
+            .with_metrics(prometheus_registry);
         if let Some(consensus_config) = &config.consensus_config {
             let effective_addr = consensus_config
                 .external_address
