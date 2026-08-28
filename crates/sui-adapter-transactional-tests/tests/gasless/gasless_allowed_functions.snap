@@ -3,6 +3,11 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 17 tasks
 
+// Tests each whitelisted gasless function:
+// - balance::send_funds
+// - balance::redeem_funds
+// - funds_accumulator::withdrawal_split
+
 init:
 A: object(0,0), B: object(0,1)
 
@@ -27,11 +32,12 @@ task 4, line 35:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, lines 37-39:
+task 5, line 37:
 //# view-funds sui::balance::Balance<test::usdc::USDC> A
 10000
 
-task 6, lines 40-42:
+task 6, lines 39-42:
+// redeem_funds: withdraw and send back to self
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(1000) @A
 //> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
 //> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(1));
@@ -43,11 +49,12 @@ task 7, line 44:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 8, lines 46-48:
+task 8, line 46:
 //# view-funds sui::balance::Balance<test::usdc::USDC> A
 10000
 
-task 9, lines 49-51:
+task 9, lines 48-51:
+// send_funds: send to another address
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(2000) @B
 //> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
 //> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(1));
@@ -63,11 +70,12 @@ task 11, line 55:
 //# view-funds sui::balance::Balance<test::usdc::USDC> A
 8000
 
-task 12, lines 57-59:
+task 12, line 57:
 //# view-funds sui::balance::Balance<test::usdc::USDC> B
 2000
 
-task 13, lines 60-65:
+task 13, lines 59-65:
+// withdrawal_split: split 3000 to A, remainder (2000) to B
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(5000) 3000u256 @A @B
 //> 0: sui::funds_accumulator::withdrawal_split<sui::balance::Balance<test::usdc::USDC>>(Input(0), Input(1));
 //> 1: sui::balance::redeem_funds<test::usdc::USDC>(Result(0));

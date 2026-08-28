@@ -3,10 +3,21 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// Per-transaction `max_withdraws = 10` cap. The cap counts explicit
+// WithdrawFunds PTB commands plus coin reservations, with +1 for the
+// implicit gas-budget withdrawal only when gas is paid purely from address
+// balance (i.e. no explicit gas-payment entries). When all gas payments are
+// explicit `--gas-payment withdraw(...)`, the payment list is non-empty, so
+// the implicit +1 is not added; the cap applies directly to the count of
+// withdraws.
+//   - 10 explicit reservations: at boundary, passes.
+//   - 11 explicit reservations: over limit, rejects.
+
 init:
 A: object(0,0)
 
-task 1, lines 17-20:
+task 1, lines 16-20:
+// Seed A's address balance with plenty.
 //# programmable --sender A --inputs 1000000000000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
@@ -15,20 +26,21 @@ mutated: object(0,0)
 accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 1000000000000)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 22-24:
+task 2, line 22:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 25-29:
+task 3, lines 24-27:
+// 10 withdraw reservations, each 20M. Total available 200M, budget 100M, plenty for workload. Boundary case, should PASS.
 //# programmable --sender A --gas-budget 100000000 --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --inputs 100 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
-// 11 withdraw reservations, each 20M. Total available 220M. Over limit, should REJECT at validation.
 created: object(3,0)
 accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 1988100)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 4, lines 30-32:
+task 4, lines 29-32:
+// 11 withdraw reservations, each 20M. Total available 220M. Over limit, should REJECT at validation.
 //# programmable --sender A --gas-budget 100000000 --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(20000000) --inputs 100 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))

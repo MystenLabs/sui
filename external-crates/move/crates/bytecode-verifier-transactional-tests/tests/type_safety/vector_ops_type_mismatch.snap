@@ -53,7 +53,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 6)],
 }
 
-task 5, lines 76-95:
+task 5, lines 76-94:
 //# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: STLOC_TYPE_MISMATCH_ERROR,
@@ -63,7 +63,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 6, lines 96-107:
+task 6, lines 95-106:
+// push int on the stack, then try to pack into vector of the wrong type
 //# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: TYPE_MISMATCH,
@@ -73,7 +74,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 7, lines 108-121:
+task 7, lines 107-121:
+// create vector<T>, try to unpack into different type
 //# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: TYPE_MISMATCH,

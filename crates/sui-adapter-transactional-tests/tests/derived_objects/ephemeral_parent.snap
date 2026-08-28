@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 11 tasks
 
+// Create a derived object out of a non-fresh UID.
+
 init:
 A: object(0,0)
 

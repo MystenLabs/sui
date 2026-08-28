@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 937
 ---
 processed 8 tasks
 
@@ -27,7 +28,7 @@ Contents: tto::M1::A {
     },
 }
 
-task 4, lines 35-37:
+task 4, line 35:
 //# view-object 2,1
 Owner: Account Address ( fake(2,0) )
 Version: 3
@@ -39,7 +40,8 @@ Contents: tto::M1::B {
     },
 }
 
-task 5, lines 38-39:
+task 5, lines 37-39:
+// Can receive the object, but if you don't do anything with it the transaction will fail
 //# programmable --inputs object(2,0) receiving(2,1)
 //> 0: tto::M1::receiver(Input(0), Input(1))
 Error: Transaction Effects Status: Unused result without the drop ability. Command result 0, return value 0

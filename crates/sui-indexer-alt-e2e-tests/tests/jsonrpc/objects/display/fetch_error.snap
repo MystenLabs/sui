@@ -6,6 +6,10 @@ processed 6 tasks
 init:
 A: object(0,0)
 
+// Trying to showDisplay when,
+// 1. the object is a package
+// 2. the type has no Display format.
+
 task 1, lines 10-19:
 //# publish
 created: object(1,0)

@@ -1,8 +1,9 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 908
 ---
 processed 27 tasks
+
+// Tests gasless transactions with coin object inputs, MergeCoins, and SplitCoins.
 
 init:
 A: object(0,0), B: object(0,1), C: object(0,2)
@@ -25,9 +26,11 @@ mutated: object(0,0), object(1,1)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 6657600,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
 
-task 4, lines 41-43:
+task 4, line 41:
 //# create-checkpoint
 Checkpoint created: 1
+
+// --- Test 1: Simple coin input sent via coin::send_funds ---
 
 task 5, lines 45-47:
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(3,0) @B
@@ -42,9 +45,11 @@ task 6, line 49:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 7, lines 51-53:
+task 7, line 51:
 //# view-funds sui::balance::Balance<test::usdc::USDC> B
 5000
+
+// --- Test 2: MergeCoins then coin::send_funds ---
 
 task 8, lines 55-58:
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(3,1) object(3,2) @C
@@ -60,9 +65,11 @@ task 9, line 60:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 10, lines 62-64:
+task 10, line 62:
 //# view-funds sui::balance::Balance<test::usdc::USDC> C
 10000
+
+// --- Test 3: Mint fresh coins, SplitCoins then send parts to different recipients ---
 
 task 11, lines 66-69:
 //# programmable --sender A --inputs 9000 object(1,1) @A
@@ -97,9 +104,11 @@ task 15, line 81:
 //# view-funds sui::balance::Balance<test::usdc::USDC> B
 8000
 
-task 16, lines 83-85:
+task 16, line 83:
 //# view-funds sui::balance::Balance<test::usdc::USDC> C
 16000
+
+// --- Test 4: Immutable coin input rejected ---
 
 task 17, lines 87-90:
 //# programmable --sender A --inputs object(1,1) 1000
@@ -110,12 +119,13 @@ created: object(17,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
 
-task 18, lines 92-96:
+task 18, lines 92-94:
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(17,0) @B
 // Reject: immutable coin
 //> 0: sui::coin::send_funds<test::usdc::USDC>(Input(0), Input(1));
-// --- Test 5: Shared coin input rejected ---
 Error: Error checking transaction input objects: Feature is not supported: Gasless transactions only support owned object inputs
+
+// --- Test 5: Shared coin input rejected ---
 
 task 19, lines 98-101:
 //# programmable --sender A --inputs object(1,1) 1000
@@ -132,13 +142,14 @@ task 20, lines 103-105:
 //> 0: sui::coin::send_funds<test::usdc::USDC>(Input(0), Input(1));
 Error: Error checking transaction input objects: Feature is not supported: Gasless transactions only support owned object inputs
 
-task 21, lines 107-112:
+task 21, lines 107-110:
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(19,0) @B 1
 // Reject: shared coin (used but not deleted)
 //> 0: SplitCoins(Input(0), [Input(2)]);
 //> 1: sui::coin::send_funds<test::usdc::USDC>(NestedResult(0, 0), Input(1));
-// --- Test 6: Party coin input succeeds (used and unused) ---
 Error: Error checking transaction input objects: Feature is not supported: Gasless transactions only support owned object inputs
+
+// --- Test 6: Party coin input succeeds (used and unused) ---
 
 task 22, lines 114-120:
 //# programmable --sender A --inputs object(1,1) 2000 @A

@@ -1,8 +1,12 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
 ---
 processed 9 tasks
+
+// This test attempts to remove a child, add it back, remove it again, and then transfer/delete it.
+// This is an interesting test case because when child objects are removed, added back and removed again,
+// they won't show up in the child_object_effects in the object runtiem. We must look at either transfers
+// or deleted_object_ids to figure them out.
 
 init:
 A: object(0,0)
@@ -13,37 +17,40 @@ created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 9652000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 54-56:
+task 2, line 54:
 //# run test::m1::create --sender A
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, line 57:
+task 3, lines 56-57:
+// transfer
 //# run test::m1::add_child --args object(2,0) --sender A
 created: object(3,0), object(3,1)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 2227104, non_refundable_storage_fee: 22496
 
-task 4, lines 59-61:
+task 4, line 59:
 //# run test::m1::transfer_child --args object(2,0) --sender A
 mutated: object(0,0), object(2,0), object(3,0)
 deleted: object(3,1)
 gas summary: computation_cost: 1000000, storage_cost: 3496000,  storage_rebate: 5891292, non_refundable_storage_fee: 59508
 
-task 5, line 62:
+task 5, lines 61-62:
+// delete
 //# run test::m1::add_child --args object(2,0) --sender A
 created: object(3,1), object(5,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 2227104, non_refundable_storage_fee: 22496
 
-task 6, lines 64-66:
+task 6, line 64:
 //# run test::m1::delete_child --args object(2,0) --sender A
 mutated: object(0,0), object(2,0)
 deleted: object(3,1), object(5,0)
 gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 5891292, non_refundable_storage_fee: 59508
 
-task 7, line 67:
+task 7, lines 66-67:
+// wrap
 //# run test::m1::add_child --args object(2,0) --sender A
 created: object(3,1), object(7,0)
 mutated: object(0,0), object(2,0)

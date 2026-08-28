@@ -3,6 +3,10 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 10 tasks
 
+// This test is to verify that the coin balance derived from coins accurately reflects the summed
+// value of the underlying coins. Create three coins and call get_balance on the Test::fake coin
+// type, expecting 600. After merging the coins, get_balance should return the same balance of 600.
+
 init:
 A: object(0,0), B: object(0,1)
 

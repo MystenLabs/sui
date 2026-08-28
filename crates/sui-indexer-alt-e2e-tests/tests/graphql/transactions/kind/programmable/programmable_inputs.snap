@@ -6,13 +6,14 @@ processed 16 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 6-48:
+task 1, lines 6-46:
 //# publish
 created: object(1,0), object(1,1)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 9036400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 49-51:
+task 2, lines 48-51:
+// Test 1: Pure input only - demonstrates Pure TransactionInput type
 //# programmable --sender A --inputs 42u64 @A
 //> 0: test::simple::new_coin(Input(0));
 //> TransferObjects([Result(0)], Input(1))
@@ -20,31 +21,35 @@ created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 53-55:
+task 3, line 53:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 56-57:
+task 4, lines 55-57:
+// Test 2: SharedInput only - demonstrates SharedInput TransactionInput type
 //# programmable --sender A --inputs object(1,1) 10
 //> 0: test::simple::add(Input(0), Input(1))
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 2340800,  storage_rebate: 2317392, non_refundable_storage_fee: 23408
 
-task 5, lines 59-62:
+task 5, line 59:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 6, lines 63-64:
+task 6, lines 61-64:
+// Test 3: OwnedOrImmutable only - demonstrates OwnedOrImmutable TransactionInput type
+// Reuses the coin created in Test 1 (object(2,0))
 //# programmable --sender A --inputs object(2,0)
 //> 0: test::simple::get_value(Input(0))
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2294820, non_refundable_storage_fee: 23180
 
-task 7, lines 66-68:
+task 7, line 66:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 8, lines 69-72:
+task 8, lines 68-72:
+// Test 4: Receiving only - demonstrates Receiving TransactionInput type
 //# programmable --sender A --inputs 200u64 @A
 // Setup: Create coin and transfer it to A's address for Receiving test
 //> 0: test::simple::new_coin(Input(0));

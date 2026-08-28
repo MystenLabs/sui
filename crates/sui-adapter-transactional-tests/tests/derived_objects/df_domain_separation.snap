@@ -1,8 +1,10 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
 ---
 processed 7 tasks
+
+// Claim a derived object & add a DF with the exact same key for the parent.
+// We should have 4 objects created (parent, derived object, df, marker df)
 
 init:
 A: object(0,0)

@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// in v1 execution, dirty check happened before type checking
+
 init:
 A: object(0,0)
 

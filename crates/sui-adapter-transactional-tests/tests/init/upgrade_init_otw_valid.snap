@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// tests the that the OTW can be successfully used, e.g. in creating a currency
+
 init:
 A: object(0,0)
 

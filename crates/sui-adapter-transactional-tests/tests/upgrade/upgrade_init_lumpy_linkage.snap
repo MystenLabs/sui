@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 13 tasks
 
+// Upgrade commands only contribute to the transaction-wide Lumpy linkage when the upgraded package
+// introduces an `init` function in a new module.
+
 init:
 A: object(0,0)
 

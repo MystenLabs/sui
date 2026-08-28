@@ -3,6 +3,14 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 7 tasks
 
+// Exercise test functions that wrap an object and subsequently unwrap and delete it.
+// There are two cases:
+// 1. In the first case, we first create the object, wrap it in a separate transaction (so that there will be a wrapped
+//    tombstone), and then unwrap and delete it in a third transaction. In this case we expect the object to show up
+//    in the unwrapped_then_deleted in the effects.
+// 2. In the second case, we create and wrap the object in a single transaction, and then unwrap and delete it in a
+//    second transaction. In this case we expect the object to not show up in the unwrapped_then_deleted in the effects.
+
 init:
 A: object(0,0)
 

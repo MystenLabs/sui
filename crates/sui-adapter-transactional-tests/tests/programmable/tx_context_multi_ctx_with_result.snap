@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// Multiple `&TxContext` parameters in one call are allowed, and the call's result
+// survives a later mutable TxContext use.
+
 task 1, lines 9-43:
 //# publish
 created: object(1,0)

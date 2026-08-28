@@ -1,8 +1,10 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
 ---
 processed 7 tasks
+
+// Claim a derived object, transfer an object to it,
+// receive it with the derived object.
 
 init:
 A: object(0,0)

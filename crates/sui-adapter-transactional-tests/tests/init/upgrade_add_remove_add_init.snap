@@ -3,6 +3,10 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 4 tasks
 
+// Add-remove-add: `a` has an `init` at v0, drops it at v1, then re-adds it at v2. The `init` check
+// compares against the immediately-prior version, so at v2 module `a` (which had no `init` in
+// v1) adding one again is treated as an existing module adding an `init`, and is rejected.
+
 init:
 A: object(0,0)
 

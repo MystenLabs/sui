@@ -6,6 +6,12 @@ processed 27 tasks
 init:
 A: object(0,0)
 
+// 1. Fetch all dynamic fields
+// 2. Fetch a limited page of dynamic fields.
+// 3. Add a dynamic field, and fetch all dynamic fields.
+// 4. Remove a dynamic field and fetch all dynamic fields.
+// 5. Modify a dynamic field and fetch all dynamic fields.
+
 task 1, lines 12-50:
 //# publish
 created: object(1,0)

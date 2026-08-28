@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 4 tasks
 
+// test old behavior of invariant violation
+
 task 1, lines 8-42:
 //# publish
 created: object(1,0)

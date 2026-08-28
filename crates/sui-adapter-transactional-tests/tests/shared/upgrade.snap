@@ -1,8 +1,9 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
 ---
 processed 7 tasks
+
+// tests that shared objects must be newly created
 
 init:
 A: object(0,0)

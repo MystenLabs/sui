@@ -59,7 +59,7 @@ task 1, line 33:
   }
 }
 
-task 2, lines 35-37:
+task 2, line 35:
 //# view-abstract-state 0x71::shapes::nested
 {
   "b0": {
@@ -144,6 +144,8 @@ task 2, lines 35-37:
     }
   }
 }
+
+// two element refs of one vector become mutual dot-star extensions
 
 task 4, line 58:
 //# view-abstract-state 0x72::mut_and_imm::mut_and_imm_elem

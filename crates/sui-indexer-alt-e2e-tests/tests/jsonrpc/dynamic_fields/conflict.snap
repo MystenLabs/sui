@@ -6,6 +6,13 @@ processed 6 tasks
 init:
 A: object(0,0)
 
+// Set-up an object that has a dynamic field and a dynamic object field with
+// the same key. JSON-RPC cannot distinguish between the two and will always
+// preference the dynamic field.
+
+// 1. Look for a dynamic field with a simple key
+// 2. Look for a dynamic field with a struct-based key
+
 task 1, lines 13-38:
 //# publish
 created: object(1,0)

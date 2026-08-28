@@ -3,6 +3,12 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 11 tasks
 
+// Visibility-based pinning applies to the transitive dependency closure, not just direct deps.
+// `Root -> Mid -> Leaf`. `Leaf::val` returns a per-version constant (10 in v1, 20 in v2) which
+// `Mid::mid_val` forwards and `Root` stores into its `R`. An entry call into `Root` pins the entire
+// closure (including the transitive `Leaf`) `exact`, locking it to v1; a public call pins the closure
+// `at_least`, so the transitive `Leaf` can be upgraded to v2 by another command in the transaction.
+
 init:
 A: object(0,0)
 

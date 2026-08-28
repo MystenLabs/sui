@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 6 tasks
 
+// Simple e2e test of coin, address, and total balance queries.
+
 init:
 A: object(0,0), B: object(0,1)
 

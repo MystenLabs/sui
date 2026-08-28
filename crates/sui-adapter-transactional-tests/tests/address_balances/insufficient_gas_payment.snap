@@ -3,29 +3,33 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 12 tasks
 
+// Tests that transactions fail appropriately when gas payment is insufficient
+// for all possible forms of gas payment.
+
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 10-15:
+task 1, lines 9-13:
+// setup: send funds to A's address balance
 //# programmable --sender A --inputs 200000000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
 //> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
-// create first small coin for testing (0.1 SUI)
 mutated: object(0,0)
 accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 200000000)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 16-20:
+task 2, lines 15-18:
+// create first small coin for testing (0.1 SUI)
 //# programmable --sender A --inputs 100000000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
-// create second small coin for testing (0.1 SUI)
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3, lines 21-23:
+task 3, lines 20-23:
+// create second small coin for testing (0.1 SUI)
 //# programmable --sender A --inputs 100000000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
@@ -33,59 +37,61 @@ created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4, lines 25-28:
+task 4, line 25:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, lines 29-34:
+task 5, lines 27-31:
+// Case 1: single coin object with insufficient balance
+// object(2,0) has 100000000 MIST (0.1 SUI), budget is 5 SUI
 //# programmable --sender A --gas-payment object(2,0) --inputs 1000 @B
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
-// Case 2: single withdrawal with insufficient balance
-// withdrawal of 100000000 MIST (0.1 SUI), budget is 5 SUI
 Error: Error checking transaction input objects: Balance of gas object 100000000 is lower than the needed amount: 5000000000
 
-task 6, lines 35-40:
+task 6, lines 33-37:
+// Case 2: single withdrawal with insufficient balance
+// withdrawal of 100000000 MIST (0.1 SUI), budget is 5 SUI
 //# programmable --sender A --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(100000000) --inputs 1000 @B
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
-// Case 3: multiple coin objects that together don't cover budget
-// two coins of 0.1 SUI each = 0.2 SUI total, budget is 5 SUI
 Error: Error checking transaction input objects: Balance of gas object 100000000 is lower than the needed amount: 5000000000
 
-task 7, lines 41-46:
+task 7, lines 39-43:
+// Case 3: multiple coin objects that together don't cover budget
+// two coins of 0.1 SUI each = 0.2 SUI total, budget is 5 SUI
 //# programmable --sender A --gas-payment object(2,0) --gas-payment object(3,0) --inputs 1000 @B
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
-// Case 4: multiple withdrawals that together don't cover budget
-// two withdrawals of 0.1 SUI each = 0.2 SUI total, budget is 5 SUI
 Error: Error checking transaction input objects: Balance of gas object 200000000 is lower than the needed amount: 5000000000
 
-task 8, lines 47-52:
+task 8, lines 45-49:
+// Case 4: multiple withdrawals that together don't cover budget
+// two withdrawals of 0.1 SUI each = 0.2 SUI total, budget is 5 SUI
 //# programmable --sender A --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(100000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(100000000) --inputs 1000 @B
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
-// Case 5: mixed coin object and withdrawal that together don't cover budget
-// coin of 0.1 SUI + withdrawal of 0.1 SUI = 0.2 SUI total, budget is 5 SUI
 Error: Error checking transaction input objects: Balance of gas object 200000000 is lower than the needed amount: 5000000000
 
-task 9, lines 53-58:
+task 9, lines 51-55:
+// Case 5: mixed coin object and withdrawal that together don't cover budget
+// coin of 0.1 SUI + withdrawal of 0.1 SUI = 0.2 SUI total, budget is 5 SUI
 //# programmable --sender A --gas-payment object(2,0) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(100000000) --inputs 1000 @B
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
-// Case 6: withdrawal exceeds address balance
-// try to reserve 1000 SUI when address balance is only 0.2 SUI
 Error: Error checking transaction input objects: Balance of gas object 200000000 is lower than the needed amount: 5000000000
 
-task 10, lines 59-64:
+task 10, lines 57-61:
+// Case 6: withdrawal exceeds address balance
+// try to reserve 1000 SUI when address balance is only 0.2 SUI
 //# programmable --sender A --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(1000000000000) --inputs 1000 @B
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
-// Case 7: empty gas payment (pure address balance) with insufficient balance
-// B has no address balance, needs 5 SUI
 Error: Error checking transaction input objects: Invalid withdraw reservation: Insufficient address balance of coin type 0x2::sui::SUI for address @A: the transaction requires 1000000000000 but only 200000000 is available. Note that the address balance does not include funds held in Coin objects owned by the address; to spend those funds, use the Coin objects directly as transaction inputs.
 
-task 11, lines 65-67:
+task 11, lines 63-67:
+// Case 7: empty gas payment (pure address balance) with insufficient balance
+// B has no address balance, needs 5 SUI
 //# programmable --sender B --address-balance-gas --inputs 1000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))

@@ -3,7 +3,8 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 4 tasks
 
-task 0, lines 4-35:
+task 0, lines 3-33:
+// imm return inside the mut return, both through calls
 //# publish
 Error: Unable to publish module '00000000000000000000000000000000000000000000000000000000000000d1::m1_ret_dotstar_nested'. Got VMError: {
     major_status: RET_BORROWED_MUTABLE_REFERENCE_ERROR,
@@ -13,7 +14,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(2), 11)],
 }
 
-task 1, lines 36-67:
+task 1, lines 35-65:
+// same, immutable side first
 //# publish
 Error: Unable to publish module '00000000000000000000000000000000000000000000000000000000000000d2::m2_ret_dotstar_imm_first'. Got VMError: {
     major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
@@ -23,7 +25,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(2), 7)],
 }
 
-task 2, lines 68-95:
+task 2, lines 67-93:
+// two mutable returns related only through calls
 //# publish
 Error: Unable to publish module '00000000000000000000000000000000000000000000000000000000000000d3::m3_ret_dotstar_two_mut'. Got VMError: {
     major_status: RET_BORROWED_MUTABLE_REFERENCE_ERROR,

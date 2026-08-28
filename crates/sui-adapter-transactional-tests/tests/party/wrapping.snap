@@ -1,25 +1,27 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 937
 ---
 processed 11 tasks
 
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 6-34:
+task 1, lines 6-32:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 35-36:
+task 2, lines 34-36:
+// Create a party object.
 //# programmable --sender A
 //> ex::m::create_party()
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 38-40:
+task 3, line 38:
 //# view-object 2,0
 Owner: ConsensusAddressOwner( 2, A )
 Version: 2
@@ -31,7 +33,8 @@ Contents: ex::m::A {
     },
 }
 
-task 4, lines 41-42:
+task 4, lines 40-42:
+// Wrap the party object.
 //# programmable --sender A --inputs object(2,0)
 //> ex::m::wrap(Input(0))
 created: object(4,0)
@@ -43,7 +46,7 @@ task 5, line 44:
 //# view-object 2,0
 No object at id 2,0
 
-task 6, lines 46-48:
+task 6, line 46:
 //# view-object 4,0
 Owner: ConsensusAddressOwner( 3, A )
 Version: 3
@@ -62,23 +65,24 @@ Contents: ex::m::AWrapper {
     },
 }
 
-task 7, lines 49-53:
+task 7, lines 48-51:
+// Verify the wrapped object can't be transferred.
 //# programmable --inputs object(2,0) @A --sender A
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::A>(Input(0), Result(0))
-// Unwrap the object.
 Error: INVALID TEST. Could not load object argument object(2,0)
 
-task 8, lines 54-57:
+task 8, lines 53-55:
+// Unwrap the object.
 //# programmable --sender A --inputs object(4,0)
 //> ex::m::unwrap(Input(0))
-// Verify it can again be transferred to a different party.
 mutated: object(0,0)
 unwrapped: object(2,0)
 deleted: object(4,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2467872, non_refundable_storage_fee: 24928
 
-task 9, lines 58-60:
+task 9, lines 57-60:
+// Verify it can again be transferred to a different party.
 //# programmable --inputs object(2,0) @B --sender A
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::A>(Input(0), Result(0))

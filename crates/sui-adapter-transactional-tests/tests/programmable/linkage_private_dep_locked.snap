@@ -3,6 +3,12 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 9 tasks
 
+// A private/`entry` function's dependencies are pinned `exact`, so they are locked to the version the
+// package was published against and cannot be upgraded under it. `Dep::stamp` writes a per-version
+// constant (1 in v1, 2 in v2) into the shared `S`. Even though `Dep` is upgraded to v2, the entry
+// call `Root::go` still runs v1 (writes 1); and a command that tries to pin `Dep` higher in the same
+// transaction conflicts (InvalidLinkage) rather than upgrading it.
+
 init:
 A: object(0,0)
 

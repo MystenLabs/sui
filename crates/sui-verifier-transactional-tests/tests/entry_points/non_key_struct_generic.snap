@@ -1,8 +1,9 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 908
 ---
 processed 2 tasks
+
+// invalid as NoStore doesn't have store, so Obj doesn't have key
 
 task 0, lines 6-21:
 //# publish

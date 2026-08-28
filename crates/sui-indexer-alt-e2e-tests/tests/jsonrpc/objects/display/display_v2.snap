@@ -3,6 +3,7 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 8 tasks
 
+// TODO: set protocol version once it's no longer the max
 init:
 A: object(0,0)
 

@@ -3,6 +3,12 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// `verify_bulletproofs_ristretto255` is not enabled on `testnet`. We use an empty
+// commitments vector so that `g_from_bytes` (whose ristretto255 group ops are also
+// gated off on this network) is never reached; execution lands directly in the
+// bulletproofs native, whose `is_supported` check aborts first with `ENotSupported`
+// (code 0) in `sui::rangeproofs` -- isolating the bulletproofs feature gate.
+
 task 1, lines 12-21:
 //# publish
 created: object(1,0)

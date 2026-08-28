@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// tests TransferObject should fail for a package
+
 init:
 A: object(0,0), B: object(0,1)
 

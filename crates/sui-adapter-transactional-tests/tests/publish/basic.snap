@@ -1,10 +1,15 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 937
 ---
 processed 5 tasks
 
 init:
 A: object(0,0)
+
+// Simple publish test
+
+// Passing
 
 task 1, lines 10-15:
 //# publish --dry-run

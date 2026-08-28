@@ -1,8 +1,10 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 908
 ---
 processed 5 tasks
+
+// tests modules can use transfer functions outside of the defining module, if the type
+// has store
 
 task 0, lines 7-17:
 //# publish

@@ -1,37 +1,43 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 920
 ---
 processed 13 tasks
+
+// This test exercises the deny-list v2 flow when regulated coins are routed through the
+// address-balance accumulator APIs. We explicitly enable the accumulator feature so that
+// `balance::send_funds` is callable from PTBs, then confirm the receiver transitions through
+// allowed, denied-after-epoch, and re-enabled states.
 
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 11-45:
+task 1, lines 11-43:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 19463600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 46-50:
+task 2, lines 45-48:
+// Initial transfer should succeed before any deny-list action is taken.
 //# programmable --sender A --inputs object(1,5) 1 @B
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
-// Deny account B.
 mutated: object(0,0), object(1,5)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 accumulators_written: (object(2,0), B, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 1)
 gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
 
-task 3, lines 51-53:
+task 3, lines 50-51:
+// Deny account B.
 //# run sui::coin::deny_list_v2_add --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 events: Event { package_id: sui, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 96, 50, 100, 55, 53, 101, 55, 100, 49, 98, 49, 52, 57, 55, 53, 99, 97, 57, 97, 53, 55, 52, 52, 52, 100, 57, 99, 52, 52, 97, 57, 100, 51, 97, 51, 55, 50, 99, 48, 101, 48, 56, 50, 57, 50, 100, 98, 48, 52, 50, 56, 100, 53, 97, 57, 99, 56, 53, 101, 100, 99, 99, 49, 49, 52, 58, 58, 114, 101, 103, 117, 108, 97, 116, 101, 100, 95, 99, 111, 105, 110, 58, 58, 82, 69, 71, 85, 76, 65, 84, 69, 68, 95, 67, 79, 73, 78, 241, 39, 142, 254, 87, 3, 187, 3, 29, 228, 85, 213, 100, 153, 121, 76, 210, 68, 152, 222, 104, 254, 204, 208, 60, 211, 90, 246, 76, 130, 108, 225] }
 created: object(3,0), object(3,1), object(3,2)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
 gas summary: computation_cost: 1000000, storage_cost: 12190400,  storage_rebate: 2746260, non_refundable_storage_fee: 27740
 
-task 4, lines 54-56:
+task 4, lines 53-56:
+// Deny entry is not enforced until the next epoch, so the transfer still succeeds.
 //# programmable --sender A --inputs object(1,5) 1 @B
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
@@ -44,42 +50,45 @@ task 5, line 58:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 6, lines 60-62:
+task 6, line 60:
 //# advance-epoch
 Epoch advanced: 1
 
-task 7, lines 63-65:
+task 7, lines 62-65:
+// After epoch change, the deny list should block the recipient.
 //# programmable --sender A --inputs object(1,5) 1 @B
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
 Error: Transaction Effects Status: Address B is denied for coin test::regulated_coin::REGULATED_COIN
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
 
-task 8, lines 67-72:
+task 8, lines 67-70:
 //# programmable --sender B --inputs withdraw<sui::balance::Balance<test::regulated_coin::REGULATED_COIN>>(1) @A
 // withdraw funds from denied account B
 //> 0: sui::balance::redeem_funds(Input(0));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(1));
-// Undeny account B.
 Error: Error checking transaction input objects: Address @B is denied for coin object(1,0)::regulated_coin::REGULATED_COIN
 
-task 9, lines 73-75:
+task 9, lines 72-73:
+// Undeny account B.
 //# run sui::coin::deny_list_v2_remove --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(3,1)
 gas summary: computation_cost: 1000000, storage_cost: 6862800,  storage_rebate: 6794172, non_refundable_storage_fee: 68628
 
-task 10, lines 76-78:
+task 10, lines 75-78:
+// Removal only takes effect after the next epoch boundary, so this attempt still fails.
 //# programmable --sender A --inputs object(1,5) 1 @B
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
 Error: Transaction Effects Status: Address B is denied for coin test::regulated_coin::REGULATED_COIN
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
 
-task 11, lines 80-82:
+task 11, line 80:
 //# advance-epoch
 Epoch advanced: 2
 
-task 12, lines 83-85:
+task 12, lines 82-85:
+// Once the following epoch begins, transfers to @B succeed again.
 //# programmable --sender A --inputs object(1,5) 1 @B
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));

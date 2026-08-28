@@ -1,8 +1,9 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
 ---
 processed 7 tasks
+
+// tests TransferObject should fail for a quasi-shared object
 
 init:
 A: object(0,0), B: object(0,1)
