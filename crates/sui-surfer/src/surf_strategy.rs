@@ -109,12 +109,14 @@ impl SurfStrategy {
                         }
                     }
                 }
-                Type::I8 => CallArg::Pure(bcs::to_bytes(&state.rng.r#gen::<i8>()).unwrap()),
-                Type::I16 => CallArg::Pure(bcs::to_bytes(&state.rng.r#gen::<i16>()).unwrap()),
-                Type::I32 => CallArg::Pure(bcs::to_bytes(&state.rng.r#gen::<i32>()).unwrap()),
-                Type::I64 => CallArg::Pure(bcs::to_bytes(&state.rng.r#gen::<i64>()).unwrap()),
-                Type::I128 => CallArg::Pure(bcs::to_bytes(&state.rng.r#gen::<i128>()).unwrap()),
+                // Signed entry params are not pure-arg-eligible until the enablement PR
+                // flips `is_primitive`; fail closed with them until then.
                 Type::U256
+                | Type::I8
+                | Type::I16
+                | Type::I32
+                | Type::I64
+                | Type::I128
                 | Type::I256
                 | Type::Signer
                 | Type::Vector(_)
@@ -147,7 +149,7 @@ impl SurfStrategy {
     ) -> Option<CallArg> {
         let pool = state.pool.read().await;
         let type_tag = match arg_type {
-            Type::Datatype(dt) => dt.to_struct_tag(&*pool),
+            Type::Datatype(dt) => dt.to_struct_tag(&*pool)?,
             _ => {
                 return None;
             }
