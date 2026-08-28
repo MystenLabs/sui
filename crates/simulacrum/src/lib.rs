@@ -217,17 +217,18 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     /// Useful for testing specific scenarios or starting from a non-genesis state.
     ///
     /// Note: the `system_state` should represent the state of the system that exists after the
-    /// provided `checkpoint`.
+    /// provided `checkpoint`. The `chain_identifier` must match the identity exposed to clients
+    /// because Simulacrum uses it to validate chain-bound transactions.
     pub fn new_from_custom_state(
         keystore: KeyStore,
         checkpoint: VerifiedCheckpoint,
         system_state: SuiSystemState,
+        chain_identifier: ChainIdentifier,
         config: &NetworkConfig,
         store: S,
         rng: R,
     ) -> Self {
         let checkpoint_builder = MockCheckpointBuilder::new(checkpoint);
-        let chain_identifier = (*config.genesis.checkpoint().digest()).into();
         let epoch_state = EpochState::new(system_state, chain_identifier);
         Self {
             rng,
@@ -1079,6 +1080,52 @@ mod tests {
 
         let executed_effects = sim.execute_transaction(tx).unwrap().0;
         assert_eq!(result.effects, executed_effects);
+    }
+
+    #[test]
+    fn simulate_transaction_uses_custom_chain_identifier() {
+        use sui_types::digests::get_testnet_chain_identifier;
+        use sui_types::transaction::TransactionExpiration;
+
+        let mut rng = OsRng;
+        let config = ConfigBuilder::new_with_temp_dir()
+            .rng(&mut rng)
+            .with_chain_start_timestamp_ms(1)
+            .deterministic_committee_size(NonZeroUsize::MIN)
+            .build();
+        let chain_identifier = get_testnet_chain_identifier();
+        assert_ne!(
+            chain_identifier,
+            ChainIdentifier::from(*config.genesis.checkpoint().digest()),
+        );
+
+        let store = InMemoryStore::new(&config.genesis);
+        let keystore = KeyStore::from_network_config(&config);
+        let mut sim = Simulacrum::new_from_custom_state(
+            keystore,
+            config.genesis.checkpoint(),
+            config.genesis.sui_system_object(),
+            chain_identifier,
+            &config,
+            store,
+            rng,
+        );
+
+        let (tx, _) = sim.transfer_txn(SuiAddress::random_for_testing_only());
+        let mut transaction = tx.data().transaction_data().clone();
+        *transaction.expiration_mut_for_testing() = TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: chain_identifier,
+            nonce: 0,
+        };
+
+        let result = sim
+            .simulate_transaction(transaction, TransactionChecks::Enabled, false)
+            .expect("simulation should use the configured chain identifier");
+        assert!(result.effects.status().is_ok());
     }
 
     #[test]

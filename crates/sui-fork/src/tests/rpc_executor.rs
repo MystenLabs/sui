@@ -113,6 +113,7 @@ impl TestHarness {
             keystore,
             genesis_checkpoint,
             config.genesis.sui_system_object(),
+            chain_identifier,
             &config,
             store.clone(),
             rng,
