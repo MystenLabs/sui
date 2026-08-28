@@ -84,7 +84,6 @@
 //! point deletes are idempotent, so a re-run is harmless.
 
 use std::collections::HashMap;
-use std::ops::Bound;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -95,6 +94,7 @@ use prometheus::register_int_counter_with_registry;
 use prometheus::register_int_gauge_with_registry;
 use sui_consistent_store::Batch;
 use sui_consistent_store::Db;
+use sui_consistent_store::Encode;
 use sui_consistent_store::FrameworkSchema;
 use sui_consistent_store::PipelineTaskKey;
 use sui_indexer_alt_framework::service::Service;
@@ -176,22 +176,27 @@ impl PrunerMetrics {
 /// Hot objects such as Clock and SuiSystemState can be superseded in every
 /// checkpoint, so one prune batch retracts the same object many times. The
 /// retraction point-deletes each checkpoint-pinned row below the superseding
-/// checkpoint by walking the object's prefix once (see
-/// [`retract_object_version_by_checkpoint`]); coalescing keeps a hot object's
-/// prefix from being walked once per supersession.
+/// checkpoint; coalescing keeps only the greatest checkpoint per object, whose
+/// rows below that checkpoint are the union of every narrower retraction's rows.
+/// On an equal checkpoint, the `removed` flags are ORed: if any same-checkpoint
+/// retraction removed the object, the row at that checkpoint must be dropped.
 ///
-/// The retraction uses point deletes rather than one
-/// `delete_range [id||0, id||cp)` precisely because successive batches retract a
-/// hot object at an ever-greater `cp`, all sharing the `id||0` start, so the
-/// range tombstones nest and RocksDB's `FragmentedRangeTombstoneList` fragments
-/// `K` of them into `K^2 / 2` `(fragment, seqnum)` pairs -- which OOMed mainnet
-/// fullnodes during memtable flush and WAL recovery.
+/// The retraction uses point deletes rather than a range delete over
+/// `[id||0, id||cp)` because successive prune batches retract a hot object at an
+/// ever-greater `cp`, all sharing the `id||0` start. Range tombstones sharing a
+/// start key nest and cause RocksDB's `FragmentedRangeTombstoneList` to fragment
+/// `K` tombstones into `O(K^2)` `(fragment, seqnum)` pairs during memtable flush,
+/// compaction, and read iteration. Point tombstones carry no nesting structure;
+/// their cost is one entry per deleted row and a forward scan over the retracted
+/// range on the delete path.
 ///
-/// Coalescing keeps only the greatest checkpoint per object: its rows below that
-/// checkpoint are the union of every narrower retraction's rows, so one widest
-/// retraction subsumes them all. On an equal checkpoint, the `removed` flags are
-/// ORed: if any same-checkpoint retraction removed the object, the row at that
-/// checkpoint must be dropped.
+/// Staging sorts the coalesced retractions by object ID and traverses the
+/// column family with a single forward cursor. Because keys are ordered by
+/// `(id, checkpoint)`, monotonic seeks visit each retracted object without
+/// re-instantiating the iterator. For each object, rows strictly below the
+/// superseding checkpoint are deleted, preserving the entry at the superseding
+/// checkpoint as the anchor for point-in-time reads at the floor. If `removed`
+/// is set, the anchor at `cp` is dropped as well.
 #[derive(Default)]
 struct Retractions(HashMap<ObjectID, (u64, bool)>);
 
@@ -211,9 +216,66 @@ impl Retractions {
     }
 
     fn stage(self, batch: &mut Batch, schema: &RpcStoreSchema) -> anyhow::Result<()> {
-        for (id, (cp, removed)) in self.0 {
-            retract_object_version_by_checkpoint(batch, schema, id, cp, removed)?;
+        let mut retractions: Vec<(ObjectID, (u64, bool))> = self.0.into_iter().collect();
+        if retractions.is_empty() {
+            return Ok(());
         }
+        // Compare borrowed references directly: `sort_unstable_by_key` cannot return
+        // a borrowed `&ObjectID` from `&(ObjectID, ...)` due to higher-ranked closure
+        // lifetime bounds, and returning an owned `ObjectID` would copy 32 bytes per comparison.
+        #[allow(clippy::unnecessary_sort_by)]
+        retractions.sort_unstable_by(|(id_a, _), (id_b, _)| id_a.cmp(id_b));
+
+        let first_id = retractions[0].0;
+        let first_key = object_version_by_checkpoint::Key {
+            id: first_id,
+            checkpoint: 0,
+        };
+        let mut iter = schema.object_version_by_checkpoint.iter(first_key..)?;
+
+        let mut upper_bound_bytes = Vec::with_capacity(ObjectID::LENGTH + 8);
+        let mut is_exhausted = false;
+
+        for (i, (id, (cp, removed))) in retractions.into_iter().enumerate() {
+            let upper_key = object_version_by_checkpoint::Key { id, checkpoint: cp };
+            upper_bound_bytes.clear();
+            upper_key.encode_into(&mut upper_bound_bytes)?;
+
+            if !is_exhausted {
+                if i > 0 {
+                    iter.seek(id.as_ref());
+                }
+                while let Some(raw_key) = iter.raw_key() {
+                    if !raw_key.starts_with(id.as_ref()) || raw_key >= upper_bound_bytes.as_slice()
+                    {
+                        break;
+                    }
+
+                    let (key, _value) = iter
+                        .next()
+                        .expect("iterator must yield a row when raw_key is Some")?;
+                    batch.delete(&schema.object_version_by_checkpoint, &key)?;
+                }
+
+                if iter.raw_key().is_none() {
+                    match iter.next().transpose()? {
+                        None => {
+                            is_exhausted = true;
+                        }
+                        Some(_) => {
+                            anyhow::bail!(
+                                "object_version_by_checkpoint iterator yielded a row without exposing its raw key"
+                            );
+                        }
+                    }
+                }
+            }
+
+            if removed {
+                batch.delete(&schema.object_version_by_checkpoint, &upper_key)?;
+            }
+        }
+
         Ok(())
     }
 }
@@ -460,61 +522,6 @@ fn prune_chunk(
     metrics.objects_deleted.inc_by(objects_deleted);
 
     Ok(new)
-}
-
-/// Retract `object_version_by_checkpoint` rows for one object, given the
-/// greatest checkpoint in a prune batch that superseded or removed it, in
-/// lockstep with the `objects` CF.
-///
-/// Point-deletes every checkpoint-pinned entry for `id` strictly older than
-/// `cp` by walking the object's own prefix over `[id||0, id||cp)` and issuing a
-/// targeted delete for each row present. The bounds stay within `id`'s prefix,
-/// so the scan never spills into the neighboring object. Callers coalesce
-/// repeated supersessions for the same object within a batch before calling this
-/// helper (see [`Retractions`]), so this prefix is walked once, at the greatest
-/// `cp`, whose row set is the union of every narrower retraction's -- including
-/// any removal below `cp`.
-///
-/// Point deletes rather than one `delete_range [id||0, id||cp)`: successive prune
-/// batches retract a hot object at an ever-greater `cp`, all sharing the `id||0`
-/// start, so the range tombstones nest and RocksDB fragments `K` of them into
-/// `O(K^2)` `(fragment, seqnum)` pairs -- at flush, at compaction, and at read.
-/// Ordinary point tombstones carry no such structure; the cost is one entry per
-/// deleted row and a bounded prefix scan on the delete path (already-retracted
-/// rows below a prior floor were deleted by earlier batches, so the scan surfaces
-/// only the rows this batch newly retires).
-///
-/// Once the floor advances past `cp`, the entry at `cp` (or a newer one) is the
-/// floor a checkpoint-pinned read resolves to, so the older entries can never
-/// be the answer again. Because the chunk only prunes checkpoints below the new
-/// floor, `cp` is itself below the floor, so the kept entry is never the answer
-/// to an in-range read either; it survives only until its own superseding
-/// transaction is pruned in a later chunk.
-///
-/// The entry *at* `cp` is kept for a supersession (it is the object's final
-/// live version in `cp`). When `removed` is set, the object was deleted or
-/// wrapped in `cp`: its tombstone entry at `cp` is dropped too, since nothing
-/// at or after the floor can reference a removed object.
-fn retract_object_version_by_checkpoint(
-    batch: &mut Batch,
-    schema: &RpcStoreSchema,
-    id: ObjectID,
-    cp: u64,
-    removed: bool,
-) -> anyhow::Result<()> {
-    let lo = object_version_by_checkpoint::Key { id, checkpoint: 0 };
-    let hi = object_version_by_checkpoint::Key { id, checkpoint: cp };
-    for entry in schema
-        .object_version_by_checkpoint
-        .iter((Bound::Included(lo), Bound::Excluded(hi)))?
-    {
-        let (key, _value) = entry?;
-        batch.delete(&schema.object_version_by_checkpoint, &key)?;
-    }
-    if removed {
-        batch.delete(&schema.object_version_by_checkpoint, &hi)?;
-    }
-    Ok(())
 }
 
 /// Prune the embedded fullnode's history cohort up to a floor supplied
@@ -942,9 +949,9 @@ mod tests {
     /// A hot object with deep checkpoint-pinned history (the Clock /
     /// SuiSystemState shape, superseded in every checkpoint) is cleared below
     /// the coalesced retraction checkpoint in a single pass, keeping only the
-    /// anchor at that checkpoint. Exercises the point-delete prefix walk that
-    /// replaced the per-object range delete, and confirms it deletes exactly
-    /// the rows in `[id||0, id||cp)` without spilling into the next object.
+    /// anchor at that checkpoint. Exercises point-delete staging across deep
+    /// history and confirms it deletes exactly the rows in `[id||0, id||cp)`
+    /// without spilling into the neighboring object.
     #[test]
     fn retraction_point_deletes_deep_history() {
         let (_dir, db, schema) = fresh_db();
@@ -996,6 +1003,86 @@ mod tests {
             Some(sui_types::base_types::SequenceNumber::from_u64(42)),
             "the bounded scan must not delete a neighboring object's rows",
         );
+    }
+
+    /// Exercises multi-object staging across sparse and absent prefixes:
+    /// monotonic cursor seeks across sorted IDs, skipping absent targets,
+    /// leaving untouched interleaved and trailing guard prefixes intact,
+    /// preserving the anchor on supersession, dropping the anchor on removal,
+    /// preserving re-creations above the retracted checkpoint, and proving
+    /// that an identical second stage-and-commit pass is idempotent.
+    #[test]
+    fn retractions_stage_handles_sparse_prefixes_on_repeated_runs() {
+        let (_dir, db, schema) = fresh_db();
+
+        let obj10 = ObjectID::from_single_byte(0x10);
+        let obj20 = ObjectID::from_single_byte(0x20);
+        let obj30 = ObjectID::from_single_byte(0x30);
+        let obj40 = ObjectID::from_single_byte(0x40);
+        let obj50 = ObjectID::from_single_byte(0x50);
+
+        seed_checkpoint_versions(&db, &schema, obj10, &[(0, 1), (4, 2), (9, 3)]);
+        // obj20 is absent (no rows seeded)
+        seed_checkpoint_versions(&db, &schema, obj30, &[(1, 10), (7, 11)]);
+        seed_checkpoint_versions(&db, &schema, obj40, &[(0, 4), (4, 5), (9, 6)]);
+        seed_checkpoint_versions(&db, &schema, obj50, &[(2, 20)]);
+
+        let build_retractions = || {
+            let mut retractions = Retractions::default();
+            // Record target IDs in descending order to exercise sorting:
+            retractions.record(obj40, 4, true);
+            retractions.record(obj20, 4, false);
+            retractions.record(obj10, 4, false);
+            retractions
+        };
+
+        let check_state = |run_label: &str| {
+            let checkpoints_of = |id| -> Vec<u64> {
+                schema
+                    .iter_object_versions_by_checkpoint(id)
+                    .unwrap()
+                    .map(|r| r.unwrap().0.checkpoint)
+                    .collect()
+            };
+
+            assert_eq!(
+                checkpoints_of(obj10),
+                vec![4, 9],
+                "superseded object must retain its anchor and subsequent versions ({run_label})",
+            );
+            assert_eq!(
+                checkpoints_of(obj20),
+                Vec::<u64>::new(),
+                "absent target remains absent ({run_label})",
+            );
+            assert_eq!(
+                checkpoints_of(obj30),
+                vec![1, 7],
+                "untouched guard prefix must remain untouched ({run_label})",
+            );
+            assert_eq!(
+                checkpoints_of(obj40),
+                vec![9],
+                "removed object must drop anchor and retain later recreation ({run_label})",
+            );
+            assert_eq!(
+                checkpoints_of(obj50),
+                vec![2],
+                "untouched trailing guard prefix must remain untouched ({run_label})",
+            );
+        };
+
+        // First stage and commit run:
+        let mut batch = db.batch();
+        build_retractions().stage(&mut batch, &schema).unwrap();
+        batch.commit().unwrap();
+        check_state("first run");
+
+        // Second stage and commit run (idempotence):
+        let mut batch = db.batch();
+        build_retractions().stage(&mut batch, &schema).unwrap();
+        batch.commit().unwrap();
+        check_state("second run");
     }
 
     #[test]
@@ -1681,14 +1768,53 @@ mod tests {
             "a removed object's rows must be dropped entirely",
         );
 
+        let checkpoints_of = |id| -> Vec<u64> {
+            schema
+                .iter_object_versions_by_checkpoint(id)
+                .unwrap()
+                .map(|r| r.unwrap().0.checkpoint)
+                .collect()
+        };
+
+        assert_eq!(
+            checkpoints_of(obj0),
+            vec![1],
+            "superseded object must retain exactly its anchor row",
+        );
+        assert_eq!(
+            checkpoints_of(obj1),
+            Vec::<u64>::new(),
+            "removed object must drop all sub-floor rows",
+        );
+
         // The floor advanced to the new lowest-available checkpoint.
         assert_eq!(
-            schema
-                .get_pruning_watermarks()
-                .unwrap()
-                .unwrap()
-                .checkpoint_lo,
-            2,
+            schema.get_pruning_watermarks().unwrap().unwrap(),
+            Watermarks {
+                tx_seq_lo: 0,
+                checkpoint_lo: 2,
+            },
+        );
+
+        // Replay the identical prune with effects: must be an idempotent no-op.
+        prune_history_cohort(&db, &schema, 1, 0, &effects).unwrap();
+
+        assert_eq!(
+            checkpoints_of(obj0),
+            vec![1],
+            "superseded object rows must be unchanged on replay",
+        );
+        assert_eq!(
+            checkpoints_of(obj1),
+            Vec::<u64>::new(),
+            "removed object rows must remain empty on replay",
+        );
+        assert_eq!(
+            schema.get_pruning_watermarks().unwrap().unwrap(),
+            Watermarks {
+                tx_seq_lo: 0,
+                checkpoint_lo: 2,
+            },
         );
     }
 

@@ -16871,6 +16871,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "bytes",
+ "criterion",
  "fdlimit",
  "futures",
  "lru 0.18.2",

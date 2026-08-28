@@ -39,3 +39,8 @@ typed-store-error.workspace = true
 futures.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt"] }
+criterion.workspace = true
+
+[[bench]]
+name = "history_pruning_bench"
+harness = false
