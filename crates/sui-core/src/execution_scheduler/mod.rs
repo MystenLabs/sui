@@ -34,8 +34,6 @@ pub struct PendingCertificate {
     // Stores stats about this transaction.
     pub stats: PendingCertificateStats,
     pub executing_guard: Option<ExecutingGuard>,
-    // The transaction's position in causal order; retires the index when dropped.
-    pub causal_guard: causal_order::CausalIndexGuard,
 }
 
 #[derive(Debug)]
