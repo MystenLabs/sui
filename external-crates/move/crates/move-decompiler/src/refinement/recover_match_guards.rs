@@ -45,7 +45,7 @@ use crate::{
     ast::{Exp, MatchArm},
     refinement::{
         Refine,
-        utils::{assigns_name, first_stmt, negate, peek, substitute_free, unwrap_block},
+        utils::{assigns_name, first_stmt, negate, peek, substitute_free},
     },
 };
 
@@ -63,89 +63,141 @@ impl Refine for RecoverMatchGuards {
         let Exp::Match(_, _, arms) = exp else {
             return false;
         };
-        if !arms.iter().any(splittable) {
-            return false;
-        }
-        let mut new_arms = Vec::with_capacity(arms.len() + 1);
+        let mut new_arms = Vec::with_capacity(arms.len());
+        let mut changed = false;
         for arm in std::mem::take(arms) {
-            match vetted_shape(&arm) {
-                Some(shape) => split_arm(arm, shape, &mut new_arms),
-                None => new_arms.push(arm),
-            }
+            changed |= split_arm(arm, &mut new_arms);
         }
         *arms = new_arms;
-        true
+        changed
     }
 }
 
 // -------------------------------------------------------------------------------------------------
-// Shape recognition
+// Types
 
-/// A vetted guard-shaped arm body: `prefix_len` leading alias statements, then the tail.
-struct GuardShape {
-    prefix_len: usize,
+/// A recognized guard-shaped arm body, borrowed from the arm: the alias prefix, then the
+/// guard tail.
+struct Guarded<'a> {
+    /// Alias name and the pattern binding it copies, in prefix order.
+    aliases: Vec<(&'a String, &'a Exp)>,
+    tail: Tail<'a>,
 }
 
-fn splittable(arm: &MatchArm) -> bool {
-    vetted_shape(arm).is_some()
+/// The guard tail, normalized across its compiled forms ([`guard_tail`]).
+struct Tail<'a> {
+    guard: &'a Exp,
+    /// The compiled `g || e` form carries the guard's negation.
+    negated: bool,
+    /// The branch taken when the guard passes.
+    taken: &'a Exp,
+    fallback: Fallback<'a>,
 }
 
-fn vetted_shape(arm: &MatchArm) -> Option<GuardShape> {
-    (arm.guard.is_none() && !arm.fields.is_empty())
-        .then(|| guard_shape(arm))
-        .flatten()
+/// The guard-fail body: an explicit else, or the literal a boolean collapse elided.
+enum Fallback<'a> {
+    Body(&'a Exp),
+    Elided(bool),
 }
 
-/// The arm body is guard-shaped: an optional alias prefix, then a single guard tail
-/// (see [`is_guard_tail`]).
-fn guard_shape(arm: &MatchArm) -> Option<GuardShape> {
-    let mut body = peek(&arm.rhs);
-    let mut aliases = Vec::new();
-    let mut prefix_len = 0;
-    if let Exp::Seq(items) = body {
-        while prefix_len < items.len() {
-            let Some((alias, _)) = alias_of_binding(peek(&items[prefix_len]), &arm.fields) else {
-                break;
-            };
-            aliases.push(alias);
-            prefix_len += 1;
-        }
-        if prefix_len + 1 != items.len() {
-            return None;
-        }
-        body = peek(&items[prefix_len]);
+impl Tail<'_> {
+    /// Any `Assign` to `name` anywhere in the tail.
+    fn assigns(&self, name: &str) -> bool {
+        assigns_name(self.guard, name)
+            || assigns_name(self.taken, name)
+            || match self.fallback {
+                Fallback::Body(e) => assigns_name(e, name),
+                Fallback::Elided(_) => false,
+            }
     }
-    if !is_guard_tail(body, arm.variant) {
+}
+
+// -------------------------------------------------------------------------------------------------
+// Recognition
+
+/// Recognize a guard-shaped arm body (see the module doc); `None` declines the arm.
+fn recognize(arm: &MatchArm) -> Option<Guarded<'_>> {
+    if arm.guard.is_some() || arm.fields.is_empty() {
         return None;
     }
+    let mut body = peek(&arm.rhs);
+    let mut aliases = Vec::new();
+    if let Exp::Seq(items) = body {
+        let (last, prefix) = items.split_last()?;
+        for stmt in prefix {
+            aliases.push(alias_of_binding(peek(stmt), &arm.fields)?);
+        }
+        body = peek(last);
+    }
+    let tail = guard_tail(body, arm.variant)?;
     // Splitting deletes the alias `let`s, which would orphan any assignment to an alias
     // name in the tail. Deliberately not shadow-aware: over-declining keeps the safe
     // `if`-in-arm fallback.
-    if aliases.iter().any(|alias| assigns_name(body, alias)) {
+    if aliases.iter().any(|(alias, _)| tail.assigns(alias)) {
         return None;
     }
-    Some(GuardShape { prefix_len })
+    Some(Guarded { aliases, tail })
 }
 
-/// The guard test in every form it survives refinement; the re-unpacking branch is the
-/// guard-taken one:
+/// Parse the guard tail in every form it survives refinement; the re-unpacking branch is
+/// the guard-taken one:
 ///
 ///   * `if (g) { conseq } else { alt }` with a re-unpacking conseq;
 ///   * `g && e`: collapsed `if (g) { e } else { false }`;
 ///   * `g || e`: collapsed `if (!g) { true } else { e }`.
-fn is_guard_tail(body: &Exp, variant: Symbol) -> bool {
+fn guard_tail(body: &Exp, variant: Symbol) -> Option<Tail<'_>> {
     match body {
-        Exp::IfElse(_, conseq, alt) => alt.as_ref().is_some() && reunpacks_variant(conseq, variant),
+        Exp::IfElse(guard, taken, fallback) => {
+            let fallback = fallback.as_ref().as_ref()?;
+            if !reunpacks_variant(taken, variant) {
+                return None;
+            }
+            Some(Tail {
+                guard,
+                negated: false,
+                taken,
+                fallback: Fallback::Body(fallback),
+            })
+        }
         Exp::Primitive {
-            op: PrimitiveOp::And | PrimitiveOp::Or,
+            op: PrimitiveOp::And,
             args,
-        } => matches!(&args[..], [_, e] if reunpacks_variant(e, variant)),
-        _ => false,
+        } => {
+            let [guard, taken] = &args[..] else {
+                return None;
+            };
+            if !reunpacks_variant(taken, variant) {
+                return None;
+            }
+            Some(Tail {
+                guard,
+                negated: false,
+                taken,
+                fallback: Fallback::Elided(false),
+            })
+        }
+        Exp::Primitive {
+            op: PrimitiveOp::Or,
+            args,
+        } => {
+            let [guard, taken] = &args[..] else {
+                return None;
+            };
+            if !reunpacks_variant(taken, variant) {
+                return None;
+            }
+            Some(Tail {
+                guard,
+                negated: true,
+                taken,
+                fallback: Fallback::Elided(true),
+            })
+        }
+        _ => None,
     }
 }
 
-/// `let alias = binding;` where `binding` is one of the arm's pattern bindings. Returns
-/// `(alias, replacement)` for substitution.
+/// `let alias = binding;` where `binding` is one of the arm's pattern bindings.
 fn alias_of_binding<'a>(
     stmt: &'a Exp,
     fields: &[(Symbol, String)],
@@ -162,7 +214,7 @@ fn alias_of_binding<'a>(
     fields
         .iter()
         .any(|(_, binding)| binding == used)
-        .then_some((alias, rhs))
+        .then_some((alias, rhs.as_ref()))
 }
 
 /// Does `branch` start with a by-value re-unpack of `variant`?
@@ -177,78 +229,45 @@ fn reunpacks_variant(branch: &Exp, variant: Symbol) -> bool {
 // -------------------------------------------------------------------------------------------------
 // Splitting
 
-/// Split into one guarded arm per `if`/`else if` level plus an unguarded arm for the final
-/// else. `shape` is the arm's vetted shape from [`vetted_shape`].
-fn split_arm(arm: MatchArm, shape: GuardShape, out: &mut Vec<MatchArm>) {
-    let MatchArm {
-        variant,
-        fields,
-        guard: _,
-        rhs,
-    } = arm;
-    let mut body = unwrap_block(rhs);
-
-    // Substitute each alias with the binding it copies before splitting.
-    body = match body {
-        Exp::Seq(mut items) => {
-            debug_assert_eq!(items.len(), shape.prefix_len + 1);
-            let mut tail = unwrap_block(items.pop().expect("vetted: prefix plus tail"));
-            for stmt in items.into_iter().rev() {
-                let (alias, replacement) = match unwrap_block(stmt) {
-                    Exp::LetBind(mut names, rhs) => {
-                        (names.pop().expect("vetted: single-binder alias"), *rhs)
-                    }
-                    _ => unreachable!("vetted: the prefix is alias `let`s"),
-                };
-                substitute_free(&mut tail, &alias, &replacement);
-            }
-            tail
-        }
-        other => other,
-    };
-
-    let (guard, conseq, else_body) = destructure_guard_tail(body);
-    out.push(MatchArm {
-        variant,
-        fields: fields.clone(),
-        guard: Some(guard),
-        rhs: conseq,
-    });
-
-    let rest = MatchArm {
-        variant,
-        fields,
-        guard: None,
-        rhs: else_body,
-    };
-    match vetted_shape(&rest) {
-        Some(shape) => split_arm(rest, shape, out),
-        None => out.push(rest),
-    }
-}
-
-/// Take a vetted guard tail apart into `(guard, taken-branch, fallback)`. Boolean-collapsed
-/// forms restore the elided literal; `g || e` un-negates the guard.
-fn destructure_guard_tail(body: Exp) -> (Exp, Exp, Exp) {
+/// Split a guard-shaped arm into one guarded arm per `if`/`else if` level plus an unguarded
+/// arm for the final else; any other arm passes through untouched. Returns whether it split.
+fn split_arm(arm: MatchArm, out: &mut Vec<MatchArm>) -> bool {
     use move_core_types::runtime_value::MoveValue;
-    match body {
-        Exp::IfElse(guard, conseq, alt) => {
-            let else_body = alt.expect("is_guard_tail checked the else");
-            (*guard, *conseq, else_body)
-        }
-        Exp::Primitive { op, mut args } => {
-            let conseq = args.pop().expect("is_guard_tail checked the arity");
-            let mut guard = args.pop().expect("is_guard_tail checked the arity");
-            let elided = match op {
-                PrimitiveOp::And => false,
-                PrimitiveOp::Or => {
-                    negate(&mut guard);
-                    true
-                }
-                _ => unreachable!("is_guard_tail admits only And/Or"),
-            };
-            (guard, conseq, Exp::Value(MoveValue::Bool(elided)))
-        }
-        _ => unreachable!("is_guard_tail admits only IfElse and And/Or"),
+    let Some(Guarded { aliases, tail }) = recognize(&arm) else {
+        out.push(arm);
+        return false;
+    };
+
+    let mut guard = tail.guard.clone();
+    if tail.negated {
+        negate(&mut guard);
     }
+    let mut taken = tail.taken.clone();
+    let mut fallback = match tail.fallback {
+        Fallback::Body(e) => e.clone(),
+        Fallback::Elided(b) => Exp::Value(MoveValue::Bool(b)),
+    };
+    // Later aliases first: a duplicate alias name resolves to its inner binding.
+    for (alias, binding) in aliases.iter().rev() {
+        substitute_free(&mut guard, alias, binding);
+        substitute_free(&mut taken, alias, binding);
+        substitute_free(&mut fallback, alias, binding);
+    }
+
+    out.push(MatchArm {
+        variant: arm.variant,
+        fields: arm.fields.clone(),
+        guard: Some(guard),
+        rhs: taken,
+    });
+    split_arm(
+        MatchArm {
+            variant: arm.variant,
+            fields: arm.fields.clone(),
+            guard: None,
+            rhs: fallback,
+        },
+        out,
+    );
+    true
 }
