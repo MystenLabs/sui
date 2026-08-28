@@ -72,10 +72,10 @@ type BlockInclusion = (
 /// How a queued submission is resolved once its fate is known.
 enum EntryAck {
     /// RPC user path: positions on inclusion, error on eviction / epoch end.
-    Positions(oneshot::Sender<SuiResult<Vec<ConsensusPosition>>>),
-    /// `ConsensusAdapter` path (system transactions): block inclusion ack plus a
-    /// `BlockStatus` subscription.
-    Inclusion(oneshot::Sender<BlockInclusion>),
+    User(oneshot::Sender<SuiResult<Vec<ConsensusPosition>>>),
+    /// `ConsensusAdapter` path (system transactions and pings): block inclusion
+    /// ack plus a `BlockStatus` subscription.
+    SystemOrPing(oneshot::Sender<BlockInclusion>),
 }
 
 /// Must be explicitly resolved; dropping it unresolved is a bug.
@@ -105,7 +105,7 @@ impl PendingAck {
         subscribers: &mut BTreeMap<BlockRef, Vec<oneshot::Sender<BlockStatus>>>,
     ) {
         match self.ack.take().expect("ack must be pending") {
-            EntryAck::Positions(sender) => {
+            EntryAck::User(sender) => {
                 let positions = indices
                     .into_iter()
                     .map(|index| ConsensusPosition {
@@ -116,7 +116,7 @@ impl PendingAck {
                     .collect();
                 let _ = sender.send(Ok(positions));
             }
-            EntryAck::Inclusion(sender) => {
+            EntryAck::SystemOrPing(sender) => {
                 let (status_sender, status_receiver) = oneshot::channel();
                 subscribers
                     .entry(block_ref)
@@ -129,10 +129,10 @@ impl PendingAck {
 
     fn resolve_error(mut self, error: SuiError) {
         match self.ack.take().expect("ack must be pending") {
-            EntryAck::Positions(sender) => {
+            EntryAck::User(sender) => {
                 let _ = sender.send(Err(error));
             }
-            EntryAck::Inclusion(sender) => {
+            EntryAck::SystemOrPing(sender) => {
                 drop(sender);
             }
         }
@@ -146,8 +146,8 @@ impl PendingAck {
 impl Drop for PendingAck {
     fn drop(&mut self) {
         let flavor = match self.ack {
-            Some(EntryAck::Positions(_)) => "Positions",
-            Some(EntryAck::Inclusion(_)) => "Inclusion",
+            Some(EntryAck::User(_)) => "User",
+            Some(EntryAck::SystemOrPing(_)) => "SystemOrPing",
             None => return,
         };
         if !std::thread::panicking() {
@@ -377,7 +377,7 @@ impl ConsensusTransactionPool {
             transactions,
             total_bytes,
             gas_price,
-            ack: PendingAck::new(EntryAck::Positions(sender), keys),
+            ack: PendingAck::new(EntryAck::User(sender), keys),
             metrics: self.metrics.clone(),
             processed,
         };
@@ -419,7 +419,7 @@ impl ConsensusTransactionPool {
                 return Err(SuiErrorKind::TooManyTransactionsPendingConsensus.into());
             }
             pool.pings
-                .push_back(PendingAck::new(EntryAck::Inclusion(sender), Vec::new()));
+                .push_back(PendingAck::new(EntryAck::SystemOrPing(sender), Vec::new()));
             self.metrics.pool_depth.with_label_values(&["ping"]).inc();
             return Ok(receiver);
         }
@@ -453,7 +453,7 @@ impl ConsensusTransactionPool {
             total_bytes,
             gas_price: 0,
             ack: PendingAck::new(
-                EntryAck::Inclusion(sender),
+                EntryAck::SystemOrPing(sender),
                 transactions.iter().map(ConsensusTransaction::key).collect(),
             ),
             metrics: self.metrics.clone(),
@@ -712,6 +712,10 @@ impl TakenTransactionsGuard {
         let mut next_index = 0usize;
         let mut watches_to_drop = Vec::with_capacity(entries.len());
         for taken in entries {
+            let lane = match taken.lane {
+                TakenLane::User => "user",
+                TakenLane::System => "system",
+            };
             let mut entry = taken.entry;
             watches_to_drop.push(std::mem::take(&mut entry.processed));
             let start = next_index;
@@ -724,6 +728,7 @@ impl TakenTransactionsGuard {
                 .collect::<Vec<_>>();
             self.metrics
                 .queue_wait_latency
+                .with_label_values(&[lane])
                 .observe(entry.ack.created.elapsed().as_secs_f64());
             entry.ack.resolve_included(
                 self.epoch,
@@ -733,6 +738,10 @@ impl TakenTransactionsGuard {
             );
         }
         for ping in pings {
+            self.metrics
+                .queue_wait_latency
+                .with_label_values(&["ping"])
+                .observe(ping.created.elapsed().as_secs_f64());
             ping.resolve_included(
                 self.epoch,
                 block_ref,
@@ -1288,7 +1297,7 @@ mod tests {
     async fn unresolved_pending_ack_panics() {
         let (sender, _receiver) = oneshot::channel();
         drop(PendingAck::new(
-            EntryAck::Positions(sender),
+            EntryAck::User(sender),
             vec![transaction().key()],
         ));
     }
@@ -1304,10 +1313,7 @@ mod tests {
             transactions: vec![Transaction::new(serialized.clone())],
             total_bytes: serialized.len(),
             gas_price: 1,
-            ack: PendingAck::new(
-                EntryAck::Positions(sender),
-                vec![consensus_transaction.key()],
-            ),
+            ack: PendingAck::new(EntryAck::User(sender), vec![consensus_transaction.key()]),
             metrics,
             processed: Vec::new(),
         };

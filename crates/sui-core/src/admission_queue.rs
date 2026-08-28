@@ -7,10 +7,10 @@ use arc_swap::ArcSwap;
 use mysten_common::debug_fatal;
 use mysten_metrics::{COUNT_BUCKETS, spawn_monitored_task};
 use prometheus::{
-    Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
-    register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry,
+    Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::net::IpAddr;
@@ -173,7 +173,7 @@ pub struct AdmissionQueueMetrics {
     // both modes implement the same admission policy and are mutually exclusive on a
     // validator. This preserves dashboard continuity when switching modes.
     pub queue_depth: IntGauge,
-    pub queue_wait_latency: Histogram,
+    pub queue_wait_latency: HistogramVec,
     pub evictions: IntCounter,
     pub rejections: IntCounter,
     pub duplicate_inserts: IntCounter,
@@ -196,9 +196,10 @@ impl AdmissionQueueMetrics {
                 registry,
             )
             .unwrap(),
-            queue_wait_latency: register_histogram_with_registry!(
+            queue_wait_latency: register_histogram_vec_with_registry!(
                 "admission_queue_wait_latency",
-                "Time a transaction spends waiting in the admission queue before being drained",
+                "Time a submission spends waiting in the admission queue or transaction pool before being drained or proposed",
+                &["lane"],
                 mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -747,6 +748,7 @@ impl AdmissionQueueEventLoop {
             self.queue
                 .metrics
                 .queue_wait_latency
+                .with_label_values(&["user"])
                 .observe(entry.enqueue_time.elapsed().as_secs_f64());
             let adapter = self.consensus_adapter.clone();
             let es = self.epoch_store.clone();
