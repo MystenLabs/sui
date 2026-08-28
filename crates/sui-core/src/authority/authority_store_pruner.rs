@@ -937,10 +937,6 @@ impl AuthorityStorePruner {
         } else {
             Duration::from_secs(config.pruning_run_delay_seconds.unwrap_or(60 * 60))
         };
-        let mut objects_prune_interval =
-            tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
-        let mut checkpoints_prune_interval =
-            tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
 
         metrics
             .num_epochs_to_retain_for_objects
@@ -957,7 +953,15 @@ impl AuthorityStorePruner {
             let _ = jsonrpc_index;
             if let Some(num_epochs_to_retain) = config.num_epochs_to_retain_for_checkpoints() {
                 let prune_objects = config.num_epochs_to_retain != u64::MAX;
-                tokio::task::spawn(async move {
+                let prune_loop = async move {
+                    let mut objects_prune_interval = tokio::time::interval_at(
+                        Instant::now() + pruning_initial_delay,
+                        tick_duration,
+                    );
+                    let mut checkpoints_prune_interval = tokio::time::interval_at(
+                        Instant::now() + pruning_initial_delay,
+                        tick_duration,
+                    );
                     loop {
                         tokio::select! {
                             _ = objects_prune_interval.tick(), if prune_objects => {
@@ -973,14 +977,26 @@ impl AuthorityStorePruner {
                             _ = &mut recv => break,
                         }
                     }
-                });
+                };
+
+                #[cfg(not(msim))]
+                std::thread::Builder::new()
+                    .name("authority-store-pruner".to_string())
+                    .spawn(move || {
+                        let runtime = tokio::runtime::Builder::new_current_thread()
+                            .enable_all()
+                            .build()
+                            .expect("Failed to build pruner tokio runtime");
+                        runtime.block_on(prune_loop);
+                    })
+                    .expect("Failed to spawn authority store pruner thread");
+
+                #[cfg(msim)]
+                tokio::task::spawn(prune_loop);
             }
         }
         #[cfg(not(tidehunter))]
         {
-            let mut indexes_prune_interval =
-                tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
-
             let perpetual_db_for_compaction = perpetual_db.clone();
             if let Some(delay_days) = config.periodic_compaction_threshold_days {
                 spawn_monitored_task!(async move {
@@ -1005,7 +1021,15 @@ impl AuthorityStorePruner {
                     }
                 });
             }
-            tokio::task::spawn(async move {
+
+            let prune_loop = async move {
+                let mut objects_prune_interval =
+                    tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
+                let mut checkpoints_prune_interval =
+                    tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
+                let mut indexes_prune_interval =
+                    tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
+
                 loop {
                     tokio::select! {
                         _ = objects_prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
@@ -1029,7 +1053,22 @@ impl AuthorityStorePruner {
                         _ = &mut recv => break,
                     }
                 }
-            });
+            };
+
+            #[cfg(not(msim))]
+            std::thread::Builder::new()
+                .name("authority-store-pruner".to_string())
+                .spawn(move || {
+                    let runtime = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .expect("Failed to build pruner tokio runtime");
+                    runtime.block_on(prune_loop);
+                })
+                .expect("Failed to spawn authority store pruner thread");
+
+            #[cfg(msim)]
+            tokio::task::spawn(prune_loop);
         }
         sender
     }
