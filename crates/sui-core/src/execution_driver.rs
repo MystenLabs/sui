@@ -85,7 +85,7 @@ use tracing::{error_span, info, trace, warn};
 
 use crate::authority::AuthorityState;
 use crate::execution_scheduler::PendingCertificate;
-use crate::execution_scheduler::causal_order::{self, CausalWindow};
+use crate::execution_scheduler::causal_order::CausalWindow;
 
 #[cfg(test)]
 #[path = "unit_tests/execution_driver_tests.rs"]
@@ -94,11 +94,24 @@ mod execution_driver_tests;
 const QUEUEING_DELAY_SAMPLING_RATIO: f64 = 0.05;
 
 /// Heap entry ordering pending transactions by causal index (min-heap via `Reverse`).
-struct QueuedCertificate(PendingCertificate);
+struct QueuedCertificate {
+    index: u64,
+    cert: PendingCertificate,
+}
 
 impl QueuedCertificate {
+    fn new(cert: PendingCertificate) -> Self {
+        let index = cert
+            .execution_env
+            .causal_guard
+            .as_ref()
+            .expect("causal index is assigned at enqueue")
+            .index();
+        Self { index, cert }
+    }
+
     fn index(&self) -> u64 {
-        self.0.causal_guard.index()
+        self.index
     }
 }
 
@@ -142,7 +155,7 @@ pub async fn execution_process(
                     if let Some(authority) = authority_state.upgrade() {
                         authority.metrics.execution_driver_dispatch_queue.dec();
                     }
-                    waiting.push(Reverse(QueuedCertificate(pending_cert)));
+                    waiting.push(Reverse(QueuedCertificate::new(pending_cert)));
                 } else {
                     // Should only happen after the AuthorityState has shut down and tx_ready_certificate
                     // has been dropped by ExecutionScheduler.
@@ -163,17 +176,17 @@ pub async fn execution_process(
             if let Some(authority) = authority_state.upgrade() {
                 authority.metrics.execution_driver_dispatch_queue.dec();
             }
-            waiting.push(Reverse(QueuedCertificate(pending_cert)));
+            waiting.push(Reverse(QueuedCertificate::new(pending_cert)));
         }
 
         // Admit in causal-index order for as long as the admission rule allows.
         while !waiting.is_empty() {
             let (head_index, cert_epoch, digest) = {
-                let head = &waiting.peek().unwrap().0.0;
+                let head = &waiting.peek().unwrap().0;
                 (
-                    head.causal_guard.index(),
-                    head.certificate.epoch(),
-                    *head.certificate.digest(),
+                    head.index(),
+                    head.cert.certificate.epoch(),
+                    *head.cert.certificate.digest(),
                 )
             };
 
@@ -210,10 +223,9 @@ pub async fn execution_process(
                 break;
             };
 
-            let Reverse(QueuedCertificate(pending_cert)) = waiting.pop().unwrap();
+            let pending_cert = waiting.pop().unwrap().0.cert;
             let certificate = pending_cert.certificate;
             let execution_env = pending_cert.execution_env;
-            let causal_guard = pending_cert.causal_guard;
             let _executing_guard = pending_cert.executing_guard;
             let txn_ready_time = pending_cert.stats.ready_time.unwrap();
 
@@ -256,14 +268,13 @@ pub async fn execution_process(
                 let _slot = slot;
                 let _alive_guard = alive_guard;
                 let _executing_guard = _executing_guard;
-                // Make the causal guard reachable for in-execution retry scheduling
-                // (object funds checker), which takes it to preserve the transaction's
-                // index across the retry.
-                let guard_slot = causal_order::install_executing_guard(causal_guard);
                 // The pool thread does not inherit the current tracing span, so re-enter
                 // it to keep execution logs attributed.
                 let _enter = execution_span.enter();
                 let _scope = monitored_scope("ExecutionDriver::blocking_task");
+                // `execution_env` carries the causal guard; consuming the env here
+                // marks the transaction's causal index done at the end of execution,
+                // unless a retry path cloned the env to keep the index alive.
                 match authority.try_execute_immediately(&certificate, execution_env, &epoch_store) {
                     ExecutionOutput::Success(_) => {
                         authority
@@ -278,18 +289,14 @@ pub async fn execution_process(
                         fatal!("Failed to execute certified transaction {digest:?}! error={e} certificate={certificate:?}");
                     }
                     ExecutionOutput::RetryLater => {
-                        // Transaction will be retried later and auto-rescheduled (keeping its
-                        // causal index via the installed guard), so we ignore it here.
+                        // Transaction will be retried later and auto-rescheduled (keeping
+                        // its causal index via the retry's env clone), so we ignore it here.
                         authority
                             .metrics
                             .execution_driver_paused_transactions
                             .inc();
                     }
                 }
-                // Dropping the guard marks this transaction's causal index done. If a
-                // retry was scheduled, the retry path took the guard and the index
-                // stays live.
-                drop(guard_slot.take_back());
             });
         }
     }

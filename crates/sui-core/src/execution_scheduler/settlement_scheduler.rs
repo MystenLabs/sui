@@ -11,7 +11,6 @@ use crate::{
     },
     checkpoints::causal_order::CausalOrder,
     execution_cache::TransactionCacheRead,
-    execution_scheduler::causal_order::CausalIndexGuard,
     execution_scheduler::execution_scheduler_impl::{BarrierDependencyBuilder, ExecutionScheduler},
     execution_scheduler::funds_withdraw_scheduler::FundsSettlement,
 };
@@ -40,11 +39,6 @@ struct SettlementWorkItem {
     settlement_key: TransactionKey,
     env: ExecutionEnv,
     batch_info: SettlementBatchInfo,
-    /// Causal index shared by all settlement transactions of this batch (including the
-    /// barrier). Assigned at enqueue time: later commits' transactions may park waiting
-    /// on the accumulator version this batch writes, so the batch's index must sit
-    /// below theirs.
-    causal_guard: CausalIndexGuard,
 }
 
 #[derive(Clone)]
@@ -106,15 +100,19 @@ impl SettlementScheduler {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         self.execution_scheduler.enqueue(certs, epoch_store);
-        // Assign the batch's index directly after its transactions', before the next
-        // commit is enqueued.
-        let causal_guard = self.execution_scheduler.causal_window().assign();
+        // The batch's causal index is assigned here, directly after its transactions'
+        // and before the next commit is enqueued. All settlement transactions of the
+        // batch (including the barrier) share it via clones of this env: later
+        // commits' transactions may park waiting on the accumulator version the batch
+        // writes, so the batch's index must sit below theirs.
+        let env = ExecutionEnv::new()
+            .with_assigned_versions(settlement.assigned_versions.clone())
+            .with_causal_guard(self.execution_scheduler.causal_window().assign());
         let queue = self.get_or_start_queue(epoch_store);
         queue.send(SettlementWorkItem {
             settlement_key: settlement.settlement_key,
-            env: ExecutionEnv::new().with_assigned_versions(settlement.assigned_versions.clone()),
+            env,
             batch_info: settlement,
-            causal_guard,
         });
     }
 
@@ -165,7 +163,6 @@ impl SettlementScheduler {
                     item.env,
                     item.batch_info,
                     tx_index_offset,
-                    item.causal_guard,
                     &epoch_store,
                 ))
                 .await;
@@ -188,7 +185,6 @@ impl SettlementScheduler {
         env: ExecutionEnv,
         batch_info: SettlementBatchInfo,
         tx_index_offset: u64,
-        causal_guard: CausalIndexGuard,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> usize {
         let digests = epoch_store
@@ -263,12 +259,12 @@ impl SettlementScheduler {
             .map(|tx| {
                 let deps = barrier_deps.process_tx(*tx.digest(), tx.transaction_data());
                 let env = env.clone().with_barrier_dependencies(deps);
-                (tx, env, causal_guard.clone())
+                (tx, env)
             })
             .collect::<Vec<_>>();
 
         self.execution_scheduler
-            .enqueue_transactions_with_guards(txns, epoch_store);
+            .enqueue_transactions(txns, epoch_store);
 
         let settlement_effects = self
             .transaction_cache_read
@@ -293,7 +289,7 @@ impl SettlementScheduler {
         let deps = barrier_deps.process_tx(*barrier_tx.digest(), barrier_tx.transaction_data());
         let env = env.with_barrier_dependencies(deps);
         self.execution_scheduler
-            .enqueue_transactions_with_guards(vec![(barrier_tx, env, causal_guard)], epoch_store);
+            .enqueue_transactions(vec![(barrier_tx, env)], epoch_store);
 
         let barrier_effects = self
             .transaction_cache_read
