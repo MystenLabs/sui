@@ -244,9 +244,6 @@ async fn test_tx_execution_publishes_checkpoint() {
     assert_eq!(*checkpoint.summary.sequence_number(), checkpoint_seq);
 }
 
-// `simulate_transaction` is not yet supported by the forked executor (the
-// current Simulacrum has no simulate entrypoint); re-enable once it lands.
-#[ignore = "simulate_transaction not yet supported by the forked network"]
 #[tokio::test]
 async fn test_simulate_transaction_does_not_commit_or_checkpoint() {
     let mut harness = TestHarness::new().await;
@@ -259,10 +256,13 @@ async fn test_simulate_transaction_does_not_commit_or_checkpoint() {
             .compute_object_reference()
     };
 
-    let result = harness
-        .executor
-        .simulate_transaction(tx_data, TransactionChecks::Enabled, false)
-        .expect("simulate_transaction should succeed");
+    let executor = ForkedTransactionExecutor::new(harness.context.clone());
+    let result = tokio::task::spawn_blocking(move || {
+        executor.simulate_transaction(tx_data, TransactionChecks::Enabled, false)
+    })
+    .await
+    .expect("simulate_transaction task should complete")
+    .expect("simulate_transaction should succeed");
 
     assert!(result.effects.status().is_ok());
     assert!(!result.objects.is_empty());
@@ -281,17 +281,19 @@ async fn test_simulate_transaction_does_not_commit_or_checkpoint() {
     assert_eq!(after, before, "simulation must not mutate stored objects");
 }
 
-#[ignore = "simulate_transaction not yet supported by the forked network"]
 #[tokio::test]
 async fn test_simulate_transaction_supports_mock_gas() {
     let harness = TestHarness::new().await;
     let mut tx_data = harness.build_transfer_tx_data(1_000);
     tx_data.gas_data_mut().payment = Vec::new();
 
-    let result = harness
-        .executor
-        .simulate_transaction(tx_data, TransactionChecks::Enabled, true)
-        .expect("simulate_transaction with mock gas should succeed");
+    let executor = ForkedTransactionExecutor::new(harness.context.clone());
+    let result = tokio::task::spawn_blocking(move || {
+        executor.simulate_transaction(tx_data, TransactionChecks::Enabled, true)
+    })
+    .await
+    .expect("simulate_transaction task should complete")
+    .expect("simulate_transaction with mock gas should succeed");
 
     assert!(result.effects.status().is_ok());
     assert_eq!(result.mock_gas_id, Some(ObjectID::MAX));
