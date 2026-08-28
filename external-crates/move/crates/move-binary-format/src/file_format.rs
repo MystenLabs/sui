@@ -1140,24 +1140,43 @@ impl Arbitrary for SignatureToken {
     fn arbitrary_with(_params: Self::Parameters) -> Self::Strategy {
         use SignatureToken::*;
 
-        let leaf = prop_oneof![
-            Just(Bool),
-            Just(U8),
-            Just(U16),
-            Just(U32),
-            Just(U64),
-            Just(U128),
-            Just(U256),
-            Just(I8),
-            Just(I16),
-            Just(I32),
-            Just(I64),
-            Just(I128),
-            Just(I256),
-            Just(Address),
-            any::<DatatypeHandleIndex>().prop_map(Datatype),
-            any::<TypeParameterIndex>().prop_map(TypeParameter),
-        ];
+        // Default strategies must only generate tokens serializable at `VERSION_MAX`,
+        // so signed tokens join once `VERSION_MAX` reaches `SIGNED_INT_VERSION`.
+        let leaf = if file_format_common::VERSION_MAX >= file_format_common::SIGNED_INT_VERSION {
+            prop_oneof![
+                Just(Bool),
+                Just(U8),
+                Just(U16),
+                Just(U32),
+                Just(U64),
+                Just(U128),
+                Just(U256),
+                Just(I8),
+                Just(I16),
+                Just(I32),
+                Just(I64),
+                Just(I128),
+                Just(I256),
+                Just(Address),
+                any::<DatatypeHandleIndex>().prop_map(Datatype),
+                any::<TypeParameterIndex>().prop_map(TypeParameter),
+            ]
+            .boxed()
+        } else {
+            prop_oneof![
+                Just(Bool),
+                Just(U8),
+                Just(U16),
+                Just(U32),
+                Just(U64),
+                Just(U128),
+                Just(U256),
+                Just(Address),
+                any::<DatatypeHandleIndex>().prop_map(Datatype),
+                any::<TypeParameterIndex>().prop_map(TypeParameter),
+            ]
+            .boxed()
+        };
         leaf.prop_recursive(
             8,  // levels deep
             16, // max size
@@ -1312,6 +1331,16 @@ pub struct Constant {
     pub data: Vec<u8>,
 }
 
+/// Generates any `Bytecode` serializable at `VERSION_MAX`: signed instructions join
+/// once `VERSION_MAX` reaches `SIGNED_INT_VERSION`.
+#[cfg(any(test, feature = "fuzzing"))]
+fn version_max_bytecode_strategy() -> impl Strategy<Value = Bytecode> {
+    any::<Bytecode>().prop_filter("signed bytecodes need SIGNED_INT_VERSION", |op| {
+        file_format_common::VERSION_MAX >= file_format_common::SIGNED_INT_VERSION
+            || !op.is_signed_integer_instruction()
+    })
+}
+
 /// A `CodeUnit` is the body of a function. It has the function header and the instruction stream.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
@@ -1324,7 +1353,7 @@ pub struct CodeUnit {
     /// Code stream, function body.
     #[cfg_attr(
         any(test, feature = "fuzzing"),
-        proptest(strategy = "vec(any::<Bytecode>(), 0..=params)")
+        proptest(strategy = "vec(version_max_bytecode_strategy(), 0..=params)")
     )]
     pub code: Vec<Bytecode>,
     #[cfg_attr(any(test, feature = "fuzzing"), proptest(value = "vec![]"))]

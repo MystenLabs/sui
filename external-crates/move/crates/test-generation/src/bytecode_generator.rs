@@ -11,11 +11,14 @@ use crate::{
     control_flow_graph::CFG,
     substitute, summaries,
 };
-use move_binary_format::file_format::{
-    Bytecode, CodeOffset, CompiledModule, ConstantPoolIndex, FieldHandleIndex,
-    FieldInstantiationIndex, FunctionHandle, FunctionHandleIndex, FunctionInstantiation,
-    FunctionInstantiationIndex, LocalIndex, SignatureToken, StructDefInstantiation,
-    StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
+use move_binary_format::{
+    file_format::{
+        Bytecode, CodeOffset, CompiledModule, ConstantPoolIndex, FieldHandleIndex,
+        FieldInstantiationIndex, FunctionHandle, FunctionHandleIndex, FunctionInstantiation,
+        FunctionInstantiationIndex, LocalIndex, SignatureToken, StructDefInstantiation,
+        StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
+    },
+    file_format_common::{SIGNED_INT_VERSION, VERSION_MAX},
 };
 use move_core_types::{i256::I256, u256::U256};
 use rand::{Rng, rngs::StdRng};
@@ -214,7 +217,7 @@ impl<'a> BytecodeGenerator<'a> {
     /// The `BytecodeGenerator` is instantiated with a seed to use with
     /// its random number generator.
     pub fn new(rng: &'a mut StdRng) -> Self {
-        let instructions: Vec<(StackEffect, BytecodeType)> = vec![
+        let mut instructions: Vec<(StackEffect, BytecodeType)> = vec![
             (StackEffect::Sub, BytecodeType::NoArg(Bytecode::Pop)),
             (StackEffect::Add, BytecodeType::U8(Bytecode::LdU8)),
             (StackEffect::Add, BytecodeType::U16(Bytecode::LdU16)),
@@ -228,19 +231,6 @@ impl<'a> BytecodeGenerator<'a> {
             (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastU64)),
             (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastU128)),
             (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastU256)),
-            (StackEffect::Add, BytecodeType::I8(Bytecode::LdI8)),
-            (StackEffect::Add, BytecodeType::I16(Bytecode::LdI16)),
-            (StackEffect::Add, BytecodeType::I32(Bytecode::LdI32)),
-            (StackEffect::Add, BytecodeType::I64(Bytecode::LdI64)),
-            (StackEffect::Add, BytecodeType::I128(Bytecode::LdI128)),
-            (StackEffect::Add, BytecodeType::I256(Bytecode::LdI256)),
-            (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI8)),
-            (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI16)),
-            (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI32)),
-            (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI64)),
-            (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI128)),
-            (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI256)),
-            (StackEffect::Nop, BytecodeType::NoArg(Bytecode::Neg)),
             (
                 StackEffect::Add,
                 BytecodeType::ConstantPoolIndex(Bytecode::LdConst),
@@ -330,6 +320,26 @@ impl<'a> BytecodeGenerator<'a> {
             (StackEffect::Sub, BytecodeType::NoArg(Bytecode::Abort)),
             (StackEffect::Nop, BytecodeType::NoArg(Bytecode::Ret)),
         ];
+        // Generated modules must serialize at `VERSION_MAX` and execute on the current VM,
+        // so signed instructions join the pool once `VERSION_MAX` reaches
+        // `SIGNED_INT_VERSION`.
+        if VERSION_MAX >= SIGNED_INT_VERSION {
+            instructions.extend([
+                (StackEffect::Add, BytecodeType::I8(Bytecode::LdI8)),
+                (StackEffect::Add, BytecodeType::I16(Bytecode::LdI16)),
+                (StackEffect::Add, BytecodeType::I32(Bytecode::LdI32)),
+                (StackEffect::Add, BytecodeType::I64(Bytecode::LdI64)),
+                (StackEffect::Add, BytecodeType::I128(Bytecode::LdI128)),
+                (StackEffect::Add, BytecodeType::I256(Bytecode::LdI256)),
+                (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI8)),
+                (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI16)),
+                (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI32)),
+                (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI64)),
+                (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI128)),
+                (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI256)),
+                (StackEffect::Nop, BytecodeType::NoArg(Bytecode::Neg)),
+            ]);
+        }
         Self { instructions, rng }
     }
 
@@ -444,9 +454,13 @@ impl<'a> BytecodeGenerator<'a> {
                 BytecodeType::I128(instruction) => Some(instruction(Box::new(
                     self.rng.gen_range(i128::MIN..=i128::MAX),
                 ))),
-                BytecodeType::I256(instruction) => Some(instruction(Box::new(I256::from(
-                    self.rng.gen_range(i128::MIN..=i128::MAX),
-                )))),
+                BytecodeType::I256(instruction) => {
+                    // Sample the full 256-bit domain: every 32-byte pattern is a valid
+                    // two's-complement I256.
+                    let mut bytes = [0u8; 32];
+                    self.rng.fill(&mut bytes);
+                    Some(instruction(Box::new(I256::from_le_bytes(&bytes))))
+                }
                 BytecodeType::ConstantPoolIndex(instruction) => {
                     // Select a random address from the module's address pool
                     Self::index_or_none(&module.constant_pool, self.rng)

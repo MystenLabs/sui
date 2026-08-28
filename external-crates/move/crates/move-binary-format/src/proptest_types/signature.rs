@@ -2,9 +2,12 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::file_format::{
-    Ability, AbilitySet, DatatypeHandle, DatatypeHandleIndex, Signature, SignatureToken,
-    TableIndex, TypeParameterIndex,
+use crate::{
+    file_format::{
+        Ability, AbilitySet, DatatypeHandle, DatatypeHandleIndex, Signature, SignatureToken,
+        TableIndex, TypeParameterIndex,
+    },
+    file_format_common::{SIGNED_INT_VERSION, VERSION_MAX},
 };
 use proptest::{
     collection::{SizeRange, vec},
@@ -129,15 +132,23 @@ impl SignatureTokenGen {
         ]
     }
 
-    /// Generates a signature token for a non-struct owned type.
+    /// Generates a signature token for a non-struct owned type. Default strategies must
+    /// only generate modules serializable at `VERSION_MAX`, so signed tokens join once
+    /// `VERSION_MAX` reaches `SIGNED_INT_VERSION`.
     pub fn owned_non_struct_strategy() -> impl Strategy<Value = Self> {
         use SignatureTokenGen::*;
 
-        static OWNED_NON_STRUCTS: &[SignatureTokenGen] = &[
+        static OWNED_NON_STRUCTS: &[SignatureTokenGen] =
+            &[Bool, U8, U16, U32, U64, U128, U256, Address, Signer];
+        static OWNED_NON_STRUCTS_SIGNED: &[SignatureTokenGen] = &[
             Bool, U8, U16, U32, U64, U128, U256, I8, I16, I32, I64, I128, I256, Address, Signer,
         ];
 
-        select(OWNED_NON_STRUCTS)
+        if VERSION_MAX >= SIGNED_INT_VERSION {
+            select(OWNED_NON_STRUCTS_SIGNED)
+        } else {
+            select(OWNED_NON_STRUCTS)
+        }
     }
 
     // TODO: remove allow(dead_code) once related features are implemented
