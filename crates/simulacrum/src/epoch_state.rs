@@ -1,18 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use anyhow::Result;
 use sui_config::{
     transaction_deny_config::TransactionDenyConfig, verifier_signing_config::VerifierSigningConfig,
 };
+use sui_core::{
+    accumulators::funds_read::AccountFundsRead,
+    transaction_simulation::{SimulationInputLoader, simulate_transaction},
+};
 use sui_execution::Executor;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    accumulator_root::{AccumulatorObjId, AccumulatorValue, U128},
+    base_types::{ObjectRef, SequenceNumber, TransactionDigest},
+    coin_reservation::BorrowedCoinReservationResolver,
     committee::{Committee, EpochId},
     digests::ChainIdentifier,
     effects::TransactionEffects,
+    error::SuiResult,
     execution_params::ExecutionOrEarlyError,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
@@ -21,12 +31,18 @@ use sui_types::{
         SuiSystemState, SuiSystemStateTrait,
         epoch_start_sui_system_state::{EpochStartSystemState, EpochStartSystemStateTrait},
     },
-    transaction::{TransactionDataAPI, VerifiedTransaction},
+    transaction::{
+        InputObjectKind, InputObjects, ReceivingObjects, TransactionData, TransactionDataAPI,
+        TxValidityCheckContext, VerifiedTransaction,
+    },
+    transaction_executor::{SimulateTransactionResult, TransactionChecks},
 };
 
 use crate::SimulatorStore;
 
-mod simulation;
+struct SimulatorAccountFundsRead<'a, S>(&'a S);
+
+struct SimulatorInputLoader<'a, S>(&'a S);
 
 pub struct EpochState {
     epoch_start_state: EpochStartSystemState,
@@ -178,5 +194,104 @@ impl EpochState {
                 &mut None,
             );
         Ok((inner_temp_store, gas_status, effects, result))
+    }
+
+    pub(crate) fn simulate_transaction<S: SimulatorStore + Send + Sync>(
+        &self,
+        store: &S,
+        transaction_deny_config: &TransactionDenyConfig,
+        verifier_signing_config: &VerifierSigningConfig,
+        transaction: TransactionData,
+        checks: TransactionChecks,
+        allow_mock_gas_coin: bool,
+    ) -> SuiResult<SimulateTransactionResult> {
+        let input_loader = SimulatorInputLoader(store);
+        let account_funds_read = SimulatorAccountFundsRead(store);
+        let coin_reservation_resolver = BorrowedCoinReservationResolver::new(store);
+        let certificate_deny_set = HashSet::new();
+
+        simulate_transaction(
+            transaction,
+            checks,
+            allow_mock_gas_coin,
+            Some(self.reference_gas_price()),
+            TxValidityCheckContext {
+                config: &self.protocol_config,
+                epoch: self.epoch(),
+                chain_identifier: self.chain_identifier,
+                reference_gas_price: self.reference_gas_price(),
+                committee_size: self.committee.num_members() as u32,
+            },
+            self.epoch(),
+            self.epoch_start_state.epoch_start_timestamp_ms(),
+            self.chain_identifier,
+            transaction_deny_config,
+            &certificate_deny_set,
+            &input_loader,
+            store,
+            store,
+            self.simulation_executor.as_ref(),
+            &coin_reservation_resolver,
+            &account_funds_read,
+            verifier_signing_config,
+            &self.bytecode_verifier_metrics,
+            &self.execution_metrics,
+        )
+    }
+}
+
+impl<S: SimulatorStore + Send + Sync> SimulatorAccountFundsRead<'_, S> {
+    fn account_amount(
+        &self,
+        account_id: &AccumulatorObjId,
+        version: Option<SequenceNumber>,
+    ) -> u128 {
+        AccumulatorValue::load_by_id::<U128>(self.0, version, *account_id)
+            .expect("simulator accumulator reads must succeed")
+            .map(|value| value.value)
+            .unwrap_or(0)
+    }
+}
+
+impl<S: SimulatorStore + Send + Sync> AccountFundsRead for SimulatorAccountFundsRead<'_, S> {
+    fn get_latest_account_amount(&self, account_id: &AccumulatorObjId) -> u128 {
+        self.account_amount(account_id, None)
+    }
+
+    fn get_consistent_latest_account_amount_and_version(
+        &self,
+        account_id: &AccumulatorObjId,
+    ) -> (u128, SequenceNumber) {
+        let root_version = SimulatorStore::get_object(self.0, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .expect("simulator accumulator root must exist")
+            .version();
+        (
+            self.get_account_amount_at_version(account_id, root_version),
+            root_version,
+        )
+    }
+
+    fn get_account_amount_at_version(
+        &self,
+        account_id: &AccumulatorObjId,
+        version: SequenceNumber,
+    ) -> u128 {
+        self.account_amount(account_id, Some(version))
+    }
+}
+
+impl<S: SimulatorStore> SimulationInputLoader for SimulatorInputLoader<'_, S> {
+    fn read_objects_for_simulation(
+        &self,
+        transaction_digest: &TransactionDigest,
+        input_object_kinds: &[InputObjectKind],
+        receiving_object_refs: &[ObjectRef],
+        _epoch_id: EpochId,
+    ) -> SuiResult<(InputObjects, ReceivingObjects)> {
+        self.0.read_objects_for_synchronous_execution(
+            transaction_digest,
+            input_object_kinds,
+            receiving_object_refs,
+        )
     }
 }
