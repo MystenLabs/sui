@@ -2349,3 +2349,35 @@ async fn test_fake_coin_reservation_dev_inspect_safe_when_flag_disabled() {
         Err(e) => panic!("unexpected join error: {e:?}"),
     }
 }
+
+#[sim_test]
+async fn test_non_sui_coin_reservation_transfer() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let (_, coin_type) = test_env
+        .publish_and_mint_trusted_coin(sender, 10_000_000_000)
+        .await;
+    let reservation = test_env.encode_coin_reservation_for_type(sender, 0, 100, coin_type);
+
+    let (_, effects) = test_env
+        .transfer_coin_to_address_balance(
+            sender,
+            reservation,
+            SuiAddress::random_for_testing_only(),
+        )
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
+
+    test_env.cluster.trigger_reconfiguration().await;
+}

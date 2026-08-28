@@ -10,8 +10,8 @@ use crate::{
             resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
         },
         loading::ast::{
-            Command, DeserializedPackage, LoadedFunction, PackagePayload, Transaction, Type,
-            module_has_init,
+            Argument, Command, DeserializedPackage, InputType, Inputs, LoadedFunction,
+            PackagePayload, Transaction, Type, module_has_init,
         },
     },
 };
@@ -58,6 +58,14 @@ pub fn refine_to_single_linkage<E: ExecutionErrorTrait>(
     for (i, command) in txn.commands.iter().enumerate() {
         analyze_command::<E>(command, &mut base_linkage, package_store, protocol_config)
             .map_err(|e| e.with_command_index(i))?;
+        add_used_input_linkage::<E>(
+            command.arguments(),
+            &txn.inputs,
+            &mut base_linkage,
+            package_store,
+            protocol_config,
+        )
+        .map_err(|e| e.with_command_index(i))?;
     }
 
     if protocol_config.enable_order_independent_upgrade_init_linkage() {
@@ -108,6 +116,29 @@ pub fn refine_to_single_linkage<E: ExecutionErrorTrait>(
 
     txn.unified_linkage = Some(resolved_linkage);
 
+    Ok(())
+}
+
+fn add_used_input_linkage<'a, E: ExecutionErrorTrait>(
+    arguments: impl IntoIterator<Item = &'a Argument>,
+    inputs: &Inputs,
+    resolution_table: &mut ResolutionTable,
+    store: &VerifiedPackageStore<'_>,
+    protocol_config: &ProtocolConfig,
+) -> Result<(), E> {
+    if !protocol_config.harden_linkage_consistency() {
+        return Ok(());
+    }
+
+    for argument in arguments {
+        let Argument::Input(i) = argument else {
+            continue;
+        };
+        let Some((_, InputType::Fixed(ty))) = inputs.get(*i as usize) else {
+            continue;
+        };
+        add_type_packages::<E>(resolution_table, std::iter::once(ty), store)?;
+    }
     Ok(())
 }
 
