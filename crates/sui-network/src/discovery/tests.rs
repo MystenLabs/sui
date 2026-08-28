@@ -1421,9 +1421,10 @@ async fn test_discovery_address_cleared_on_expiry() -> Result<()> {
         NetworkPublicKey::from_bytes(&peer_id_2.0).expect("PeerId is a valid public key");
     event_loop
         .endpoint_manager
-        .update_endpoint(
+        .update_endpoint_versioned(
             EndpointId::Consensus(peer_2_network_pubkey.clone()),
             AddressSource::Discovery,
+            1,
             vec![consensus_addr],
         )
         .unwrap();
@@ -1547,9 +1548,10 @@ async fn test_seed_fallback_on_discovery_clear() -> Result<()> {
 
     // Set Discovery source (higher priority)
     endpoint_manager
-        .update_endpoint(
+        .update_endpoint_versioned(
             EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
             AddressSource::Discovery,
+            1,
             vec![discovery_addr.clone()],
         )
         .unwrap();

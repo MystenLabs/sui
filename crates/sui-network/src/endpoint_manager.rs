@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use lru::LruCache;
+use mysten_common::debug_fatal;
 use mysten_network::Multiaddr;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -57,12 +58,9 @@ impl<K: std::hash::Hash + Eq> LastSentCache<K> {
         }
     }
 
-    fn is_duplicate_or_stale(
-        &mut self,
-        key: &K,
-        version: Option<u64>,
-        addresses: &[Multiaddr],
-    ) -> bool {
+    /// Returns true if a non-empty update is a duplicate or stale and should
+    /// not be dispatched.
+    fn suppresses(&mut self, key: &K, version: Option<u64>, addresses: &[Multiaddr]) -> bool {
         let Some(cached) = self.entries.get_mut(key) else {
             return false;
         };
@@ -169,8 +167,9 @@ impl EndpointManager {
     /// `version` is not newer than the last accepted version for this
     /// (endpoint, source).
     ///
-    /// A source should be either consistently versioned or not. Today
-    /// `AddressSource::Discovery` is the only versioned source.
+    /// Non-empty updates must carry a version iff
+    /// [`AddressSource::is_versioned`]; clears
+    /// go through [`Self::update_endpoint`] regardless of source.
     pub fn update_endpoint_versioned(
         &self,
         endpoint: EndpointId,
@@ -188,6 +187,14 @@ impl EndpointManager {
         version: Option<u64>,
         addresses: Vec<Multiaddr>,
     ) -> SuiResult<()> {
+        if !addresses.is_empty() && version.is_some() != source.is_versioned() {
+            debug_fatal!(
+                "{:?} update must {}carry a version",
+                source,
+                if source.is_versioned() { "" } else { "not " }
+            );
+        }
+
         match endpoint {
             EndpointId::P2p(peer_id) => {
                 let key = (peer_id, source);
@@ -198,7 +205,7 @@ impl EndpointManager {
                     // addresses from known_peers_v2 behind this cache's back,
                     // so "already cleared" is never proof they're still gone.
                     last_sent.remove(&key);
-                } else if last_sent.is_duplicate_or_stale(&key, version, &addresses) {
+                } else if last_sent.suppresses(&key, version, &addresses) {
                     return Ok(());
                 }
 
@@ -281,7 +288,7 @@ fn deliver_consensus_update(
     addresses: Vec<Multiaddr>,
 ) -> SuiResult<()> {
     let key = (network_pubkey.clone(), source);
-    if !addresses.is_empty() && last_sent.is_duplicate_or_stale(&key, version, &addresses) {
+    if !addresses.is_empty() && last_sent.suppresses(&key, version, &addresses) {
         return Ok(());
     }
 
@@ -318,6 +325,18 @@ pub enum AddressSource {
 impl AddressSource {
     /// Reserved metric value for the "no override" state.
     pub const DEFAULT_ADDRESS_SOURCE_CODE: i64 = 0;
+
+    /// Whether non-empty updates from this source carry a monotonic version
+    /// (see [`EndpointManager::update_endpoint_versioned`]).
+    pub const fn is_versioned(self) -> bool {
+        match self {
+            AddressSource::Discovery => true,
+            AddressSource::Admin
+            | AddressSource::Config
+            | AddressSource::Seed
+            | AddressSource::Chain => false,
+        }
+    }
 
     /// Used as the value of the active-address-source metrics.
     pub const fn metric_code(self) -> i64 {
@@ -435,19 +454,24 @@ mod tests {
             .unwrap();
     }
 
-    /// Sends a Discovery-sourced consensus address update that must succeed.
+    /// Sends a versioned Discovery-sourced consensus address update that must
+    /// succeed. Empty `addresses` are sent as an unversioned clear.
     fn send_consensus_discovery_update(
         endpoint_manager: &EndpointManager,
         network_pubkey: &NetworkPublicKey,
+        version: u64,
         addresses: Vec<Multiaddr>,
     ) {
-        endpoint_manager
-            .update_endpoint(
-                EndpointId::Consensus(network_pubkey.clone()),
-                AddressSource::Discovery,
-                addresses,
-            )
-            .unwrap();
+        let endpoint = EndpointId::Consensus(network_pubkey.clone());
+        if addresses.is_empty() {
+            endpoint_manager
+                .update_endpoint(endpoint, AddressSource::Discovery, addresses)
+                .unwrap();
+        } else {
+            endpoint_manager
+                .update_endpoint_versioned(endpoint, AddressSource::Discovery, version, addresses)
+                .unwrap();
+        }
     }
 
     struct BlockingConsensusAddressUpdater {
@@ -483,32 +507,12 @@ mod tests {
         let address_a = vec!["/ip4/127.0.0.1/udp/9000".parse().unwrap()];
         let address_b = vec!["/ip4/127.0.0.1/udp/9001".parse().unwrap()];
 
-        send_p2p_update(
-            &endpoint_manager,
-            peer_id,
-            AddressSource::Discovery,
-            address_a.clone(),
-        );
-        send_p2p_update(
-            &endpoint_manager,
-            peer_id,
-            AddressSource::Discovery,
-            address_a.clone(),
-        );
+        send_p2p_versioned(&endpoint_manager, peer_id, 1, address_a.clone());
+        send_p2p_versioned(&endpoint_manager, peer_id, 2, address_a.clone());
         assert_eq!(mailbox.len(), 1);
 
-        send_p2p_update(
-            &endpoint_manager,
-            peer_id,
-            AddressSource::Discovery,
-            address_b,
-        );
-        send_p2p_update(
-            &endpoint_manager,
-            peer_id,
-            AddressSource::Discovery,
-            address_a.clone(),
-        );
+        send_p2p_versioned(&endpoint_manager, peer_id, 3, address_b);
+        send_p2p_versioned(&endpoint_manager, peer_id, 4, address_a.clone());
         endpoint_manager
             .update_endpoint(EndpointId::P2p(peer_id), AddressSource::Chain, address_a)
             .unwrap();
@@ -554,18 +558,8 @@ mod tests {
         // survives, so the identical follow-up is still deduplicated.
         let peer_id = anemo::PeerId([255; 32]);
         let addresses = vec!["/ip4/127.0.0.1/udp/9001".parse().unwrap()];
-        send_p2p_update(
-            &endpoint_manager,
-            peer_id,
-            AddressSource::Discovery,
-            addresses.clone(),
-        );
-        send_p2p_update(
-            &endpoint_manager,
-            peer_id,
-            AddressSource::Discovery,
-            addresses,
-        );
+        send_p2p_versioned(&endpoint_manager, peer_id, 1, addresses.clone());
+        send_p2p_versioned(&endpoint_manager, peer_id, 2, addresses);
 
         assert_eq!(mailbox.len(), 1);
         let last_sent = endpoint_manager.inner.last_sent_p2p.lock().unwrap();
@@ -761,12 +755,17 @@ mod tests {
         let address_a = vec!["/ip4/127.0.0.1/udp/9000".parse().unwrap()];
         let address_b = vec!["/ip4/127.0.0.1/udp/9001".parse().unwrap()];
 
-        for _ in 0..3 {
-            send_consensus_discovery_update(&endpoint_manager, network_pubkey, address_a.clone());
+        for version in 1..=3 {
+            send_consensus_discovery_update(
+                &endpoint_manager,
+                network_pubkey,
+                version,
+                address_a.clone(),
+            );
         }
-        send_consensus_discovery_update(&endpoint_manager, network_pubkey, address_b);
+        send_consensus_discovery_update(&endpoint_manager, network_pubkey, 4, address_b);
         for _ in 0..2 {
-            send_consensus_discovery_update(&endpoint_manager, network_pubkey, vec![]);
+            send_consensus_discovery_update(&endpoint_manager, network_pubkey, 0, vec![]);
         }
 
         assert_eq!(updates.lock().unwrap().len(), 4);
@@ -781,11 +780,11 @@ mod tests {
         let (_, network_key): (_, NetworkKeyPair) = get_key_pair();
         let network_pubkey = network_key.public();
         let addresses = vec!["/ip4/127.0.0.1/udp/9000".parse().unwrap()];
-        send_consensus_discovery_update(&endpoint_manager, network_pubkey, addresses.clone());
+        send_consensus_discovery_update(&endpoint_manager, network_pubkey, 1, addresses.clone());
 
         let (replacement, replacement_updates) = MockConsensusAddressUpdater::new();
         endpoint_manager.set_consensus_address_updater(Arc::new(replacement));
-        send_consensus_discovery_update(&endpoint_manager, network_pubkey, addresses);
+        send_consensus_discovery_update(&endpoint_manager, network_pubkey, 1, addresses);
 
         assert_eq!(first_updates.lock().unwrap().len(), 1);
         assert_eq!(replacement_updates.lock().unwrap().len(), 1);
@@ -801,9 +800,10 @@ mod tests {
         let addresses = vec!["/ip4/127.0.0.1/udp/9000".parse().unwrap()];
 
         // Should succeed (buffered) even without an updater set.
-        let result = endpoint_manager.update_endpoint(
+        let result = endpoint_manager.update_endpoint_versioned(
             EndpointId::Consensus(network_pubkey.clone()),
             AddressSource::Discovery,
+            1,
             addresses.clone(),
         );
         assert!(result.is_ok());
@@ -812,7 +812,7 @@ mod tests {
         let (mock_updater, updates) = MockConsensusAddressUpdater::new();
         endpoint_manager.set_consensus_address_updater(Arc::new(mock_updater));
 
-        send_consensus_discovery_update(&endpoint_manager, network_pubkey, addresses.clone());
+        send_consensus_discovery_update(&endpoint_manager, network_pubkey, 2, addresses.clone());
 
         let recorded_updates = updates.lock().unwrap();
         assert_eq!(recorded_updates.len(), 1);
@@ -827,8 +827,13 @@ mod tests {
         let network_pubkey = network_key.public();
         let addresses = vec!["/ip4/127.0.0.1/udp/9000".parse().unwrap()];
 
-        for _ in 0..3 {
-            send_consensus_discovery_update(&endpoint_manager, network_pubkey, addresses.clone());
+        for version in 1..=3 {
+            send_consensus_discovery_update(
+                &endpoint_manager,
+                network_pubkey,
+                version,
+                addresses.clone(),
+            );
         }
 
         let (updater, updates) = MockConsensusAddressUpdater::new();
@@ -847,19 +852,20 @@ mod tests {
         let address_a = vec!["/ip4/127.0.0.1/udp/9000".parse().unwrap()];
         let address_b = vec!["/ip4/127.0.0.1/udp/9001".parse().unwrap()];
 
-        send_consensus_discovery_update(&endpoint_manager, network_pubkey, address_a.clone());
+        send_consensus_discovery_update(&endpoint_manager, network_pubkey, 1, address_a.clone());
         fail.store(true, Ordering::SeqCst);
         assert!(
             endpoint_manager
-                .update_endpoint(
+                .update_endpoint_versioned(
                     EndpointId::Consensus(network_pubkey.clone()),
                     AddressSource::Discovery,
+                    2,
                     address_b,
                 )
                 .is_err()
         );
         fail.store(false, Ordering::SeqCst);
-        send_consensus_discovery_update(&endpoint_manager, network_pubkey, address_a);
+        send_consensus_discovery_update(&endpoint_manager, network_pubkey, 3, address_a);
 
         assert_eq!(updates.lock().unwrap().len(), 3);
     }
@@ -877,9 +883,10 @@ mod tests {
         for _ in 0..2 {
             assert!(
                 endpoint_manager
-                    .update_endpoint(
+                    .update_endpoint_versioned(
                         EndpointId::Consensus(network_pubkey.clone()),
                         AddressSource::Discovery,
+                        1,
                         addresses.clone(),
                     )
                     .is_err()
@@ -909,9 +916,10 @@ mod tests {
         let update_addresses = addresses.clone();
         let update_thread = std::thread::spawn(move || {
             update_manager
-                .update_endpoint(
+                .update_endpoint_versioned(
                     EndpointId::Consensus(update_pubkey),
                     AddressSource::Discovery,
+                    1,
                     update_addresses,
                 )
                 .unwrap();
@@ -933,7 +941,7 @@ mod tests {
         release_tx.send(()).unwrap();
         update_thread.join().unwrap();
         setter_thread.join().unwrap();
-        send_consensus_discovery_update(&endpoint_manager, network_pubkey, addresses);
+        send_consensus_discovery_update(&endpoint_manager, network_pubkey, 1, addresses);
 
         assert_eq!(old_updates.lock().unwrap().len(), 1);
         assert_eq!(replacement_updates.lock().unwrap().len(), 1);
@@ -952,9 +960,10 @@ mod tests {
         for _ in 0..num_buffered {
             let (_, network_key): (_, NetworkKeyPair) = get_key_pair();
             endpoint_manager
-                .update_endpoint(
+                .update_endpoint_versioned(
                     EndpointId::Consensus(network_key.public().clone()),
                     AddressSource::Discovery,
+                    1,
                     vec!["/ip4/127.0.0.1/udp/9000".parse().unwrap()],
                 )
                 .unwrap();
@@ -976,9 +985,10 @@ mod tests {
                 if i % 2 == 0 {
                     std::thread::yield_now();
                 }
-                em.update_endpoint(
+                em.update_endpoint_versioned(
                     EndpointId::Consensus(pubkey),
                     AddressSource::Discovery,
+                    1,
                     vec!["/ip4/127.0.0.1/udp/9000".parse().unwrap()],
                 )
                 .unwrap();
