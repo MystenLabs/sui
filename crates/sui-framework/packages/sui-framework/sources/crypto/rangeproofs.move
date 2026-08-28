@@ -28,7 +28,7 @@ const MAX_DST_LENGTH: u64 = 64;
 ///
 /// The `commitments` are Pedersen commitments to the values used in the proof.
 /// The number of commitments must be a power of two, but if needed, the input to the prover can be padded with trivial commitments to zero.
-/// The number of commitments times `bits` can be at most 512.
+/// The number of commitments times `bits` can be at most 1024.
 ///
 /// The `dst` is a domain separation tag that is bound into the proof transcript. Provers and
 /// verifiers must agree on the same `dst` for verification to succeed. It can be at most 64 bytes.

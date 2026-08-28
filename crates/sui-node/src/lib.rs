@@ -500,6 +500,10 @@ impl SuiNode {
         // Initialize metrics to track db usage before creating any stores
         DBMetrics::init(registry_service.clone());
 
+        // Build the Bulletproofs generators up front, so that the first range proof verification
+        // does not pay for it.
+        fastcrypto::bulletproofs::initialize_generators();
+
         // Initialize db sync-to-disk setting from config (falls back to env var if not set)
         typed_store::init_write_sync(config.enable_db_sync_to_disk);
 
