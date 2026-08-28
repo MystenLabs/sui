@@ -35,6 +35,7 @@ use move_binary_format::{
 use move_core_types::{
     identifier::Identifier, language_storage::ModuleId, resolver::IntraPackageName,
 };
+use move_vm_config::runtime::VMConfig;
 
 use indexmap::IndexMap;
 use tracing::instrument;
@@ -213,8 +214,9 @@ impl FunctionContext<'_, '_> {
 
 #[instrument(level = "trace", skip_all)]
 pub fn package(
-    natives: &NativeFunctions,
+    vm_config: &VMConfig,
     interner: &IdentifierInterner,
+    natives: &NativeFunctions,
     system_packages: &BTreeMap<OriginalId, Arc<CachedPackage>>,
     verified_package: input::Package,
 ) -> PartialVMResult<Package> {
@@ -263,7 +265,7 @@ pub fn package(
         version_id,
         original_id,
         loaded_modules: IndexMap::new(),
-        package_arena: ArenaBuilder::new_bounded(),
+        package_arena: ArenaBuilder::new_bounded(vm_config),
         vtable_funs: DefinitionMap::empty(),
         vtable_types: DefinitionMap::empty(),
         type_origin_table,

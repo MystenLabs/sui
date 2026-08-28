@@ -642,7 +642,7 @@ fn test_vm_config(switch_to_regex_reference_safety: bool) -> VMConfig {
             ..VerifierConfig::default()
         },
 
-        ..VMConfig::default()
+        ..VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None)
     }
 }
 

@@ -387,6 +387,7 @@ const MAINNET_USDB: &str =
 //              Enable allowed_proposers on devnet.
 //              Add limits for references used by programmable transactions.
 //              Add additional linkage invariant hardening/invariant checks in PTBs.
+//              Add package_arena_size_in_bytes.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1579,6 +1580,10 @@ pub struct ProtocolConfig {
 
     /// Maximum depth of a Move value within the VM.
     max_move_value_depth: Option<u64>,
+
+    /// Maximum number of bytes a single package's arena may allocate when the package is loaded
+    /// into the VM. If unset, the VM uses its built-in default.
+    package_arena_size_in_bytes: Option<u64>,
 
     /// Maximum number of variants in an enum. Enforced by the bytecode verifier at signing.
     max_move_enum_variants: Option<u64>,
@@ -2941,6 +2946,7 @@ impl ProtocolConfig {
             // Limits the length of a Move identifier
             max_move_identifier_len: None,
             max_move_value_depth: None,
+            package_arena_size_in_bytes: None,
             max_move_enum_variants: None,
 
             gas_rounding_step: None,
@@ -4678,6 +4684,8 @@ impl ProtocolConfig {
                         cfg.feature_flags.allowed_proposers = true;
                     }
                     cfg.feature_flags.harden_linkage_consistency = true;
+
+                    cfg.package_arena_size_in_bytes = Some(10_000_000);
                 }
                 // Use this template when making changes:
                 //
