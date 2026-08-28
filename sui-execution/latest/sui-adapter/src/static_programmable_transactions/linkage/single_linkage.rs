@@ -10,7 +10,7 @@ use crate::{
             resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
         },
         loading::ast::{
-            Argument, Command, DeserializedPackage, InputType, Inputs, LoadedFunction,
+            Argument, Command, DeserializedPackage, InputArg, InputType, Inputs, LoadedFunction,
             PackagePayload, Transaction, Type, module_has_init,
         },
     },
@@ -67,6 +67,13 @@ pub fn refine_to_single_linkage<E: ExecutionErrorTrait>(
         )
         .map_err(|e| e.with_command_index(i))?;
     }
+
+    add_withdrawal_compatibility_input_linkage::<E>(
+        &txn.inputs,
+        &mut base_linkage,
+        package_store,
+        protocol_config,
+    )?;
 
     if protocol_config.enable_order_independent_upgrade_init_linkage() {
         for (i, command) in txn.commands.iter().enumerate() {
@@ -131,15 +138,39 @@ fn add_used_input_linkage<'a, E: ExecutionErrorTrait>(
     }
 
     for argument in arguments {
-        let Argument::Input(i) = argument else {
-            continue;
-        };
-        let Some((_, InputType::Fixed(ty))) = inputs.get(*i as usize) else {
-            continue;
-        };
-        add_type_packages::<E>(resolution_table, std::iter::once(ty), store)?;
+        if let Argument::Input(i) = argument
+            && let Some((_, InputType::Fixed(ty))) = inputs.get(*i as usize)
+        {
+            add_type_packages::<E>(resolution_table, std::iter::once(ty), store)?;
+        }
     }
     Ok(())
+}
+
+fn add_withdrawal_compatibility_input_linkage<E: ExecutionErrorTrait>(
+    inputs: &Inputs,
+    resolution_table: &mut ResolutionTable,
+    store: &VerifiedPackageStore<'_>,
+    protocol_config: &ProtocolConfig,
+) -> Result<(), E> {
+    if !protocol_config.harden_linkage_consistency() {
+        return Ok(());
+    }
+
+    add_type_packages::<E>(
+        resolution_table,
+        inputs.iter().filter_map(|(input_arg, input_ty)| {
+            if let InputArg::FundsWithdrawal(withdrawal) = input_arg
+                && withdrawal.from_compatibility_object
+                && let InputType::Fixed(ty) = input_ty
+            {
+                Some(ty)
+            } else {
+                None
+            }
+        }),
+        store,
+    )
 }
 
 /// A publish or upgrade that runs an `init` executes it under the linkage declared by that command
