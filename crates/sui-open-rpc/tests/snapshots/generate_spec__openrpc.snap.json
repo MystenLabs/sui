@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "136",
+              "maxSupportedProtocolVersion": "137",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1839,6 +1839,7 @@
                 "max_basic_blocks": {
                   "u64": "1024"
                 },
+                "max_bulletproofs_total_bits": null,
                 "max_checkpoint_size_bytes": {
                   "u64": "31457280"
                 },
