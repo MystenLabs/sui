@@ -12,22 +12,22 @@
 //! deadlock-free (see the design comment in `execution_driver.rs`).
 //!
 //! Index lifecycle. [`CausalWindow::assign`] hands out the next index wrapped in a
-//! [`CausalIndexGuard`]. The guard travels with the unit; cloning it shares the index
-//! among all transactions materialized from one key (a group). The index is *done* when
-//! the last guard clone drops - whether because every transaction of the group finished
-//! executing, or because the unit was dropped without executing (already executed,
-//! wrong epoch, epoch ended, scheduling skipped). This makes retirement structural:
-//! there is no code path that can leak an index without leaking the guard itself, and a
-//! leaked index would permanently stall the watermark.
+//! [`CausalIndexGuard`], which travels with the unit inside its `ExecutionEnv`.
+//! Cloning the env (and with it the guard) shares the index among all transactions
+//! materialized from one key (a group). The index is *done* when the last guard clone
+//! drops - whether because every transaction of the group finished executing (the env
+//! is consumed at the end of execution), or because the unit was dropped without
+//! executing (already executed, wrong epoch, epoch ended, scheduling skipped). This
+//! makes retirement structural: there is no code path that can leak an index without
+//! leaking the guard itself, and a leaked index would permanently stall the watermark.
 //!
 //! One rule must hold for assignment: a unit that other, already-indexed units may wait
 //! on must never be re-assigned a *new, higher* index (its waiters would be parked
 //! below it, and the admission window never reaches far above a parked index). Units
-//! that will execute later keep their original guard; only units that are truly done
-//! may drop it.
+//! that will execute later keep their original guard - a retry path clones the env
+//! before execution finishes; only units that are truly done may drop it.
 
 use std::{
-    cell::RefCell,
     collections::BTreeSet,
     sync::{
         Arc, Mutex,
@@ -213,48 +213,6 @@ impl Drop for InFlightSlot {
     }
 }
 
-thread_local! {
-    /// The causal guard of the transaction currently executing on this thread. Lets
-    /// deep-in-execution code that defers the transaction for a later retry (the object
-    /// funds checker) carry the original index into the retry instead of the retry
-    /// being re-assigned a new, higher one - see the assignment rule in the module
-    /// comment.
-    static EXECUTING_GUARD: RefCell<Option<CausalIndexGuard>> = const { RefCell::new(None) };
-}
-
-/// Installs the executing transaction's guard on the current thread for the duration of
-/// execution. The driver holds the returned slot and takes the guard back afterwards;
-/// if execution scheduled a retry, the guard has been taken by
-/// [`take_guard_for_retry`] and `take_back` returns None.
-pub fn install_executing_guard(guard: CausalIndexGuard) -> ExecutingGuardSlot {
-    EXECUTING_GUARD.with(|slot| {
-        let prev = slot.borrow_mut().replace(guard);
-        assert!(prev.is_none(), "executing guard already installed");
-    });
-    ExecutingGuardSlot(())
-}
-
-/// Takes the executing transaction's guard for a retry re-enqueue. Returns None when
-/// execution is not running under the driver (direct test callers).
-pub fn take_guard_for_retry() -> Option<CausalIndexGuard> {
-    EXECUTING_GUARD.with(|slot| slot.borrow_mut().take())
-}
-
-pub struct ExecutingGuardSlot(());
-
-impl ExecutingGuardSlot {
-    pub fn take_back(self) -> Option<CausalIndexGuard> {
-        EXECUTING_GUARD.with(|slot| slot.borrow_mut().take())
-    }
-}
-
-impl Drop for ExecutingGuardSlot {
-    fn drop(&mut self) {
-        // Clear the slot if take_back was skipped, so the thread can be reused.
-        EXECUTING_GUARD.with(|slot| slot.borrow_mut().take());
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -351,27 +309,5 @@ mod tests {
         drop(g1);
         assert_eq!(window.watermark_for_testing(), 1);
         assert!(window.try_admit(g2.index()).is_some());
-    }
-
-    #[test]
-    fn retry_guard_handoff() {
-        let window = CausalWindow::new(2, 8);
-        let g1 = window.assign();
-        let g2 = window.assign();
-
-        // Execution that does not retry: the driver takes the guard back.
-        let slot = install_executing_guard(g1);
-        let g1 = slot.take_back().expect("guard not taken");
-        drop(g1);
-        assert_eq!(window.watermark_for_testing(), 1);
-
-        // Execution that schedules a retry: the retry path takes the guard, keeping
-        // the index alive after the driver's take_back.
-        let slot = install_executing_guard(g2);
-        let retry_guard = take_guard_for_retry().expect("guard installed");
-        assert!(slot.take_back().is_none());
-        assert_eq!(window.watermark_for_testing(), 1);
-        drop(retry_guard);
-        assert_eq!(window.watermark_for_testing(), 2);
     }
 }

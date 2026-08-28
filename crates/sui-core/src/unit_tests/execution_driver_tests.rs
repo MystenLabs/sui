@@ -19,6 +19,7 @@ use crate::test_utils::{make_transfer_object_move_transaction, make_transfer_obj
 use crate::unit_test_utils::{
     init_local_authorities, init_local_authorities_with_overload_thresholds,
 };
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_protocol_config::ProtocolConfig;
 
 use sui_types::error::SuiErrorKind;
@@ -499,7 +500,7 @@ async fn test_execution_with_dependencies() {
             &authorities[3].epoch_store_for_testing(),
         );
     }
-    for (owned, (shared, env)) in owned_iter.zip(executables_with_env.iter()) {
+    for (owned, (shared, env)) in owned_iter.zip_debug_eq(executables_with_env.iter()) {
         authorities[3].execution_scheduler().enqueue(
             vec![(owned.clone().into(), ExecutionEnv::new())],
             &authorities[3].epoch_store_for_testing(),
