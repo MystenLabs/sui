@@ -198,16 +198,19 @@ where
             function.to_string(),
             type_arguments,
         )?;
-        if let Some(unified_linkage) = unified_linkage {
+        if self.protocol_config.harden_linkage_consistency() {
+            let Some(unified_linkage) = unified_linkage else {
+                invariant_violation!(
+                    "Unified linkage is required when hardened linkage consistency is enabled"
+                )
+            };
             assert_invariant!(
                 loaded
                     .linkage
                     .0
                     .linkage
-                    .iter()
-                    .all(|(original_id, version_id)| {
-                        unified_linkage.0.linkage.get(original_id) == Some(version_id)
-                    }),
+                    .keys()
+                    .all(|original_id| unified_linkage.0.linkage.contains_key(original_id)),
                 "transaction linkage drops a package resolved by a framework MoveCall"
             );
             loaded.linkage = unified_linkage.clone();
