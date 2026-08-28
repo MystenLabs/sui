@@ -58,6 +58,7 @@ mod transaction_input_loader;
 pub mod transaction_orchestrator;
 mod transaction_outputs;
 mod transaction_signing_filter;
+mod transaction_simulation;
 pub mod validator_client_monitor;
 
 #[cfg(test)]
