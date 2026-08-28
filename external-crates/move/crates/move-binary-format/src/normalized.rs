@@ -437,11 +437,8 @@ impl<S> Type<S> {
             T::I8 | T::I16 | T::I32 | T::I64 | T::I128 | T::I256 => return None,
             T::Address => TypeTag::Address,
             T::Signer => TypeTag::Signer,
-            T::Vector(t) => TypeTag::Vector(Box::new(
-                t.to_type_tag(pool)
-                    .expect("Invariant violation: vector type argument contains reference"),
-            )),
-            T::Datatype(dt) => TypeTag::Struct(Box::new(dt.to_struct_tag(pool))),
+            T::Vector(t) => TypeTag::Vector(Box::new(t.to_type_tag(pool)?)),
+            T::Datatype(dt) => TypeTag::Struct(Box::new(dt.to_struct_tag(pool)?)),
             T::TypeParameter(_) => unreachable!(),
         })
     }
@@ -562,24 +559,23 @@ impl<S> Datatype<S> {
         }
     }
 
-    pub fn to_struct_tag<Pool: StringPool<String = S>>(&self, pool: &Pool) -> StructTag {
+    /// Returns `None` when any type argument has no `TypeTag` representation, e.g. a
+    /// reference.
+    pub fn to_struct_tag<Pool: StringPool<String = S>>(&self, pool: &Pool) -> Option<StructTag> {
         let Datatype {
             module,
             name,
             type_arguments,
         } = self;
-        StructTag {
+        Some(StructTag {
             address: module.address,
             module: pool.as_ident_str(&module.name).to_owned(),
             name: pool.as_ident_str(name).to_owned(),
             type_params: type_arguments
                 .iter()
-                .map(|t| {
-                    t.to_type_tag(pool)
-                        .expect("Invariant violation: struct type argument contains reference")
-                })
-                .collect(),
-        }
+                .map(|t| t.to_type_tag(pool))
+                .collect::<Option<Vec<_>>>()?,
+        })
     }
 
     pub fn from_struct_tag<Pool: StringPool<String = S>>(pool: &mut Pool, tag: &StructTag) -> Self {
