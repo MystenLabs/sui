@@ -1,17 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Recover Move 2024 match guards (`pattern if (cond) => body`) from their compiled shape.
-//!
-//! A guarded arm is compiled as:
-//!
-//!   * a variant tag dispatch;
-//!   * pattern field binding, by reference;
-//!   * guard evaluation, with a fallthrough on failure.
-//!
-//! After structuring, this reads as an arm whose body is an `if` with by-value unpacking
-//! after the test in both branches. This refinement recognizes that pattern and puts the
-//! guard back together:
+//! Recover Move 2024 match guards (`pattern if (cond) => body`), compiled away as an `if`
+//! in the arm body:
 //!
 //! ```text
 //! Market { qty: reg_4 } => {
@@ -27,19 +18,11 @@
 //! Market { qty: reg_4 } => { let Order::Market { qty: reg_13 } = l4; ...B... }
 //! ```
 //!
-//! The same-variant by-value unpack is our discriminator: a source-level `if` never
-//! generates one, a compiled guard must. Else-if chains split into further guarded arms;
-//! the final else becomes the unguarded fallback.
-//!
-//! Translation may alias a binding before the test (`let l5 = reg_6; if (*l5 > 10)`). The
-//! alias folds away at split time: a guard is a bare expression, so the `let` cannot
-//! survive the split.
-//!
-//! Recovery declines on fieldless arm patterns (recovery keys on pattern bindings, though
-//! compiled fieldless guards do re-unpack, so this is recoverable future work), on
-//! by-reference guarded matches whose failure paths abort (no branch re-unpacks), and when
-//! the tail reassigns an alias local, whose `let` the split would delete. Declined arms
-//! keep the `if`-in-arm shape.
+//! The same-variant by-value re-unpack is the discriminator: a source-level `if` never
+//! generates one, a compiled guard must. Else-if chains split into a guarded arm per
+//! level; the final else is the unguarded fallback. Alias `let`s staged before the test
+//! substitute away. Fieldless patterns, tails without the re-unpack, and reassigned
+//! aliases decline, keeping the `if`-in-arm shape.
 
 use crate::{
     ast::{Exp, MatchArm},
