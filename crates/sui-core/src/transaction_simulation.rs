@@ -13,7 +13,7 @@ use sui_config::{
 use sui_execution::Executor;
 use sui_transaction_checks::{check_dev_inspect_input, check_transaction_input};
 use sui_types::{
-    base_types::{EpochId, ObjectID},
+    base_types::{EpochId, ObjectID, ObjectRef},
     coin_reservation::{CoinReservationResolverTrait, ParsedDigest},
     digests::{ChainIdentifier, TransactionDigest},
     effects::TransactionEffectsAPI,
@@ -28,7 +28,10 @@ use sui_types::{
     storage::{
         BackingPackageStore, BackingStore, TrackingBackingStore, get_transaction_object_set,
     },
-    transaction::{ObjectReadResult, TransactionData, TransactionDataAPI, TxValidityCheckContext},
+    transaction::{
+        InputObjectKind, InputObjects, ObjectReadResult, ReceivingObjects, TransactionData,
+        TransactionDataAPI, TxValidityCheckContext,
+    },
     transaction_executor::{SimulateTransactionResult, TransactionChecks},
 };
 
@@ -38,11 +41,23 @@ use crate::{
         transaction_rewriting::rewrite_transaction_for_coin_reservations,
     },
     authority::{DEV_INSPECT_GAS_COIN_VALUE, pre_object_load_checks},
-    transaction_input_loader::TransactionInputLoader,
     transaction_outputs::unchanged_loaded_runtime_objects,
 };
 
-pub(crate) fn simulate_transaction(
+/// Load transaction inputs for simulation without preparing them for committed execution.
+pub trait SimulationInputLoader {
+    /// Load the input and receiving objects at the state used for simulation.
+    fn read_objects_for_simulation(
+        &self,
+        transaction_digest: &TransactionDigest,
+        input_object_kinds: &[InputObjectKind],
+        receiving_object_refs: &[ObjectRef],
+        epoch_id: EpochId,
+    ) -> SuiResult<(InputObjects, ReceivingObjects)>;
+}
+
+/// Simulate a transaction without committing its outputs.
+pub fn simulate_transaction(
     mut transaction: TransactionData,
     checks: TransactionChecks,
     allow_mock_gas_coin: bool,
@@ -53,7 +68,7 @@ pub(crate) fn simulate_transaction(
     chain_identifier: ChainIdentifier,
     transaction_deny_config: &TransactionDenyConfig,
     certificate_deny_set: &HashSet<TransactionDigest>,
-    input_loader: &TransactionInputLoader,
+    input_loader: &dyn SimulationInputLoader,
     backing_store: &(dyn BackingStore + Send + Sync),
     backing_package_store: &(dyn BackingPackageStore + Send + Sync),
     executor: &(dyn Executor + Send + Sync),
@@ -129,9 +144,9 @@ pub(crate) fn simulate_transaction(
     )?;
     let address_funds: BTreeSet<_> = declared_withdrawals.keys().cloned().collect();
 
-    let (mut input_objects, receiving_objects) = input_loader.read_objects_for_signing(
-        // We don't want to cache this transaction since it's a simulation.
-        None,
+    let transaction_digest = transaction.digest();
+    let (mut input_objects, receiving_objects) = input_loader.read_objects_for_simulation(
+        &transaction_digest,
         &input_object_kinds,
         &receiving_object_refs,
         validity_check_context.epoch,
@@ -191,7 +206,7 @@ pub(crate) fn simulate_transaction(
     let cloned_input_objects = checked_input_objects.clone();
     let cloned_gas = gas_data.clone();
     let cloned_kind = kind.clone();
-    let tx_digest = transaction.digest();
+    let tx_digest = transaction_digest;
     let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
         &tracking_store,
         protocol_config,
