@@ -75,9 +75,8 @@ struct LoopFrame {
     head_env: Env,
 }
 
-/// A statement that binds names: which names, whether they are initialized at the binder,
-/// and the right-hand side evaluated before the binding takes effect. `names` and `fields`
-/// are the two shapes a binder's names come in; one is always empty.
+/// A name-binding statement; its `rhs` is evaluated before the bindings take effect. One of
+/// `names`/`fields` is always empty.
 struct Binder<'a> {
     names: &'a [String],
     fields: &'a [(Symbol, String)],
@@ -174,8 +173,8 @@ impl Env {
         }
     }
 
-    /// Set `name`'s raw entry. Default entries are removed, keeping the map canonical so
-    /// the loop fixpoint's equality check cannot see two forms of the same fact.
+    /// Set `name`'s raw entry, removing it when default: the loop fixpoint's equality
+    /// check needs a canonical map.
     fn set(&mut self, name: &str, u: Use) {
         if u == Use::default() {
             self.uses.remove(name);
@@ -184,7 +183,7 @@ impl Env {
         }
     }
 
-    /// Remove `name`'s raw entry (crossing its binder, or masking a shadowed region).
+    /// Remove `name`'s raw entry.
     fn kill(&mut self, name: &str) {
         self.uses.remove(name);
     }
@@ -222,8 +221,8 @@ impl<'a> Binder<'a> {
 
 impl Context {
     /// Record which of `names`, bound at `(node, arm_idx)`, the incoming fact forces `mut`.
-    /// Code inside a loop records once per fixpoint pass; the fact only grows between
-    /// passes, so earlier passes record a subset of the last.
+    /// Under a loop this re-runs per fixpoint pass; earlier passes record a subset of the
+    /// last.
     fn record<'a>(
         &mut self,
         node: &Exp,
@@ -307,8 +306,7 @@ fn exp_env(context: &mut Context, exp: &Exp, mut env: Env) -> Env {
     use Exp as E;
     match exp {
         E::Variable(_) | E::Value(_) | E::Constant(_) | E::Declare(_) => env,
-        // A jump discards the incoming fact for its target's: the loop's exit for `break`,
-        // its head for `continue`.
+        // A jump discards the incoming fact for its target's.
         E::Break(label) => match context.find_loop(*label) {
             Some(frame) => frame.break_env.clone(),
             None => orphan_jump_env(),
@@ -317,10 +315,16 @@ fn exp_env(context: &mut Context, exp: &Exp, mut env: Env) -> Env {
             Some(frame) => frame.head_env.clone(),
             None => orphan_jump_env(),
         },
-        E::Return(items) => seq_backward(context, items, Env::default()),
+        E::Return(items) => {
+            let mut env = Env::default();
+            for item in items.iter().rev() {
+                env = exp_env(context, item, env);
+            }
+            env
+        }
         E::Abort(e) => exp_env(context, e, Env::default()),
-        // Binding, not assignment: only the right-hand side can mutate an outer name.
-        // Statement-position binders (with their shadowing) go through `stmt_env`.
+        // Binding, not assignment: only the right-hand side can mutate an outer name;
+        // statement-position binders go through `stmt_env`.
         E::LetBind(_, rhs)
         | E::VecUnpack(_, rhs)
         | E::Unpack(_, _, rhs)
@@ -370,10 +374,14 @@ fn exp_env(context: &mut Context, exp: &Exp, mut env: Env) -> Env {
             exp_env(context, subject, joined.unwrap_or(env))
         }
         E::Call(_, items) | E::Primitive { args: items, .. } | E::Data { args: items, .. } => {
-            seq_backward(context, items, env)
+            let mut env = env;
+            for item in items.iter().rev() {
+                env = exp_env(context, item, env);
+            }
+            env
         }
-        // Unmodeled goto control flow: poison the fact so every name reads as fully used,
-        // and walk the bodies so binders inside them still get (all-`mut`) records.
+        // Unmodeled goto flow: poison the fact; the bodies still walk so binders inside
+        // them get records.
         E::Unstructured(nodes) => {
             let mut env = Env::poisoned();
             for node in nodes.iter().rev() {
@@ -389,43 +397,8 @@ fn exp_env(context: &mut Context, exp: &Exp, mut env: Env) -> Env {
     }
 }
 
-/// The fact for a jump with no enclosing frame. Loud where `liveness`'s `find_loop` shrugs:
-/// structuring never emits an orphan jump.
-fn orphan_jump_env() -> Env {
-    debug_assert!(false, "jump outside its loop");
-    Env::poisoned()
-}
-
-/// Expressions evaluated in sequence (call arguments and the like), walked backward.
-fn seq_backward(context: &mut Context, items: &[Exp], mut env: Env) -> Env {
-    for item in items.iter().rev() {
-        env = exp_env(context, item, env);
-    }
-    env
-}
-
-/// Join the walks of alternative scope bodies (`Switch`/`MatchLit` arms). `None` when there
-/// are no bodies.
-fn join_scopes<'a>(
-    context: &mut Context,
-    bodies: impl Iterator<Item = &'a Exp>,
-    after: &Env,
-) -> Option<Env> {
-    let mut joined: Option<Env> = None;
-    for body in bodies {
-        let env = scope_env(context, body, after.clone());
-        joined = Some(match joined {
-            Some(j) => j.join(env),
-            None => env,
-        });
-    }
-    joined
-}
-
-/// One `Match` arm backward. Pattern names shadow the guard and whole body: their entries
-/// are set aside for the walk, the pattern's `mut` needs read off the body-only fact, and
-/// the guard's pattern-name uses are discarded (the guard sees immutable references, so it
-/// never forces `mut`).
+/// One `Match` arm backward. Pattern names shadow the guard and whole body; the guard sees
+/// its bindings by immutable reference, so guard uses never force `mut`.
 fn match_arm_env(
     context: &mut Context,
     match_exp: &Exp,
@@ -460,7 +433,7 @@ fn match_arm_env(
 
 /// The fact at a loop's head, as the fixpoint over its back edge. Transfers are per-name
 /// independent and monotone on a chain of height four (assign count 0/1/2, then the borrow
-/// bit), so iteration terminates, as in `liveness::Builder::fixpoint_loop`.
+/// bit), so iteration terminates.
 fn loop_head_env(context: &mut Context, exp: &Exp, break_env: Env) -> Env {
     let (label, cond, body) = match exp {
         Exp::Loop(label, body) => (*label, None, body),
@@ -470,8 +443,8 @@ fn loop_head_env(context: &mut Context, exp: &Exp, break_env: Env) -> Env {
     let mut head = Env::default();
     loop {
         context.push_loop(label, break_env.clone(), head.clone());
-        // The body falls through to the back edge; a `while` also runs its condition
-        // (with the exit path joined in) every iteration.
+        // The body falls through to the back edge; a `while` re-runs its condition every
+        // iteration.
         let mut next = scope_env(context, body, head.clone());
         if let Some(cond) = cond {
             next = exp_env(context, cond, next.join(break_env.clone()));
@@ -482,6 +455,30 @@ fn loop_head_env(context: &mut Context, exp: &Exp, break_env: Env) -> Env {
         }
         head = next;
     }
+}
+
+/// Join the walks of alternative scope bodies (`Switch`/`MatchLit` arms). `None` when there
+/// are no bodies.
+fn join_scopes<'a>(
+    context: &mut Context,
+    bodies: impl Iterator<Item = &'a Exp>,
+    after: &Env,
+) -> Option<Env> {
+    let mut joined: Option<Env> = None;
+    for body in bodies {
+        let env = scope_env(context, body, after.clone());
+        joined = Some(match joined {
+            Some(j) => j.join(env),
+            None => env,
+        });
+    }
+    joined
+}
+
+/// A jump with no enclosing frame; structuring should never emit this.
+fn orphan_jump_env() -> Env {
+    debug_assert!(false, "jump outside its loop");
+    Env::poisoned()
 }
 
 // -------------------------------------------------------------------------------------------------
