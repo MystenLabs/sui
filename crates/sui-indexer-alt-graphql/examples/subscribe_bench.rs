@@ -22,10 +22,16 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-/// (live, backfill) query pair selected by the `QUERY_TYPE` env (tx | checkpoint | event | tx_prev).
+/// (live, backfill) query pair selected by the `QUERY_TYPE` env:
+///   min       - trivial digest only; isolates the scan/transport ceiling (no field resolution)
+///   tx / wide - realistic default: the common fields a typical consumer reads, incl. effects and
+///               `lamportVersion` (which exercises the V1-effects path over historical backfill)
+///   nested    - wide plus a connection fan-out (balanceChanges + events per tx)
+///   event     - events with sender/module
+///   checkpoint- whole-checkpoint delivery (backfill from genesis exercises `add_tombstones`/lamport)
+///   tx_prev   - heavy object descent (objectChanges → outputState → previousTransaction); throttle test
 /// The backfill query resumes after `BACKFILL_FROM` (env, default 0 = from genesis); set it to a
-/// recent checkpoint to measure a realistic small-gap resume (the `checkpoints` subscription backfills
-/// via gap-recovery, which a genesis-sized gap starves).
+/// recent checkpoint to measure a realistic small-gap resume.
 fn queries() -> (&'static str, &'static str) {
     let from: u64 = std::env::var("BACKFILL_FROM")
         .ok()
@@ -33,6 +39,12 @@ fn queries() -> (&'static str, &'static str) {
         .unwrap_or(0);
     let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
     match std::env::var("QUERY_TYPE").as_deref().unwrap_or("tx") {
+        "min" | "tx_min" => (
+            "subscription { transactions { cursor node { digest } } }",
+            leak(format!(
+                "subscription {{ transactions(filter: {{ afterCheckpoint: {from} }}) {{ cursor node {{ digest }} }} }}"
+            )),
+        ),
         "checkpoint" | "cp" => (
             "subscription { checkpoints { cursor node { sequenceNumber } } }",
             leak(format!(
@@ -40,31 +52,31 @@ fn queries() -> (&'static str, &'static str) {
             )),
         ),
         "event" | "ev" => (
-            "subscription { events { cursor node { sequenceNumber } } }",
+            "subscription { events { cursor node { sequenceNumber sender { address } transactionModule } } }",
             leak(format!(
-                "subscription {{ events(filter: {{ afterCheckpoint: {from} }}) {{ cursor node {{ sequenceNumber }} }} }}"
+                "subscription {{ events(filter: {{ afterCheckpoint: {from} }}) {{ cursor node {{ sequenceNumber sender {{ address }} transactionModule }} }} }}"
             )),
         ),
-        // Realistic: the common fields a typical consumer selects (digest + sender + effects status),
-        // moderate resolution cost, between the trivial digest and the heavy object descent.
-        "tx_realistic" | "realistic" => (
-            "subscription { transactions { cursor node { digest sender { address } effects { status } } } }",
+        "nested" | "tx_nested" => (
+            "subscription { transactions { cursor node { digest sender { address } effects { status lamportVersion checkpoint { sequenceNumber } balanceChanges { nodes { amount coinType } } events { nodes { sequenceNumber transactionModule } } } } } }",
             leak(format!(
-                "subscription {{ transactions(filter: {{ afterCheckpoint: {from} }}) {{ cursor node {{ digest sender {{ address }} effects {{ status }} }} }} }}"
+                "subscription {{ transactions(filter: {{ afterCheckpoint: {from} }}) {{ cursor node {{ digest sender {{ address }} effects {{ status lamportVersion checkpoint {{ sequenceNumber }} balanceChanges {{ nodes {{ amount coinType }} }} events {{ nodes {{ sequenceNumber transactionModule }} }} }} }} }} }}"
             )),
         ),
-        // Complex: descending into object contents (objectChanges → outputState → previousTransaction) forces
-        // a per-delivered-tx BatchGetObjects to the ledger (not in the scan payload). Exercises the resolution path.
+        // Heavy object descent: objectChanges → outputState → previousTransaction forces a per-tx
+        // object fetch. Reserved for the throttle/isolation scenario, not a primary load shape.
         "tx_prev" | "complex" => (
             "subscription { transactions { cursor node { digest effects { objectChanges { nodes { outputState { previousTransaction { digest } } } } } } } }",
             leak(format!(
                 "subscription {{ transactions(filter: {{ afterCheckpoint: {from} }}) {{ cursor node {{ digest effects {{ objectChanges {{ nodes {{ outputState {{ previousTransaction {{ digest }} }} }} }} }} }} }} }}"
             )),
         ),
+        // Realistic default (`tx`/`wide`): common client fields plus effects resolution, including
+        // `lamportVersion` so the historical V1-effects path is exercised on backfill.
         _ => (
-            "subscription { transactions { cursor node { digest } } }",
+            "subscription { transactions { cursor node { digest sender { address } gasInput { gasPrice gasBudget } effects { status timestamp lamportVersion epoch { epochId } checkpoint { sequenceNumber } } } } }",
             leak(format!(
-                "subscription {{ transactions(filter: {{ afterCheckpoint: {from} }}) {{ cursor node {{ digest }} }} }}"
+                "subscription {{ transactions(filter: {{ afterCheckpoint: {from} }}) {{ cursor node {{ digest sender {{ address }} gasInput {{ gasPrice gasBudget }} effects {{ status timestamp lamportVersion epoch {{ epochId }} checkpoint {{ sequenceNumber }} }} }} }} }}"
             )),
         ),
     }
