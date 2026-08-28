@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// We first transfer to a derived object before it is ever created,
+// then we claim the id and receive the item in the same tx.
+
 init:
 A: object(0,0)
 

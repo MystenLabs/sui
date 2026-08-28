@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 10 tasks
 
+// tests TransferObject should fail for an object _without_ public transfer
+
 init:
 A: object(0,0), B: object(0,1)
 
@@ -35,7 +37,7 @@ task 4, line 31:
 Error: Transaction Effects Status: Invalid command argument at 0. Object passed to TransferObject does not have public transfer, i.e. the `store` ability
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidTransferObject }, source: None, command: Some(0) } }
 
-task 5, lines 33-36:
+task 5, line 33:
 //# view-object 2,0
 Owner: Account Address ( A )
 Version: 3
@@ -46,6 +48,8 @@ Contents: test::m::S {
         },
     },
 }
+
+// Mint Cup<S> to A. Fail to transfer Cup<S> from A to B
 
 task 6, line 38:
 //# run test::m::mint_cup --type-args test::m::S --sender A

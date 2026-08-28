@@ -12,9 +12,16 @@ created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 5738000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 29-36:
+task 2, line 29:
 //# create-checkpoint
 Checkpoint created: 1
+
+// Create a tree of objects:
+//
+// O(3)
+// |- 20 -> O(4) - 30 -> O(5)
+// |= 20 => O(6) - 40 -> O(7)
+// `- 50 -> O(8)
 
 task 3, lines 38-40:
 //# programmable --sender A --inputs 3u64 @A

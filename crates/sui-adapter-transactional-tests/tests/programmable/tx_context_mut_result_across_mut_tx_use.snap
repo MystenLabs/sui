@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// The motivating case: a `&mut Y` from `borrow_mut(&mut X, &mut TxContext)` roots only in
+// the object, so it survives a later TxContext use and can still be written through.
+
 task 1, lines 9-43:
 //# publish
 created: object(1,0)

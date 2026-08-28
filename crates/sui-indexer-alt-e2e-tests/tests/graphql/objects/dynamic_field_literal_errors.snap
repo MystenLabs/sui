@@ -6,6 +6,8 @@ processed 6 tasks
 init:
 A: object(0,0)
 
+// Various error cases related to dynamic field names.
+
 task 1, lines 8-15:
 //# run-graphql --cursors bcs(42u64)
 Response: {

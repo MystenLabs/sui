@@ -3,16 +3,23 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 9 tasks
 
+// Move abort with `[Coin, AddressBalance]` gas payment. The abort triggers a
+// temporary-store reset and a re-smash before storage is charged. Verifies
+// that re-smashing produces consistent results, and that the final
+// accumulator event and gas coin charge reflect the post-abort state, not
+// the pre-abort attempt.
+
 init:
 A: object(0,0)
 
-task 1, lines 12-16:
+task 1, lines 12-14:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 3465600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 17-20:
+task 2, lines 16-20:
+// Seed A's address balance.
 //# programmable --sender A --inputs 100000000000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
@@ -25,21 +32,25 @@ task 3, line 22:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 24-26:
+task 4, line 24:
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
 100000000000
 
-task 5, lines 27-28:
+task 5, lines 26-28:
+// Mixed payment: coin smash target + address-balance secondary; call aborts.
 //# programmable --sender A --gas-payment object(0,0) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(500000000)
 //> test::boom::boom()
 Error: Transaction Effects Status: Move Runtime Abort. Location: test::boom::boom (function index 0) at offset 1, Abort Code: 7
 Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("boom") }, function: 0, instruction: 1, function_name: Some("boom") }, 7) at command Some(0)
 
-task 6, lines 30-34:
+task 6, line 30:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 7, line 35:
+task 7, lines 32-35:
+// Address balance after abort: charge against the merged reservation should
+// reflect computation cost (no storage cost since writes were dumped on
+// abort).
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
 99500000000
 

@@ -6,6 +6,9 @@ processed 7 tasks
 init:
 A: object(0,0)
 
+// Test creating and deleting an object. Both of these operations should show
+// up in object changes.
+
 task 1, lines 9-23:
 //# publish
 created: object(1,0)

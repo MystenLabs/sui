@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 9 tasks
 
+// Exercise test functions that create, transfer, read, update, and delete objects
+
 init:
 A: object(0,0), B: object(0,1)
 

@@ -3,16 +3,19 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// attempt to return a reference from a function
+
 init:
 A: object(0,0)
 
-task 1, lines 8-46:
+task 1, lines 8-44:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 6232000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 47-55:
+task 2, lines 46-53:
+// read from a returned reference
 //# programmable --sender A --dev-inspect --inputs 42
 //> 0: test::m::new();
 //> 1: test::m::borrow_f(Result(0));
@@ -20,11 +23,11 @@ task 2, lines 47-55:
 //> test::m::check(Result(1), Result(2));
 //> test::m::check(Result(1), Input(0));
 //> test::m::delete(Result(0));
-// read from a returned reference, with "subtyping"
 mutated: object(_)
 gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 56-66:
+task 3, lines 55-62:
+// read from a returned reference, with "subtyping"
 //# programmable --sender A --dev-inspect --inputs 42
 //> 0: test::m::new();
 //> 1: test::m::borrow_f_mut(Result(0));
@@ -32,12 +35,12 @@ task 3, lines 56-66:
 //> test::m::check(Result(1), Result(2));
 //> test::m::check(Result(1), Input(0));
 //> test::m::delete(Result(0));
-// Read from the struct again to check that the reference was actually
-// updated, and not just `Result(1)`
 mutated: object(_)
 gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 4, lines 67-73:
+task 4, lines 65-73:
+// Read from the struct again to check that the reference was actually
+// updated, and not just `Result(1)`
 //# programmable --sender A --dev-inspect --inputs 43
 //> 0: test::m::new();
 //> 1: test::m::borrow_f_mut(Result(0));

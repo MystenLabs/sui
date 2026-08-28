@@ -3,7 +3,8 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 4 tasks
 
-task 0, lines 4-23:
+task 0, lines 3-21:
+// Ret: return (&a.x, &mut a.x.y)
 //# publish
 Error: Unable to publish module '00000000000000000000000000000000000000000000000000000000000000a1::j1_ret_imm_parent_mut_ext'. Got VMError: {
     major_status: RET_BORROWED_MUTABLE_REFERENCE_ERROR,
@@ -13,7 +14,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 11)],
 }
 
-task 1, lines 24-52:
+task 1, lines 23-50:
+// Call: pass (&a.x, &mut a.x.y)
 //# publish
 Error: Unable to publish module '00000000000000000000000000000000000000000000000000000000000000a2::j2_call_imm_parent_mut_ext'. Got VMError: {
     major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
@@ -23,7 +25,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(1), 11)],
 }
 
-task 3, lines 82-99:
+task 3, lines 81-99:
+// imm parent is the whole struct
 //# publish
 Error: Unable to publish module '00000000000000000000000000000000000000000000000000000000000000a4::j4_ret_imm_whole_mut_ext'. Got VMError: {
     major_status: RET_BORROWED_MUTABLE_REFERENCE_ERROR,

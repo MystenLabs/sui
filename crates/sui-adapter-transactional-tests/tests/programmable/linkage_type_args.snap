@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 7 tasks
 
+// Type-argument packages are pinned `at_least` (version from the type's defining id), for both
+// MoveCall type args and the MakeMoveVec element type.
+
 init:
 A: object(0,0)
 

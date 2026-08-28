@@ -3,6 +3,11 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// An upgrade that both adds an `init` to an existing module and introduces a new module with an
+// `init` must still be rejected: the error comes from the existing module gaining an `init` and is
+// not masked by the presence of a new init module. Here the offending existing module (`a`) sorts
+// before the new init module (`z`).
+
 init:
 A: object(0,0)
 

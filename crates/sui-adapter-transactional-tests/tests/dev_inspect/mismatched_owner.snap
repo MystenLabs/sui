@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 24 tasks
 
+// check that owner can be mismatched in dev inspect
+
 init:
 A: object(0,0), B: object(0,1)
 

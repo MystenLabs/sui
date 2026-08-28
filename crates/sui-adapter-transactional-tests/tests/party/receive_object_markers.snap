@@ -1,24 +1,27 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 937
 ---
 processed 13 tasks
 
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 6-37:
+task 1, lines 6-35:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 6908400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 38-40:
+task 2, lines 37-38:
+// Setup:
 //# run ex::m::mint
 created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 4613200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3, lines 41-43:
+task 3, lines 40-41:
+// a
 //# view-object 2,0
 Owner: Account Address ( _ )
 Version: 3
@@ -30,7 +33,8 @@ Contents: ex::m::A {
     },
 }
 
-task 4, lines 44-46:
+task 4, lines 43-44:
+// b1
 //# view-object 2,1
 Owner: Account Address ( fake(2,0) )
 Version: 3
@@ -42,7 +46,8 @@ Contents: ex::m::B {
     },
 }
 
-task 5, lines 47-54:
+task 5, lines 46-47:
+// b2
 //# view-object 2,2
 Owner: Account Address ( fake(2,0) )
 Version: 3
@@ -53,6 +58,11 @@ Contents: ex::m::B {
         },
     },
 }
+
+// b1:
+// 1. Receive the object
+// 2. Transfer to party
+// 3. Verify cannot receive again at the old version
 
 task 6, line 56:
 //# run ex::m::receive --args object(2,0) receiving(2,1) @A
@@ -66,10 +76,16 @@ task 7, lines 58-60:
 mutated: object(0,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 1196316, non_refundable_storage_fee: 12084
 
-task 8, lines 63-72:
+task 8, line 63:
 //# run ex::m::receive --args object(2,0) receiving(2,1)@3 @A
 Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 15) at offset 0, Abort Code: 3
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 15, instruction: 0, function_name: Some("receive_impl") }, 3), source: Some(VMError { major_status: ABORTED, sub_status: Some(3), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(15), 0)] }), command: Some(0) } }
+
+// b2:
+// 1. Receive the object
+// 2. Transfer to party
+// 3. Delete
+// 4. Verify cannot receive again at the old version
 
 task 9, line 74:
 //# run ex::m::receive --args object(2,0) receiving(2,2) @A

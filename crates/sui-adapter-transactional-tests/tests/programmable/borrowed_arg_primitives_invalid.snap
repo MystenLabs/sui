@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// tests various invalid usages of a borrowed arg in non-Move calls
+
 init:
 A: object(0,0), B: object(0,1)
 

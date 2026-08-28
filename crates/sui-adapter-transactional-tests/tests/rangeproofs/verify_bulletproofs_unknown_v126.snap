@@ -3,6 +3,10 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// `verify_bulletproofs_ristretto255` is only enabled on `unknown` (devnet/local)
+// chains, so on this chain the native verifies the proof and the call succeeds.
+// Pinned to protocol version 126.
+
 task 1, lines 10-23:
 //# publish
 created: object(1,0)

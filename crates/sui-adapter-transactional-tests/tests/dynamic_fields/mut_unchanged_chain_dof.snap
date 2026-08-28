@@ -1,8 +1,11 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
 ---
 processed 11 tasks
+
+// This test tests that objects that are borrowed mutably or added/removed, but not modified, do not
+// need to be marked as mutated.
+// Operates through a long chain of dynamic fields
 
 init:
 A: object(0,0)
@@ -31,7 +34,7 @@ Contents: test::m1::GreatGrandParent {
     },
 }
 
-task 4, lines 80-82:
+task 4, line 80:
 //# view-object 2,4
 Owner: Shared( 2 )
 Version: 2
@@ -42,6 +45,8 @@ Contents: test::m1::GreatGrandParent {
         },
     },
 }
+
+// for all of these, only the inputs are mutated
 
 task 5, line 84:
 //# run test::m1::borrow_mut --sender A --args object(2,0)

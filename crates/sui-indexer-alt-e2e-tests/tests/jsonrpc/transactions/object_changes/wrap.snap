@@ -6,6 +6,8 @@ processed 6 tasks
 init:
 A: object(0,0)
 
+// Wrapped objects do show up in object changes.
+
 task 1, lines 8-26:
 //# publish
 created: object(1,0)

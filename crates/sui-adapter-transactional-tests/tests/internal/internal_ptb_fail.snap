@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// Case: try to call internal in PTB, fail
+
 init:
 A: object(0,0)
 

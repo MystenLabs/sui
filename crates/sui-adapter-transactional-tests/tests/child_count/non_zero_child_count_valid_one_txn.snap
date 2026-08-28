@@ -1,8 +1,11 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
 ---
 processed 4 tasks
+
+// DEPRECATED child count no longer tracked
+// tests valid transfers of an object that has children
+// all transfers done in a single transaction
 
 init:
 A: object(0,0), B: object(0,1)

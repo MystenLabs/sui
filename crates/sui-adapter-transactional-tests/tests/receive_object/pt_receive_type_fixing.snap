@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 937
 ---
 processed 13 tasks
 
@@ -27,7 +28,7 @@ Contents: tto::M1::A {
     },
 }
 
-task 4, lines 56-59:
+task 4, line 56:
 //# view-object 2,1
 Owner: Account Address ( fake(2,0) )
 Version: 3
@@ -39,7 +40,9 @@ Contents: tto::M1::B {
     },
 }
 
-task 5, lines 60-62:
+task 5, lines 58-62:
+// Pass a receiving object through a move function, and then use the returned
+// Receiving argument in a subsequent command.
 //# programmable --inputs object(2,0) receiving(2,1)
 //> 0: tto::M1::pass_through(Input(1));
 //> tto::M1::receiver(Input(0), Result(0));
@@ -61,40 +64,40 @@ task 7, lines 69-71:
 Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 15) at offset 0, Abort Code: 3
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 15, instruction: 0, function_name: Some("receive_impl") }, 3), source: Some(VMError { major_status: ABORTED, sub_status: Some(3), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(15), 0)] }), command: Some(1) } }
 
-task 8, lines 73-77:
+task 8, lines 73-75:
 //# programmable --inputs object(2,0) receiving(2,1)
 //> 0: tto::M1::pass_through_ref_a(Input(1));
 //> tto::M1::receiver(Input(0), Input(1));
-// make vec, then unpack it and make sure the type is fixed
 Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 15) at offset 0, Abort Code: 3
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 15, instruction: 0, function_name: Some("receive_impl") }, 3), source: Some(VMError { major_status: ABORTED, sub_status: Some(3), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(15), 0)] }), command: Some(1) } }
 
-task 9, lines 78-80:
+task 9, lines 77-80:
+// make vec, then unpack it and make sure the type is fixed
 //# programmable --inputs object(2,0) receiving(2,1)
 //> 0: MakeMoveVec<sui::transfer::Receiving<tto::M1::A>>([Input(1)]);
 //> 1: tto::M1::unpacker_b(Result(0));
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
 
-task 10, lines 82-87:
+task 10, lines 82-85:
 //# programmable --inputs object(2,0) receiving(2,1)
 //> 0: MakeMoveVec<sui::transfer::Receiving<tto::M1::A>>([Input(1)]);
 //> 1: tto::M1::unpacker_a(Result(0));
 //> 2: tto::M1::receiver(Input(0), Result(1));
-// This is fine since we are going A -> A in the unpack. But we should fail the call.
 Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(2) } }
 
-task 11, lines 88-93:
+task 11, lines 87-91:
+// This is fine since we are going A -> A in the unpack. But we should fail the call.
 //# programmable --inputs object(2,0) receiving(2,1)
 //> 0: MakeMoveVec<sui::transfer::Receiving<tto::M1::A>>([Input(1)]);
 //> 1: tto::M1::unpacker_generic<tto::M1::A>(Result(0));
 //> 2: tto::M1::receiver(Input(0), Result(1));
-// This should fail since we're going A -> B in the unpack.
 Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(2) } }
 
-task 12, lines 94-96:
+task 12, lines 93-96:
+// This should fail since we're going A -> B in the unpack.
 //# programmable --inputs object(2,0) receiving(2,1)
 //> 0: MakeMoveVec<sui::transfer::Receiving<tto::M1::A>>([Input(1)]);
 //> 1: tto::M1::unpacker_generic<tto::M1::B>(Result(0));

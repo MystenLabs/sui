@@ -6,6 +6,12 @@ processed 13 tasks
 init:
 A: object(0,0), B: object(0,1)
 
+// 1. Show the owner of an object owned by one address
+// 2. ...owned by another address
+// 3. ...shared
+// 4. ...frozen
+// 5. ...owned by an object
+
 task 1, lines 12-14:
 //# programmable --sender A --inputs 42 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
