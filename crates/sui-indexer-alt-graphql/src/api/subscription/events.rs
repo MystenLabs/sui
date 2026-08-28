@@ -37,10 +37,6 @@ impl Subscribable for Event {
     type Filter = EventFilter;
     type ScanItem = v2::Event;
 
-    fn cursor_checkpoint(cursor: &CEvent) -> u64 {
-        cursor.checkpoint()
-    }
-
     fn subscription_type() -> &'static str {
         "events"
     }

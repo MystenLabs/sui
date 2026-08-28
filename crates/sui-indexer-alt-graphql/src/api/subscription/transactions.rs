@@ -35,10 +35,6 @@ impl Subscribable for Transaction {
     type Filter = TransactionFilter;
     type ScanItem = v2::ExecutedTransaction;
 
-    fn cursor_checkpoint(cursor: &CTransaction) -> u64 {
-        cursor.checkpoint()
-    }
-
     fn subscription_type() -> &'static str {
         "transactions"
     }

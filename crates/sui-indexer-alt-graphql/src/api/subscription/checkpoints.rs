@@ -39,10 +39,6 @@ impl Subscribable for Checkpoint {
     type Filter = ();
     type ScanItem = v2::Checkpoint;
 
-    fn cursor_checkpoint(cursor: &CCheckpoint) -> u64 {
-        cursor.sequence_number()
-    }
-
     fn subscription_type() -> &'static str {
         "checkpoints"
     }

@@ -442,6 +442,13 @@ impl ByteCursor for CheckpointToken {
     }
 }
 
+#[cfg(feature = "staging")]
+impl From<&CCheckpoint> for CursorToken {
+    fn from(cursor: &CCheckpoint) -> Self {
+        CursorToken::from(&cursor.token())
+    }
+}
+
 impl From<&CheckpointToken> for CursorToken {
     fn from(token: &CheckpointToken) -> Self {
         CursorToken {

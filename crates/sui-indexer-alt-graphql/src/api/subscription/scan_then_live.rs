@@ -100,10 +100,6 @@ pub(super) trait Subscribable {
         filter: &Self::Filter,
     ) -> Result<Vec<Edge<String, Self::Item, EmptyFields>>, RpcError>;
 
-    /// The checkpoint a resume cursor points at, letting the driver derive the resume point from an
-    /// `after` cursor without knowing the concrete cursor type.
-    fn cursor_checkpoint(cursor: &Self::Cursor) -> u64;
-
     /// The feed's name, used to label its lifecycle metrics.
     fn subscription_type() -> &'static str;
 }
@@ -145,9 +141,18 @@ pub(super) fn subscribe<S: Subscribable>(
     subscriber_limit: SubscriberLimit,
     config: SubscriptionConfig,
 ) -> Result<impl Stream<Item = Result<Edge<String, S::Item, EmptyFields>, RpcError>>, RpcError<Error>>
+where
+    for<'a> CursorToken: From<&'a S::Cursor>,
 {
-    // The checkpoint to resume after: the later of the `after` cursor and `afterCheckpoint`.
-    let start_from = match (after.as_ref().map(S::cursor_checkpoint), after_checkpoint) {
+    // The checkpoint to resume after: the later of the `after` cursor and `afterCheckpoint`. A
+    // cursor's checkpoint is read through its `CursorToken` position, so the driver needs no
+    // per-feed accessor.
+    let start_from = match (
+        after
+            .as_ref()
+            .map(|c| CursorToken::from(c).position.checkpoint()),
+        after_checkpoint,
+    ) {
         (Some(a), Some(b)) => Some(a.max(b)),
         (a, b) => a.or(b),
     };
