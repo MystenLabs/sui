@@ -49,6 +49,7 @@ use crate::authority::consensus_tx_status_cache::{
 use crate::checkpoints::CheckpointStore;
 use crate::consensus_handler::{SequencedConsensusTransactionKey, classify, tx_type_label};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
+use crate::staggered_submission::StaggeredSubmission;
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -69,6 +70,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_in_flight_semaphore_wait: IntGauge,
     pub sequencing_in_flight_submissions: IntGauge,
     pub sequencing_best_effort_timeout: IntCounterVec,
+    pub sequencing_staggered_delay: Histogram,
     pub consensus_latency: Histogram,
     pub num_rejected_cert_in_epoch_boundary: IntCounter,
 }
@@ -156,6 +158,12 @@ impl ConsensusAdapterMetrics {
                 &["tx_type"],
                 registry,
             ).unwrap(),
+            sequencing_staggered_delay: register_histogram_with_registry!(
+                "sequencing_staggered_delay",
+                "The staggered-submission delay applied before submitting a transaction without allowed proposers to consensus.",
+                mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
             // These two metrics originally lived in ValidatorServiceMetrics (authority_server.rs)
             // and keep their legacy names for dashboard compatibility.
             consensus_latency: register_histogram_with_registry!(
@@ -238,6 +246,9 @@ pub struct ConsensusAdapter {
     /// Used by the admission queue drainer to wake up and submit more
     /// transactions.
     inflight_slot_freed_notify: Arc<Notify>,
+    /// Delays submission of transactions without allowed proposers when duplication is
+    /// detected on the network. Inactive by default.
+    staggered_submission: StaggeredSubmission,
 }
 
 impl ConsensusAdapter {
@@ -261,7 +272,12 @@ impl ConsensusAdapter {
             metrics,
             submit_semaphore: Arc::new(Semaphore::new(max_pending_local_submissions)),
             inflight_slot_freed_notify,
+            staggered_submission: StaggeredSubmission::new(),
         }
+    }
+
+    pub fn staggered_submission(&self) -> &StaggeredSubmission {
+        &self.staggered_submission
     }
 
     /// Get the current number of in-flight transactions
@@ -547,26 +563,50 @@ impl ConsensusAdapter {
             debug!("Submitting {:?} to consensus", transaction_keys);
             guard.submitted = true;
 
-            // System messages (checkpoint signatures, EndOfPublish, capability
-            // notifications, randomness DKG, etc.) are not buffered behind user
-            // tx; they are excluded from the semaphore.
-            let _permit: Option<SemaphorePermit> = if is_system_message {
+            // Staggered submission of transactions without allowed proposers. Soft bundles
+            // are exempt: they are built by this validator from its own admission queue,
+            // not amplified fan-out from a submitter.
+            let stagger_delay = if is_soft_bundle {
                 None
             } else {
-                Some(
-                    self.submit_semaphore
-                        .acquire()
-                        .count_in_flight(self.metrics.sequencing_in_flight_semaphore_wait.clone())
-                        .await
-                        .expect("Consensus adapter does not close semaphore"),
-                )
+                transactions[0]
+                    .kind
+                    .as_user_transaction()
+                    .and_then(|tx| self.staggered_submission.submission_delay(tx, epoch_store))
             };
-            let _in_flight_submission_guard =
-                GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
 
             // Submit the transaction to consensus, racing against the processed waiter in
-            // case another validator sequences the transaction first.
+            // case another validator sequences the transaction first. The staggered delay
+            // and the semaphore wait both live inside the raced future, so a transaction
+            // that commits elsewhere while held or queued is cancelled without ever being
+            // submitted, and a held transaction does not occupy a submission permit.
             let submit_fut = async {
+                if let Some(delay) = stagger_delay {
+                    self.metrics
+                        .sequencing_staggered_delay
+                        .observe(delay.as_secs_f64());
+                    time::sleep(delay).await;
+                }
+
+                // System messages (checkpoint signatures, EndOfPublish, capability
+                // notifications, randomness DKG, etc.) are not buffered behind user
+                // tx; they are excluded from the semaphore.
+                let _permit: Option<SemaphorePermit> = if is_system_message {
+                    None
+                } else {
+                    Some(
+                        self.submit_semaphore
+                            .acquire()
+                            .count_in_flight(
+                                self.metrics.sequencing_in_flight_semaphore_wait.clone(),
+                            )
+                            .await
+                            .expect("Consensus adapter does not close semaphore"),
+                    )
+                };
+                let _in_flight_submission_guard =
+                    GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
+
                 const RETRY_DELAY_STEP: Duration = Duration::from_secs(1);
 
                 loop {
