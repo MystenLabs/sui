@@ -18,12 +18,8 @@ use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::CheckpointContents as NativeCheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSummary as NativeCheckpointSummary;
-use tokio::sync::broadcast;
 
-use super::checkpoint_stream_task::SubscriptionBroadcast;
 use super::gap_recovery::CheckpointFetcher;
-use super::processed_checkpoint::ProcessedCheckpoint;
-use crate::metrics::SubscriptionMetrics;
 
 /// Per-key behavior of the mock fetcher.
 #[derive(Debug, Clone)]
@@ -38,7 +34,7 @@ pub(super) enum FetcherBehavior {
 
 /// Mock fetcher with per-seq behavior, tracking call counts. Panics on unconfigured seqs so
 /// tests fail loudly if unexpected fetches happen. `Clone` shares the underlying state, so
-/// call counts are aggregated across clones (`scan_checkpoints` clones the fetcher per item).
+/// call counts are aggregated across clones (the caller may clone the fetcher per item).
 #[derive(Clone)]
 pub(super) struct MockFetcher {
     state: Arc<DashMap<u64, (FetcherBehavior, usize)>>,
@@ -54,12 +50,6 @@ impl MockFetcher {
     /// Build a fetcher from a slice of (seq, behavior) pairs.
     pub(super) fn from_setup(setup: &[(u64, FetcherBehavior)]) -> Self {
         Self::new(setup.iter().cloned().collect())
-    }
-
-    /// Build a fetcher that returns `Success` for every seq in the given inclusive range.
-    pub(super) fn success_for_range(range: std::ops::RangeInclusive<u64>) -> Self {
-        let setup = range.map(|seq| (seq, FetcherBehavior::Success)).collect();
-        Self::new(setup)
     }
 
     pub(super) fn calls_for(&self, seq: u64) -> usize {
@@ -100,26 +90,6 @@ impl CheckpointFetcher for MockFetcher {
             }
         }
     }
-}
-
-/// Build a `SubscriptionBroadcast` with the given `first_live_checkpoint` and a buffer large
-/// enough that tests do not trigger lag incidentally. Returns the sender so tests can drive
-/// the channel directly to advance `network_tip()`.
-pub(super) fn test_broadcast(
-    first_live_checkpoint: u64,
-) -> (
-    broadcast::Sender<Arc<ProcessedCheckpoint>>,
-    Arc<SubscriptionBroadcast>,
-) {
-    let (tx, rx) = broadcast::channel(256);
-    (
-        tx,
-        Arc::new(SubscriptionBroadcast::new(
-            rx,
-            first_live_checkpoint,
-            SubscriptionMetrics::new_for_test(),
-        )),
-    )
 }
 
 /// Build a fully deserializable test `ProtoCheckpoint` at the given sequence number.

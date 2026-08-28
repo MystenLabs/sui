@@ -178,15 +178,13 @@ impl Scope {
         }
     }
 
-    /// Create a scope for transactions backfilled through the indexed pathway during a
-    /// subscription's catch-up phase. Unlike the live [`for_streamed_checkpoint`] path, backfilled
-    /// transactions are already finalized and indexed, so their fields resolve lazily through the
-    /// index (`KvLoader`) rather than from an in-memory payload. `checkpoint_viewed_at` is `None`,
-    /// matching the live path: a subscription does not resolve as of a single consistent checkpoint,
-    /// so checkpoint-anchored fields (balances, latest object versions) stay null and transaction
-    /// contents hydrate by digest.
+    /// Create a scope whose fields resolve lazily through the durable index (`KvLoader`), with no
+    /// in-memory payload. Used for individually-scanned items backfilled during a subscription's
+    /// catch-up phase. `checkpoint_viewed_at` is `None`: a subscription does not resolve as of a
+    /// single consistent checkpoint, so checkpoint-anchored fields (balances, latest object
+    /// versions) stay null and contents hydrate on demand.
     #[cfg(feature = "staging")]
-    pub(crate) fn for_backfilled_transactions(
+    pub(crate) fn for_indexed(
         caches: Arc<StreamedCaches>,
         resolver_limits: sui_package_resolver::Limits,
     ) -> Self {

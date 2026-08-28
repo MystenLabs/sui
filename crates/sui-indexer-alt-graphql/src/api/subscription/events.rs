@@ -37,6 +37,10 @@ impl Subscribable for Event {
     type Filter = EventFilter;
     type ScanItem = v2::Event;
 
+    fn subscription_type() -> &'static str {
+        "events"
+    }
+
     fn scan<'a>(
         reader: &'a AlphaLedgerGrpcReader,
         cp_bounds: RangeInclusive<u64>,
@@ -46,8 +50,13 @@ impl Subscribable for Event {
         Event::scan_grpc(reader, cp_bounds, page, filter)
     }
 
-    fn build_node(scope: &Scope, payload: &v2::Event) -> Result<Self, RpcError> {
-        event_from_stream_item(scope.clone(), payload)
+    fn build_node(
+        caches: &Arc<StreamedCaches>,
+        resolver_limits: &sui_package_resolver::Limits,
+        payload: &v2::Event,
+    ) -> Result<Self, RpcError> {
+        let scope = Scope::for_indexed(caches.clone(), resolver_limits.clone());
+        event_from_stream_item(scope, payload)
     }
 
     fn matching_edges(

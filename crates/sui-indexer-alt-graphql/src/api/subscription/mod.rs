@@ -4,18 +4,14 @@
 use std::sync::Arc;
 
 use async_graphql::Context;
-use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
-use futures::StreamExt;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
-use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use tokio::sync::watch;
 
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
-use crate::api::types::checkpoint::CheckpointToken;
 use crate::api::types::event::CEvent;
 use crate::api::types::event::Event;
 use crate::api::types::event::filter::EventFilter;
@@ -26,14 +22,12 @@ use crate::config::Limits;
 use crate::config::SubscriptionConfig;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
-use crate::error::upcast;
-use crate::scope::Scope;
 use crate::task::streaming::StreamedCaches;
 use crate::task::streaming::SubscriberLimit;
 use crate::task::streaming::SubscriptionBroadcast;
-use crate::task::streaming::SubscriptionLifecycleGuard;
 use crate::task::watermark::Watermarks;
 
+mod checkpoints;
 mod events;
 mod scan_then_live;
 mod transactions;
@@ -72,44 +66,22 @@ impl Subscription {
         let limits: &Limits = ctx.data()?;
         let config: &SubscriptionConfig = ctx.data()?;
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
-        let fetcher: &LedgerGrpcReader = ctx.data()?;
+        let reader: &AlphaLedgerGrpcReader = ctx.data()?;
+        let watermarks_rx: &watch::Receiver<Arc<Watermarks>> = ctx.data()?;
+        let subscriber_limit: &SubscriberLimit = ctx.data()?;
 
-        let start_from: Option<u64> = match (
-            after.map(|c| c.sequence_number()),
+        subscribe::<Checkpoint>(
+            reader.clone(),
+            broadcast.clone(),
+            caches.clone(),
+            limits.package_resolver(),
+            watermarks_rx.clone(),
+            (),
+            after,
             after_checkpoint.map(u64::from),
-        ) {
-            (Some(a), Some(b)) => Some(a.max(b)),
-            (a, b) => a.or(b),
-        };
-        reject_if_start_too_far_ahead(start_from, broadcast, config)?;
-        let guard = admit_subscription(ctx, broadcast, "checkpoints")?;
-
-        let caches = caches.clone();
-        let resolver_limits = limits.package_resolver();
-
-        let stream = broadcast
-            .clone()
-            .subscribe(start_from, fetcher.clone(), config, guard);
-
-        Ok(stream.map(move |item| {
-            item.map(|processed| {
-                let sequence_number = processed.summary.sequence_number;
-                let scope = Scope::for_streamed_checkpoint(
-                    caches.clone(),
-                    resolver_limits.clone(),
-                    processed.clone(),
-                );
-                let cursor = CheckpointToken::cursor(sequence_number).encode_cursor();
-                Edge::new(
-                    cursor,
-                    Checkpoint {
-                        sequence_number,
-                        scope,
-                        streamed_data: Some(processed),
-                    },
-                )
-            })
-        }))
+            subscriber_limit.clone(),
+            config.clone(),
+        )
     }
 
     /// Subscribe to transactions as they are finalized, with optional filtering.
@@ -134,38 +106,26 @@ impl Subscription {
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
         let reader: &AlphaLedgerGrpcReader = ctx.data()?;
         let watermarks_rx: &watch::Receiver<Arc<Watermarks>> = ctx.data()?;
+        let subscriber_limit: &SubscriberLimit = ctx.data()?;
 
-        let caches = caches.clone();
-        let resolver_limits = limits.package_resolver();
         let filter = filter.unwrap_or_default();
-
         if filter.at_checkpoint.is_some() || filter.before_checkpoint.is_some() {
             return Err(bad_user_input(Error::CheckpointBoundsUnsupported));
         }
-
         let after_checkpoint = filter.after_checkpoint.map(u64::from);
 
-        // Start from whichever of the cursor and `afterCheckpoint` is later, then reject a start
-        // that sits too far past the tip.
-        let start_from = match (after.as_ref().map(|c| c.checkpoint()), after_checkpoint) {
-            (Some(a), Some(b)) => Some(a.max(b)),
-            (a, b) => a.or(b),
-        };
-        reject_if_start_too_far_ahead(start_from, broadcast, config)?;
-        let guard = admit_subscription(ctx, broadcast, "transactions")?;
-
-        Ok(subscribe::<Transaction>(
+        subscribe::<Transaction>(
             reader.clone(),
             broadcast.clone(),
-            caches,
-            resolver_limits,
+            caches.clone(),
+            limits.package_resolver(),
             watermarks_rx.clone(),
             filter,
             after,
             after_checkpoint,
+            subscriber_limit.clone(),
             config.clone(),
-            guard,
-        ))
+        )
     }
 
     /// Subscribe to events as they are emitted, with optional filtering.
@@ -190,67 +150,25 @@ impl Subscription {
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
         let reader: &AlphaLedgerGrpcReader = ctx.data()?;
         let watermarks_rx: &watch::Receiver<Arc<Watermarks>> = ctx.data()?;
+        let subscriber_limit: &SubscriberLimit = ctx.data()?;
 
-        let caches = caches.clone();
-        let resolver_limits = limits.package_resolver();
         let filter = filter.unwrap_or_default();
-
         if filter.at_checkpoint.is_some() || filter.before_checkpoint.is_some() {
             return Err(bad_user_input(Error::CheckpointBoundsUnsupported));
         }
-
         let after_checkpoint = filter.after_checkpoint.map(u64::from);
 
-        // Start from whichever of the cursor and `afterCheckpoint` is later, then reject a start
-        // that sits too far past the tip.
-        let start_from = match (after.as_ref().map(|c| c.checkpoint()), after_checkpoint) {
-            (Some(a), Some(b)) => Some(a.max(b)),
-            (a, b) => a.or(b),
-        };
-        reject_if_start_too_far_ahead(start_from, broadcast, config)?;
-        let guard = admit_subscription(ctx, broadcast, "events")?;
-
-        Ok(subscribe::<Event>(
+        subscribe::<Event>(
             reader.clone(),
             broadcast.clone(),
-            caches,
-            resolver_limits,
+            caches.clone(),
+            limits.package_resolver(),
             watermarks_rx.clone(),
             filter,
             after,
             after_checkpoint,
+            subscriber_limit.clone(),
             config.clone(),
-            guard,
-        ))
+        )
     }
-}
-
-/// Admit a new subscription of `subscription_type` by claiming a concurrency slot, or return an
-/// at-capacity error refusing it. The returned guard holds the slot and the per-subscriber metric
-/// handles for the subscription's lifetime; it is moved into the subscription's stream driver.
-fn admit_subscription(
-    ctx: &Context<'_>,
-    broadcast: &SubscriptionBroadcast,
-    subscription_type: &'static str,
-) -> Result<SubscriptionLifecycleGuard, RpcError<Error>> {
-    let subscriber_limit: &SubscriberLimit = ctx.data()?;
-    SubscriptionLifecycleGuard::new(subscription_type, broadcast.metrics(), subscriber_limit)
-        .map_err(upcast)
-}
-
-/// Reject a start point sitting more than `max_ahead` checkpoints past the chain tip. There is
-/// nothing to backfill ahead of the tip, so such a request would only wait for the chain to reach
-/// it, and a far-future one would hold the connection open indefinitely.
-fn reject_if_start_too_far_ahead(
-    start_from: Option<u64>,
-    broadcast: &SubscriptionBroadcast,
-    config: &SubscriptionConfig,
-) -> Result<(), RpcError<Error>> {
-    let max_ahead = config.max_start_checkpoints_ahead_of_tip;
-    if let Some(start) = start_from
-        && start > broadcast.network_tip().saturating_add(max_ahead)
-    {
-        return Err(bad_user_input(Error::TooFarAheadOfTip { max: max_ahead }));
-    }
-    Ok(())
 }

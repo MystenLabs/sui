@@ -60,11 +60,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context as _;
-#[cfg(any(feature = "staging", test))]
-use async_stream::stream;
 use backoff::ExponentialBackoff;
-#[cfg(any(feature = "staging", test))]
-use futures::Stream;
 use futures::StreamExt;
 use sui_futures::service::Service;
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
@@ -105,17 +101,7 @@ use super::StreamedObjectStore;
 use super::StreamedTransactionStore;
 use super::StreamingPackageStore;
 use super::SubscriptionReadiness;
-#[cfg(any(feature = "staging", test))]
-use super::checkpoint_resume::scan_checkpoints;
-#[cfg(any(feature = "staging", test))]
-use super::gap_recovery::CheckpointFetcher;
 use super::gap_recovery::recover_gap;
-#[cfg(test)]
-use super::lifecycle::SubscriberLimit;
-#[cfg(any(feature = "staging", test))]
-use super::lifecycle::SubscriptionLifecycleGuard;
-#[cfg(any(feature = "staging", test))]
-use super::lifecycle::SubscriptionTerminationReason;
 use super::processed_checkpoint::ProcessedCheckpoint;
 use super::processed_checkpoint::ProcessedTransaction;
 
@@ -142,7 +128,7 @@ const CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
 pub(crate) type CheckpointBroadcaster = broadcast::Receiver<Arc<ProcessedCheckpoint>>;
 
 /// Field mask requesting checkpoint-level and transaction-level fields needed by GraphQL resolvers.
-pub(super) fn checkpoint_field_mask() -> FieldMask {
+pub(crate) fn checkpoint_field_mask() -> FieldMask {
     FieldMask::from_paths([
         ProtoCheckpoint::path_builder().sequence_number(),
         ProtoCheckpoint::path_builder().summary().bcs().value(),
@@ -232,102 +218,6 @@ impl SubscriptionBroadcast {
         self.first_live_checkpoint
             .saturating_add(self.broadcaster.len() as u64)
             .saturating_sub(1)
-    }
-
-    /// Subscribe to broadcasted checkpoints, optionally resuming from `resume_from + 1`.
-    ///
-    /// Linear "catch up, then follow": Phase 1 scans toward the tip and pins a `handoff` near it,
-    /// Phase 2 follows the live broadcast from `handoff + 1`, so the phases meet with no gap. Any
-    /// anomaly disconnects (the client reconnects from its last cursor), logged by reason.
-    pub(crate) fn subscribe<F: CheckpointFetcher + Clone + Send + 'static>(
-        self: Arc<Self>,
-        resume_from: Option<u64>,
-        fetcher: F,
-        config: &SubscriptionConfig,
-        guard: SubscriptionLifecycleGuard,
-    ) -> impl Stream<Item = Result<Arc<ProcessedCheckpoint>, RpcError>> + 'static {
-        // Resubscribe and pin the handoff once the scan is within this many checkpoints of the tip.
-        // Half the buffer leaves room for checkpoints arriving during the handoff, so it won't lag.
-        let handoff_threshold = config.broadcast_buffer as u64 / 2;
-
-        let config = config.clone();
-
-        stream! {
-            let mut last_yielded: Option<u64> = resume_from;
-            let mut receiver = self.broadcaster.resubscribe();
-            // `resubscribe` is future-only (delivers `handoff + 1`), so Phase 1 stops exactly at
-            // `handoff` rather than chasing the tip.
-            let mut handoff: Option<u64> = None;
-
-            // Phase 1: scan toward the tip; within `handoff_threshold`, resubscribe + pin, stop at it.
-            if let Some(start_after) = last_yielded {
-                for await item in scan_checkpoints(fetcher, self.clone(), start_after, &config) {
-                    let processed = match item {
-                        Ok(processed) => processed,
-                        Err(e) => {
-                            guard.terminate(SubscriptionTerminationReason::BackfillError);
-                            yield Err(e);
-                            return;
-                        }
-                    };
-                    let seq = processed.summary.sequence_number;
-                    last_yielded = Some(seq);
-                    yield Ok(processed);
-
-                    if handoff.is_none()
-                        && self.network_tip().saturating_sub(seq) <= handoff_threshold
-                    {
-                        receiver = self.broadcaster.resubscribe();
-                        handoff = Some(self.network_tip());
-                    }
-
-                    if handoff.is_some_and(|h| seq >= h) {
-                        break;
-                    }
-                }
-            }
-
-            // Phase 2: follow live from the pinned receiver, or a fresh one if Phase 1 was skipped.
-            // Tags the disconnect log: a `Lagged` before the first live item is catch-up overflow.
-            let mut delivered_live = false;
-            loop {
-                match receiver.recv().await {
-                    Ok(processed) => match last_yielded {
-                        // Already covered by the scan (resubscribe/tip race): skip.
-                        Some(ly) if processed.summary.sequence_number <= ly => continue,
-                        // Unreachable under pin-and-meet (live is contiguous with the scan; a real
-                        // lag surfaces as `Lagged`). Disconnect defensively rather than emit a hole.
-                        Some(ly) if processed.summary.sequence_number > ly + 1 => {
-                            warn!(
-                                last_yielded = ly,
-                                received = processed.summary.sequence_number,
-                                "Unexpected gap between scan and live; disconnecting"
-                            );
-                            guard.terminate(SubscriptionTerminationReason::UnexpectedGap);
-                            yield Err(reconnect_error());
-                            return;
-                        }
-                        _ => {
-                            last_yielded = Some(processed.summary.sequence_number);
-                            delivered_live = true;
-                            yield Ok(processed);
-                        }
-                    },
-                    Err(broadcast::error::RecvError::Lagged(missed)) if !delivered_live => {
-                        warn!(missed, "Subscriber fell behind during catch-up (likely kv-rpc lag)");
-                        guard.terminate(SubscriptionTerminationReason::Lagged);
-                        yield Err(reconnect_error());
-                        return;
-                    }
-                    // Slow subscriber (Lagged after going live) or closed channel: disconnect.
-                    Err(e) => {
-                        guard.terminate(SubscriptionTerminationReason::from_recv_error(&e));
-                        yield Err(broadcast_error(e));
-                        return;
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -600,7 +490,7 @@ fn classify_connect_error(e: anyhow::Error) -> backoff::Error<anyhow::Error> {
     }
 }
 
-pub(super) fn process_checkpoint(
+pub(crate) fn process_checkpoint(
     checkpoint: ProtoCheckpoint,
 ) -> anyhow::Result<ProcessedCheckpoint> {
     let sequence_number = checkpoint
@@ -825,108 +715,4 @@ fn add_tombstones(
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::task::streaming::test_utils::MockFetcher;
-    use crate::task::streaming::test_utils::make_test_proto_checkpoint;
-    use crate::task::streaming::test_utils::test_broadcast;
-
-    /// Drain `n` items from the (pinned) stream, returning their sequence numbers. The stream
-    /// is borrowed via `Pin<&mut _>` so multiple `drain_n` calls can interleave with other test
-    /// operations (e.g., bumping the broadcast tip between phases).
-    async fn drain_n<S>(mut stream: std::pin::Pin<&mut S>, n: usize) -> Vec<u64>
-    where
-        S: Stream<Item = Result<Arc<ProcessedCheckpoint>, RpcError>>,
-    {
-        use futures::StreamExt;
-        let mut out = Vec::with_capacity(n);
-        for _ in 0..n {
-            let item = stream.as_mut().next().await.unwrap().unwrap();
-            out.push(item.summary.sequence_number);
-        }
-        out
-    }
-
-    /// Send `seq` through the broadcast channel after processing it.
-    fn send(tx: &broadcast::Sender<Arc<ProcessedCheckpoint>>, seq: u64) {
-        let processed = process_checkpoint(make_test_proto_checkpoint(seq)).unwrap();
-        tx.send(Arc::new(processed)).ok();
-    }
-
-    fn test_guard() -> SubscriptionLifecycleGuard {
-        SubscriptionLifecycleGuard::new(
-            "checkpoints",
-            &SubscriptionMetrics::new_for_test(),
-            &SubscriberLimit::new(10),
-        )
-        .unwrap()
-    }
-
-    #[tokio::test]
-    async fn subscribe_no_resume_yields_live_only() {
-        use futures::FutureExt;
-
-        let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
-        // Fetcher is unused since resume_from is None.
-        let fetcher = MockFetcher::success_for_range(0..=0);
-
-        let stream =
-            broadcast.subscribe(None, fetcher, &SubscriptionConfig::default(), test_guard());
-        tokio::pin!(stream);
-
-        // Poll once so the receiver gets pinned at tail=0 before any sends.
-        let _ = stream.as_mut().next().now_or_never();
-
-        send(&tx, 1);
-        send(&tx, 2);
-        send(&tx, 3);
-
-        let yielded = drain_n(stream.as_mut(), 3).await;
-        assert_eq!(yielded, vec![1, 2, 3]);
-    }
-
-    #[tokio::test]
-    async fn subscribe_resume_before_tip_yields_scan_then_live() {
-        let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
-        for seq in 1..=5 {
-            send(&tx, seq);
-        }
-        assert_eq!(broadcast.network_tip(), 5);
-
-        // resume_from = 2 → Phase 1 yields 3, 4, 5; then Phase 2 picks up live items.
-        let fetcher = MockFetcher::success_for_range(3..=5);
-        let stream = broadcast.subscribe(
-            Some(2),
-            fetcher,
-            &SubscriptionConfig::default(),
-            test_guard(),
-        );
-        tokio::pin!(stream);
-
-        // Phase 1 catches up via scan.
-        assert_eq!(drain_n(stream.as_mut(), 3).await, vec![3, 4, 5]);
-
-        // Live items broadcast after Phase 1 are picked up by the mid-phase receiver.
-        send(&tx, 6);
-        send(&tx, 7);
-        assert_eq!(drain_n(stream.as_mut(), 2).await, vec![6, 7]);
-    }
-
-    #[tokio::test]
-    async fn subscribe_yields_error_when_channel_closes() {
-        let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
-        let fetcher = MockFetcher::success_for_range(0..=0);
-        let stream =
-            broadcast.subscribe(None, fetcher, &SubscriptionConfig::default(), test_guard());
-        tokio::pin!(stream);
-
-        // Dropping the sender closes the channel; subscriber should yield an error and end.
-        drop(tx);
-
-        assert!(stream.next().await.unwrap().is_err());
-        assert!(stream.next().await.is_none());
-    }
 }
