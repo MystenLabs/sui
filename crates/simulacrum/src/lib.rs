@@ -60,6 +60,7 @@ use self::store::in_mem_store::KeyStore;
 use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::sui_system_state::SuiSystemState;
+use sui_types::transaction_executor::SimulateTransactionResult;
 pub use sui_types::transaction_executor::TransactionChecks;
 use sui_types::{
     gas_coin::GasCoin,
@@ -239,6 +240,26 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             verifier_signing_config: VerifierSigningConfig::default(),
             data_ingestion_path: None,
         }
+    }
+
+    /// Simulate a transaction without committing its outputs.
+    pub fn simulate_transaction(
+        &self,
+        transaction: TransactionData,
+        checks: TransactionChecks,
+        allow_mock_gas_coin: bool,
+    ) -> SuiResult<SimulateTransactionResult>
+    where
+        S: Send + Sync,
+    {
+        self.epoch_state.simulate_transaction(
+            &self.store,
+            &self.deny_config,
+            &self.verifier_signing_config,
+            transaction,
+            checks,
+            allow_mock_gas_coin,
+        )
     }
 
     /// Execute a transaction, allowing empty-signature sender impersonation.
@@ -1016,6 +1037,48 @@ mod tests {
         let end_epoch = chain.store.get_highest_checkpint().unwrap().epoch;
         assert_eq!(end_epoch - start_epoch, steps);
         dbg!(chain.store().get_highest_checkpint());
+    }
+
+    #[test]
+    fn simulate_transaction_does_not_commit_outputs() {
+        let mut sim = Simulacrum::new();
+        let recipient = SuiAddress::random_for_testing_only();
+        let (tx, _) = sim.transfer_txn(recipient);
+        let transaction = tx.data().transaction_data().clone();
+        let transaction_digest = transaction.digest();
+        let gas_id = transaction.gas_data().payment[0].0;
+        let gas_before = SimulatorStore::get_object(sim.store(), &gas_id).unwrap();
+        let checkpoint_before = sim.store().get_highest_checkpint().unwrap();
+
+        let result = sim
+            .simulate_transaction(transaction, TransactionChecks::Enabled, false)
+            .unwrap();
+
+        assert!(result.effects.status().is_ok());
+        assert_eq!(result.suggested_gas_price, Some(sim.reference_gas_price()));
+        assert!(sim.store().get_transaction(&transaction_digest).is_none());
+        assert!(
+            sim.store()
+                .get_transaction_effects(&transaction_digest)
+                .is_none()
+        );
+        assert!(
+            sim.store()
+                .get_transaction_events(&transaction_digest)
+                .is_none()
+        );
+        assert_eq!(
+            SimulatorStore::get_object(sim.store(), &gas_id),
+            Some(gas_before)
+        );
+        assert!(sim.store().owned_objects(recipient).next().is_none());
+        assert_eq!(
+            sim.store().get_highest_checkpint().unwrap().digest(),
+            checkpoint_before.digest()
+        );
+
+        let executed_effects = sim.execute_transaction(tx).unwrap().0;
+        assert_eq!(result.effects, executed_effects);
     }
 
     #[test]
