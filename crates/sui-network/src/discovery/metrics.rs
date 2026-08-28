@@ -6,7 +6,10 @@ use prometheus::{
     IntGauge, IntGaugeVec, Registry, register_int_gauge_vec_with_registry,
     register_int_gauge_with_registry,
 };
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
 use tap::Pipe;
 
 #[derive(Clone)]
@@ -46,11 +49,44 @@ impl Metrics {
                 .set(code);
         }
     }
+
+    /// Folds a sampled mailbox depth into the high-water mark accumulated
+    /// since the last [`Self::publish_mailbox_depth`].
+    pub fn observe_mailbox_depth(&self, depth: u64) {
+        if let Some(inner) = &self.0 {
+            inner
+                .mailbox_high_water_accumulator
+                .fetch_max(depth, Ordering::Relaxed);
+        }
+    }
+
+    /// Publishes the current depth and the accumulated high-water mark, then
+    /// resets the accumulator for the next interval.
+    pub fn publish_mailbox_depth(&self, depth: u64) {
+        if let Some(inner) = &self.0 {
+            let high_water = inner
+                .mailbox_high_water_accumulator
+                .swap(0, Ordering::Relaxed)
+                .max(depth);
+            inner.mailbox_depth.set(depth as i64);
+            inner.mailbox_high_water.set(high_water as i64);
+        }
+    }
+
+    pub fn set_mailbox_capacity(&self, value: i64) {
+        if let Some(inner) = &self.0 {
+            inner.mailbox_capacity.set(value);
+        }
+    }
 }
 
 struct Inner {
     num_peers_with_external_address: IntGauge,
     active_p2p_address_source: IntGaugeVec,
+    mailbox_depth: IntGauge,
+    mailbox_high_water: IntGauge,
+    mailbox_high_water_accumulator: AtomicU64,
+    mailbox_capacity: IntGauge,
 }
 
 impl Inner {
@@ -69,6 +105,28 @@ impl Inner {
                  5=chain (highest to lowest priority). One series per peer; `peer_id` is the \
                  full hex peer id.",
                 &["peer_id"],
+                registry
+            )
+            .unwrap(),
+            mailbox_depth: register_int_gauge_with_registry!(
+                "discovery_mailbox_depth",
+                "Sampled discovery mailbox depth, refreshed once per discovery tick and therefore \
+                 up to one interval stale.",
+                registry
+            )
+            .unwrap(),
+            mailbox_high_water: register_int_gauge_with_registry!(
+                "discovery_mailbox_high_water",
+                "Highest sampled discovery mailbox depth since the previous tick. Sampling after \
+                 recv under-reports the pre-drain peak by at least one, and an overflow during \
+                 message handling can panic before it is sampled.",
+                registry
+            )
+            .unwrap(),
+            mailbox_high_water_accumulator: AtomicU64::new(0),
+            mailbox_capacity: register_int_gauge_with_registry!(
+                "discovery_mailbox_capacity",
+                "Configured discovery mailbox capacity.",
                 registry
             )
             .unwrap(),
