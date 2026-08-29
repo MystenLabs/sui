@@ -373,14 +373,21 @@ impl<'env, 'a, 'b, M: Meter + ?Sized> SignatureChecker<'env, 'a, 'b, M> {
             | SignatureToken::U64
             | SignatureToken::U128
             | SignatureToken::U256
-            | SignatureToken::I8
+            | SignatureToken::Address
+            | SignatureToken::Signer => {}
+            SignatureToken::I8
             | SignatureToken::I16
             | SignatureToken::I32
             | SignatureToken::I64
             | SignatureToken::I128
-            | SignatureToken::I256
-            | SignatureToken::Address
-            | SignatureToken::Signer => {}
+            | SignatureToken::I256 => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(
+                            "Unexpected signed int signature token in version 3".to_string(),
+                        ),
+                );
+            }
         }
         Ok(())
     }
@@ -413,8 +420,12 @@ impl<'env, 'a, 'b, M: Meter + ?Sized> SignatureChecker<'env, 'a, 'b, M> {
     fn check_signature_token(&self, ty: &SignatureToken) -> PartialVMResult<()> {
         use SignatureToken::*;
         match ty {
-            U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16 | I32 | I64 | I128 | I256 | Bool
-            | Address | Signer | Datatype(_) | TypeParameter(_) => Ok(()),
+            U8 | U16 | U32 | U64 | U128 | U256 | Bool | Address | Signer | Datatype(_)
+            | TypeParameter(_) => Ok(()),
+            I8 | I16 | I32 | I64 | I128 | I256 => Err(PartialVMError::new(
+                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            )
+            .with_message("Unexpected signed int signature token in version 3".to_string())),
             Reference(_) | MutableReference(_) => {
                 // TODO: Prop tests expect us to NOT check the inner types.
                 // Revisit this once we rework prop tests.
@@ -494,14 +505,17 @@ impl<'env, 'a, 'b, M: Meter + ?Sized> SignatureChecker<'env, 'a, 'b, M> {
             | SignatureToken::U64
             | SignatureToken::U128
             | SignatureToken::U256
-            | SignatureToken::I8
+            | SignatureToken::Address
+            | SignatureToken::Signer => Ok(()),
+            SignatureToken::I8
             | SignatureToken::I16
             | SignatureToken::I32
             | SignatureToken::I64
             | SignatureToken::I128
-            | SignatureToken::I256
-            | SignatureToken::Address
-            | SignatureToken::Signer => Ok(()),
+            | SignatureToken::I256 => Err(PartialVMError::new(
+                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            )
+            .with_message("Unexpected signed int signature token in version 3".to_string())),
         }
     }
 
