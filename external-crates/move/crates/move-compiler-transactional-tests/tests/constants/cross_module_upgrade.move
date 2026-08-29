@@ -23,8 +23,7 @@ module 0x42::b {
 
 //# run 0x42::b::check_original
 
-// upgrade the package, changing the constant's value: the new version is published at a new
-// storage location, as on chain
+// upgrade the package, changing the constant's value
 
 //# publish --location 0x108 --linkage 0x42=>0x108
 module 0x42::a {
@@ -42,8 +41,7 @@ module 0x42::b {
     }
 
     public fun check_upgraded() {
-        // this version's copy of the constant and the re-folded DOUBLE were both compiled
-        // from the new value
+        // the new version sees the new value, directly and through DOUBLE
         assert!(a::MAX == 50, 0);
         assert!(DOUBLE == 100, 1);
     }
@@ -53,7 +51,6 @@ module 0x42::b {
 
 //# run 0x42::b::check_upgraded --linkage 0x42=>0x108
 
-// the original version is untouched: its copy and its folded constant both still hold the
-// old values
+// the original version is untouched: it still returns the values it was compiled with
 
 //# run 0x42::b::check_original

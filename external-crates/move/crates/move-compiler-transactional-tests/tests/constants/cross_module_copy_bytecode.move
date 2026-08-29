@@ -1,10 +1,6 @@
 //# init --edition 2024.alpha
 
-// Constant copies are synthesized on demand in each using module: 0x42::b gets copies of
-// 'USED' and 'BYTES', 0x42::c gets its own copy of 'USED', and 'LOCAL_ONLY' is copied
-// nowhere. Copy names use the '#' generated-name delimiter ('const#x_A#B'), so the constants
-// of 'x' and 'x_A' -- which an identifier-only mangling would render identically as '_x_A_B'
-// -- get distinct names in 0x42::user
+// We double-check that strange name collision cases do not crop up
 
 //# print-bytecode
 module 0x42::a {

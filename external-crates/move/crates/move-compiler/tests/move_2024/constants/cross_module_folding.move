@@ -1,6 +1,5 @@
-// Constants defined in terms of other modules' constants are folded at compile time, across
-// module boundaries, including chains through multiple modules. No copies are synthesized for
-// constants only used in other constant definitions.
+// Constants may be defined in terms of other modules' constants, including chains through
+// multiple modules
 
 module 0x42::a {
 

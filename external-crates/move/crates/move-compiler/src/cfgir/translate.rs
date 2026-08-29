@@ -8,12 +8,13 @@ use crate::{
         self,
         ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
         cfg::{ImmForwardCFG, MutForwardCFG},
-        constants::{self, ConstantContext, ConstantValues},
+        constants::{self, Constants},
         visitor::{CFGIRVisitor, CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
     diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
     expansion::ast::{Attributes, ModuleIdent},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_},
+    ice_assert,
     parser::ast::{ConstantName, FunctionName},
     shared::{AstDebug, CompilationEnv, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };
@@ -196,43 +197,21 @@ fn modules(
     hmodules: UniqueMap<ModuleIdent, H::ModuleDefinition>,
 ) -> UniqueMap<ModuleIdent, G::ModuleDefinition> {
     let mut hmodules = hmodules.into_iter().collect::<Vec<_>>();
-    let mut constant_context = ConstantContext::new();
-    let mut constant_values = ConstantValues::new();
-    constants::seed_precompiled_constants(
-        context,
-        &mut constant_context,
-        &hmodules,
-        &mut constant_values,
-    );
     // All constants are folded up front, in the order of their own dependency graph; module
     // order is irrelevant
-    let mut folded_constants = constants::compute_folded_constants(
-        context,
-        &mut constant_context,
-        &mut hmodules,
-        &mut constant_values,
-    );
-    let constant_context = &mut constant_context;
-    let constant_values = &constant_values;
+    let (mut folded_constants, constants) = constants::folding::modules(context, &mut hmodules);
+    let constants = &constants;
     let modules = hmodules.into_iter().map(|(mname, m)| {
-        let constants = folded_constants.remove(&mname).unwrap_or_default();
-        module(
-            context,
-            constant_context,
-            constant_values,
-            constants,
-            mname,
-            m,
-        )
+        let module_constants = folded_constants.remove(&mname).unwrap_or_default();
+        module(context, constants, module_constants, mname, m)
     });
     UniqueMap::maybe_from_iter(modules).unwrap()
 }
 
 fn module(
     context: &mut Context,
-    constant_context: &mut ConstantContext,
-    constant_values: &ConstantValues,
-    mut constants: UniqueMap<ConstantName, G::Constant>,
+    constants: &Constants,
+    mut module_constants: UniqueMap<ConstantName, G::Constant>,
     module_ident: ModuleIdent,
     mdef: H::ModuleDefinition,
 ) -> (ModuleIdent, G::ModuleDefinition) {
@@ -248,19 +227,20 @@ fn module(
         functions: hfunctions,
         constants: hconstants,
     } = mdef;
-    assert!(
+    ice_assert!(
+        context.reporter(),
         hconstants.is_empty(),
-        "ICE constants should have been taken by the global constant pass"
+        module_ident.loc,
+        "constants should have been taken by the global constant pass"
     );
     context.current_package = package_name;
     context.push_warning_filter_scope(warning_filter.clone());
     let mut functions = hfunctions.map(|name, f| function(context, module_ident, name, f));
-    constants::generate_cross_module_constants(
+    constants::cross_module_gen::module(
         context,
-        constant_context,
-        constant_values,
+        constants,
         module_ident,
-        &mut constants,
+        &mut module_constants,
         &mut functions,
     );
     context.pop_warning_filter_scope();
@@ -276,7 +256,7 @@ fn module(
             friends,
             structs,
             enums,
-            constants,
+            constants: module_constants,
             functions,
         },
     )

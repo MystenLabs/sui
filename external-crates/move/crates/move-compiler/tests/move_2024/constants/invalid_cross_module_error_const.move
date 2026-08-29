@@ -1,6 +1,4 @@
-// '#[error]' constants cannot be declared 'public(package)': the error information is encoded
-// against the aborting module's tables, so they cannot be used outside their defining module.
-// The combination is rejected at the definition
+// '#[error]' constants may not be declared 'public(package)'; rejected at the definition
 
 module 0x42::a {
 

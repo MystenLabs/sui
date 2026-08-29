@@ -3,7 +3,9 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 2 tasks
 
-task 1, lines 9-47:
+// We double-check that strange name collision cases do not crop up
+
+task 1, lines 5-43:
 //# print-bytecode
 // Move bytecode v7
 module 42.a {

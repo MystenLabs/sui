@@ -14,8 +14,7 @@ module 0x42::b {
     use 0x42::a;
 
     public fun check() {
-        // the macro body's reference to LIMIT expands here, in another module, and loads this
-        // module's copy of the constant
+        // the macro body's reference to LIMIT expands here, in another module
         assert!(a::clamp!(4) == 4, 0);
         assert!(a::clamp!(11) == 10, 1);
     }

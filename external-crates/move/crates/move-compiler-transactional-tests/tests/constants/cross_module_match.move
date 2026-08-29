@@ -1,8 +1,5 @@
 //# init --edition 2024.alpha
 
-// match patterns that are cross-module constants select the right arms at runtime, including
-// alongside a same-named local constant
-
 //# publish
 module 0x42::a {
     public(package) const ONE: u64 = 1;

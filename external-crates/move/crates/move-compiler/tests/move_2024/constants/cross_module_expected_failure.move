@@ -1,8 +1,6 @@
-// Pins the '#[expected_failure(abort_code = ...)]' attribute path for constants: attribute
-// references do not go through constant visibility checks, so a cross-module reference to a
-// constant without 'public(package)' is accepted there (as it was before cross-module
-// constants existed). Question: should attribute references eventually require
-// 'public(package)' for consistency with term uses?
+// Attribute references like '#[expected_failure(abort_code = ...)]' do not go through
+// constant visibility checks: a cross-module reference to a constant without
+// 'public(package)' is accepted there, as it was before cross-module constants existed
 
 module 0x42::a {
 

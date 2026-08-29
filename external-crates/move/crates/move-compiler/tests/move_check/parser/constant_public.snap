@@ -9,4 +9,4 @@ error[EC02016]: invalid visibility modifier
   ┌─ tests/move_check/parser/constant_public.move:3:5
   │
 3 │     public const Foo: u64 = 0;
-  │     ^^^^^^ Invalid constant declaration. Constants can only be declared with 'public(package)' visibility
+  │     ^^^^^^ Invalid constant declaration. Constants may only be internal or 'public(package)'

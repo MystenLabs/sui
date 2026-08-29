@@ -1,5 +1,5 @@
-// An unfoldable constant used only from another module's function body: one error at the
-// definition and one at the use, with no ICE
+// An unfoldable constant used only from another module's function body reports one error, at
+// the definition
 
 module 0x42::a {
 

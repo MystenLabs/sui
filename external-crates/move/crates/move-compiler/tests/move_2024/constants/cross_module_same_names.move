@@ -1,5 +1,5 @@
-// Same-named constants from different modules are keyed independently, in constant
-// definitions and in function bodies
+// Same-named constants from different modules keep their own values, in constant definitions
+// and in function bodies
 
 module 0x42::a {
 

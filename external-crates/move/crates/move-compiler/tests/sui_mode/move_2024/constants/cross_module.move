@@ -1,5 +1,4 @@
-// Cross-module constants under the Sui flavor: the synthesized constant copies do not trip
-// sui-mode checks
+// Cross-module constant uses do not trip sui-mode checks
 
 module 0x42::a {
 

@@ -1,6 +1,6 @@
-// A constant reference in a macro body is a cross-module use when the macro expands in another
-// module: the copy must be synthesized even though no cross-module reference appears in the
-// source of the defining module
+// A constant reference in a macro body is a cross-module use when the macro expands in
+// another module, even though no cross-module reference appears in the defining module's
+// source
 
 module 0x42::a {
 

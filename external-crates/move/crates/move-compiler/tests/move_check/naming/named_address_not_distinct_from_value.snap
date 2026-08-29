@@ -14,4 +14,4 @@ error[EC04001]: restricted visibility
 18 │         0x41::M::C;
    │         ^^^^^^^^^^ Invalid access of '0x41::M::C'
    │
-   = cross-module constant accesses are not supported by current edition 'legacy'; the '2024.alpha' edition supports this feature
+   = cross-module constants are not supported by current edition 'legacy'; the '2024.alpha' edition supports this feature

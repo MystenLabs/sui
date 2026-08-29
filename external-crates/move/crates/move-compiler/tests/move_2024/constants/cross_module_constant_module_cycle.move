@@ -1,7 +1,7 @@
-// A module "cycle" that exists only through constant references is legal: constants are erased
-// at compile time (folded into definitions and copied into using modules), so they create no
-// module dependency. This holds for function-body uses (c <-> d) and for constant definitions
-// referencing each other across modules in both directions without a constant cycle (a <-> b)
+// A module "cycle" that exists only through constant references is legal: constant references
+// create no module dependency. This holds for function-body uses (c <-> d) and for constant
+// definitions referencing each other across modules in both directions without a constant
+// cycle (a <-> b)
 
 module 0x42::a {
 

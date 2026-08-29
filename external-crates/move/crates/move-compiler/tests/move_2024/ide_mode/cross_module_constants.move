@@ -1,6 +1,5 @@
-// Member completion on a module with a package-visible constant lists the constant but not
-// the generated function; a rejected (private) cross-module use under IDE mode continues past
-// the error without an ICE
+// Member completion on a module with a package-visible constant lists the constant; a
+// rejected (private) cross-module use under IDE mode continues past the error
 
 module 0x42::a {
 

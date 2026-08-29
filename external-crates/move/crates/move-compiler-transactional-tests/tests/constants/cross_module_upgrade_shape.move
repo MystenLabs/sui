@@ -1,7 +1,7 @@
 //# init --edition 2024.alpha
 
-// The synthesized constant copy disappears when the upgraded package no longer uses the
-// constant cross-module; constants are not part of the upgrade-compatibility surface
+// An upgrade may drop a cross-module constant use: constants are not part of the
+// upgrade-compatibility surface
 
 //# publish
 module 0x42::a {

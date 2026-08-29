@@ -6,9 +6,7 @@ module CrossModuleConsts::user {
     }
 }
 
-// Extending a module of the (pre-compiled) dependency package forces that one module to
-// recompile from source: its constants, and the extension's, fold against the dependency
-// package's pre-compiled constant values
+// extends a module of the pre-compiled dependency package
 #[test_only]
 extend module ConstDeps::m {
     public fun extended(): u64 {

@@ -1,5 +1,4 @@
-// A genuine constant dependency cycle across modules is reported directly at the constants
-// involved
+// Cross-module constant dependency cycle
 
 module 0x42::a {
 

@@ -1,6 +1,5 @@
-// Constants from modules whose names would collide under identifier-only mangling
-// (`x::A_B` and `x_A::B` would both render as `_x_A_B`) get distinct copy names, since the
-// copy names use the `#` generated-name delimiter (`const#x_A#B`)
+// Constants whose module and constant names concatenate ambiguously (`x::A_B` and `x_A::B`)
+// stay distinct when both are used from one module
 
 module 0x42::x {
 

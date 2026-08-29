@@ -323,7 +323,7 @@ impl FeatureGate {
             FeatureGate::Lambda => "lambda expressions are",
             FeatureGate::ModuleLabel => "'module' label forms (ending with ';') are",
             FeatureGate::ModuleExtension => "module extensions are",
-            FeatureGate::CrossModuleConstants => "cross-module constant accesses are",
+            FeatureGate::CrossModuleConstants => "cross-module constants are",
             FeatureGate::StringLiterals => "string literals (without a leading 'b' or 'x') are",
         }
     }

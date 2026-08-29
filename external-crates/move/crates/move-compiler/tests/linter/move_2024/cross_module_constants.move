@@ -1,4 +1,4 @@
-// This test ensures that synthesized copies of cross-module constants do not show up in lints
+// Cross-module constant uses trigger no lints in the using module
 
 module 0x42::a {
 

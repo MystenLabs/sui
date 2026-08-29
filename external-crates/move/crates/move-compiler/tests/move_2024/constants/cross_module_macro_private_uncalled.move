@@ -1,5 +1,4 @@
-// A macro body referencing its module's private constant is fine while the macro is never
-// called: macro bodies are not eagerly checked
+// Unexpanded macro bodies with private constants are no concern for visibility
 
 module 0x42::a {
 

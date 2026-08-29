@@ -23,9 +23,3 @@ error[EC04001]: restricted visibility
 2 │     public(package) const MAX: u64 = 100;
   │     --------------- A 'public(package)' constant can only be accessed from the same address and package as module 'Defn::defn' in package 'Defn'. This access is from address 'Usage' in package 'Usage'
 
-error[EC03003]: unbound module member
-   ┌─ ./sources/usage.move:12:40
-   │
-12 │     public fun call_generated(): u64 { defn::_const_MAX() }
-   │                                        ^^^^^^^^^^^^^^^^ Invalid module access. Unbound function '_const_MAX' in module 'Defn::defn'
-

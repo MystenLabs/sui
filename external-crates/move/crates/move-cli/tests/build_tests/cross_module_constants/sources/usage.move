@@ -1,10 +1,8 @@
 module A::usage {
     use A::defn;
 
-    // folded at compile time
     const DOUBLE: u64 = defn::MAX * 2;
 
-    // compiled as calls to the getters synthesized in A::defn
     public fun max(): u64 { defn::MAX }
     public fun bytes(): vector<u8> { defn::BYTES }
     public fun double(): u64 { DOUBLE }
@@ -21,7 +19,6 @@ module A::usage {
 
     public fun fail() { abort FAIL_CODE }
 
-    // the expected abort code is folded from a cross-module constant
     #[test]
     #[expected_failure(abort_code = FAIL_CODE)]
     fun expect_folded_code() { fail() }

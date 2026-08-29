@@ -9,7 +9,6 @@ module 0x42::a {
         115792089237316195423570985008687907853269984665640564039457584007913129639935;
     public(package) const NESTED: vector<vector<u8>> = vector[b"a", b"bc"];
 
-    // local use compiles as a load of this module's own constant
     public fun local_max(): u64 { MAX }
 }
 
@@ -19,13 +18,19 @@ module 0x42::b {
     const DOUBLE: u64 = a::MAX * 2;
     const FOLDED: address = a::ADDR;
 
+    public struct S has drop { x: u64, y: vector<u8> }
+
+    public enum En has drop { V(u64) }
+
+    fun id(x: u64): u64 { x }
+
     public fun check() {
-        // function-body uses: compiled as loads of copies of the constants in this module
+        // function-body uses
         assert!(a::MAX == 100, 0);
         assert!(a::BYTES == b"hello", 1);
-        // constant-definition use: folded at compile time
+        // constant-definition uses
         assert!(DOUBLE == 200, 2);
-        // local constant load and cross-module copy agree
+        // local and cross-module reads agree
         assert!(a::local_max() == a::MAX, 3);
         // other constant types
         assert!(a::ADDR == @0x7, 4);
@@ -36,10 +41,22 @@ module 0x42::b {
         );
         assert!(a::NESTED == vector[b"a", b"bc"], 6);
         assert!(FOLDED == @0x7, 7);
+        // struct and variant fields
+        let s = S { x: a::MAX, y: a::BYTES };
+        assert!(s.x == 100, 8);
+        assert!(s.y == b"hello", 9);
+        let v = match (En::V(a::MAX)) { En::V(x) => x };
+        assert!(v == 100, 10);
+        // mutation and direct call argument
+        let mut m = 0;
+        let r = &mut m;
+        *r = a::MAX;
+        assert!(m == 100, 11);
+        assert!(id(a::MAX) == 100, 12);
     }
 
     public fun fail() {
-        // a cross-module constant as an abort code that is actually taken
+        // a cross-module constant as an abort code
         abort a::MAX
     }
 }

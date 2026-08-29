@@ -1400,6 +1400,7 @@ fn check_visibility_modifiers(
     // mark conflicting friend usage
     let mut friend_usage = friends.iter().next().map(|(_, _, friend)| friend.loc);
     let mut public_package_usage = None;
+
     for (_, _, function) in functions {
         match function.visibility {
             E::Visibility::Friend(loc) if friend_usage.is_none() => {
@@ -1412,6 +1413,7 @@ fn check_visibility_modifiers(
             _ => (),
         }
     }
+
     for (_, _, constant) in constants {
         // error constants are encoded against their defining module's tables, so they cannot be
         // given any visibility
@@ -1420,23 +1422,32 @@ fn check_visibility_modifiers(
             .get_(&known_attributes::AttributeKind_::Error)
             && !matches!(constant.visibility, E::Visibility::Internal)
         {
-            let vis_loc = constant
-                .visibility
-                .loc()
-                .expect("ICE non-internal visibility must have a loc");
+            use known_attributes::ErrorAttribute as ErrAttr;
+
+            let Some(vis_loc) = constant.visibility.loc() else {
+                context.add_diag(ice!((
+                    constant.loc,
+                    "ICE: Non-internal visibility for error constant must have a loc"
+                )));
+                continue;
+            };
+
             let msg = format!(
-                "Invalid constant declaration. '#[{}]' constants cannot be declared '{}'",
-                known_attributes::ErrorAttribute::ERROR,
-                E::Visibility::PACKAGE,
+                "Invalid constant declaration. '#[{attr}]' constants may only be used internal \
+                 to their module, and may not be declared '{vis}'",
+                attr = ErrAttr::ERROR,
+                vis = constant.visibility,
             );
-            let attr_msg = "Error constants are encoded against their defining module \
-                            and cannot be used outside of it";
+
+            let attr_msg = format!("Declared as '#[{}]' here", ErrAttr::ERROR);
+
             context.add_diag(diag!(
                 Declarations::InvalidVisibilityModifier,
                 (vis_loc, msg),
                 (error_attr.loc, attr_msg)
             ));
         }
+
         match constant.visibility {
             E::Visibility::Package(loc) => {
                 context.check_feature(package_name, FeatureGate::CrossModuleConstants, loc);
@@ -1445,8 +1456,7 @@ fn check_visibility_modifiers(
             E::Visibility::Internal => (),
             E::Visibility::Public(loc) | E::Visibility::Friend(loc) => {
                 let msg = format!(
-                    "Invalid constant declaration. Constants can only be declared with '{}' \
-                     visibility",
+                    "Invalid constant declaration. Constants may only be internal or '{}'",
                     E::Visibility::PACKAGE,
                 );
                 context.add_diag(diag!(Declarations::InvalidVisibilityModifier, (loc, msg)));
@@ -1480,17 +1490,20 @@ fn check_visibility_modifiers(
             E::Visibility::FRIEND_IDENT,
             E::Visibility::PACKAGE_IDENT
         );
-        let package_constant_locs = constants.iter().filter_map(|(_, _, c)| match c.visibility {
-            E::Visibility::Package(loc) => Some(loc),
-            _ => None,
-        });
-        for loc in package_constant_locs {
+
+        for (_, _, constant) in constants {
+            // Erroring on `friend` here is odd since we disallow it above, but why not?
+            let (E::Visibility::Package(loc) | E::Visibility::Friend(loc)) = constant.visibility
+            else {
+                continue;
+            };
             context.add_diag(diag!(
                 Declarations::InvalidVisibilityModifier,
                 (loc, package_error_msg.clone()),
                 (friend_usage, friend_error_msg.clone())
             ));
         }
+
         for (_, _, function) in functions {
             match function.visibility {
                 E::Visibility::Friend(loc) => {

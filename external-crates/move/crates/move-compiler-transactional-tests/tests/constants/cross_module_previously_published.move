@@ -1,7 +1,6 @@
 //# init --edition 2024.alpha
 
-// Modules published in earlier tasks are recompiled as source dependencies, so their constants
-// can be copied and folded like any other module in the compilation
+// Constants of modules published in earlier tasks are usable from later ones
 
 //# publish
 module 0x42::a {
