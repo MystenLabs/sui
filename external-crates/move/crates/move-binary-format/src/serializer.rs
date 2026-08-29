@@ -690,10 +690,10 @@ fn serialize_signature_token_single_node_impl(
     binary: &mut BinaryData,
     token: &SignatureToken,
 ) -> Result<()> {
-    // Version-gate at the token peel-off: every signature token — whether it appears in a
-    // signature, a struct/enum field definition, or a constant type — serializes through this
-    // function, so gating here covers all positions by construction. (Signed-integer *opcodes*
-    // do not flow through this path; they are gated separately in `serialize_instruction_inner`.)
+    // Version-gate at the token peel-off: every signature token serializes through this
+    // function, whether it appears in a signature, a struct/enum field definition, or a
+    // constant type, so gating here covers all positions by construction. Signed-integer
+    // *opcodes* do not flow through this path; they are gated in `serialize_instruction_inner`.
     if major_version < SIGNED_INT_VERSION && token.is_signed_integer() {
         bail!(
             "Signed integer types (i8..i256) not supported in bytecode version {}",
@@ -850,6 +850,15 @@ fn serialize_instruction_inner(
     binary: &mut BinaryData,
     opcode: &Bytecode,
 ) -> Result<()> {
+    // Signed-integer *opcodes* must be gated here: they are not signature tokens, so they
+    // never flow through `serialize_signature_token_single_node_impl` (which gates signed
+    // *types* in signatures, field definitions, and constant types).
+    if major_version < SIGNED_INT_VERSION && opcode.is_signed_integer_instruction() {
+        return Err(anyhow!(
+            "Signed integer bytecodes not supported in bytecode version {}",
+            major_version
+        ));
+    }
     match opcode {
         Bytecode::LdU16(_)
         | Bytecode::LdU32(_)
@@ -861,29 +870,6 @@ fn serialize_instruction_inner(
         {
             return Err(anyhow!(
                 "Loading or casting u16, u32, u256 integers not supported in bytecode version {}",
-                major_version
-            ));
-        }
-        // Signed-integer *opcodes* must be gated here: they are not signature tokens, so they
-        // never flow through `serialize_signature_token_single_node_impl` (which gates signed
-        // *types* in signatures, field definitions, and constant types).
-        Bytecode::LdI8(_)
-        | Bytecode::LdI16(_)
-        | Bytecode::LdI32(_)
-        | Bytecode::LdI64(_)
-        | Bytecode::LdI128(_)
-        | Bytecode::LdI256(_)
-        | Bytecode::CastI8
-        | Bytecode::CastI16
-        | Bytecode::CastI32
-        | Bytecode::CastI64
-        | Bytecode::CastI128
-        | Bytecode::CastI256
-        | Bytecode::Neg
-            if (major_version < SIGNED_INT_VERSION) =>
-        {
-            return Err(anyhow!(
-                "Signed integer bytecodes not supported in bytecode version {}",
                 major_version
             ));
         }

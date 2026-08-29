@@ -496,6 +496,14 @@ pub(crate) fn write_u128(binary: &mut BinaryData, value: u128) -> Result<()> {
     binary.extend(&value.to_le_bytes())
 }
 
+/// Write a `u256` in Little Endian format.
+pub(crate) fn write_u256(
+    binary: &mut BinaryData,
+    value: move_core_types::u256::U256,
+) -> Result<()> {
+    binary.extend(&value.to_le_bytes())
+}
+
 /// Write an `i8` in Little Endian format.
 pub(crate) fn write_i8(binary: &mut BinaryData, value: i8) -> Result<()> {
     binary.extend(&value.to_le_bytes())
@@ -521,18 +529,10 @@ pub(crate) fn write_i128(binary: &mut BinaryData, value: i128) -> Result<()> {
     binary.extend(&value.to_le_bytes())
 }
 
-/// Write an `I256` in Little Endian format.
+/// Write an `i256` in Little Endian format.
 pub(crate) fn write_i256(
     binary: &mut BinaryData,
     value: move_core_types::i256::I256,
-) -> Result<()> {
-    binary.extend(&value.to_le_bytes())
-}
-
-/// Write a `u256` in Little Endian format.
-pub(crate) fn write_u256(
-    binary: &mut BinaryData,
-    value: move_core_types::u256::U256,
 ) -> Result<()> {
     binary.extend(&value.to_le_bytes())
 }

@@ -75,97 +75,43 @@ impl Table {
     }
 }
 
-fn read_u16_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u16> {
-    let mut u16_bytes = [0; 2];
-    cursor
-        .read_exact(&mut u16_bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_U16))?;
-    Ok(u16::from_le_bytes(u16_bytes))
+/// Defines a `$name` reading `$n` little-endian bytes as `$ty` via `$conv`, failing with
+/// `$err` on truncated input.
+macro_rules! read_le_int {
+    ($name:ident, $ty:ty, $n:expr, $err:ident, $conv:expr) => {
+        fn $name(cursor: &mut VersionedCursor) -> BinaryLoaderResult<$ty> {
+            let mut bytes = [0; $n];
+            cursor
+                .read_exact(&mut bytes)
+                .map_err(|_| PartialVMError::new(StatusCode::$err))?;
+            Ok($conv(bytes))
+        }
+    };
 }
 
-fn read_u32_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u32> {
-    let mut u32_bytes = [0; 4];
-    cursor
-        .read_exact(&mut u32_bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_U32))?;
-    Ok(u32::from_le_bytes(u32_bytes))
-}
-
-fn read_u64_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u64> {
-    let mut u64_bytes = [0; 8];
-    cursor
-        .read_exact(&mut u64_bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_U64))?;
-    Ok(u64::from_le_bytes(u64_bytes))
-}
-
-fn read_u128_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u128> {
-    let mut u128_bytes = [0; 16];
-    cursor
-        .read_exact(&mut u128_bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_U128))?;
-    Ok(u128::from_le_bytes(u128_bytes))
-}
-
-fn read_u256_internal(
-    cursor: &mut VersionedCursor,
-) -> BinaryLoaderResult<move_core_types::u256::U256> {
-    let mut u256_bytes = [0; 32];
-    cursor
-        .read_exact(&mut u256_bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_U256))?;
-    Ok(move_core_types::u256::U256::from_le_bytes(&u256_bytes))
-}
-
-fn read_i8_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<i8> {
-    let mut bytes = [0; 1];
-    cursor
-        .read_exact(&mut bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_I8))?;
-    Ok(i8::from_le_bytes(bytes))
-}
-
-fn read_i16_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<i16> {
-    let mut bytes = [0; 2];
-    cursor
-        .read_exact(&mut bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_I16))?;
-    Ok(i16::from_le_bytes(bytes))
-}
-
-fn read_i32_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<i32> {
-    let mut bytes = [0; 4];
-    cursor
-        .read_exact(&mut bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_I32))?;
-    Ok(i32::from_le_bytes(bytes))
-}
-
-fn read_i64_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<i64> {
-    let mut bytes = [0; 8];
-    cursor
-        .read_exact(&mut bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_I64))?;
-    Ok(i64::from_le_bytes(bytes))
-}
-
-fn read_i128_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<i128> {
-    let mut bytes = [0; 16];
-    cursor
-        .read_exact(&mut bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_I128))?;
-    Ok(i128::from_le_bytes(bytes))
-}
-
-fn read_i256_internal(
-    cursor: &mut VersionedCursor,
-) -> BinaryLoaderResult<move_core_types::i256::I256> {
-    let mut bytes = [0; 32];
-    cursor
-        .read_exact(&mut bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_I256))?;
-    Ok(move_core_types::i256::I256::from_le_bytes(&bytes))
-}
+read_le_int!(read_u16_internal, u16, 2, BAD_U16, u16::from_le_bytes);
+read_le_int!(read_u32_internal, u32, 4, BAD_U32, u32::from_le_bytes);
+read_le_int!(read_u64_internal, u64, 8, BAD_U64, u64::from_le_bytes);
+read_le_int!(read_u128_internal, u128, 16, BAD_U128, u128::from_le_bytes);
+read_le_int!(
+    read_u256_internal,
+    move_core_types::u256::U256,
+    32,
+    BAD_U256,
+    |bytes| move_core_types::u256::U256::from_le_bytes(&bytes)
+);
+read_le_int!(read_i8_internal, i8, 1, BAD_I8, i8::from_le_bytes);
+read_le_int!(read_i16_internal, i16, 2, BAD_I16, i16::from_le_bytes);
+read_le_int!(read_i32_internal, i32, 4, BAD_I32, i32::from_le_bytes);
+read_le_int!(read_i64_internal, i64, 8, BAD_I64, i64::from_le_bytes);
+read_le_int!(read_i128_internal, i128, 16, BAD_I128, i128::from_le_bytes);
+read_le_int!(
+    read_i256_internal,
+    move_core_types::i256::I256,
+    32,
+    BAD_I256,
+    |bytes| move_core_types::i256::I256::from_le_bytes(&bytes)
+);
 
 //
 // Helpers to read all uleb128 encoded integers.
@@ -1812,6 +1758,8 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
             _ => (),
         };
 
+        // TODO (signed-ints): add a test entry for load_code at VERSION_8 to exercise the
+        // signed opcode path when possible
         match opcode {
             Opcodes::LD_I8
             | Opcodes::LD_I16

@@ -264,7 +264,7 @@ pub fn is_primitive(
     use SignatureToken as S;
     match s {
         S::Bool | S::U8 | S::U16 | S::U32 | S::U64 | S::U128 | S::U256 | S::Address => true,
-        // TODO [signed-ints]: fail closed until the signed value/BCS layer lands — signed
+        // TODO [signed-ints]: fail closed until the signed value/BCS layer lands: signed
         // entry params must not be treated as primitive pure-arg-eligible before then. Flip
         // deliberately in the enablement PR.
         S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => false,

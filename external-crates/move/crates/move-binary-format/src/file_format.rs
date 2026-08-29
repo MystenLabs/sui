@@ -1855,28 +1855,76 @@ pub enum Bytecode {
     VariantSwitch(VariantJumpTableIndex),
 
     /// Push an i8 constant onto the stack.
+    ///
+    /// Stack transition:
+    ///
+    /// ```... -> ..., i8_value```
     LdI8(i8),
     /// Push an i16 constant onto the stack.
+    ///
+    /// Stack transition:
+    ///
+    /// ```... -> ..., i16_value```
     LdI16(i16),
     /// Push an i32 constant onto the stack.
+    ///
+    /// Stack transition:
+    ///
+    /// ```... -> ..., i32_value```
     LdI32(i32),
     /// Push an i64 constant onto the stack.
+    ///
+    /// Stack transition:
+    ///
+    /// ```... -> ..., i64_value```
     LdI64(i64),
     /// Push an i128 constant onto the stack.
+    ///
+    /// Stack transition:
+    ///
+    /// ```... -> ..., i128_value```
     LdI128(Box<i128>),
-    /// Push an I256 constant onto the stack.
+    /// Push an i256 constant onto the stack.
+    ///
+    /// Stack transition:
+    ///
+    /// ```... -> ..., i256_value```
     LdI256(Box<move_core_types::i256::I256>),
     /// Convert the value at the top of the stack into i8.
+    ///
+    /// Stack transition:
+    ///
+    /// ```..., integer_value -> ..., i8_value```
     CastI8,
     /// Convert the value at the top of the stack into i16.
+    ///
+    /// Stack transition:
+    ///
+    /// ```..., integer_value -> ..., i16_value```
     CastI16,
     /// Convert the value at the top of the stack into i32.
+    ///
+    /// Stack transition:
+    ///
+    /// ```..., integer_value -> ..., i32_value```
     CastI32,
     /// Convert the value at the top of the stack into i64.
+    ///
+    /// Stack transition:
+    ///
+    /// ```..., integer_value -> ..., i64_value```
     CastI64,
     /// Convert the value at the top of the stack into i128.
+    ///
+    /// Stack transition:
+    ///
+    /// ```..., integer_value -> ..., i128_value```
     CastI128,
-    /// Convert the value at the top of the stack into I256.
+    /// Convert the value at the top of the stack into i256.
+    ///
+    /// Stack transition:
+    ///
+    /// ```..., integer_value -> ..., i256_value```
     CastI256,
     /// Negate the signed integer value at the top of the stack. Valid only on signed integer
     /// types (i8..i256) and type-preserving: the result has the same type as the operand.
@@ -2963,8 +3011,8 @@ impl CompiledModule {
 /// Returns true if the module uses signed integer types or instructions anywhere they can
 /// occur: signature tokens in the signature pool, constant types, struct/enum field definition
 /// types, or code-unit bytecodes. A module for which this returns true requires bytecode
-/// version `SIGNED_INT_VERSION` or later (version selection and the serializer's version gates key off
-/// exactly these positions).
+/// version `SIGNED_INT_VERSION` or later; as signed integers are enabled, version selection
+/// keys off this predicate to pick that version.
 pub fn module_uses_signed_integers(module: &CompiledModule) -> bool {
     fn token_uses_signed_integers(token: &SignatureToken) -> bool {
         token
