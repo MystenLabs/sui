@@ -23,6 +23,7 @@ pub mod many_back_edges;
 pub mod negative_stack_size_tests;
 pub mod reference_safety_tests;
 pub mod signature_tests;
+pub mod signed_int_rejection_tests;
 pub mod vec_pack_tests;
 
 /// Configuration used in production.
