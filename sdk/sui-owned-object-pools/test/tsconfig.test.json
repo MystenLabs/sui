@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "../", // This should be set to the project root
+    "paths": {
+      "@testHelpers/*": ["test/helpers/*"],
+      "@src/*": ["src/*"]
+    },
+  },
+
+  "include": [
+    "../src/**/*",
+    "../test/helpers/*",
+    "../test/unit/*"
+  ]
+}
