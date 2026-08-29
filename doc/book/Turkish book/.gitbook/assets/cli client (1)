@@ -1,0 +1,738 @@
+<!doctype html>
+<html data-n-head-ssr lang="en">
+
+<head>
+  <meta name="robots" content="index,follow">
+  <meta property="og:type" content="website">
+  <meta data-rh="true" name="keywords" content="Technology,Blockchain,Move,Sui, Mysten labs">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=6">
+
+
+  <title>Sui Client CLI | Sui Docs</title><meta data-n-head="ssr" charset="utf-8"><meta data-n-head="ssr" name="viewport" content="width=device-width,initial-scale=1"><meta data-n-head="ssr" data-hid="og:image" name="og:image" content="https://docs.sui.io/img/sui.jpeg"><meta data-n-head="ssr" property="twitter:card" content="summary"><meta data-n-head="ssr" property="twitter:creator" content="mysten_labs"><meta data-n-head="ssr" property="twitter:image" content="https://sui.io/img/sui.jpeg"><meta data-n-head="ssr" name="format-detection" content="telephone=no"><meta data-n-head="ssr" data-hid="description" name="description" content="Learn how to set up, configure, and use the Sui Client Command Line Interface (CLI). You can use the CLI to experiment with Sui features using a command line interface."><meta data-n-head="ssr" data-hid="og:title" name="og:title" content="Sui Client CLI"><meta data-n-head="ssr" data-hid="og:description" property="og:description" content="Learn how to set up, configure, and use the Sui Client Command Line Interface (CLI). You can use the CLI to experiment with Sui features using a command line interface."><meta data-n-head="ssr" data-hid="twitter:title" property="twitter:title" content="Sui Client CLI"><meta data-n-head="ssr" data-hid="twitter:description" property="twitter:description" content="Learn how to set up, configure, and use the Sui Client Command Line Interface (CLI). You can use the CLI to experiment with Sui features using a command line interface."><link data-n-head="ssr" rel="icon" type="image/x-icon" href="/favicon2.png"><link data-n-head="ssr" data-hid="canonical" rel="canonical" href="https://docs.sui.io/devnet/build/cli-client"><link rel="preload" href="/_nuxt/b4e2ed9.js" as="script"><link rel="preload" href="/_nuxt/8ae2c42.js" as="script"><link rel="preload" href="/_nuxt/css/85a0274.css" as="style"><link rel="preload" href="/_nuxt/42bcd16.js" as="script"><link rel="preload" href="/_nuxt/css/4356c8f.css" as="style"><link rel="preload" href="/_nuxt/6a70b28.js" as="script"><link rel="preload" href="/_nuxt/d3737a5.js" as="script"><link rel="preload" href="/_nuxt/css/57374d8.css" as="style"><link rel="preload" href="/_nuxt/a5af1a2.js" as="script"><link rel="preload" href="/_nuxt/css/fbcfabb.css" as="style"><link rel="preload" href="/_nuxt/3062117.js" as="script"><link rel="stylesheet" href="/_nuxt/css/85a0274.css"><link rel="stylesheet" href="/_nuxt/css/4356c8f.css"><link rel="stylesheet" href="/_nuxt/css/57374d8.css"><link rel="stylesheet" href="/_nuxt/css/fbcfabb.css"><link rel="preload" href="/_nuxt/static/1671776160/devnet/build/cli-client/state.js" as="script"><link rel="preload" href="/_nuxt/static/1671776160/devnet/build/cli-client/payload.js" as="script"><link rel="preload" href="/_nuxt/static/1671776160/manifest.js" as="script">
+
+
+
+
+
+</head>
+
+<body>
+  <script data-n-head="ssr" data-hid="nuxt-color-mode-script" data-pbody="true">!function(){"use strict";var t=window,e=document,s=e.documentElement,a=["dark","light"],o=window.localStorage.getItem("nuxt-color-mode")||"system",c="system"===o?n():o,e=e.body.getAttribute("data-color-mode-forced");function r(e){e+="-mode";s.classList?s.classList.add(e):s.className+=" "+e}function l(e){return t.matchMedia("(prefers-color-scheme"+e+")")}function n(){if(t.matchMedia&&"not all"!==l("").media)for(var e of a)if(l(":"+e).matches)return e;return"light"}r(c=e?e:c),t.__NUXT_COLOR_MODE__={preference:o,value:c,getColorScheme:n,addClass:r,removeClass:function(e){e+="-mode";s.classList?s.classList.remove(e):s.className=s.className.replace(new RegExp(e,"g"),"")}}}()</script><div data-server-rendered="true" id="__nuxt"><!----><div id="__layout"><section><!----> <div class="page-wrapper"><!----> <div class="sui-headers-wrapper"><header class="header site-header js-header-sticky sui_menu_inactived header_light" data-v-f6ae978a><div class="container-fluid _sui-md" data-v-f6ae978a><div class="row justify-content-between align-items-center sui-mx" data-v-f6ae978a><div class="col-auto v-dropdown" data-v-f6ae978a><a href="/" aria-label="Home" title="Home logo" class="logo" data-v-f6ae978a><div class="logo sui-logo" data-v-f6ae978a></div></a> <!----><!----><!----></div> <div class="col-auto d-xl-block d-none" data-v-f6ae978a><ul class="menu" data-v-f6ae978a><li data-v-f6ae978a><a href="/devnet/learn" aria-label="Learn" title="Learn" data-v-f6ae978a>Learn</a></li><li data-v-f6ae978a><a href="/devnet/build" aria-label="Build" title="Build" class="_selectActive" data-v-f6ae978a>Build</a></li><li data-v-f6ae978a><a href="/devnet/reference" aria-label="Reference" title="Reference" data-v-f6ae978a>Reference</a></li><li data-v-f6ae978a><a href="/devnet/explore" aria-label="Explore" title="Explore" data-v-f6ae978a>Explore</a></li><li data-v-f6ae978a><a href="/devnet/contribute" aria-label="Contribute" title="Contribute" data-v-f6ae978a>Contribute</a></li> <!----> <li data-v-f6ae978a><div data-v-f6ae978a><button type="button" autocomplete="off" class="_search button" data-v-f6ae978a><div class="search_icon"><svg viewBox="0 0 20 20" fill="currentColor" class="h-full py-2 text-grey-800 opacity-75 fill-current group-hover:animate-wiggle-once group-focus:animate-wiggle-once"><path d="M19.71,18.29,16,14.61A9,9,0,1,0,14.61,16l3.68,3.68a1,1,0,0,0,1.42,0A1,1,0,0,0,19.71,18.29ZM2,9a7,7,0,1,1,12,4.93h0s0,0,0,0A7,7,0,0,1,2,9Z"></path></svg></div> <div class="search-text">Press '/' to start search</div></button> <div data-v-9f446ede data-v-f6ae978a></div></div></li></ul></div> <div class="col-auto d-xl-none" data-v-f6ae978a><div class="burger js-burger" data-v-f6ae978a><div class="burger__line" data-v-f6ae978a></div> <div class="burger__line" data-v-f6ae978a></div> <div class="burger__line" data-v-f6ae978a></div></div></div></div></div> <div class="header__wrapper-overlay-menu d-xl-none" data-v-f6ae978a><div class="container _sui_mobile_menu" data-v-f6ae978a><div class="row justify-content-center" data-v-f6ae978a><div class="col-auto _sui-menu" data-v-f6ae978a><ul class="overlay-menu js-overlay-menu" data-v-f6ae978a><li class="subelm" data-v-f6ae978a data-v-f6ae978a><div class="_menu_content" data-v-f6ae978a><a href="/devnet/learn" data-v-f6ae978a><div class="overlay-menu__item-wrapper" data-v-f6ae978a><div class="overlay-menu__item-line" data-v-f6ae978a></div> <div class="overlay-menu__item-counter" data-v-f6ae978a>
+                        01
+                      </div> <span data-v-f6ae978a>Learn</span></div></a> <div class="burger__submenu" data-v-f6ae978a><i class="far fa-chevron-down" data-v-f6ae978a></i></div></div> <ul class="_subMenu list_details" data-v-85d14994 data-v-f6ae978a><li class="_doc-submenu subList _subEle" data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/learn/about-sui" aria-label="About Sui" title="About Sui" data-v-85d14994>About Sui</a> <!----> <!----> <div class="burger__submenu" data-v-85d14994><i class="far fa-chevron-down" data-v-85d14994></i></div></div> <ul class="_subMenu list_details" data-v-85d14994><li data-v-85d14994><a href="/devnet/learn/sui-glossary" aria-label="Sui Glossary" title="Sui Glossary" data-v-85d14994>Sui Glossary</a> <!----></li><li data-v-85d14994><a href="/devnet/learn/why-move" aria-label="Why Move?" title="Why Move?" data-v-85d14994>Why Move?</a> <!----></li><li data-v-85d14994><a href="/devnet/learn/sui-move-diffs" aria-label="How Sui Move differs from Core Move" title="How Sui Move differs from Core Move" data-v-85d14994>How Sui Move differs from Core Move</a> <!----></li><li data-v-85d14994><a href="/devnet/learn/sui-security" aria-label="Sui Security" title="Sui Security" data-v-85d14994>Sui Security</a> <!----></li></ul></li><li class="_doc-submenu subList _subEle" data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/learn/how-sui-works" aria-label="How Sui Works" title="How Sui Works" data-v-85d14994>How Sui Works</a> <!----> <!----> <div class="burger__submenu" data-v-85d14994><i class="far fa-chevron-down" data-v-85d14994></i></div></div> <ul class="_subMenu list_details" data-v-85d14994><li data-v-85d14994><a href="/devnet/learn/sui-compared" aria-label="Sui Compared to Other Blockchains" title="Sui Compared to Other Blockchains" data-v-85d14994>Sui Compared to Other Blockchains</a> <!----></li><li data-v-85d14994><a href="/devnet/learn/objects" aria-label="Objects" title="Objects" data-v-85d14994>Objects</a> <!----></li><li data-v-85d14994><a href="/devnet/learn/transactions" aria-label="Transactions" title="Transactions" data-v-85d14994>Transactions</a> <!----></li><li data-v-85d14994><a href="/devnet/learn/single-writer-apps" aria-label="Single-Writer Apps" title="Single-Writer Apps" data-v-85d14994>Single-Writer Apps</a> <!----></li><li data-v-85d14994><a href="/devnet/learn/architecture/validators" aria-label="Validators" title="Validators" data-v-85d14994>Validators</a> <!----></li><li data-v-85d14994><a href="/devnet/learn/architecture/consensus" aria-label="Consensus Engine" title="Consensus Engine" data-v-85d14994>Consensus Engine</a> <!----></li></ul></li><li class="_doc-submenu subList _subEle" data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/learn/tokenomics" aria-label="Sui Tokenomics" title="Sui Tokenomics" data-v-85d14994>Sui Tokenomics</a> <!----> <!----> <div class="burger__submenu" data-v-85d14994><i class="far fa-chevron-down" data-v-85d14994></i></div></div> <ul class="_subMenu list_details" data-v-85d14994><li data-v-85d14994><a href="/devnet/learn/tokenomics/sui-token" aria-label="Sui Token" title="Sui Token" data-v-85d14994>Sui Token</a> <!----></li><li data-v-85d14994><a href="/devnet/learn/tokenomics/gas-pricing" aria-label="Sui Gas Pricing" title="Sui Gas Pricing" data-v-85d14994>Sui Gas Pricing</a> <!----></li><li data-v-85d14994><a href="/devnet/learn/tokenomics/storage-fund" aria-label="Sui Storage Fund" title="Sui Storage Fund" data-v-85d14994>Sui Storage Fund</a> <!----></li><li data-v-85d14994><a href="/devnet/learn/tokenomics/proof-of-stake" aria-label="Proof-of-Stake" title="Proof-of-Stake" data-v-85d14994>Proof-of-Stake</a> <!----></li><li data-v-85d14994><!----> <a href="https://github.com/MystenLabs/sui/blob/main/doc/paper/tokenomics.pdf/" aria-label="Tokenomics White Paper" data-v-85d14994>Tokenomics White Paper</a></li></ul></li><li data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/learn/exchange-integration-faq" aria-label="Sui Exchange Integration FAQ" title="Sui Exchange Integration FAQ" data-v-85d14994>Sui Exchange Integration FAQ</a> <!----> <!----> <!----></div> <!----></li></ul></li><li class="activeList subelm activeList" data-v-f6ae978a data-v-f6ae978a><div class="_menu_content" data-v-f6ae978a><a href="/devnet/build" class="_selectActive" data-v-f6ae978a><div class="overlay-menu__item-wrapper" data-v-f6ae978a><div class="overlay-menu__item-line" data-v-f6ae978a></div> <div class="overlay-menu__item-counter" data-v-f6ae978a>
+                        02
+                      </div> <span data-v-f6ae978a>Build</span></div></a> <div class="burger__submenu" data-v-f6ae978a><i class="far fa-chevron-up" data-v-f6ae978a></i></div></div> <ul class="_subMenu list_details" data-v-85d14994 data-v-f6ae978a><li data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/build/install" aria-label="Install Sui" title="Install Sui" data-v-85d14994>Install Sui</a> <!----> <!----> <!----></div> <!----></li><li data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/build/devnet" aria-label="Connect to Sui Devnet" title="Connect to Sui Devnet" data-v-85d14994>Connect to Sui Devnet</a> <!----> <!----> <!----></div> <!----></li><li class="activeList" data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/build/cli-client" aria-current="page" aria-label="Sui Client CLI" title="Sui Client CLI" class="exact-active _selectActive" data-v-85d14994>Sui Client CLI</a> <!----> <!----> <!----></div> <!----></li><li data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/build/sui-local-network" aria-label="Sui Local Network" title="Sui Local Network" data-v-85d14994>Sui Local Network</a> <!----> <!----> <!----></div> <!----></li><li class="_doc-submenu subList _subEle" data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/build/move" aria-label="Create Smart Contracts with Move" title="Create Smart Contracts with Move" data-v-85d14994>Create Smart Contracts with Move</a> <!----> <!----> <div class="burger__submenu" data-v-85d14994><i class="far fa-chevron-down" data-v-85d14994></i></div></div> <ul class="_subMenu list_details" data-v-85d14994><li data-v-85d14994><a href="/devnet/build/move/write-package" aria-label="Write Move Packages" title="Write Move Packages" data-v-85d14994>Write Move Packages</a> <!----></li><li data-v-85d14994><a href="/devnet/build/move/build-test" aria-label="Build and Test Move Packages" title="Build and Test Move Packages" data-v-85d14994>Build and Test Move Packages</a> <!----></li><li data-v-85d14994><a href="/devnet/build/move/debug-publish" aria-label="Debug and Publish Move Packages" title="Debug and Publish Move Packages" data-v-85d14994>Debug and Publish Move Packages</a> <!----></li><li data-v-85d14994><a href="/devnet/build/move/sui-move-library" aria-label="Sui Move Library" title="Sui Move Library" data-v-85d14994>Sui Move Library</a> <!----></li></ul></li><li class="_doc-submenu subList _subEle" data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/build/programming-with-objects" aria-label="Program with Objects" title="Program with Objects" data-v-85d14994>Program with Objects</a> <!----> <!----> <div class="burger__submenu" data-v-85d14994><i class="far fa-chevron-down" data-v-85d14994></i></div></div> <ul class="_subMenu list_details" data-v-85d14994><li data-v-85d14994><a href="/devnet/build/programming-with-objects/ch1-object-basics" aria-label="Object Basics" title="Object Basics" data-v-85d14994>Object Basics</a> <!----></li><li data-v-85d14994><a href="/devnet/build/programming-with-objects/ch2-using-objects" aria-label="Using Objects" title="Using Objects" data-v-85d14994>Using Objects</a> <!----></li><li data-v-85d14994><a href="/devnet/build/programming-with-objects/ch3-immutable-objects" aria-label="Immutable Objects" title="Immutable Objects" data-v-85d14994>Immutable Objects</a> <!----></li><li data-v-85d14994><a href="/devnet/build/programming-with-objects/ch4-object-wrapping" aria-label="Object Wrapping" title="Object Wrapping" data-v-85d14994>Object Wrapping</a> <!----></li><li data-v-85d14994><a href="/devnet/build/programming-with-objects/ch5-dynamic-fields" aria-label="Dynamic Fields" title="Dynamic Fields" data-v-85d14994>Dynamic Fields</a> <!----></li><li data-v-85d14994><a href="/devnet/build/programming-with-objects/ch6-collections" aria-label="Collections" title="Collections" data-v-85d14994>Collections</a> <!----></li></ul></li><li class="_doc-submenu subList _subEle" data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/build/comms" aria-label="Connect to Sui" title="Connect to Sui" data-v-85d14994>Connect to Sui</a> <!----> <!----> <div class="burger__submenu" data-v-85d14994><i class="far fa-chevron-down" data-v-85d14994></i></div></div> <ul class="_subMenu list_details" data-v-85d14994><li data-v-85d14994><a href="/devnet/build/json-rpc" aria-label="JSON-RPC API" title="JSON-RPC API" data-v-85d14994>JSON-RPC API</a> <!----></li><li data-v-85d14994><a href="/devnet/build/rust-sdk" aria-label="Rust SDK" title="Rust SDK" data-v-85d14994>Rust SDK</a> <!----></li><li data-v-85d14994><!----> <a href="https://github.com/MystenLabs/sui/tree/main/sdk/typescript/" aria-label="TypeScript/JavaScript SDK" data-v-85d14994>TypeScript/JavaScript SDK</a></li><li data-v-85d14994><a href="/devnet/build/fullnode" aria-label="Sui Full node" title="Sui Full node" data-v-85d14994>Sui Full node</a> <!----></li><li data-v-85d14994><a href="/devnet/build/event_api" aria-label="Event Query and Subscription" title="Event Query and Subscription" data-v-85d14994>Event Query and Subscription</a> <!----></li></ul></li></ul></li><li class="subelm" data-v-f6ae978a data-v-f6ae978a><div class="_menu_content" data-v-f6ae978a><a href="/devnet/reference" data-v-f6ae978a><div class="overlay-menu__item-wrapper" data-v-f6ae978a><div class="overlay-menu__item-line" data-v-f6ae978a></div> <div class="overlay-menu__item-counter" data-v-f6ae978a>
+                        03
+                      </div> <span data-v-f6ae978a>Reference</span></div></a> <div class="burger__submenu" data-v-f6ae978a><i class="far fa-chevron-down" data-v-f6ae978a></i></div></div> <ul class="_subMenu list_details" data-v-85d14994 data-v-f6ae978a><li data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><!----> <a href="https://github.com/MystenLabs/sui/tree/main/sdk/typescript" aria-label="TypeScript/JavaScript SDK" title="TypeScript/JavaScript SDK" target="_blank" data-v-85d14994>TypeScript/JavaScript SDK</a> <!----> <!----></div> <!----></li><li data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/reference/sui-json" aria-label="SuiJSON Format" title="SuiJSON Format" data-v-85d14994>SuiJSON Format</a> <!----> <!----> <!----></div> <!----></li></ul></li><li class="subelm" data-v-f6ae978a data-v-f6ae978a><div class="_menu_content" data-v-f6ae978a><a href="/devnet/explore" data-v-f6ae978a><div class="overlay-menu__item-wrapper" data-v-f6ae978a><div class="overlay-menu__item-line" data-v-f6ae978a></div> <div class="overlay-menu__item-counter" data-v-f6ae978a>
+                        04
+                      </div> <span data-v-f6ae978a>Explore</span></div></a> <div class="burger__submenu" data-v-f6ae978a><i class="far fa-chevron-down" data-v-f6ae978a></i></div></div> <ul class="_subMenu list_details" data-v-85d14994 data-v-f6ae978a><li data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/explore/sui-explorer" aria-label="Sui Explorer" title="Sui Explorer" data-v-85d14994>Sui Explorer</a> <!----> <!----> <!----></div> <!----></li><li class="_doc-submenu subList _subEle" data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/explore/move-examples" aria-label="Sui Move by Example" title="Sui Move by Example" data-v-85d14994>Sui Move by Example</a> <!----> <!----> <div class="burger__submenu" data-v-85d14994><i class="far fa-chevron-down" data-v-85d14994></i></div></div> <ul class="_subMenu list_details" data-v-85d14994><li data-v-85d14994><a href="/devnet/explore/move-examples/basics" aria-label="Basics" title="Basics" data-v-85d14994>Basics</a> <!----></li><li data-v-85d14994><a href="/devnet/explore/move-examples/patterns" aria-label="Patterns" title="Patterns" data-v-85d14994>Patterns</a> <!----></li><li data-v-85d14994><a href="/devnet/explore/move-examples/samples" aria-label="Samples" title="Samples" data-v-85d14994>Samples</a> <!----></li><li data-v-85d14994><a href="/devnet/explore/move-examples/additional-resources" aria-label="Additional Resources" title="Additional Resources" data-v-85d14994>Additional Resources</a> <!----></li></ul></li><li data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/explore/wallet-browser" aria-label="Sui Wallet" title="Sui Wallet" data-v-85d14994>Sui Wallet</a> <!----> <!----> <!----></div> <!----></li><li data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/explore/tutorials" aria-label="Tutorials" title="Tutorials" data-v-85d14994>Tutorials</a> <!----> <!----> <!----></div> <!----></li><li data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/explore/prototypes" aria-label="Prototypes" title="Prototypes" data-v-85d14994>Prototypes</a> <!----> <!----> <!----></div> <!----></li><li data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/explore/examples" aria-label="Examples" title="Examples" data-v-85d14994>Examples</a> <!----> <!----> <!----></div> <!----></li><li data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/explore/panzerdogs" aria-label="Panzerdogs x Sui" title="Panzerdogs x Sui" data-v-85d14994>Panzerdogs x Sui</a> <!----> <!----> <!----></div> <!----></li><li data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/explore/sowork" aria-label="SoWork x Sui" title="SoWork x Sui" data-v-85d14994>SoWork x Sui</a> <!----> <!----> <!----></div> <!----></li></ul></li><li class="subelm" data-v-f6ae978a data-v-f6ae978a><div class="_menu_content" data-v-f6ae978a><a href="/devnet/contribute" data-v-f6ae978a><div class="overlay-menu__item-wrapper" data-v-f6ae978a><div class="overlay-menu__item-line" data-v-f6ae978a></div> <div class="overlay-menu__item-counter" data-v-f6ae978a>
+                        05
+                      </div> <span data-v-f6ae978a>Contribute</span></div></a> <div class="burger__submenu" data-v-f6ae978a><i class="far fa-chevron-down" data-v-f6ae978a></i></div></div> <ul class="_subMenu list_details" data-v-85d14994 data-v-f6ae978a><li data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/contribute/faq" aria-label="Frequently Asked Questions" title="Frequently Asked Questions" data-v-85d14994>Frequently Asked Questions</a> <!----> <!----> <!----></div> <!----></li><li data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/contribute/observability" aria-label="Logging" title="Logging" data-v-85d14994>Logging</a> <!----> <!----> <!----></div> <!----></li><li data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/contribute/research-papers" aria-label="Research Papers" title="Research Papers" data-v-85d14994>Research Papers</a> <!----> <!----> <!----></div> <!----></li><li data-v-85d14994 data-v-85d14994><div class="_menu_content" data-v-85d14994><a href="/devnet/contribute/code-of-conduct" aria-label="Code of Conduct" title="Code of Conduct" data-v-85d14994>Code of Conduct</a> <!----> <!----> <!----></div> <!----></li></ul></li></ul></div></div></div> <div class="_search_btn-item" data-v-f6ae978a><button type="button" autocomplete="off" class="_search button" data-v-f6ae978a><div class="search_icon"><svg viewBox="0 0 20 20" fill="currentColor" class="h-full py-2 text-grey-800 opacity-75 fill-current group-hover:animate-wiggle-once group-focus:animate-wiggle-once"><path d="M19.71,18.29,16,14.61A9,9,0,1,0,14.61,16l3.68,3.68a1,1,0,0,0,1.42,0A1,1,0,0,0,19.71,18.29ZM2,9a7,7,0,1,1,12,4.93h0s0,0,0,0A7,7,0,0,1,2,9Z"></path></svg></div> <div class="search-text">Press '/' to start search</div></button></div></div></header></div> <section class="sui-mx"><div class="container_25"><section class="row"><div class="_side-doc-menu col-lg-3"><aside class="sidebar widget-area sticky"><div class="_side-doc-menu-inner"><div class="_sui-side-menu-inner full-height"><div class="col-auto _sue__spacer"></div> <button type="button" autocomplete="off" class="_search button _search button _s_t"><div class="search_icon"><svg viewBox="0 0 20 20" fill="currentColor" class="h-full py-2 text-grey-800 opacity-75 fill-current group-hover:animate-wiggle-once group-focus:animate-wiggle-once"><path d="M19.71,18.29,16,14.61A9,9,0,1,0,14.61,16l3.68,3.68a1,1,0,0,0,1.42,0A1,1,0,0,0,19.71,18.29ZM2,9a7,7,0,1,1,12,4.93h0s0,0,0,0A7,7,0,0,1,2,9Z"></path></svg></div> <div class="search-text">Press '/' to start search</div></button> <section class="side_content"><section class="widget widget_nav_menu _sue__spacer" data-v-402abc28><h3 class="_sui_side_menu_header" data-v-402abc28>Get Started</h3> <ul class="menu _sui_list_cta" data-v-402abc28><li class="_doc-submenu" data-v-402abc28 data-v-402abc28><a href="/devnet/learn" aria-label="learn" title="learn" class="_titleCase _devTopMenu" data-v-402abc28>learn</a> <ul class="_subMenu list_details" data-v-402abc28><li class="_doc-submenu subList" data-v-402abc28 data-v-402abc28><a href="/devnet/learn/about-sui" aria-label="About Sui" title="About Sui" data-v-402abc28>About Sui
+              </a> <!----> <!----> <ul class="_subMenu list_details" data-v-402abc28><li data-v-402abc28><a href="/devnet/learn/sui-glossary" aria-label="Sui Glossary" title="Sui Glossary" data-v-402abc28>Sui Glossary</a> <!----></li><li data-v-402abc28><a href="/devnet/learn/why-move" aria-label="Why Move?" title="Why Move?" data-v-402abc28>Why Move?</a> <!----></li><li data-v-402abc28><a href="/devnet/learn/sui-move-diffs" aria-label="How Sui Move differs from Core Move" title="How Sui Move differs from Core Move" data-v-402abc28>How Sui Move differs from Core Move</a> <!----></li><li data-v-402abc28><a href="/devnet/learn/sui-security" aria-label="Sui Security" title="Sui Security" data-v-402abc28>Sui Security</a> <!----></li></ul></li><li class="_doc-submenu subList" data-v-402abc28 data-v-402abc28><a href="/devnet/learn/how-sui-works" aria-label="How Sui Works" title="How Sui Works" data-v-402abc28>How Sui Works
+              </a> <!----> <!----> <ul class="_subMenu list_details" data-v-402abc28><li data-v-402abc28><a href="/devnet/learn/sui-compared" aria-label="Sui Compared to Other Blockchains" title="Sui Compared to Other Blockchains" data-v-402abc28>Sui Compared to Other Blockchains</a> <!----></li><li data-v-402abc28><a href="/devnet/learn/objects" aria-label="Objects" title="Objects" data-v-402abc28>Objects</a> <!----></li><li data-v-402abc28><a href="/devnet/learn/transactions" aria-label="Transactions" title="Transactions" data-v-402abc28>Transactions</a> <!----></li><li data-v-402abc28><a href="/devnet/learn/single-writer-apps" aria-label="Single-Writer Apps" title="Single-Writer Apps" data-v-402abc28>Single-Writer Apps</a> <!----></li><li data-v-402abc28><a href="/devnet/learn/architecture/validators" aria-label="Validators" title="Validators" data-v-402abc28>Validators</a> <!----></li><li data-v-402abc28><a href="/devnet/learn/architecture/consensus" aria-label="Consensus Engine" title="Consensus Engine" data-v-402abc28>Consensus Engine</a> <!----></li></ul></li><li class="_doc-submenu subList" data-v-402abc28 data-v-402abc28><a href="/devnet/learn/tokenomics" aria-label="Sui Tokenomics" title="Sui Tokenomics" data-v-402abc28>Sui Tokenomics
+              </a> <!----> <!----> <ul class="_subMenu list_details" data-v-402abc28><li data-v-402abc28><a href="/devnet/learn/tokenomics/sui-token" aria-label="Sui Token" title="Sui Token" data-v-402abc28>Sui Token</a> <!----></li><li data-v-402abc28><a href="/devnet/learn/tokenomics/gas-pricing" aria-label="Sui Gas Pricing" title="Sui Gas Pricing" data-v-402abc28>Sui Gas Pricing</a> <!----></li><li data-v-402abc28><a href="/devnet/learn/tokenomics/storage-fund" aria-label="Sui Storage Fund" title="Sui Storage Fund" data-v-402abc28>Sui Storage Fund</a> <!----></li><li data-v-402abc28><a href="/devnet/learn/tokenomics/proof-of-stake" aria-label="Proof-of-Stake" title="Proof-of-Stake" data-v-402abc28>Proof-of-Stake</a> <!----></li><li data-v-402abc28><!----> <a href="https://github.com/MystenLabs/sui/blob/main/doc/paper/tokenomics.pdf/" aria-label="Tokenomics White Paper" data-v-402abc28>Tokenomics White Paper</a></li></ul></li><li data-v-402abc28 data-v-402abc28><a href="/devnet/learn/exchange-integration-faq" aria-label="Sui Exchange Integration FAQ" title="Sui Exchange Integration FAQ" data-v-402abc28>Sui Exchange Integration FAQ
+              </a> <!----> <!----> <!----></li></ul></li><li class="_doc-submenu activeList" data-v-402abc28 data-v-402abc28><a href="/devnet/build" aria-label="build" title="build" class="_titleCase _devTopMenu _selectActive" data-v-402abc28>build</a> <ul class="_subMenu list_details" data-v-402abc28><li data-v-402abc28 data-v-402abc28><a href="/devnet/build/install" aria-label="Install Sui" title="Install Sui" data-v-402abc28>Install Sui
+              </a> <!----> <!----> <!----></li><li data-v-402abc28 data-v-402abc28><a href="/devnet/build/devnet" aria-label="Connect to Sui Devnet" title="Connect to Sui Devnet" data-v-402abc28>Connect to Sui Devnet
+              </a> <!----> <!----> <!----></li><li class="activeList" data-v-402abc28 data-v-402abc28><a href="/devnet/build/cli-client" aria-current="page" aria-label="Sui Client CLI" title="Sui Client CLI" class="exact-active _selectActive" data-v-402abc28>Sui Client CLI
+              </a> <!----> <!----> <!----></li><li data-v-402abc28 data-v-402abc28><a href="/devnet/build/sui-local-network" aria-label="Sui Local Network" title="Sui Local Network" data-v-402abc28>Sui Local Network
+              </a> <!----> <!----> <!----></li><li class="_doc-submenu subList" data-v-402abc28 data-v-402abc28><a href="/devnet/build/move" aria-label="Create Smart Contracts with Move" title="Create Smart Contracts with Move" data-v-402abc28>Create Smart Contracts with Move
+              </a> <!----> <!----> <ul class="_subMenu list_details" data-v-402abc28><li data-v-402abc28><a href="/devnet/build/move/write-package" aria-label="Write Move Packages" title="Write Move Packages" data-v-402abc28>Write Move Packages</a> <!----></li><li data-v-402abc28><a href="/devnet/build/move/build-test" aria-label="Build and Test Move Packages" title="Build and Test Move Packages" data-v-402abc28>Build and Test Move Packages</a> <!----></li><li data-v-402abc28><a href="/devnet/build/move/debug-publish" aria-label="Debug and Publish Move Packages" title="Debug and Publish Move Packages" data-v-402abc28>Debug and Publish Move Packages</a> <!----></li><li data-v-402abc28><a href="/devnet/build/move/sui-move-library" aria-label="Sui Move Library" title="Sui Move Library" data-v-402abc28>Sui Move Library</a> <!----></li></ul></li><li class="_doc-submenu subList" data-v-402abc28 data-v-402abc28><a href="/devnet/build/programming-with-objects" aria-label="Program with Objects" title="Program with Objects" data-v-402abc28>Program with Objects
+              </a> <!----> <!----> <ul class="_subMenu list_details" data-v-402abc28><li data-v-402abc28><a href="/devnet/build/programming-with-objects/ch1-object-basics" aria-label="Object Basics" title="Object Basics" data-v-402abc28>Object Basics</a> <!----></li><li data-v-402abc28><a href="/devnet/build/programming-with-objects/ch2-using-objects" aria-label="Using Objects" title="Using Objects" data-v-402abc28>Using Objects</a> <!----></li><li data-v-402abc28><a href="/devnet/build/programming-with-objects/ch3-immutable-objects" aria-label="Immutable Objects" title="Immutable Objects" data-v-402abc28>Immutable Objects</a> <!----></li><li data-v-402abc28><a href="/devnet/build/programming-with-objects/ch4-object-wrapping" aria-label="Object Wrapping" title="Object Wrapping" data-v-402abc28>Object Wrapping</a> <!----></li><li data-v-402abc28><a href="/devnet/build/programming-with-objects/ch5-dynamic-fields" aria-label="Dynamic Fields" title="Dynamic Fields" data-v-402abc28>Dynamic Fields</a> <!----></li><li data-v-402abc28><a href="/devnet/build/programming-with-objects/ch6-collections" aria-label="Collections" title="Collections" data-v-402abc28>Collections</a> <!----></li></ul></li><li class="_doc-submenu subList" data-v-402abc28 data-v-402abc28><a href="/devnet/build/comms" aria-label="Connect to Sui" title="Connect to Sui" data-v-402abc28>Connect to Sui
+              </a> <!----> <!----> <ul class="_subMenu list_details" data-v-402abc28><li data-v-402abc28><a href="/devnet/build/json-rpc" aria-label="JSON-RPC API" title="JSON-RPC API" data-v-402abc28>JSON-RPC API</a> <!----></li><li data-v-402abc28><a href="/devnet/build/rust-sdk" aria-label="Rust SDK" title="Rust SDK" data-v-402abc28>Rust SDK</a> <!----></li><li data-v-402abc28><!----> <a href="https://github.com/MystenLabs/sui/tree/main/sdk/typescript/" aria-label="TypeScript/JavaScript SDK" data-v-402abc28>TypeScript/JavaScript SDK</a></li><li data-v-402abc28><a href="/devnet/build/fullnode" aria-label="Sui Full node" title="Sui Full node" data-v-402abc28>Sui Full node</a> <!----></li><li data-v-402abc28><a href="/devnet/build/event_api" aria-label="Event Query and Subscription" title="Event Query and Subscription" data-v-402abc28>Event Query and Subscription</a> <!----></li></ul></li></ul></li><li class="_doc-submenu" data-v-402abc28 data-v-402abc28><a href="/devnet/reference" aria-label="reference" title="reference" class="_titleCase _devTopMenu" data-v-402abc28>reference</a> <ul class="_subMenu list_details" data-v-402abc28><li data-v-402abc28 data-v-402abc28><!----> <a href="https://github.com/MystenLabs/sui/tree/main/sdk/typescript" aria-label="TypeScript/JavaScript SDK" title="TypeScript/JavaScript SDK" target="_blank" data-v-402abc28>TypeScript/JavaScript SDK</a> <!----> <!----></li><li data-v-402abc28 data-v-402abc28><a href="/devnet/reference/sui-json" aria-label="SuiJSON Format" title="SuiJSON Format" data-v-402abc28>SuiJSON Format
+              </a> <!----> <!----> <!----></li></ul></li><li class="_doc-submenu" data-v-402abc28 data-v-402abc28><a href="/devnet/explore" aria-label="explore" title="explore" class="_titleCase _devTopMenu" data-v-402abc28>explore</a> <ul class="_subMenu list_details" data-v-402abc28><li data-v-402abc28 data-v-402abc28><a href="/devnet/explore/sui-explorer" aria-label="Sui Explorer" title="Sui Explorer" data-v-402abc28>Sui Explorer
+              </a> <!----> <!----> <!----></li><li data-v-402abc28 data-v-402abc28><a href="/devnet/explore/wallet-browser" aria-label="Sui Wallet" title="Sui Wallet" data-v-402abc28>Sui Wallet
+              </a> <!----> <!----> <!----></li><li data-v-402abc28 data-v-402abc28><a href="/devnet/explore/tutorials" aria-label="Tutorials" title="Tutorials" data-v-402abc28>Tutorials
+              </a> <!----> <!----> <!----></li><li data-v-402abc28 data-v-402abc28><a href="/devnet/explore/prototypes" aria-label="Prototypes" title="Prototypes" data-v-402abc28>Prototypes
+              </a> <!----> <!----> <!----></li><li data-v-402abc28 data-v-402abc28><a href="/devnet/explore/examples" aria-label="Examples" title="Examples" data-v-402abc28>Examples
+              </a> <!----> <!----> <!----></li><li data-v-402abc28 data-v-402abc28><a href="/devnet/explore/panzerdogs" aria-label="Panzerdogs x Sui" title="Panzerdogs x Sui" data-v-402abc28>Panzerdogs x Sui
+              </a> <!----> <!----> <!----></li><li data-v-402abc28 data-v-402abc28><a href="/devnet/explore/sowork" aria-label="SoWork x Sui" title="SoWork x Sui" data-v-402abc28>SoWork x Sui
+              </a> <!----> <!----> <!----></li></ul></li><li class="_doc-submenu" data-v-402abc28 data-v-402abc28><a href="/devnet/contribute" aria-label="contribute" title="contribute" class="_titleCase _devTopMenu" data-v-402abc28>contribute</a> <ul class="_subMenu list_details" data-v-402abc28><li data-v-402abc28 data-v-402abc28><a href="/devnet/contribute/faq" aria-label="Frequently Asked Questions" title="Frequently Asked Questions" data-v-402abc28>Frequently Asked Questions
+              </a> <!----> <!----> <!----></li><li data-v-402abc28 data-v-402abc28><a href="/devnet/contribute/observability" aria-label="Logging" title="Logging" data-v-402abc28>Logging
+              </a> <!----> <!----> <!----></li><li data-v-402abc28 data-v-402abc28><a href="/devnet/contribute/research-papers" aria-label="Research Papers" title="Research Papers" data-v-402abc28>Research Papers
+              </a> <!----> <!----> <!----></li><li data-v-402abc28 data-v-402abc28><a href="/devnet/contribute/code-of-conduct" aria-label="Code of Conduct" title="Code of Conduct" data-v-402abc28>Code of Conduct
+              </a> <!----> <!----> <!----></li></ul></li></ul></section> <section class="_sui-global-menu _sue__spacer"><section class="widget widget_recent_entries w_light _fixeds sticky"><h3 class="_sui_side_menu_header">
+      QUICK LINKS
+    </h3> <ul class="_sui_list_cta"><li class="_light _in-page-menu"><a href="/doc-updates" aria-label="doc-updates">Sui Doc Updates</a></li><li class="_light _in-page-menu"><a href="/https://github.com/MystenLabs/sui/releases" aria-label="https://github.com/MystenLabs/sui/releases">Sui Releases</a></li><li class="_light _in-page-menu"><a href="https://forums.sui.io/" class="sui_external">Sui Developer Forums</a></li></ul></section></section> <section class="widget widget_nav_menu _sue__spacer" data-v-403a48d0><h3 class="_sui_side_menu_header" data-v-403a48d0>
+    Sui JSON-RPC
+    <span class="_api-version" data-v-403a48d0><span class="_version" data-v-403a48d0>v</span> 0.20.0</span></h3> <ul class="menu _sui_list_cta" data-v-403a48d0><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_batchTransaction</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_batchTransaction" aria-label="signer" data-v-403a48d0>signer
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_batchTransaction" aria-label="single_transaction_params" data-v-403a48d0>single_transaction_params
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_batchTransaction" aria-label="gas" data-v-403a48d0>gas
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_batchTransaction" aria-label="gas_budget" data-v-403a48d0>gas_budget
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_batchTransaction" aria-label="TransactionBytes" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>TransactionBytes</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_dryRunTransaction</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_dryRunTransaction" aria-label="tx_bytes" data-v-403a48d0>tx_bytes
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_dryRunTransaction" aria-label="SuiTransactionEffects" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>SuiTransactionEffects</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_executeTransaction</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_executeTransaction" aria-label="tx_bytes" data-v-403a48d0>tx_bytes
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_executeTransaction" aria-label="sig_scheme" data-v-403a48d0>sig_scheme
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_executeTransaction" aria-label="signature" data-v-403a48d0>signature
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_executeTransaction" aria-label="pub_key" data-v-403a48d0>pub_key
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_executeTransaction" aria-label="request_type" data-v-403a48d0>request_type
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_executeTransaction" aria-label="SuiExecuteTransactionResponse" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>SuiExecuteTransactionResponse</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_executeTransactionSerializedSig</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_executeTransactionSerializedSig" aria-label="tx_bytes" data-v-403a48d0>tx_bytes
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_executeTransactionSerializedSig" aria-label="signature" data-v-403a48d0>signature
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_executeTransactionSerializedSig" aria-label="request_type" data-v-403a48d0>request_type
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_executeTransactionSerializedSig" aria-label="SuiExecuteTransactionResponse" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>SuiExecuteTransactionResponse</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getAllBalances</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getAllBalances" aria-label="owner" data-v-403a48d0>owner
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getAllBalances" aria-label="Vec<Balance>" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>Vec&lt;Balance></span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getAllCoins</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getAllCoins" aria-label="owner" data-v-403a48d0>owner
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getAllCoins" aria-label="cursor" data-v-403a48d0>cursor
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getAllCoins" aria-label="limit" data-v-403a48d0>limit
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getAllCoins" aria-label="CoinPage" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>CoinPage</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getBalance</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getBalance" aria-label="owner" data-v-403a48d0>owner
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getBalance" aria-label="coin_type" data-v-403a48d0>coin_type
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getBalance" aria-label="Balance" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>Balance</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getCoinMetadata</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getCoinMetadata" aria-label="coin_type" data-v-403a48d0>coin_type
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getCoinMetadata" aria-label="SuiCoinMetadata" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>SuiCoinMetadata</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getCoins</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getCoins" aria-label="owner" data-v-403a48d0>owner
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getCoins" aria-label="coin_type" data-v-403a48d0>coin_type
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getCoins" aria-label="cursor" data-v-403a48d0>cursor
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getCoins" aria-label="limit" data-v-403a48d0>limit
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getCoins" aria-label="CoinPage" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>CoinPage</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getCommitteeInfo</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getCommitteeInfo" aria-label="epoch" data-v-403a48d0>epoch
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getCommitteeInfo" aria-label="CommitteeInfoResponse" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>CommitteeInfoResponse</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getDynamicFieldObject</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getDynamicFieldObject" aria-label="parent_object_id" data-v-403a48d0>parent_object_id
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getDynamicFieldObject" aria-label="name" data-v-403a48d0>name
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getDynamicFieldObject" aria-label="GetObjectDataResponse" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>GetObjectDataResponse</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getDynamicFields</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getDynamicFields" aria-label="parent_object_id" data-v-403a48d0>parent_object_id
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getDynamicFields" aria-label="cursor" data-v-403a48d0>cursor
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getDynamicFields" aria-label="limit" data-v-403a48d0>limit
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getDynamicFields" aria-label="DynamicFieldPage" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>DynamicFieldPage</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getEvents</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getEvents" aria-label="query" data-v-403a48d0>query
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getEvents" aria-label="cursor" data-v-403a48d0>cursor
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getEvents" aria-label="limit" data-v-403a48d0>limit
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getEvents" aria-label="descending_order" data-v-403a48d0>descending_order
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getEvents" aria-label="EventPage" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>EventPage</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getMoveFunctionArgTypes</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getMoveFunctionArgTypes" aria-label="package" data-v-403a48d0>package
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getMoveFunctionArgTypes" aria-label="module" data-v-403a48d0>module
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getMoveFunctionArgTypes" aria-label="function" data-v-403a48d0>function
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getMoveFunctionArgTypes" aria-label="Vec<MoveFunctionArgType>" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>Vec&lt;MoveFunctionArgType></span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getNormalizedMoveFunction</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getNormalizedMoveFunction" aria-label="package" data-v-403a48d0>package
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getNormalizedMoveFunction" aria-label="module_name" data-v-403a48d0>module_name
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getNormalizedMoveFunction" aria-label="function_name" data-v-403a48d0>function_name
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getNormalizedMoveFunction" aria-label="SuiMoveNormalizedFunction" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>SuiMoveNormalizedFunction</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getNormalizedMoveModule</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getNormalizedMoveModule" aria-label="package" data-v-403a48d0>package
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getNormalizedMoveModule" aria-label="module_name" data-v-403a48d0>module_name
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getNormalizedMoveModule" aria-label="SuiMoveNormalizedModule" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>SuiMoveNormalizedModule</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getNormalizedMoveModulesByPackage</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getNormalizedMoveModulesByPackage" aria-label="package" data-v-403a48d0>package
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getNormalizedMoveModulesByPackage" aria-label="BTreeMap<String,SuiMoveNormalizedModule>" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>BTreeMap&lt;String,SuiMoveNormalizedModule></span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getNormalizedMoveStruct</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getNormalizedMoveStruct" aria-label="package" data-v-403a48d0>package
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getNormalizedMoveStruct" aria-label="module_name" data-v-403a48d0>module_name
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getNormalizedMoveStruct" aria-label="struct_name" data-v-403a48d0>struct_name
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getNormalizedMoveStruct" aria-label="SuiMoveNormalizedStruct" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>SuiMoveNormalizedStruct</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getObject</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getObject" aria-label="object_id" data-v-403a48d0>object_id
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getObject" aria-label="GetObjectDataResponse" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>GetObjectDataResponse</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getObjectsOwnedByAddress</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getObjectsOwnedByAddress" aria-label="address" data-v-403a48d0>address
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getObjectsOwnedByAddress" aria-label="Vec<SuiObjectInfo>" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>Vec&lt;SuiObjectInfo></span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getObjectsOwnedByObject</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getObjectsOwnedByObject" aria-label="object_id" data-v-403a48d0>object_id
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getObjectsOwnedByObject" aria-label="Vec<SuiObjectInfo>" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>Vec&lt;SuiObjectInfo></span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getRawObject</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getRawObject" aria-label="object_id" data-v-403a48d0>object_id
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getRawObject" aria-label="GetRawObjectDataResponse" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>GetRawObjectDataResponse</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getSuiSystemState</span> <ul class="_subMenu list_details" data-v-403a48d0> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getSuiSystemState" aria-label="SuiSystemState" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>SuiSystemState</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getTotalSupply</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getTotalSupply" aria-label="coin_type" data-v-403a48d0>coin_type
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getTotalSupply" aria-label="Supply" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>Supply</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getTotalTransactionNumber</span> <ul class="_subMenu list_details" data-v-403a48d0> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getTotalTransactionNumber" aria-label="u64" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>u64</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getTransaction</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getTransaction" aria-label="digest" data-v-403a48d0>digest
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getTransaction" aria-label="SuiTransactionResponse" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>SuiTransactionResponse</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getTransactionAuthSigners</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getTransactionAuthSigners" aria-label="digest" data-v-403a48d0>digest
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getTransactionAuthSigners" aria-label="SuiTransactionAuthSignersResponse" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>SuiTransactionAuthSignersResponse</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getTransactions</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getTransactions" aria-label="query" data-v-403a48d0>query
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getTransactions" aria-label="cursor" data-v-403a48d0>cursor
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getTransactions" aria-label="limit" data-v-403a48d0>limit
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getTransactions" aria-label="descending_order" data-v-403a48d0>descending_order
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getTransactions" aria-label="TransactionsPage" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>TransactionsPage</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_getTransactionsInRange</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getTransactionsInRange" aria-label="start" data-v-403a48d0>start
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_getTransactionsInRange" aria-label="end" data-v-403a48d0>end
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_getTransactionsInRange" aria-label="Vec<TransactionDigest>" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>Vec&lt;TransactionDigest></span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_mergeCoins</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_mergeCoins" aria-label="signer" data-v-403a48d0>signer
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_mergeCoins" aria-label="primary_coin" data-v-403a48d0>primary_coin
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_mergeCoins" aria-label="coin_to_merge" data-v-403a48d0>coin_to_merge
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_mergeCoins" aria-label="gas" data-v-403a48d0>gas
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_mergeCoins" aria-label="gas_budget" data-v-403a48d0>gas_budget
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_mergeCoins" aria-label="TransactionBytes" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>TransactionBytes</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_moveCall</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_moveCall" aria-label="signer" data-v-403a48d0>signer
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_moveCall" aria-label="package_object_id" data-v-403a48d0>package_object_id
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_moveCall" aria-label="module" data-v-403a48d0>module
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_moveCall" aria-label="function" data-v-403a48d0>function
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_moveCall" aria-label="type_arguments" data-v-403a48d0>type_arguments
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_moveCall" aria-label="arguments" data-v-403a48d0>arguments
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_moveCall" aria-label="gas" data-v-403a48d0>gas
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_moveCall" aria-label="gas_budget" data-v-403a48d0>gas_budget
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_moveCall" aria-label="TransactionBytes" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>TransactionBytes</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_pay</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_pay" aria-label="signer" data-v-403a48d0>signer
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_pay" aria-label="input_coins" data-v-403a48d0>input_coins
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_pay" aria-label="recipients" data-v-403a48d0>recipients
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_pay" aria-label="amounts" data-v-403a48d0>amounts
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_pay" aria-label="gas" data-v-403a48d0>gas
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_pay" aria-label="gas_budget" data-v-403a48d0>gas_budget
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_pay" aria-label="TransactionBytes" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>TransactionBytes</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_payAllSui</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_payAllSui" aria-label="signer" data-v-403a48d0>signer
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_payAllSui" aria-label="input_coins" data-v-403a48d0>input_coins
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_payAllSui" aria-label="recipient" data-v-403a48d0>recipient
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_payAllSui" aria-label="gas_budget" data-v-403a48d0>gas_budget
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_payAllSui" aria-label="TransactionBytes" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>TransactionBytes</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_paySui</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_paySui" aria-label="signer" data-v-403a48d0>signer
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_paySui" aria-label="input_coins" data-v-403a48d0>input_coins
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_paySui" aria-label="recipients" data-v-403a48d0>recipients
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_paySui" aria-label="amounts" data-v-403a48d0>amounts
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_paySui" aria-label="gas_budget" data-v-403a48d0>gas_budget
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_paySui" aria-label="TransactionBytes" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>TransactionBytes</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_publish</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_publish" aria-label="sender" data-v-403a48d0>sender
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_publish" aria-label="compiled_modules" data-v-403a48d0>compiled_modules
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_publish" aria-label="gas" data-v-403a48d0>gas
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_publish" aria-label="gas_budget" data-v-403a48d0>gas_budget
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_publish" aria-label="TransactionBytes" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>TransactionBytes</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_splitCoin</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_splitCoin" aria-label="signer" data-v-403a48d0>signer
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_splitCoin" aria-label="coin_object_id" data-v-403a48d0>coin_object_id
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_splitCoin" aria-label="split_amounts" data-v-403a48d0>split_amounts
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_splitCoin" aria-label="gas" data-v-403a48d0>gas
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_splitCoin" aria-label="gas_budget" data-v-403a48d0>gas_budget
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_splitCoin" aria-label="TransactionBytes" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>TransactionBytes</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_splitCoinEqual</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_splitCoinEqual" aria-label="signer" data-v-403a48d0>signer
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_splitCoinEqual" aria-label="coin_object_id" data-v-403a48d0>coin_object_id
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_splitCoinEqual" aria-label="split_count" data-v-403a48d0>split_count
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_splitCoinEqual" aria-label="gas" data-v-403a48d0>gas
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_splitCoinEqual" aria-label="gas_budget" data-v-403a48d0>gas_budget
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_splitCoinEqual" aria-label="TransactionBytes" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>TransactionBytes</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_subscribeEvent</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_subscribeEvent" aria-label="filter" data-v-403a48d0>filter
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_subscribeEvent" aria-label="SuiEventEnvelope" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>SuiEventEnvelope</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_transferObject</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_transferObject" aria-label="signer" data-v-403a48d0>signer
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_transferObject" aria-label="object_id" data-v-403a48d0>object_id
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_transferObject" aria-label="gas" data-v-403a48d0>gas
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_transferObject" aria-label="gas_budget" data-v-403a48d0>gas_budget
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_transferObject" aria-label="recipient" data-v-403a48d0>recipient
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_transferObject" aria-label="TransactionBytes" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>TransactionBytes</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_transferSui</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_transferSui" aria-label="signer" data-v-403a48d0>signer
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_transferSui" aria-label="sui_object_id" data-v-403a48d0>sui_object_id
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_transferSui" aria-label="gas_budget" data-v-403a48d0>gas_budget
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_transferSui" aria-label="recipient" data-v-403a48d0>recipient
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_transferSui" aria-label="amount" data-v-403a48d0>amount
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_transferSui" aria-label="TransactionBytes" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>TransactionBytes</span></a></li></ul></li><li class="_doc-submenu" data-v-403a48d0><span class="_devTopMenu" data-v-403a48d0>sui_tryGetPastObject</span> <ul class="_subMenu list_details" data-v-403a48d0><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_tryGetPastObject" aria-label="object_id" data-v-403a48d0>object_id
+          </a></li><li class="_doc-submenu1 subList" data-v-403a48d0><a href="/sui-jsonrpc#sui_tryGetPastObject" aria-label="version" data-v-403a48d0>version
+          </a></li> <li class="_Api_result" data-v-403a48d0><a href="/sui-jsonrpc#sui_tryGetPastObject" aria-label="GetPastObjectDataResponse" data-v-403a48d0><span class="_titleCase _devTopMenu" data-v-403a48d0>GetPastObjectDataResponse</span></a></li></ul></li></ul></section></section></div></div></aside></div> <div class="_side-doc-menu col-lg-2 order-lg-last -l2"><aside class="sidebar widget-area sticky sui-toc"><div class="col-auto _sue__spacer"></div> <section class="_toc _sue__spacer"><section class="widget widget_recent_entries w_light _fixeds sticky _t-content"><!----></section></section></aside></div> <div class="_doc-content col-lg-7"><div class="_docBody"><div class="section-blog__wrapper-post"><article class="post"><div class="post__content"><h1>Sui Client CLI</h1> <div class="_suiMD nuxt-content"><p>Learn how to set up, configure, and use the Sui Client Command Line Interface (CLI). You can use the CLI to experiment with Sui features using a command line interface.</p>
+<h2 id="set-up"><a href="#set-up" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>Set up</h2>
+<p>The SUI Client CLI installs when you install Sui. See the <a href="/devnet/build/install" aria-label="Install Sui">Install Sui</a> topic for prerequisites and installation instructions.</p>
+<h2 id="using-the-sui-client"><a href="#using-the-sui-client" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>Using the Sui client</h2>
+<p>The Sui Client CLI supports the following commands:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Command</th><th>Description</th></tr></thead><tbody><tr><td><code>active-address</code></td><td>Default address used for commands when none specified</td></tr><tr><td><code>active-env</code></td><td>Default environment used for commands when none specified</td></tr><tr><td><code>addresses</code></td><td>Obtain the Addresses managed by the client</td></tr><tr><td><code>call</code></td><td>Call Move function</td></tr><tr><td><code>create-example-nft</code></td><td>Create an example NFT</td></tr><tr><td><code>envs</code></td><td>List all Sui environments</td></tr><tr><td><code>execute-signed-tx</code></td><td>Execute a Signed Transaction. This is useful when the user prefers to sign elsewhere and use this command to execute</td></tr><tr><td><code>gas</code></td><td>Obtain all gas objects owned by the address</td></tr><tr><td><code>help</code></td><td>Print this message or the help of the given subcommand(s)</td></tr><tr><td><code>merge-coin</code></td><td>Merge two coin objects into one coin</td></tr><tr><td><code>new-address</code></td><td>Generate new address and keypair with keypair scheme flag {ed25519 or secp256k1} with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1</td></tr><tr><td><code>new-env</code></td><td>Add new Sui environment</td></tr><tr><td><code>object</code></td><td>Get object info</td></tr><tr><td><code>objects</code></td><td>Obtain all objects owned by the address</td></tr><tr><td><code>pay</code></td><td>Pay SUI to recipients following specified amounts, with input coins. Length of recipients must be the same as that of amounts</td></tr><tr><td><code>pay_all_sui</code></td><td>Pay all residual SUI coins to the recipient with input coins, after deducting the gas cost. The input coins also include the coin for gas payment, so no extra gas coin is required</td></tr><tr><td><code>pay_sui</code></td><td>Pay SUI coins to recipients following following specified amounts, with input coins. Length of recipients must be the same as that of amounts. The input coins also include the coin for gas payment, so no extra gas coin is required</td></tr><tr><td><code>publish</code></td><td>Publish Move modules</td></tr><tr><td><code>serialize-transfer-sui</code></td><td>Serialize a transfer that can be signed. This is useful when user prefers to take the data to sign elsewhere</td></tr><tr><td><code>split-coin</code></td><td>Split a coin object into multiple coins</td></tr><tr><td><code>switch</code></td><td>Switch active address and network(e.g., devnet, local rpc server)</td></tr><tr><td><code>sync</code></td><td>Synchronize client state with authorities</td></tr><tr><td><code>transfer</code></td><td>Transfer object</td></tr><tr><td><code>transfer-sui</code></td><td>Transfer SUI, and pay gas with the same SUI coin object. If amount is specified, transfers only the amount. If not specified, transfers the object.</td></tr></tbody></table>
+<p><strong>Note:</strong> The <code>clear</code>, <code>echo</code>, <code>env</code> and <code>exit</code> commands exist only in the interactive shell.</p>
+<p>Use <code>sui client -h</code> to see a list of supported commands.</p>
+<p>Use <code>sui help &lt;command></code> to see more information on each command.</p>
+<p>You can start the client in two modes: interactive shell or command line interface <a href="/devnet/build/devnet#configure-sui-client" aria-label="Configure Sui client">Configure Sui client</a>.</p>
+<h3 id="interactive-shell"><a href="#interactive-shell" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>Interactive shell</h3>
+<p>To start the interactive shell:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui console
+</code></pre></div>
+<p>The console command looks for the client configuration file
+<code>client.yaml</code> in the <code>~/.sui/sui_config</code> directory. But you can
+override this setting by providing a path to the directory where this
+file is stored:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui console <span class="token parameter variable">--config</span> /workspace/config-files
+</code></pre></div>
+<p>The Sui interactive client console supports the following shell functionality:</p>
+<ul>
+<li><em>Command history</em> - use the <code>history</code> command to print the command history. You can also use Up, Down or Ctrl-P, Ctrl-N to display the previous or next in the history list. Use Ctrl-R to search the command history.</li>
+<li><em>Tab completion</em> - supported for all commands using Tab and Ctrl-I keys.</li>
+<li><em>Environment variable substitution</em> - the console substitutes input prefixed with <code>$</code> with environment variables. Use the <code>env</code> command to print out the entire list of variables and use <code>echo</code> to preview the substitution without invoking any commands.</li>
+</ul>
+<h3 id="command-line-mode"><a href="#command-line-mode" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>Command line mode</h3>
+<p>You can use the client without the interactive shell. This is useful if
+you want to pipe the output of the client to another application or invoke client
+commands using scripts.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>USAGE:
+    sui client <span class="token punctuation">[</span>SUBCOMMAND<span class="token punctuation">]</span>
+</code></pre></div>
+<p>For example, the following command returns the list of
+account addresses available on the platform:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client addresses
+</code></pre></div>
+<h3 id="active-address"><a href="#active-address" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>Active address</h3>
+<p>You can specify an active address or default address to use to execute commands.</p>
+<p>Sui sets a default address to use for commands. It uses the active address for commands that require an address. To view the current active address, use the <code>active-address</code> command.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client active-address
+</code></pre></div>
+<p>The response to the request resembles the following:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>0x562f07cf6369e8d22dbf226a5bfedc6300014837
+</code></pre></div>
+<p>To change the default address, use the <code>switch</code> command:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client switch <span class="token parameter variable">--address</span> 0x913cf36f370613ed131868ac6f9da2420166062e
+</code></pre></div>
+<p>The response resembles the following:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>Active address switched to 0x913cf36f370613ed131868ac6f9da2420166062e
+</code></pre></div>
+<p>You can call the <code>objects</code> command with or without specifying an address.
+Sui uses the active address if you do not specify one.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client objects
+                 Object ID                  <span class="token operator">|</span>  Version   <span class="token operator">|</span>                    Digest                    <span class="token operator">|</span>   Owner Type    <span class="token operator">|</span>               Object Type
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 <span class="token operator">|</span>     <span class="token number">0</span>      <span class="token operator">|</span> j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo<span class="token operator">=</span> <span class="token operator">|</span>  AddressOwner   <span class="token operator">|</span>      0x2::coin::Coin<span class="token operator">&lt;</span>0x2::sui::SUI<span class="token operator">></span>
+</code></pre></div>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client objects 0x913cf36f370613ed131868ac6f9da2420166062e
+                 Object ID                  <span class="token operator">|</span>  Version   <span class="token operator">|</span>                    Digest                    <span class="token operator">|</span>   Owner Type    <span class="token operator">|</span>               Object Type
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 <span class="token operator">|</span>     <span class="token number">0</span>      <span class="token operator">|</span> j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo<span class="token operator">=</span> <span class="token operator">|</span>  AddressOwner   <span class="token operator">|</span>      0x2::coin::Coin<span class="token operator">&lt;</span>0x2::sui::SUI<span class="token operator">></span>
+</code></pre></div>
+<p>All subsequent commands that omit <code>address</code> use the new active address:
+0x913cf36f370613ed131868ac6f9da2420166062e</p>
+<p>If you call a command that uses a gas object that is not owned by the active address,
+Sui temporarily uses the address that owns the gas object for the transaction.</p>
+<h3 id="paying-for-transactions-with-gas-objects"><a href="#paying-for-transactions-with-gas-objects" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>Paying For transactions with gas objects</h3>
+<p>All Sui transactions require a gas object for payment, as well as a budget. However, specifying the gas object can be cumbersome; so in the CLI, one is allowed to omit the gas object and leave the client to pick an object that meets the specified budget. This gas selection logic is currently rudimentary as it does not combine/split gas as needed but currently picks the first object it finds that meets the budget. Note that one can always specify their own gas if they want to manage the gas themselves.</p>
+<p>⚠️A gas object cannot be part of the transaction while also being used to
+pay for the transaction. For example, one cannot try to transfer gas object X while paying for the
+transaction with gas object X. The gas selection logic checks for this and rejects such cases.</p>
+<p>To see how much gas is in an account, use the <code>gas</code> command. Note that this command uses the <code>active-address</code>, unless otherwise specified.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client gas
+</code></pre></div>
+<p>You can specify an address to see the amount of gas for that address instead of the active address.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client gas 0x562f07cf6369e8d22dbf226a5bfedc6300014837
+</code></pre></div>
+<h2 id="create-new-account-addresses"><a href="#create-new-account-addresses" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>Create new account addresses</h2>
+<p>Sui Client CLI includes 1 address by default. To add more, create new addresses for the client with the <code>new-address</code> command, or add existing accounts to the client.yaml.</p>
+<h3 id="create-a-new-account-address"><a href="#create-a-new-account-address" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>Create a new account address</h3>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client new-address ed25519
+</code></pre></div>
+<p>You must specify the key scheme, either <code>ed25519</code> or <code>secp256k1</code>.</p>
+<h3 id="add-existing-accounts-to-clientyaml"><a href="#add-existing-accounts-to-clientyaml" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>Add existing accounts to client.yaml</h3>
+<p>To add existing account addresses to your client, such as from a previous installation, edit the client.yaml file and add the accounts section. You must also add key pair to the keystore file.</p>
+<p>Restart the Sui console after you save the changes to the client.yaml file.</p>
+<h2 id="view-objects-an-address-owns"><a href="#view-objects-an-address-owns" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>View objects an address owns</h2>
+<p>Use the <code>objects</code> command to view the objects an address owns.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client objects
+</code></pre></div>
+<p>To view the objects for a different address than the active address, specify the address to see objects for.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client objects 0x66af3898e7558b79e115ab61184a958497d1905a
+</code></pre></div>
+<p>To view more information about an object, use the <code>object</code> command.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>    sui client object <span class="token operator">&lt;</span>ID<span class="token operator">></span>
+</code></pre></div>
+<p>The result shows some basic information about the object, the owner,
+version, ID, if the object is immutable and the type of the object.</p>
+<p>To view the JSON representation of the object, include <code>--json</code> in the command.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>    sui client object <span class="token operator">&lt;</span>ID<span class="token operator">></span> <span class="token parameter variable">--json</span>
+</code></pre></div>
+<h2 id="transfer-objects"><a href="#transfer-objects" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>Transfer objects</h2>
+<p>You can transfer mutable objects you own to another address using the command below</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>    sui client transfer <span class="token punctuation">[</span>OPTIONS<span class="token punctuation">]</span> <span class="token parameter variable">--to</span> <span class="token operator">&lt;</span>TO<span class="token operator">></span> --object-id <span class="token operator">&lt;</span>OBJECT_ID<span class="token operator">></span> --gas-budget <span class="token operator">&lt;</span>GAS_BUDGET<span class="token operator">></span>
+
+OPTIONS:
+        --coin-object-id <span class="token operator">&lt;</span>OBJECT_ID<span class="token operator">></span>
+            Object to transfer, <span class="token keyword">in</span> <span class="token number">20</span> bytes Hex string
+
+        <span class="token parameter variable">--gas</span> <span class="token operator">&lt;</span>GAS<span class="token operator">></span>
+            ID of the gas object <span class="token keyword">for</span> gas payment, <span class="token keyword">in</span> <span class="token number">20</span> bytes Hex string If not provided, a gas
+            object with at least gas_budget value will be selected
+
+        --gas-budget <span class="token operator">&lt;</span>GAS_BUDGET<span class="token operator">></span>
+            Gas budget <span class="token keyword">for</span> this transfer
+
+    -h, <span class="token parameter variable">--help</span>
+            Print <span class="token builtin class-name">help</span> information
+
+        <span class="token parameter variable">--json</span>
+            Return <span class="token builtin class-name">command</span> outputs <span class="token keyword">in</span> json <span class="token function">format</span>
+
+        <span class="token parameter variable">--to</span> <span class="token operator">&lt;</span>TO<span class="token operator">></span>
+            Recipient address
+</code></pre></div>
+<p>To transfer an object to a recipient, you need the recipient's address,
+the object ID of the object to transfer, and, optionally, the ID of the coin object for the transaction fee payment. If not specified, a coin that meets the budget is picked. Gas budget sets a cap for how much gas to spend. We are still finalizing our gas metering mechanisms. For now, just set something large enough.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client transfer <span class="token parameter variable">--to</span> 0xf456ebef195e4a231488df56b762ac90695be2dd --object-id 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 --gas-budget <span class="token number">100</span>
+</code></pre></div>
+<h2 id="create-an-example-nft"><a href="#create-an-example-nft" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>Create an example NFT</h2>
+<p>You can add an example NFT to an address using the <code>create-example-nft</code> command. The command adds an NFT to the active address.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client create-example-nft
+</code></pre></div>
+<p>The command invokes the <code>mint</code> function in the <code>devnet_nft</code> module, which mints a Sui object with three attributes: name, description, and image URL with <a href="https://github.com/MystenLabs/sui/blob/27dff728a4c9cb65cd5d92a574105df20cb51887/sui/src/wallet_commands.rs#L39" rel="nofollow noopener noreferrer" target="_blank">default values</a> and transfers the object to your address. You can also provide custom values using the following instructions:</p>
+<p><code>create-example-nft</code> command usage:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>    sui client create-example-nft <span class="token punctuation">[</span>OPTIONS<span class="token punctuation">]</span>
+
+OPTIONS:
+        <span class="token parameter variable">--description</span> <span class="token operator">&lt;</span>DESCRIPTION<span class="token operator">></span>    Description of the NFT
+        <span class="token parameter variable">--gas</span> <span class="token operator">&lt;</span>GAS<span class="token operator">></span>                    ID of the gas object <span class="token keyword">for</span> gas payment, <span class="token keyword">in</span> <span class="token number">20</span> bytes Hex string
+                                       If not provided, a gas object with at least gas_budget value
+                                       will be selected
+        --gas-budget <span class="token operator">&lt;</span>GAS_BUDGET<span class="token operator">></span>      Gas budget <span class="token keyword">for</span> this transfer
+    -h, <span class="token parameter variable">--help</span>                         Print <span class="token builtin class-name">help</span> information
+        <span class="token parameter variable">--json</span>                         Return <span class="token builtin class-name">command</span> outputs <span class="token keyword">in</span> json <span class="token function">format</span>
+        <span class="token parameter variable">--name</span> <span class="token operator">&lt;</span>NAME<span class="token operator">></span>                  Name of the NFT
+        <span class="token parameter variable">--url</span> <span class="token operator">&lt;</span>URL<span class="token operator">></span>                    Display url<span class="token punctuation">(</span>e.g., an image url<span class="token punctuation">)</span> of the NFT
+
+</code></pre></div>
+<h2 id="merge-and-split-coin-objects"><a href="#merge-and-split-coin-objects" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>Merge and split coin objects</h2>
+<p>You can merge coins to reduce the number of separate coin objects in an account, or split coins to create smaller coin objects to use for transfers or gas payments.</p>
+<p>We can use the <code>merge-coin</code> command and <code>split-coin</code> command to consolidate or split coins, respectively.</p>
+<h3 id="merge-coins"><a href="#merge-coins" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>Merge coins</h3>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>    sui client merge-coin <span class="token punctuation">[</span>OPTIONS<span class="token punctuation">]</span> --primary-coin <span class="token operator">&lt;</span>PRIMARY_COIN<span class="token operator">></span> --coin-to-merge <span class="token operator">&lt;</span>COIN_TO_MERGE<span class="token operator">></span> --gas-budget <span class="token operator">&lt;</span>GAS_BUDGET<span class="token operator">></span>
+
+OPTIONS:
+        --coin-to-merge <span class="token operator">&lt;</span>COIN_TO_MERGE<span class="token operator">></span>
+            Coin to be merged, <span class="token keyword">in</span> <span class="token number">20</span> bytes Hex string
+
+        <span class="token parameter variable">--gas</span> <span class="token operator">&lt;</span>GAS<span class="token operator">></span>
+            ID of the gas object <span class="token keyword">for</span> gas payment, <span class="token keyword">in</span> <span class="token number">20</span> bytes Hex string If not provided, a gas
+            object with at least gas_budget value will be selected
+
+        --gas-budget <span class="token operator">&lt;</span>GAS_BUDGET<span class="token operator">></span>
+            Gas budget <span class="token keyword">for</span> this call
+
+    -h, <span class="token parameter variable">--help</span>
+            Print <span class="token builtin class-name">help</span> information
+
+        <span class="token parameter variable">--json</span>
+            Return <span class="token builtin class-name">command</span> outputs <span class="token keyword">in</span> json <span class="token function">format</span>
+
+        --primary-coin <span class="token operator">&lt;</span>PRIMARY_COIN<span class="token operator">></span>
+            Coin to merge into, <span class="token keyword">in</span> <span class="token number">20</span> bytes Hex string
+</code></pre></div>
+<p>You need at lease three coin objects to merge coins, two coins to merge and one to pay for gas payment. When you merge a coin, you specify maximum gas budget allowed for the merge transaction.</p>
+<p>Use the following command to view the objects that the specified address owns.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client objects 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
+</code></pre></div>
+<p>Use the IDs returns from the previous command in the <code>merge-coin</code> command.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client merge-coin --primary-coin 0x1e90389f5d70d7fa6ce973155460e1c04deae194 --coin-to-merge 0x351f08f03709cebea85dcd20e24b00fbc1851c92 --gas-budget <span class="token number">1000</span>
+</code></pre></div>
+<h3 id="split-coins"><a href="#split-coins" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>Split coins</h3>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>    sui client split-coin <span class="token punctuation">[</span>OPTIONS<span class="token punctuation">]</span> --coin-id <span class="token operator">&lt;</span>COIN_ID<span class="token operator">></span> --gas-budget <span class="token operator">&lt;</span>GAS_BUDGET<span class="token operator">></span> <span class="token punctuation">(</span>--amounts <span class="token operator">&lt;</span>AMOUNTS<span class="token operator">></span><span class="token punctuation">..</span>. <span class="token operator">|</span> <span class="token parameter variable">--count</span> <span class="token operator">&lt;</span>COUNT<span class="token operator">></span><span class="token punctuation">)</span>
+
+OPTIONS:
+        <span class="token parameter variable">--amounts</span> <span class="token operator">&lt;</span>AMOUNTS<span class="token operator">></span><span class="token punctuation">..</span>.       Specific amounts to <span class="token function">split</span> out from the coin
+        --coin-id <span class="token operator">&lt;</span>COIN_ID<span class="token operator">></span>          Coin to Split, <span class="token keyword">in</span> <span class="token number">20</span> bytes Hex string
+        <span class="token parameter variable">--count</span> <span class="token operator">&lt;</span>COUNT<span class="token operator">></span>              Count of equal-size coins to <span class="token function">split</span> into
+        <span class="token parameter variable">--gas</span> <span class="token operator">&lt;</span>GAS<span class="token operator">></span>                  ID of the gas object <span class="token keyword">for</span> gas payment, <span class="token keyword">in</span> <span class="token number">20</span> bytes Hex string If
+                                     not provided, a gas object with at least gas_budget value will
+                                     be selected
+        --gas-budget <span class="token operator">&lt;</span>GAS_BUDGET<span class="token operator">></span>    Gas budget <span class="token keyword">for</span> this call
+    -h, <span class="token parameter variable">--help</span>                       Print <span class="token builtin class-name">help</span> information
+        <span class="token parameter variable">--json</span>                       Return <span class="token builtin class-name">command</span> outputs <span class="token keyword">in</span> json <span class="token function">format</span>
+</code></pre></div>
+<p>To split a coin you need at least 2 coin objects, one to split and one to pay for gas fees.</p>
+<p>Use the following command to view the objects the address owns.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client objects 0x08da15bee6a3f5b01edbbd402654a75421d81397
+</code></pre></div>
+<p>Then use the IDs returned in the <code>split-coin</code> command.</p>
+<p>The following example splits one coin into three coins of different amounts, 1000, 5000, and 3000. The <code>--amounts</code> argument accepts a list of values.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client split-coin --coin-id 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 <span class="token parameter variable">--amounts</span> <span class="token number">1000</span> <span class="token number">5000</span> <span class="token number">3000</span> --gas-budget <span class="token number">1000</span>
+</code></pre></div>
+<p>Use the <code>objects</code> command to view the new coin objects.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-text"><code>sui client objects 0x08da15bee6a3f5b01edbbd402654a75421d81397
+</code></pre></div>
+<p>The following example splits a coin into three equal parts. To split a coin evenly, don't include the <code>--amount</code> argument in the command.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client split-coin --coin-id 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 <span class="token parameter variable">--count</span> <span class="token number">3</span> --gas-budget <span class="token number">1000</span>
+</code></pre></div>
+<h2 id="calling-move-code"><a href="#calling-move-code" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>Calling Move code</h2>
+<p>The genesis state of the Sui platform includes Move code that is
+immediately ready to be called from Sui CLI. Please see our
+<a href="/devnet/build/move#first-look-at-move-source-code" aria-label="Move developer documentation">Move developer documentation</a>
+for the first look at Move source code and a description of the
+following function we will be calling in this tutorial:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-rust"><code>public entry fun <span class="token function">transfer</span><span class="token punctuation">(</span>c<span class="token punctuation">:</span> <span class="token namespace">coin<span class="token punctuation">::</span></span><span class="token class-name">Coin</span><span class="token operator">&lt;</span><span class="token constant">SUI</span><span class="token operator">></span><span class="token punctuation">,</span> recipient<span class="token punctuation">:</span> address<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token namespace">transfer<span class="token punctuation">::</span></span><span class="token function">transfer</span><span class="token punctuation">(</span>c<span class="token punctuation">,</span> <span class="token class-name">Address</span><span class="token punctuation">::</span><span class="token function">new</span><span class="token punctuation">(</span>recipient<span class="token punctuation">)</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre></div>
+<p>Please note that there is no real need to use a Move call to transfer
+coins as this can be accomplished with a built-in Sui client
+<a href="#transferring-coins">command</a> - we chose this example due to its
+simplicity.</p>
+<p>Let us examine objects owned by address <code>0x48ff0a932b12976caec91d521265b009ad5b2225</code>:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client objects 0x48ff0a932b12976caec91d521265b009ad5b2225
+
+                 Object ID                  <span class="token operator">|</span>  Version   <span class="token operator">|</span>                    Digest                    <span class="token operator">|</span>   Owner Type    <span class="token operator">|</span>               Object Type
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0x471c8e241d0473c34753461529b70f9c4ed3151b <span class="token operator">|</span>     <span class="token number">0</span>      <span class="token operator">|</span> MCQIALghS9kQUWMclChmsd6jCuLiUxNjEn9VRV+AhSA<span class="token operator">=</span> <span class="token operator">|</span>  AddressOwner   <span class="token operator">|</span>      0x2::coin::Coin<span class="token operator">&lt;</span>0x2::sui::SUI<span class="token operator">></span>
+ 0x53b50e3020a01e1fd6acf832a871feee240183f0 <span class="token operator">|</span>     <span class="token number">0</span>      <span class="token operator">|</span> VIbuA4fcsitOUmJLQ+FugZWIn7bg6LnVO8eTIAUDzkg<span class="token operator">=</span> <span class="token operator">|</span>  AddressOwner   <span class="token operator">|</span>      0x2::coin::Coin<span class="token operator">&lt;</span>0x2::sui::SUI<span class="token operator">></span>
+ 0x5c846224b8704683a1c576aec7c8d9c3413d87c1 <span class="token operator">|</span>     <span class="token number">0</span>      <span class="token operator">|</span> <span class="token assign-left variable">KO0Fr9uCPnT3KxOEishyzas33le4J9fAGg7iEOOzo7A</span><span class="token operator">=</span> <span class="token operator">|</span>  AddressOwner   <span class="token operator">|</span>      0x2::coin::Coin<span class="token operator">&lt;</span>0x2::sui::SUI<span class="token operator">></span>
+ 0x6fe4cf8d2c21f23f2aacf60f30c98ff9e2c78226 <span class="token operator">|</span>     <span class="token number">0</span>      <span class="token operator">|</span> p2evKbTirwEoF1PxGIu5USAsSdkxzh1sUD/OxBfpdNE<span class="token operator">=</span> <span class="token operator">|</span>  AddressOwner   <span class="token operator">|</span>      0x2::coin::Coin<span class="token operator">&lt;</span>0x2::sui::SUI<span class="token operator">></span>
+ 0xa28dd252ab5b984a8c1da699bbe10e7f09947a12 <span class="token operator">|</span>     <span class="token number">0</span>      <span class="token operator">|</span> 6VT+8479aijA8tYmab7YatVgjXm1TWy5jItooC416YQ<span class="token operator">=</span> <span class="token operator">|</span>  AddressOwner   <span class="token operator">|</span>      0x2::coin::Coin<span class="token operator">&lt;</span>0x2::sui::SUI<span class="token operator">></span>
+Showing <span class="token number">5</span> results.
+</code></pre></div>
+<p>Now that we know which objects are owned by that address,
+we can transfer one of them to another address, say the fresh one
+we created in the <a href="#generating-a-new-account">Generating a new account</a> section
+(<code>0xc72cf3adcc4d11c03079cef2c8992aea5268677a</code>). We can try any object,
+but for the sake of this exercise, let's choose the last one on the
+list.</p>
+<p>We will perform the transfer by calling the <code>transfer</code> function from
+the sui module using the following Sui client command:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client call <span class="token parameter variable">--function</span> transfer <span class="token parameter variable">--module</span> sui <span class="token parameter variable">--package</span> 0x2 <span class="token parameter variable">--args</span> 0x471c8e241d0473c34753461529b70f9c4ed3151b 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75 --gas-budget <span class="token number">1000</span>
+</code></pre></div>
+<p>This is a pretty complicated command so let's explain all of its
+parameters one-by-one:</p>
+<ul>
+<li><code>--function</code> - name of the function to be called</li>
+<li><code>--module</code> - name of the module containing the function</li>
+<li><code>--package</code> - ID of the package object where the module containing
+the function is located. (Remember
+that the ID of the genesis Sui package containing the GAS module is
+defined in its manifest file, and is equal to <code>0x2</code>.)</li>
+<li><code>--args</code> - a list of function arguments formatted as
+<a href="/devnet/build/sui-json" aria-label="SuiJSON">SuiJSON</a> values (hence the preceding <code>0x</code> in address
+and object ID):
+<ul>
+<li>ID of the gas object representing the <code>c</code> parameter of the <code>transfer</code>
+function</li>
+<li>address of the new gas object owner</li>
+</ul>
+</li>
+<li><code>--gas</code> - an optional object containing gas used to pay for this
+function call</li>
+<li><code>--gas-budget</code> - a decimal value expressing how much gas we are
+willing to pay for the <code>transfer</code> call to be completed to avoid
+accidental drain of all gas in the gas pay)</li>
+</ul>
+<p>Note the third argument to the <code>transfer</code> function representing
+<code>TxContext</code> does not have to be specified explicitly - it
+is a required argument for all functions callable from Sui and is
+auto-injected by the platform at the point of a function call.</p>
+<blockquote>
+<p><strong>Important:</strong> If you use a shell that interprets square brackets ([ ]) as special characters (such as the <code>zsh</code> shell), you must enclose the brackets in single quotes. For example, instead of <code>[7,42]</code> you must use <code>'[7,42]'</code>.</p>
+<p>Additionally, when you specify a vector of object IDs, you must enclose each ID in double quotes. For example,
+<code>'["0x471c8e241d0473c34753461529b70f9c4ed3151b","0x53b50e3020a01e1fd6acf832a871feee240183f0"]'</code></p>
+</blockquote>
+<p>To gain a deeper view into the object, include the</p>
+<blockquote>
+<p><code>--json</code> flag in the <code>sui client</code> command to see the raw JSON representation
+of the object.</p>
+</blockquote>
+<p>The output of the call command is a bit verbose, but the important
+information that should be printed at the end indicates objects
+changes as a result of the function call:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>----- Certificate ----
+Transaction Hash: KT7sEHzxavRFkLijfKGDqj6kM5bVl1QA1IawJPV2+Go<span class="token operator">=</span>
+Transaction Signature: GIUaa8yAPgy/eSVypVz+fmbjC2mL5kHuYNodUyNcIUMvlUN5XxyPYdL8C25vvH6rYt/ZUDY2ntZU1NHUp4yPCg<span class="token operator">==</span>@iocJzkLCMJMh1VGZ6sUsw0okqoDP71ed9a4Vf2vWlx4<span class="token operator">=</span>
+Signed Authorities <span class="token builtin class-name">:</span> <span class="token punctuation">[</span>k<span class="token comment">#5067c1e30cc9d8b9ed9fe589beffbcdd14a2829b9fed5bf602608f411dbc4d56, k#e5b3bc0d482603d8b54a25246b9053e958c872530d4014676d5c30d885f116ac, k#3adde8bfae7d338b65e7d13d4ead6b523e5271ca17b2d5eb321412257ee914a4]</span>
+Transaction Kind <span class="token builtin class-name">:</span> Call
+Package ID <span class="token builtin class-name">:</span> 0x2
+Module <span class="token builtin class-name">:</span> sui
+Function <span class="token builtin class-name">:</span> transfer
+Arguments <span class="token builtin class-name">:</span> <span class="token punctuation">[</span><span class="token string">"0x471c8e241d0473c34753461529b70f9c4ed3151b"</span>, <span class="token string">"0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75"</span><span class="token punctuation">]</span>
+Type Arguments <span class="token builtin class-name">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>
+----- Transaction Effects ----
+Status <span class="token builtin class-name">:</span> Success
+Mutated Objects:
+  - ID: 0x471c8e241d0473c34753461529b70f9c4ed3151b , Owner: Account Address <span class="token punctuation">(</span> 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75 <span class="token punctuation">)</span>
+  - ID: 0x53b50e3020a01e1fd6acf832a871feee240183f0 , Owner: Account Address <span class="token punctuation">(</span> 0x48ff0a932b12976caec91d521265b009ad5b2225 <span class="token punctuation">)</span>
+</code></pre></div>
+<p>This output indicates the gas object
+was updated to collect gas payment for the function call, and the
+transferred object was updated as its owner had been
+modified. We can confirm the latter (and thus a successful execution
+of the <code>transfer</code> function) by querying objects that are now owned by
+the sender:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client objects 0x48ff0a932b12976caec91d521265b009ad5b2225
+                 Object ID                  <span class="token operator">|</span>  Version   <span class="token operator">|</span>                    Digest                    <span class="token operator">|</span>   Owner Type    <span class="token operator">|</span>               Object Type
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0x53b50e3020a01e1fd6acf832a871feee240183f0 <span class="token operator">|</span>     <span class="token number">1</span>      <span class="token operator">|</span> st6KVE+nTPsQgtEtxSbgJZCzSSuSB2ZsJAMbXFNLw/k<span class="token operator">=</span> <span class="token operator">|</span>  AddressOwner   <span class="token operator">|</span>      0x2::coin::Coin<span class="token operator">&lt;</span>0x2::sui::SUI<span class="token operator">></span>
+ 0x5c846224b8704683a1c576aec7c8d9c3413d87c1 <span class="token operator">|</span>     <span class="token number">0</span>      <span class="token operator">|</span> <span class="token assign-left variable">KO0Fr9uCPnT3KxOEishyzas33le4J9fAGg7iEOOzo7A</span><span class="token operator">=</span> <span class="token operator">|</span>  AddressOwner   <span class="token operator">|</span>      0x2::coin::Coin<span class="token operator">&lt;</span>0x2::sui::SUI<span class="token operator">></span>
+ 0x6fe4cf8d2c21f23f2aacf60f30c98ff9e2c78226 <span class="token operator">|</span>     <span class="token number">0</span>      <span class="token operator">|</span> p2evKbTirwEoF1PxGIu5USAsSdkxzh1sUD/OxBfpdNE<span class="token operator">=</span> <span class="token operator">|</span>  AddressOwner   <span class="token operator">|</span>      0x2::coin::Coin<span class="token operator">&lt;</span>0x2::sui::SUI<span class="token operator">></span>
+ 0xa28dd252ab5b984a8c1da699bbe10e7f09947a12 <span class="token operator">|</span>     <span class="token number">0</span>      <span class="token operator">|</span> 6VT+8479aijA8tYmab7YatVgjXm1TWy5jItooC416YQ<span class="token operator">=</span> <span class="token operator">|</span>  AddressOwner   <span class="token operator">|</span>      0x2::coin::Coin<span class="token operator">&lt;</span>0x2::sui::SUI<span class="token operator">></span>
+Showing <span class="token number">4</span> results.
+</code></pre></div>
+<p>We can now see this address no longer owns the transferred object.
+And if we inspect this object, we can see it has the new
+owner, different from the original one:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client object 0x471c8e241d0473c34753461529b70f9c4ed3151b
+</code></pre></div>
+<p>Resulting in:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-text"><code>----- Move Object (0x471c8e241d0473c34753461529b70f9c4ed3151b[1]) -----
+Owner: Account Address ( 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75 )
+Version: 1
+Storage Rebate: 15
+Previous Transaction: KT7sEHzxavRFkLijfKGDqj6kM5bVl1QA1IawJPV2+Go=
+----- Data -----
+type: 0x2::coin::Coin&lt;0x2::sui::SUI>
+balance: 100000
+id: 0x471c8e241d0473c34753461529b70f9c4ed3151b[1]
+</code></pre></div>
+<h2 id="publish-packages"><a href="#publish-packages" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>Publish packages</h2>
+<p>You must publish packages to the Sui <a href="/devnet/learn/how-sui-works#architecture" aria-label="distributed ledger">distributed ledger</a> for the code you developed to be available in Sui. To publish packages with the Sui client, use the <code>publish</code> command.</p>
+<p>Refer to the <a href="/devnet/build/move" aria-label="Move developer documentation">Move developer documentation</a> for a
+description on how to <a href="/devnet/build/move/write-package" aria-label="write a simple Move code package">write a simple Move code package</a>,
+which you can then publish using the Sui client <code>publish</code> command.</p>
+<p><strong>Important:</strong> You must remove all calls to functions in the <code>debug</code> module from no-test code before you can publish the new module (test code is marked with the <code>#[test]</code> annotation).</p>
+<p>Use the same address for publishing that we used for calling Move code in the previous <a href="#calling-move-code">section</a> (<code>0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75</code>) which now has four objects left:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client objects 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
+</code></pre></div>
+<p>Outputting:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-text"><code>                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0x53b50e3020a01e1fd6acf832a871feee240183f0 |     1      | st6KVE+nTPsQgtEtxSbgJZCzSSuSB2ZsJAMbXFNLw/k= |  AddressOwner   |      0x2::coin::Coin&lt;0x2::sui::SUI>
+ 0x5c846224b8704683a1c576aec7c8d9c3413d87c1 |     0      | KO0Fr9uCPnT3KxOEishyzas33le4J9fAGg7iEOOzo7A= |  AddressOwner   |      0x2::coin::Coin&lt;0x2::sui::SUI>
+ 0x6fe4cf8d2c21f23f2aacf60f30c98ff9e2c78226 |     0      | p2evKbTirwEoF1PxGIu5USAsSdkxzh1sUD/OxBfpdNE= |  AddressOwner   |      0x2::coin::Coin&lt;0x2::sui::SUI>
+ 0xa28dd252ab5b984a8c1da699bbe10e7f09947a12 |     0      | 6VT+8479aijA8tYmab7YatVgjXm1TWy5jItooC416YQ= |  AddressOwner   |      0x2::coin::Coin&lt;0x2::sui::SUI>
+Showing 4 results.
+</code></pre></div>
+<p>The whole command to publish a package for address
+<code>0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75</code> resembles the following (assuming
+that the location of the package sources is in the <code>PATH_TO_PACKAGE</code>
+environment variable):</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui client publish <span class="token variable">$PATH_TO_PACKAGE</span>/my_move_package <span class="token parameter variable">--gas</span> 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19 --gas-budget <span class="token number">30000</span> --verify-dependencies
+</code></pre></div>
+<p>The publish command accepts the path to your package as an optional positional parameter (<code>$PATH_TO_PACKAGE/my_move_package</code> in the previous call). If you do not supply the path, the command uses the current working directory as the default path value. The call also provides the following data:</p>
+<ul>
+<li><code>--gas</code> - The Coin object used to pay for gas.</li>
+<li><code>--gas-budget</code> - Gas budget for running module initializers.</li>
+<li><code>--verify-dependencies</code> - Optional flag to have the CLI check that all dependencies match their on-chain counterparts.</li>
+</ul>
+<p>When the <code>--verify-dependencies</code> flag is present, the CLI verifies that the bytecode for dependencies found at their respective published addresses matches the bytecode you get when compiling that dependency from source code. If the bytecode for a dependency does not match, your package does not publish and you receive an error message indicating which package and module the mismatch was found in:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>Local dependency did not match its on-chain version at <span class="token operator">&lt;</span>address<span class="token operator">></span>::<span class="token operator">&lt;</span>package<span class="token operator">></span>::<span class="token operator">&lt;</span>module<span class="token operator">></span>
+</code></pre></div>
+<p>The <code>--verify-dependencies</code> flag can fail the publish for other reasons, as well:</p>
+<ul>
+<li>There are modules missing, either in the local version of the dependency or on-chain.</li>
+<li>There's nothing at the address that the dependency points to (it was deleted or never existed).</li>
+<li>The address supplied for the dependency points to an object instead of a package.</li>
+<li>The CLI fails to connect to the node to fetch the package.</li>
+</ul>
+<p>If successful, your response resembles the following:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>----- Certificate ----
+Transaction Hash: evmJUz0+a2oFMbsTza2U+vC9q2KHeDVVV9XUma8OXv8<span class="token operator">=</span>
+Transaction Signature: 7Lqy/KQW86Tq81cUxLMW07AQw1S+D4QLFC9/jMNKrau81eABHpxG2lgaVaAh0c+d5ldYhp75SmpY0pxq0FSLBA<span class="token operator">==</span>@BE/TaOYjyEtJUqF0Db4FEcVT4umrPmp760gFLQIGA1E<span class="token operator">=</span>
+Signed Authorities <span class="token builtin class-name">:</span> <span class="token punctuation">[</span>k<span class="token comment">#5067c1e30cc9d8b9ed9fe589beffbcdd14a2829b9fed5bf602608f411dbc4d56, k#f2e5749a5fc33d45c6f546eb9e53fabf4f17681ba6f697080de9514f4e0d6a75, k#e5b3bc0d482603d8b54a25246b9053e958c872530d4014676d5c30d885f116ac]</span>
+Transaction Kind <span class="token builtin class-name">:</span> Publish
+----- Publish Results ----
+The newly published package object ID: 0xdbcee02bd4eb326122ced0a8540f15a057d82850
+
+List of objects created by running module initializers:
+----- Move Object <span class="token punctuation">(</span>0x4ac2df49c3698baaef11ae23b3d8417d7e5ed65f<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span> -----
+Owner: Account Address <span class="token punctuation">(</span> 0xb02b5e57fe3572f94ad5ac2a17392bfb3261f7a0 <span class="token punctuation">)</span>
+Version: <span class="token number">1</span>
+Storage Rebate: <span class="token number">12</span>
+Previous Transaction: evmJUz0+a2oFMbsTza2U+vC9q2KHeDVVV9XUma8OXv8<span class="token operator">=</span>
+----- Data -----
+type: 0xdbcee02bd4eb326122ced0a8540f15a057d82850::m1::Forge
+id: 0x4ac2df49c3698baaef11ae23b3d8417d7e5ed65f<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span>
+swords_created: <span class="token number">0</span>
+
+Updated Gas <span class="token builtin class-name">:</span> Coin <span class="token punctuation">{</span> id: 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19, value: <span class="token number">96929</span> <span class="token punctuation">}</span>
+</code></pre></div>
+<p>Running this command created an object representing the published package.
+From now on, use the package object ID (<code>0xdbcee02bd4eb326122ced0a8540f15a057d82850</code>) in the Sui client call
+command (similar to <code>0x2</code> used for built-in packages in the
+<a href="#calling-move-code">Calling Move code</a> section).</p>
+<p>Another object created as a result of package publishing is a
+user-defined object (of type <code>Forge</code>) created inside the initializer
+function of the (only) module included in the published package - see
+the part of Move developer documentation concerning <a href="/devnet/build/move/debug-publish#module-initializers" aria-label="module
+initializers">module
+initializers</a> for more details.</p>
+<p>You might notice that the gas object that was used to pay for
+publishing was updated as well.</p>
+<p><strong>Important:</strong> If the publishing attempt results in an error regarding verification failure, <a href="/devnet/build/move/build-test#building-a-package" aria-label="build your package locally">build your package locally</a> (using the <code>sui move build</code> command) to get a more verbose error message.</p>
+<h2 id="customize-genesis"><a href="#customize-genesis" aria-hidden="true" tabindex="-1"><span class="icon icon-link"></span></a>Customize genesis</h2>
+<p>The genesis process can be customized by providing a genesis configuration
+file using the <code>--config</code> flag.</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-shell"><code>sui genesis <span class="token parameter variable">--config</span> <span class="token operator">&lt;</span>Path to genesis config file<span class="token operator">></span>
+</code></pre></div>
+<p>Example <code>genesis.yaml</code>:</p>
+<div class="nuxt-content-highlight"><pre class="line-numbers language-yaml"><code><span class="token punctuation">---</span>
+<span class="token key atrule">validator_config_info</span><span class="token punctuation">:</span> <span class="token null important">~</span>
+<span class="token key atrule">committee_size</span><span class="token punctuation">:</span> <span class="token number">4</span>
+<span class="token key atrule">accounts</span><span class="token punctuation">:</span>
+  <span class="token punctuation">-</span> <span class="token key atrule">gas_objects</span><span class="token punctuation">:</span>
+      <span class="token punctuation">-</span> <span class="token key atrule">object_id</span><span class="token punctuation">:</span> <span class="token string">"0xdbac75c4e5a5064875cb8566a533547957092f93"</span>
+        <span class="token key atrule">gas_value</span><span class="token punctuation">:</span> <span class="token number">100000</span>
+    <span class="token key atrule">gas_object_ranges</span><span class="token punctuation">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>
+<span class="token key atrule">move_packages</span><span class="token punctuation">:</span> <span class="token punctuation">[</span><span class="token string">"&lt;Paths to custom move packages>"</span><span class="token punctuation">]</span>
+<span class="token key atrule">sui_framework_lib_path</span><span class="token punctuation">:</span> <span class="token null important">~</span>
+<span class="token key atrule">move_framework_lib_path</span><span class="token punctuation">:</span> <span class="token null important">~</span>
+
+</code></pre></div></div></div></article> <div class="pagination-nav justify-content-between"><a href="/devnet/build/devnet" class="_docSNav"><span class="truncate"> Connect to Sui Devnet </span></a> <a href="/devnet/build/sui-local-network" class="_docSNav justify-end right"><span class="truncate"> Sui Local Network </span></a></div></div> <div class="article-update">
+            Last update
+            12/12/2022, 5:14:09 PM
+          </div> <section class="widget widget_recent_entries sui-contributors"><h2 class="widget-title">Contributor(s)</h2> <ul><li><a href="https://github.com/randall-Mysten" target="_blank"><img src="https://avatars.githubusercontent.com/u/109545725?v=4" alt><span>Randall-Mysten</span></a></li><li><a href="https://github.com/aschran" target="_blank"><img src="https://avatars.githubusercontent.com/u/6739538?v=4" alt><span>Andrew Schran</span></a></li><li><a href="https://github.com/ronny-mysten" target="_blank"><img src="https://avatars.githubusercontent.com/u/118224482?v=4" alt><span>ronny-mysten</span></a></li><li><a href="https://github.com/sblackshear" target="_blank"><img src="https://avatars.githubusercontent.com/u/3513142?v=4" alt><span>Sam Blackshear</span></a></li><li><a href="https://github.com/Romainua" target="_blank"><img src="https://avatars.githubusercontent.com/u/44613085?v=4" alt><span>Roman</span></a></li><li><a href="https://github.com/oxade" target="_blank"><img src="https://avatars.githubusercontent.com/u/93547199?v=4" alt><span>oxade</span></a></li><li><a href="https://github.com/geeknees" target="_blank"><img src="https://avatars.githubusercontent.com/u/701242?v=4" alt><span>Masumi Kawasaki</span></a></li><li><a href="https://github.com/awelc" target="_blank"><img src="https://avatars.githubusercontent.com/u/1724397?v=4" alt><span>Adam Welc</span></a></li><li><a href="https://github.com/kchalkias" target="_blank"><img src="https://avatars.githubusercontent.com/u/25659162?v=4" alt><span>Konstantinos Chalkias</span></a></li><li><a href="https://github.com/joyqvq" target="_blank"><img src="https://avatars.githubusercontent.com/u/108701016?v=4" alt><span>Joy Wang</span></a></li><li><a href="https://github.com/Clay-Mysten" target="_blank"><img src="https://avatars.githubusercontent.com/u/100217682?v=4" alt><span>Clay-Mysten</span></a></li><li><a href="https://github.com/patrickkuo" target="_blank"><img src="https://avatars.githubusercontent.com/u/1888654?v=4" alt><span>Patrick Kuo</span></a></li></ul></section> <div class="section-masthead__meta text-left"><ul class="post-meta"><li><a href="https://github.com/MystenLabs/sui/blob/devnet/doc/src/build/cli-client.md" target="_blank" class="_sui_small-txt"><i class="fab fa-github"></i> Source Code</a></li></ul></div></div></div></section></div></section> <footer class="footer site-footer container-fluid"><div class="container footermenu sui-mx"><div class="footer__divider"></div> <div class="row"><div class="col-lg-3 text-center footer__column"><a href="/" aria-label="home" class="logo _selectActive"><div class="logo _sui-footer-logo"></div></a> <div class="footer-co-community-link"><ul class="list-unstyled d-flex justify-content-center"><li><a href="https://twitter.com/SuiNetwork/" target="_blank" aria-label="twitter"><svg width="24" height="18" viewBox="0 0 24 18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7.54752 18C16.6042 18 21.5578 11.0743 21.5578 5.0683C21.5578 4.87158 21.5578 4.67576 21.5434 4.48082C22.507 3.83743 23.3389 3.0408 24 2.12823C23.1014 2.49596 22.148 2.73701 21.1718 2.84331C22.1998 2.27537 22.9692 1.38197 23.3366 0.329451C22.3701 0.858902 21.3126 1.232 20.2099 1.43264C19.4675 0.703991 18.4856 0.221496 17.4162 0.0598233C16.3468 -0.10185 15.2494 0.0663123 14.294 0.538287C13.3385 1.01026 12.5782 1.75974 12.1307 2.67073C11.6833 3.58173 11.5735 4.60345 11.8186 5.5778C9.8609 5.48716 7.94576 5.01756 6.19745 4.19948C4.44915 3.38141 2.90676 2.23314 1.6704 0.82921C1.04073 1.82976 0.847872 3.0142 1.1311 4.14139C1.41433 5.26857 2.15234 6.25374 3.19488 6.89632C2.41123 6.87512 1.64465 6.67999 0.96 6.32744V6.38504C0.960311 7.43437 1.35385 8.4513 2.07387 9.26335C2.79389 10.0754 3.79606 10.6326 4.9104 10.8403C4.18548 11.0228 3.42487 11.0495 2.68704 10.9183C3.00181 11.8213 3.61443 12.611 4.43924 13.1769C5.26405 13.7428 6.25983 14.0566 7.28736 14.0746C6.26644 14.8153 5.09731 15.3629 3.84687 15.6862C2.59643 16.0094 1.28921 16.1019 0 15.9584C2.25183 17.2922 4.87192 17.9997 7.54752 17.9965" fill="#76839D"></path></svg></a></li> <li><a href="https://medium.com/mysten-labs" target="_blank" aria-label="medium"><svg width="21" height="16" viewBox="0 0 21 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.42669 3.264C2.43894 3.14227 2.42253 3.01935 2.37877 2.9051C2.33501 2.79084 2.26512 2.68841 2.17469 2.606L0.306688 0.339V0H6.10469L10.5867 9.905L14.5267 0H20.0547V0.339L18.4577 1.88C18.39 1.93225 18.3378 2.00189 18.3066 2.0815C18.2755 2.16111 18.2665 2.24769 18.2807 2.332V13.666C18.2665 13.7503 18.2755 13.8369 18.3066 13.9165C18.3378 13.9961 18.39 14.0658 18.4577 14.118L20.0177 15.66V16H12.1737V15.661L13.7897 14.081C13.9487 13.921 13.9487 13.874 13.9487 13.63V4.468L9.45669 15.962H8.85069L3.62069 4.468V12.172C3.57769 12.495 3.68469 12.822 3.91069 13.056L6.01169 15.624V15.962H0.0546875V15.624L2.15469 13.056C2.2658 12.9401 2.34826 12.7997 2.39549 12.6462C2.44272 12.4928 2.4534 12.3304 2.42669 12.172V3.264Z" fill="#75859F"></path></svg></a></li> <li><a href="https://discord.gg/Sui" target="_blank" aria-label="discord"><svg width="24" height="18" viewBox="0 0 24 18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20.3175 1.49197C18.7875 0.801974 17.1475 0.291974 15.4325 0.0019736C15.4172 -0.000958481 15.4014 0.000931061 15.3872 0.00738094C15.3731 0.0138308 15.3613 0.0245219 15.3535 0.0379736C15.1435 0.406974 14.9095 0.887974 14.7455 1.26797C12.9266 0.99621 11.0774 0.99621 9.25848 1.26797C9.07582 0.846834 8.86983 0.436198 8.64148 0.0379736C8.63374 0.0243563 8.62203 0.0134234 8.60792 0.00663373C8.5938 -0.000155898 8.57795 -0.00247938 8.56248 -2.64894e-05C6.84848 0.289973 5.20848 0.799974 3.67748 1.49097C3.66431 1.4965 3.65314 1.50592 3.64548 1.51797C0.533481 6.09297 -0.319519 10.555 0.0994806 14.961C0.100647 14.9718 0.103996 14.9822 0.109326 14.9917C0.114655 15.0011 0.121853 15.0094 0.130481 15.016C1.94687 16.3384 3.97282 17.3458 6.12348 17.996C6.13847 18.0006 6.15451 18.0006 6.16949 17.9959C6.18448 17.9913 6.19772 17.9823 6.20748 17.97C6.67028 17.351 7.08038 16.6944 7.43348 16.007C7.43838 15.9976 7.44121 15.9872 7.44176 15.9766C7.44232 15.9661 7.4406 15.9555 7.43671 15.9456C7.43282 15.9358 7.42686 15.9268 7.41923 15.9195C7.4116 15.9121 7.40248 15.9065 7.39248 15.903C6.74649 15.6597 6.12057 15.3661 5.52048 15.025C5.5097 15.0188 5.50061 15.0101 5.49404 14.9995C5.48746 14.989 5.48361 14.977 5.48281 14.9646C5.48202 14.9522 5.48432 14.9398 5.48949 14.9286C5.49467 14.9173 5.50257 14.9075 5.51248 14.9C5.63848 14.807 5.76448 14.71 5.88448 14.613C5.89528 14.6043 5.90829 14.5987 5.92206 14.5969C5.93584 14.5952 5.94983 14.5973 5.96248 14.603C9.88948 16.367 14.1425 16.367 18.0235 14.603C18.0362 14.5969 18.0503 14.5946 18.0643 14.5961C18.0782 14.5977 18.0915 14.6032 18.1025 14.612C18.2225 14.71 18.3475 14.807 18.4745 14.9C18.4845 14.9073 18.4925 14.917 18.4979 14.9282C18.5032 14.9394 18.5057 14.9517 18.5051 14.9641C18.5045 14.9765 18.5008 14.9885 18.4945 14.9991C18.4881 15.0098 18.4791 15.0186 18.4685 15.025C17.8705 15.369 17.2485 15.66 16.5955 15.902C16.5855 15.9056 16.5763 15.9114 16.5687 15.9188C16.561 15.9263 16.5551 15.9353 16.5512 15.9452C16.5473 15.9551 16.5456 15.9658 16.5462 15.9764C16.5467 15.9871 16.5496 15.9975 16.5545 16.007C16.9145 16.694 17.3265 17.348 17.7795 17.969C17.7889 17.9817 17.802 17.9912 17.8171 17.9963C17.8321 18.0013 17.8483 18.0015 17.8635 17.997C20.0178 17.3486 22.0471 16.3407 23.8655 15.016C23.8744 15.0098 23.8818 15.0017 23.8873 14.9924C23.8928 14.9831 23.8963 14.9727 23.8975 14.962C24.3975 9.86797 23.0595 5.44197 20.3485 1.51997C20.3418 1.50723 20.3308 1.49729 20.3175 1.49197ZM8.02048 12.278C6.83848 12.278 5.86348 11.209 5.86348 9.89797C5.86348 8.58597 6.81948 7.51797 8.02048 7.51797C9.23048 7.51797 10.1965 8.59497 10.1775 9.89797C10.1775 11.21 9.22148 12.278 8.02048 12.278ZM15.9955 12.278C14.8125 12.278 13.8385 11.209 13.8385 9.89797C13.8385 8.58597 14.7935 7.51797 15.9955 7.51797C17.2055 7.51797 18.1715 8.59497 18.1525 9.89797C18.1525 11.21 17.2065 12.278 15.9955 12.278Z" fill="#76839D"></path></svg></a></li></ul></div></div> <div class="col-lg-3 col-sm-4 footer-menu-col text-center"><h1>Community</h1> <ul><li><a href="https://discord.gg/sui" title="Discord" target="_blank">
+              Discord
+            </a></li><li><a href="https://twitter.com/SuiNetwork/" title="Twitter" target="_blank">
+              Twitter
+            </a></li><li><a href="https://medium.com/mysten-labs/" title="Medium" target="_blank">
+              Medium
+            </a></li><li><a href="https://github.com/MystenLabs" title="GitHub" target="_blank">
+              GitHub
+            </a></li></ul></div><div class="col-lg-3 col-sm-4 footer-menu-col text-center"><h1>Ecosystem</h1> <ul><li><a href="https://sui.io/" title="Sui.io" target="_blank" class="sui_external">
+              Sui.io
+            </a></li><li><a href="https://sui.io/resources/" title="Sui Resources" target="_blank" class="sui_external">
+              Sui Resources
+            </a></li><li><a href="https://forums.sui.io/" title="Sui Developer Forums" target="_blank" class="sui_external">
+              Sui Developer Forums
+            </a></li></ul></div><div class="col-lg-3 col-sm-4 footer-menu-col text-center"><h1>Send Feedback</h1> <ul><li><a href="mailto:doc@mystenlabs.com" title="Contact us (Email)" target="_blank" class="sui_external">
+              Contact us (Email)
+            </a></li><li><a href="https://github.com/MystenLabs/sui/issues/new/choose" title="Create an Issue (GitHub)" target="_blank" class="sui_external">
+              Create an Issue (GitHub)
+            </a></li><li><a href="https://discord.com/channels/916379725201563759/1001562806862233701" title="Chat about Docs (Discord)" target="_blank" class="sui_external">
+              Chat about Docs (Discord)
+            </a></li></ul></div></div> <div class="footer-bottom"><div class="row"><div class="col-md-4 offset-md-4"><div class="footer-bottom-link"><ul class="list-unstyled"><li><a href="https://sui.io/policy/">Privacy Policy</a></li> <li><a href="https://sui.io/terms/">Terms of Service</a></li></ul></div> <div class="footer-copyright"><span class="copyright-text">©2022 Copyright Sui. All rights reserved.</span></div></div></div></div></div></footer></div></section></div></div><script defer src="/_nuxt/static/1671776160/devnet/build/cli-client/state.js"></script><script src="/_nuxt/b4e2ed9.js" defer></script><script src="/_nuxt/d3737a5.js" defer></script><script src="/_nuxt/a5af1a2.js" defer></script><script src="/_nuxt/3062117.js" defer></script><script src="/_nuxt/8ae2c42.js" defer></script><script src="/_nuxt/42bcd16.js" defer></script><script src="/_nuxt/6a70b28.js" defer></script>
+  <!--EXTRA JS FILES-->
+  <!-- Global site tag (gtag.js) - Google Analytics-->
+  <script defer src="https://www.googletagmanager.com/gtag/js?id=G-0GW4F97GFL"></script>
+  <script>function gtag(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],gtag("js",new Date),gtag("config","G-0GW4F97GFL")</script>
+
+  <script>window.MathJax={tex:{inlineMath:[["$","$"],["\\(","\\)"]]}}</script>
+  <script id="MathJax-script" defer async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+
+</body>
+
+</html>
