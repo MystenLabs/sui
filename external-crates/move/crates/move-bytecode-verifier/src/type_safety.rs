@@ -860,6 +860,11 @@ fn verify_instr(
         Bytecode::CastU64 => check_cast(verifier, meter, offset, ST::U64)?,
         Bytecode::CastU128 => check_cast(verifier, meter, offset, ST::U128)?,
 
+        // TODO (signed-ints): `is_integer` includes I8..I256, so these arms (and Shl/Shr,
+        // Lt/Gt/Le/Ge, and `check_cast` in both directions) accept signed operands. We need
+        // to ensure the runtime implements each of Add/Sub/Mul/Mod/Div, BitOr/BitAnd/Xor,
+        // Shl/Shr, Lt/Gt/Le/Ge, and cross-signedness casts for signed integers before
+        // enabling SIGNED_INT_VERSION.
         Bytecode::Add
         | Bytecode::Sub
         | Bytecode::Mul

@@ -331,7 +331,7 @@ impl Type {
             S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("Unable to load const type signature".to_string()),
+                        .with_message("Unexpected signed int signature token in version 2".to_string()),
                 )
             }
         })
