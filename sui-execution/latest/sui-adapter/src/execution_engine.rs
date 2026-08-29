@@ -381,9 +381,10 @@ pub(crate) mod checked {
         }
     }
 
-    /// Post-execution consistency: SUI conservation + the expensive ownership invariants. `Err` means
-    /// an invariant was violated unrecoverably - no panic, no recovery; the caller bails to
-    /// `BumpOnly` reporting the error.
+    /// Post-execution consistency: SUI conservation, the expensive ownership invariants, and (on
+    /// successful execution) the published-packages invariant. `Err` means an invariant was
+    /// violated unrecoverably - no panic, no recovery; the caller bails to `BumpOnly` reporting
+    /// the error.
     #[allow(clippy::too_many_arguments)]
     fn check_consistency<Mode: ExecutionMode>(
         temporary_store: &mut TemporaryStore<'_>,
@@ -395,6 +396,7 @@ pub(crate) mod checked {
         sponsor: Option<SuiAddress>,
         is_epoch_change: bool,
         transaction_digest: TransactionDigest,
+        execution_succeeded: bool,
     ) -> Result<(), (Mode::Error, BumpOnlyReason)> {
         // FIXME: we cannot fail the transaction if this is an epoch change transaction.
         // Conservation + ownership read the cached invariant inputs from the store
@@ -432,6 +434,14 @@ pub(crate) mod checked {
                 ExecutionError::from_kind(ExecutionErrorKind::InvariantViolation).into(),
                 BumpOnlyReason::Ownership,
             ));
+        }
+
+        // Written packages must match the PTB's publish/upgrade commands; only meaningful when
+        // execution succeeded (on failure the writes were dropped).
+        if execution_succeeded {
+            temporary_store
+                .check_published_packages()
+                .map_err(|error| (error.into(), BumpOnlyReason::PublishedPackages))?;
         }
 
         Ok(())
@@ -559,6 +569,7 @@ pub(crate) mod checked {
         WriteReset,
         Conservation,
         Ownership,
+        PublishedPackages,
     }
 
     impl BumpOnlyReason {
@@ -570,6 +581,7 @@ pub(crate) mod checked {
                 Self::WriteReset => "write_reset",
                 Self::Conservation => "conservation",
                 Self::Ownership => "ownership",
+                Self::PublishedPackages => "published_packages",
             }
         }
 
@@ -723,8 +735,8 @@ pub(crate) mod checked {
             Ok(outcome) => outcome,
         };
 
-        // Post-execution consistency (conservation + ownership): on violation bail to `BumpOnly` with
-        // the gas_status recovered from the charger
+        // Post-execution consistency (conservation + ownership + published packages): on violation
+        // bail to `BumpOnly` with the gas_status recovered from the charger
         match check_consistency::<Mode>(
             temporary_store,
             &gas_charger,
@@ -735,6 +747,7 @@ pub(crate) mod checked {
             sponsor,
             is_epoch_change,
             transaction_digest,
+            execution_result.is_ok(),
         ) {
             Ok(()) => Outcome::Proceed {
                 gas_charger,
