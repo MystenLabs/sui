@@ -29,7 +29,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 136;
+const MAX_PROTOCOL_VERSION: u64 = 137;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -388,6 +388,8 @@ const MAINNET_USDB: &str =
 //              Add limits for references used by programmable transactions.
 //              Add additional linkage invariant hardening/invariant checks in PTBs.
 //              Add package_arena_size_in_bytes.
+// Version 137: Enable the step-by-step gas-charging pipeline (gas_model_version 15),
+//              replacing the monolithic charge_gas with discrete charging steps.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4686,6 +4688,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.harden_linkage_consistency = true;
 
                     cfg.package_arena_size_in_bytes = Some(10_000_000);
+                }
+                137 => {
+                    cfg.gas_model_version = Some(15);
                 }
                 // Use this template when making changes:
                 //
