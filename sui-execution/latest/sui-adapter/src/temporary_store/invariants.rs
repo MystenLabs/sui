@@ -35,7 +35,7 @@ use sui_types::gas::GasCostSummary;
 use sui_types::is_system_package;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::object::{Object, ObjectPermissions, Owner};
-use sui_types::transaction::{Command, GasData, TransactionKind};
+use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 
 use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::{GasCharger, PaymentLocation};
@@ -50,8 +50,7 @@ use crate::type_layout_resolver::TypeLayoutResolver;
 struct InvariantInputs {
     /// Per-`(address, type)` funds-accumulator reservation budget authorized by this transaction.
     /// Sources: PTB `FundsWithdrawalArg`s (sender/sponsor as owner), gas paid entirely from an
-    /// address balance, and gas-data coin-reservation digests. Consumed by
-    /// `check_address_balance_changes` and `check_ownership_invariants`.
+    /// address balance, and gas-data coin-reservation digests.
     input_reservations: BTreeMap<(SuiAddress, TypeTag), u64>,
     /// For the advance-epoch transaction, `(epoch_fees minted, epoch_rebates burned)`; `None`
     /// for every other transaction. Needed by `check_sui_conserved_expensive`, which must account
@@ -102,6 +101,8 @@ impl InvariantChecker {
         gas_data: &GasData,
         transaction_signer: SuiAddress,
     ) {
+        // `enable_gasless` is not checked: a gasless-shaped tx cannot execute while the flag is
+        // off (rejected at validation with GasPriceUnderRGP).
         self.inputs = InvariantInputs {
             input_reservations: compute_input_reservations(
                 transaction_kind,
@@ -118,6 +119,20 @@ impl InvariantChecker {
     /// `TemporaryStore::check_ownership_invariants`, which shares the same authorization model.
     pub(crate) fn input_reservations(&self) -> &BTreeMap<(SuiAddress, TypeTag), u64> {
         &self.inputs.input_reservations
+    }
+
+    /// The withdrawal reservations of a gasless transaction:
+    /// `input_reservations` re-keyed by the coin type `T` (unwrapped from `Balance<T>`).
+    pub(crate) fn gasless_reservations(&self) -> BTreeMap<(SuiAddress, TypeTag), u64> {
+        use sui_types::balance::Balance;
+        self.inputs
+            .input_reservations
+            .iter()
+            .filter_map(|((owner, ty), amount)| {
+                Balance::maybe_get_balance_type_param(ty)
+                    .map(|coin_type| ((*owner, coin_type), *amount))
+            })
+            .collect()
     }
 
     /// Drop the PTB-emitted ranges. Called from `TemporaryStore::drop_writes` since the
@@ -512,6 +527,7 @@ fn compute_input_reservations(
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::{Reservation, WithdrawFrom, is_gas_paid_from_address_balance};
 
+    let is_gasless = is_gasless_transaction(gas_data, transaction_kind);
     let mut reservations: BTreeMap<(SuiAddress, TypeTag), u64> = BTreeMap::new();
     let sui_balance_type = Balance::type_tag(GAS::type_tag());
 
@@ -521,22 +537,27 @@ fn compute_input_reservations(
             WithdrawFrom::Sponsor => gas_data.owner,
         };
         let Reservation::MaxAmountU64(reservation) = arg.reservation;
-        *reservations
+        let entry = reservations
             .entry((owner, arg.type_arg.to_type_tag()))
-            .or_insert(0) += reservation;
+            .or_insert(0);
+        *entry = entry.saturating_add(reservation);
     }
 
-    if is_gas_paid_from_address_balance(gas_data, transaction_kind) {
-        *reservations
+    // Gasless transactions charge no gas, so gas sources grant no reservation (their budget is
+    // validated to be 0 anyway; skipping keeps the map free of a phantom zero entry).
+    if !is_gasless && is_gas_paid_from_address_balance(gas_data, transaction_kind) {
+        let entry = reservations
             .entry((gas_data.owner, sui_balance_type.clone()))
-            .or_insert(0) += gas_data.budget;
+            .or_insert(0);
+        *entry = entry.saturating_add(gas_data.budget);
     }
 
     for entry in &gas_data.payment {
         if let Ok(parsed) = ParsedDigest::try_from(entry.2) {
-            *reservations
+            let entry = reservations
                 .entry((gas_data.owner, sui_balance_type.clone()))
-                .or_insert(0) += parsed.reservation_amount();
+                .or_insert(0);
+            *entry = entry.saturating_add(parsed.reservation_amount());
         }
     }
 
@@ -631,7 +652,6 @@ impl InvariantChecker {
         sender: &SuiAddress,
         sponsor: &Option<SuiAddress>,
         gas_charger: &GasCharger,
-        mutable_inputs: &HashSet<ObjectID>,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
         // The funds-accumulator reservation budget is shared with the conservation checks; see
@@ -691,8 +711,9 @@ impl InvariantChecker {
             })
             .filter(|id| {
                 // remove any non-mutable inputs. This will remove deleted or readonly shared
-                // objects
-                mutable_inputs.contains(id)
+                // objects.
+                store.mutable_input_refs.contains_key(id)
+                    || store.non_exclusive_input_original_versions.contains_key(id)
             })
             .copied()
             // Add any object IDs generated in the object runtime during execution to the
