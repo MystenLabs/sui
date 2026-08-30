@@ -699,12 +699,10 @@ impl TakenTransactionsGuard {
         let entries = self.entries.take().expect("acknowledgement called once");
         let pings = self.pings.take().expect("acknowledgement called once");
         let mut inner = self.inner.lock();
-        let pool = match &mut *inner {
-            Inner::Open(pool) => pool,
-            Inner::Closed => {
-                Self::resolve_after_close(entries, pings, "pool closed before acknowledgement");
-                return;
-            }
+        let Inner::Open(pool) = &mut *inner else {
+            drop(inner);
+            Self::resolve_after_close(entries, pings, "pool closed before acknowledgement");
+            return;
         };
 
         // Transactions occupy the block in exactly the order take() returned them,
@@ -776,16 +774,10 @@ impl Drop for TakenTransactionsGuard {
         };
         let pings = self.pings.take().unwrap_or_default();
         let mut inner = self.inner.lock();
-        let pool = match &mut *inner {
-            Inner::Open(pool) => pool,
-            Inner::Closed => {
-                Self::resolve_after_close(
-                    entries,
-                    pings,
-                    "pool closed before dropped acknowledgement",
-                );
-                return;
-            }
+        let Inner::Open(pool) = &mut *inner else {
+            drop(inner);
+            Self::resolve_after_close(entries, pings, "pool closed before dropped acknowledgement");
+            return;
         };
 
         let mut requeued = 0;
@@ -802,6 +794,13 @@ impl Drop for TakenTransactionsGuard {
                         .with_label_values(&["system"])
                         .add(taken.entry.total_bytes as i64);
                     pool.system.push_front(taken.entry);
+                    let depth = pool.system.len();
+                    if depth == SYSTEM_LANE_WARN_THRESHOLD {
+                        warn!(
+                            depth,
+                            "Consensus transaction pool system lane exceeded warning threshold"
+                        );
+                    }
                 }
                 TakenLane::User => match &mut pool.user {
                     UserLane::Open(user) => {
