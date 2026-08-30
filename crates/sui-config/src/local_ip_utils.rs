@@ -94,11 +94,12 @@ pub fn get_available_port(host: &str) -> u16 {
 
 #[cfg(not(msim))]
 fn get_ephemeral_port(host: &str) -> std::io::Result<u16> {
-    use std::net::{TcpListener, TcpStream};
+    use std::net::{TcpListener, TcpStream, UdpSocket};
 
     // Request a random available port from the OS
     let listener = TcpListener::bind((host, 0))?;
     let addr = listener.local_addr()?;
+    let _udp_socket = UdpSocket::bind(addr)?;
 
     // Create and accept a connection (which we'll promptly drop) in order to force the port
     // into the TIME_WAIT state, ensuring that the port will be reserved from some limited
