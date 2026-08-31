@@ -1,5 +1,5 @@
 [package]
-name = "sui-adapter-v1"
+name = "sui-adapter-v0"
 version = "0.1.0"
 authors = ["Mysten Labs <eng@mystenlabs.com>"]
 description = "Adapter and accompanying CLI for local sui development"
@@ -14,6 +14,7 @@ workspace = true
 anyhow = { workspace = true, features = ["backtrace"] }
 bcs.workspace = true
 leb128.workspace = true
+once_cell.workspace = true
 tracing.workspace = true
 serde.workspace = true
 
@@ -22,13 +23,13 @@ move-bytecode-utils.workspace = true
 move-bytecode-verifier-meter.workspace = true
 move-core-types.workspace = true
 move-vm-config.workspace = true
+move-vm-profiler.workspace = true
 
-move-bytecode-verifier = { path = "../../../external-crates/move/move-execution/v1/crates/move-bytecode-verifier", package = "move-bytecode-verifier-v1" }
-move-vm-runtime = { path = "../../../external-crates/move/move-execution/v1/crates/move-vm-runtime", package = "move-vm-runtime-v1" }
-move-vm-profiler = { path = "../../../external-crates/move/crates/move-vm-profiler" }
-sui-move-natives = { path = "../sui-move-natives", package = "sui-move-natives-v1" }
-sui-verifier = { path = "../sui-verifier", package = "sui-verifier-v1" }
-move-vm-types = { path = "../../../external-crates/move/move-execution/v1/crates/move-vm-types", package = "move-vm-types-v1" }
+move-bytecode-verifier = { path = "../../../../external-crates/move/historical-versions/v0/crates/move-bytecode-verifier", package = "move-bytecode-verifier-v0" }
+move-vm-runtime = { path = "../../../../external-crates/move/historical-versions/v0/crates/move-vm-runtime", package = "move-vm-runtime-v0" }
+sui-move-natives = { path = "../sui-move-natives", package = "sui-move-natives-v0" }
+sui-verifier = { path = "../sui-verifier", package = "sui-verifier-v0" }
+move-vm-types = { path = "../../../../external-crates/move/historical-versions/v0/crates/move-vm-types", package = "move-vm-types-v0" }
 
 sui-macros.workspace = true
 sui-protocol-config.workspace = true

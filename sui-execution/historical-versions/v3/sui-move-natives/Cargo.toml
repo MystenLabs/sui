@@ -23,9 +23,9 @@ fastcrypto.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
 
-move-stdlib-natives = { path = "../../../external-crates/move/move-execution/v3/crates/move-stdlib-natives", package = "move-stdlib-natives-v3" }
-move-vm-runtime = { path = "../../../external-crates/move/move-execution/v3/crates/move-vm-runtime", package = "move-vm-runtime-v3" }
-move-vm-types = { path = "../../../external-crates/move/move-execution/v3/crates/move-vm-types", package = "move-vm-types-v3" }
+move-stdlib-natives = { path = "../../../../external-crates/move/historical-versions/v3/crates/move-stdlib-natives", package = "move-stdlib-natives-v3" }
+move-vm-runtime = { path = "../../../../external-crates/move/historical-versions/v3/crates/move-vm-runtime", package = "move-vm-runtime-v3" }
+move-vm-types = { path = "../../../../external-crates/move/historical-versions/v3/crates/move-vm-types", package = "move-vm-types-v3" }
 
 sui-protocol-config.workspace = true
 sui-types.workspace = true
