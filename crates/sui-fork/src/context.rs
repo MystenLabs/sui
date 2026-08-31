@@ -4,18 +4,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Result;
-use prometheus::Registry;
 use rand::rngs::OsRng;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
-use tokio::sync::broadcast;
 use tracing::info;
 
 use simulacrum::Simulacrum;
 use simulacrum::SimulatorStore as _;
 use sui_types::effects::TransactionEffectsAPI as _;
-use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait as _;
 
@@ -40,8 +36,7 @@ pub(crate) struct CreatedCheckpointMetadata {
     pub(crate) timestamp_ms: u64,
 }
 
-/// Shared context for the forked network, holding the simulacrum and the service manager running
-/// the embedded indexer.
+/// Shared execution state for the forked network and its durable indexing progress.
 pub struct Context {
     simulacrum: Arc<RwLock<ForkedSimulacrum>>,
     services: ServiceManager,
@@ -49,27 +44,16 @@ pub struct Context {
 }
 
 impl Context {
-    /// Build a `Context` whose Simulacrum is backed by a started [`ServiceManager`].
+    /// Construct a context from shared Simulacrum state and its opened local services.
     ///
-    /// Starts the embedded `sui-rpc-store` indexer over `checkpoint_sender` before returning, so
-    /// committed local checkpoints get indexed for RPC reads. The indexer's broadcast pipeline owns
-    /// `checkpoint_sender` from here on and is what publishes to subscribers, so their ordering
-    /// follows indexing rather than sealing.
-    pub(crate) async fn new(
-        simulacrum: Simulacrum<OsRng, ForkStore>,
-        mut services: ServiceManager,
-        checkpoint_sender: broadcast::Sender<Arc<Checkpoint>>,
-        registry: &Registry,
-    ) -> Result<Self> {
-        let simulacrum = Arc::new(RwLock::new(simulacrum));
-        services
-            .start_indexer(simulacrum.clone(), checkpoint_sender, registry)
-            .await?;
-        Ok(Self {
+    /// The caller must start and retain the corresponding indexer service because checkpoint
+    /// publication waits for its pipelines to commit.
+    pub(crate) fn new(simulacrum: Arc<RwLock<ForkedSimulacrum>>, services: ServiceManager) -> Self {
+        Self {
             simulacrum,
             services,
             checkpoint_publication_lock: Mutex::new(()),
-        })
+        }
     }
 
     pub(crate) fn simulacrum(&self) -> &Arc<RwLock<ForkedSimulacrum>> {
@@ -81,13 +65,6 @@ impl Context {
     #[cfg(test)]
     pub(crate) fn services(&self) -> &ServiceManager {
         &self.services
-    }
-
-    /// Resolve when the embedded rpc-store indexer stops. The server loop uses this as a liveness
-    /// watchdog, so an indexer failure surfaces immediately instead of as a publication timeout on
-    /// the next executed transaction.
-    pub(crate) async fn indexer_stopped(&self) -> anyhow::Result<()> {
-        self.services.indexer_stopped().await
     }
 
     /// Advance the fork's clock and seal the clock transaction into a new checkpoint.

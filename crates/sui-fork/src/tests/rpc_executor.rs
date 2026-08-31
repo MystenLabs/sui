@@ -19,6 +19,7 @@ use prometheus::Registry;
 use simulacrum::Simulacrum;
 use simulacrum::SimulatorStore;
 use simulacrum::store::in_mem_store::KeyStore;
+use sui_futures::service::Service;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
@@ -66,6 +67,7 @@ struct TestHarness {
     gas_object: Object,
     reference_gas_price: u64,
     checkpoint_receiver: tokio::sync::broadcast::Receiver<Arc<Checkpoint>>,
+    _indexer_service: Service,
     temp: tempfile::TempDir,
     _gql_server: MockServer,
 }
@@ -83,7 +85,7 @@ impl TestHarness {
         let genesis_contents = config.genesis.checkpoint_contents().clone();
         let forked_at_checkpoint = genesis_checkpoint.data().sequence_number;
         let chain_identifier = (*genesis_checkpoint.digest()).into();
-        let services = ServiceManager::open(
+        let mut services = ServiceManager::open(
             temp.path(),
             "localnet".to_owned(),
             forked_at_checkpoint,
@@ -132,11 +134,12 @@ impl TestHarness {
         let gas_object = Self::find_gas_coin(&config, sender);
         let registry = Registry::new();
         let (checkpoint_sender, checkpoint_receiver) = tokio::sync::broadcast::channel(4);
-        let context = Arc::new(
-            Context::new(sim, services, checkpoint_sender, &registry)
-                .await
-                .expect("service-backed context should initialize"),
-        );
+        let simulacrum = Arc::new(tokio::sync::RwLock::new(sim));
+        let indexer_service = services
+            .start_indexer(simulacrum.clone(), checkpoint_sender, &registry)
+            .await
+            .expect("indexer service should start");
+        let context = Arc::new(Context::new(simulacrum, services));
         let executor = ForkedTransactionExecutor::new(context.clone());
 
         Self {
@@ -147,6 +150,7 @@ impl TestHarness {
             gas_object,
             reference_gas_price,
             checkpoint_receiver,
+            _indexer_service: indexer_service,
             temp,
             _gql_server: gql_server,
         }

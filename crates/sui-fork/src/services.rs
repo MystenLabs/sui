@@ -12,8 +12,8 @@
 //! store, and runs the checkpoint broadcast pipeline used by RPC subscriptions.
 //!
 //! The module deliberately stays below orchestration concerns. `startup` chooses the remote
-//! checkpoint, initializes remote readers, seeds Simulacrum state, and builds the RPC server, while
-//! this module keeps the opened store and indexer service alive for the rest of the process.
+//! checkpoint, initializes remote readers, seeds Simulacrum state, and owns the returned indexer
+//! service, while this module keeps the opened store available for execution and indexing.
 
 use std::fs;
 use std::path::Path;
@@ -98,18 +98,13 @@ pub(crate) const FORK_INDEXER_PIPELINES: &[&str] = &[
 
 /// Opened fork services backed by `sui-rpc-store`.
 ///
-/// The manager owns the local RPC store and, once started, keeps the embedded `sui-rpc-store`
-/// indexer alive for local Simulacrum checkpoints.
+/// The manager owns the local RPC store and builds the embedded indexer, while its caller owns the
+/// returned service that keeps the indexer running.
 pub(crate) struct ServiceManager {
     db: Db,
     schema: Arc<RpcStoreSchema>,
     metadata: Metadata,
     indexer_pipelines: Vec<&'static str>,
-    /// Handle to the running indexer. Holding it keeps the indexer alive (dropping the `Service`
-    /// stops the background tasks), and [`Self::indexer_stopped`] joins it to observe failures.
-    /// Behind an async mutex because `Service::join` needs exclusive access while the manager is
-    /// shared behind the `Context`.
-    indexer_service: Option<tokio::sync::Mutex<Service>>,
 }
 
 /// Various fork metadata, written to a JSON file in the fork data directory.
@@ -163,7 +158,6 @@ impl ServiceManager {
             schema,
             metadata,
             indexer_pipelines: Vec::new(),
-            indexer_service: None,
         })
     }
 
@@ -208,17 +202,17 @@ impl ServiceManager {
     ///
     /// Ingestion reads checkpoints back out of `simulacrum`, starting at the checkpoint after the
     /// fork point, because everything at or below it is pre-fork state the seed load already
-    /// placed. Registers the pipelines in [`Self::pipeline_layer`] plus the broadcast pipeline that
-    /// feeds RPC subscriptions, and errors if an indexer is already running.
+    /// placed. The caller must retain the returned service for as long as indexing should continue.
+    /// Returns an error when the indexer has already been started or cannot be constructed.
     pub(crate) async fn start_indexer(
         &mut self,
         simulacrum: Arc<RwLock<ForkedSimulacrum>>,
         checkpoint_sender: broadcast::Sender<Arc<Checkpoint>>,
         registry: &Registry,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Service> {
         ensure!(
-            self.indexer_service.is_none(),
-            "fork rpc-store indexer is already running",
+            self.indexer_pipelines.is_empty(),
+            "fork rpc-store indexer has already been started",
         );
 
         let first_checkpoint = self
@@ -261,14 +255,13 @@ impl ServiceManager {
             .await
             .context("failed to register fork checkpoint broadcast pipeline")?;
 
-        self.indexer_pipelines = indexer.pipelines().collect();
-        self.indexer_service = Some(tokio::sync::Mutex::new(
-            indexer
-                .run()
-                .await
-                .context("failed to start fork rpc-store indexer")?,
-        ));
-        Ok(())
+        let indexer_pipelines = indexer.pipelines().collect();
+        let service = indexer
+            .run()
+            .await
+            .context("failed to start fork rpc-store indexer")?;
+        self.indexer_pipelines = indexer_pipelines;
+        Ok(service)
     }
 
     /// The pipelines the embedded indexer owns.
@@ -321,16 +314,6 @@ impl ServiceManager {
             self.schema.clone(),
             self.metadata.forked_at_checkpoint,
         )
-    }
-
-    /// Resolve when the embedded indexer stops, with `Ok(())` if all its tasks completed
-    /// (unexpected while the fork is serving), or the task error if any pipeline failed or
-    /// panicked. Pends forever if the indexer was never started.
-    pub(crate) async fn indexer_stopped(&self) -> anyhow::Result<()> {
-        let Some(service) = &self.indexer_service else {
-            return std::future::pending().await;
-        };
-        service.lock().await.join().await
     }
 
     /// Wait until the indexer has committed `checkpoint` on every pipeline it owns, so a caller
