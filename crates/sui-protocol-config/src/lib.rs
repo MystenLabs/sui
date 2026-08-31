@@ -29,7 +29,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 136;
+const MAX_PROTOCOL_VERSION: u64 = 137;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -388,6 +388,8 @@ const MAINNET_USDB: &str =
 //              Add limits for references used by programmable transactions.
 //              Add additional linkage invariant hardening/invariant checks in PTBs.
 //              Add package_arena_size_in_bytes.
+// Version 137: Lower the per-bit cost of bulletproofs range proof verification, and raise the
+//              bound on batch size * range bits from 512 to 1024.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1962,6 +1964,9 @@ pub struct ProtocolConfig {
 
     verify_bulletproofs_ristretto255_base_cost: Option<u64>,
     verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: Option<u64>,
+    // Upper bound on batch size * range in bits for a bulletproofs range proof. Defaults to 512
+    // when unset.
+    max_bulletproofs_total_bits: Option<u64>,
 
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
@@ -2889,6 +2894,7 @@ impl ProtocolConfig {
 
             verify_bulletproofs_ristretto255_base_cost: None,
             verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: None,
+            max_bulletproofs_total_bits: None,
 
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
@@ -4686,6 +4692,10 @@ impl ProtocolConfig {
                     cfg.feature_flags.harden_linkage_consistency = true;
 
                     cfg.package_arena_size_in_bytes = Some(10_000_000);
+                }
+                137 => {
+                    cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(621);
+                    cfg.max_bulletproofs_total_bits = Some(1024);
                 }
                 // Use this template when making changes:
                 //
