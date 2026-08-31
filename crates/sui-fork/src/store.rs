@@ -57,8 +57,8 @@ use sui_types::storage::load_package_object_from_object_store;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::VerifiedTransaction;
 
-use crate::GraphQLClient;
-use crate::TransactionInfo;
+use crate::gql::GraphQLClient;
+use crate::gql::TransactionInfo;
 use crate::local_store::LocalStore;
 use crate::local_store::ObjectRemoval;
 use crate::metadata::MetadataStore;
