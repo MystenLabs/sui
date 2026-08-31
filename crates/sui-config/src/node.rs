@@ -288,6 +288,12 @@ pub struct NodeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_driver_config: Option<TransactionDriverConfig>,
 
+    /// When set, consensus pulls transactions directly from a validator-side pool
+    /// instead of the admission-queue drain thread pushing them. This takes
+    /// precedence over `authority_overload_config.admission_queue_enabled`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub consensus_transaction_pool: Option<ConsensusTransactionPoolConfig>,
+
     /// Configuration for congestion tracker binary logging.
     /// When set, enables per-commit binary logs of congestion tracker state.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -326,6 +332,22 @@ impl Default for TransactionDriverConfig {
             blocked_submission_validators: vec![],
             enable_early_validation: true,
         }
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ConsensusTransactionPoolConfig {
+    /// Maximum queued user-lane entries. A soft bundle counts as one entry,
+    /// matching the existing admission queue. Defaults to the consensus
+    /// `max_pending_transactions` setting.
+    pub max_pending_transactions: Option<usize>,
+}
+
+impl ConsensusTransactionPoolConfig {
+    pub fn max_pending_transactions(&self, consensus_config: &ConsensusConfig) -> usize {
+        self.max_pending_transactions
+            .unwrap_or_else(|| consensus_config.max_pending_transactions())
     }
 }
 
@@ -1567,7 +1589,8 @@ pub struct AuthorityOverloadConfig {
 
     // Enables use of a gas-price-based priority queue for load shedding of
     // transactions at admission time. If false, when consensus is saturated, transactions
-    // are rejected with TooManyTransactionsPendingConsensus.
+    // are rejected with TooManyTransactionsPendingConsensus. Ignored when
+    // `consensus_transaction_pool` is configured.
     #[serde(default = "default_admission_queue_enabled")]
     pub admission_queue_enabled: bool,
 

@@ -347,6 +347,7 @@ pub struct AuthorityMetrics {
     pub consensus_committed_user_transactions: IntGaugeVec,
     pub consensus_finalized_user_transactions: IntGaugeVec,
     pub consensus_rejected_user_transactions: IntGaugeVec,
+    pub consensus_dropped_user_transactions: IntGaugeVec,
     pub consensus_calculated_throughput: IntGauge,
     pub consensus_calculated_throughput_profile: IntGauge,
     pub consensus_block_handler_block_processed: IntCounter,
@@ -768,6 +769,12 @@ impl AuthorityMetrics {
             consensus_rejected_user_transactions: register_int_gauge_vec_with_registry!(
                 "consensus_rejected_user_transactions",
                 "Number of user transactions rejected, sliced by submitter",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            consensus_dropped_user_transactions: register_int_gauge_vec_with_registry!(
+                "consensus_dropped_user_transactions",
+                "Number of user transactions dropped post-consensus, sliced by submitter",
                 &["authority"],
                 registry,
             ).unwrap(),
