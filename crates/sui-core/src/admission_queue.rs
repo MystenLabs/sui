@@ -185,6 +185,7 @@ pub struct AdmissionQueueMetrics {
     pub pool_gc_notified: IntCounter,
     pub pool_waiting_inserts: IntGauge,
     pub pool_already_processed: IntCounterVec,
+    pub pool_commit_latency: HistogramVec,
 }
 
 impl AdmissionQueueMetrics {
@@ -265,6 +266,14 @@ impl AdmissionQueueMetrics {
                 "consensus_transaction_pool_already_processed",
                 "User submissions not proposed because they were already processed elsewhere, by the stage that detected it and the path that processed them",
                 &["stage", "method"],
+                registry,
+            )
+            .unwrap(),
+            pool_commit_latency: register_histogram_vec_with_registry!(
+                "consensus_transaction_pool_commit_latency",
+                "Time from insert into the transaction pool to commit of the block that proposed the entry",
+                &["lane"],
+                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),

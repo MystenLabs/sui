@@ -47,13 +47,14 @@ use crate::authority::consensus_tx_status_cache::{
     ConsensusTxStatus, NotifyReadConsensusTxStatusResult,
 };
 use crate::checkpoints::CheckpointStore;
-use crate::consensus_handler::{SequencedConsensusTransactionKey, classify};
+use crate::consensus_handler::{SequencedConsensusTransactionKey, classify, tx_type_label};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
 pub mod consensus_tests;
 
+#[derive(Clone)]
 pub struct ConsensusAdapterMetrics {
     // Certificate sequencing metrics
     pub sequencing_certificate_attempt: IntCounterVec,
@@ -491,11 +492,7 @@ impl ConsensusAdapter {
             let transaction_key = SequencedConsensusTransactionKey::External(transaction.key());
             transaction_keys.push(transaction_key);
         }
-        let tx_type = if is_soft_bundle {
-            "soft_bundle"
-        } else {
-            classify(&transactions[0])
-        };
+        let tx_type = tx_type_label(&transactions);
         tracing::Span::current().record("tx_type", tx_type);
         tracing::Span::current().record("tx_keys", tracing::field::debug(&transaction_keys));
 
@@ -692,7 +689,7 @@ impl ConsensusAdapter {
                     for status in statuses {
                         self.metrics
                             .sequencing_certificate_settled_status
-                            .with_label_values(&[tx_type, status_label(status)])
+                            .with_label_values(&[tx_type, status.metric_label()])
                             .inc();
                     }
                     ProcessedMethod::ConsensusStatusReceived
@@ -1216,12 +1213,4 @@ enum SequencingOutcome {
     /// position expired from the status cache before its status was read. The
     /// terminal outcome existed and was missed; nothing further to wait for.
     StatusExpired,
-}
-
-fn status_label(status: ConsensusTxStatus) -> &'static str {
-    match status {
-        ConsensusTxStatus::Finalized => "finalized",
-        ConsensusTxStatus::Rejected => "rejected",
-        ConsensusTxStatus::Dropped => "dropped",
-    }
 }

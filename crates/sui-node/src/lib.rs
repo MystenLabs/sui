@@ -24,7 +24,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 #[cfg(msim)]
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, OnceLock, Weak};
 use std::time::Duration;
 use sui_core::admission_queue::{
     AdmissionQueueContext, AdmissionQueueManager, AdmissionQueueMetrics,
@@ -302,6 +302,8 @@ pub struct SuiNode {
     /// Per-epoch consensus transaction pool handoff, shared between the RPC
     /// server and ConsensusManager (`Some` only in pull-based submission mode).
     transaction_pool_context: Option<Arc<TransactionPoolContext>>,
+
+    consensus_adapter_metrics: OnceLock<ConsensusAdapterMetrics>,
 
     /// AuthorityAggregator of the network, created at start and beginning of each epoch.
     /// Use ArcSwap so that we could mutate it without taking mut reference.
@@ -936,10 +938,18 @@ impl SuiNode {
             .configured_max_protocol_version
             .set(config.supported_protocol_versions.unwrap().max.as_u64() as i64);
 
+        let consensus_adapter_metrics = OnceLock::new();
         let transaction_pool_context = config.consensus_transaction_pool.as_ref().map(|_| {
-            Arc::new(TransactionPoolContext::new(Arc::new(
-                AdmissionQueueMetrics::new(&registry_service.default_registry()),
-            )))
+            Arc::new(TransactionPoolContext::new(
+                Arc::new(AdmissionQueueMetrics::new(
+                    &registry_service.default_registry(),
+                )),
+                consensus_adapter_metrics
+                    .get_or_init(|| {
+                        ConsensusAdapterMetrics::new(&registry_service.default_registry())
+                    })
+                    .clone(),
+            ))
         });
         let node_role = epoch_store.node_role();
         if !node_role.is_validator()
@@ -960,6 +970,7 @@ impl SuiNode {
                 backpressure_manager.clone(),
                 &registry_service,
                 transaction_pool_context.clone(),
+                &consensus_adapter_metrics,
                 sui_node_metrics.clone(),
                 checkpoint_metrics.clone(),
                 node_role,
@@ -1052,6 +1063,7 @@ impl SuiNode {
             shutdown_channel_tx: shutdown_channel,
             randomness_receiver_handle,
             transaction_pool_context,
+            consensus_adapter_metrics,
 
             auth_agg,
             subscription_service_checkpoint_sender,
@@ -1390,6 +1402,7 @@ impl SuiNode {
         backpressure_manager: Arc<BackpressureManager>,
         registry_service: &RegistryService,
         transaction_pool_context: Option<Arc<TransactionPoolContext>>,
+        consensus_adapter_metrics: &OnceLock<ConsensusAdapterMetrics>,
         sui_node_metrics: Arc<SuiNodeMetrics>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         node_role: NodeRole,
@@ -1407,7 +1420,9 @@ impl SuiNode {
             &committee,
             consensus_config,
             state.name,
-            &registry_service.default_registry(),
+            consensus_adapter_metrics
+                .get_or_init(|| ConsensusAdapterMetrics::new(&registry_service.default_registry()))
+                .clone(),
             client.clone(),
             checkpoint_store.clone(),
             inflight_slot_freed_notify.clone(),
@@ -1712,14 +1727,12 @@ impl SuiNode {
         committee: &Committee,
         consensus_config: &ConsensusConfig,
         authority: AuthorityName,
-        prometheus_registry: &Registry,
+        ca_metrics: ConsensusAdapterMetrics,
         consensus_client: Arc<dyn ConsensusClient>,
         checkpoint_store: Arc<CheckpointStore>,
         inflight_slot_freed_notify: Arc<tokio::sync::Notify>,
     ) -> ConsensusAdapter {
-        let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
-
         ConsensusAdapter::new(
             consensus_client,
             checkpoint_store,
@@ -2225,6 +2238,7 @@ impl SuiNode {
                         self.backpressure_manager.clone(),
                         &self.registry_service,
                         self.transaction_pool_context.clone(),
+                        &self.consensus_adapter_metrics,
                         self.metrics.clone(),
                         self.checkpoint_metrics.clone(),
                         new_role,

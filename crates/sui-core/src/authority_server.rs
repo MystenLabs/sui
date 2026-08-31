@@ -1410,6 +1410,10 @@ impl ValidatorService {
                 {
                     let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
                     if !reconfiguration_lock.should_accept_user_certs() {
+                        context
+                            .adapter_metrics()
+                            .num_rejected_cert_in_epoch_boundary
+                            .inc();
                         return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
                     }
                 }
@@ -1431,12 +1435,25 @@ impl ValidatorService {
                     }
                     receivers.push(result.map(|(receiver, _)| receiver));
                 }
-                future::join_all(receivers.into_iter().map(|receiver| async move {
-                    match receiver {
-                        Ok(receiver) => receiver.await.unwrap_or_else(|_| {
-                            Err(SuiErrorKind::TooManyTransactionsPendingConsensus.into())
-                        }),
-                        Err(error) => Err(error),
+                let halted_rejections = context
+                    .adapter_metrics()
+                    .num_rejected_cert_in_epoch_boundary
+                    .clone();
+                future::join_all(receivers.into_iter().map(|receiver| {
+                    let halted_rejections = halted_rejections.clone();
+                    async move {
+                        let result = match receiver {
+                            Ok(receiver) => receiver.await.unwrap_or_else(|_| {
+                                Err(SuiErrorKind::TooManyTransactionsPendingConsensus.into())
+                            }),
+                            Err(error) => Err(error),
+                        };
+                        if let Err(error) = &result
+                            && matches!(error.as_inner(), SuiErrorKind::ValidatorHaltedAtEpochEnd)
+                        {
+                            halted_rejections.inc();
+                        }
+                        result
                     }
                 }))
                 .await

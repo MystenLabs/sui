@@ -22,9 +22,10 @@ use crate::admission_queue::{
 };
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::{
-    BlockStatusReceiver, ConsensusClient, ProcessedMethod, processing_error,
+    BlockStatusReceiver, ConsensusAdapterMetrics, ConsensusClient, ProcessedMethod,
+    processing_error,
 };
-use crate::consensus_handler::SequencedConsensusTransactionKey;
+use crate::consensus_handler::{SequencedConsensusTransactionKey, tx_type_label};
 use async_trait::async_trait;
 use consensus_core::{BlockStatus, ClientError, LimitReached, Transaction, TransactionPool};
 use consensus_types::block::{
@@ -102,7 +103,7 @@ impl PendingAck {
         epoch: EpochId,
         block_ref: BlockRef,
         indices: Vec<TransactionIndex>,
-        subscribers: &mut BTreeMap<BlockRef, Vec<oneshot::Sender<BlockStatus>>>,
+        block: &mut ProposedBlock,
     ) {
         match self.ack.take().expect("ack must be pending") {
             EntryAck::User(sender) => {
@@ -118,10 +119,7 @@ impl PendingAck {
             }
             EntryAck::SystemOrPing(sender) => {
                 let (status_sender, status_receiver) = oneshot::channel();
-                subscribers
-                    .entry(block_ref)
-                    .or_default()
-                    .push(status_sender);
+                block.subscribers.push(status_sender);
                 let _ = sender.send((block_ref, indices, status_receiver));
             }
         }
@@ -205,6 +203,7 @@ struct PoolEntry {
     transactions: Vec<Transaction>,
     total_bytes: usize,
     gas_price: u64,
+    tx_type: &'static str, // tx label for metrics
     ack: PendingAck,
     metrics: Arc<AdmissionQueueMetrics>,
     /// Empty for system and ping submissions: the `ConsensusAdapter` already
@@ -274,8 +273,23 @@ struct Pool {
     // internal components at bounded rates, and must never be evicted or outbid.
     system: VecDeque<PoolEntry>,
     pings: VecDeque<PendingAck>,
-    // Resolved to Sequenced / GarbageCollected by `notify_committed`.
-    block_status_subscribers: BTreeMap<BlockRef, Vec<oneshot::Sender<BlockStatus>>>,
+    // This validator's proposed blocks, resolved by `notify_committed` once each
+    // commits or is garbage collected.
+    blocks: BTreeMap<BlockRef, ProposedBlock>,
+}
+
+#[derive(Default)]
+struct ProposedBlock {
+    /// `ConsensusAdapter`-path acks awaiting the block's status.
+    subscribers: Vec<oneshot::Sender<BlockStatus>>,
+    /// Every entry in the block, for reporting metrics.
+    entries: Vec<ProposedEntry>,
+}
+
+struct ProposedEntry {
+    lane: TakenLane,
+    tx_type: &'static str,
+    created: Instant,
 }
 
 enum Inner {
@@ -293,6 +307,7 @@ enum Inner {
 pub struct ConsensusTransactionPool {
     epoch_store: Arc<AuthorityPerEpochStore>,
     metrics: Arc<AdmissionQueueMetrics>,
+    adapter_metrics: ConsensusAdapterMetrics,
     inner: Arc<Mutex<Inner>>,
 }
 
@@ -301,6 +316,7 @@ impl ConsensusTransactionPool {
         epoch_store: Arc<AuthorityPerEpochStore>,
         max_pending_transactions: usize,
         metrics: Arc<AdmissionQueueMetrics>,
+        adapter_metrics: ConsensusAdapterMetrics,
     ) -> Self {
         assert!(
             max_pending_transactions > 0,
@@ -321,6 +337,7 @@ impl ConsensusTransactionPool {
         Self {
             epoch_store,
             metrics: metrics.clone(),
+            adapter_metrics,
             inner: Arc::new(Mutex::new(Inner::Open(Pool {
                 user: UserLane::Open(PriorityAdmissionQueue::new(
                     max_pending_transactions,
@@ -328,9 +345,23 @@ impl ConsensusTransactionPool {
                 )),
                 system: VecDeque::new(),
                 pings: VecDeque::new(),
-                block_status_subscribers: BTreeMap::new(),
+                blocks: BTreeMap::new(),
             }))),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_tests(
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        max_pending_transactions: usize,
+        metrics: Arc<AdmissionQueueMetrics>,
+    ) -> Self {
+        Self::new(
+            epoch_store,
+            max_pending_transactions,
+            metrics,
+            ConsensusAdapterMetrics::new_test(),
+        )
     }
 
     pub fn epoch(&self) -> EpochId {
@@ -371,12 +402,14 @@ impl ConsensusTransactionPool {
             ));
         }
 
+        let tx_type = tx_type_label(&transactions);
         let (transactions, total_bytes) = self.serialize_and_validate(&transactions)?;
         let (sender, receiver) = oneshot::channel();
         let entry = PoolEntry {
             transactions,
             total_bytes,
             gas_price,
+            tx_type,
             ack: PendingAck::new(EntryAck::User(sender), keys),
             metrics: self.metrics.clone(),
             processed,
@@ -452,6 +485,7 @@ impl ConsensusTransactionPool {
             transactions: serialized,
             total_bytes,
             gas_price: 0,
+            tx_type: tx_type_label(transactions),
             ack: PendingAck::new(
                 EntryAck::SystemOrPing(sender),
                 transactions.iter().map(ConsensusTransaction::key).collect(),
@@ -624,7 +658,7 @@ impl ConsensusTransactionPool {
         for ping in pool.pings {
             ping.drop_deliberately("pool closed");
         }
-        drop(pool.block_status_subscribers);
+        drop(pool.blocks);
         self.metrics
             .pool_depth
             .with_label_values(&["system"])
@@ -670,9 +704,19 @@ impl ConsensusTransactionPool {
     }
 }
 
+#[derive(Clone, Copy)]
 enum TakenLane {
     System,
     User,
+}
+
+impl TakenLane {
+    fn label(self) -> &'static str {
+        match self {
+            TakenLane::System => "system",
+            TakenLane::User => "user",
+        }
+    }
 }
 
 struct TakenEntry {
@@ -709,12 +753,15 @@ impl TakenTransactionsGuard {
         // so indices are assigned contiguously across entries in that order.
         let mut next_index = 0usize;
         let mut watches_to_drop = Vec::with_capacity(entries.len());
+        let mut block = ProposedBlock::default();
         for taken in entries {
-            let lane = match taken.lane {
-                TakenLane::User => "user",
-                TakenLane::System => "system",
-            };
+            let lane = taken.lane;
             let mut entry = taken.entry;
+            block.entries.push(ProposedEntry {
+                lane,
+                tx_type: entry.tx_type,
+                created: entry.ack.created,
+            });
             watches_to_drop.push(std::mem::take(&mut entry.processed));
             let start = next_index;
             next_index += entry.transactions.len();
@@ -726,14 +773,11 @@ impl TakenTransactionsGuard {
                 .collect::<Vec<_>>();
             self.metrics
                 .queue_wait_latency
-                .with_label_values(&[lane])
+                .with_label_values(&[lane.label()])
                 .observe(entry.ack.created.elapsed().as_secs_f64());
-            entry.ack.resolve_included(
-                self.epoch,
-                block_ref,
-                indices,
-                &mut pool.block_status_subscribers,
-            );
+            entry
+                .ack
+                .resolve_included(self.epoch, block_ref, indices, &mut block);
         }
         for ping in pings {
             self.metrics
@@ -744,8 +788,11 @@ impl TakenTransactionsGuard {
                 self.epoch,
                 block_ref,
                 vec![PING_TRANSACTION_INDEX],
-                &mut pool.block_status_subscribers,
+                &mut block,
             );
+        }
+        if !block.subscribers.is_empty() || !block.entries.is_empty() {
+            pool.blocks.insert(block_ref, block);
         }
         drop(inner);
         drop(watches_to_drop); // drop after mutex release
@@ -989,29 +1036,85 @@ impl TransactionPool for ConsensusTransactionPool {
     // committed blocks resolve Sequenced first, then every remaining subscription at
     // round <= gc_round resolves GarbageCollected (those blocks can never commit).
     fn notify_committed(&self, own_committed_blocks: Vec<BlockRef>, gc_round: Round) {
-        let mut inner = self.inner.lock();
-        let Inner::Open(pool) = &mut *inner else {
-            return;
-        };
-        for block_ref in own_committed_blocks {
-            if let Some(subscribers) = pool.block_status_subscribers.remove(&block_ref) {
-                for subscriber in subscribers {
-                    let _ = subscriber.send(BlockStatus::Sequenced(block_ref));
+        let mut sequenced = Vec::new();
+        let mut garbage_collected = Vec::new();
+        {
+            let mut inner = self.inner.lock();
+            let Inner::Open(pool) = &mut *inner else {
+                return;
+            };
+            for block_ref in own_committed_blocks {
+                if let Some(block) = pool.blocks.remove(&block_ref) {
+                    for subscriber in block.subscribers {
+                        let _ = subscriber.send(BlockStatus::Sequenced(block_ref));
+                    }
+                    sequenced.extend(block.entries);
                 }
+            }
+            while let Some((block_ref, block)) = pool.blocks.pop_first() {
+                if block_ref.round > gc_round {
+                    pool.blocks.insert(block_ref, block);
+                    break;
+                }
+                self.metrics
+                    .pool_gc_notified
+                    .inc_by(block.subscribers.len() as u64);
+                for subscriber in block.subscribers {
+                    let _ = subscriber.send(BlockStatus::GarbageCollected(block_ref));
+                }
+                garbage_collected.extend(block.entries);
             }
         }
 
-        while let Some((block_ref, subscribers)) = pool.block_status_subscribers.pop_first() {
-            if block_ref.round > gc_round {
-                pool.block_status_subscribers.insert(block_ref, subscribers);
-                break;
+        // Metrics are updated with the mutex released.
+        self.report_proposed_status(&sequenced, "sequenced");
+        self.report_proposed_status(&garbage_collected, "garbage_collected");
+        self.report_commit_latency(&sequenced);
+    }
+}
+
+impl ConsensusTransactionPool {
+    /// Reports user entries to `sequencing_certificate_status*` metrics.
+    /// System entries are reported by the adapter itself, which waits on their block
+    /// status.
+    fn report_proposed_status(&self, entries: &[ProposedEntry], status: &'static str) {
+        let mut counts: Vec<(&'static str, u64)> = Vec::new();
+        for entry in entries
+            .iter()
+            .filter(|entry| matches!(entry.lane, TakenLane::User))
+        {
+            match counts
+                .iter_mut()
+                .find(|(tx_type, _)| *tx_type == entry.tx_type)
+            {
+                Some((_, count)) => *count += 1,
+                None => counts.push((entry.tx_type, 1)),
             }
-            self.metrics
-                .pool_gc_notified
-                .inc_by(subscribers.len() as u64);
-            for subscriber in subscribers {
-                let _ = subscriber.send(BlockStatus::GarbageCollected(block_ref));
-            }
+        }
+        for (tx_type, count) in counts {
+            self.adapter_metrics
+                .sequencing_certificate_status
+                .with_label_values(&[tx_type, status])
+                .inc_by(count);
+        }
+    }
+
+    fn report_commit_latency(&self, entries: &[ProposedEntry]) {
+        let now = Instant::now();
+        let user = self
+            .metrics
+            .pool_commit_latency
+            .with_label_values(&["user"]);
+        let system = self
+            .metrics
+            .pool_commit_latency
+            .with_label_values(&["system"]);
+        for entry in entries {
+            let histogram = match entry.lane {
+                TakenLane::User => &user,
+                TakenLane::System => &system,
+            };
+            histogram.observe(now.saturating_duration_since(entry.created).as_secs_f64());
         }
     }
 }
@@ -1059,12 +1162,20 @@ enum PoolState {
 pub struct TransactionPoolContext {
     state: watch::Sender<PoolState>,
     metrics: Arc<AdmissionQueueMetrics>,
+    adapter_metrics: ConsensusAdapterMetrics,
 }
 
 impl TransactionPoolContext {
-    pub fn new(metrics: Arc<AdmissionQueueMetrics>) -> Self {
+    pub fn new(
+        metrics: Arc<AdmissionQueueMetrics>,
+        adapter_metrics: ConsensusAdapterMetrics,
+    ) -> Self {
         let (state, _) = watch::channel(PoolState::Absent);
-        Self { state, metrics }
+        Self {
+            state,
+            metrics,
+            adapter_metrics,
+        }
     }
 
     pub fn set_active(&self, epoch: EpochId, pool: Arc<ConsensusTransactionPool>) {
@@ -1154,6 +1265,15 @@ impl TransactionPoolContext {
 
     pub fn metrics(&self) -> &Arc<AdmissionQueueMetrics> {
         &self.metrics
+    }
+
+    pub fn adapter_metrics(&self) -> &ConsensusAdapterMetrics {
+        &self.adapter_metrics
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_tests(metrics: Arc<AdmissionQueueMetrics>) -> Self {
+        Self::new(metrics, ConsensusAdapterMetrics::new_test())
     }
 }
 
@@ -1249,7 +1369,7 @@ mod tests {
         state: &Arc<AuthorityState>,
         capacity: usize,
     ) -> Arc<ConsensusTransactionPool> {
-        Arc::new(ConsensusTransactionPool::new(
+        Arc::new(ConsensusTransactionPool::new_for_tests(
             state.epoch_store_for_testing().clone(),
             capacity,
             Arc::new(AdmissionQueueMetrics::new_for_tests()),
@@ -1312,6 +1432,7 @@ mod tests {
             transactions: vec![Transaction::new(serialized.clone())],
             total_bytes: serialized.len(),
             gas_price: 1,
+            tx_type: tx_type_label(std::slice::from_ref(&consensus_transaction)),
             ack: PendingAck::new(EntryAck::User(sender), vec![consensus_transaction.key()]),
             metrics,
             processed: Vec::new(),
@@ -1642,6 +1763,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn notify_committed_reports_proposed_user_outcomes() {
+        let (_state, pool) = test_state_and_pool(10).await;
+        let epoch = pool.epoch();
+        let status = |status: &str| {
+            pool.adapter_metrics
+                .sequencing_certificate_status
+                .with_label_values(&["owned_user_transaction_v2", status])
+                .get()
+        };
+        let commit_latency_count = |lane: &str| {
+            pool.metrics
+                .pool_commit_latency
+                .with_label_values(&[lane])
+                .get_sample_count()
+        };
+
+        // Block 1: one user transaction, later garbage collected.
+        let (_first, _) = pool.try_insert(epoch, 1, vec![user_transaction()]).unwrap();
+        let (_, ack, _) = pool.take(1, usize::MAX);
+        ack(block(1));
+        // Block 2: one user transaction and one system transaction, committed.
+        let (_second, _) = pool.try_insert(epoch, 1, vec![user_transaction()]).unwrap();
+        let _system = pool.submit(epoch, &[transaction()]).unwrap();
+        let (_, ack, _) = pool.take(2, usize::MAX);
+        ack(block(2));
+        assert_eq!(status("sequenced"), 0);
+
+        pool.notify_committed(vec![block(2)], 1);
+        assert_eq!(status("sequenced"), 1);
+        assert_eq!(status("garbage_collected"), 1);
+        // System entries report through the adapter; only their latency is recorded here.
+        assert_eq!(commit_latency_count("user"), 1);
+        assert_eq!(commit_latency_count("system"), 1);
+    }
+
+    #[tokio::test]
     async fn insert_validation_rejects_oversized_transactions_and_bundles() {
         let serialized_len = u64::try_from(bcs::to_bytes(&transaction()).unwrap().len()).unwrap();
 
@@ -1883,7 +2040,7 @@ mod tests {
         let state = TestAuthorityBuilder::new().build().await;
         let epoch_store = state.epoch_store_for_testing().clone();
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            ConsensusTransactionPool::new(
+            ConsensusTransactionPool::new_for_tests(
                 epoch_store,
                 0,
                 Arc::new(AdmissionQueueMetrics::new_for_tests()),
@@ -1895,7 +2052,7 @@ mod tests {
     #[tokio::test]
     async fn context_observes_installed_pool_and_waits_for_matching_epoch() {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
-        let context = Arc::new(TransactionPoolContext::new(metrics));
+        let context = Arc::new(TransactionPoolContext::new_for_tests(metrics));
         let state = TestAuthorityBuilder::new().build().await;
         let pool = pool_for_current_epoch(&state, 10);
         let epoch = pool.epoch();
@@ -1913,7 +2070,7 @@ mod tests {
         // send_replace retains the active state after the only receiver is gone.
         assert_eq!(context.wait_for_pool(epoch).await.unwrap().epoch(), epoch);
 
-        let race_context = Arc::new(TransactionPoolContext::new(Arc::new(
+        let race_context = Arc::new(TransactionPoolContext::new_for_tests(Arc::new(
             AdmissionQueueMetrics::new_for_tests(),
         )));
         let setter = race_context.clone();
@@ -1945,7 +2102,8 @@ mod tests {
 
     #[tokio::test]
     async fn context_fails_stale_and_unavailable_epochs_promptly() {
-        let context = TransactionPoolContext::new(Arc::new(AdmissionQueueMetrics::new_for_tests()));
+        let context =
+            TransactionPoolContext::new_for_tests(Arc::new(AdmissionQueueMetrics::new_for_tests()));
         // Advance to epoch 1 so a stale (older-epoch) caller can exist.
         let state = TestAuthorityBuilder::new().build().await;
         state.reconfigure_for_testing().await;
@@ -1987,8 +2145,8 @@ mod tests {
         let state = TestAuthorityBuilder::new().build().await;
         let epoch_store = state.epoch_store_for_testing().clone();
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
-        let context = Arc::new(TransactionPoolContext::new(metrics.clone()));
-        let pool = Arc::new(ConsensusTransactionPool::new(
+        let context = Arc::new(TransactionPoolContext::new_for_tests(metrics.clone()));
+        let pool = Arc::new(ConsensusTransactionPool::new_for_tests(
             epoch_store.clone(),
             10,
             metrics,
