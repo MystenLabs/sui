@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
 use prometheus::Registry;
@@ -9,11 +10,18 @@ use rand::rngs::OsRng;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use tokio::sync::broadcast;
+use tracing::info;
 
 use simulacrum::Simulacrum;
+use simulacrum::SimulatorStore as _;
+use sui_types::effects::TransactionEffectsAPI as _;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait as _;
 
+use crate::proto::forking::AdvanceCheckpointResponse;
+use crate::proto::forking::AdvanceClockResponse;
+use crate::proto::forking::GetStatusResponse;
 use crate::services::ServiceManager;
 use crate::store::ForkStore;
 
@@ -80,6 +88,75 @@ impl Context {
     /// the next executed transaction.
     pub(crate) async fn indexer_stopped(&self) -> anyhow::Result<()> {
         self.services.indexer_stopped().await
+    }
+
+    /// Advance the fork's clock and seal the clock transaction into a new checkpoint.
+    ///
+    /// Return only after the indexer has committed the checkpoint, so subsequent reads observe the
+    /// clock transaction and its derived state.
+    pub(crate) async fn advance_clock(&self, duration: Duration) -> AdvanceClockResponse {
+        let ((tx_digest, timestamp_ms), checkpoint_metadata) = self
+            .run_with_new_checkpoint(|sim| {
+                let effects = sim.advance_clock(duration);
+                let tx_digest = *effects.transaction_digest();
+                let timestamp_ms = sim.store().get_clock().timestamp_ms;
+                (tx_digest, timestamp_ms)
+            })
+            .await;
+
+        info!(
+            %tx_digest,
+            duration_ms = duration.as_millis(),
+            timestamp_ms,
+            checkpoint_sequence_number = checkpoint_metadata.sequence_number,
+            "clock advanced"
+        );
+
+        AdvanceClockResponse {
+            timestamp_ms,
+            tx_digest: tx_digest.to_string(),
+        }
+    }
+
+    /// Create and publish a new checkpoint without executing another transaction.
+    ///
+    /// Return only after the indexer has committed the checkpoint, so subscribers and reads observe
+    /// it before the call completes.
+    pub(crate) async fn advance_checkpoint(&self) -> AdvanceCheckpointResponse {
+        let (_, checkpoint_metadata) = self.run_with_new_checkpoint(|_| ()).await;
+
+        info!(
+            checkpoint_sequence_number = checkpoint_metadata.sequence_number,
+            timestamp_ms = checkpoint_metadata.timestamp_ms,
+            "checkpoint created"
+        );
+
+        AdvanceCheckpointResponse {
+            checkpoint_sequence_number: checkpoint_metadata.sequence_number,
+            timestamp_ms: checkpoint_metadata.timestamp_ms,
+        }
+    }
+
+    /// Return the fork's current epoch, checkpoint, clock, and original fork point.
+    ///
+    /// Read every field under one Simulacrum guard so the response describes one state snapshot.
+    pub(crate) async fn status(&self) -> GetStatusResponse {
+        let sim = self.simulacrum.read().await;
+        let epoch = sim.epoch_start_state().epoch();
+        let timestamp_ms = sim.store().get_clock().timestamp_ms;
+        let checkpoint_sequence_number = sim
+            .store()
+            .get_highest_checkpint()
+            .map(|checkpoint| checkpoint.data().sequence_number)
+            .unwrap_or(0);
+        let forked_at_checkpoint = sim.store().forked_at_checkpoint();
+
+        GetStatusResponse {
+            epoch,
+            checkpoint_sequence_number,
+            timestamp_ms,
+            forked_at_checkpoint,
+        }
     }
 
     /// Execute `operation`, create a checkpoint afterward, and publish that checkpoint to
