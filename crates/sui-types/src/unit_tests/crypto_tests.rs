@@ -140,26 +140,27 @@ proptest! {
 
 }
 
-// Same seed as the pq-sigs-ts "digest-msg" interop vector.
+// Same seed as the pq-sigs-ts "digest-msg" interop vector; only the golden
+// test needs it, everything else uses a fresh random keypair.
 const MLDSA65_TEST_SEED: [u8; 32] = [2; 32];
 const MLDSA65_TEST_ADDRESS: &str =
     "0xa44576e02f83a9e1bddac6fd742a77931d1689d9a61122eb3125dee425f6dd36";
 
-fn mldsa65_test_keypair() -> SuiKeyPair {
-    SuiKeyPair::MLDSA65(MLDSA65KeyPair::from_bytes(&MLDSA65_TEST_SEED).unwrap())
+fn mldsa65_random_keypair() -> SuiKeyPair {
+    SuiKeyPair::MLDSA65(MLDSA65KeyPair::generate(&mut rand::thread_rng()))
 }
 
 #[test]
 fn mldsa65_address_golden() {
     // Pins blake2b256(flag || pk) end to end.
-    let kp = mldsa65_test_keypair();
+    let kp = SuiKeyPair::MLDSA65(MLDSA65KeyPair::from_bytes(&MLDSA65_TEST_SEED).unwrap());
     let address: SuiAddress = (&kp.public()).into();
     assert_eq!(address.to_string(), MLDSA65_TEST_ADDRESS);
 }
 
 #[test]
 fn mldsa65_keystore_blob_roundtrip() {
-    let kp = mldsa65_test_keypair();
+    let kp = mldsa65_random_keypair();
     let blob = kp.to_bytes();
     // flag || 32-byte seed
     assert_eq!(blob.len(), 33);
@@ -185,14 +186,14 @@ fn mldsa65_blob_wrong_lengths_rejected() {
         );
     }
     assert!(SuiKeyPair::from_bytes(&[]).is_err());
-    let mut blob = mldsa65_test_keypair().to_bytes();
+    let mut blob = mldsa65_random_keypair().to_bytes();
     blob.push(0);
     assert!(SuiKeyPair::from_bytes(&blob).is_err());
 }
 
 #[test]
 fn mldsa65_envelope_roundtrip() {
-    let kp = mldsa65_test_keypair();
+    let kp = mldsa65_random_keypair();
     // Signing is hedged, so only the roundtrip can be pinned.
     let sig = kp.sign(b"mldsa envelope roundtrip");
     assert_eq!(sig.scheme().flag(), SignatureScheme::MLDSA65.flag());
@@ -206,7 +207,7 @@ fn mldsa65_envelope_roundtrip() {
 
 #[test]
 fn mldsa65_verify_secure_intent_message() {
-    let kp = mldsa65_test_keypair();
+    let kp = mldsa65_random_keypair();
     let address: SuiAddress = (&kp.public()).into();
     let msg = IntentMessage::new(Intent::sui_transaction(), Foo("mldsa65".to_string()));
     let sig = Signature::new_secure(&msg, &kp);
@@ -223,14 +224,14 @@ fn mldsa65_verify_secure_intent_message() {
 #[test]
 fn mldsa65_not_parsed_as_generic_signature() {
     // The transaction-level parser rejects 0x07 until verification is wired up.
-    let kp = mldsa65_test_keypair();
+    let kp = mldsa65_random_keypair();
     let sig = kp.sign(b"message");
     assert!(GenericSignature::from_bytes(sig.as_ref()).is_err());
 }
 
 #[test]
 fn mldsa65_public_key_decode() {
-    let kp = mldsa65_test_keypair();
+    let kp = mldsa65_random_keypair();
     let pk = kp.public();
     let encoded = pk.encode_base64();
     let decoded = PublicKey::decode_base64(&encoded).unwrap();
@@ -250,7 +251,7 @@ fn mldsa65_zklogin_ephemeral_rejected() {
     use crate::zk_login_util::get_zklogin_inputs;
     use std::sync::Arc;
 
-    let kp = mldsa65_test_keypair();
+    let kp = mldsa65_random_keypair();
     let msg = IntentMessage::new(Intent::sui_transaction(), Foo("zklogin".to_string()));
     let eph_sig = Signature::new_secure(&msg, &kp);
     let inputs = get_zklogin_inputs();
@@ -279,6 +280,6 @@ fn mldsa65_zklogin_ephemeral_rejected() {
 #[test]
 fn mldsa65_bcs_variant_index_pinned() {
     // The BCS tag is consensus-critical (serialized inside MultiSig committees).
-    let kp = mldsa65_test_keypair();
+    let kp = mldsa65_random_keypair();
     assert_eq!(bcs::to_bytes(&kp.public()).unwrap()[0], 5);
 }

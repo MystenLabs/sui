@@ -43,6 +43,12 @@ use sui_types::transaction::TransactionData;
 use tempfile::TempDir;
 use tokio::test;
 
+// A valid ML-DSA-65 keystore blob (flag 0x07 || seed 0x02 * 32) in bech32;
+// crate `sui` has no fastcrypto-pq dependency, so tests decode this instead
+// of generating a keypair.
+const MLDSA65_TEST_SUIPRIVKEY: &str =
+    "suiprivkey1qupqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyghdug7";
+
 const TEST_MNEMONIC: &str = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
 
 #[test]
@@ -78,6 +84,9 @@ async fn test_flag_in_signature_and_keypair() -> Result<(), anyhow::Error> {
         .await?;
     keystore
         .import(None, SuiKeyPair::Ed25519(get_key_pair().1))
+        .await?;
+    keystore
+        .import(None, SuiKeyPair::decode(MLDSA65_TEST_SUIPRIVKEY).unwrap())
         .await?;
 
     for pk in keystore.entries() {
@@ -172,6 +181,30 @@ async fn test_read_write_keystore_with_flag() {
     // read from file as AuthorityKeyPair success
     let kp_ed_read = read_authority_keypair_from_file(fp_ed_2);
     assert!(kp_ed_read.is_err());
+
+    // create ML-DSA-65 keypair
+    let kp_mldsa = SuiKeyPair::decode(MLDSA65_TEST_SUIPRIVKEY).unwrap();
+    let addr_mldsa: SuiAddress = (&kp_mldsa.public()).into();
+    let fp_mldsa = dir.path().join(format!("{}.key", addr_mldsa));
+    let fp_mldsa_2 = fp_mldsa.clone();
+
+    // write ML-DSA-65 keypair to file
+    let res = write_keypair_to_file(&kp_mldsa, &fp_mldsa);
+    assert!(res.is_ok());
+
+    // read from file as enum KeyPair success
+    let kp_mldsa_read = read_keypair_from_file(fp_mldsa);
+    assert!(kp_mldsa_read.is_ok());
+
+    // KeyPair wrote into file is the same as read
+    assert_eq!(
+        kp_mldsa_read.unwrap().public().as_ref(),
+        kp_mldsa.public().as_ref()
+    );
+
+    // read as AuthorityKeyPair fails
+    let kp_mldsa_read = read_authority_keypair_from_file(fp_mldsa_2);
+    assert!(kp_mldsa_read.is_err());
 }
 
 #[test]
