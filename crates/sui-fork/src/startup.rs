@@ -7,11 +7,13 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use anyhow::Context as _;
 use anyhow::Result;
 use anyhow::anyhow;
 use prometheus::Registry;
 use rand::rngs::OsRng;
 use tokio::sync::RwLock;
+use tokio::sync::oneshot;
 use tracing::info;
 
 use simulacrum::Simulacrum;
@@ -227,59 +229,132 @@ pub(crate) fn resume_base_checkpoint(store: &ForkStore) -> Result<VerifiedCheckp
         .ok_or_else(|| anyhow!("no local checkpoint available to resume from"))
 }
 
-/// Run the forked network. Spawns the `sui-rpc-api` `RpcService` bound to `rpc_addr`, backed by the
-/// `ForkStore`'s RPC trait impls, then blocks on Ctrl+C.
-pub async fn run(
-    context: Context,
+/// Bind the fork's RPC listener and return bind failures to the caller.
+///
+/// Binding before initialization reports address conflicts synchronously and preserves the selected
+/// address when the caller requests an ephemeral port.
+pub(crate) async fn bind(rpc_addr: SocketAddr) -> Result<tokio::net::TcpListener> {
+    tokio::net::TcpListener::bind(rpc_addr)
+        .await
+        .with_context(|| format!("failed to bind fork RPC server to {rpc_addr}"))
+}
+
+/// Serve a fork over an already-bound listener and return its managed RPC service.
+///
+/// The returned service stops accepting connections and drains in-flight requests during graceful
+/// shutdown. The RPC task retains the context, while the caller must keep the indexer alive until
+/// draining completes. Returns an error if the listener's bound address cannot be read.
+pub(crate) async fn serve(
+    context: Arc<Context>,
     subscription_handle: SubscriptionServiceHandle,
-    mut indexer_service: Service,
-    rpc_addr: SocketAddr,
+    listener: tokio::net::TcpListener,
     version: &'static str,
-) -> Result<()> {
+) -> Result<(SocketAddr, Service)> {
     let store = {
         let sim = context.simulacrum().read().await;
         sim.store().clone()
     };
     let reader: Arc<dyn RpcStateReader> = Arc::new(store);
 
-    // Serve through `sui-rpc-api`'s `RpcService` directly (the fork does not
-    // depend on `sui-rpc-node`). The `ForkStore` itself is the
-    // `RpcStateReader`, with the fork admin service and executor attached.
-    let mut service = RpcService::new(reader);
-    service.with_server_version(ServerVersion::new("sui-fork", version));
-    service.with_subscription_service(subscription_handle);
-    let context = Arc::new(context);
-    service.with_executor(Arc::new(ForkedTransactionExecutor::new(context.clone())));
-    service.with_custom_service(ForkingServiceServer::new(ForkingServiceImpl::new(
-        context.clone(),
-    )));
-    service.with_file_descriptor_set(crate::proto::FILE_DESCRIPTOR_SET);
+    let mut rpc = RpcService::new(reader);
+    rpc.with_server_version(ServerVersion::new("sui-fork", version));
+    rpc.with_subscription_service(subscription_handle);
+    rpc.with_executor(Arc::new(ForkedTransactionExecutor::new(context.clone())));
+    rpc.with_custom_service(ForkingServiceServer::new(ForkingServiceImpl::new(context)));
+    rpc.with_file_descriptor_set(crate::proto::FILE_DESCRIPTOR_SET);
+
+    let rpc_addr = listener
+        .local_addr()
+        .context("failed to read the fork RPC server's bound address")?;
+    let router = rpc.into_router().await;
+    let (shutdown_sender, shutdown_receiver) = oneshot::channel::<()>();
 
     info!("starting sui-rpc-api server on {rpc_addr}");
-    let server_handle = tokio::spawn(async move { service.start_service(rpc_addr).await });
+    let service = Service::new()
+        .with_shutdown_signal(async move {
+            let _ = shutdown_sender.send(());
+        })
+        .spawn(async move {
+            axum::serve(listener, router)
+                .with_graceful_shutdown(async move {
+                    let _ = shutdown_receiver.await;
+                    info!("shutdown received, stopping fork RPC server");
+                })
+                .await
+                .context("fork RPC server failed")
+        });
+
+    Ok((rpc_addr, service))
+}
+
+/// Run the forked network until it receives a process shutdown signal or a service stops.
+///
+/// Bind `rpc_addr` before starting the RPC service. Process shutdown drains RPC requests before
+/// stopping the indexer because accepted requests may need the indexer to publish their
+/// checkpoints. Returns an error if binding fails or either service stops unexpectedly.
+pub async fn run(
+    context: Context,
+    subscription_handle: SubscriptionServiceHandle,
+    indexer_service: Service,
+    rpc_addr: SocketAddr,
+    version: &'static str,
+) -> Result<()> {
+    let listener = bind(rpc_addr).await?;
+    run_with_listener(
+        context,
+        subscription_handle,
+        indexer_service,
+        listener,
+        version,
+    )
+    .await
+}
+
+/// Run the forked network over an already-bound listener.
+///
+/// Process shutdown drains RPC requests before stopping the indexer because accepted requests may
+/// need the indexer to publish their checkpoints. Returns an error if either service stops
+/// unexpectedly.
+pub(crate) async fn run_with_listener(
+    context: Context,
+    subscription_handle: SubscriptionServiceHandle,
+    mut indexer_service: Service,
+    listener: tokio::net::TcpListener,
+    version: &'static str,
+) -> Result<()> {
+    let (_, mut rpc_service) =
+        serve(Arc::new(context), subscription_handle, listener, version).await?;
+
+    enum Exit {
+        Shutdown,
+        Rpc(Result<()>),
+        Indexer(Result<()>),
+    }
 
     info!("forked network running, waiting for shutdown signal (Ctrl+C)");
-    tokio::select! {
-        res = tokio::signal::ctrl_c() => {
-            res?;
+    let exit = tokio::select! {
+        result = tokio::signal::ctrl_c() => {
+            result?;
+            Exit::Shutdown
+        }
+        result = rpc_service.join() => Exit::Rpc(result),
+        result = indexer_service.join() => Exit::Indexer(result),
+    };
+
+    match exit {
+        Exit::Shutdown => {
             info!("shutdown signal received, stopping forked network");
+            let rpc_shutdown = rpc_service.shutdown().await;
+            let indexer_shutdown = indexer_service.shutdown().await;
+            rpc_shutdown?;
+            indexer_shutdown?;
+            Ok(())
         }
-        join = server_handle => {
-            if let Err(e) = join {
-                return Err(anyhow!("rpc server task panicked: {e}"));
-            }
-            return Err(anyhow!("rpc server task exited unexpectedly"));
-        }
-        stopped = indexer_service.join() => {
-            // Without this watchdog an indexer failure would only surface as
-            // a 30s publication timeout on the next executed transaction.
-            return match stopped {
-                Ok(()) => Err(anyhow!("embedded rpc-store indexer stopped unexpectedly")),
-                Err(e) => Err(e.context("embedded rpc-store indexer failed")),
-            };
-        }
+        Exit::Rpc(Ok(())) => Err(anyhow!("rpc server stopped unexpectedly")),
+        Exit::Rpc(Err(error)) => Err(error.context("rpc server failed")),
+        Exit::Indexer(Ok(())) => Err(anyhow!("embedded rpc-store indexer stopped unexpectedly")),
+        Exit::Indexer(Err(error)) => Err(error.context("embedded rpc-store indexer failed")),
     }
-    Ok(())
 }
 
 /// Replace the validator set in the system state with local validators from the NetworkConfig
@@ -326,6 +401,25 @@ mod tests {
                 entries: Vec::new(),
             })
             .expect("seed manifest should write");
+    }
+
+    #[tokio::test]
+    async fn bind_reports_address_conflicts() {
+        let listener = bind("127.0.0.1:0".parse().expect("valid address"))
+            .await
+            .expect("ephemeral listener should bind");
+        let rpc_addr = listener
+            .local_addr()
+            .expect("listener should have an address");
+
+        let error = bind(rpc_addr)
+            .await
+            .expect_err("a second listener must not bind the same address");
+
+        assert!(
+            error.to_string().contains("failed to bind fork RPC server"),
+            "unexpected error: {error:#}",
+        );
     }
 
     #[test]
