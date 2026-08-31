@@ -7,6 +7,7 @@ use tracing::debug;
 
 use crate::git::get_cache_path;
 use crate::logging::user_error;
+use crate::schema::PublishedID;
 
 #[derive(Debug, Error)]
 pub enum LockError {
@@ -40,6 +41,17 @@ impl PackageSystemLock {
         let path = cache_path_for(repo_id)?;
         Self::new_for_path(&path, true).map_err(|source| LockError::CacheLockError {
             name: repo_id.to_string(),
+            path,
+            source,
+        })
+    }
+
+    /// Acquire a lock for fetching an on-chain package. Keyed by chain ID and address.
+    pub fn new_for_onchain(chain_id: &str, address: &PublishedID) -> LockResult<Self> {
+        let key = format!("onchain_{chain_id}_{address}");
+        let path = cache_path_for(&key)?;
+        Self::new_for_path(&path, true).map_err(|source| LockError::CacheLockError {
+            name: key,
             path,
             source,
         })

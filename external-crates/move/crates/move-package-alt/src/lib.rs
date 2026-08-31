@@ -12,6 +12,7 @@ mod errors;
 mod flavor;
 mod graph;
 mod logging;
+mod on_chain;
 mod package;
 
 pub mod git;
@@ -24,7 +25,7 @@ pub use package::paths::read_name_from_manifest;
 // TODO: maybe put SourcePackageLayout, NamedAddress into schema
 
 pub use errors::{PackageError, PackageResult};
-pub use flavor::{MoveFlavor, Vanilla};
+pub use flavor::{MoveFlavor, OnChainPackageData, Vanilla};
 pub use graph::{NamedAddress, PackageInfo};
 pub use package::layout::SourcePackageLayout;
 pub use package::{
