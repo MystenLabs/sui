@@ -140,7 +140,6 @@ pub struct PipelineLayer {
     pub obj_versions: Option<ConcurrentLayer>,
     pub tx_affected_addresses: Option<ConcurrentLayer>,
     pub tx_affected_objects: Option<ConcurrentLayer>,
-    pub tx_balance_changes: Option<ConcurrentLayer>,
     pub tx_calls: Option<ConcurrentLayer>,
     pub tx_digests: Option<ConcurrentLayer>,
     pub tx_kinds: Option<ConcurrentLayer>,
@@ -328,7 +327,6 @@ impl PipelineLayer {
             obj_versions: Some(Default::default()),
             tx_affected_addresses: Some(Default::default()),
             tx_affected_objects: Some(Default::default()),
-            tx_balance_changes: Some(Default::default()),
             tx_calls: Some(Default::default()),
             tx_digests: Some(Default::default()),
             tx_kinds: Some(Default::default()),
@@ -463,7 +461,6 @@ impl Merge for PipelineLayer {
                 .tx_affected_addresses
                 .merge(other.tx_affected_addresses)?,
             tx_affected_objects: self.tx_affected_objects.merge(other.tx_affected_objects)?,
-            tx_balance_changes: self.tx_balance_changes.merge(other.tx_balance_changes)?,
             tx_calls: self.tx_calls.merge(other.tx_calls)?,
             tx_digests: self.tx_digests.merge(other.tx_digests)?,
             tx_kinds: self.tx_kinds.merge(other.tx_kinds)?,

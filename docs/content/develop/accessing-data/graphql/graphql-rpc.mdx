@@ -160,9 +160,9 @@ The following pipelines create indexed views that allow efficient filtering and 
 
 ### Transaction pipelines
 
-These pipelines extract and index key transaction attributes to support efficient filtering and querying. `tx_kinds`, `tx_calls`, `tx_affected_addresses`, and `tx_affected_objects` enable fast lookups of transactions based on types, function calls, sender and receiver addresses, and changed objects. `tx_digests` enable conversions between transaction sequence numbers and transaction digests needed for looking up transactions in `kv_` tables by digests and `tx_balance_changes` stores balance changes information of each transaction.
+These pipelines extract and index key transaction attributes to support efficient filtering and querying. `tx_kinds`, `tx_calls`, `tx_affected_addresses`, and `tx_affected_objects` enable fast lookups of transactions based on types, function calls, sender and receiver addresses, and changed objects. `tx_digests` enable conversions between transaction sequence numbers and transaction digests needed for looking up transactions in `kv_` tables by digests.
 
-**Tables** : `tx_digests`, `tx_kinds`, `tx_calls`, `tx_affected_addresses`, `tx_affected_objects`, `tx_balance_changes`
+**Tables** : `tx_digests`, `tx_kinds`, `tx_calls`, `tx_affected_addresses`, `tx_affected_objects`
 
 ### Object pipelines
 
