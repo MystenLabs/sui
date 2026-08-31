@@ -586,6 +586,7 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
         index,
         attributes,
         loc,
+        visibility,
         signature,
         value: nvalue,
     } = nconstant;
@@ -629,6 +630,7 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
         index,
         attributes,
         loc,
+        visibility,
         signature,
         value: *value,
     }
@@ -4310,6 +4312,7 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
             index: _,
             attributes,
             defined_loc,
+            visibility: _,
             signature: _,
             value: _,
         } = context.constant_info(module_ident, constant_name).clone();
@@ -4324,6 +4327,17 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
                 )));
                 return;
             };
+            // A cross-module '#[error]' use is unreachable without a prior error: '#[error]' +
+            // 'public(package)' is rejected during expansion, and any other cross-module access
+            // is a visibility error
+            if !context.is_current_module(module_ident) {
+                ice_assert!(
+                    context.reporter,
+                    context.env().has_errors(),
+                    *const_loc,
+                    "cross-module '#[error]' constant use without a prior error"
+                );
+            }
             let econst = T::UnannotatedExp_::ErrorConstant {
                 line_number_loc: *const_loc,
                 error_constant: Some(*constant_name),

@@ -6,7 +6,7 @@ use crate::{
     cfgir::cfg::MutForwardCFG,
     diag,
     diagnostics::DiagnosticReporter,
-    expansion::ast::Mutability,
+    expansion::ast::{ModuleIdent, Mutability},
     hlir::ast::{
         BaseType, BaseType_, Command, Command_, Exp, FunctionSignature, SingleType, TypeName,
         TypeName_, UnannotatedExp_, Value, Value_, Var,
@@ -18,14 +18,14 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
-use std::{borrow::Cow, convert::TryFrom};
+use std::{borrow::Cow, collections::BTreeMap, convert::TryFrom};
 
 /// returns true if anything changed
 pub fn optimize(
     reporter: &DiagnosticReporter,
     _signature: &FunctionSignature,
     _locals: &UniqueMap<Var, (Mutability, SingleType)>,
-    constants: &UniqueMap<ConstantName, Value>,
+    constants: &BTreeMap<(ModuleIdent, ConstantName), Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
     let context = Context {
@@ -54,7 +54,7 @@ pub fn optimize(
 
 struct Context<'a> {
     reporter: &'a DiagnosticReporter<'a>,
-    constants: &'a UniqueMap<ConstantName, Value>,
+    constants: &'a BTreeMap<(ModuleIdent, ConstantName), Value>,
 }
 
 //**************************************************************************************************
@@ -109,11 +109,11 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
         | E::ErrorConstant { .. }
         | E::Unreachable => false,
 
-        e_ @ E::Constant(_) => {
-            let E::Constant(name) = e_ else {
+        e_ @ E::Constant(_, _) => {
+            let E::Constant(module, name) = e_ else {
                 unreachable!()
             };
-            if let Some(value) = context.constants.get(name) {
+            if let Some(value) = context.constants.get(&(*module, *name)) {
                 *e_ = E::Value(value.clone());
                 true
             } else {
@@ -481,7 +481,7 @@ fn ignorable_exp(e: &Exp) -> bool {
 /// `0xFFFFu16 as u8`.
 pub fn report_always_erroring_operations(
     reporter: &DiagnosticReporter,
-    constants: &UniqueMap<ConstantName, Value>,
+    constants: &BTreeMap<(ModuleIdent, ConstantName), Value>,
     cfg: &MutForwardCFG,
 ) {
     let context = Context {
@@ -523,7 +523,7 @@ fn check_cmd(context: &Context, sp!(_, cmd_): &Command) {
 fn check_exp<'a>(context: &Context, e: &'a Exp) -> Option<Cow<'a, Value_>> {
     use UnannotatedExp_ as E;
     match &e.exp.value {
-        E::Value(_) | E::Constant(_) => foldable_exp(e).map(Cow::Borrowed),
+        E::Value(_) | E::Constant(_, _) => foldable_exp(e).map(Cow::Borrowed),
 
         E::Unit { .. }
         | E::UnresolvedError

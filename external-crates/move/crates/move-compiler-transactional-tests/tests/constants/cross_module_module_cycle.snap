@@ -1,0 +1,8 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+// Constant references create no module dependency, so these modules publish and run despite
+// referring to each other: 'a' and 'b' through constant definitions, 'c' and 'd' through
+// function bodies

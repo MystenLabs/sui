@@ -8,12 +8,12 @@ use crate::{
         self,
         ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
         cfg::{ImmForwardCFG, MutForwardCFG},
+        constants::{self, Constants},
         visitor::{CFGIRVisitor, CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
-    diag,
     diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
-    expansion::ast::{Attributes, ModuleIdent, Mutability},
-    hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
+    expansion::ast::{Attributes, ModuleIdent},
+    hlir::ast::{self as H, BlockLabel, Label, Value, Value_},
     ice_assert,
     parser::ast::{ConstantName, FunctionName},
     shared::{AstDebug, CompilationEnv, program_info::TypingProgramInfo, unique_map::UniqueMap},
@@ -23,10 +23,6 @@ use move_core_types::{account_address::AccountAddress as MoveAddress, runtime_va
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
-use petgraph::{
-    algo::{kosaraju_scc as petgraph_scc, toposort as petgraph_toposort},
-    graphmap::DiGraphMap,
-};
 use rayon::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -50,11 +46,11 @@ pub(super) struct CFGIRDebugFlags {
     pub(super) print_optimized_blocks: bool,
 }
 
-struct Context<'env> {
-    env: &'env CompilationEnv,
-    info: &'env TypingProgramInfo,
+pub(super) struct Context<'env> {
+    pub(super) env: &'env CompilationEnv,
+    pub(super) info: &'env TypingProgramInfo,
     reporter: DiagnosticReporter<'env>,
-    current_package: Option<Symbol>,
+    pub(super) current_package: Option<Symbol>,
     label_count: usize,
     named_blocks: UniqueMap<BlockLabel, (Label, Label)>,
     // Used for populating block_info
@@ -78,6 +74,10 @@ impl<'env> Context<'env> {
                 print_optimized_blocks: false,
             },
         }
+    }
+
+    pub(super) fn reporter(&self) -> &DiagnosticReporter<'env> {
+        &self.reporter
     }
 
     pub fn add_diag(&self, diag: Diagnostic) {
@@ -164,7 +164,6 @@ pub fn program(
     } = prog;
 
     let mut context = Context::new(compilation_env, &info);
-
     let modules = modules(&mut context, hmodules);
     set_constant_value_types(&info, &modules);
 
@@ -182,14 +181,12 @@ fn set_constant_value_types(
 ) {
     for (mname, mdef) in modules.key_cloned_iter() {
         for (cname, cdef) in mdef.constants.key_cloned_iter() {
+            // synthesized copies of cross-module constants have no typing-info counterpart
+            let Some(info_cdef) = info.module(&mname).constants.get(&cname) else {
+                continue;
+            };
             if let Some(value) = &cdef.value {
-                info.module(&mname)
-                    .constants
-                    .get(&cname)
-                    .unwrap()
-                    .value
-                    .set(value.clone())
-                    .unwrap();
+                info_cdef.value.set(value.clone()).unwrap();
             }
         }
     }
@@ -199,14 +196,22 @@ fn modules(
     context: &mut Context,
     hmodules: UniqueMap<ModuleIdent, H::ModuleDefinition>,
 ) -> UniqueMap<ModuleIdent, G::ModuleDefinition> {
-    let modules = hmodules
-        .into_iter()
-        .map(|(mname, m)| module(context, mname, m));
+    let mut hmodules = hmodules.into_iter().collect::<Vec<_>>();
+    // All constants are folded up front, in the order of their own dependency graph; module
+    // order is irrelevant
+    let (mut folded_constants, constants) = constants::folding::modules(context, &mut hmodules);
+    let constants = &constants;
+    let modules = hmodules.into_iter().map(|(mname, m)| {
+        let module_constants = folded_constants.remove(&mname).unwrap_or_default();
+        module(context, constants, module_constants, mname, m)
+    });
     UniqueMap::maybe_from_iter(modules).unwrap()
 }
 
 fn module(
     context: &mut Context,
+    constants: &Constants,
+    mut module_constants: UniqueMap<ConstantName, G::Constant>,
     module_ident: ModuleIdent,
     mdef: H::ModuleDefinition,
 ) -> (ModuleIdent, G::ModuleDefinition) {
@@ -222,10 +227,22 @@ fn module(
         functions: hfunctions,
         constants: hconstants,
     } = mdef;
+    ice_assert!(
+        context.reporter(),
+        hconstants.is_empty(),
+        module_ident.loc,
+        "constants should have been taken by the global constant pass"
+    );
     context.current_package = package_name;
     context.push_warning_filter_scope(warning_filter.clone());
-    let constants = constants(context, module_ident, hconstants);
-    let functions = hfunctions.map(|name, f| function(context, module_ident, name, f));
+    let mut functions = hfunctions.map(|name, f| function(context, module_ident, name, f));
+    constants::cross_module_gen::module(
+        context,
+        constants,
+        module_ident,
+        &mut module_constants,
+        &mut functions,
+    );
     context.pop_warning_filter_scope();
     context.current_package = None;
     (
@@ -239,377 +256,17 @@ fn module(
             friends,
             structs,
             enums,
-            constants,
+            constants: module_constants,
             functions,
         },
     )
 }
 
 //**************************************************************************************************
-// Functions
+// Values
 //**************************************************************************************************
 
-fn constants(
-    context: &mut Context,
-    module: ModuleIdent,
-    mut consts: UniqueMap<ConstantName, H::Constant>,
-) -> UniqueMap<ConstantName, G::Constant> {
-    // Traverse the constants and compute the dependency graph between constants: if one mentions
-    // another, an edge is added between them.
-    let mut graph = DiGraphMap::<ConstantName, ()>::new();
-    for (name, constant) in consts.key_cloned_iter() {
-        let deps = dependent_constants(constant);
-        graph.add_node(name);
-        for dep in deps {
-            // Only add edges for constants defined in this module; cross-module constants
-            // are already resolved and don't need dependency tracking here.
-            if consts.contains_key(&dep) {
-                graph.add_edge(dep, name, ());
-            }
-        }
-    }
-
-    // report any cycles we find
-    let sccs = petgraph_scc(&graph);
-    let mut cycle_nodes = BTreeSet::new();
-    for scc in sccs {
-        // An SCC of size 1 is only a cycle if the node has a self-edge.
-        if scc.len() == 1 && graph.contains_edge(scc[0], scc[0]) {
-            let name = scc[0];
-            context.add_diag(diag!(
-                CodeGeneration::UnfoldableConstant,
-                (
-                    *consts.get_loc(&name).unwrap(),
-                    format!("Constant '{}' references itself", name),
-                )
-            ));
-            cycle_nodes.insert(name);
-        } else if scc.len() > 1 {
-            let names = scc
-                .iter()
-                .map(|name| name.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            let mut diag = diag!(
-                CodeGeneration::UnfoldableConstant,
-                (
-                    *consts.get_loc(&scc[0]).unwrap(),
-                    format!("Constant definitions form a circular dependency: {}", names),
-                )
-            );
-            for name in scc.iter().skip(1) {
-                diag.add_secondary_label((
-                    *consts.get_loc(name).unwrap(),
-                    "Cyclic constant defined here",
-                ));
-            }
-            context.add_diag(diag);
-            cycle_nodes.append(&mut scc.into_iter().collect());
-        }
-    }
-    // report any node that relies on a node in a cycle but is not iself part of that cycle
-    for cycle_node in cycle_nodes.iter() {
-        // petgraph retains edges for nodes that have been deleted, so we ensure the node is not
-        // part of a cyclle _and_ it's still in the graph
-        let neighbors: Vec<_> = graph
-            .neighbors(*cycle_node)
-            .filter(|node| !cycle_nodes.contains(node) && graph.contains_node(*node))
-            .collect();
-        for node in neighbors {
-            context.add_diag(diag!(
-                CodeGeneration::UnfoldableConstant,
-                (
-                    *consts.get_loc(&node).unwrap(),
-                    format!(
-                        "Constant uses constant {}, which has a circular dependency",
-                        cycle_node
-                    )
-                )
-            ));
-            graph.remove_node(node);
-        }
-        graph.remove_node(*cycle_node);
-    }
-
-    // Finally, iterate the remaining constants in dependency order, inlining them into each other
-    // via the constant folding optimizer as we process them.
-
-    // petgraph will include nodes in the toposort that only appear in an edge, even if that node
-    // has been removed from the graph, so we filter down to only the remaining nodes
-    let remaining_nodes: BTreeSet<_> = graph.nodes().collect();
-    let sorted: Vec<_> = petgraph_toposort(&graph, None)
-        .expect("ICE concstant cycles not removed")
-        .into_iter()
-        .filter(|node| remaining_nodes.contains(node))
-        .collect();
-
-    let mut out_map = UniqueMap::new();
-    let mut constant_values = UniqueMap::new();
-    for constant_name in sorted.into_iter() {
-        let cdef = consts.remove(&constant_name).unwrap();
-        let new_cdef = constant(context, &mut constant_values, module, constant_name, cdef);
-        out_map
-            .add(constant_name, new_cdef)
-            .expect("ICE constant name collision");
-    }
-
-    out_map
-}
-
-fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
-    fn dep_exp(set: &mut BTreeSet<ConstantName>, exp: &H::Exp) {
-        use H::UnannotatedExp_ as E;
-        match &exp.exp.value {
-            E::UnresolvedError
-            | E::Unreachable
-            | E::Unit { .. }
-            | E::Value(_)
-            | E::Move { .. }
-            | E::Copy { .. } => (),
-            E::UnaryExp(_, rhs) => dep_exp(set, rhs),
-            E::BinopExp(lhs, _, rhs) => {
-                dep_exp(set, lhs);
-                dep_exp(set, rhs)
-            }
-            E::Cast(base, _) => dep_exp(set, base),
-            E::Vector(_, _, _, args) | E::Multiple(args) => {
-                for arg in args {
-                    dep_exp(set, arg);
-                }
-            }
-            E::Constant(c) => {
-                set.insert(*c);
-            }
-            _ => panic!("ICE typing should have rejected exp in const"),
-        }
-    }
-
-    fn dep_cmd(set: &mut BTreeSet<ConstantName>, command: &H::Command_) {
-        use H::Command_ as C;
-        match command {
-            C::IgnoreAndPop { exp, .. } => dep_exp(set, exp),
-            C::Return { exp, .. } => dep_exp(set, exp),
-            C::Abort(_, exp) | C::Assign(_, _, exp) => dep_exp(set, exp),
-            C::Mutate(lhs, rhs) => {
-                dep_exp(set, lhs);
-                dep_exp(set, rhs)
-            }
-            C::Break(_)
-            | C::Continue(_)
-            | C::Jump { .. }
-            | C::JumpIf { .. }
-            | C::VariantSwitch { .. } => (),
-        }
-    }
-
-    fn dep_stmt(set: &mut BTreeSet<ConstantName>, stmt: &H::Statement_) {
-        use H::Statement_ as S;
-        match stmt {
-            S::Command(cmd) => dep_cmd(set, &cmd.value),
-            S::IfElse {
-                cond,
-                if_block,
-                else_block,
-            } => {
-                dep_exp(set, cond);
-                dep_block(set, if_block);
-                dep_block(set, else_block)
-            }
-            S::VariantMatch {
-                subject,
-                enum_name: _,
-                arms,
-            } => {
-                dep_exp(set, subject);
-                for (_, arm) in arms {
-                    dep_block(set, arm);
-                }
-            }
-            S::While {
-                cond: (cond_block, cond_exp),
-                block,
-                ..
-            } => {
-                dep_block(set, cond_block);
-                dep_exp(set, cond_exp);
-                dep_block(set, block)
-            }
-            S::Loop { block, .. } => dep_block(set, block),
-            S::NamedBlock { block, .. } => dep_block(set, block),
-        }
-    }
-
-    fn dep_block(set: &mut BTreeSet<ConstantName>, block: &H::Block) {
-        for entry in block {
-            dep_stmt(set, &entry.value);
-        }
-    }
-
-    let mut output = BTreeSet::new();
-    let (_, block) = &constant.value;
-    dep_block(&mut output, block);
-    output
-}
-
-fn constant(
-    context: &mut Context,
-    constant_values: &mut UniqueMap<ConstantName, Value>,
-    module: ModuleIdent,
-    name: ConstantName,
-    c: H::Constant,
-) -> G::Constant {
-    let H::Constant {
-        warning_filter,
-        index,
-        attributes,
-        loc,
-        signature,
-        value: (locals, block),
-    } = c;
-
-    context.push_warning_filter_scope(warning_filter.clone());
-    let final_value = constant_(
-        context,
-        constant_values,
-        module,
-        name,
-        loc,
-        &attributes,
-        signature.clone(),
-        locals,
-        block,
-    );
-    let value = match final_value {
-        Some(H::Exp {
-            exp: sp!(_, H::UnannotatedExp_::Value(value)),
-            ..
-        }) => {
-            constant_values
-                .add(name, value.clone())
-                .expect("ICE constant name collision");
-            Some(move_value_from_value(value))
-        }
-        _ => None,
-    };
-
-    context.pop_warning_filter_scope();
-    G::Constant {
-        warning_filter,
-        index,
-        attributes,
-        loc,
-        signature,
-        value,
-    }
-}
-
-const CANNOT_FOLD: &str =
-    "Invalid expression in 'const'. This expression could not be evaluated to a value";
-
-fn constant_(
-    context: &mut Context,
-    constant_values: &UniqueMap<ConstantName, Value>,
-    module: ModuleIdent,
-    name: ConstantName,
-    full_loc: Loc,
-    attributes: &Attributes,
-    signature: H::BaseType,
-    locals: UniqueMap<Var, (Mutability, H::SingleType)>,
-    body: H::Block,
-) -> Option<H::Exp> {
-    use H::Command_ as C;
-    const ICE_MSG: &str = "ICE invalid constant should have been blocked in typing";
-    let blocks = block(context, body);
-    let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
-    context.clear_block_state();
-
-    let binfo = block_info.iter().map(destructure_tuple);
-    let (mut cfg, infinite_loop_starts, errors) = MutForwardCFG::new(start, &mut blocks, binfo);
-    assert!(infinite_loop_starts.is_empty(), "{}", ICE_MSG);
-    assert!(errors.is_empty(), "{}", ICE_MSG);
-
-    let num_previous_errors = context.env.count_diags();
-    let fake_signature = H::FunctionSignature {
-        type_parameters: vec![],
-        parameters: vec![],
-        return_type: H::Type_::base(signature),
-    };
-    let fake_infinite_loop_starts = BTreeSet::new();
-    let function_context = super::CFGContext {
-        env: context.env,
-        pre_compiled_program: None,
-        reporter: &context.reporter,
-        info: context.info,
-        package: context.current_package,
-        module,
-        member: cfgir::MemberName::Constant(name.0),
-        attributes,
-        entry: None,
-        visibility: H::Visibility::Internal,
-        signature: &fake_signature,
-        locals: &locals,
-        infinite_loop_starts: &fake_infinite_loop_starts,
-    };
-    cfgir::refine_inference_and_verify(&function_context, &mut cfg);
-    ice_assert!(
-        context.reporter,
-        num_previous_errors == context.env.count_diags(),
-        full_loc,
-        "{}",
-        ICE_MSG
-    );
-    cfgir::optimize(
-        context.env,
-        &context.reporter,
-        context.current_package,
-        &fake_signature,
-        &locals,
-        constant_values,
-        &mut cfg,
-    );
-
-    if blocks.len() != 1 {
-        context.add_diag(diag!(
-            CodeGeneration::UnfoldableConstant,
-            (full_loc, CANNOT_FOLD)
-        ));
-        return None;
-    }
-    let mut optimized_block = blocks.remove(&start).unwrap();
-    let return_cmd = optimized_block.pop_back().unwrap();
-    for sp!(cloc, cmd_) in &optimized_block {
-        let e = match cmd_ {
-            C::IgnoreAndPop { exp, .. } => exp,
-            _ => {
-                context.add_diag(diag!(
-                    CodeGeneration::UnfoldableConstant,
-                    (*cloc, CANNOT_FOLD)
-                ));
-                continue;
-            }
-        };
-        check_constant_value(context, e)
-    }
-
-    let result = match return_cmd.value {
-        C::Return { exp: e, .. } => e,
-        _ => unreachable!(),
-    };
-    check_constant_value(context, &result);
-    Some(result)
-}
-
-fn check_constant_value(context: &mut Context, e: &H::Exp) {
-    use H::UnannotatedExp_ as E;
-    match &e.exp.value {
-        E::Value(_) => (),
-        _ => context.add_diag(diag!(
-            CodeGeneration::UnfoldableConstant,
-            (e.exp.loc, CANNOT_FOLD)
-        )),
-    }
-}
-
+/// Lowers a folded `H::Value` into a `MoveValue` for a compiled constant.
 pub(crate) fn move_value_from_value(sp!(_, v_): Value) -> MoveValue {
     move_value_from_value_(v_)
 }
@@ -693,63 +350,49 @@ fn function_body(
     let b_ = match tb_ {
         HB::Native => GB::Native,
         HB::Defined { locals, body } => {
-            let blocks = block(context, body);
-            let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
-            context.clear_block_state();
-            let binfo = block_info.iter().map(destructure_tuple);
-            if context.debug.print_blocks {
-                for (lbl, block) in &blocks {
-                    println!("{lbl}:");
-                    for cmd in block {
-                        print!("    ");
-                        cmd.print_verbose();
+            // cross-module constant uses are rewritten to module-local copies after translation,
+            // by the constant selection pass (see `cfgir::constants`)
+            let (start, blocks, block_info) = lower_body_to_cfg(
+                context,
+                body,
+                |context, cfg, infinite_loop_starts, diags| {
+                    context.add_diags(diags);
+                    let function_context = super::CFGContext {
+                        env: context.env,
+                        pre_compiled_program: None,
+                        reporter: &context.reporter,
+                        info: context.info,
+                        package: context.current_package,
+                        module,
+                        member: cfgir::MemberName::Function(name.0),
+                        attributes,
+                        entry,
+                        visibility,
+                        signature,
+                        locals: &locals,
+                        infinite_loop_starts,
+                    };
+                    cfgir::refine_inference_and_verify(&function_context, cfg);
+                    // do not optimize if there are errors, warnings are okay
+                    if !context.env.has_errors() {
+                        cfgir::optimize(
+                            context.env,
+                            &context.reporter,
+                            context.current_package,
+                            signature,
+                            &locals,
+                            &BTreeMap::new(),
+                            cfg,
+                        );
+                        // TODO thread through constants
+                        cfgir::report_always_erroring_operations(
+                            &context.reporter,
+                            &BTreeMap::new(),
+                            cfg,
+                        );
                     }
-                }
-            }
-            let (mut cfg, infinite_loop_starts, diags) =
-                MutForwardCFG::new(start, &mut blocks, binfo);
-            context.add_diags(diags);
-
-            let function_context = super::CFGContext {
-                env: context.env,
-                pre_compiled_program: None,
-                reporter: &context.reporter,
-                info: context.info,
-                package: context.current_package,
-                module,
-                member: cfgir::MemberName::Function(name.0),
-                attributes,
-                entry,
-                visibility,
-                signature,
-                locals: &locals,
-                infinite_loop_starts: &infinite_loop_starts,
-            };
-            cfgir::refine_inference_and_verify(&function_context, &mut cfg);
-            // do not optimize if there are errors, warnings are okay
-            if !context.env.has_errors() {
-                // TODO thread through constants
-                let constants = &UniqueMap::new();
-                cfgir::optimize(
-                    context.env,
-                    &context.reporter,
-                    context.current_package,
-                    signature,
-                    &locals,
-                    constants,
-                    &mut cfg,
-                );
-                cfgir::report_always_erroring_operations(&context.reporter, constants, &cfg);
-                if context.debug.print_optimized_blocks {
-                    for (lbl, block) in &blocks {
-                        println!("{lbl}:");
-                        for cmd in block {
-                            print!("    ");
-                            cmd.print_verbose();
-                        }
-                    }
-                }
-            }
+                },
+            );
             let block_info = block_info
                 .into_iter()
                 .filter(|(lbl, _info)| blocks.contains_key(lbl))
@@ -763,6 +406,39 @@ fn function_body(
         }
     };
     sp(loc, b_)
+}
+
+/// Lowers a body through the shared statement-lowering pipeline -- block generation, label
+/// resolution, and CFG construction -- and hands the CFG to `with_cfg` for verification and
+/// optimization. Returns the start label, the final blocks, and their block info
+pub(super) fn lower_body_to_cfg(
+    context: &mut Context,
+    body: H::Block,
+    with_cfg: impl FnOnce(&mut Context, &mut MutForwardCFG, &BTreeSet<Label>, Diagnostics),
+) -> (Label, BasicBlocks, Vec<(Label, BlockInfo)>) {
+    let blocks = block(context, body);
+    let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
+    context.clear_block_state();
+    let binfo = block_info.iter().map(destructure_tuple);
+    if context.debug.print_blocks {
+        print_blocks(&blocks);
+    }
+    let (mut cfg, infinite_loop_starts, diags) = MutForwardCFG::new(start, &mut blocks, binfo);
+    with_cfg(context, &mut cfg, &infinite_loop_starts, diags);
+    if context.debug.print_optimized_blocks {
+        print_blocks(&blocks);
+    }
+    (start, blocks, block_info)
+}
+
+fn print_blocks(blocks: &BasicBlocks) {
+    for (lbl, block) in blocks {
+        println!("{lbl}:");
+        for cmd in block {
+            print!("    ");
+            cmd.print_verbose();
+        }
+    }
 }
 
 //**************************************************************************************************

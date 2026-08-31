@@ -1,0 +1,6 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+// Constants of modules published in earlier tasks are usable from later ones
