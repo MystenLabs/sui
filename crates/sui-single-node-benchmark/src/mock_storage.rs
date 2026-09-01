@@ -67,7 +67,7 @@ impl InMemoryObjectStore {
                         panic!("Shared object version should have been assigned. key: {tx_key:?}, obj id: {id:?}")
                     });
 
-                    self.get_object_by_key(id, *version)
+                    self.get_object_by_key(id, version.sequence_number())
                 }
             };
 
