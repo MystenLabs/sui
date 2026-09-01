@@ -23,7 +23,7 @@ task 3, lines 33-35:
 // Withdrawing zero MIST should succeed before the vault has an object balance.
 //> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
 mutated: object(0,0), object(2,0)
-accumulators_written: (object(3,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 0)
+accumulators_written: (object(3,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 0), (object(3,1), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 0)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
 
 task 4, lines 37-39:
@@ -39,12 +39,11 @@ task 5, lines 41-44:
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: test::obj_vault::fund(Input(1), Result(0));
 mutated: object(0,0), object(2,0)
-accumulators_written: (object(5,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Merge, 1000)
+accumulators_written: (object(3,1), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Merge, 1000)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
 
 task 6, lines 46-47:
 //# create-checkpoint
-// Make sure the valut funding settles.
 Checkpoint created: 1
 
 task 7, lines 49-51:
@@ -52,7 +51,7 @@ task 7, lines 49-51:
 // Withdrawing 500 MIST from the funded vault should succeed.
 //> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
 mutated: object(0,0), object(2,0)
-accumulators_written: (object(5,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 500), (object(7,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 500)
+accumulators_written: (object(3,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 500), (object(3,1), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 500)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
 
 task 8, lines 53-55:
@@ -77,7 +76,7 @@ task 10, lines 62-66:
 //> 1: test::obj_vault::fund(Input(1), Result(0));
 //> 2: test::obj_vault::withdraw_to(Input(1), Input(2), Input(3));
 mutated: object(0,0), object(2,0)
-accumulators_written: (object(5,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 900), (object(7,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 1400)
+accumulators_written: (object(3,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 1400), (object(3,1), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 900)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
 
 task 11, lines 68-72:
@@ -94,7 +93,7 @@ task 12, lines 74-76:
 // Withdrawing zero MIST should succeed.
 //> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
 mutated: object(0,0), object(2,0)
-accumulators_written: (object(5,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 0), (object(7,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 0)
+accumulators_written: (object(3,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 0), (object(3,1), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 0)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
 
 task 13, lines 78-82:
@@ -104,7 +103,7 @@ task 13, lines 78-82:
 //> 1: test::obj_vault::fund(Input(1), Result(0));
 //> 2: test::obj_vault::withdraw_to(Input(1), Input(2), Input(3));
 mutated: object(0,0), object(2,0)
-accumulators_written: (object(5,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Merge, 100), (object(7,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 600)
+accumulators_written: (object(3,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 600), (object(3,1), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Merge, 100)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
 
 task 14, lines 84-86:
@@ -113,7 +112,7 @@ task 14, lines 84-86:
 //> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
 mutated: object(0,0), object(2,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
-accumulators_written: (object(5,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 600), (object(7,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 600)
+accumulators_written: (object(3,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 600), (object(3,1), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 600)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
 
 task 15, lines 88-90:
@@ -125,7 +124,6 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 16, lines 92-93:
 //# create-checkpoint
-// After this settlement, the vault has 400 MIST remaining.
 Checkpoint created: 2
 
 task 17, lines 95-97:
@@ -134,7 +132,7 @@ task 17, lines 95-97:
 //> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
 mutated: object(0,0), object(2,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
-accumulators_written: (object(5,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 400), (object(7,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 400)
+accumulators_written: (object(3,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 400), (object(3,1), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 400)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
 
 task 18, lines 99-103:
@@ -144,5 +142,5 @@ task 18, lines 99-103:
 //> 1: test::obj_vault::fund(Input(1), Result(0));
 //> 2: test::obj_vault::withdraw_to(Input(1), Input(2), Input(3));
 mutated: object(0,0), object(2,0)
-accumulators_written: (object(5,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Merge, 100), (object(7,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 400)
+accumulators_written: (object(3,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 400), (object(3,1), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Merge, 100)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
