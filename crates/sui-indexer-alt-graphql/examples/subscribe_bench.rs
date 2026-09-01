@@ -136,7 +136,8 @@ fn metric_sum(text: &str, name: &str) -> f64 {
 fn terminations_lagged(text: &str) -> f64 {
     text.lines()
         .filter(|l| {
-            l.starts_with("graphql_subscription_terminations{") && l.contains("reason=\"lagged\"")
+            l.starts_with("graphql_alt_graphql_subscription_terminations{")
+                && l.contains("reason=\"lagged\"")
         })
         .filter_map(|l| l.rsplit(' ').next().and_then(|v| v.parse::<f64>().ok()))
         .sum()
@@ -251,7 +252,7 @@ async fn main() -> anyhow::Result<()> {
             Some(r) => r.text().await.unwrap_or_default(),
             None => String::new(),
         };
-        let lag = "graphql_subscription_live_payload_delivery_checkpoint_timestamp_lag";
+        let lag = "graphql_alt_graphql_subscription_live_payload_delivery_checkpoint_timestamp_lag";
         let (rss_kb, cpu_pct) = server_rss_cpu();
         let d_backfill = delivered_backfill.load(Ordering::Relaxed);
         let d_live = delivered_live.load(Ordering::Relaxed);
@@ -259,9 +260,12 @@ async fn main() -> anyhow::Result<()> {
             f,
             "{},{},{},{},{},{},{},{},{},{},{},{},{}",
             start.elapsed().as_millis(),
-            metric_sum(&text, "graphql_subscription_active_subscriptions") as i64,
-            metric_sum(&text, "graphql_subscription_opened") as u64,
-            metric_sum(&text, "graphql_subscription_payloads_delivered") as u64,
+            metric_sum(
+                &text,
+                "graphql_alt_graphql_subscription_active_subscriptions"
+            ) as i64,
+            metric_sum(&text, "graphql_alt_graphql_subscription_opened") as u64,
+            metric_sum(&text, "graphql_alt_graphql_subscription_payloads_delivered") as u64,
             metric_sum(&text, &format!("{lag}_sum")),
             metric_sum(&text, &format!("{lag}_count")) as u64,
             terminations_lagged(&text) as u64,
@@ -270,7 +274,10 @@ async fn main() -> anyhow::Result<()> {
             d_live,
             rss_kb,
             cpu_pct,
-            metric_sum(&text, "graphql_subscription_upstream_processed_checkpoints") as u64,
+            metric_sum(
+                &text,
+                "graphql_alt_graphql_subscription_upstream_processed_checkpoints"
+            ) as u64,
         )?;
         f.flush().ok();
         tokio::time::sleep(Duration::from_millis(1000)).await;
