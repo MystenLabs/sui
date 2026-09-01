@@ -4,6 +4,7 @@
 use crate::{ErrorReason, Result, RpcService};
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::{GetDatatypeRequest, GetDatatypeResponse};
+use sui_types::move_package::MovePackage;
 
 use super::{
     conversions::{convert_datatype, convert_error},
@@ -34,10 +35,20 @@ pub fn get_datatype(
     })?;
 
     let package = load_package(service, package_id_str)?;
+    get_datatype_response(&package, module_name, datatype_name)
+}
+
+/// Build a `GetDatatype` response from an already-loaded package. Shared with other implementors
+/// of `MovePackageService` (e.g. sui-kv-rpc) that load packages from a different backend.
+pub fn get_datatype_response(
+    package: &MovePackage,
+    module_name: &str,
+    datatype_name: &str,
+) -> Result<GetDatatypeResponse> {
     let package_id = package.id();
 
     let resolver_package =
-        sui_package_resolver::Package::read_from_package(&package).map_err(convert_error)?;
+        sui_package_resolver::Package::read_from_package(package).map_err(convert_error)?;
 
     let resolver_module = resolver_package
         .module(module_name)
