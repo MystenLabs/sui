@@ -41,6 +41,8 @@ pub enum PopAction {
     Include,
     /// Pop the entry into the excluded partition.
     Exclude,
+    /// Leave the entry queued and continue with the next entry.
+    Skip,
     /// Leave the entry queued and stop iterating.
     Stop,
 }
@@ -392,32 +394,49 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
     }
 
     /// Pop entries highest gas price first (FIFO within a price level) until
-    /// `action` returns `Stop` or the queue is empty. The entry that stopped
-    /// iteration stays queued. Popped entries are returned partitioned into
-    /// those the callback chose to `Include` and those to `Exclude`.
+    /// `action` returns `Stop` or the queue is exhausted. `Skip`ped entries and
+    /// the entry that stopped iteration stay queued. Popped entries are returned
+    /// partitioned into those the callback chose to `Include` and those to
+    /// `Exclude`.
     pub fn pop_batch_while(
         &mut self,
         mut action: impl FnMut(&mut E) -> PopAction,
     ) -> (Vec<E>, Vec<E>) {
         let mut included = Vec::new();
         let mut excluded = Vec::new();
-        'levels: while let Some(mut last) = self.map.last_entry() {
-            let deque = last.get_mut();
-            while let Some(entry) = deque.front_mut() {
-                let action = action(entry);
-                if matches!(action, PopAction::Stop) {
-                    break 'levels;
+        let mut stopped = false;
+        for deque in self.map.values_mut().rev() {
+            if stopped {
+                break;
+            }
+            // Drain the level once, writing retained entries back in order: a batch with
+            // removals costs one pass over the level rather than a shift per removal.
+            // This runs on every block proposal, so it must stay linear even when most
+            // entries are skipped (e.g. held by staggered submission).
+            let mut source = std::mem::take(deque);
+            while let Some(mut entry) = source.pop_front() {
+                if stopped {
+                    deque.push_back(entry);
+                    continue;
                 }
-                let entry = deque.pop_front().expect("front entry must exist");
-                self.total_len -= 1;
-                match action {
-                    PopAction::Include => included.push(entry),
-                    PopAction::Exclude => excluded.push(entry),
-                    PopAction::Stop => unreachable!("Stop breaks out above"),
+                match action(&mut entry) {
+                    PopAction::Stop => {
+                        stopped = true;
+                        deque.push_back(entry);
+                    }
+                    PopAction::Skip => deque.push_back(entry),
+                    PopAction::Include => {
+                        self.total_len -= 1;
+                        included.push(entry);
+                    }
+                    PopAction::Exclude => {
+                        self.total_len -= 1;
+                        excluded.push(entry);
+                    }
                 }
             }
-            last.remove();
         }
+        self.map.retain(|_, deque| !deque.is_empty());
         for entry in included.iter().chain(&excluded) {
             self.remove_keys(entry);
         }
@@ -884,6 +903,84 @@ mod tests {
         assert_eq!(q.min_gas_price(), Some(50));
         let (rest, _) = q.pop_batch_while(|_| PopAction::Include);
         assert_eq!(rest.len(), 2);
+        assert!(q.is_empty());
+    }
+
+    #[test]
+    fn test_pop_batch_while_skips_and_retains() {
+        let mut q = build_queue(10, &[100, 200, 200, 50, 75]);
+
+        // Skipping continues past the entry — both within a price level (only one of
+        // the two 200s is skipped) and into lower levels.
+        let mut seen_200 = false;
+        let (included, excluded) = q.pop_batch_while(|entry| match entry.gas_price {
+            200 if !seen_200 => {
+                seen_200 = true;
+                PopAction::Skip
+            }
+            100 => PopAction::Skip,
+            75 => PopAction::Exclude,
+            _ => PopAction::Include,
+        });
+        assert_eq!(
+            included.iter().map(|e| e.gas_price).collect::<Vec<_>>(),
+            vec![200, 50]
+        );
+        assert_eq!(
+            excluded.iter().map(|e| e.gas_price).collect::<Vec<_>>(),
+            vec![75]
+        );
+        // Skipped entries stay queued in order and are visible to later pops.
+        assert_eq!(q.len(), 2);
+        let (rest, _) = q.pop_batch_while(|_| PopAction::Include);
+        assert_eq!(
+            rest.iter().map(|e| e.gas_price).collect::<Vec<_>>(),
+            vec![200, 100]
+        );
+        assert!(q.is_empty());
+    }
+
+    #[test]
+    fn test_pop_batch_while_skip_then_stop() {
+        // A skipped entry ahead of the stopping one: both stay queued, in order,
+        // with bookkeeping intact.
+        let mut q = build_queue(10, &[300, 200, 100]);
+
+        let (included, excluded) = q.pop_batch_while(|entry| match entry.gas_price {
+            300 => PopAction::Skip,
+            200 => PopAction::Include,
+            _ => PopAction::Stop,
+        });
+        assert_eq!(
+            included.iter().map(|e| e.gas_price).collect::<Vec<_>>(),
+            vec![200]
+        );
+        assert!(excluded.is_empty());
+        assert_eq!(q.len(), 2);
+        assert_eq!(q.min_gas_price(), Some(100));
+        let (rest, _) = q.pop_batch_while(|_| PopAction::Include);
+        assert_eq!(
+            rest.iter().map(|e| e.gas_price).collect::<Vec<_>>(),
+            vec![300, 100]
+        );
+        assert!(q.is_empty());
+    }
+
+    #[test]
+    fn test_pop_batch_while_fully_skipped_level_retained() {
+        let mut q = build_queue(10, &[200, 200]);
+
+        let (included, excluded) = q.pop_batch_while(|_| PopAction::Skip);
+        assert!(included.is_empty() && excluded.is_empty());
+        // The untouched level survives with its invariants: length, min price, and
+        // eviction of a full queue still work on it.
+        assert_eq!(q.len(), 2);
+        assert_eq!(q.min_gas_price(), Some(200));
+        let (rest, _) = q.pop_batch_while(|_| PopAction::Include);
+        assert_eq!(
+            rest.iter().map(|e| e.gas_price).collect::<Vec<_>>(),
+            vec![200, 200]
+        );
         assert!(q.is_empty());
     }
 
