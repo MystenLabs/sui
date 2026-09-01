@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -20,10 +23,26 @@ use crate::ledger_grpc_reader::LedgerGrpcArgs;
 use crate::metrics::GrpcMetricsLayer;
 
 /// A reader backed by the gRPC LedgerService's streaming list APIs.
+///
+/// Holds a pool of independent gRPC clients (each a distinct HTTP/2 connection) and round-robins
+/// list calls across them. A single connection caps backfill throughput at the rate one HTTP/2
+/// connection's flow-control and single driver task can sustain, so the pool lets one server
+/// replica drive several connections in parallel to the ledger service.
 #[derive(Clone)]
 pub struct AlphaLedgerGrpcReader {
-    client: Client,
+    clients: Vec<Client>,
+    next: Arc<AtomicUsize>,
     timeout: Option<Duration>,
+}
+
+/// Number of independent gRPC connections one reader opens to the ledger service. Read once at
+/// construction from `ALPHA_LEDGER_GRPC_POOL_SIZE`; defaults to 1 (a single connection).
+fn pool_size() -> usize {
+    std::env::var("ALPHA_LEDGER_GRPC_POOL_SIZE")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or(1)
 }
 
 /// A single item from a list stream and the resume cursor the server emitted alongside it.
@@ -62,18 +81,32 @@ impl AlphaLedgerGrpcReader {
         registry: &Registry,
     ) -> anyhow::Result<Self> {
         let timeout = args.statement_timeout();
-        let mut client = Client::new(uri)?
-            .with_max_decoding_message_size(args.ledger_grpc_max_decoding_message_size)
-            .request_layer(GrpcMetricsLayer::new(
-                prefix.unwrap_or("ledger_grpc"),
-                registry,
-            ));
+        let metrics = GrpcMetricsLayer::new(prefix.unwrap_or("ledger_grpc"), registry);
 
-        if let Some(timeout) = timeout {
-            client = client.with_response_headers_timeout(timeout);
-        }
+        let clients = (0..pool_size())
+            .map(|_| {
+                let mut client = Client::new(uri.clone())?
+                    .with_max_decoding_message_size(args.ledger_grpc_max_decoding_message_size)
+                    .request_layer(metrics.clone());
+                if let Some(timeout) = timeout {
+                    client = client.with_response_headers_timeout(timeout);
+                }
+                anyhow::Ok(client)
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
 
-        Ok(Self { client, timeout })
+        Ok(Self {
+            clients,
+            next: Arc::new(AtomicUsize::new(0)),
+            timeout,
+        })
+    }
+
+    /// Pick the next client in the pool, round-robin, so concurrent list calls spread across the
+    /// connections rather than all contending on one.
+    fn client(&self) -> Client {
+        let i = self.next.fetch_add(1, Ordering::Relaxed) % self.clients.len();
+        self.clients[i].clone()
     }
 
     pub async fn list_transactions(
@@ -81,8 +114,7 @@ impl AlphaLedgerGrpcReader {
         request: proto::ListTransactionsRequest,
     ) -> anyhow::Result<StreamPage<ExecutedTransaction>> {
         let stream = self
-            .client
-            .clone()
+            .client()
             .ledger_client()
             .list_transactions(self.request(request))
             .await
@@ -97,8 +129,7 @@ impl AlphaLedgerGrpcReader {
         request: proto::ListEventsRequest,
     ) -> anyhow::Result<StreamPage<proto::Event>> {
         let stream = self
-            .client
-            .clone()
+            .client()
             .ledger_client()
             .list_events(self.request(request))
             .await
@@ -113,8 +144,7 @@ impl AlphaLedgerGrpcReader {
         request: proto::ListCheckpointsRequest,
     ) -> anyhow::Result<StreamPage<proto::Checkpoint>> {
         let stream = self
-            .client
-            .clone()
+            .client()
             .ledger_client()
             .list_checkpoints(self.request(request))
             .await
