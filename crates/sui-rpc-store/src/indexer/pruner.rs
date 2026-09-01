@@ -38,11 +38,13 @@
 //!   retractions, then each prune batch coalesces them per object to the
 //!   latest superseding checkpoint and point-deletes that object's
 //!   checkpoint-pinned entries below it (plus the tombstone entry itself
-//!   when the object was removed there). Point deletes rather than a range
-//!   delete because a hot object's successive retractions share the `id||0`
-//!   start and would nest into `O(K^2)` range-tombstone fragments (see
-//!   the `Retractions` collector). The retained set mirrors the `objects`
-//!   versions kept, so the index never points at a pruned version.
+//!   when the object was removed there). Point deletes remain load-bearing
+//!   because cursor state is best-effort — on cache miss, eviction, or restart,
+//!   `lo_cp = 0`, and a range delete from 0 would nest with prior ranges into
+//!   `O(K^2)` range-tombstone fragments (which OOMed mainnet nodes; see the
+//!   `Retractions` collector). Point deletes are the only fallback-safe shape.
+//!   The retained set mirrors the `objects` versions kept, so the index never
+//!   points at a pruned version.
 //! - **Ledger-history bitmaps** (`transaction_bitmap`,
 //!   `event_bitmap`) — not deleted directly; advancing the
 //!   database-local pruning floor lets their compaction filters drop
@@ -84,8 +86,12 @@
 //! point deletes are idempotent, so a re-run is harmless.
 
 use std::collections::HashMap;
+use std::num::NonZeroUsize;
 use std::ops::Bound;
 use std::sync::Arc;
+use std::sync::Mutex;
+
+use lru::LruCache;
 
 use anyhow::Context as _;
 use prometheus::IntCounter;
@@ -170,6 +176,64 @@ impl PrunerMetrics {
     }
 }
 
+/// Default maximum number of per-object retraction cursors retained in memory.
+pub const DEFAULT_RETRACTION_CURSORS_CAPACITY: usize = 200_000;
+
+/// In-memory cache of the greatest committed retraction checkpoint per object.
+///
+/// Bounded by an LRU policy with capacity [`DEFAULT_RETRACTION_CURSORS_CAPACITY`].
+/// A missing or evicted object falls back to a lower bound of `0`.
+#[derive(Debug)]
+pub struct RetractionCursors {
+    cache: LruCache<ObjectID, u64>,
+}
+
+impl Default for RetractionCursors {
+    fn default() -> Self {
+        Self::with_capacity(DEFAULT_RETRACTION_CURSORS_CAPACITY)
+    }
+}
+
+impl RetractionCursors {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        let capacity = NonZeroUsize::new(capacity.max(1)).expect("capacity is at least 1");
+        Self {
+            cache: LruCache::new(capacity),
+        }
+    }
+
+    /// Return the lower bound checkpoint for scanning an object's prefix.
+    /// Returns 0 on miss or eviction.
+    pub fn lower_bound(&self, id: &ObjectID) -> u64 {
+        self.cache.peek(id).copied().unwrap_or(0)
+    }
+
+    /// Monotonically advance the retraction checkpoint for the given object.
+    pub fn advance(&mut self, id: ObjectID, cp: u64) {
+        if let Some(existing) = self.cache.get_mut(&id) {
+            *existing = (*existing).max(cp);
+        } else {
+            self.cache.put(id, cp);
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.cache.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.cache.is_empty()
+    }
+
+    pub fn cap(&self) -> usize {
+        self.cache.cap().get()
+    }
+}
+
 /// Collects `object_version_by_checkpoint` retractions for one prune batch,
 /// coalescing every retraction for an object to a single entry.
 ///
@@ -181,12 +245,14 @@ impl PrunerMetrics {
 /// prefix from being walked once per supersession.
 ///
 /// The retraction uses point deletes rather than one
-/// `delete_range [id||0, id||cp)` precisely because successive batches retract a
-/// hot object at an ever-greater `cp`, all sharing the `id||0` start, so the
-/// range tombstones nest and RocksDB's `FragmentedRangeTombstoneList` fragments
-/// `K` of them into `K^2 / 2` `(fragment, seqnum)` pairs -- which OOMed mainnet
-/// fullnodes during memtable flush and WAL recovery.
-///
+/// `delete_range [id||0, id||cp)` because cursor state is best-effort in
+/// memory: on cache miss, eviction, or node restart, the scan falls back to
+/// `lo_cp = 0`. If range deletes were used, successive retractions falling
+/// back to `id||0` would share that lower bound, causing range tombstones to
+/// nest and RocksDB's `FragmentedRangeTombstoneList` to fragment `K` of them
+/// into `K^2 / 2` `(fragment, seqnum)` pairs -- which OOMed mainnet fullnodes
+/// during memtable flush and WAL recovery. Point deletes are the only
+/// fallback-safe delete shape.
 /// Coalescing keeps only the greatest checkpoint per object: its rows below that
 /// checkpoint are the union of every narrower retraction's rows, so one widest
 /// retraction subsumes them all. On an equal checkpoint, the `removed` flags are
@@ -210,11 +276,23 @@ impl Retractions {
             .or_insert((cp, removed));
     }
 
-    fn stage(self, batch: &mut Batch, schema: &RpcStoreSchema) -> anyhow::Result<()> {
-        for (id, (cp, removed)) in self.0 {
-            retract_object_version_by_checkpoint(batch, schema, id, cp, removed)?;
+    fn stage(
+        &self,
+        batch: &mut Batch,
+        schema: &RpcStoreSchema,
+        cursors: &RetractionCursors,
+    ) -> anyhow::Result<()> {
+        for (&id, &(cp, removed)) in &self.0 {
+            let lo_cp = cursors.lower_bound(&id);
+            retract_object_version_by_checkpoint(batch, schema, id, lo_cp, cp, removed)?;
         }
         Ok(())
+    }
+
+    fn commit_to_cursors(self, cursors: &mut RetractionCursors) {
+        for (id, (cp, _removed)) in self.0 {
+            cursors.advance(id, cp);
+        }
     }
 }
 
@@ -238,6 +316,8 @@ pub fn start_pruner(
         "PrunerConfig::max_checkpoints_per_tick must be >= 1; 0 would never make progress",
     );
 
+    let cursors = Arc::new(Mutex::new(RetractionCursors::default()));
+
     let service = Service::new().spawn_aborting(async move {
         let mut ticker = tokio::time::interval(config.interval());
         ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -248,11 +328,13 @@ pub fn start_pruner(
             let store = store.clone();
             let config = config.clone();
             let metrics = metrics.clone();
+            let cursors = cursors.clone();
 
             // The pruner does blocking RocksDB iteration and writes;
             // keep it off the async runtime threads.
             let res = tokio::task::spawn_blocking(move || {
-                prune_once(store.db(), store.schema(), &config, &metrics)
+                let mut guard = cursors.lock().unwrap_or_else(|p| p.into_inner());
+                prune_once(store.db(), store.schema(), &config, &metrics, &mut guard)
             })
             .await;
 
@@ -261,7 +343,13 @@ pub fn start_pruner(
                 Ok(Err(e)) => {
                     warn!("rpc-store pruner pass failed (will retry next interval): {e:#}")
                 }
-                Err(e) => warn!("rpc-store pruner task join error: {e}"),
+                Err(e) => {
+                    if e.is_panic() {
+                        std::panic::resume_unwind(e.into_panic());
+                    } else {
+                        panic!("rpc-store pruner task failed: {e}");
+                    }
+                }
             }
         }
     });
@@ -276,6 +364,7 @@ fn prune_once(
     schema: &RpcStoreSchema,
     config: &PrunerConfig,
     metrics: &PrunerMetrics,
+    cursors: &mut RetractionCursors,
 ) -> anyhow::Result<()> {
     let Some(current_epoch) = current_committed_epoch(db)? else {
         debug!("rpc-store pruner: no committed watermark yet; nothing to prune");
@@ -321,7 +410,7 @@ fn prune_once(
 
     while cursor.checkpoint_lo < tick_target {
         let chunk_ckpt_hi = (cursor.checkpoint_lo + config.max_chunk_checkpoints).min(tick_target);
-        cursor = prune_chunk(db, schema, cursor, chunk_ckpt_hi, metrics)?;
+        cursor = prune_chunk(db, schema, cursor, chunk_ckpt_hi, metrics, cursors)?;
         metrics.checkpoint_lo.set(cursor.checkpoint_lo as i64);
         metrics.tx_seq_lo.set(cursor.tx_seq_lo as i64);
         metrics.chunks_committed.inc();
@@ -351,6 +440,7 @@ fn prune_chunk(
     cursor: Watermarks,
     chunk_ckpt_hi: u64,
     metrics: &PrunerMetrics,
+    cursors: &mut RetractionCursors,
 ) -> anyhow::Result<Watermarks> {
     let ckpt_lo = cursor.checkpoint_lo;
     let tx_lo = cursor.tx_seq_lo;
@@ -442,7 +532,7 @@ fn prune_chunk(
         &U64Be(chunk_ckpt_hi),
     )?;
 
-    retractions.stage(&mut batch, schema)?;
+    retractions.stage(&mut batch, schema, cursors)?;
 
     // Advance the persisted floor atomically with the deletes.
     let new = Watermarks {
@@ -453,6 +543,8 @@ fn prune_chunk(
     batch.put(&schema.pruning_watermark, &k, &v)?;
 
     batch.commit()?;
+
+    retractions.commit_to_cursors(cursors);
 
     // The commit is durable; advance the in-memory bitmap floor so
     // the compaction filters drop buckets below `tx_hi`.
@@ -467,22 +559,31 @@ fn prune_chunk(
 /// lockstep with the `objects` CF.
 ///
 /// Point-deletes every checkpoint-pinned entry for `id` strictly older than
-/// `cp` by walking the object's own prefix over `[id||0, id||cp)` and issuing a
-/// targeted delete for each row present. The bounds stay within `id`'s prefix,
-/// so the scan never spills into the neighboring object. Callers coalesce
-/// repeated supersessions for the same object within a batch before calling this
-/// helper (see [`Retractions`]), so this prefix is walked once, at the greatest
-/// `cp`, whose row set is the union of every narrower retraction's -- including
-/// any removal below `cp`.
+/// `cp` by walking the object's own prefix over `[id||lo_cp, id||cp)` and issuing a
+/// targeted delete for each row present. When `lo_cp >= cp`, the scan range is
+/// empty. The bounds stay within `id`'s prefix, so the scan never spills into the
+/// neighboring object. Callers coalesce repeated supersessions for the same
+/// object within a batch before calling this helper (see [`Retractions`]), so this
+/// prefix is walked once, at the greatest `cp`, whose row set is the union of
+/// every narrower retraction's -- including any removal below `cp`.
 ///
-/// Point deletes rather than one `delete_range [id||0, id||cp)`: successive prune
-/// batches retract a hot object at an ever-greater `cp`, all sharing the `id||0`
-/// start, so the range tombstones nest and RocksDB fragments `K` of them into
-/// `O(K^2)` `(fragment, seqnum)` pairs -- at flush, at compaction, and at read.
-/// Ordinary point tombstones carry no such structure; the cost is one entry per
-/// deleted row and a bounded prefix scan on the delete path (already-retracted
-/// rows below a prior floor were deleted by earlier batches, so the scan surfaces
-/// only the rows this batch newly retires).
+/// Invariant: after a retraction at checkpoint `lo_cp` commits, no live
+/// `object_version_by_checkpoint` row for that object exists strictly below
+/// `lo_cp` -- prior retractions visited and deleted every row below `lo_cp`,
+/// leaving at most the kept anchor exactly at `lo_cp` (or no row if removed at
+/// `lo_cp`). Therefore, a subsequent retraction at `cp > lo_cp` only needs to scan
+/// `[id||lo_cp, id||cp)`. Seeking to `id||lo_cp` skips the dead range below `lo_cp`.
+/// If `lo_cp` is 0 (cursor cache miss or eviction), the scan safely defaults to
+/// `[id||0, id||cp)`.
+///
+/// Point deletes rather than `delete_range`: cursor state is best-effort in
+/// memory, so on cache miss, eviction, or node restart, `lo_cp` falls back to
+/// `0`. If range deletes were used, successive retractions falling back to
+/// `id||0` would share that start and nest into `O(K^2)` `(fragment, seqnum)`
+/// pairs at flush, compaction, and read. Point deletes are the only
+/// fallback-safe delete shape: ordinary point tombstones carry no such
+/// structure, and the cost is one entry per deleted row and a bounded prefix
+/// scan on the delete path.
 ///
 /// Once the floor advances past `cp`, the entry at `cp` (or a newer one) is the
 /// floor a checkpoint-pinned read resolves to, so the older entries can never
@@ -499,19 +600,26 @@ fn retract_object_version_by_checkpoint(
     batch: &mut Batch,
     schema: &RpcStoreSchema,
     id: ObjectID,
+    lo_cp: u64,
     cp: u64,
     removed: bool,
 ) -> anyhow::Result<()> {
-    let lo = object_version_by_checkpoint::Key { id, checkpoint: 0 };
-    let hi = object_version_by_checkpoint::Key { id, checkpoint: cp };
-    for entry in schema
-        .object_version_by_checkpoint
-        .iter((Bound::Included(lo), Bound::Excluded(hi)))?
-    {
-        let (key, _value) = entry?;
-        batch.delete(&schema.object_version_by_checkpoint, &key)?;
+    if lo_cp < cp {
+        let lo = object_version_by_checkpoint::Key {
+            id,
+            checkpoint: lo_cp,
+        };
+        let hi = object_version_by_checkpoint::Key { id, checkpoint: cp };
+        for entry in schema
+            .object_version_by_checkpoint
+            .iter((Bound::Included(lo), Bound::Excluded(hi)))?
+        {
+            let (key, _value) = entry?;
+            batch.delete(&schema.object_version_by_checkpoint, &key)?;
+        }
     }
     if removed {
+        let hi = object_version_by_checkpoint::Key { id, checkpoint: cp };
         batch.delete(&schema.object_version_by_checkpoint, &hi)?;
     }
     Ok(())
@@ -570,6 +678,7 @@ pub fn prune_history_cohort(
     pruned_checkpoint_watermark: u64,
     pruned_tx_seq_exclusive: u64,
     effects: &[(u64, TransactionEffects)],
+    cursors: &mut RetractionCursors,
 ) -> anyhow::Result<()> {
     let cursor = schema.get_pruning_watermarks()?.unwrap_or_default();
     let tx_lo = cursor.tx_seq_lo;
@@ -614,7 +723,7 @@ pub fn prune_history_cohort(
             retractions.record(id, *checkpoint, true);
         }
     }
-    retractions.stage(&mut batch, schema)?;
+    retractions.stage(&mut batch, schema, cursors)?;
 
     // Advance the persisted floor atomically with the deletes, taking
     // the monotonic max on each axis so a stale lower floor never
@@ -626,6 +735,8 @@ pub fn prune_history_cohort(
     let (k, v) = pruning_watermark::store(&new);
     batch.put(&schema.pruning_watermark, &k, &v)?;
     batch.commit()?;
+
+    retractions.commit_to_cursors(cursors);
 
     // Durable now: advance the in-memory bitmap floor so the bitmap
     // compaction filters start dropping fully-pruned buckets on the next
@@ -904,7 +1015,9 @@ mod tests {
         retractions.record(obj, 1, true);
         retractions.record(obj, 2, false);
         let mut batch = db.batch();
-        retractions.stage(&mut batch, &schema).unwrap();
+        retractions
+            .stage(&mut batch, &schema, &RetractionCursors::default())
+            .unwrap();
         batch.commit().unwrap();
 
         assert_eq!(
@@ -929,7 +1042,9 @@ mod tests {
         retractions.record(obj, 2, false);
         retractions.record(obj, 2, true);
         let mut batch = db.batch();
-        retractions.stage(&mut batch, &schema).unwrap();
+        retractions
+            .stage(&mut batch, &schema, &RetractionCursors::default())
+            .unwrap();
         batch.commit().unwrap();
 
         assert_eq!(
@@ -966,7 +1081,9 @@ mod tests {
             retractions.record(obj, *checkpoint, false);
         }
         let mut batch = db.batch();
-        retractions.stage(&mut batch, &schema).unwrap();
+        retractions
+            .stage(&mut batch, &schema, &RetractionCursors::default())
+            .unwrap();
         batch.commit().unwrap();
 
         // Everything below 999 is gone; the anchor at 999 survives as the floor
@@ -1206,8 +1323,15 @@ mod tests {
         seed(&db, &schema, &checkpoint).await;
 
         let metrics = PrunerMetrics::new(None, &Registry::new());
-        let new = prune_chunk(&db, &schema, Watermarks::default(), 1, &metrics).unwrap();
-
+        let new = prune_chunk(
+            &db,
+            &schema,
+            Watermarks::default(),
+            1,
+            &metrics,
+            &mut RetractionCursors::default(),
+        )
+        .unwrap();
         assert_eq!(
             schema.current_pruning_floor(),
             new.tx_seq_lo,
@@ -1316,18 +1440,18 @@ mod tests {
         };
 
         // Each pass advances by at most the per-tick budget of 2.
-        prune_once(&db, &schema, &config, &metrics).unwrap();
+        let mut cursors = RetractionCursors::default();
+        prune_once(&db, &schema, &config, &metrics, &mut cursors).unwrap();
         assert_eq!(floor(&schema), 2, "first tick advances by the budget");
-        prune_once(&db, &schema, &config, &metrics).unwrap();
+        prune_once(&db, &schema, &config, &metrics, &mut cursors).unwrap();
         assert_eq!(floor(&schema), 4, "second tick advances by the budget");
-        prune_once(&db, &schema, &config, &metrics).unwrap();
+        prune_once(&db, &schema, &config, &metrics, &mut cursors).unwrap();
         assert_eq!(floor(&schema), 5, "third tick reaches the target");
-
         // Caught up: history below the floor is gone, the live target
         // boundary is retained, and another pass is a no-op.
         assert!(schema.get_effects(4).unwrap().is_none());
         assert!(schema.get_checkpoint_summary(4).unwrap().is_none());
-        prune_once(&db, &schema, &config, &metrics).unwrap();
+        prune_once(&db, &schema, &config, &metrics, &mut cursors).unwrap();
         assert_eq!(floor(&schema), 5, "a pass at the target is a no-op");
     }
 
@@ -1371,7 +1495,15 @@ mod tests {
 
         // Prune the whole checkpoint: checkpoints [0, 1), tx [0, 2).
         let metrics = PrunerMetrics::new(None, &Registry::new());
-        let new = prune_chunk(&db, &schema, Watermarks::default(), 1, &metrics).unwrap();
+        let new = prune_chunk(
+            &db,
+            &schema,
+            Watermarks::default(),
+            1,
+            &metrics,
+            &mut RetractionCursors::default(),
+        )
+        .unwrap();
         assert_eq!(
             new,
             Watermarks {
@@ -1461,10 +1593,19 @@ mod tests {
         seed(&db, &schema, &cp0).await;
         seed(&db, &schema, &cp1).await;
         let metrics = PrunerMetrics::new(None, &Registry::new());
+        let mut cursors = RetractionCursors::default();
 
         // Chunk 1: prune checkpoint 0 only (tx [0, 1)). obj0's
         // superseding transaction is in checkpoint 1, so v_a stays.
-        let after_first = prune_chunk(&db, &schema, Watermarks::default(), 1, &metrics).unwrap();
+        let after_first = prune_chunk(
+            &db,
+            &schema,
+            Watermarks::default(),
+            1,
+            &metrics,
+            &mut cursors,
+        )
+        .unwrap();
         assert_eq!(
             after_first,
             Watermarks {
@@ -1481,7 +1622,8 @@ mod tests {
 
         // Chunk 2: prune checkpoint 1 (tx [1, 2)). Now the superseding
         // transaction is pruned, retracting v_a; v_b remains live.
-        let after_second = prune_chunk(&db, &schema, after_first, 2, &metrics).unwrap();
+        let after_second =
+            prune_chunk(&db, &schema, after_first, 2, &metrics, &mut cursors).unwrap();
         assert_eq!(
             after_second,
             Watermarks {
@@ -1573,10 +1715,19 @@ mod tests {
         );
 
         let metrics = PrunerMetrics::new(None, &Registry::new());
+        let mut cursors = RetractionCursors::default();
 
         // Prune checkpoint 0 only: tx0 creates obj0 and supersedes
         // nothing, so the cp0-pinned entry survives.
-        let after_first = prune_chunk(&db, &schema, Watermarks::default(), 1, &metrics).unwrap();
+        let after_first = prune_chunk(
+            &db,
+            &schema,
+            Watermarks::default(),
+            1,
+            &metrics,
+            &mut cursors,
+        )
+        .unwrap();
         assert_eq!(
             schema.get_object_version_at_checkpoint(obj0, 0).unwrap(),
             Some(v_a),
@@ -1585,7 +1736,7 @@ mod tests {
 
         // Prune checkpoint 1: tx1 supersedes obj0@v_a, retracting the
         // cp0-pinned entry; the cp1-pinned floor entry remains.
-        prune_chunk(&db, &schema, after_first, 2, &metrics).unwrap();
+        prune_chunk(&db, &schema, after_first, 2, &metrics, &mut cursors).unwrap();
         assert_eq!(
             schema.get_object_version_at_checkpoint(obj0, 0).unwrap(),
             None,
@@ -1659,8 +1810,15 @@ mod tests {
             .map(|tx| (0u64, tx.effects.clone()))
             .chain(cp1.transactions.iter().map(|tx| (1u64, tx.effects.clone())))
             .collect();
-        prune_history_cohort(&db, &schema, 1, 0, &effects).unwrap();
-
+        prune_history_cohort(
+            &db,
+            &schema,
+            1,
+            0,
+            &effects,
+            &mut RetractionCursors::default(),
+        )
+        .unwrap();
         // obj0 was superseded in cp1: its cp0 row is retracted, the cp1
         // anchor survives to resolve reads at or above the floor.
         assert_eq!(
@@ -1737,8 +1895,7 @@ mod tests {
 
         // Perpetual store has pruned through checkpoint 2; tx_seq 3 is
         // the first still-retained transaction.
-        prune_history_cohort(&db, &schema, 2, 3, &[]).unwrap();
-
+        prune_history_cohort(&db, &schema, 2, 3, &[], &mut RetractionCursors::default()).unwrap();
         // tx_metadata 0..3 pruned, 3..6 retained.
         for tx_seq in 0..3 {
             assert!(
@@ -1771,7 +1928,7 @@ mod tests {
         );
 
         // Idempotent: a re-run at the same floor is a no-op.
-        prune_history_cohort(&db, &schema, 2, 3, &[]).unwrap();
+        prune_history_cohort(&db, &schema, 2, 3, &[], &mut RetractionCursors::default()).unwrap();
         assert_eq!(
             schema.get_pruning_watermarks().unwrap(),
             Some(Watermarks {
@@ -1828,8 +1985,15 @@ mod tests {
         // No prior pruning watermark (floor unknown -> 0); prune through
         // checkpoint 0 / tx_seq 600_000 exclusive. Only the two rows
         // below 600_000 are unindexed; the one at 999_999 survives.
-        prune_history_cohort(&db, &schema, 0, 600_000, &[]).unwrap();
-
+        prune_history_cohort(
+            &db,
+            &schema,
+            0,
+            600_000,
+            &[],
+            &mut RetractionCursors::default(),
+        )
+        .unwrap();
         assert!(schema.get_tx_metadata_by_seq(0).unwrap().is_none());
         assert!(schema.get_tx_metadata_by_seq(500_000).unwrap().is_none());
         assert!(schema.get_tx_metadata_by_seq(999_999).unwrap().is_some());
@@ -1858,5 +2022,737 @@ mod tests {
                 checkpoint_lo: 1,
             }),
         );
+    }
+    fn all_object_version_by_checkpoint_rows(
+        schema: &RpcStoreSchema,
+    ) -> Vec<(
+        object_version_by_checkpoint::Key,
+        sui_types::base_types::SequenceNumber,
+    )> {
+        schema
+            .object_version_by_checkpoint
+            .iter(..)
+            .unwrap()
+            .map(|res| {
+                let (key, value) = res.unwrap();
+                (
+                    key,
+                    sui_types::base_types::SequenceNumber::from_u64(value.into_inner().version),
+                )
+            })
+            .collect()
+    }
+    /// Differential test: an identical multi-batch prune sequence executed
+    /// with persistent cursors vs. fresh/unwarmed cursors produces byte-identical
+    /// `object_version_by_checkpoint` CF contents.
+    #[test]
+    fn prune_history_cohort_differential_with_warm_and_fresh_cursors() {
+        let (_dir_warm, db_warm, schema_warm) = fresh_db();
+        let (_dir_fresh, db_fresh, schema_fresh) = fresh_db();
+
+        let mut builder = TestCheckpointBuilder::new(0)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .create_owned_object(1)
+            .create_owned_object(2)
+            .finish_transaction();
+        let cp0 = Arc::new(builder.build_checkpoint());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .transfer_object(1, 2)
+            .create_owned_object(3)
+            .finish_transaction();
+        let cp1 = Arc::new(builder.build_checkpoint());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 2)
+            .delete_object(2)
+            .create_owned_object(4)
+            .finish_transaction();
+        let cp2 = Arc::new(builder.build_checkpoint());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 3)
+            .transfer_object(3, 4)
+            .delete_object(4)
+            .finish_transaction();
+        let cp3 = Arc::new(builder.build_checkpoint());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 4)
+            .delete_object(1)
+            .transfer_object(3, 5)
+            .finish_transaction();
+        let cp4 = Arc::new(builder.build_checkpoint());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 5)
+            .finish_transaction();
+        let cp5 = Arc::new(builder.build_checkpoint());
+
+        let obj0 = TestCheckpointBuilder::derive_object_id(0);
+        let obj1 = TestCheckpointBuilder::derive_object_id(1);
+        let obj2 = TestCheckpointBuilder::derive_object_id(2);
+        let obj3 = TestCheckpointBuilder::derive_object_id(3);
+        let obj4 = TestCheckpointBuilder::derive_object_id(4);
+
+        let ver = |n: u64| sui_types::base_types::SequenceNumber::from_u64(n);
+        let rows = [
+            (obj0, 0, 1),
+            (obj0, 1, 2),
+            (obj0, 2, 3),
+            (obj0, 3, 4),
+            (obj0, 4, 5),
+            (obj0, 5, 6),
+            (obj1, 0, 1),
+            (obj1, 1, 2),
+            (obj1, 4, 3),
+            (obj2, 0, 1),
+            (obj2, 2, 2),
+            (obj3, 1, 1),
+            (obj3, 3, 2),
+            (obj3, 4, 3),
+            (obj4, 2, 1),
+            (obj4, 3, 2),
+        ];
+
+        for (db, schema) in [(&db_warm, &schema_warm), (&db_fresh, &schema_fresh)] {
+            let mut batch = db.batch();
+            for (id, cp, version) in rows {
+                let (k, v) = object_version_by_checkpoint::store(id, cp, ver(version));
+                batch
+                    .put(&schema.object_version_by_checkpoint, &k, &v)
+                    .unwrap();
+            }
+            batch.commit().unwrap();
+        }
+
+        let checkpoints = [
+            (&cp0, 0u64),
+            (&cp1, 1),
+            (&cp2, 2),
+            (&cp3, 3),
+            (&cp4, 4),
+            (&cp5, 5),
+        ];
+
+        // Batch 1: prune through cp 1
+        let effects_b1: Vec<(u64, TransactionEffects)> = checkpoints[0..=1]
+            .iter()
+            .flat_map(|(cp, seq)| {
+                cp.transactions
+                    .iter()
+                    .map(move |tx| (*seq, tx.effects.clone()))
+            })
+            .collect();
+        // Batch 2: prune through cp 3
+        let effects_b2: Vec<(u64, TransactionEffects)> = checkpoints[2..=3]
+            .iter()
+            .flat_map(|(cp, seq)| {
+                cp.transactions
+                    .iter()
+                    .map(move |tx| (*seq, tx.effects.clone()))
+            })
+            .collect();
+        // Batch 3: prune through cp 5
+        let effects_b3: Vec<(u64, TransactionEffects)> = checkpoints[4..=5]
+            .iter()
+            .flat_map(|(cp, seq)| {
+                cp.transactions
+                    .iter()
+                    .map(move |tx| (*seq, tx.effects.clone()))
+            })
+            .collect();
+
+        // Run with persistent warm cursors
+        let mut warm_cursors = RetractionCursors::default();
+        prune_history_cohort(&db_warm, &schema_warm, 1, 0, &effects_b1, &mut warm_cursors).unwrap();
+        prune_history_cohort(&db_warm, &schema_warm, 3, 0, &effects_b2, &mut warm_cursors).unwrap();
+        prune_history_cohort(&db_warm, &schema_warm, 5, 0, &effects_b3, &mut warm_cursors).unwrap();
+
+        // Run with fresh cursors every batch (simulating full cache misses / lower bound 0 fallback)
+        prune_history_cohort(
+            &db_fresh,
+            &schema_fresh,
+            1,
+            0,
+            &effects_b1,
+            &mut RetractionCursors::default(),
+        )
+        .unwrap();
+        prune_history_cohort(
+            &db_fresh,
+            &schema_fresh,
+            3,
+            0,
+            &effects_b2,
+            &mut RetractionCursors::default(),
+        )
+        .unwrap();
+        prune_history_cohort(
+            &db_fresh,
+            &schema_fresh,
+            5,
+            0,
+            &effects_b3,
+            &mut RetractionCursors::default(),
+        )
+        .unwrap();
+
+        let rows_warm = all_object_version_by_checkpoint_rows(&schema_warm);
+        let rows_fresh = all_object_version_by_checkpoint_rows(&schema_fresh);
+        assert_eq!(rows_warm, rows_fresh);
+        assert!(!rows_warm.is_empty());
+    }
+
+    /// Simulated restart test: dropping the cursor state mid-sequence produces
+    /// CF contents identical to an uninterrupted run.
+    #[test]
+    fn prune_history_cohort_simulated_restart() {
+        let (_dir_uninterrupted, db_uninterrupted, schema_uninterrupted) = fresh_db();
+        let (_dir_restarted, db_restarted, schema_restarted) = fresh_db();
+
+        let mut builder = TestCheckpointBuilder::new(0)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .create_owned_object(1)
+            .finish_transaction();
+        let cp0 = Arc::new(builder.build_checkpoint());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .transfer_object(1, 2)
+            .finish_transaction();
+        let cp1 = Arc::new(builder.build_checkpoint());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 2)
+            .delete_object(1)
+            .finish_transaction();
+        let cp2 = Arc::new(builder.build_checkpoint());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 3)
+            .finish_transaction();
+        let cp3 = Arc::new(builder.build_checkpoint());
+
+        let obj0 = TestCheckpointBuilder::derive_object_id(0);
+        let obj1 = TestCheckpointBuilder::derive_object_id(1);
+
+        let ver = |n: u64| sui_types::base_types::SequenceNumber::from_u64(n);
+        let rows = [
+            (obj0, 0, 1),
+            (obj0, 1, 2),
+            (obj0, 2, 3),
+            (obj0, 3, 4),
+            (obj1, 0, 1),
+            (obj1, 1, 2),
+            (obj1, 2, 3),
+        ];
+
+        for (db, schema) in [
+            (&db_uninterrupted, &schema_uninterrupted),
+            (&db_restarted, &schema_restarted),
+        ] {
+            let mut batch = db.batch();
+            for (id, cp, version) in rows {
+                let (k, v) = object_version_by_checkpoint::store(id, cp, ver(version));
+                batch
+                    .put(&schema.object_version_by_checkpoint, &k, &v)
+                    .unwrap();
+            }
+            batch.commit().unwrap();
+        }
+
+        let checkpoints = [(&cp0, 0u64), (&cp1, 1), (&cp2, 2), (&cp3, 3)];
+
+        let effects_b1: Vec<(u64, TransactionEffects)> = checkpoints[0..=1]
+            .iter()
+            .flat_map(|(cp, seq)| {
+                cp.transactions
+                    .iter()
+                    .map(move |tx| (*seq, tx.effects.clone()))
+            })
+            .collect();
+        let effects_b2: Vec<(u64, TransactionEffects)> = checkpoints[2..=3]
+            .iter()
+            .flat_map(|(cp, seq)| {
+                cp.transactions
+                    .iter()
+                    .map(move |tx| (*seq, tx.effects.clone()))
+            })
+            .collect();
+
+        // Uninterrupted run
+        let mut uninterrupted_cursors = RetractionCursors::default();
+        prune_history_cohort(
+            &db_uninterrupted,
+            &schema_uninterrupted,
+            1,
+            0,
+            &effects_b1,
+            &mut uninterrupted_cursors,
+        )
+        .unwrap();
+        prune_history_cohort(
+            &db_uninterrupted,
+            &schema_uninterrupted,
+            3,
+            0,
+            &effects_b2,
+            &mut uninterrupted_cursors,
+        )
+        .unwrap();
+
+        // Restarted run: cursors dropped/reset mid-sequence
+        let mut restarted_cursors = RetractionCursors::default();
+        prune_history_cohort(
+            &db_restarted,
+            &schema_restarted,
+            1,
+            0,
+            &effects_b1,
+            &mut restarted_cursors,
+        )
+        .unwrap();
+        // Drop and recreate cursors (simulating restart)
+        restarted_cursors = RetractionCursors::default();
+        prune_history_cohort(
+            &db_restarted,
+            &schema_restarted,
+            3,
+            0,
+            &effects_b2,
+            &mut restarted_cursors,
+        )
+        .unwrap();
+
+        let rows_uninterrupted = all_object_version_by_checkpoint_rows(&schema_uninterrupted);
+        let rows_restarted = all_object_version_by_checkpoint_rows(&schema_restarted);
+        assert_eq!(rows_uninterrupted, rows_restarted);
+    }
+
+    /// Hot object across batches: an object superseded in every checkpoint
+    /// over >= 3 batches keeps exactly its latest anchor each time.
+    #[test]
+    fn prune_history_cohort_hot_object_across_batches() {
+        let (_dir, db, schema) = fresh_db();
+
+        let mut builder = TestCheckpointBuilder::new(0)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        let cp0 = Arc::new(builder.build_checkpoint());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .finish_transaction();
+        let cp1 = Arc::new(builder.build_checkpoint());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 2)
+            .finish_transaction();
+        let cp2 = Arc::new(builder.build_checkpoint());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 3)
+            .finish_transaction();
+        let cp3 = Arc::new(builder.build_checkpoint());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 4)
+            .finish_transaction();
+        let cp4 = Arc::new(builder.build_checkpoint());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 5)
+            .finish_transaction();
+        let cp5 = Arc::new(builder.build_checkpoint());
+
+        let hot_obj = TestCheckpointBuilder::derive_object_id(0);
+        let ver = |n: u64| sui_types::base_types::SequenceNumber::from_u64(n);
+
+        let mut batch = db.batch();
+        for (checkpoint, version) in [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)] {
+            let (k, v) = object_version_by_checkpoint::store(hot_obj, checkpoint, ver(version));
+            batch
+                .put(&schema.object_version_by_checkpoint, &k, &v)
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        let mut cursors = RetractionCursors::default();
+
+        // Batch 1: prune through checkpoint 1 (new floor 2)
+        let effects_b1 = vec![
+            (0u64, cp0.transactions[0].effects.clone()),
+            (1u64, cp1.transactions[0].effects.clone()),
+        ];
+        prune_history_cohort(&db, &schema, 1, 0, &effects_b1, &mut cursors).unwrap();
+        assert_eq!(cursors.lower_bound(&hot_obj), 1);
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(hot_obj, 0).unwrap(),
+            None
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(hot_obj, 1).unwrap(),
+            Some(ver(2))
+        );
+
+        // Batch 2: prune through checkpoint 3 (new floor 4)
+        let effects_b2 = vec![
+            (2u64, cp2.transactions[0].effects.clone()),
+            (3u64, cp3.transactions[0].effects.clone()),
+        ];
+        prune_history_cohort(&db, &schema, 3, 0, &effects_b2, &mut cursors).unwrap();
+        assert_eq!(cursors.lower_bound(&hot_obj), 3);
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(hot_obj, 0).unwrap(),
+            None
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(hot_obj, 1).unwrap(),
+            None
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(hot_obj, 2).unwrap(),
+            None
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(hot_obj, 3).unwrap(),
+            Some(ver(4))
+        );
+
+        // Batch 3: prune through checkpoint 5 (new floor 6)
+        let effects_b3 = vec![
+            (4u64, cp4.transactions[0].effects.clone()),
+            (5u64, cp5.transactions[0].effects.clone()),
+        ];
+        prune_history_cohort(&db, &schema, 5, 0, &effects_b3, &mut cursors).unwrap();
+        assert_eq!(cursors.lower_bound(&hot_obj), 5);
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(hot_obj, 3).unwrap(),
+            None
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(hot_obj, 4).unwrap(),
+            None
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(hot_obj, 6).unwrap(),
+            Some(ver(6))
+        );
+    }
+
+    /// Eviction fallback: with a tiny capacity forcing eviction on each entry,
+    /// pruning results remain correct and identical to default capacity.
+    #[test]
+    fn prune_history_cohort_eviction_fallback() {
+        let (_dir_tiny, db_tiny, schema_tiny) = fresh_db();
+        let (_dir_default, db_default, schema_default) = fresh_db();
+
+        let ver = |n: u64| sui_types::base_types::SequenceNumber::from_u64(n);
+        let num_objects = 10;
+        let mut effects_all = Vec::new();
+
+        for cp in 0..4u64 {
+            let mut builder = TestCheckpointBuilder::new(cp);
+            for obj_idx in 0..num_objects {
+                builder = builder
+                    .start_transaction(0)
+                    .create_owned_object(obj_idx)
+                    .finish_transaction();
+            }
+            let built = builder.build_checkpoint();
+            for tx in &built.transactions {
+                effects_all.push((cp, tx.effects.clone()));
+            }
+        }
+
+        for (db, schema) in [(&db_tiny, &schema_tiny), (&db_default, &schema_default)] {
+            let mut batch = db.batch();
+            for obj_idx in 0..num_objects {
+                let id = TestCheckpointBuilder::derive_object_id(obj_idx);
+                for cp in 0..4u64 {
+                    let (k, v) = object_version_by_checkpoint::store(id, cp, ver(cp + 1));
+                    batch
+                        .put(&schema.object_version_by_checkpoint, &k, &v)
+                        .unwrap();
+                }
+            }
+            batch.commit().unwrap();
+        }
+
+        // Run with capacity 1 (evicting on almost every write)
+        let mut tiny_cursors = RetractionCursors::with_capacity(1);
+        prune_history_cohort(
+            &db_tiny,
+            &schema_tiny,
+            1,
+            0,
+            &effects_all[0..10],
+            &mut tiny_cursors,
+        )
+        .unwrap();
+        prune_history_cohort(
+            &db_tiny,
+            &schema_tiny,
+            3,
+            0,
+            &effects_all[10..],
+            &mut tiny_cursors,
+        )
+        .unwrap();
+
+        // Run with default capacity
+        let mut default_cursors = RetractionCursors::default();
+        prune_history_cohort(
+            &db_default,
+            &schema_default,
+            1,
+            0,
+            &effects_all[0..10],
+            &mut default_cursors,
+        )
+        .unwrap();
+        prune_history_cohort(
+            &db_default,
+            &schema_default,
+            3,
+            0,
+            &effects_all[10..],
+            &mut default_cursors,
+        )
+        .unwrap();
+
+        let rows_tiny = all_object_version_by_checkpoint_rows(&schema_tiny);
+        let rows_default = all_object_version_by_checkpoint_rows(&schema_default);
+        assert_eq!(rows_tiny, rows_default);
+        assert_eq!(tiny_cursors.len(), 1);
+    }
+
+    /// `removed` at or below cursor: an object removed at a checkpoint where
+    /// the cursor is already at or above the removal checkpoint deletes the
+    /// tombstone without resurrecting old rows or erroring.
+    #[test]
+    fn prune_history_cohort_removed_at_or_below_cursor() {
+        let (_dir, db, schema) = fresh_db();
+
+        let mut builder = TestCheckpointBuilder::new(0)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        let _cp0 = Arc::new(builder.build_checkpoint());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .finish_transaction()
+            .start_transaction(0)
+            .delete_object(0)
+            .finish_transaction();
+        let cp1 = Arc::new(builder.build_checkpoint());
+
+        let obj0 = TestCheckpointBuilder::derive_object_id(0);
+        let ver = |n: u64| sui_types::base_types::SequenceNumber::from_u64(n);
+
+        let mut batch = db.batch();
+        let (k0, v0) = object_version_by_checkpoint::store(obj0, 0, ver(1));
+        let (k1, v1) = object_version_by_checkpoint::store(obj0, 1, ver(2));
+        batch
+            .put(&schema.object_version_by_checkpoint, &k0, &v0)
+            .unwrap();
+        batch
+            .put(&schema.object_version_by_checkpoint, &k1, &v1)
+            .unwrap();
+        batch.commit().unwrap();
+
+        let mut cursors = RetractionCursors::default();
+
+        // Step 1: Supersession in cp1 retracts cp0 and sets cursor to 1.
+        let effects_supersede: Vec<(u64, TransactionEffects)> =
+            vec![(1u64, cp1.transactions[0].effects.clone())];
+        prune_history_cohort(&db, &schema, 0, 0, &effects_supersede, &mut cursors).unwrap();
+        assert_eq!(cursors.lower_bound(&obj0), 1);
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 0).unwrap(),
+            None
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 1).unwrap(),
+            Some(ver(2))
+        );
+
+        // Step 2: Removal at cp1 where cursor is already 1 (cursor >= cp).
+        let effects_remove: Vec<(u64, TransactionEffects)> =
+            vec![(1u64, cp1.transactions[1].effects.clone())];
+        prune_history_cohort(&db, &schema, 1, 0, &effects_remove, &mut cursors).unwrap();
+        assert_eq!(cursors.lower_bound(&obj0), 1);
+
+        // The tombstone at cp1 is deleted, no resurrecting rows below cp1.
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 0).unwrap(),
+            None
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 1).unwrap(),
+            None
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 2).unwrap(),
+            None
+        );
+
+        // Step 3: Idempotent re-run with cursor >= cp is a clean no-op without error.
+        prune_history_cohort(&db, &schema, 1, 0, &effects_remove, &mut cursors).unwrap();
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 0).unwrap(),
+            None
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 1).unwrap(),
+            None
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 2).unwrap(),
+            None
+        );
+    }
+
+    /// Standalone `prune_chunk` path coverage: verifies cursor advance,
+    /// differential consistency, and simulated restart across multiple chunks.
+    #[tokio::test]
+    async fn prune_chunk_standalone_retraction_cursors_and_restart() {
+        use crate::indexer::object_version_by_checkpoint::ObjectVersionByCheckpoint;
+
+        let (_dir1, db1, schema1) = fresh_db();
+        let (_dir2, db2, schema2) = fresh_db();
+        let (_dir3, db3, schema3) = fresh_db();
+
+        let mut builder = TestCheckpointBuilder::new(0)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .create_owned_object(1)
+            .finish_transaction();
+        let cp0 = Arc::new(builder.build_checkpoint());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .transfer_object(1, 2)
+            .finish_transaction();
+        let cp1 = Arc::new(builder.build_checkpoint());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 2)
+            .delete_object(1)
+            .finish_transaction();
+        let cp2 = Arc::new(builder.build_checkpoint());
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 3)
+            .finish_transaction();
+        let cp3 = Arc::new(builder.build_checkpoint());
+
+        let checkpoints = [&cp0, &cp1, &cp2, &cp3];
+
+        for (db, schema) in [(&db1, &schema1), (&db2, &schema2), (&db3, &schema3)] {
+            for cp in &checkpoints {
+                seed(db, schema, cp).await;
+                let mut batch = db.batch();
+                for row in ObjectVersionByCheckpoint::default()
+                    .process(cp)
+                    .await
+                    .unwrap()
+                {
+                    let crate::indexer::object_version_by_checkpoint::Row::Change {
+                        id,
+                        checkpoint,
+                        version,
+                    } = row
+                    else {
+                        continue;
+                    };
+                    let (k, v) = object_version_by_checkpoint::store(id, checkpoint, version);
+                    batch
+                        .put(&schema.object_version_by_checkpoint, &k, &v)
+                        .unwrap();
+                }
+                batch.commit().unwrap();
+            }
+        }
+
+        let metrics = PrunerMetrics::new(None, &Registry::new());
+
+        // Run 1: Continuous cursors across chunks
+        let mut cursors1 = RetractionCursors::default();
+        let w1 = prune_chunk(
+            &db1,
+            &schema1,
+            Watermarks::default(),
+            2,
+            &metrics,
+            &mut cursors1,
+        )
+        .unwrap();
+        prune_chunk(&db1, &schema1, w1, 4, &metrics, &mut cursors1).unwrap();
+
+        // Run 2: Fresh cursors per chunk
+        let w2 = prune_chunk(
+            &db2,
+            &schema2,
+            Watermarks::default(),
+            2,
+            &metrics,
+            &mut RetractionCursors::default(),
+        )
+        .unwrap();
+        prune_chunk(
+            &db2,
+            &schema2,
+            w2,
+            4,
+            &metrics,
+            &mut RetractionCursors::default(),
+        )
+        .unwrap();
+
+        // Run 3: Simulated restart between chunks
+        let mut cursors3 = RetractionCursors::default();
+        let w3 = prune_chunk(
+            &db3,
+            &schema3,
+            Watermarks::default(),
+            2,
+            &metrics,
+            &mut cursors3,
+        )
+        .unwrap();
+        cursors3 = RetractionCursors::default();
+        prune_chunk(&db3, &schema3, w3, 4, &metrics, &mut cursors3).unwrap();
+
+        let rows1 = all_object_version_by_checkpoint_rows(&schema1);
+        let rows2 = all_object_version_by_checkpoint_rows(&schema2);
+        let rows3 = all_object_version_by_checkpoint_rows(&schema3);
+
+        assert_eq!(rows1, rows2);
+        assert_eq!(rows1, rows3);
+        assert!(!rows1.is_empty());
     }
 }
