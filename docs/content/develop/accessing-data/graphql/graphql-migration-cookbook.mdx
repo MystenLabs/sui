@@ -180,9 +180,9 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
 ```graphql
 query {
   multiGetObjects(keys: [
-    { objectId: "0xOBJECT_A" },
-    { objectId: "0xOBJECT_B" },
-    { objectId: "0xOBJECT_C" }
+    { address: "0xOBJECT_A" },
+    { address: "0xOBJECT_B" },
+    { address: "0xOBJECT_C" }
   ]) {
     address
     asMoveObject {
