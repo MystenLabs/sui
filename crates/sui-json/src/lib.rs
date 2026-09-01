@@ -622,7 +622,7 @@ pub fn primitive_type(
         | SignatureToken::I64
         | SignatureToken::I128
         | SignatureToken::I256 => {
-            todo!("[signed-ints] signed integer primitive layouts in sui-json")
+            todo!("(signed-ints) signed integer primitive layouts in sui-json")
         }
     })
 }

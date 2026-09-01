@@ -1761,7 +1761,7 @@ fn make_arena_type_impl(
             | SignatureToken::I64
             | SignatureToken::I128
             | SignatureToken::I256 => {
-                todo!("[signed-ints] signed integer types in the VM runtime")
+                todo!("(signed-ints) signed integer types in the VM runtime")
             }
         };
         Ok(res)

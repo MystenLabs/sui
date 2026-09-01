@@ -214,7 +214,7 @@ fn bytecode(code: &FF::Bytecode) -> PartialVMResult<ast::Bytecode> {
         | FF::Bytecode::CastI128
         | FF::Bytecode::CastI256
         | FF::Bytecode::Neg => {
-            todo!("[signed-ints] signed integer bytecodes in the VM runtime")
+            todo!("(signed-ints) signed integer bytecodes in the VM runtime")
         }
 
         // Deprecated bytecodes -- bail
