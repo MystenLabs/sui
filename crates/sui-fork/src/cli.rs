@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Context;
 use anyhow::Result;
 use clap::CommandFactory;
 use clap::FromArgMatches;
@@ -11,14 +10,15 @@ use reqwest::Url;
 use serde::Serialize;
 use tracing::info;
 
+use sui_futures::service::Error as ServiceError;
+
 use crate::AdvanceCheckpointRequest;
 use crate::AdvanceClockRequest;
 use crate::DEFAULT_RPC_ADDR;
+use crate::ForkNode;
 use crate::ForkingServiceClient;
 use crate::GetStatusRequest;
 use crate::StartArgs;
-use crate::seed::SeedInput;
-use crate::startup::ForkParts;
 
 #[derive(Parser)]
 #[command(name = "sui-fork", about = "Fork and interact with a Sui network")]
@@ -137,54 +137,25 @@ fn print_output<T: Serialize + std::fmt::Display>(value: &T, json_output: bool) 
 }
 
 async fn cmd_start(args: StartArgs, json_output: bool) -> Result<()> {
-    let StartArgs {
-        network: node,
-        checkpoint,
-        data_dir,
-        addresses,
-        object_ids,
-        rpc_addr,
-        version,
-    } = args;
-    let seed_input = SeedInput {
-        addresses: addresses.into_iter().collect(),
-        object_ids: object_ids.into_iter().collect(),
-    };
-    let listener = crate::startup::bind(rpc_addr).await?;
-    let rpc_addr = listener
-        .local_addr()
-        .context("failed to read the fork RPC server's bound address")?;
-    let network_name = node.network_name();
-
-    let ForkParts {
-        context,
-        subscription_handle,
-        indexer_service,
-        resumed,
-        ..
-    } = crate::startup::initialize(node, checkpoint, version, data_dir, seed_input).await?;
-    let status = context.status().await;
+    let network = args.network.network_name();
+    let fork = ForkNode::start(args).await?;
+    let status = fork.status().await;
 
     let output = StartOutput {
-        network: network_name,
+        network,
         checkpoint: status.forked_at_checkpoint,
-        rpc_addr: rpc_addr.to_string(),
+        rpc_addr: fork.rpc_address().to_string(),
         current_checkpoint: status.checkpoint_sequence_number,
-        resuming: resumed,
+        resuming: fork.resumed(),
     };
     print_output(&output, json_output);
     info!("{output}");
 
-    let handle = tokio::spawn(crate::startup::run_with_listener(
-        context,
-        subscription_handle,
-        indexer_service,
-        listener,
-        version,
-    ));
-    handle.await??;
-
-    Ok(())
+    info!("forked network running, waiting for shutdown signal (Ctrl+C)");
+    match fork.into_service().main().await {
+        Ok(()) | Err(ServiceError::Terminated) => Ok(()),
+        Err(error) => Err(error.into()),
+    }
 }
 
 async fn cmd_advance_clock(
