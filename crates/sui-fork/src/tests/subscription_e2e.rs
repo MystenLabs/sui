@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! End-to-end tests for the checkpoint subscription gRPC. They spin up the full tonic stack
-//! (forking admin RPCs plus the canonical sui-rpc-api streaming RPC), drive checkpoint-producing
-//! admin calls, and assert subscribers see each checkpoint on the stream.
+//! End-to-end tests for `ForkNode`. They serve a synthetic fork over the full tonic stack (forking
+//! admin RPCs plus the canonical sui-rpc-api streaming RPC), drive it in-process and over gRPC,
+//! and assert on what subscribers and later opens of the data directory observe.
 
 use std::collections::BTreeMap;
-use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
@@ -18,31 +17,34 @@ use rand::rngs::OsRng;
 use simulacrum::Simulacrum;
 use simulacrum::SimulatorStore;
 use simulacrum::store::in_mem_store::KeyStore;
-use sui_futures::service::Service;
 use sui_rpc_api::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
 use sui_rpc_api::proto::sui::rpc::v2::subscription_service_client::SubscriptionServiceClient;
 use sui_rpc_api::subscription::SubscriptionService;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::ObjectID;
+use sui_types::digests::ChainIdentifier;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 
 use crate::AdvanceCheckpointRequest;
 use crate::AdvanceClockRequest;
+use crate::ForkNode;
 use crate::ForkingServiceClient;
 use crate::GetStatusRequest;
 use crate::context::Context;
 use crate::services::ServiceManager;
 use crate::startup;
+use crate::startup::ForkParts;
 use crate::store::ForkStore;
 
-/// In-process gRPC harness that serves a synthetic fork on an ephemeral port.
+/// In-process harness that serves a synthetic fork on an ephemeral port.
 struct ServerHarness {
-    rpc_service: Service,
-    indexer_service: Service,
-    rpc_addr: SocketAddr,
+    node: ForkNode,
     grpc_endpoint: String,
+    forked_at_checkpoint: CheckpointSequenceNumber,
+    chain_identifier: ChainIdentifier,
     // Held to keep the metadata and RPC store directory alive for the server lifetime.
-    _temp: tempfile::TempDir,
+    temp: tempfile::TempDir,
     // Held so remote object probes keep resolving to "not found".
     _gql_server: wiremock::MockServer,
 }
@@ -59,7 +61,7 @@ impl ServerHarness {
         let genesis_checkpoint = config.genesis.checkpoint();
         let genesis_contents = config.genesis.checkpoint_contents().clone();
         let forked_at_checkpoint = genesis_checkpoint.data().sequence_number;
-        let chain_identifier = (*genesis_checkpoint.digest()).into();
+        let chain_identifier: ChainIdentifier = (*genesis_checkpoint.digest()).into();
         let mut services = ServiceManager::open(
             temp.path(),
             "localnet".to_owned(),
@@ -105,43 +107,119 @@ impl ServerHarness {
             .start_indexer(simulacrum.clone(), checkpoint_sender, &registry)
             .await
             .expect("indexer service should start");
-        let context = Arc::new(Context::new(simulacrum, services));
+        let context = Context::new(simulacrum, services);
         let listener = startup::bind("127.0.0.1:0".parse()?).await?;
-        let (rpc_addr, rpc_service) =
-            startup::serve(context, subscription_handle, listener, "test").await?;
+        let node = ForkNode::from_parts(
+            ForkParts {
+                context,
+                subscription_handle,
+                indexer_service,
+                data_dir: temp.path().to_path_buf(),
+                resumed: false,
+            },
+            listener,
+            "test",
+        )
+        .await?;
+        let grpc_endpoint = format!("http://{}", node.rpc_address());
 
         Ok(Self {
-            rpc_service,
-            indexer_service,
-            rpc_addr,
-            grpc_endpoint: format!("http://{rpc_addr}"),
-            _temp: temp,
+            node,
+            grpc_endpoint,
+            forked_at_checkpoint,
+            chain_identifier,
+            temp,
             _gql_server: gql_server,
         })
-    }
-
-    async fn shutdown(self) -> Result<()> {
-        let rpc_shutdown = self.rpc_service.shutdown().await;
-        let indexer_shutdown = self.indexer_service.shutdown().await;
-        rpc_shutdown?;
-        indexer_shutdown?;
-        Ok(())
     }
 }
 
 const STREAM_RECV_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[tokio::test]
-async fn ephemeral_port_is_bound_and_shutdown_stops_rpc_server() -> Result<()> {
+async fn stop_stops_rpc_server() -> Result<()> {
     let harness = ServerHarness::start().await?;
     let grpc_endpoint = harness.grpc_endpoint.clone();
 
-    assert_ne!(harness.rpc_addr.port(), 0);
+    assert_ne!(harness.node.rpc_address().port(), 0);
     ForkingServiceClient::connect(grpc_endpoint.clone()).await?;
 
-    harness.shutdown().await?;
+    harness.node.stop().await?;
 
     assert!(ForkingServiceClient::connect(grpc_endpoint).await.is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn into_service_shutdown_stops_rpc_server() -> Result<()> {
+    let harness = ServerHarness::start().await?;
+    let grpc_endpoint = harness.grpc_endpoint.clone();
+    let service = harness.node.into_service();
+    ForkingServiceClient::connect(grpc_endpoint.clone()).await?;
+
+    service.shutdown().await?;
+
+    assert!(ForkingServiceClient::connect(grpc_endpoint).await.is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn in_process_administration_matches_grpc_status() -> Result<()> {
+    let harness = ServerHarness::start().await?;
+    let before = harness.node.status().await;
+
+    let clock = harness
+        .node
+        .advance_clock(Duration::from_millis(1_000))
+        .await;
+    let sealed = harness.node.advance_checkpoint().await;
+
+    assert_eq!(clock.timestamp_ms, before.timestamp_ms + 1_000);
+    assert_eq!(
+        sealed.checkpoint_sequence_number,
+        before.checkpoint_sequence_number + 2
+    );
+    assert_eq!(sealed.timestamp_ms, clock.timestamp_ms);
+
+    let mut forking = ForkingServiceClient::connect(harness.grpc_endpoint.clone()).await?;
+    let status = forking.get_status(GetStatusRequest {}).await?.into_inner();
+    assert_eq!(status, harness.node.status().await);
+    assert_eq!(
+        status.checkpoint_sequence_number,
+        sealed.checkpoint_sequence_number
+    );
+    assert_eq!(status.timestamp_ms, clock.timestamp_ms);
+    Ok(())
+}
+
+/// A stopped node must release its rpc-store, because resuming the same directory reopens it.
+#[tokio::test]
+async fn stop_releases_the_data_directory_for_resume() -> Result<()> {
+    let harness = ServerHarness::start().await?;
+    let sealed = harness.node.advance_checkpoint().await;
+    let ServerHarness {
+        node,
+        forked_at_checkpoint,
+        chain_identifier,
+        temp,
+        _gql_server,
+        ..
+    } = harness;
+
+    node.stop().await?;
+
+    let services = ServiceManager::open(
+        temp.path(),
+        "localnet".to_owned(),
+        forked_at_checkpoint,
+        chain_identifier,
+    )?;
+    let store = ForkStore::new_for_testing(temp.path().to_path_buf(), services.local_store());
+    let base = startup::resume_base_checkpoint(&store)?;
+    assert_eq!(
+        base.data().sequence_number,
+        sealed.checkpoint_sequence_number
+    );
     Ok(())
 }
 
