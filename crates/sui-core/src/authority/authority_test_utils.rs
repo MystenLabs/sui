@@ -130,20 +130,18 @@ pub async fn submit_and_execute(
     authority: &AuthorityState,
     transaction: Transaction,
 ) -> Result<(VerifiedExecutableTransaction, SignedTransactionEffects), SuiError> {
-    submit_and_execute_with_options(authority, None, transaction, false).await
+    submit_and_execute_with_options(authority, None, transaction).await
 }
 
 /// Options:
 /// - `fullnode`: Optionally sync and execute on a fullnode as well
-/// - `with_shared`: Whether the transaction involves shared objects (triggers version assignment)
 pub async fn submit_and_execute_with_options(
     authority: &AuthorityState,
     fullnode: Option<&AuthorityState>,
     transaction: Transaction,
-    with_shared: bool,
 ) -> Result<(VerifiedExecutableTransaction, SignedTransactionEffects), SuiError> {
     let (exec, effects, _) =
-        submit_and_execute_with_error(authority, fullnode, transaction, with_shared).await?;
+        submit_and_execute_with_error(authority, fullnode, transaction).await?;
     Ok((exec, effects))
 }
 
@@ -152,7 +150,6 @@ pub async fn submit_and_execute_with_error(
     authority: &AuthorityState,
     fullnode: Option<&AuthorityState>,
     transaction: Transaction,
-    with_shared: bool,
 ) -> Result<
     (
         VerifiedExecutableTransaction,
@@ -170,22 +167,20 @@ pub async fn submit_and_execute_with_error(
     let executable =
         VerifiedExecutableTransaction::new_from_consensus(verified_tx, epoch_store.epoch());
 
-    // Assign shared object versions if needed
-    let assigned_versions = if with_shared {
-        let versions = authority
-            .epoch_store_for_testing()
-            .assign_shared_object_versions_for_tests(
-                authority.get_object_cache_reader().as_ref(),
-                std::slice::from_ref(&executable.clone()),
-            )?;
-        versions
-            .into_map()
-            .get(&executable.key())
-            .cloned()
-            .unwrap_or_default()
-    } else {
-        AssignedVersions::default()
-    };
+    // This also assigns the accumulator root's version when accumulators are enabled, even if
+    // the transaction has no shared inputs. So we should always call this, whether or not there
+    // are shared objects present in the transaction.
+    let versions = authority
+        .epoch_store_for_testing()
+        .assign_shared_object_versions_for_tests(
+            authority.get_object_cache_reader().as_ref(),
+            std::slice::from_ref(&executable.clone()),
+        )?;
+    let assigned_versions = versions
+        .into_map()
+        .get(&executable.key())
+        .cloned()
+        .unwrap_or_default();
 
     // State accumulator for validation
     let state_acc =
