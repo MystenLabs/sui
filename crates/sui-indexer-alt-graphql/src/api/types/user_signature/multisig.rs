@@ -51,19 +51,11 @@ pub(crate) enum MultisigMemberPublicKey {
     Secp256r1(Secp256r1PublicKey),
     Passkey(PasskeyPublicKey),
     ZkLogin(ZkLoginPublicIdentifier),
-    MlDsa65(MlDsa65PublicKey),
 }
 
 /// An Ed25519 public key.
 #[derive(SimpleObject, Clone)]
 pub(crate) struct Ed25519PublicKey {
-    /// The raw public key bytes.
-    bytes: Option<Base64>,
-}
-
-/// An ML-DSA-65 public key.
-#[derive(SimpleObject, Clone)]
-pub(crate) struct MlDsa65PublicKey {
     /// The raw public key bytes.
     bytes: Option<Base64>,
 }
@@ -175,9 +167,6 @@ impl From<&PublicKey> for MultisigMemberPublicKey {
             PublicKey::Passkey(_) => MultisigMemberPublicKey::Passkey(PasskeyPublicKey {
                 bytes: Some(Base64(pk.as_ref().to_vec())),
             }),
-            PublicKey::MLDSA65(_) => MultisigMemberPublicKey::MlDsa65(MlDsa65PublicKey {
-                bytes: Some(Base64(pk.as_ref().to_vec())),
-            }),
             PublicKey::ZkLogin(z) => {
                 // Convert through sui_sdk_types for clean field extraction.
                 MultisigMemberPublicKey::ZkLogin(
@@ -188,6 +177,11 @@ impl From<&PublicKey> for MultisigMemberPublicKey {
                         })
                         .unwrap_or_default(),
                 )
+            }
+            PublicKey::MLDSA65(_) => {
+                // ML-DSA-65 members are rejected by new()/validate() until
+                // dedicated RPC/GraphQL support lands.
+                unreachable!("ML-DSA-65 multisig members are rejected at parse")
             }
         }
     }
