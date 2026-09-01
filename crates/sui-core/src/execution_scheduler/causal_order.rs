@@ -35,6 +35,7 @@ use std::{
     },
 };
 
+use mysten_common::assert_sometimes;
 use tokio::sync::Notify;
 
 /// Shared state between the ExecutionScheduler (index assignment) and the execution
@@ -64,14 +65,21 @@ struct AdmissionInner {
 
 impl CausalAdmission {
     /// Default sizing: execution parallelism K at half the CPUs, leaving the rest for
-    /// consensus, networking and checkpointing. Under msim K is fixed: host CPU count
-    /// must not influence simulation behavior, and the sim's blocking pool (default 32
-    /// threads, shared with other spawn_blocking users) must accommodate K + 1.
+    /// consensus, networking and checkpointing. In test configurations the limit is
+    /// randomized instead - both because the host's CPU count must not influence
+    /// simulation behavior, and to explore admission interleavings, including small
+    /// limits that force transactions through the causal-next lane. (The sim's
+    /// blocking pool, default 32 threads shared with other spawn_blocking users, must
+    /// accommodate the largest randomized K + 1.)
     pub fn new_with_default_sizing() -> Arc<Self> {
-        #[cfg(msim)]
-        return Self::new(4);
-        #[cfg(not(msim))]
-        Self::new(std::cmp::max(1, num_cpus::get() / 2))
+        let concurrency_limit = if mysten_common::in_test_configuration() {
+            use rand::Rng;
+            mysten_common::random::get_rng().gen_range(1..=8)
+        } else {
+            std::cmp::max(1, num_cpus::get() / 2)
+        };
+        tracing::info!("execution concurrency limit: {concurrency_limit}");
+        Self::new(concurrency_limit)
     }
 
     pub fn new(concurrency_limit: usize) -> Arc<Self> {
@@ -126,6 +134,7 @@ impl CausalAdmission {
         } else {
             return None;
         };
+        assert_sometimes!(is_next, "admitted via the causal-next lane over the limit");
         inner.in_flight += 1;
         Some(InFlightSlot {
             admission: self.clone(),
