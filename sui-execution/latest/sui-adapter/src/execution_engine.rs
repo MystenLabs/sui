@@ -259,7 +259,7 @@ pub(crate) mod checked {
             protocol_config,
             *epoch_id,
             system_object_versions,
-            Some((&transaction_kind, &gas_data, transaction_signer)),
+            (&transaction_kind, &gas_data, transaction_signer),
         );
 
         if bump_only_enabled(protocol_config.gas_model_version()) {
@@ -520,19 +520,12 @@ pub(crate) mod checked {
         metrics: Arc<ExecutionMetrics>,
         move_vm: &Arc<MoveRuntime>,
         tx_context: Rc<RefCell<TxContext>>,
-        input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
-        let input_objects = input_objects.into_inner();
-        let mut temporary_store = TemporaryStore::new(
+        let mut temporary_store = TemporaryStore::new_for_genesis_state_update(
             store,
-            input_objects,
-            vec![],
             tx_context.borrow().digest(),
             protocol_config,
-            0,
-            BTreeMap::new(),
-            None,
         );
         let mut gas_charger =
             GasCharger::new_unmetered(tx_context.borrow().digest(), protocol_config);

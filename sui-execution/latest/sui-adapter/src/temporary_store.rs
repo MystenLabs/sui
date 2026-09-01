@@ -61,16 +61,8 @@ struct PostExecutionCheckInputs {
 }
 
 impl PostExecutionCheckInputs {
-    fn new(
-        transaction: Option<(&TransactionKind, &GasData, SuiAddress)>,
-        enable_gasless: bool,
-    ) -> Self {
-        let Some((transaction_kind, gas_data, transaction_signer)) = transaction else {
-            return Self {
-                is_genesis: true,
-                ..Default::default()
-            };
-        };
+    fn new(transaction: (&TransactionKind, &GasData, SuiAddress), enable_gasless: bool) -> Self {
+        let (transaction_kind, gas_data, transaction_signer) = transaction;
         Self {
             input_reservations: compute_input_reservations(
                 transaction_kind,
@@ -145,10 +137,49 @@ impl<'backing> TemporaryStore<'backing> {
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
         _system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
-        transaction: Option<(&TransactionKind, &GasData, SuiAddress)>,
+        transaction: (&TransactionKind, &GasData, SuiAddress),
     ) -> Self {
         let post_execution_check_inputs =
             PostExecutionCheckInputs::new(transaction, protocol_config.enable_gasless());
+        Self::new_with_input_objects(
+            store,
+            input_objects,
+            receiving_objects,
+            tx_digest,
+            protocol_config,
+            cur_epoch,
+            post_execution_check_inputs,
+        )
+    }
+
+    pub(crate) fn new_for_genesis_state_update(
+        store: &'backing dyn BackingStore,
+        tx_digest: TransactionDigest,
+        protocol_config: &'backing ProtocolConfig,
+    ) -> Self {
+        Self::new_with_input_objects(
+            store,
+            InputObjects::new(vec![]),
+            vec![],
+            tx_digest,
+            protocol_config,
+            0,
+            PostExecutionCheckInputs {
+                is_genesis: true,
+                ..Default::default()
+            },
+        )
+    }
+
+    fn new_with_input_objects(
+        store: &'backing dyn BackingStore,
+        input_objects: InputObjects,
+        receiving_objects: Vec<ObjectRef>,
+        tx_digest: TransactionDigest,
+        protocol_config: &'backing ProtocolConfig,
+        cur_epoch: EpochId,
+        post_execution_check_inputs: PostExecutionCheckInputs,
+    ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
 

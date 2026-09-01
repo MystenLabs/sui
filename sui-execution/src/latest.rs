@@ -275,6 +275,7 @@ impl executor::Executor for Executor {
         input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
+        debug_assert!(input_objects.inner().is_empty());
         let tx_context = TxContext::new_from_components(
             &SuiAddress::default(),
             transaction_digest,
@@ -288,15 +289,7 @@ impl executor::Executor for Executor {
             protocol_config,
         );
         let tx_context = Rc::new(RefCell::new(tx_context));
-        execute_genesis_state_update(
-            store,
-            protocol_config,
-            metrics,
-            &self.0,
-            tx_context,
-            input_objects,
-            pt,
-        )
+        execute_genesis_state_update(store, protocol_config, metrics, &self.0, tx_context, pt)
     }
 
     fn type_layout_resolver<'r, 'vm: 'r, 'store: 'r>(
