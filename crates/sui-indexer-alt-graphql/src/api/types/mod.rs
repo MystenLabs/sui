@@ -17,6 +17,7 @@ pub(crate) mod execution_result;
 pub(crate) mod gas;
 pub(crate) mod gas_effects;
 pub(crate) mod gas_input;
+pub(crate) mod gated_object;
 mod linkage;
 pub(crate) mod lookups;
 pub(crate) mod move_datatype;
