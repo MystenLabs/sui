@@ -466,10 +466,8 @@ fn serializer_rejects_signed_signature_token_below_version_8() {
     );
 }
 
-/// Serializes `base` and `variant` (which must differ in exactly one byte — the byte of
-/// interest) at `VERSION_MAX`, then overwrites that byte in `base`'s blob with `patch`.
-/// This lets the tests plant byte tags (signed type tags / signed opcodes) that the
-/// serializer itself refuses to emit below `SIGNED_INT_VERSION`.
+/// Serialize `base` and `variant` at `VERSION_MAX`, then overwrite the one byte they differ in.
+/// This is for tests to plant byte tags that the serializer refuses.
 fn serialize_and_patch_single_byte(
     base: &CompiledModule,
     variant: &CompiledModule,

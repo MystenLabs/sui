@@ -1127,8 +1127,10 @@ impl BytecodeGen {
         1 => any::<Box<U256>>().prop_map(Bytecode::LdU256),
         ];
         if VERSION_MAX >= SIGNED_INT_VERSION {
+            // Weight 15 matches the total weight of `unsigned`, so every load instruction is
+            // equally likely and `just_bytecode_strategy` keeps its 9-to-1 edge over loads.
             prop_oneof![
-            9 => unsigned,
+            15 => unsigned,
             1 => any::<i8>().prop_map(Bytecode::LdI8),
             1 => any::<i16>().prop_map(Bytecode::LdI16),
             1 => any::<i32>().prop_map(Bytecode::LdI32),

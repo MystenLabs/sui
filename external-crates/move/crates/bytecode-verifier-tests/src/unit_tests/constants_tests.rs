@@ -236,9 +236,9 @@ fn invalid_types() {
     invalid_type(SignatureToken::Signer, vec![0]);
     invalid_type(tvec(SignatureToken::Signer), vec![0]);
 
-    // `is_valid_for_constant` returns false for signed integers, so they fail the type check
-    // (INVALID_CONSTANT_TYPE) even with well-formed data. These should pass once signed
-    // integers are enabled.
+    // TODO (signed-ints): `is_valid_for_constant` rejects signed integers, so these fail with
+    // INVALID_CONSTANT_TYPE even with well-formed data. Move them to the valid cases once signed
+    // constants are enabled.
     invalid_type(SignatureToken::I8, vec![0]);
     invalid_type(SignatureToken::I16, vec![0; 2]);
     invalid_type(SignatureToken::I32, vec![0; 4]);
