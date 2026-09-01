@@ -49,7 +49,6 @@ use crate::authority::consensus_tx_status_cache::{
 use crate::checkpoints::CheckpointStore;
 use crate::consensus_handler::{SequencedConsensusTransactionKey, classify, tx_type_label};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
-use crate::staggered_submission::StaggeredSubmission;
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -246,9 +245,6 @@ pub struct ConsensusAdapter {
     /// Used by the admission queue drainer to wake up and submit more
     /// transactions.
     inflight_slot_freed_notify: Arc<Notify>,
-    /// Delays submission of transactions without allowed proposers when duplication is
-    /// detected on the network. Inactive by default.
-    staggered_submission: StaggeredSubmission,
 }
 
 impl ConsensusAdapter {
@@ -272,12 +268,7 @@ impl ConsensusAdapter {
             metrics,
             submit_semaphore: Arc::new(Semaphore::new(max_pending_local_submissions)),
             inflight_slot_freed_notify,
-            staggered_submission: StaggeredSubmission::new(),
         }
-    }
-
-    pub fn staggered_submission(&self) -> &StaggeredSubmission {
-        &self.staggered_submission
     }
 
     /// Get the current number of in-flight transactions
@@ -569,10 +560,11 @@ impl ConsensusAdapter {
             let stagger_delay = if is_soft_bundle {
                 None
             } else {
-                transactions[0]
-                    .kind
-                    .as_user_transaction()
-                    .and_then(|tx| self.staggered_submission.submission_delay(tx, epoch_store))
+                transactions[0].kind.as_user_transaction().and_then(|tx| {
+                    epoch_store
+                        .staggered_submission()
+                        .submission_delay(tx, epoch_store)
+                })
             };
 
             // Submit the transaction to consensus, racing against the processed waiter in
