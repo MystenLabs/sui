@@ -88,6 +88,7 @@ impl StaggeredSubmission {
         self.active.store(active, Ordering::Relaxed);
     }
 
+    #[cfg(test)]
     pub fn set_params_for_testing(&self, params: StaggerParams) {
         *self.params.write() = params;
     }
@@ -356,13 +357,13 @@ mod adapter_tests {
         }
     }
 
-    const COMMITTEE_SIZE: u32 = 4;
+    pub(super) const COMMITTEE_SIZE: u32 = 4;
 
     /// A 4-validator state, plus gas objects ground so that this validator's derived rank
     /// for a transaction paying with `staggered_gas` is past slot 0 (i.e. the transaction
     /// is held when staggering is active, since a reference-price transaction has exactly
     /// one immediate slot), while a transaction paying with `immediate_gas` is not.
-    async fn setup() -> (
+    pub(super) async fn setup() -> (
         Arc<AuthorityState>,
         SuiAddress,
         AccountKeyPair,
@@ -440,14 +441,14 @@ mod adapter_tests {
         let adapter = make_consensus_adapter_with_client_for_test(&state, client.clone(), 100);
 
         const STEP: Duration = Duration::from_millis(1000);
-        adapter
-            .staggered_submission()
-            .set_params_for_testing(StaggerParams {
-                step: STEP,
-                max_delay: Duration::from_secs(10),
-                free_slots: 1,
-            });
-        adapter.staggered_submission().set_active(true);
+        let epoch_store = state.epoch_store_for_testing();
+        let staggered = epoch_store.staggered_submission();
+        staggered.set_params_for_testing(StaggerParams {
+            step: STEP,
+            max_delay: Duration::from_secs(10),
+            free_slots: 1,
+        });
+        staggered.set_active(true);
 
         // Rank 0 for its gas object: submits immediately even while staggering is active.
         let tx = test_user_transaction(&state, sender, &keypair, immediate_gas, vec![]).await;
@@ -468,7 +469,7 @@ mod adapter_tests {
         // Inactive: the same held rank submits immediately. A new gas coin was created by
         // the previous transfer, so reuse of the original gas object is fine: the previous
         // transaction is already processed, but this one has a fresh digest.
-        adapter.staggered_submission().set_active(false);
+        staggered.set_active(false);
         let gas = state.get_object(&staggered_gas.id()).unwrap();
         let tx = test_user_transaction(&state, sender, &keypair, gas, vec![]).await;
         let elapsed = submit_and_wait(&adapter, &state, tx).await;
@@ -491,14 +492,13 @@ mod adapter_tests {
         let adapter = make_consensus_adapter_with_client_for_test(&state, client.clone(), 100);
 
         // A hold long enough that the test can only pass by cancellation.
-        adapter
-            .staggered_submission()
-            .set_params_for_testing(StaggerParams {
-                step: Duration::from_secs(60),
-                max_delay: Duration::from_secs(60),
-                free_slots: 1,
-            });
-        adapter.staggered_submission().set_active(true);
+        let staggered = epoch_store.staggered_submission();
+        staggered.set_params_for_testing(StaggerParams {
+            step: Duration::from_secs(60),
+            max_delay: Duration::from_secs(60),
+            free_slots: 1,
+        });
+        staggered.set_active(true);
 
         let tx = test_user_transaction(&state, sender, &keypair, staggered_gas, vec![]).await;
         let consensus_tx =
@@ -524,5 +524,233 @@ mod adapter_tests {
             client.submit_times.lock().is_empty(),
             "held submission should have been dropped, not submitted"
         );
+    }
+}
+
+/// Staggering through the pull-based transaction pool: entries are held inside the pool
+/// and skipped by `take()` until eligible, rather than delayed before submission.
+#[cfg(test)]
+mod pool_tests {
+    use std::sync::Arc;
+
+    use consensus_config::AuthorityIndex;
+    use consensus_core::TransactionPool as _;
+    use consensus_types::block::{BlockDigest, BlockRef};
+    use sui_protocol_config::ProtocolConfig;
+    use sui_types::messages_consensus::ConsensusTransaction;
+    use sui_types::object::Object;
+
+    use super::adapter_tests::setup;
+    use super::*;
+    use crate::admission_queue::AdmissionQueueMetrics;
+    use crate::authority::AuthorityState;
+    use crate::consensus_adapter::consensus_tests::test_user_transaction;
+    use crate::consensus_handler::SequencedConsensusTransaction;
+    use crate::consensus_transaction_pool::ConsensusTransactionPool;
+
+    fn pool_for(state: &Arc<AuthorityState>) -> Arc<ConsensusTransactionPool> {
+        Arc::new(ConsensusTransactionPool::new_for_tests(
+            state.epoch_store_for_testing().clone(),
+            10,
+            Arc::new(AdmissionQueueMetrics::new_for_tests()),
+        ))
+    }
+
+    async fn insert(
+        pool: &ConsensusTransactionPool,
+        state: &Arc<AuthorityState>,
+        sender: sui_types::base_types::SuiAddress,
+        keypair: &sui_types::crypto::AccountKeyPair,
+        gas: Object,
+    ) -> (
+        crate::consensus_transaction_pool::PositionReceiver,
+        ConsensusTransaction,
+    ) {
+        let tx = test_user_transaction(state, sender, keypair, gas, vec![]).await;
+        let consensus_tx =
+            ConsensusTransaction::new_user_transaction_v2_message(&state.name, tx.into());
+        let (receiver, newly_inserted) = pool
+            .try_insert(pool.epoch(), 1, vec![consensus_tx.clone()])
+            .unwrap();
+        assert!(newly_inserted);
+        (receiver, consensus_tx)
+    }
+
+    #[tokio::test]
+    async fn staggered_entry_held_until_eligible() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
+            c.set_allowed_proposers_for_testing(true);
+            c
+        });
+        let (state, sender, keypair, staggered_gas, _) = setup().await;
+        let epoch_store = state.epoch_store_for_testing();
+        let pool = pool_for(&state);
+
+        let staggered = epoch_store.staggered_submission();
+        staggered.set_params_for_testing(StaggerParams {
+            step: Duration::from_millis(250),
+            max_delay: Duration::from_millis(500),
+            free_slots: 1,
+        });
+        staggered.set_active(true);
+
+        let (_receiver, _) = insert(&pool, &state, sender, &keypair, staggered_gas).await;
+
+        // Held: not proposed, but still queued (occupying pool capacity).
+        let (transactions, ack, _) = pool.take(10, usize::MAX);
+        assert!(transactions.is_empty(), "held entry was proposed");
+        drop(ack);
+        assert_eq!(pool.queue_depth("user"), 1);
+
+        // Past the (capped) delay the entry is proposed as usual.
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        let (transactions, ack, _) = pool.take(10, usize::MAX);
+        assert_eq!(transactions.len(), 1, "eligible entry was not proposed");
+        // The dropped ack requeues the entry; close() resolves it before the pool drops.
+        drop(ack);
+        pool.close();
+    }
+
+    #[tokio::test]
+    async fn immediate_rank_and_inactive_not_held() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
+            c.set_allowed_proposers_for_testing(true);
+            c
+        });
+        let (state, sender, keypair, staggered_gas, immediate_gas) = setup().await;
+        let epoch_store = state.epoch_store_for_testing();
+        let pool = pool_for(&state);
+
+        let staggered = epoch_store.staggered_submission();
+        staggered.set_params_for_testing(StaggerParams {
+            step: Duration::from_secs(60),
+            max_delay: Duration::from_secs(60),
+            free_slots: 1,
+        });
+        staggered.set_active(true);
+
+        // Rank 0 for its gas object: proposed on the next take while staggering is active.
+        let (_receiver, _) = insert(&pool, &state, sender, &keypair, immediate_gas).await;
+        let (transactions, ack, _) = pool.take(10, usize::MAX);
+        assert_eq!(transactions.len(), 1, "immediate slot was held");
+        ack(BlockRef::new(
+            1,
+            AuthorityIndex::new_for_test(0),
+            BlockDigest::MIN,
+        ));
+
+        // Inactive: a rank that would be held is proposed immediately.
+        staggered.set_active(false);
+        let (_receiver, _) = insert(&pool, &state, sender, &keypair, staggered_gas).await;
+        let (transactions, ack, _) = pool.take(10, usize::MAX);
+        assert_eq!(transactions.len(), 1, "inactive staggering held an entry");
+        // The dropped ack requeues the entry; close() resolves it before the pool drops.
+        drop(ack);
+        pool.close();
+    }
+
+    #[tokio::test]
+    async fn held_entry_resolved_when_copy_processed() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
+            c.set_allowed_proposers_for_testing(true);
+            c
+        });
+        let (state, sender, keypair, staggered_gas, _) = setup().await;
+        let epoch_store = state.epoch_store_for_testing();
+        let pool = pool_for(&state);
+
+        // A hold long enough that the entry can only leave the pool by resolution.
+        let staggered = epoch_store.staggered_submission();
+        staggered.set_params_for_testing(StaggerParams {
+            step: Duration::from_secs(60),
+            max_delay: Duration::from_secs(60),
+            free_slots: 1,
+        });
+        staggered.set_active(true);
+
+        let (receiver, consensus_tx) = insert(&pool, &state, sender, &keypair, staggered_gas).await;
+        let (transactions, ack, _) = pool.take(10, usize::MAX);
+        assert!(transactions.is_empty(), "held entry was proposed");
+        drop(ack);
+
+        // While the entry is held, another validator's copy is processed. The next
+        // take resolves it without proposing it or waiting out the hold.
+        let key = SequencedConsensusTransaction::new_test(consensus_tx).key();
+        epoch_store.process_notifications(std::iter::once(&key));
+        let (transactions, ack, _) = pool.take(10, usize::MAX);
+        assert!(transactions.is_empty(), "processed entry was proposed");
+        drop(ack);
+        assert_eq!(pool.queue_depth("user"), 0);
+        assert!(
+            receiver.await.unwrap().is_err(),
+            "held entry should resolve as already processed"
+        );
+    }
+
+    #[tokio::test]
+    async fn disarming_releases_held_entries() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
+            c.set_allowed_proposers_for_testing(true);
+            c
+        });
+        let (state, sender, keypair, staggered_gas, _) = setup().await;
+        let epoch_store = state.epoch_store_for_testing();
+        let pool = pool_for(&state);
+
+        let staggered = epoch_store.staggered_submission();
+        staggered.set_params_for_testing(StaggerParams {
+            step: Duration::from_secs(60),
+            max_delay: Duration::from_secs(60),
+            free_slots: 1,
+        });
+        staggered.set_active(true);
+
+        let (_receiver, _) = insert(&pool, &state, sender, &keypair, staggered_gas).await;
+        let (transactions, ack, _) = pool.take(10, usize::MAX);
+        assert!(transactions.is_empty(), "held entry was proposed");
+        drop(ack);
+
+        // Disarming releases entries stamped while the mode was armed, without
+        // waiting out their remaining delay.
+        staggered.set_active(false);
+        let (transactions, ack, _) = pool.take(10, usize::MAX);
+        assert_eq!(transactions.len(), 1, "disarming did not release the entry");
+        drop(ack);
+        pool.close();
+    }
+
+    #[tokio::test]
+    async fn soft_bundle_not_held() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
+            c.set_allowed_proposers_for_testing(true);
+            c
+        });
+        let (state, sender, keypair, staggered_gas, immediate_gas) = setup().await;
+        let epoch_store = state.epoch_store_for_testing();
+        let pool = pool_for(&state);
+
+        let staggered = epoch_store.staggered_submission();
+        staggered.set_params_for_testing(StaggerParams {
+            step: Duration::from_secs(60),
+            max_delay: Duration::from_secs(60),
+            free_slots: 1,
+        });
+        staggered.set_active(true);
+
+        // A soft bundle containing a transaction that would be held on its own is
+        // exempt from staggering and proposed on the next take.
+        let tx_a = test_user_transaction(&state, sender, &keypair, staggered_gas, vec![]).await;
+        let tx_b = test_user_transaction(&state, sender, &keypair, immediate_gas, vec![]).await;
+        let bundle = vec![
+            ConsensusTransaction::new_user_transaction_v2_message(&state.name, tx_a.into()),
+            ConsensusTransaction::new_user_transaction_v2_message(&state.name, tx_b.into()),
+        ];
+        let (_receiver, newly_inserted) = pool.try_insert(pool.epoch(), 1, bundle).unwrap();
+        assert!(newly_inserted);
+        let (transactions, ack, _) = pool.take(10, usize::MAX);
+        assert_eq!(transactions.len(), 2, "soft bundle was held");
+        // The dropped ack requeues the bundle; close() resolves it before the pool drops.
+        drop(ack);
+        pool.close();
     }
 }
