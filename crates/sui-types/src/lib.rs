@@ -264,6 +264,10 @@ pub fn is_primitive(
     use SignatureToken as S;
     match s {
         S::Bool | S::U8 | S::U16 | S::U32 | S::U64 | S::U128 | S::U256 | S::Address => true,
+        // TODO [signed-ints]: fail closed until the signed value/BCS layer lands: signed
+        // entry params must not be treated as primitive pure-arg-eligible before then. Flip
+        // deliberately in the enablement PR.
+        S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => false,
         S::Signer => false,
         // optimistic, but no primitive has key
         S::TypeParameter(idx) => !function_type_args[*idx as usize].has_key(),
@@ -325,6 +329,12 @@ fn is_object_struct(
         | S::U64
         | S::U128
         | S::U256
+        | S::I8
+        | S::I16
+        | S::I32
+        | S::I64
+        | S::I128
+        | S::I256
         | S::Address
         | S::Signer
         | S::Vector(_)
@@ -347,6 +357,32 @@ fn is_object_struct(
 mod tests {
     use super::*;
     use expect_test::expect;
+
+    // Signed integer types must fail closed in `is_primitive` until the signed value/BCS layer
+    // lands: the entry-points verifier uses this predicate to decide pure-arg eligibility, so a
+    // `true` here would pre-commit Sui to accepting signed pure PTB args. A full e2e publish
+    // test is impossible while the protocol rejects VERSION_8 modules, so we pin the predicate
+    // directly on hand-constructed signature tokens (the same values the verifier passes).
+    #[test]
+    fn test_signed_integers_are_not_primitive() {
+        use move_binary_format::file_format::{SignatureToken as S, empty_module};
+
+        let module = empty_module();
+        for token in [S::I8, S::I16, S::I32, S::I64, S::I128, S::I256] {
+            assert!(
+                !is_primitive(&module, &[], &token),
+                "{token:?} must not be primitive until signed values land"
+            );
+            assert!(
+                !is_primitive(&module, &[], &S::Vector(Box::new(token.clone()))),
+                "vector<{token:?}> must not be primitive until signed values land"
+            );
+        }
+        // Sanity: the unsigned twins remain primitive.
+        for token in [S::U8, S::U16, S::U32, S::U64, S::U128, S::U256, S::Bool] {
+            assert!(is_primitive(&module, &[], &token), "{token:?}");
+        }
+    }
 
     #[test]
     fn test_parse_sui_numeric_address() {

@@ -15,7 +15,8 @@ use crate::{
         VariantInstantiationHandleIndex, VariantJumpTable, VariantJumpTableIndex, Visibility,
     },
     file_format_common::{
-        VARIANT_HANDLE_INDEX_MAX, VARIANT_INSTANTIATION_HANDLE_INDEX_MAX, VARIANT_TAG_MAX_VALUE,
+        SIGNED_INT_VERSION, VARIANT_HANDLE_INDEX_MAX, VARIANT_INSTANTIATION_HANDLE_INDEX_MAX,
+        VARIANT_TAG_MAX_VALUE, VERSION_MAX,
     },
     internals::ModuleIndex,
     proptest_types::{
@@ -1094,8 +1095,8 @@ impl BytecodeGen {
     fn check_signature_token(token: &SignatureToken) -> bool {
         use SignatureToken::*;
         match token {
-            U8 | U16 | U32 | U64 | U128 | U256 | Bool | Address | Signer | Datatype(_)
-            | TypeParameter(_) => true,
+            U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16 | I32 | I64 | I128 | I256 | Bool
+            | Address | Signer | Datatype(_) | TypeParameter(_) => true,
             Vector(element_token) => BytecodeGen::check_signature_token(element_token),
             DatatypeInstantiation(inst) => {
                 let (_, type_arguments) = &**inst;
@@ -1115,7 +1116,7 @@ impl BytecodeGen {
     }
 
     fn simple_bytecode_strategy() -> impl Strategy<Value = Bytecode> {
-        prop_oneof![
+        let unsigned = prop_oneof![
         // The numbers are relative weights, somewhat arbitrarily picked.
         9 => Self::just_bytecode_strategy(),
         1 => any::<u64>().prop_map(Bytecode::LdU64),
@@ -1124,7 +1125,23 @@ impl BytecodeGen {
         1 => any::<u16>().prop_map(Bytecode::LdU16),
         1 => any::<u32>().prop_map(Bytecode::LdU32),
         1 => any::<Box<U256>>().prop_map(Bytecode::LdU256),
-        ]
+        ];
+        // Default strategies must only generate bytecodes serializable at `VERSION_MAX`,
+        // so signed loads join once `VERSION_MAX` reaches `SIGNED_INT_VERSION`.
+        if VERSION_MAX >= SIGNED_INT_VERSION {
+            prop_oneof![
+            9 => unsigned,
+            1 => any::<i8>().prop_map(Bytecode::LdI8),
+            1 => any::<i16>().prop_map(Bytecode::LdI16),
+            1 => any::<i32>().prop_map(Bytecode::LdI32),
+            1 => any::<i64>().prop_map(Bytecode::LdI64),
+            1 => any::<Box<i128>>().prop_map(Bytecode::LdI128),
+            1 => any::<Box<move_core_types::i256::I256>>().prop_map(Bytecode::LdI256),
+            ]
+            .boxed()
+        } else {
+            unsigned.boxed()
+        }
     }
 
     fn just_bytecode_strategy() -> impl Strategy<Value = Bytecode> {
@@ -1135,6 +1152,16 @@ impl BytecodeGen {
             BitOr, BitAnd, Xor, Or, And, Eq, Neq, Lt, Gt, Le, Ge, Abort, CastU8, CastU64, CastU128,
             CastU16, CastU32, CastU256, Not, Nop, Shl, Shr,
         ];
-        select(JUST_BYTECODES)
+        static JUST_BYTECODES_SIGNED: &[Bytecode] = &[
+            FreezeRef, Pop, Ret, LdTrue, LdFalse, ReadRef, WriteRef, Add, Sub, Mul, Mod, Div,
+            BitOr, BitAnd, Xor, Or, And, Eq, Neq, Lt, Gt, Le, Ge, Abort, CastU8, CastU64, CastU128,
+            CastU16, CastU32, CastU256, CastI8, CastI16, CastI32, CastI64, CastI128, CastI256, Neg,
+            Not, Nop, Shl, Shr,
+        ];
+        if VERSION_MAX >= SIGNED_INT_VERSION {
+            select(JUST_BYTECODES_SIGNED)
+        } else {
+            select(JUST_BYTECODES)
+        }
     }
 }

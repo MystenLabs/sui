@@ -12,14 +12,15 @@ use crate::{
     state_stack_bin_op, state_stack_function_call, state_stack_function_inst_call,
     state_stack_function_inst_popn, state_stack_function_popn, state_stack_has,
     state_stack_has_ability, state_stack_has_integer, state_stack_has_polymorphic_eq,
-    state_stack_has_reference, state_stack_has_struct, state_stack_has_struct_inst,
-    state_stack_is_castable, state_stack_local_polymorphic_eq, state_stack_pop, state_stack_push,
-    state_stack_push_register, state_stack_push_register_borrow, state_stack_ref_polymorphic_eq,
-    state_stack_satisfies_function_inst_signature, state_stack_satisfies_function_signature,
-    state_stack_satisfies_struct_signature, state_stack_struct_borrow_field,
-    state_stack_struct_borrow_field_inst, state_stack_struct_has_field,
-    state_stack_struct_has_field_inst, state_stack_struct_inst_popn, state_stack_struct_popn,
-    state_stack_unpack_struct, state_stack_unpack_struct_inst, struct_instantiation_for_state,
+    state_stack_has_reference, state_stack_has_signed_integer, state_stack_has_struct,
+    state_stack_has_struct_inst, state_stack_is_castable, state_stack_local_polymorphic_eq,
+    state_stack_pop, state_stack_push, state_stack_push_register, state_stack_push_register_borrow,
+    state_stack_ref_polymorphic_eq, state_stack_satisfies_function_inst_signature,
+    state_stack_satisfies_function_signature, state_stack_satisfies_struct_signature,
+    state_stack_struct_borrow_field, state_stack_struct_borrow_field_inst,
+    state_stack_struct_has_field, state_stack_struct_has_field_inst, state_stack_struct_inst_popn,
+    state_stack_struct_popn, state_stack_unpack_struct, state_stack_unpack_struct_inst,
+    struct_instantiation_for_state,
     transitions::*,
     unpack_instantiation_for_state, with_ty_param,
 };
@@ -152,6 +153,90 @@ pub fn instruction_summary(instruction: Bytecode, exact: bool) -> Summary {
                 state_stack_pop!(),
                 state_stack_push!(AbstractValue::new_primitive(SignatureToken::U256)),
             ]),
+        },
+        Bytecode::LdI8(_) => Summary {
+            preconditions: vec![],
+            effects: Effects::NoTyParams(vec![state_stack_push!(AbstractValue::new_primitive(
+                SignatureToken::I8
+            ))]),
+        },
+        Bytecode::LdI16(_) => Summary {
+            preconditions: vec![],
+            effects: Effects::NoTyParams(vec![state_stack_push!(AbstractValue::new_primitive(
+                SignatureToken::I16
+            ))]),
+        },
+        Bytecode::LdI32(_) => Summary {
+            preconditions: vec![],
+            effects: Effects::NoTyParams(vec![state_stack_push!(AbstractValue::new_primitive(
+                SignatureToken::I32
+            ))]),
+        },
+        Bytecode::LdI64(_) => Summary {
+            preconditions: vec![],
+            effects: Effects::NoTyParams(vec![state_stack_push!(AbstractValue::new_primitive(
+                SignatureToken::I64
+            ))]),
+        },
+        Bytecode::LdI128(_) => Summary {
+            preconditions: vec![],
+            effects: Effects::NoTyParams(vec![state_stack_push!(AbstractValue::new_primitive(
+                SignatureToken::I128
+            ))]),
+        },
+        Bytecode::LdI256(_) => Summary {
+            preconditions: vec![],
+            effects: Effects::NoTyParams(vec![state_stack_push!(AbstractValue::new_primitive(
+                SignatureToken::I256
+            ))]),
+        },
+        Bytecode::CastI8 => Summary {
+            preconditions: vec![state_stack_is_castable!(SignatureToken::I8)],
+            effects: Effects::NoTyParams(vec![
+                state_stack_pop!(),
+                state_stack_push!(AbstractValue::new_primitive(SignatureToken::I8)),
+            ]),
+        },
+        Bytecode::CastI16 => Summary {
+            preconditions: vec![state_stack_is_castable!(SignatureToken::I16)],
+            effects: Effects::NoTyParams(vec![
+                state_stack_pop!(),
+                state_stack_push!(AbstractValue::new_primitive(SignatureToken::I16)),
+            ]),
+        },
+        Bytecode::CastI32 => Summary {
+            preconditions: vec![state_stack_is_castable!(SignatureToken::I32)],
+            effects: Effects::NoTyParams(vec![
+                state_stack_pop!(),
+                state_stack_push!(AbstractValue::new_primitive(SignatureToken::I32)),
+            ]),
+        },
+        Bytecode::CastI64 => Summary {
+            preconditions: vec![state_stack_is_castable!(SignatureToken::I64)],
+            effects: Effects::NoTyParams(vec![
+                state_stack_pop!(),
+                state_stack_push!(AbstractValue::new_primitive(SignatureToken::I64)),
+            ]),
+        },
+        Bytecode::CastI128 => Summary {
+            preconditions: vec![state_stack_is_castable!(SignatureToken::I128)],
+            effects: Effects::NoTyParams(vec![
+                state_stack_pop!(),
+                state_stack_push!(AbstractValue::new_primitive(SignatureToken::I128)),
+            ]),
+        },
+        Bytecode::CastI256 => Summary {
+            preconditions: vec![state_stack_is_castable!(SignatureToken::I256)],
+            effects: Effects::NoTyParams(vec![
+                state_stack_pop!(),
+                state_stack_push!(AbstractValue::new_primitive(SignatureToken::I256)),
+            ]),
+        },
+        Bytecode::Neg => Summary {
+            // Mirrors the verifier rule: `Neg` requires a signed integer on top of the stack
+            // and is type-preserving.
+            preconditions: vec![state_stack_has_signed_integer!(0)],
+            effects: Effects::NoTyParams(vec![state_stack_pop!(), state_stack_push_register!()]),
         },
         // TODO actual constant generation
         Bytecode::LdConst(_) => Summary {

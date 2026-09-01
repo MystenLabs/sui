@@ -1046,6 +1046,18 @@ pub enum SignatureToken {
     U32,
     /// Unsigned integers, 256 bits length.
     U256,
+    /// Signed integers, 8 bits length.
+    I8,
+    /// Signed integers, 16 bits length.
+    I16,
+    /// Signed integers, 32 bits length.
+    I32,
+    /// Signed integers, 64 bits length.
+    I64,
+    /// Signed integers, 128 bits length.
+    I128,
+    /// Signed integers, 256 bits length.
+    I256,
 }
 
 /// An iterator to help traverse the `SignatureToken` in a non-recursive fashion to avoid
@@ -1074,8 +1086,8 @@ impl<'a> Iterator for SignatureTokenPreorderTraversalIter<'a> {
                         self.stack.extend(inner_toks.iter().rev())
                     }
 
-                    Signer | Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | Datatype(_)
-                    | TypeParameter(_) => (),
+                    Signer | Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16
+                    | I32 | I64 | I128 | I256 | Datatype(_) | TypeParameter(_) => (),
                 }
                 Some(tok)
             }
@@ -1109,8 +1121,8 @@ impl<'a> Iterator for SignatureTokenPreorderTraversalIterWithDepth<'a> {
                             .extend(inner_toks.iter().map(|tok| (tok, depth + 1)).rev())
                     }
 
-                    Signer | Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | Datatype(_)
-                    | TypeParameter(_) => (),
+                    Signer | Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16
+                    | I32 | I64 | I128 | I256 | Datatype(_) | TypeParameter(_) => (),
                 }
                 Some((tok, depth))
             }
@@ -1128,18 +1140,43 @@ impl Arbitrary for SignatureToken {
     fn arbitrary_with(_params: Self::Parameters) -> Self::Strategy {
         use SignatureToken::*;
 
-        let leaf = prop_oneof![
-            Just(Bool),
-            Just(U8),
-            Just(U16),
-            Just(U32),
-            Just(U64),
-            Just(U128),
-            Just(U256),
-            Just(Address),
-            any::<DatatypeHandleIndex>().prop_map(Datatype),
-            any::<TypeParameterIndex>().prop_map(TypeParameter),
-        ];
+        // Default strategies must only generate tokens serializable at `VERSION_MAX`,
+        // so signed tokens join once `VERSION_MAX` reaches `SIGNED_INT_VERSION`.
+        let leaf = if file_format_common::VERSION_MAX >= file_format_common::SIGNED_INT_VERSION {
+            prop_oneof![
+                Just(Bool),
+                Just(U8),
+                Just(U16),
+                Just(U32),
+                Just(U64),
+                Just(U128),
+                Just(U256),
+                Just(I8),
+                Just(I16),
+                Just(I32),
+                Just(I64),
+                Just(I128),
+                Just(I256),
+                Just(Address),
+                any::<DatatypeHandleIndex>().prop_map(Datatype),
+                any::<TypeParameterIndex>().prop_map(TypeParameter),
+            ]
+            .boxed()
+        } else {
+            prop_oneof![
+                Just(Bool),
+                Just(U8),
+                Just(U16),
+                Just(U32),
+                Just(U64),
+                Just(U128),
+                Just(U256),
+                Just(Address),
+                any::<DatatypeHandleIndex>().prop_map(Datatype),
+                any::<TypeParameterIndex>().prop_map(TypeParameter),
+            ]
+            .boxed()
+        };
         leaf.prop_recursive(
             8,  // levels deep
             16, // max size
@@ -1166,6 +1203,12 @@ impl std::fmt::Debug for SignatureToken {
             SignatureToken::U64 => write!(f, "U64"),
             SignatureToken::U128 => write!(f, "U128"),
             SignatureToken::U256 => write!(f, "U256"),
+            SignatureToken::I8 => write!(f, "I8"),
+            SignatureToken::I16 => write!(f, "I16"),
+            SignatureToken::I32 => write!(f, "I32"),
+            SignatureToken::I64 => write!(f, "I64"),
+            SignatureToken::I128 => write!(f, "I128"),
+            SignatureToken::I256 => write!(f, "I256"),
             SignatureToken::Address => write!(f, "Address"),
             SignatureToken::Signer => write!(f, "Signer"),
             SignatureToken::Vector(boxed) => write!(f, "Vector({:?})", boxed),
@@ -1186,7 +1229,7 @@ impl SignatureToken {
     pub fn is_integer(&self) -> bool {
         use SignatureToken::*;
         match self {
-            U8 | U16 | U32 | U64 | U128 | U256 => true,
+            U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16 | I32 | I64 | I128 | I256 => true,
             Bool
             | Address
             | Signer
@@ -1197,6 +1240,12 @@ impl SignatureToken {
             | MutableReference(_)
             | TypeParameter(_) => false,
         }
+    }
+
+    /// Returns true if the `SignatureToken` is a signed integer type.
+    pub fn is_signed_integer(&self) -> bool {
+        use SignatureToken::*;
+        matches!(self, I8 | I16 | I32 | I64 | I128 | I256)
     }
 
     /// Returns true if the `SignatureToken` is any kind of reference (mutable and immutable).
@@ -1227,6 +1276,11 @@ impl SignatureToken {
 
         match self {
             Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address => true,
+            // Signed integer constants are not yet supported: this must agree with
+            // `constant::sig_to_ty` (and the VM's constant deserialization), which currently
+            // reject signed types. #26274 flips these sites together when signed constants
+            // become real.
+            I8 | I16 | I32 | I64 | I128 | I256 => false,
             Vector(inner) => inner.is_valid_for_constant(),
             Signer
             | Datatype(_)
@@ -1277,6 +1331,16 @@ pub struct Constant {
     pub data: Vec<u8>,
 }
 
+/// Generates any `Bytecode` serializable at `VERSION_MAX`: signed instructions join
+/// once `VERSION_MAX` reaches `SIGNED_INT_VERSION`.
+#[cfg(any(test, feature = "fuzzing"))]
+fn version_max_bytecode_strategy() -> impl Strategy<Value = Bytecode> {
+    any::<Bytecode>().prop_filter("signed bytecodes need SIGNED_INT_VERSION", |op| {
+        file_format_common::VERSION_MAX >= file_format_common::SIGNED_INT_VERSION
+            || !op.is_signed_integer_instruction()
+    })
+}
+
 /// A `CodeUnit` is the body of a function. It has the function header and the instruction stream.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
@@ -1289,7 +1353,7 @@ pub struct CodeUnit {
     /// Code stream, function body.
     #[cfg_attr(
         any(test, feature = "fuzzing"),
-        proptest(strategy = "vec(any::<Bytecode>(), 0..=params)")
+        proptest(strategy = "vec(version_max_bytecode_strategy(), 0..=params)")
     )]
     pub code: Vec<Bytecode>,
     #[cfg_attr(any(test, feature = "fuzzing"), proptest(value = "vec![]"))]
@@ -1790,6 +1854,86 @@ pub enum Bytecode {
     /// ```..., enum_value_ref -> ...```
     VariantSwitch(VariantJumpTableIndex),
 
+    /// Push an i8 constant onto the stack.
+    ///
+    /// Stack transition:
+    ///
+    /// ```... -> ..., i8_value```
+    LdI8(i8),
+    /// Push an i16 constant onto the stack.
+    ///
+    /// Stack transition:
+    ///
+    /// ```... -> ..., i16_value```
+    LdI16(i16),
+    /// Push an i32 constant onto the stack.
+    ///
+    /// Stack transition:
+    ///
+    /// ```... -> ..., i32_value```
+    LdI32(i32),
+    /// Push an i64 constant onto the stack.
+    ///
+    /// Stack transition:
+    ///
+    /// ```... -> ..., i64_value```
+    LdI64(i64),
+    /// Push an i128 constant onto the stack.
+    ///
+    /// Stack transition:
+    ///
+    /// ```... -> ..., i128_value```
+    LdI128(Box<i128>),
+    /// Push an i256 constant onto the stack.
+    ///
+    /// Stack transition:
+    ///
+    /// ```... -> ..., i256_value```
+    LdI256(Box<move_core_types::i256::I256>),
+    /// Convert the value at the top of the stack into i8.
+    ///
+    /// Stack transition:
+    ///
+    /// ```..., integer_value -> ..., i8_value```
+    CastI8,
+    /// Convert the value at the top of the stack into i16.
+    ///
+    /// Stack transition:
+    ///
+    /// ```..., integer_value -> ..., i16_value```
+    CastI16,
+    /// Convert the value at the top of the stack into i32.
+    ///
+    /// Stack transition:
+    ///
+    /// ```..., integer_value -> ..., i32_value```
+    CastI32,
+    /// Convert the value at the top of the stack into i64.
+    ///
+    /// Stack transition:
+    ///
+    /// ```..., integer_value -> ..., i64_value```
+    CastI64,
+    /// Convert the value at the top of the stack into i128.
+    ///
+    /// Stack transition:
+    ///
+    /// ```..., integer_value -> ..., i128_value```
+    CastI128,
+    /// Convert the value at the top of the stack into i256.
+    ///
+    /// Stack transition:
+    ///
+    /// ```..., integer_value -> ..., i256_value```
+    CastI256,
+    /// Negate the signed integer value at the top of the stack. Valid only on signed integer
+    /// types (i8..i256) and type-preserving: the result has the same type as the operand.
+    /// Aborts at runtime when the operand is the type's minimum value (`-MIN` overflows).
+    ///
+    /// Stack transition:
+    /// ```..., signed_integer_value -> ..., signed_integer_value```
+    Neg,
+
     // ******** DEPRECATED BYTECODES ********
     ExistsDeprecated(StructDefinitionIndex),
     ExistsGenericDeprecated(StructDefInstantiationIndex),
@@ -1909,6 +2053,19 @@ impl ::std::fmt::Debug for Bytecode {
                 write!(f, "UnpackVariantGenericMutRef({:?})", handle)
             }
             Bytecode::VariantSwitch(jt) => write!(f, "VariantSwitch({:?})", jt),
+            Bytecode::LdI8(a) => write!(f, "LdI8({})", a),
+            Bytecode::LdI16(a) => write!(f, "LdI16({})", a),
+            Bytecode::LdI32(a) => write!(f, "LdI32({})", a),
+            Bytecode::LdI64(a) => write!(f, "LdI64({})", a),
+            Bytecode::LdI128(a) => write!(f, "LdI128({})", a),
+            Bytecode::LdI256(a) => write!(f, "LdI256({})", a),
+            Bytecode::CastI8 => write!(f, "CastI8"),
+            Bytecode::CastI16 => write!(f, "CastI16"),
+            Bytecode::CastI32 => write!(f, "CastI32"),
+            Bytecode::CastI64 => write!(f, "CastI64"),
+            Bytecode::CastI128 => write!(f, "CastI128"),
+            Bytecode::CastI256 => write!(f, "CastI256"),
+            Bytecode::Neg => write!(f, "Neg"),
         }
     }
 }
@@ -1993,6 +2150,19 @@ impl Bytecode {
             | Bytecode::UnpackVariantGeneric(_)
             | Bytecode::UnpackVariantGenericImmRef(_)
             | Bytecode::UnpackVariantGenericMutRef(_)
+            | Bytecode::LdI8(_)
+            | Bytecode::LdI16(_)
+            | Bytecode::LdI32(_)
+            | Bytecode::LdI64(_)
+            | Bytecode::LdI128(_)
+            | Bytecode::LdI256(_)
+            | Bytecode::CastI8
+            | Bytecode::CastI16
+            | Bytecode::CastI32
+            | Bytecode::CastI64
+            | Bytecode::CastI128
+            | Bytecode::CastI256
+            | Bytecode::Neg
             | Bytecode::ExistsDeprecated(_)
             | Bytecode::ExistsGenericDeprecated(_)
             | Bytecode::MoveFromDeprecated(_)
@@ -2087,6 +2257,19 @@ impl Bytecode {
             | Bytecode::UnpackVariantGeneric(_)
             | Bytecode::UnpackVariantGenericImmRef(_)
             | Bytecode::UnpackVariantGenericMutRef(_)
+            | Bytecode::LdI8(_)
+            | Bytecode::LdI16(_)
+            | Bytecode::LdI32(_)
+            | Bytecode::LdI64(_)
+            | Bytecode::LdI128(_)
+            | Bytecode::LdI256(_)
+            | Bytecode::CastI8
+            | Bytecode::CastI16
+            | Bytecode::CastI32
+            | Bytecode::CastI64
+            | Bytecode::CastI128
+            | Bytecode::CastI256
+            | Bytecode::Neg
             | Bytecode::ExistsDeprecated(_)
             | Bytecode::ExistsGenericDeprecated(_)
             | Bytecode::MoveFromDeprecated(_)
@@ -2103,6 +2286,27 @@ impl Bytecode {
     /// Returns true if this bytecode instruction is either a conditional or an unconditional branch
     pub fn is_branch(&self) -> bool {
         self.is_conditional_branch() || self.is_unconditional_branch()
+    }
+
+    /// Returns true if this bytecode instruction operates on signed integers and therefore
+    /// requires bytecode version `SIGNED_INT_VERSION` or later.
+    pub fn is_signed_integer_instruction(&self) -> bool {
+        matches!(
+            self,
+            Bytecode::LdI8(_)
+                | Bytecode::LdI16(_)
+                | Bytecode::LdI32(_)
+                | Bytecode::LdI64(_)
+                | Bytecode::LdI128(_)
+                | Bytecode::LdI256(_)
+                | Bytecode::CastI8
+                | Bytecode::CastI16
+                | Bytecode::CastI32
+                | Bytecode::CastI64
+                | Bytecode::CastI128
+                | Bytecode::CastI256
+                | Bytecode::Neg
+        )
     }
 
     /// Returns the offset that this bytecode instruction branches to, if any.
@@ -2197,6 +2401,19 @@ impl Bytecode {
             | Bytecode::UnpackVariantGeneric(_)
             | Bytecode::UnpackVariantGenericImmRef(_)
             | Bytecode::UnpackVariantGenericMutRef(_)
+            | Bytecode::LdI8(_)
+            | Bytecode::LdI16(_)
+            | Bytecode::LdI32(_)
+            | Bytecode::LdI64(_)
+            | Bytecode::LdI128(_)
+            | Bytecode::LdI256(_)
+            | Bytecode::CastI8
+            | Bytecode::CastI16
+            | Bytecode::CastI32
+            | Bytecode::CastI64
+            | Bytecode::CastI128
+            | Bytecode::CastI256
+            | Bytecode::Neg
             | Bytecode::ExistsDeprecated(_)
             | Bytecode::ExistsGenericDeprecated(_)
             | Bytecode::MoveFromDeprecated(_)
@@ -2745,7 +2962,8 @@ impl CompiledModule {
         use SignatureToken::*;
 
         match ty {
-            Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address => Ok(AbilitySet::PRIMITIVES),
+            Bool | U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16 | I32 | I64 | I128 | I256
+            | Address => Ok(AbilitySet::PRIMITIVES),
 
             Reference(_) | MutableReference(_) => Ok(AbilitySet::REFERENCES),
             Signer => Ok(AbilitySet::SIGNER),
@@ -2788,6 +3006,52 @@ impl CompiledModule {
     pub fn self_id(&self) -> ModuleId {
         self.module_id_for_handle(self.self_handle())
     }
+}
+
+/// Returns true if the module uses signed integer types or instructions anywhere they can
+/// occur: signature tokens in the signature pool, constant types, struct/enum field definition
+/// types, or code-unit bytecodes. A module for which this returns true requires bytecode
+/// version `SIGNED_INT_VERSION` or later; as signed integers are enabled, version selection
+/// keys off this predicate to pick that version.
+pub fn module_uses_signed_integers(module: &CompiledModule) -> bool {
+    fn token_uses_signed_integers(token: &SignatureToken) -> bool {
+        token
+            .preorder_traversal()
+            .any(SignatureToken::is_signed_integer)
+    }
+
+    module
+        .signatures
+        .iter()
+        .any(|sig| sig.0.iter().any(token_uses_signed_integers))
+        || module
+            .constant_pool
+            .iter()
+            .any(|constant| token_uses_signed_integers(&constant.type_))
+        || module
+            .struct_defs
+            .iter()
+            .any(|struct_def| match &struct_def.field_information {
+                StructFieldInformation::Native => false,
+                StructFieldInformation::Declared(fields) => fields
+                    .iter()
+                    .any(|field| token_uses_signed_integers(&field.signature.0)),
+            })
+        || module.enum_defs.iter().any(|enum_def| {
+            enum_def.variants.iter().any(|variant| {
+                variant
+                    .fields
+                    .iter()
+                    .any(|field| token_uses_signed_integers(&field.signature.0))
+            })
+        })
+        || module.function_defs.iter().any(|function_def| {
+            function_def.code.as_ref().is_some_and(|code| {
+                code.code
+                    .iter()
+                    .any(Bytecode::is_signed_integer_instruction)
+            })
+        })
 }
 
 /// Return the simplest module that will pass the bounds checker

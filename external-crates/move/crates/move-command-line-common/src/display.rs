@@ -52,6 +52,16 @@ pub fn try_render_constant(constant: &Constant) -> RenderResult {
             .map(|x| x.to_string())
             .map_or(RenderResult::NotRendered, RenderResult::AsValue),
 
+        // Signed integer constants are not yet supported
+        // (`SignatureToken::is_valid_for_constant` returns false for them), so there is nothing
+        // to render. #26274 flips these sites together when signed constants become real.
+        SignatureToken::I8
+        | SignatureToken::I16
+        | SignatureToken::I32
+        | SignatureToken::I64
+        | SignatureToken::I128
+        | SignatureToken::I256 => RenderResult::NotRendered,
+
         SignatureToken::Signer
         | SignatureToken::Vector(_)
         | SignatureToken::Datatype(_)

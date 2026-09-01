@@ -396,6 +396,17 @@ impl ModuleCache {
                 let def_idx = self.resolve_struct_by_name(struct_name, &runtime_id)?.0;
                 Type::DatatypeInstantiation(Box::new((def_idx, type_parameters)))
             }
+            SignatureToken::I8
+            | SignatureToken::I16
+            | SignatureToken::I32
+            | SignatureToken::I64
+            | SignatureToken::I128
+            | SignatureToken::I256 => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("Unexpected signed int type in version 2".to_string()),
+                )
+            }
         };
         Ok(res)
     }

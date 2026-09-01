@@ -615,6 +615,15 @@ pub fn primitive_type(
         }
 
         SignatureToken::Signer => return None,
+
+        SignatureToken::I8
+        | SignatureToken::I16
+        | SignatureToken::I32
+        | SignatureToken::I64
+        | SignatureToken::I128
+        | SignatureToken::I256 => {
+            todo!("[signed-ints] signed integer primitive layouts in sui-json")
+        }
     })
 }
 

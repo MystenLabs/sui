@@ -611,9 +611,10 @@ impl<'a> BoundsChecker<'a> {
                 // bytecode gets added.
                 FreezeRef | Pop | Ret | LdU8(_) | LdU16(_) | LdU32(_) | LdU64(_) | LdU256(_)
                 | LdU128(_) | CastU8 | CastU16 | CastU32 | CastU64 | CastU128 | CastU256
-                | LdTrue | LdFalse | ReadRef | WriteRef | Add | Sub | Mul | Mod | Div | BitOr
-                | BitAnd | Xor | Shl | Shr | Or | And | Not | Eq | Neq | Lt | Gt | Le | Ge
-                | Abort | Nop => (),
+                | LdI8(_) | LdI16(_) | LdI32(_) | LdI64(_) | LdI128(_) | LdI256(_) | CastI8
+                | CastI16 | CastI32 | CastI64 | CastI128 | CastI256 | Neg | LdTrue | LdFalse
+                | ReadRef | WriteRef | Add | Sub | Mul | Mod | Div | BitOr | BitAnd | Xor | Shl
+                | Shr | Or | And | Not | Eq | Neq | Lt | Gt | Le | Ge | Abort | Nop => (),
                 PackVariant(v_handle)
                 | UnpackVariant(v_handle)
                 | UnpackVariantImmRef(v_handle)
@@ -696,8 +697,8 @@ impl<'a> BoundsChecker<'a> {
         let mut max_type_param = None;
         for ty in ty.preorder_traversal() {
             match ty {
-                Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer | Reference(_)
-                | MutableReference(_) | Vector(_) => (),
+                Bool | U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16 | I32 | I64 | I128 | I256
+                | Address | Signer | Reference(_) | MutableReference(_) | Vector(_) => (),
                 TypeParameter(idx) => max_type_param = max_type_param.max(Some(*idx)),
                 Datatype(idx) => {
                     check_bounds_impl(self.module.datatype_handles(), *idx)?;
@@ -791,6 +792,12 @@ impl<'a> BoundsChecker<'a> {
                 | U64
                 | U128
                 | U256
+                | I8
+                | I16
+                | I32
+                | I64
+                | I128
+                | I256
                 | Address
                 | Signer
                 | Datatype(_)

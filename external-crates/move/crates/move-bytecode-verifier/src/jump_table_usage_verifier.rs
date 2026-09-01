@@ -102,6 +102,19 @@ pub(crate) fn verify(
             | Bytecode::UnpackVariantGeneric(_)
             | Bytecode::UnpackVariantGenericImmRef(_)
             | Bytecode::UnpackVariantGenericMutRef(_)
+            | Bytecode::LdI8(_)
+            | Bytecode::LdI16(_)
+            | Bytecode::LdI32(_)
+            | Bytecode::LdI64(_)
+            | Bytecode::LdI128(_)
+            | Bytecode::LdI256(_)
+            | Bytecode::CastI8
+            | Bytecode::CastI16
+            | Bytecode::CastI32
+            | Bytecode::CastI64
+            | Bytecode::CastI128
+            | Bytecode::CastI256
+            | Bytecode::Neg
             | Bytecode::ExistsDeprecated(_)
             | Bytecode::ExistsGenericDeprecated(_)
             | Bytecode::MoveFromDeprecated(_)

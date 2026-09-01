@@ -90,7 +90,7 @@ impl<'a> InstantiationLoopChecker<'a> {
 
     fn verify_module_impl(module: &'a CompiledModule) -> PartialVMResult<()> {
         let mut checker = Self::new(module);
-        checker.build_graph();
+        checker.build_graph()?;
         let mut components = checker.find_non_trivial_components();
 
         match components.pop() {
@@ -135,30 +135,47 @@ impl<'a> InstantiationLoopChecker<'a> {
 
     /// Helper function that extracts type parameters from a given type.
     /// Duplicated entries are removed.
-    fn extract_type_parameters(&self, ty: &SignatureToken) -> HashSet<TypeParameterIndex> {
+    fn extract_type_parameters(
+        &self,
+        ty: &SignatureToken,
+    ) -> PartialVMResult<HashSet<TypeParameterIndex>> {
         use SignatureToken::*;
 
         let mut type_params = HashSet::new();
 
-        fn rec(type_params: &mut HashSet<TypeParameterIndex>, ty: &SignatureToken) {
+        fn rec(
+            type_params: &mut HashSet<TypeParameterIndex>,
+            ty: &SignatureToken,
+        ) -> PartialVMResult<()> {
             match ty {
                 Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | Signer | Datatype(_) => (),
+                // Signed integers are not supported in this execution version; fail closed
+                // instead of silently ignoring the token.
+                I8 | I16 | I32 | I64 | I128 | I256 => {
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(
+                                "Unexpected signed int signature token in version 2".to_string(),
+                            ),
+                    );
+                }
                 TypeParameter(idx) => {
                     type_params.insert(*idx);
                 }
-                Vector(ty) => rec(type_params, ty),
-                Reference(ty) | MutableReference(ty) => rec(type_params, ty),
+                Vector(ty) => rec(type_params, ty)?,
+                Reference(ty) | MutableReference(ty) => rec(type_params, ty)?,
                 DatatypeInstantiation(struct_inst) => {
                     let (_, tys) = &**struct_inst;
                     for ty in tys {
-                        rec(type_params, ty);
+                        rec(type_params, ty)?;
                     }
                 }
             }
+            Ok(())
         }
 
-        rec(&mut type_params, ty);
-        type_params
+        rec(&mut type_params, ty)?;
+        Ok(type_params)
     }
 
     /// Helper function that creates an edge from one given node to the other.
@@ -176,7 +193,7 @@ impl<'a> InstantiationLoopChecker<'a> {
         caller_idx: FunctionDefinitionIndex,
         callee_idx: FunctionDefinitionIndex,
         type_actuals_idx: SignatureIndex,
-    ) {
+    ) -> PartialVMResult<()> {
         let type_actuals = &self.module.signature_at(type_actuals_idx).0;
 
         for (formal_idx, ty) in type_actuals.iter().enumerate() {
@@ -188,7 +205,7 @@ impl<'a> InstantiationLoopChecker<'a> {
                     Edge::Identity,
                 ),
                 _ => {
-                    for type_param in self.extract_type_parameters(ty) {
+                    for type_param in self.extract_type_parameters(ty)? {
                         self.add_edge(
                             Node(caller_idx, type_param),
                             Node(callee_idx, formal_idx),
@@ -198,6 +215,7 @@ impl<'a> InstantiationLoopChecker<'a> {
                 }
             }
         }
+        Ok(())
     }
 
     /// Helper of `fn build_graph` that inspects a function definition for calls between two generic
@@ -206,7 +224,7 @@ impl<'a> InstantiationLoopChecker<'a> {
         &mut self,
         caller_idx: FunctionDefinitionIndex,
         caller_def: &FunctionDefinition,
-    ) {
+    ) -> PartialVMResult<()> {
         if let Some(code) = &caller_def.code {
             for instr in &code.code {
                 if let Bytecode::CallGeneric(callee_inst_idx) = instr {
@@ -216,11 +234,12 @@ impl<'a> InstantiationLoopChecker<'a> {
                     let callee_si = self.module.function_instantiation_at(*callee_inst_idx);
                     if let Some(callee_idx) = self.func_handle_def_map.get(&callee_si.handle) {
                         let callee_idx = *callee_idx;
-                        self.build_graph_call(caller_idx, callee_idx, callee_si.type_parameters)
+                        self.build_graph_call(caller_idx, callee_idx, callee_si.type_parameters)?;
                     }
                 }
             }
         }
+        Ok(())
     }
 
     /// Builds a graph G such that
@@ -228,7 +247,7 @@ impl<'a> InstantiationLoopChecker<'a> {
     ///   - There is an edge from type formal f_T to g_T if f_T is used to instantiate g_T in a
     ///     call.
     ///     - Each edge is labeled either `Identity` or `TyConApp`. See `Edge` for details.
-    fn build_graph(&mut self) {
+    fn build_graph(&mut self) -> PartialVMResult<()> {
         for (def_idx, func_def) in self
             .module
             .function_defs()
@@ -236,8 +255,9 @@ impl<'a> InstantiationLoopChecker<'a> {
             .enumerate()
             .filter(|(_, def)| !def.is_native())
         {
-            self.build_graph_function_def(FunctionDefinitionIndex::new(def_idx as u16), func_def)
+            self.build_graph_function_def(FunctionDefinitionIndex::new(def_idx as u16), func_def)?;
         }
+        Ok(())
     }
 
     /// Computes the strongly connected components of the graph built and keep the ones that

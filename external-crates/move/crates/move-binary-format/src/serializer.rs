@@ -498,8 +498,12 @@ fn serialize_address(binary: &mut BinaryData, address: &AccountAddress) -> Resul
 /// - `type_` serialized (see `serialize_signature_token`)
 /// - `data` size as a ULEB128
 /// - `data` bytes in increasing index order
-fn serialize_constant(binary: &mut BinaryData, constant: &Constant) -> Result<()> {
-    serialize_signature_token(binary, &constant.type_)?;
+fn serialize_constant(
+    major_version: u32,
+    binary: &mut BinaryData,
+    constant: &Constant,
+) -> Result<()> {
+    serialize_signature_token(major_version, binary, &constant.type_)?;
     serialize_byte_blob(binary, serialize_constant_size, &constant.data)
 }
 
@@ -529,6 +533,7 @@ fn serialize_byte_blob(
 /// - `StructDefinition.field_count` as a ULEB128 (number of fields defined in the type)
 /// - `StructDefinition.fields` as a ULEB128 (index into the `FieldDefinition` table)
 fn serialize_struct_definition(
+    major_version: u32,
     binary: &mut BinaryData,
     struct_definition: &StructDefinition,
 ) -> Result<()> {
@@ -537,7 +542,7 @@ fn serialize_struct_definition(
         StructFieldInformation::Native => binary.push(SerializedNativeStructFlag::NATIVE as u8),
         StructFieldInformation::Declared(fields) => {
             binary.push(SerializedNativeStructFlag::DECLARED as u8)?;
-            serialize_field_definitions(binary, fields)
+            serialize_field_definitions(major_version, binary, fields)
         }
     }
 }
@@ -550,6 +555,7 @@ fn serialize_struct_definition(
 /// - `EnumDefinition.variant_count` as a ULEB128 (number of variants defined in the enum)
 /// - `EnumDefinition.variants` are then each serialized out.
 fn serialize_enum_definition(
+    major_version: u32,
     binary: &mut BinaryData,
     enum_definition: &EnumDefinition,
 ) -> Result<()> {
@@ -557,17 +563,18 @@ fn serialize_enum_definition(
     binary.push(SerializedEnumFlag::DECLARED as u8)?;
     serialize_variant_count(binary, enum_definition.variants.len())?;
     for variant in &enum_definition.variants {
-        serialize_variant_definition(binary, variant)?;
+        serialize_variant_definition(major_version, binary, variant)?;
     }
     Ok(())
 }
 
 fn serialize_variant_definition(
+    major_version: u32,
     binary: &mut BinaryData,
     variant_definition: &VariantDefinition,
 ) -> Result<()> {
     serialize_identifier_index(binary, &variant_definition.variant_name)?;
-    serialize_field_definitions(binary, &variant_definition.fields)
+    serialize_field_definitions(major_version, binary, &variant_definition.fields)
 }
 
 fn serialize_struct_def_instantiation(
@@ -589,10 +596,14 @@ fn serialize_enum_def_instantiation(
 }
 
 /// Serializes `FieldDefinition` within a struct.
-fn serialize_field_definitions(binary: &mut BinaryData, fields: &[FieldDefinition]) -> Result<()> {
+fn serialize_field_definitions(
+    major_version: u32,
+    binary: &mut BinaryData,
+    fields: &[FieldDefinition],
+) -> Result<()> {
     serialize_field_count(binary, fields.len())?;
     for field_definition in fields {
-        serialize_field_definition(binary, field_definition)?;
+        serialize_field_definition(major_version, binary, field_definition)?;
     }
     Ok(())
 }
@@ -604,11 +615,12 @@ fn serialize_field_definitions(binary: &mut BinaryData, fields: &[FieldDefinitio
 /// - `StructDefinition.name` as a ULEB128 (index into the `IdentifierPool` table)
 /// - `StructDefinition.signature` a serialized `TypeSignatureToekn`)
 fn serialize_field_definition(
+    major_version: u32,
     binary: &mut BinaryData,
     field_definition: &FieldDefinition,
 ) -> Result<()> {
     serialize_identifier_index(binary, &field_definition.name)?;
-    serialize_signature_token(binary, &field_definition.signature.0)
+    serialize_signature_token(major_version, binary, &field_definition.signature.0)
 }
 
 fn serialize_field_handle(binary: &mut BinaryData, field_handle: &FieldHandle) -> Result<()> {
@@ -652,23 +664,42 @@ fn serialize_acquires(binary: &mut BinaryData, indices: &[StructDefinitionIndex]
 /// Serializes a `Signature`.
 ///
 /// A `Signature` gets serialized as follows the vector of `SignatureToken`s for locals
-fn serialize_signature(binary: &mut BinaryData, signature: &Signature) -> Result<()> {
-    serialize_signature_tokens(binary, &signature.0)
+fn serialize_signature(
+    major_version: u32,
+    binary: &mut BinaryData,
+    signature: &Signature,
+) -> Result<()> {
+    serialize_signature_tokens(major_version, binary, &signature.0)
 }
 
 /// Serializes a slice of `SignatureToken`s.
-fn serialize_signature_tokens(binary: &mut BinaryData, tokens: &[SignatureToken]) -> Result<()> {
+fn serialize_signature_tokens(
+    major_version: u32,
+    binary: &mut BinaryData,
+    tokens: &[SignatureToken],
+) -> Result<()> {
     serialize_signature_size(binary, tokens.len())?;
     for token in tokens {
-        serialize_signature_token(binary, token)?;
+        serialize_signature_token(major_version, binary, token)?;
     }
     Ok(())
 }
 
 fn serialize_signature_token_single_node_impl(
+    major_version: u32,
     binary: &mut BinaryData,
     token: &SignatureToken,
 ) -> Result<()> {
+    // Version-gate at the token peel-off: every signature token serializes through this
+    // function, whether it appears in a signature, a struct/enum field definition, or a
+    // constant type, so gating here covers all positions by construction. Signed-integer
+    // *opcodes* do not flow through this path; they are gated in `serialize_instruction_inner`.
+    if major_version < SIGNED_INT_VERSION && token.is_signed_integer() {
+        bail!(
+            "Signed integer types (i8..i256) not supported in bytecode version {}",
+            major_version
+        );
+    }
     match token {
         SignatureToken::Bool => binary.push(SerializedType::BOOL as u8)?,
         SignatureToken::U8 => binary.push(SerializedType::U8 as u8)?,
@@ -677,6 +708,12 @@ fn serialize_signature_token_single_node_impl(
         SignatureToken::U64 => binary.push(SerializedType::U64 as u8)?,
         SignatureToken::U128 => binary.push(SerializedType::U128 as u8)?,
         SignatureToken::U256 => binary.push(SerializedType::U256 as u8)?,
+        SignatureToken::I8 => binary.push(SerializedType::I8 as u8)?,
+        SignatureToken::I16 => binary.push(SerializedType::I16 as u8)?,
+        SignatureToken::I32 => binary.push(SerializedType::I32 as u8)?,
+        SignatureToken::I64 => binary.push(SerializedType::I64 as u8)?,
+        SignatureToken::I128 => binary.push(SerializedType::I128 as u8)?,
+        SignatureToken::I256 => binary.push(SerializedType::I256 as u8)?,
         SignatureToken::Address => binary.push(SerializedType::ADDRESS as u8)?,
         SignatureToken::Signer => binary.push(SerializedType::SIGNER as u8)?,
         SignatureToken::Vector(_) => {
@@ -708,11 +745,12 @@ fn serialize_signature_token_single_node_impl(
 
 #[cfg(test)]
 pub(crate) fn serialize_signature_token_unchecked(
+    major_version: u32,
     binary: &mut BinaryData,
     token: &SignatureToken,
 ) -> Result<()> {
     for token in token.preorder_traversal() {
-        serialize_signature_token_single_node_impl(binary, token)?;
+        serialize_signature_token_single_node_impl(major_version, binary, token)?;
     }
     Ok(())
 }
@@ -722,6 +760,7 @@ pub(crate) fn serialize_signature_token_unchecked(
 /// A `SignatureToken` gets serialized as a variable size blob depending on composition.
 /// Values for types are defined in `SerializedType`.
 pub(crate) fn serialize_signature_token(
+    major_version: u32,
     binary: &mut BinaryData,
     token: &SignatureToken,
 ) -> Result<()> {
@@ -730,7 +769,7 @@ pub(crate) fn serialize_signature_token(
         if depth > SIGNATURE_TOKEN_DEPTH_MAX {
             bail!("max recursion depth reached")
         }
-        serialize_signature_token_single_node_impl(binary, token)?;
+        serialize_signature_token_single_node_impl(major_version, binary, token)?;
     }
     Ok(())
 }
@@ -811,6 +850,15 @@ fn serialize_instruction_inner(
     binary: &mut BinaryData,
     opcode: &Bytecode,
 ) -> Result<()> {
+    // Signed-integer *opcodes* must be gated here: they are not signature tokens, so they
+    // never flow through `serialize_signature_token_single_node_impl` (which gates signed
+    // *types* in signatures, field definitions, and constant types).
+    if major_version < SIGNED_INT_VERSION && opcode.is_signed_integer_instruction() {
+        return Err(anyhow!(
+            "Signed integer bytecodes not supported in bytecode version {}",
+            major_version
+        ));
+    }
     match opcode {
         Bytecode::LdU16(_)
         | Bytecode::LdU32(_)
@@ -1082,6 +1130,37 @@ fn serialize_instruction_inner(
             binary.push(Opcodes::VARIANT_SWITCH as u8)?;
             serialize_jump_table_index(binary, jti.0)
         }
+        Bytecode::LdI8(value) => {
+            binary.push(Opcodes::LD_I8 as u8)?;
+            write_i8(binary, *value)
+        }
+        Bytecode::LdI16(value) => {
+            binary.push(Opcodes::LD_I16 as u8)?;
+            write_i16(binary, *value)
+        }
+        Bytecode::LdI32(value) => {
+            binary.push(Opcodes::LD_I32 as u8)?;
+            write_i32(binary, *value)
+        }
+        Bytecode::LdI64(value) => {
+            binary.push(Opcodes::LD_I64 as u8)?;
+            write_i64(binary, *value)
+        }
+        Bytecode::LdI128(value) => {
+            binary.push(Opcodes::LD_I128 as u8)?;
+            write_i128(binary, **value)
+        }
+        Bytecode::LdI256(value) => {
+            binary.push(Opcodes::LD_I256 as u8)?;
+            write_i256(binary, **value)
+        }
+        Bytecode::CastI8 => binary.push(Opcodes::CAST_I8 as u8),
+        Bytecode::CastI16 => binary.push(Opcodes::CAST_I16 as u8),
+        Bytecode::CastI32 => binary.push(Opcodes::CAST_I32 as u8),
+        Bytecode::CastI64 => binary.push(Opcodes::CAST_I64 as u8),
+        Bytecode::CastI128 => binary.push(Opcodes::CAST_I128 as u8),
+        Bytecode::CastI256 => binary.push(Opcodes::CAST_I256 as u8),
+        Bytecode::Neg => binary.push(Opcodes::NEG as u8),
     };
     res?;
     Ok(())
@@ -1341,7 +1420,7 @@ impl CommonSerializer {
             self.table_count += 1;
             self.constant_pool.0 = check_index_in_binary(binary.len())?;
             for constant in constants {
-                serialize_constant(binary, constant)?;
+                serialize_constant(self.major_version, binary, constant)?;
             }
             self.constant_pool.1 = checked_calculate_table_size(binary, self.constant_pool.0)?;
         }
@@ -1371,7 +1450,7 @@ impl CommonSerializer {
             self.table_count += 1;
             self.signatures.0 = check_index_in_binary(binary.len())?;
             for signature in signatures {
-                serialize_signature(binary, signature)?;
+                serialize_signature(self.major_version, binary, signature)?;
             }
             self.signatures.1 = checked_calculate_table_size(binary, self.signatures.0)?;
         }
@@ -1507,7 +1586,7 @@ impl ModuleSerializer {
             self.common.table_count = self.common.table_count.wrapping_add(1); // the count will bound to a small number
             self.struct_defs.0 = check_index_in_binary(binary.len())?;
             for struct_definition in struct_definitions {
-                serialize_struct_definition(binary, struct_definition)?;
+                serialize_struct_definition(self.common.major_version, binary, struct_definition)?;
             }
             self.struct_defs.1 = checked_calculate_table_size(binary, self.struct_defs.0)?;
         }
@@ -1530,7 +1609,7 @@ impl ModuleSerializer {
             self.common.table_count = self.common.table_count.wrapping_add(1); // the count will bound to a small number
             self.enum_defs.0 = check_index_in_binary(binary.len())?;
             for enum_definition in enum_definitions {
-                serialize_enum_definition(binary, enum_definition)?;
+                serialize_enum_definition(self.common.major_version, binary, enum_definition)?;
             }
             self.enum_defs.1 = checked_calculate_table_size(binary, self.enum_defs.0)?;
         }

@@ -63,12 +63,12 @@ impl AbstractValue {
 }
 
 impl ValueKind {
-    pub fn for_signature(s: &Signature) -> Vec<Self> {
+    pub fn for_signature(s: &Signature) -> PartialVMResult<Vec<Self>> {
         s.0.iter().map(Self::for_type).collect()
     }
 
-    pub fn for_type(s: &SignatureToken) -> Self {
-        match s {
+    pub fn for_type(s: &SignatureToken) -> PartialVMResult<Self> {
+        Ok(match s {
             SignatureToken::Reference(_) => Self::Reference(false),
             SignatureToken::MutableReference(_) => Self::Reference(true),
             SignatureToken::Bool
@@ -84,7 +84,22 @@ impl ValueKind {
             | SignatureToken::U16
             | SignatureToken::U32
             | SignatureToken::U256 => Self::NonReference,
-        }
+            // Signed integers are not supported in this execution version; fail closed like
+            // the rest of v3's signed-token arms.
+            SignatureToken::I8
+            | SignatureToken::I16
+            | SignatureToken::I32
+            | SignatureToken::I64
+            | SignatureToken::I128
+            | SignatureToken::I256 => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(
+                            "Unexpected signed int signature token in version 3".to_string(),
+                        ),
+                );
+            }
+        })
     }
 }
 

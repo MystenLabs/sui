@@ -1753,6 +1753,14 @@ fn make_arena_type_impl(
                     VirtualTableKey::from_parts(*original_address, module_name, datatype_name);
                 ArenaType::DatatypeInstantiation(context.arena_box((cache_idx, type_parameters))?)
             }
+            SignatureToken::I8
+            | SignatureToken::I16
+            | SignatureToken::I32
+            | SignatureToken::I64
+            | SignatureToken::I128
+            | SignatureToken::I256 => {
+                todo!("[signed-ints] signed integer types in the VM runtime")
+            }
         };
         Ok(res)
     })

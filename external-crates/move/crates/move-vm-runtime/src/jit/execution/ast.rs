@@ -1157,6 +1157,9 @@ impl Type {
                         "Unable to load const type signature"
                     ));
                 }
+                S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => {
+                    todo!("[signed-ints] signed integer constants in the VM runtime")
+                }
                 // Not allowed/Not meaningful
                 S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) | S::Signer => {
                     return Err(partial_vm_error!(

@@ -75,47 +75,43 @@ impl Table {
     }
 }
 
-fn read_u16_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u16> {
-    let mut u16_bytes = [0; 2];
-    cursor
-        .read_exact(&mut u16_bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_U16))?;
-    Ok(u16::from_le_bytes(u16_bytes))
+/// Defines a `$name` reading `$n` little-endian bytes as `$ty` via `$conv`, failing with
+/// `$err` on truncated input.
+macro_rules! read_le_int {
+    ($name:ident, $ty:ty, $n:expr, $err:ident, $conv:expr) => {
+        fn $name(cursor: &mut VersionedCursor) -> BinaryLoaderResult<$ty> {
+            let mut bytes = [0; $n];
+            cursor
+                .read_exact(&mut bytes)
+                .map_err(|_| PartialVMError::new(StatusCode::$err))?;
+            Ok($conv(bytes))
+        }
+    };
 }
 
-fn read_u32_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u32> {
-    let mut u32_bytes = [0; 4];
-    cursor
-        .read_exact(&mut u32_bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_U32))?;
-    Ok(u32::from_le_bytes(u32_bytes))
-}
-
-fn read_u64_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u64> {
-    let mut u64_bytes = [0; 8];
-    cursor
-        .read_exact(&mut u64_bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_U64))?;
-    Ok(u64::from_le_bytes(u64_bytes))
-}
-
-fn read_u128_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u128> {
-    let mut u128_bytes = [0; 16];
-    cursor
-        .read_exact(&mut u128_bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_U128))?;
-    Ok(u128::from_le_bytes(u128_bytes))
-}
-
-fn read_u256_internal(
-    cursor: &mut VersionedCursor,
-) -> BinaryLoaderResult<move_core_types::u256::U256> {
-    let mut u256_bytes = [0; 32];
-    cursor
-        .read_exact(&mut u256_bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_U256))?;
-    Ok(move_core_types::u256::U256::from_le_bytes(&u256_bytes))
-}
+read_le_int!(read_u16_internal, u16, 2, BAD_U16, u16::from_le_bytes);
+read_le_int!(read_u32_internal, u32, 4, BAD_U32, u32::from_le_bytes);
+read_le_int!(read_u64_internal, u64, 8, BAD_U64, u64::from_le_bytes);
+read_le_int!(read_u128_internal, u128, 16, BAD_U128, u128::from_le_bytes);
+read_le_int!(
+    read_u256_internal,
+    move_core_types::u256::U256,
+    32,
+    BAD_U256,
+    |bytes| move_core_types::u256::U256::from_le_bytes(&bytes)
+);
+read_le_int!(read_i8_internal, i8, 1, BAD_I8, i8::from_le_bytes);
+read_le_int!(read_i16_internal, i16, 2, BAD_I16, i16::from_le_bytes);
+read_le_int!(read_i32_internal, i32, 4, BAD_I32, i32::from_le_bytes);
+read_le_int!(read_i64_internal, i64, 8, BAD_I64, i64::from_le_bytes);
+read_le_int!(read_i128_internal, i128, 16, BAD_I128, i128::from_le_bytes);
+read_le_int!(
+    read_i256_internal,
+    move_core_types::i256::I256,
+    32,
+    BAD_I256,
+    |bytes| move_core_types::i256::I256::from_le_bytes(&bytes)
+);
 
 //
 // Helpers to read all uleb128 encoded integers.
@@ -1024,6 +1020,39 @@ pub fn load_signature_token_test_entry(
     load_signature_token(&mut VersionedCursor::new_for_test(VERSION_MAX, cursor))
 }
 
+#[cfg(test)]
+pub(crate) fn load_signature_token_test_entry_with_version(
+    version: u32,
+    cursor: std::io::Cursor<&[u8]>,
+) -> BinaryLoaderResult<SignatureToken> {
+    load_signature_token(&mut VersionedCursor::new_for_test(version, cursor))
+}
+
+// Test entry points for the signed-integer readers, fixed at `SIGNED_INT_VERSION` (the version that
+// introduces signed values). Used by the LE round-trip tests against `write_i*`.
+#[cfg(test)]
+pub(crate) mod signed_read_test_entries {
+    use super::*;
+
+    macro_rules! read_test_entry {
+        ($name:ident, $reader:ident, $ty:ty) => {
+            pub(crate) fn $name(bytes: &[u8]) -> BinaryLoaderResult<$ty> {
+                $reader(&mut VersionedCursor::new_for_test(
+                    SIGNED_INT_VERSION,
+                    std::io::Cursor::new(bytes),
+                ))
+            }
+        };
+    }
+
+    read_test_entry!(read_i8, read_i8_internal, i8);
+    read_test_entry!(read_i16, read_i16_internal, i16);
+    read_test_entry!(read_i32, read_i32_internal, i32);
+    read_test_entry!(read_i64, read_i64_internal, i64);
+    read_test_entry!(read_i128, read_i128_internal, i128);
+    read_test_entry!(read_i256, read_i256_internal, move_core_types::i256::I256);
+}
+
 /// Deserializes a `SignatureToken`.
 fn load_signature_token(cursor: &mut VersionedCursor) -> BinaryLoaderResult<SignatureToken> {
     // The following algorithm works by storing partially constructed types on a stack.
@@ -1118,6 +1147,16 @@ fn load_signature_token(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Sign
                         )),
                     );
                 }
+                S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256
+                    if (cursor.version() < SIGNED_INT_VERSION) =>
+                {
+                    return Err(
+                        PartialVMError::new(StatusCode::MALFORMED).with_message(format!(
+                            "Signed integer types not supported in bytecode version {}",
+                            cursor.version()
+                        )),
+                    );
+                }
                 _ => (),
             };
 
@@ -1129,6 +1168,12 @@ fn load_signature_token(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Sign
                 S::U64 => T::Saturated(SignatureToken::U64),
                 S::U128 => T::Saturated(SignatureToken::U128),
                 S::U256 => T::Saturated(SignatureToken::U256),
+                S::I8 => T::Saturated(SignatureToken::I8),
+                S::I16 => T::Saturated(SignatureToken::I16),
+                S::I32 => T::Saturated(SignatureToken::I32),
+                S::I64 => T::Saturated(SignatureToken::I64),
+                S::I128 => T::Saturated(SignatureToken::I128),
+                S::I256 => T::Saturated(SignatureToken::I256),
                 S::ADDRESS => T::Saturated(SignatureToken::Address),
                 S::SIGNER => T::Saturated(SignatureToken::Signer),
                 S::VECTOR => T::Vector,
@@ -1713,6 +1758,34 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
             _ => (),
         };
 
+        // TODO (signed-ints): add a test entry for load_code at VERSION_8 to exercise the
+        // signed opcode path when possible
+        match opcode {
+            Opcodes::LD_I8
+            | Opcodes::LD_I16
+            | Opcodes::LD_I32
+            | Opcodes::LD_I64
+            | Opcodes::LD_I128
+            | Opcodes::LD_I256
+            | Opcodes::CAST_I8
+            | Opcodes::CAST_I16
+            | Opcodes::CAST_I32
+            | Opcodes::CAST_I64
+            | Opcodes::CAST_I128
+            | Opcodes::CAST_I256
+            | Opcodes::NEG
+                if (cursor.version() < SIGNED_INT_VERSION) =>
+            {
+                return Err(
+                    PartialVMError::new(StatusCode::MALFORMED).with_message(format!(
+                        "Signed integer bytecodes not supported in bytecode version {}",
+                        cursor.version()
+                    )),
+                );
+            }
+            _ => (),
+        };
+
         // conversion
         let bytecode = match opcode {
             Opcodes::POP => Bytecode::Pop,
@@ -1856,6 +1929,19 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
                 let jti = load_jump_table_index(cursor)?;
                 Bytecode::VariantSwitch(VariantJumpTableIndex(jti))
             }
+            Opcodes::LD_I8 => Bytecode::LdI8(read_i8_internal(cursor)?),
+            Opcodes::LD_I16 => Bytecode::LdI16(read_i16_internal(cursor)?),
+            Opcodes::LD_I32 => Bytecode::LdI32(read_i32_internal(cursor)?),
+            Opcodes::LD_I64 => Bytecode::LdI64(read_i64_internal(cursor)?),
+            Opcodes::LD_I128 => Bytecode::LdI128(Box::new(read_i128_internal(cursor)?)),
+            Opcodes::LD_I256 => Bytecode::LdI256(Box::new(read_i256_internal(cursor)?)),
+            Opcodes::CAST_I8 => Bytecode::CastI8,
+            Opcodes::CAST_I16 => Bytecode::CastI16,
+            Opcodes::CAST_I32 => Bytecode::CastI32,
+            Opcodes::CAST_I64 => Bytecode::CastI64,
+            Opcodes::CAST_I128 => Bytecode::CastI128,
+            Opcodes::CAST_I256 => Bytecode::CastI256,
+            Opcodes::NEG => Bytecode::Neg,
             // ******** DEPRECATED BYTECODES ********
             Opcodes::EXISTS_DEPRECATED => {
                 check_deprecate_global_storage_ops(cursor)?;
@@ -1948,6 +2034,12 @@ impl SerializedType {
             0xD => Ok(SerializedType::U16),
             0xE => Ok(SerializedType::U32),
             0xF => Ok(SerializedType::U256),
+            0x10 => Ok(SerializedType::I8),
+            0x11 => Ok(SerializedType::I16),
+            0x12 => Ok(SerializedType::I32),
+            0x13 => Ok(SerializedType::I64),
+            0x14 => Ok(SerializedType::I128),
+            0x15 => Ok(SerializedType::I256),
             _ => Err(PartialVMError::new(StatusCode::UNKNOWN_SERIALIZED_TYPE)),
         }
     }
@@ -2109,6 +2201,19 @@ impl Opcodes {
             0x54 => Ok(Opcodes::UNPACK_VARIANT_GENERIC_IMM_REF),
             0x55 => Ok(Opcodes::UNPACK_VARIANT_GENERIC_MUT_REF),
             0x56 => Ok(Opcodes::VARIANT_SWITCH),
+            0x57 => Ok(Opcodes::LD_I8),
+            0x58 => Ok(Opcodes::LD_I16),
+            0x59 => Ok(Opcodes::LD_I32),
+            0x5A => Ok(Opcodes::LD_I64),
+            0x5B => Ok(Opcodes::LD_I128),
+            0x5C => Ok(Opcodes::LD_I256),
+            0x5D => Ok(Opcodes::CAST_I8),
+            0x5E => Ok(Opcodes::CAST_I16),
+            0x5F => Ok(Opcodes::CAST_I32),
+            0x60 => Ok(Opcodes::CAST_I64),
+            0x61 => Ok(Opcodes::CAST_I128),
+            0x62 => Ok(Opcodes::CAST_I256),
+            0x63 => Ok(Opcodes::NEG),
             _ => Err(PartialVMError::new(StatusCode::UNKNOWN_OPCODE)),
         }
     }
