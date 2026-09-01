@@ -202,6 +202,7 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
         &perpetual_db,
         &checkpoint_store,
         None,
+        &mut sui_core::authority::authority_store_pruner::RetractionCursors::default(),
         pruning_config,
         metrics,
         EPOCH_DURATION_MS_FOR_TESTING,
