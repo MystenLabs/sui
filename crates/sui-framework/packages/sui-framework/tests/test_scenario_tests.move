@@ -1312,6 +1312,12 @@ fun create_system_objects() {
     let deny_list = scenario.take_shared<sui::deny_list::DenyList>();
     test_scenario::return_shared(deny_list);
 
+    let display_registry = scenario.take_shared<sui::display_registry::DisplayRegistry>();
+    test_scenario::return_shared(display_registry);
+
+    let accumulator = scenario.take_shared<sui::accumulator::AccumulatorRoot>();
+    test_scenario::return_shared(accumulator);
+
     scenario.end();
 }
 
