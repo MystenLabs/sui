@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use consensus_config::Stake;
 use consensus_types::block::{BlockRef, Round, TransactionIndex};
@@ -144,8 +147,8 @@ impl TransactionVoteTracker {
 
     /// Retrieves own votes on peer block transactions.
     pub(crate) fn get_own_votes(&self, block_refs: Vec<BlockRef>) -> Vec<BlockTransactionVotes> {
-        let mut votes = vec![];
         let vote_tracker_state = self.vote_tracker_state.read();
+        let mut votes = vec![];
         for block_ref in block_refs {
             if block_ref.round <= vote_tracker_state.gc_round {
                 continue;
@@ -156,11 +159,22 @@ impl TransactionVoteTracker {
                     block_ref
                 )
             });
-            if !vote_info.own_reject_txn_votes.is_empty() {
-                votes.push(BlockTransactionVotes {
-                    block_ref,
-                    rejects: vote_info.own_reject_txn_votes.clone(),
-                });
+            let rejects = match &vote_info.own_reject_txn_votes {
+                OwnRejectVotes::Unknown => {
+                    panic!("Ancestor block {} has not been received", block_ref)
+                }
+                OwnRejectVotes::AcceptAll => vec![],
+                OwnRejectVotes::RejectSome { rejects, .. } => rejects.to_vec(),
+                OwnRejectVotes::RejectAll { transaction_count } => (0..*transaction_count)
+                    .map(|index| {
+                        TransactionIndex::try_from(index).unwrap_or_else(|_| {
+                            panic!("Block {} has too many transactions to reject", block_ref)
+                        })
+                    })
+                    .collect(),
+            };
+            if !rejects.is_empty() {
+                votes.push(BlockTransactionVotes { block_ref, rejects });
             }
         }
         votes
@@ -216,14 +230,30 @@ struct VoteTrackerState {
 
     // Highest round where blocks are GC'ed.
     gc_round: Round,
+
+    // Maximum number of detailed own reject-vote blocks retained per block author.
+    // The limit is enabled only for v3.
+    max_own_reject_vote_blocks_per_author: Option<usize>,
+
+    // Blocks for which this authority keeps detailed own reject votes, grouped by block author.
+    own_reject_vote_blocks_by_author: Vec<BTreeSet<BlockRef>>,
 }
 
 impl VoteTrackerState {
     fn new(context: Arc<Context>) -> Self {
+        let max_own_reject_vote_blocks_per_author =
+            context.protocol_config.enable_v3().then(|| {
+                let gc_depth = context.protocol_config.gc_depth() as usize;
+                assert!(gc_depth > 0, "Mysticeti v3 requires a positive GC depth");
+                gc_depth
+            });
+        let own_reject_vote_blocks_by_author = vec![BTreeSet::new(); context.committee.size()];
         Self {
             context,
             votes: BTreeMap::new(),
             gc_round: GENESIS_ROUND,
+            max_own_reject_vote_blocks_per_author,
+            own_reject_vote_blocks_by_author,
         }
     }
 
@@ -258,12 +288,24 @@ impl VoteTrackerState {
 
         // Initialize the entry for the voted block.
         let vote_info = self.votes.entry(voted_block.reference()).or_default();
-        if vote_info.block.is_some() {
+        if !matches!(&vote_info.own_reject_txn_votes, OwnRejectVotes::Unknown) {
             // Input block has already been processed and added to the state.
             return;
         }
-        vote_info.block = Some(voted_block.clone());
-        vote_info.own_reject_txn_votes = reject_txn_votes;
+        vote_info.own_reject_txn_votes = if reject_txn_votes.is_empty() {
+            OwnRejectVotes::AcceptAll
+        } else {
+            OwnRejectVotes::RejectSome {
+                rejects: reject_txn_votes.into_boxed_slice(),
+                transaction_count: voted_block.transactions().len(),
+            }
+        };
+        if self.max_own_reject_vote_blocks_per_author.is_some()
+            && vote_info.own_reject_txn_votes.has_explicit_rejects()
+        {
+            self.own_reject_vote_blocks_by_author[voted_block.author()]
+                .insert(voted_block.reference());
+        }
 
         // Update reject votes from the input block.
         for block_votes in voted_block.transaction_votes() {
@@ -280,6 +322,34 @@ impl VoteTrackerState {
                     .add_unique(voted_block.author(), &self.context.committee);
             }
         }
+
+        self.enforce_own_reject_vote_limit(voted_block.author());
+    }
+
+    fn enforce_own_reject_vote_limit(&mut self, author: consensus_config::AuthorityIndex) {
+        let Some(max_vote_blocks) = self.max_own_reject_vote_blocks_per_author else {
+            return;
+        };
+
+        let vote_blocks = &mut self.own_reject_vote_blocks_by_author[author];
+        while vote_blocks.len() > max_vote_blocks {
+            let block_ref = vote_blocks
+                .pop_first()
+                .expect("Own reject vote blocks should not be empty");
+            let own_reject_txn_votes = &mut self
+                .votes
+                .get_mut(&block_ref)
+                .expect("Own reject vote block should exist in vote tracker state")
+                .own_reject_txn_votes;
+            let OwnRejectVotes::RejectSome {
+                transaction_count, ..
+            } = own_reject_txn_votes
+            else {
+                panic!("Own reject vote block should contain detailed votes");
+            };
+            let transaction_count = *transaction_count;
+            *own_reject_txn_votes = OwnRejectVotes::RejectAll { transaction_count };
+        }
     }
 
     /// Updates the GC round and cleans up obsolete internal state.
@@ -287,7 +357,11 @@ impl VoteTrackerState {
         self.gc_round = gc_round;
         while let Some((block_ref, _)) = self.votes.first_key_value() {
             if block_ref.round <= self.gc_round {
-                self.votes.pop_first();
+                let (block_ref, _) = self
+                    .votes
+                    .pop_first()
+                    .expect("Vote tracker state should not be empty");
+                self.own_reject_vote_blocks_by_author[block_ref.author].remove(&block_ref);
             } else {
                 break;
             }
@@ -303,17 +377,40 @@ impl VoteTrackerState {
 
 /// VoteInfo keeps track of votes received for each transaction of this block,
 /// possibly even before the block is received by this authority.
-#[derive(Default)]
 struct VoteInfo {
-    // Content of the block.
-    // None if the blocks has not been received.
-    block: Option<VerifiedBlock>,
     // Rejection votes by this authority on this block.
     // This field is written when the block is first received and its transactions are voted on.
     // It is read from core after the block is accepted.
-    own_reject_txn_votes: Vec<TransactionIndex>,
+    own_reject_txn_votes: OwnRejectVotes,
     // Accumulates reject votes per transaction in this block.
     reject_txn_votes: BTreeMap<TransactionIndex, StakeAggregator<QuorumThreshold>>,
+}
+
+impl Default for VoteInfo {
+    fn default() -> Self {
+        Self {
+            own_reject_txn_votes: OwnRejectVotes::Unknown,
+            reject_txn_votes: BTreeMap::new(),
+        }
+    }
+}
+
+enum OwnRejectVotes {
+    Unknown,
+    AcceptAll,
+    RejectSome {
+        rejects: Box<[TransactionIndex]>,
+        transaction_count: usize,
+    },
+    RejectAll {
+        transaction_count: usize,
+    },
+}
+
+impl OwnRejectVotes {
+    fn has_explicit_rejects(&self) -> bool {
+        matches!(self, Self::RejectSome { .. })
+    }
 }
 
 #[cfg(test)]
@@ -324,7 +421,7 @@ mod test {
 
     use crate::{
         TestBlock, Transaction, VerifiedBlock, block::BlockTransactionVotes, context::Context,
-        metrics::test_metrics,
+        metrics::test_metrics, storage::mem_store::MemStore,
     };
 
     use super::*;
@@ -376,11 +473,20 @@ mod test {
 
         // Verify own reject votes are stored correctly.
         let vote_info_0 = state.votes.get(&round_1_blocks[0].reference()).unwrap();
-        assert_eq!(vote_info_0.own_reject_txn_votes, vec![0]);
+        assert!(matches!(
+            &vote_info_0.own_reject_txn_votes,
+            OwnRejectVotes::RejectSome { rejects, .. } if rejects.as_ref() == [0]
+        ));
         let vote_info_1 = state.votes.get(&round_1_blocks[1].reference()).unwrap();
-        assert_eq!(vote_info_1.own_reject_txn_votes, vec![1, 2]);
+        assert!(matches!(
+            &vote_info_1.own_reject_txn_votes,
+            OwnRejectVotes::RejectSome { rejects, .. } if rejects.as_ref() == [1, 2]
+        ));
         let vote_info_2 = state.votes.get(&round_1_blocks[2].reference()).unwrap();
-        assert!(vote_info_2.own_reject_txn_votes.is_empty());
+        assert!(matches!(
+            &vote_info_2.own_reject_txn_votes,
+            OwnRejectVotes::AcceptAll
+        ));
 
         // No reject votes have been aggregated yet (round 1 blocks have no transaction_votes).
         assert!(vote_info_0.reject_txn_votes.is_empty());
@@ -472,5 +578,154 @@ mod test {
             .unwrap()
             .reject_txn_votes;
         assert!(reject_votes_2.is_empty());
+    }
+
+    #[test]
+    fn test_own_reject_vote_limit_is_per_author() {
+        let (mut context, _) = Context::new_with_test_options(2, false);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        context.protocol_config.set_gc_depth_for_testing(2);
+        let context = Arc::new(context);
+        let dag_state = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let tracker = TransactionVoteTracker::new(
+            context,
+            Arc::new(crate::block_verifier::NoopBlockVerifier),
+            dag_state,
+        );
+
+        let authority_0_blocks = (10..12)
+            .map(|marker| {
+                VerifiedBlock::new_for_test(
+                    TestBlock::new(2, 0)
+                        .set_transactions(vec![Transaction::new(vec![marker]); 3])
+                        .build(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut authority_1_blocks = (0..3)
+            .map(|marker| {
+                VerifiedBlock::new_for_test(
+                    TestBlock::new(2, 1)
+                        .set_transactions(vec![Transaction::new(vec![marker]); 3])
+                        .build(),
+                )
+            })
+            .collect::<Vec<_>>();
+        authority_1_blocks.sort_by_key(VerifiedBlock::reference);
+        let mut voted_blocks = authority_0_blocks
+            .iter()
+            .cloned()
+            .map(|block| (block, vec![1]))
+            .collect::<Vec<_>>();
+        voted_blocks.extend([2, 0, 1].map(|index| (authority_1_blocks[index].clone(), vec![1])));
+        tracker.add_voted_blocks(voted_blocks);
+
+        {
+            let state = tracker.vote_tracker_state.read();
+            assert_eq!(state.own_reject_vote_blocks_by_author[0].len(), 2);
+            assert_eq!(state.own_reject_vote_blocks_by_author[1].len(), 2);
+            assert_eq!(
+                state
+                    .own_reject_vote_blocks_by_author
+                    .iter()
+                    .map(BTreeSet::len)
+                    .sum::<usize>(),
+                2 * 2
+            );
+            for block in &authority_0_blocks {
+                assert!(matches!(
+                    &state
+                        .votes
+                        .get(&block.reference())
+                        .unwrap()
+                        .own_reject_txn_votes,
+                    OwnRejectVotes::RejectSome { .. }
+                ));
+            }
+            assert!(matches!(
+                &state
+                    .votes
+                    .get(&authority_1_blocks[0].reference())
+                    .unwrap()
+                    .own_reject_txn_votes,
+                OwnRejectVotes::RejectAll {
+                    transaction_count: 3
+                }
+            ));
+        }
+
+        let block_refs = authority_0_blocks
+            .iter()
+            .chain(&authority_1_blocks)
+            .map(VerifiedBlock::reference)
+            .collect();
+        let votes = tracker.get_own_votes(block_refs);
+
+        assert_eq!(votes.len(), 5);
+        assert_eq!(
+            votes
+                .iter()
+                .find(|votes| votes.block_ref == authority_1_blocks[0].reference())
+                .unwrap()
+                .rejects,
+            vec![0, 1, 2]
+        );
+
+        tracker.vote_tracker_state.write().update_gc_round(2);
+        let state = tracker.vote_tracker_state.read();
+        assert!(state.votes.is_empty());
+        assert!(
+            state
+                .own_reject_vote_blocks_by_author
+                .iter()
+                .all(BTreeSet::is_empty)
+        );
+    }
+
+    #[test]
+    fn test_own_vote_limit_is_disabled_for_v2() {
+        let (mut context, _) = Context::new_with_test_options(2, false);
+        context.protocol_config.set_gc_depth_for_testing(1);
+        let context = Arc::new(context);
+        let dag_state = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let tracker = TransactionVoteTracker::new(
+            context,
+            Arc::new(crate::block_verifier::NoopBlockVerifier),
+            dag_state,
+        );
+        let blocks = (0..3)
+            .map(|marker| {
+                VerifiedBlock::new_for_test(
+                    TestBlock::new(2, 1)
+                        .set_transactions(vec![Transaction::new(vec![marker])])
+                        .build(),
+                )
+            })
+            .collect::<Vec<_>>();
+        tracker.add_voted_blocks(
+            blocks
+                .iter()
+                .cloned()
+                .map(|block| (block, vec![0]))
+                .collect(),
+        );
+
+        let votes = tracker.get_own_votes(blocks.iter().map(|block| block.reference()).collect());
+
+        assert_eq!(votes.len(), 3);
+        assert!(
+            tracker
+                .vote_tracker_state
+                .read()
+                .own_reject_vote_blocks_by_author
+                .iter()
+                .all(BTreeSet::is_empty)
+        );
     }
 }
