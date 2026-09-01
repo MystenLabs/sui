@@ -1,7 +1,41 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Building blocks for the experimental `sui-fork` tool.
+//! Start and administer a local Sui network forked from live network state.
+//!
+//! [`ForkNode::start`] takes [`StartArgs`], binds the RPC listener, resumes or creates the fork
+//! under its data directory, and serves it over gRPC. The node advances the clock, seals
+//! checkpoints, and reports status in-process through the same implementation as the forking
+//! gRPC service, and [`ForkNode::stop`] shuts the fork down in order. The `sui-fork` binary wraps
+//! the same entry point, and its client subcommands drive a running fork through
+//! [`ForkingServiceClient`].
+//!
+//! ```no_run
+//! use std::time::Duration;
+//!
+//! use sui_fork::ForkNode;
+//! use sui_fork::Node;
+//! use sui_fork::StartArgs;
+//!
+//! # async fn run() -> anyhow::Result<()> {
+//! let fork = ForkNode::start(StartArgs {
+//!     network: Node::Testnet,
+//!     data_dir: Some("/tmp/sui-fork-demo".into()),
+//!     rpc_addr: "127.0.0.1:0".parse()?,
+//!     ..StartArgs::default()
+//! })
+//! .await?;
+//!
+//! println!("fork RPC listening on {}", fork.rpc_address());
+//! fork.advance_clock(Duration::from_secs(60)).await;
+//! let sealed = fork.advance_checkpoint().await;
+//! println!("sealed checkpoint {}", sealed.checkpoint_sequence_number);
+//! fork.stop().await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! Starting again with the same data directory resumes the fork at its highest local checkpoint.
 
 pub mod args;
 #[doc(hidden)]

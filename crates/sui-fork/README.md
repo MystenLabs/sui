@@ -20,6 +20,41 @@ A development tool that enables testing and developing against a local Sui netwo
 > Unlike a standard local Sui network with validators, the forking tool runs in lock-step mode where each transaction is executed sequentially and creates a checkpoint.
 > That means that you have full control over the advancement of checkpoints, time, (and soon epochs too) to simulate different scenarios.
 
+## Rust API
+
+`ForkNode` starts and administers a fork in-process while serving it over gRPC:
+
+```rust
+use std::time::Duration;
+
+use sui_fork::{ForkNode, Node, StartArgs};
+
+async fn run() -> anyhow::Result<()> {
+    let fork = ForkNode::start(StartArgs {
+        network: Node::Testnet,
+        data_dir: Some("/tmp/sui-fork-demo".into()),
+        rpc_addr: "127.0.0.1:0".parse()?,
+        ..StartArgs::default()
+    })
+    .await?;
+
+    println!("fork RPC listening on {}", fork.rpc_address());
+    let status = fork.status().await;
+    println!("current checkpoint: {}", status.checkpoint_sequence_number);
+
+    fork.advance_clock(Duration::from_secs(60)).await;
+    fork.advance_checkpoint().await;
+    fork.stop().await?;
+    Ok(())
+}
+```
+
+Starting again with the same data directory resumes the fork from its highest local checkpoint,
+so omit seed addresses and objects when resuming. `into_service` hands the fork's tasks to a
+`sui_futures::service::Service` for composition with other services. The in-process
+administration methods end there, while the forking gRPC service stays reachable. The library
+installs no signal handlers and does not initialize tracing.
+
 ## Quick Start
 
 #### 1. Build or install `sui-fork`
