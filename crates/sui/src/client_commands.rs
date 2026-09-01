@@ -999,6 +999,7 @@ impl SuiClientCommands {
                     build_env.clone(),
                     pubfile_path.clone(),
                     modes.clone(),
+                    context,
                 )
                 .await?;
 
@@ -4090,19 +4091,27 @@ pub async fn load_root_pkg_for_publish_upgrade(
         .await?)
 }
 
+/// Load the package at `package_path` for an ephemeral (`test-publish`/`test-upgrade`) publication
+/// to the chain `chain_id`, recording publications in `pubfile_path`.
+///
+/// `wallet` is used to resolve the system dependencies for `build_env`. Naming a build environment
+/// asks for a faithful rehearsal of a publish to it, so its framework version has to be resolved
+/// the same way a real publish would resolve it — pinning to whatever this binary happens to ship
+/// would let the rehearsal pass and the real publish fail.
 pub async fn load_root_pkg_for_ephemeral_publish_or_upgrade(
     package_path: &Path,
     chain_id: &str,
     build_env: Option<String>,
     pubfile_path: PathBuf,
     modes: Vec<ModeName>,
+    wallet: &WalletContext,
 ) -> anyhow::Result<RootPackage<SuiFlavor>> {
     Ok(PackageLoader::new_ephemeral(
         package_path,
         build_env.clone(),
         chain_id.to_string(),
         pubfile_path,
-        SuiFlavor::new(),
+        SuiFlavor::with_client(wallet),
     )
     .modes(modes)
     .load()
@@ -4287,6 +4296,7 @@ async fn upgrade_command(
             build_config.environment.clone(),
             pubfile_path,
             build_config.mode_set(),
+            context,
         )
         .await?
     } else {
@@ -4426,6 +4436,7 @@ async fn publish_ephemeral_unpublished_dependencies(
         build_env.clone(),
         pubfile_path.clone(),
         modes.clone(),
+        context,
     )
     .await?;
 
@@ -4454,6 +4465,7 @@ async fn publish_ephemeral_unpublished_dependencies(
             build_env.clone(),
             pubfile_path.clone(),
             modes.clone(),
+            context,
         )
         .await?;
 

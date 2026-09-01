@@ -2,10 +2,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt, path::PathBuf};
+use std::{collections::BTreeMap, fmt, path::PathBuf};
 
 use path_clean::PathClean;
 use sha2::{Digest, Sha256};
+use tokio::sync::OnceCell;
 use tracing::debug;
 
 use crate::{
@@ -16,7 +17,7 @@ use crate::{
     schema::{
         Environment, EnvironmentID, EnvironmentName, EphemeralDependencyInfo, LocalDepInfo,
         LockfileDependencyInfo, LockfileGitDepInfo, ManifestGitDependency, ModeName,
-        OnChainAddress, PackageName, PublishedID, RenderToml, RootDepInfo,
+        OnChainAddress, PackageName, PublishedID, RenderToml, RootDepInfo, SystemDepName,
     },
 };
 
@@ -79,20 +80,30 @@ pub struct PinnedLocalDependency {
     relative_path_from_root_package: PathBuf,
 }
 
+/// The system dependencies for the environment being pinned. Every package in a package graph
+/// shares one of these, so that [MoveFlavor::system_deps] is consulted at most once per graph
+/// build, and not at all if no package depends on a system package.
+pub(crate) type SystemDepCache = OnceCell<BTreeMap<SystemDepName, LockfileDependencyInfo>>;
+
 impl PinnedDependency {
     /// Replace all dependencies in `deps` with their pinned versions:
     ///  - first, all external dependencies are resolved (in environment `env`)
     ///  - next, the revisions for git dependencies are replaced with 40-character shas
     ///  - finally, local dependencies are transformed relative to `parent`
+    ///
+    /// System dependencies are taken from `system_deps`, which is populated from `flavor` the
+    /// first time any package in the graph needs one.
     pub(crate) async fn pin<F: MoveFlavor>(
         parent: &Pinned,
         deps: Vec<CombinedDependency>,
         env: &Environment,
         flavor: &F,
+        system_deps: &SystemDepCache,
     ) -> PackageResult<Vec<PinnedDependency>> {
         debug!("pinning dependencies");
         // replace all system dependencies using the flavor
-        let (non_system_deps, mut result) = Self::replace_system_deps(deps, env, flavor).await?;
+        let (non_system_deps, mut result) =
+            Self::replace_system_deps(deps, env, flavor, system_deps).await?;
 
         // resolution - replace all externally resolved dependencies with internal dependencies
         let deps = ResolvedDependency::resolve(non_system_deps, env).await?;
@@ -126,43 +137,62 @@ impl PinnedDependency {
     }
 
     /// Partition `deps` into the system dependencies and the non-system dependencies; replace all
-    /// the system dependencies using `flavor`.
+    /// the system dependencies using `system_deps`, resolving it from `flavor` if this is the
+    /// first package in the graph to need one.
     async fn replace_system_deps<F: MoveFlavor>(
         deps: Vec<CombinedDependency>,
         env: &Environment,
         flavor: &F,
+        system_deps: &SystemDepCache,
     ) -> PackageResult<(Vec<CombinedDependency>, Vec<PinnedDependency>)> {
-        let all_system_deps = flavor.system_deps(env.id()).await;
+        // Partition first so that packages with no system dependencies never consult the flavor;
+        // resolving them may require the network.
+        let (system, non_system): (Vec<_>, Vec<_>) = deps
+            .into_iter()
+            .partition(|dep| matches!(dep.dep_info, Combined::System(_)));
+
+        if system.is_empty() {
+            return Ok((non_system, Vec::new()));
+        }
+
+        let all_system_deps = system_deps
+            .get_or_try_init(|| async {
+                flavor
+                    .system_deps(env.id())
+                    .await
+                    .map_err(|err| PackageError::SystemDeps {
+                        env: env.id().clone(),
+                        err,
+                    })
+            })
+            .await?;
+
         let valid_list = move_compiler::format_oxford_list!(
             "and",
             "{}",
             all_system_deps.keys().collect::<Vec<&String>>()
         );
 
-        let mut system_deps: Vec<PinnedDependency> = Vec::new();
-        let mut non_system_deps: Vec<CombinedDependency> = Vec::new();
-
-        for dep in deps.into_iter() {
-            if let Combined::System(sys) = &dep.dep_info {
-                let lockfile_dep =
-                    all_system_deps
-                        .get(&sys.system)
-                        .ok_or(PackageError::InvalidSystemDep {
-                            dep: sys.system.clone(),
-                            valid: valid_list.to_string(),
-                        })?;
-                let file = dep.context.containing_file;
-                let pinned_dep = PinnedDependency {
-                    context: dep.context,
-                    dep_info: Pinned::from_lockfile(file, lockfile_dep)
-                        .expect("system dependencies are valid pins"),
-                };
-                system_deps.push(pinned_dep);
-            } else {
-                non_system_deps.push(dep);
-            }
+        let mut pinned = Vec::new();
+        for dep in system.into_iter() {
+            let Combined::System(sys) = &dep.dep_info else {
+                unreachable!("partitioned on Combined::System above");
+            };
+            let lockfile_dep =
+                all_system_deps
+                    .get(&sys.system)
+                    .ok_or(PackageError::InvalidSystemDep {
+                        dep: sys.system.clone(),
+                        valid: valid_list.to_string(),
+                    })?;
+            let file = dep.context.containing_file;
+            pinned.push(PinnedDependency {
+                context: dep.context,
+                dep_info: Pinned::from_lockfile(file, lockfile_dep)
+                    .expect("system dependencies are valid pins"),
+            });
         }
-        Ok((non_system_deps, system_deps))
+        Ok((non_system, pinned))
     }
 
     /// The name for the dependency
