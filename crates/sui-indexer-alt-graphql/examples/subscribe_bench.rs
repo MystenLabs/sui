@@ -52,9 +52,9 @@ fn queries() -> (&'static str, &'static str) {
             )),
         ),
         "event" | "ev" => (
-            "subscription { events { cursor node { sequenceNumber sender { address } transactionModule } } }",
+            "subscription { events { cursor node { sequenceNumber sender { address } transactionModule { name } } } }",
             leak(format!(
-                "subscription {{ events(filter: {{ afterCheckpoint: {from} }}) {{ cursor node {{ sequenceNumber sender {{ address }} transactionModule }} }} }}"
+                "subscription {{ events(filter: {{ afterCheckpoint: {from} }}) {{ cursor node {{ sequenceNumber sender {{ address }} transactionModule {{ name }} }} }} }}"
             )),
         ),
         "nested" | "tx_nested" => (
