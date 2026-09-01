@@ -186,6 +186,7 @@ pub struct AdmissionQueueMetrics {
     pub pool_waiting_inserts: IntGauge,
     pub pool_already_processed: IntCounterVec,
     pub pool_commit_latency: HistogramVec,
+    pub pool_abandoned: IntCounterVec,
 }
 
 impl AdmissionQueueMetrics {
@@ -274,6 +275,13 @@ impl AdmissionQueueMetrics {
                 "Time from insert into the transaction pool to commit of the block that proposed the entry",
                 &["lane"],
                 mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            pool_abandoned: register_int_counter_vec_with_registry!(
+                "consensus_transaction_pool_abandoned",
+                "Pool entries dropped at proposal time because their submitter stopped waiting",
+                &["lane"],
                 registry,
             )
             .unwrap(),

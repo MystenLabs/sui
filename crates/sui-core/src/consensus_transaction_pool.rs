@@ -139,6 +139,10 @@ impl PendingAck {
     fn drop_deliberately(mut self, _reason: &'static str) {
         drop(self.ack.take().expect("ack must be pending"));
     }
+
+    fn is_abandoned_system(&self) -> bool {
+        matches!(&self.ack, Some(EntryAck::SystemOrPing(sender)) if sender.is_closed())
+    }
 }
 
 impl Drop for PendingAck {
@@ -702,6 +706,11 @@ impl ConsensusTransactionPool {
             .with_label_values(&[stage, method])
             .get()
     }
+
+    #[cfg(test)]
+    pub fn abandoned_count(&self, lane: &str) -> u64 {
+        self.metrics.pool_abandoned.with_label_values(&[lane]).get()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -934,18 +943,30 @@ impl TransactionPool for ConsensusTransactionPool {
             );
         }
 
-        let pings = pool.pings.drain(..).collect::<Vec<_>>();
+        let (abandoned_pings, pings): (Vec<_>, Vec<_>) = pool
+            .pings
+            .drain(..)
+            .partition(PendingAck::is_abandoned_system);
         self.metrics
             .pool_depth
             .with_label_values(&["ping"])
-            .sub(pings.len() as i64);
+            .sub((pings.len() + abandoned_pings.len()) as i64);
 
         let mut transactions = Vec::new();
         let mut entries = Vec::new();
         let mut total_bytes = 0usize;
         let mut limit_reached = LimitReached::AllTransactionsIncluded;
 
+        let mut abandoned = Vec::new();
         while let Some(entry) = pool.system.front() {
+            // Skip entries whose submitter stopped waiting (e.g. a checkpoint
+            // signature whose checkpoint was already synced).
+            if entry.ack.is_abandoned_system() {
+                let entry = pool.system.pop_front().expect("front entry must exist");
+                self.decrement_lane_metrics("system", &entry);
+                abandoned.push(entry);
+                continue;
+            }
             if let Some(limit) =
                 entry_limit(entry, transactions.len(), total_bytes, max_count, max_bytes)
             {
@@ -1000,6 +1021,22 @@ impl TransactionPool for ConsensusTransactionPool {
 
         // Resolve flushed/processed items outside the mutex.
         self.resolve_flushed_user_entries(flushed);
+        for entry in abandoned {
+            self.metrics
+                .pool_abandoned
+                .with_label_values(&["system"])
+                .inc();
+            entry
+                .ack
+                .drop_deliberately("submitter stopped waiting before proposal");
+        }
+        for ping in abandoned_pings {
+            self.metrics
+                .pool_abandoned
+                .with_label_values(&["ping"])
+                .inc();
+            ping.drop_deliberately("submitter stopped waiting before proposal");
+        }
         for mut entry in already_processed {
             self.decrement_lane_metrics("user", &entry);
             let method = all_processed(&mut entry.processed)
@@ -1598,6 +1635,32 @@ mod tests {
         for receiver in receivers {
             assert_eq!(receiver.await.unwrap().1.len(), 1);
         }
+    }
+
+    #[tokio::test]
+    async fn take_skips_abandoned_system_entries_and_pings() {
+        let (_state, pool) = test_state_and_pool(1).await;
+        let epoch = pool.epoch();
+
+        // Abandoned entry first, so skipping it must not consume the count budget
+        // of take(1, ..) below.
+        let stale = pool.submit(epoch, &[transaction()]).unwrap();
+        drop(stale);
+        let live = pool.submit(epoch, &[transaction()]).unwrap();
+        let stale_ping = pool.submit(epoch, &[]).unwrap();
+        drop(stale_ping);
+        let live_ping = pool.submit(epoch, &[]).unwrap();
+
+        let (transactions, ack, _) = pool.take(1, usize::MAX);
+        assert_eq!(transactions.len(), 1);
+        assert_eq!(pool.queue_depth("system"), 0);
+        assert_eq!(pool.queue_depth("ping"), 0);
+        assert_eq!(pool.abandoned_count("system"), 1);
+        assert_eq!(pool.abandoned_count("ping"), 1);
+
+        ack(block(1));
+        assert_eq!(live.await.unwrap().1.len(), 1);
+        assert_eq!(live_ping.await.unwrap().1, vec![PING_TRANSACTION_INDEX]);
     }
 
     #[tokio::test]
