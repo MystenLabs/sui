@@ -7,9 +7,9 @@ module examples::coffee;
 
 use sui::balance::{Self, Balance};
 use sui::coin::{Self, TreasuryCap, Coin};
+use sui::coin_registry;
 use sui::sui::SUI;
 use sui::token::{Self, Token};
-use sui::tx_context::sender;
 
 /// Error code for incorrect amount.
 const EIncorrectAmount: u64 = 0;
@@ -38,19 +38,19 @@ public struct CoffeeShop has key {
 public struct CoffeePurchased has copy, drop, store {}
 
 // Create and share the `CoffeeShop` object.
-#[allow(deprecated_usage)]
 fun init(otw: COFFEE, ctx: &mut TxContext) {
-    let (coffee_points, metadata) = coin::create_currency(
+    let (builder, coffee_points) = coin_registry::new_currency_with_otw(
         otw,
-        0,
-        b"COFFEE",
-        b"Coffee Point",
-        b"Buy 4 coffees and get 1 free",
-        std::option::none(),
+        0, // no decimals
+        b"COFFEE".to_string(),
+        b"Coffee Point".to_string(),
+        b"Buy 4 coffees and get 1 free".to_string(),
+        b"".to_string(),
         ctx,
     );
 
-    sui::transfer::public_freeze_object(metadata);
+    let metadata_cap = builder.finalize(ctx);
+    sui::transfer::public_transfer(metadata_cap, ctx.sender());
     sui::transfer::share_object(CoffeeShop {
         coffee_points,
         id: object::new(ctx),

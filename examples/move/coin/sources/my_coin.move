@@ -3,30 +3,30 @@
 
 module examples::my_coin;
 
-use sui::coin::{Self, TreasuryCap};
+use sui::coin::TreasuryCap;
+use sui::coin_registry;
 
 // The type identifier of coin. The coin will have a type
 // tag of kind: `Coin<package_object::mycoin::MYCOIN>`
 // Make sure that the name of the type matches the module's name.
 public struct MY_COIN has drop {}
 
-#[allow(deprecated_usage)]
 // Module initializer is called once on module publish. A treasury
 // cap is sent to the publisher, who then controls minting and burning.
 fun init(witness: MY_COIN, ctx: &mut TxContext) {
-    let (treasury, metadata) = coin::create_currency(
+    let (builder, treasury_cap) = coin_registry::new_currency_with_otw(
         witness,
-        6,
-        b"MY_COIN",
-        b"",
-        b"",
-        option::none(),
+        6, // Decimals
+        b"MY_COIN".to_string(), // Symbol
+        b"My Coin".to_string(), // Name
+        b"Example Coin".to_string(), // Description
+        b"".to_string(), // Icon URL
         ctx,
     );
-    // Freezing this object makes the metadata immutable, including the title, name, and icon image.
-    // If you want to allow mutability, share it with public_share_object instead.
-    transfer::public_freeze_object(metadata);
-    transfer::public_transfer(treasury, ctx.sender())
+
+    let metadata_cap = builder.finalize(ctx);
+    transfer::public_transfer(metadata_cap, ctx.sender());
+    transfer::public_transfer(treasury_cap, ctx.sender());
 }
 
 // Create MY_COINs using the TreasuryCap.
@@ -36,6 +36,6 @@ public fun mint(
     recipient: address,
     ctx: &mut TxContext,
 ) {
-    let coin = coin::mint(treasury_cap, amount, ctx);
+    let coin = treasury_cap.mint(amount, ctx);
     transfer::public_transfer(coin, recipient)
 }
