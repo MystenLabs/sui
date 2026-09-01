@@ -7397,9 +7397,6 @@
           }
         ]
       },
-      "MLDSA65SuiSignature": {
-        "$ref": "#/components/schemas/Base64"
-      },
       "MoveCallParams": {
         "type": "object",
         "required": [
@@ -8945,18 +8942,6 @@
               }
             },
             "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "MLDSA65"
-            ],
-            "properties": {
-              "MLDSA65": {
-                "$ref": "#/components/schemas/Base64"
-              }
-            },
-            "additionalProperties": false
           }
         ]
       },
@@ -9113,18 +9098,6 @@
             "properties": {
               "Secp256r1SuiSignature": {
                 "$ref": "#/components/schemas/Secp256r1SuiSignature"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "MLDSA65SuiSignature"
-            ],
-            "properties": {
-              "MLDSA65SuiSignature": {
-                "$ref": "#/components/schemas/MLDSA65SuiSignature"
               }
             },
             "additionalProperties": false

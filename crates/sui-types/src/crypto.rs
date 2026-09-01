@@ -284,6 +284,9 @@ pub enum PublicKey {
     ZkLogin(ZkLoginPublicIdentifier),
     Passkey(Secp256r1PublicKeyAsBytes),
     // Boxed because the 1,952-byte pk; Box is transparent to BCS.
+    // Schema-only skip (serde unaffected): keeps the generated openrpc spec
+    // unchanged, since deprecated JSON-RPC will never serve ML-DSA.
+    #[schemars(skip)]
     MLDSA65(Box<MLDSA65PublicKeyAsBytes>),
 }
 
@@ -750,6 +753,8 @@ pub enum Signature {
     Ed25519SuiSignature,
     Secp256k1SuiSignature,
     Secp256r1SuiSignature,
+    // Schema-only skip: see `PublicKey::MLDSA65`.
+    #[schemars(skip)]
     MLDSA65SuiSignature,
 }
 
