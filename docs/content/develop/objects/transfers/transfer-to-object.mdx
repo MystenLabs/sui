@@ -305,8 +305,8 @@ tx.moveCall({
   arguments: [tx.object("0xcafe"), tx.object("0xc0ffee")]
 });
 const result = await client.signAndExecuteTransaction({
-      transaction: tx,
-  });
+    transaction: tx,
+});
 ...
 ```
 
@@ -335,7 +335,7 @@ client
 
 </Tabs>
 
-Object arguments can also have an `ObjectRef` constructor where you can provide an explicit object ID, version, and digest. There is also a `ReceivingRef` constructor that takes the same arguments corresponding to a receiving argument.
+Object arguments can also have an `ReceivingRef` constructor where you can provide an explicit object ID, version, and digest.
 
 ## Soul-bound objects {#soul-bound-example}
 
