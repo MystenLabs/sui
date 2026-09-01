@@ -436,6 +436,7 @@ pub struct Constant {
     pub doc: DocComment,
     pub attributes: Vec<Attributes>,
     pub loc: Loc,
+    pub visibility: Visibility,
     pub signature: Type,
     pub name: ConstantName,
     pub value: Exp,
@@ -2103,12 +2104,14 @@ impl AstDebug for Constant {
             doc,
             attributes,
             loc: _loc,
+            visibility,
             name,
             signature,
             value,
         } = self;
         doc.ast_debug(w);
         attributes.ast_debug(w);
+        visibility.ast_debug(w);
         w.write(format!("const {}:", name));
         signature.ast_debug(w);
         w.write(" = ");

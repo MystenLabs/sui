@@ -1348,7 +1348,7 @@ fn module_(
         }
     }
     let mut use_funs = use_funs(context, use_funs_builder);
-    check_visibility_modifiers(context, &functions, &friends, package_name);
+    check_visibility_modifiers(context, &functions, &constants, &friends, package_name);
 
     let stdlib_definitions = stdlib_definitions(context, loc);
 
@@ -1383,6 +1383,7 @@ fn module_(
 fn check_visibility_modifiers(
     context: &mut Context,
     functions: &UniqueMap<FunctionName, E::Function>,
+    constants: &UniqueMap<ConstantName, E::Constant>,
     friends: &UniqueMap<ModuleIdent, E::Friend>,
     package_name: Option<Symbol>,
 ) {
@@ -1430,6 +1431,7 @@ fn check_visibility_modifiers(
     // mark conflicting friend usage
     let mut friend_usage = friends.iter().next().map(|(_, _, friend)| friend.loc);
     let mut public_package_usage = None;
+
     for (_, _, function) in functions {
         match function.visibility {
             E::Visibility::Friend(loc) if friend_usage.is_none() => {
@@ -1440,6 +1442,56 @@ fn check_visibility_modifiers(
                 public_package_usage = Some(loc);
             }
             _ => (),
+        }
+    }
+
+    for (_, _, constant) in constants {
+        // error constants are encoded against their defining module's tables, so they cannot be
+        // given any visibility
+        if let Some(error_attr) = constant
+            .attributes
+            .get_(&known_attributes::AttributeKind_::Error)
+            && !matches!(constant.visibility, E::Visibility::Internal)
+        {
+            use known_attributes::ErrorAttribute as ErrAttr;
+
+            let Some(vis_loc) = constant.visibility.loc() else {
+                context.add_diag(ice!((
+                    constant.loc,
+                    "ICE: Non-internal visibility for error constant must have a loc"
+                )));
+                continue;
+            };
+
+            let msg = format!(
+                "Invalid constant declaration. '#[{attr}]' constants may only be used internal \
+                 to their module, and may not be declared '{vis}'",
+                attr = ErrAttr::ERROR,
+                vis = constant.visibility,
+            );
+
+            let attr_msg = format!("Declared as '#[{}]' here", ErrAttr::ERROR);
+
+            context.add_diag(diag!(
+                Declarations::InvalidVisibilityModifier,
+                (vis_loc, msg),
+                (error_attr.loc, attr_msg)
+            ));
+        }
+
+        match constant.visibility {
+            E::Visibility::Package(loc) => {
+                context.check_feature(package_name, FeatureGate::CrossModuleConstants, loc);
+                public_package_usage = Some(loc);
+            }
+            E::Visibility::Internal => (),
+            E::Visibility::Public(loc) | E::Visibility::Friend(loc) => {
+                let msg = format!(
+                    "Invalid constant declaration. Constants may only be internal or '{}'",
+                    E::Visibility::PACKAGE,
+                );
+                context.add_diag(diag!(Declarations::InvalidVisibilityModifier, (loc, msg)));
+            }
         }
     }
 
@@ -1469,6 +1521,20 @@ fn check_visibility_modifiers(
             E::Visibility::FRIEND_IDENT,
             E::Visibility::PACKAGE_IDENT
         );
+
+        for (_, _, constant) in constants {
+            // Erroring on `friend` here is odd since we disallow it above, but why not?
+            let (E::Visibility::Package(loc) | E::Visibility::Friend(loc)) = constant.visibility
+            else {
+                continue;
+            };
+            context.add_diag(diag!(
+                Declarations::InvalidVisibilityModifier,
+                (loc, package_error_msg.clone()),
+                (friend_usage, friend_error_msg.clone())
+            ));
+        }
+
         for (_, _, function) in functions {
             match function.visibility {
                 E::Visibility::Friend(loc) => {
@@ -2698,6 +2764,7 @@ fn constant_(
         doc,
         attributes: pattributes,
         loc,
+        visibility: pvisibility,
         name,
         signature: psignature,
         value: pvalue,
@@ -2713,6 +2780,7 @@ fn constant_(
         index,
         attributes,
         loc,
+        visibility: visibility(pvisibility),
         signature,
         value,
     };

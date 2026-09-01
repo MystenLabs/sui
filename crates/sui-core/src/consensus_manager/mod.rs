@@ -3,6 +3,9 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::{BlockStatusReceiver, ConsensusClient};
 use crate::consensus_handler::{ConsensusHandlerInitializer, MysticetiConsensusHandler};
+use crate::consensus_transaction_pool::{
+    ConsensusTransactionPool, TransactionPoolClient, TransactionPoolContext,
+};
 use crate::consensus_validator::SuiTxValidator;
 use crate::mysticeti_adapter::LazyMysticetiClient;
 use arc_swap::ArcSwapOption;
@@ -13,11 +16,12 @@ use consensus_config::{
 };
 use consensus_core::{
     Clock, CommitConsumerArgs, CommitConsumerMonitor, CommitIndex, ConsensusAuthority, NetworkType,
-    RandomnessSignatureHandler, storage::rocksdb_store::RocksDBStore,
+    RandomnessSignatureHandler, TransactionPool, storage::rocksdb_store::RocksDBStore,
 };
 use core::panic;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair as _;
+use mysten_common::debug_fatal;
 use mysten_metrics::{RegistryID, RegistryService};
 use mysten_network::Multiaddr;
 use prometheus::{
@@ -192,6 +196,8 @@ pub struct ConsensusManager {
     // client that gets created for every new epoch.
     client: Arc<LazyMysticetiClient>,
     consensus_client: Arc<UpdatableConsensusClient>,
+    transaction_pool_context: Option<Arc<TransactionPoolContext>>,
+    transaction_pool: ArcSwapOption<ConsensusTransactionPool>,
 
     consensus_handler: Mutex<Option<MysticetiConsensusHandler>>,
 
@@ -219,6 +225,7 @@ impl ConsensusManager {
         consensus_config: &ConsensusConfig,
         registry_service: &RegistryService,
         consensus_client: Arc<UpdatableConsensusClient>,
+        transaction_pool_context: Option<Arc<TransactionPoolContext>>,
         node_role: NodeRole,
     ) -> Self {
         let metrics = Arc::new(ConsensusManagerMetrics::new(
@@ -241,6 +248,8 @@ impl ConsensusManager {
             authority: ArcSwapOption::empty(),
             client,
             consensus_client,
+            transaction_pool_context,
+            transaction_pool: ArcSwapOption::empty(),
             consensus_handler: Mutex::new(None),
             consumer_monitor: ArcSwapOption::empty(),
             consumer_monitor_sender,
@@ -284,7 +293,40 @@ impl ConsensusManager {
             protocol_config.version
         );
 
-        self.consensus_client.set(self.client.clone());
+        let is_validator = epoch_store.is_validator();
+        if is_validator && self.protocol_keypair.is_none() {
+            // The manager was built for a non-validator role and reused across a
+            // promotion to validator; consensus cannot sign proposals in this state.
+            debug_fatal!("validator epoch {epoch} started without a protocol keypair");
+        }
+        let pool_context = self
+            .transaction_pool_context
+            .as_ref()
+            .filter(|_| is_validator);
+        let transaction_pool: Option<Arc<dyn TransactionPool>> = if let Some(context) = pool_context
+        {
+            let config = node_config
+                .consensus_transaction_pool
+                .as_ref()
+                .expect("transaction pool context requires pool config");
+            let pool = Arc::new(ConsensusTransactionPool::new(
+                epoch_store.clone(),
+                config.max_pending_transactions(&self.consensus_config),
+                context.metrics().clone(),
+                context.adapter_metrics().clone(),
+            ));
+            context.set_active(epoch, pool.clone());
+            self.transaction_pool.store(Some(pool.clone()));
+            self.consensus_client
+                .set(Arc::new(TransactionPoolClient::new(context.clone())));
+            Some(pool)
+        } else {
+            if let Some(context) = &self.transaction_pool_context {
+                context.set_unavailable(epoch);
+            }
+            self.consensus_client.set(self.client.clone());
+            None
+        };
 
         let consensus_config = node_config
             .consensus_config()
@@ -354,14 +396,16 @@ impl ConsensusManager {
             self.network_keypair.clone(),
             Arc::new(Clock::default()),
             Arc::new(tx_validator.clone()),
-            None,
+            transaction_pool,
             commit_consumer,
             registry.clone(),
             *boot_counter,
             randomness_signature_handler,
         )
         .await;
-        let client = authority.transaction_client();
+        let client = pool_context
+            .is_none()
+            .then(|| authority.transaction_client());
 
         let registry_id = self.registry_service.add(registry.clone());
 
@@ -380,7 +424,9 @@ impl ConsensusManager {
         }
 
         // Initialize the client to send transactions to this Mysticeti instance.
-        self.client.set(client);
+        if let Some(client) = client {
+            self.client.set(client);
+        }
 
         // Send the consumer monitor to the replay waiter.
         let _ = self.consumer_monitor_sender.send(monitor);
@@ -417,6 +463,10 @@ impl ConsensusManager {
         };
 
         // Stop consensus submissions.
+        let pool = self.transaction_pool.swap(None);
+        if let Some(pool) = &pool {
+            pool.close();
+        }
         self.client.clear();
 
         // swap with empty to ensure there is no other reference to authority and we can safely do Arc unwrap
@@ -437,7 +487,9 @@ impl ConsensusManager {
         // unregister the registry id
         self.registry_service.remove(registry_id);
 
-        self.consensus_client.clear();
+        if pool.is_none() {
+            self.consensus_client.clear();
+        }
 
         let elapsed = start_time.elapsed().as_secs_f64();
         self.metrics.shutdown_latency.set(elapsed as i64);
@@ -479,6 +531,16 @@ impl ConsensusManager {
         let mut store_path = self.storage_base_path.clone();
         store_path.push(format!("{}", epoch));
         store_path
+    }
+}
+
+impl Drop for ConsensusManager {
+    fn drop(&mut self) {
+        // Abrupt node teardown can bypass async shutdown; explicitly disarm any
+        // pending pool acknowledgements before the manager's fields are dropped.
+        if let Some(pool) = self.transaction_pool.swap(None) {
+            pool.close();
+        }
     }
 }
 

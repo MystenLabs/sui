@@ -11,6 +11,9 @@ pub mod regex;
 
 pub mod tests;
 
+/// An upper bound on the capacity pre-allocated for canonical references.
+pub(crate) const MAX_CANONICAL_REFERENCE_CAPACITY: usize = 512;
+
 pub type Result<T> = std::result::Result<T, InvariantViolation>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

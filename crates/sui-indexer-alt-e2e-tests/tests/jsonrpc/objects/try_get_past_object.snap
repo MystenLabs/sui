@@ -6,6 +6,14 @@ processed 12 tasks
 init:
 A: object(0,0), B: object(0,1)
 
+// 1. Trying to fetch an object at too low a version
+// 2. ...at its first version
+// 3. ...after it has been modified
+// 4. ...after it has been deleted
+// 5. Show the details of a non-existent object verson
+// 6. Show the details of an object version
+// 7. Show the details of a deleted object version
+
 task 1, lines 14-16:
 //# programmable --sender A --inputs 42 @A
 //> 0: SplitCoins(Gas, [Input(0)]);

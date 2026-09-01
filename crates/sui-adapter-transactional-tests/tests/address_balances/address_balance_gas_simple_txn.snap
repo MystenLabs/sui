@@ -1,13 +1,15 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 908
 ---
 processed 8 tasks
+
+// Test send_funds and redeem_funds from sui::balance
 
 init:
 A: object(0,0), B: object(0,1), C: object(0,2)
 
-task 1, lines 9-11:
+task 1, lines 8-11:
+// Send 1000000000 from A to B
 //# programmable --sender A --inputs 1000000000 @B
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
@@ -23,7 +25,7 @@ task 3, line 15:
 //# view-funds sui::balance::Balance<sui::sui::SUI> B
 1000000000
 
-task 4, lines 17-19:
+task 4, line 17:
 //# view-object 0,1
 Owner: Account Address ( B )
 Version: 1
@@ -38,7 +40,8 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 5, line 20:
+task 5, lines 19-20:
+// Use address balance as gas
 //# transfer-object --recipient A --sender B 0,1 --gas-budget 1000000000 --address-balance-gas
 mutated: object(0,1)
 accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Split, 1988000)

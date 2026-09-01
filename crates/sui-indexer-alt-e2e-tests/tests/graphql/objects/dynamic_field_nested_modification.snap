@@ -6,6 +6,10 @@ processed 8 tasks
 init:
 A: object(0,0)
 
+// When a nested dynamic field is modified, its root object is also modified,
+// but intermediate dynamic fields in the path are not, so it is not always
+// safe to bound a dynamic field by the version of its immediate parent.
+
 task 1, lines 10-34:
 //# publish
 created: object(1,0)

@@ -6,27 +6,30 @@ processed 10 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 7-8:
+task 1, lines 6-8:
+// Test 1: Single element MakeMoveVec
 //# programmable --sender A --inputs 10u64
 //> 0: MakeMoveVec<u64>([Input(0)]);
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 10-12:
+task 2, line 10:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 13-14:
+task 3, lines 12-14:
+// Test 2: Multiple elements MakeMoveVec
 //# programmable --sender A --inputs 10u64 11u64
 //> 0: MakeMoveVec<u64>([Input(0), Input(1)]);
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4, lines 16-18:
+task 4, line 16:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 5, lines 19-20:
+task 5, lines 18-20:
+// Test 3: Empty MakeMoveVec
 //# programmable --sender A
 //> 0: MakeMoveVec<u64>([]);
 mutated: object(0,0)

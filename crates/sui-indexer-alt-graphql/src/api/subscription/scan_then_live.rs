@@ -35,16 +35,22 @@ use tracing::warn;
 
 use crate::config::SubscriptionConfig;
 use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::upcast;
 use crate::pagination::Page;
 use crate::pagination::PageLimits;
-use crate::scope::Scope;
 use crate::task::streaming::CheckpointBroadcaster;
 use crate::task::streaming::ProcessedCheckpoint;
-use crate::task::streaming::StreamingPackageStore;
+use crate::task::streaming::StreamedCaches;
+use crate::task::streaming::SubscriberLimit;
 use crate::task::streaming::SubscriptionBroadcast;
+use crate::task::streaming::SubscriptionLifecycleGuard;
+use crate::task::streaming::SubscriptionTerminationReason;
 use crate::task::streaming::broadcast_error;
 use crate::task::streaming::reconnect_error;
 use crate::task::streaming::wait_for_pipelines_catching_up_at;
+
+use super::Error;
 use crate::task::watermark::Watermarks;
 
 /// How long to wait before re-requesting when the scan has drained the indexer's current tip but not
@@ -78,17 +84,24 @@ pub(super) trait Subscribable {
         filter: &'a Self::Filter,
     ) -> impl Future<Output = Result<StreamPage<Self::ScanItem>, RpcError>> + Send + 'a;
 
-    /// Build the GraphQL node from one scanned item's payload. The driver mints the cursor from the
-    /// item's position and assembles the edge.
-    fn build_node(scope: &Scope, payload: &Self::ScanItem) -> Result<Self::Item, RpcError>;
+    /// Build the GraphQL node from one scanned item's payload, constructing whatever scope the feed
+    /// resolves against. The driver mints the cursor from the item's position and assembles the edge.
+    fn build_node(
+        caches: &Arc<StreamedCaches>,
+        resolver_limits: &sui_package_resolver::Limits,
+        payload: &Self::ScanItem,
+    ) -> Result<Self::Item, RpcError>;
 
     /// The filter-matching edges in one live checkpoint, in delivery order.
     fn matching_edges(
         checkpoint: &Arc<ProcessedCheckpoint>,
-        package_store: &Arc<StreamingPackageStore>,
+        caches: &Arc<StreamedCaches>,
         resolver_limits: &sui_package_resolver::Limits,
         filter: &Self::Filter,
     ) -> Result<Vec<Edge<String, Self::Item, EmptyFields>>, RpcError>;
+
+    /// The feed's name, used to label its lifecycle metrics.
+    fn subscription_type() -> &'static str;
 }
 
 /// One backfill scan output: either a matching edge, or a coverage marker whose `checkpoint` is the
@@ -115,17 +128,48 @@ impl<I: OutputType> Scanned<I> {
 /// Subscribe to items matching `filter`: backfill from `resume` toward the tip, then follow live.
 /// The handoff is pinned mid-scan, once the scan frontier comes within `handoff_threshold` of the
 /// tip, so even a deep backfill catches up within one connection instead of lagging the receiver.
+#[allow(clippy::type_complexity)]
 pub(super) fn subscribe<S: Subscribable>(
     reader: AlphaLedgerGrpcReader,
     broadcast: Arc<SubscriptionBroadcast>,
-    package_store: Arc<StreamingPackageStore>,
+    caches: Arc<StreamedCaches>,
     resolver_limits: sui_package_resolver::Limits,
     watermarks_rx: watch::Receiver<Arc<Watermarks>>,
     filter: S::Filter,
     after: Option<S::Cursor>,
     after_checkpoint: Option<u64>,
+    subscriber_limit: SubscriberLimit,
     config: SubscriptionConfig,
-) -> impl Stream<Item = Result<Edge<String, S::Item, EmptyFields>, RpcError>> {
+) -> Result<impl Stream<Item = Result<Edge<String, S::Item, EmptyFields>, RpcError>>, RpcError<Error>>
+where
+    for<'a> CursorToken: From<&'a S::Cursor>,
+{
+    // The checkpoint to resume after: the later of the `after` cursor and `afterCheckpoint`. A
+    // cursor's checkpoint is read through its `CursorToken` position, so the driver needs no
+    // per-feed accessor.
+    let start_from = match (
+        after
+            .as_ref()
+            .map(|c| CursorToken::from(c).position.checkpoint()),
+        after_checkpoint,
+    ) {
+        (Some(a), Some(b)) => Some(a.max(b)),
+        (a, b) => a.or(b),
+    };
+
+    // Reject a far-ahead resume before admitting, so bad input never claims a slot or lands in the
+    // subscription lifecycle metrics.
+    reject_if_start_too_far_ahead(start_from, &broadcast, &config)?;
+
+    // Claim a concurrency slot for the subscription's lifetime; at capacity this is `Err` with no
+    // guard created (and so no lifecycle metric).
+    let guard = SubscriptionLifecycleGuard::new(
+        S::subscription_type(),
+        broadcast.metrics(),
+        &subscriber_limit,
+    )
+    .map_err(upcast)?;
+
     // Size the backfill scan page to the resolve concurrency. Scans are sequential (each needs the
     // previous page's cursor), so feeding one window of `n` concurrent resolutions takes ceil(n /
     // page) scans: a page much smaller than the concurrency makes scanning the bottleneck, a much
@@ -136,7 +180,7 @@ pub(super) fn subscribe<S: Subscribable>(
     // checkpoints that arrive during the handoff so the receiver does not lag.
     let handoff_threshold = config.broadcast_buffer as u64 / 2;
 
-    stream! {
+    Ok(stream! {
         let mut pending_receiver = None;
         let mut handoff: Option<u64> = None;
         let mut last_checkpoint: Option<u64> = None;
@@ -147,7 +191,7 @@ pub(super) fn subscribe<S: Subscribable>(
             let checkpoint_lo = after_checkpoint.map_or(0, |cp| cp.saturating_add(1));
             let scan = backfill::<S>(
                 reader,
-                package_store.clone(),
+                caches.clone(),
                 resolver_limits.clone(),
                 watermarks_rx,
                 filter.clone(),
@@ -159,6 +203,7 @@ pub(super) fn subscribe<S: Subscribable>(
                 let scanned = match scanned {
                     Ok(scanned) => scanned,
                     Err(e) => {
+                        guard.terminate(SubscriptionTerminationReason::BackfillError);
                         yield Err(e);
                         return;
                     }
@@ -179,6 +224,7 @@ pub(super) fn subscribe<S: Subscribable>(
                             break;
                         }
                         yield Ok(edge);
+                        guard.record_backfill_delivered();
                     }
                     // A coverage marker (its `checkpoint` is the fully-scanned frontier): stop once
                     // it has covered the handoff.
@@ -194,17 +240,36 @@ pub(super) fn subscribe<S: Subscribable>(
 
         // Phase 2: follow live from `handoff + 1` (a fresh receiver if there was no backfill).
         let receiver = pending_receiver.unwrap_or_else(|| broadcast.broadcaster().resubscribe());
-        for await edge in live::<S>(receiver, last_checkpoint, package_store, resolver_limits, filter) {
+        for await edge in
+            live::<S>(receiver, last_checkpoint, caches, resolver_limits, filter, guard)
+        {
             yield edge;
         }
+    })
+}
+
+/// Reject a start point sitting more than `max_ahead` checkpoints past the chain tip. There is
+/// nothing to backfill ahead of the tip, so such a request would only wait for the chain to reach
+/// it, and a far-future one would hold the connection open indefinitely.
+fn reject_if_start_too_far_ahead(
+    start_from: Option<u64>,
+    broadcast: &SubscriptionBroadcast,
+    config: &SubscriptionConfig,
+) -> Result<(), RpcError<Error>> {
+    let max_ahead = config.max_start_checkpoints_ahead_of_tip;
+    if let Some(start) = start_from
+        && start > broadcast.network_tip().saturating_add(max_ahead)
+    {
+        return Err(bad_user_input(Error::TooFarAheadOfTip { max: max_ahead }));
     }
+    Ok(())
 }
 
 /// Scan matches from the resume point toward the tip, yielding each match and a per-page coverage
 /// marker. Open-ended: the caller stops it once the handoff is covered.
 fn backfill<S: Subscribable>(
     reader: AlphaLedgerGrpcReader,
-    package_store: Arc<StreamingPackageStore>,
+    caches: Arc<StreamedCaches>,
     resolver_limits: sui_package_resolver::Limits,
     mut watermarks_rx: watch::Receiver<Arc<Watermarks>>,
     filter: S::Filter,
@@ -213,10 +278,6 @@ fn backfill<S: Subscribable>(
     scan_page_size: usize,
 ) -> impl Stream<Item = Result<Scanned<S::Item>, RpcError>> {
     stream! {
-        // Finalized, indexed data: fields resolve lazily through the index. `checkpoint_viewed_at`
-        // is None (uniform with live), so the scan range is supplied explicitly rather than derived
-        // from the scope.
-        let scope = Scope::for_backfilled_transactions(package_store, resolver_limits);
         let limits = PageLimits {
             default: scan_page_size as u32,
             max: scan_page_size as u32,
@@ -230,7 +291,8 @@ fn backfill<S: Subscribable>(
         loop {
             let (items, next_after) = match scan_page::<S>(
                 &reader,
-                &scope,
+                &caches,
+                &resolver_limits,
                 &limits,
                 cp_bounds.clone(),
                 after.as_ref(),
@@ -268,9 +330,10 @@ fn covered_checkpoint(token: &CursorToken) -> u64 {
 fn live<S: Subscribable>(
     mut receiver: CheckpointBroadcaster,
     mut last_checkpoint: Option<u64>,
-    package_store: Arc<StreamingPackageStore>,
+    caches: Arc<StreamedCaches>,
     resolver_limits: sui_package_resolver::Limits,
     filter: S::Filter,
+    guard: SubscriptionLifecycleGuard,
 ) -> impl Stream<Item = Result<Edge<String, S::Item, EmptyFields>, RpcError>> {
     stream! {
         let mut delivered_live = false;
@@ -289,15 +352,24 @@ fn live<S: Subscribable>(
                                 received = seq,
                                 "Unexpected gap between scan and live; disconnecting"
                             );
+                            guard.terminate(SubscriptionTerminationReason::UnexpectedGap);
                             yield Err(reconnect_error());
                             return;
                         }
                     }
                     // Deliver each matching item as its own payload, ordered within the checkpoint.
                     // Empty checkpoints yield nothing.
-                    let edges = S::matching_edges(&checkpoint, &package_store, &resolver_limits, &filter)?;
+                    let edges = match S::matching_edges(&checkpoint, &caches, &resolver_limits, &filter) {
+                        Ok(edges) => edges,
+                        Err(e) => {
+                            guard.terminate(SubscriptionTerminationReason::Error);
+                            yield Err(e);
+                            return;
+                        }
+                    };
                     for edge in edges {
                         yield Ok(edge);
+                        guard.record_delivered(checkpoint.summary.timestamp_ms);
                     }
                     last_checkpoint = Some(seq);
                     delivered_live = true;
@@ -305,10 +377,12 @@ fn live<S: Subscribable>(
                 // A lag before the first live checkpoint is catch-up overflow (likely kv-rpc lag).
                 Err(broadcast::error::RecvError::Lagged(missed)) if !delivered_live => {
                     warn!(missed, "Subscriber fell behind during catch-up; disconnecting");
+                    guard.terminate(SubscriptionTerminationReason::Lagged);
                     yield Err(reconnect_error());
                     return;
                 }
                 Err(e) => {
+                    guard.terminate(SubscriptionTerminationReason::from_recv_error(&e));
                     yield Err(broadcast_error(e));
                     return;
                 }
@@ -332,7 +406,8 @@ fn scan_backoff() -> ExponentialBackoff {
 /// matches, a trailing coverage marker, and the cursor to resume from.
 async fn scan_page<S: Subscribable>(
     reader: &AlphaLedgerGrpcReader,
-    scope: &Scope,
+    caches: &Arc<StreamedCaches>,
+    resolver_limits: &sui_package_resolver::Limits,
     limits: &PageLimits,
     cp_bounds: RangeInclusive<u64>,
     after: Option<&S::Cursor>,
@@ -365,7 +440,10 @@ async fn scan_page<S: Subscribable>(
                 .encode_cursor();
             items.push(Scanned::Match {
                 checkpoint,
-                edge: Edge::new(cursor, S::build_node(scope, &item.payload)?),
+                edge: Edge::new(
+                    cursor,
+                    S::build_node(caches, resolver_limits, &item.payload)?,
+                ),
             });
         }
         // Coverage marker at the fully-scanned end: advances the handoff even on a match-less page.

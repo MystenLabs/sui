@@ -10,10 +10,10 @@ use mysten_common::in_test_configuration;
 use rand::rngs::OsRng;
 use sui_config::ExecutionCacheConfig;
 use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
-use sui_config::node::AuthorityOverloadConfig;
 #[cfg(msim)]
 use sui_config::node::ExecutionTimeObserverConfig;
 use sui_config::node::FundsWithdrawSchedulerType;
+use sui_config::node::{AuthorityOverloadConfig, ConsensusTransactionPoolConfig};
 use sui_config::transaction_deny_config::PeerDenySyncConfig;
 use sui_protocol_config::Chain;
 use sui_types::base_types::{AuthorityName, SuiAddress};
@@ -115,6 +115,7 @@ pub struct ConfigBuilder<R = OsRng> {
     jwk_fetch_interval: Option<Duration>,
     num_unpruned_validators: Option<usize>,
     authority_overload_config: Option<AuthorityOverloadConfig>,
+    consensus_transaction_pool_config: Option<ConsensusTransactionPoolConfig>,
     execution_cache_config: Option<ExecutionCacheConfig>,
     data_ingestion_dir: Option<PathBuf>,
     policy_config: Option<PolicyConfig>,
@@ -161,6 +162,7 @@ impl ConfigBuilder {
             jwk_fetch_interval: None,
             num_unpruned_validators: None,
             authority_overload_config: None,
+            consensus_transaction_pool_config: None,
             execution_cache_config: None,
             data_ingestion_dir: None,
             policy_config: None,
@@ -360,6 +362,14 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_consensus_transaction_pool_config(
+        mut self,
+        config: ConsensusTransactionPoolConfig,
+    ) -> Self {
+        self.consensus_transaction_pool_config = Some(config);
+        self
+    }
+
     pub fn with_execution_cache_config(mut self, c: ExecutionCacheConfig) -> Self {
         self.execution_cache_config = Some(c);
         self
@@ -388,6 +398,7 @@ impl<R> ConfigBuilder<R> {
             num_unpruned_validators: self.num_unpruned_validators,
             jwk_fetch_interval: self.jwk_fetch_interval,
             authority_overload_config: self.authority_overload_config,
+            consensus_transaction_pool_config: self.consensus_transaction_pool_config,
             execution_cache_config: self.execution_cache_config,
             data_ingestion_dir: self.data_ingestion_dir,
             policy_config: self.policy_config,
@@ -583,6 +594,10 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                         builder.with_authority_overload_config(authority_overload_config.clone());
                 }
 
+                if let Some(config) = &self.consensus_transaction_pool_config {
+                    builder = builder.with_consensus_transaction_pool_config(config.clone());
+                }
+
                 if let Some(execution_cache_config) = &self.execution_cache_config {
                     builder = builder.with_execution_cache_config(execution_cache_config.clone());
                 }
@@ -769,7 +784,7 @@ mod test {
                 input_objects,
                 std::collections::BTreeMap::new(),
                 gas_data,
-                SuiGasStatus::new_unmetered(),
+                SuiGasStatus::new_unmetered(&protocol_config),
                 kind,
                 None, // compat_args
                 signer,

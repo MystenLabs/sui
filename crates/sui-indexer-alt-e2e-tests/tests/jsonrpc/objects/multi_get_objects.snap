@@ -6,6 +6,11 @@ processed 15 tasks
 init:
 A: object(0,0), B: object(0,1)
 
+// 1. Multi-get newly created objects
+// 2. ...after some have been modified
+// 3. ...after some have been wrapped
+// 4. ...after some have been deleted
+
 task 1, lines 11-13:
 //# programmable --sender A --inputs @A
 //> 0: sui::table::new<u64, sui::coin::Coin<sui::sui::SUI>>();

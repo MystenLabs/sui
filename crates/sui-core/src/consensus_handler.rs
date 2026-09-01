@@ -2560,6 +2560,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let epoch = self.epoch_store.epoch();
         let mut num_finalized_user_transactions = vec![0; self.committee.size()];
         let mut num_rejected_user_transactions = vec![0; self.committee.size()];
+        let mut num_dropped_user_transactions = vec![0; self.committee.size()];
 
         // Prefetch the cross-commit owned-object lock state for the whole commit in one
         // batched read. These locks are constant for the duration of a commit (new locks
@@ -2704,6 +2705,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             // itself stall when reconfiguration is stuck.
                             if parsed.transaction.is_user_transaction() {
                                 status_updates.push((position, ConsensusTxStatus::Dropped));
+                                num_dropped_user_transactions[author] += 1;
                                 self.metrics
                                     .consensus_handler_dropped_transactions
                                     .with_label_values(&["end_of_epoch"])
@@ -2765,6 +2767,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         // prior commits): record a terminal status so waiters are not
                         // leaked, as with the certs-closed drop above.
                         status_updates.push((position, ConsensusTxStatus::Dropped));
+                        num_dropped_user_transactions[author] += 1;
                         self.metrics
                             .consensus_handler_dropped_transactions
                             .with_label_values(&["end_of_publish"])
@@ -2794,6 +2797,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             .with_label_values(&["invalid_input"])
                             .inc();
                         status_updates.push((position, ConsensusTxStatus::Dropped));
+                        num_dropped_user_transactions[author] += 1;
                         // Record the concrete input error as the reject reason so effects
                         // waiters get a terminal, non-retriable error instead of a bare
                         // Dropped with no reason (which clients treat as retriable).
@@ -2864,6 +2868,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 .with_label_values(&["lock_conflict"])
                                 .inc();
                             status_updates.push((position, ConsensusTxStatus::Dropped));
+                            num_dropped_user_transactions[author] += 1;
                             self.epoch_store.set_rejection_vote_reason(position, &e);
                             dropped_transaction_keys.push(parsed.transaction.key());
                             continue;
@@ -2903,6 +2908,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .consensus_rejected_user_transactions
                 .with_label_values(&[hostname])
                 .add(num_rejected_user_transactions[i.value()] as i64);
+            self.metrics
+                .consensus_dropped_user_transactions
+                .with_label_values(&[hostname])
+                .add(num_dropped_user_transactions[i.value()] as i64);
         }
 
         FilteredConsensusOutput {
@@ -3319,6 +3328,14 @@ fn owned_object_refs_to_lock(
             })
             .collect(),
     )
+}
+
+/// Label for the `sequencing_certificate_*` metrics.
+pub(crate) fn tx_type_label(transactions: &[ConsensusTransaction]) -> &'static str {
+    match transactions {
+        [transaction] => classify(transaction),
+        _ => "soft_bundle",
+    }
 }
 
 pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {

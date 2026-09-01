@@ -52,7 +52,7 @@ fn test_publish_module_with_nested_loops() {
                     max_loop_depth: Some(2),
                     ..Default::default()
                 },
-                ..Default::default()
+                ..VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None)
             },
         );
 
@@ -77,7 +77,7 @@ fn test_publish_module_with_nested_loops() {
                     max_loop_depth: Some(1),
                     ..Default::default()
                 },
-                ..Default::default()
+                ..VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None)
             },
         );
 

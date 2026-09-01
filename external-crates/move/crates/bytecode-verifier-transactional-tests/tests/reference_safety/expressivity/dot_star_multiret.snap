@@ -3,7 +3,8 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 2 tasks
 
-task 0, lines 5-30:
+task 0, lines 4-28:
+// write through a dot-star mut return while an alias of its parent is live
 //# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000083::h3_write_dotstar_with_alias'. Got VMError: {
     major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,

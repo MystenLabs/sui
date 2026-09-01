@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[EC08001]: cannot compute constant value
+   ┌─ tests/move_2024/constants/invalid_cross_module_cycle.move:7:23
+   │
+ 7 │ public(package) const A: u64 = b::B + 1;
+   │                       ^ Constant definitions form a circular dependency: 0x42::a::A, 0x42::b::B
+   ·
+15 │ public(package) const B: u64 = a::A + 1;
+   │                       - Cyclic constant defined here

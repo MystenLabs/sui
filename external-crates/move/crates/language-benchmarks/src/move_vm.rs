@@ -110,11 +110,11 @@ pub fn bench_pinned_pkg_call<M: Measurement + 'static>(
     let runtime = if pinned {
         MoveRuntime::new_with_system_packages(
             natives,
-            VMConfig::default(),
+            VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None),
             SystemPackages::new(vec![lib_pkg.clone().into_serialized_package()]),
         )
     } else {
-        MoveRuntime::new_with_default_config(natives)
+        MoveRuntime::new_with_test_config(natives)
     };
 
     let mut adapter = InMemoryTestAdapter::new_with_runtime(runtime);
@@ -162,7 +162,7 @@ pub fn compile_modules(filename: &str) -> Vec<CompiledModule> {
 }
 
 fn create_vm() -> InMemoryTestAdapter {
-    InMemoryTestAdapter::new_with_runtime(MoveRuntime::new_with_default_config(
+    InMemoryTestAdapter::new_with_runtime(MoveRuntime::new_with_test_config(
         stdlib_native_functions(
             AccountAddress::from_hex_literal("0x1").unwrap(),
             move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),

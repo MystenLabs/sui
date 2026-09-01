@@ -89,12 +89,6 @@ pub struct TransactionToken {
 /// Compatibility dispatch over the on-wire cursor format.
 pub type CTransaction = OpaqueCursor<TransactionToken>;
 
-impl CTransaction {
-    /// The checkpoint this cursor points at.
-    pub(crate) fn checkpoint(&self) -> u64 {
-        self.checkpoint
-    }
-}
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
 impl Transaction {
@@ -519,6 +513,17 @@ impl TransactionContents {
             return Ok(self.clone());
         }
 
+        // A just-streamed transaction runs ahead of the KV backend, so serve it from the in-memory
+        // streamed store (live streamed path only) until the backend catches up.
+        if let Some(streaming_transactions) = self.scope.streamed_transaction_store()
+            && let Some(contents) = streaming_transactions.get(&digest)
+        {
+            return Ok(Self {
+                scope: self.scope.clone(),
+                contents: Some(contents),
+            });
+        }
+
         let kv_loader: &KvLoader = ctx.data()?;
         let Some(transaction) = kv_loader
             .load_one_transaction(digest)
@@ -582,6 +587,12 @@ impl From<&TransactionToken> for CursorToken {
                 tx_seq: token.tx_seq,
             },
         }
+    }
+}
+
+impl From<&CTransaction> for CursorToken {
+    fn from(cursor: &CTransaction) -> Self {
+        CursorToken::from(&**cursor)
     }
 }
 

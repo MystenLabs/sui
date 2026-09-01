@@ -65,7 +65,7 @@ use sui_move_natives::object_runtime::{
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    TypeTag,
+    Identifier, TypeTag,
     accumulator_event::AccumulatorEvent,
     accumulator_root::{
         self, AccumulatorObjId, SETTLEMENT_MAX_TYPE_INSTANTIATION_NODES, is_settle_u128_call,
@@ -418,7 +418,7 @@ where
             None => None,
         };
         let native_extensions = adapter::new_native_extensions(
-            env.state_view.as_child_resolver(),
+            env.state_view,
             input_object_map,
             !gas_charger.is_unmetered(),
             env.protocol_config,
@@ -1174,6 +1174,7 @@ where
         verified_pkg: VerifiedPackage,
         vm: MoveVM<'env>,
         modules: impl IntoIterator<Item = &'a CompiledModule>,
+        expected_inits: BTreeSet<Identifier>,
         linkage: &ExecutableLinkage,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
         expected_stack_height: u64,
@@ -1188,6 +1189,7 @@ where
             vm,
             package_id,
             modules,
+            expected_inits,
             linkage,
             trace_builder_opt,
             expected_stack_height,
@@ -1208,6 +1210,7 @@ where
         mut vm: MoveVM<'env>,
         package_id: ObjectID,
         modules: impl IntoIterator<Item = &'a CompiledModule>,
+        mut expected_inits: BTreeSet<Identifier>,
         linkage: &ExecutableLinkage,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
         expected_stack_height: u64,
@@ -1216,11 +1219,13 @@ where
             self.gas_charger.move_gas_status().stack_height_current(),
             expected_stack_height,
         );
+        let check_expected_inits = self.env.protocol_config.harden_linkage_consistency();
         for module in modules {
             let Some((fdef_idx, fdef)) = module.find_function_def_by_name(INIT_FN_NAME.as_str())
             else {
                 continue;
             };
+            let module_name = module.identifier_at(module.self_handle().name);
             let fhandle = module.function_handle_at(fdef.function);
             let fparameters = module.signature_at(fhandle.parameters);
             assert_invariant!(
@@ -1235,6 +1240,14 @@ where
                 })?;
             // balance the stack after borrowing the tx context
             charge_gas!(self, charge_store_loc, &tx_context)?;
+
+            if check_expected_inits {
+                assert_invariant!(
+                    expected_inits.remove(module_name),
+                    "module {module_name} defines an `init` but was not recorded as doing so when \
+                     the package payload was deserialized"
+                );
+            }
 
             let args = if has_otw {
                 vec![CtxValue(Value::one_time_witness()?), CtxValue(tx_context)]
@@ -1280,16 +1293,27 @@ where
             );
         }
 
+        // Every module we expected to initialize from earlier was initialized.
+        assert_invariant!(
+            !check_expected_inits || expected_inits.is_empty(),
+            "modules {expected_inits:?} define an `init` that was never run"
+        );
+
         Ok(())
     }
 
     pub fn publish_and_init_package(
         &mut self,
-        mut modules: Vec<CompiledModule>,
+        package_payload: DeserializedPackage,
         dep_ids: &[ObjectID],
         linkage: ResolvedLinkage,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<ObjectID, Mode::Error> {
+        let DeserializedPackage {
+            deserialized_modules: mut modules,
+            modules_with_init,
+            ..
+        } = package_payload;
         let original_id = if Mode::packages_are_predefined() {
             // do not calculate or substitute id for predefined packages
             (*modules.safe_get(0)?.self_id().address()).into()
@@ -1320,6 +1344,7 @@ where
             pkg,
             vm,
             &modules,
+            modules_with_init,
             &linkage,
             trace_builder_opt,
             PUBLISH_INIT_EXPECTED_STACK_HEIGHT,
@@ -1329,13 +1354,18 @@ where
 
     pub fn upgrade(
         &mut self,
-        mut modules: Vec<CompiledModule>,
+        package_payload: DeserializedPackage,
         dep_ids: &[ObjectID],
         current_package_id: ObjectID,
         upgrade_ticket_policy: u8,
         linkage: ResolvedLinkage,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<ObjectID, Mode::Error> {
+        let DeserializedPackage {
+            deserialized_modules: mut modules,
+            modules_with_init,
+            ..
+        } = package_payload;
         // Check that this package ID points to a package and get the package we're upgrading.
         let current_move_package = self.fetch_package(&current_package_id)?;
 
@@ -1383,12 +1413,18 @@ where
             .collect::<Vec<&CompiledModule>>();
 
         if self.env.protocol_config.enable_init_on_upgrade() {
+            // Only newly added modules have their `init` functions called on upgrade.
+            let expected_inits: BTreeSet<Identifier> = modules_with_init
+                .into_iter()
+                .filter(|name| !current_module_names.contains(name.as_str()))
+                .collect();
             self.push_package_and_init_selected_modules(
                 version_id,
                 package,
                 verified_pkg,
                 vm,
                 new_modules.iter().copied(),
+                expected_inits,
                 &linkage,
                 trace_builder_opt,
                 UPGRADE_INIT_EXPECTED_STACK_HEIGHT,

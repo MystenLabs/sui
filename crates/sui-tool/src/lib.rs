@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use backoff::ExponentialBackoff;
 use fastcrypto::traits::ToFromBytes;
 use futures::future::AbortHandle;
@@ -34,7 +34,7 @@ use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::messages_grpc::LayoutGenerationOption;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::{base_types::*, object::Owner};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
@@ -52,7 +52,7 @@ use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::checkpoints::CheckpointStore;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::storage::RocksDbStore;
-use sui_snapshot::reader::StateSnapshotReaderV1;
+use sui_snapshot::reader::{StateAccumulatorSender, StateSnapshotReaderV1};
 use sui_snapshot::setup_db_state;
 use sui_storage::object_store::ObjectStoreGetExt;
 use sui_storage::object_store::util::{exists, get_path};
@@ -891,6 +891,7 @@ pub async fn download_formal_snapshot(
     // TODO if verify is false, we should skip generating these and
     // not pass in a channel to the reader
     let (sender, mut receiver) = mpsc::channel(num_parallel_downloads);
+    let (accumulation_done_sender, accumulation_done_receiver) = oneshot::channel();
     let m_clone = m.clone();
 
     let snapshot_handle = tokio::spawn(async move {
@@ -910,42 +911,55 @@ pub async fn download_formal_snapshot(
             num_parallel_chunks,
         )
         .await
-        .unwrap_or_else(|err| panic!("Failed to create reader: {}", err));
+        .context("Failed to create snapshot reader")?;
         reader
-            .read(perpetual_db_clone.clone(), abort_registration, Some(sender))
+            .read(
+                perpetual_db_clone.clone(),
+                abort_registration,
+                Some(StateAccumulatorSender {
+                    partials: sender,
+                    completion: accumulation_done_sender,
+                }),
+            )
             .await
-            .unwrap_or_else(|err| panic!("Failed during read: {}", err));
+            .context("Failed to read snapshot")?;
         info!("Snapshot download complete");
         Ok::<(), anyhow::Error>(())
     });
+    tokio::pin!(summaries_handle);
+    tokio::pin!(snapshot_handle);
+    tokio::pin!(backfill_handle);
+
     let mut root_global_state_hash = GlobalStateHash::default();
     let mut num_live_objects = 0;
     while let Some((partial_hash, num_objects)) = receiver.recv().await {
         num_live_objects += num_objects;
         root_global_state_hash.union(&partial_hash);
     }
-    tokio::pin!(summaries_handle);
-    tokio::pin!(snapshot_handle);
-    tokio::pin!(backfill_handle);
+    if accumulation_done_receiver.await.is_err() {
+        (&mut snapshot_handle)
+            .await
+            .map_err(|error| anyhow!("Snapshot task failed: {error}"))??;
+        return Err(anyhow!("Snapshot accumulation did not complete"));
+    }
 
     let mut summaries_done = false;
     let mut snapshot_done = false;
     let mut backfill_done = false;
 
-    // Wait for summaries (required for verification) while monitoring other tasks for early failures
     while !summaries_done {
         tokio::select! {
             result = &mut summaries_handle, if !summaries_done => {
                 summaries_done = true;
-                result.expect("Summaries task panicked")?;
+                result.map_err(|error| anyhow!("Summaries task failed: {error}"))??;
             }
             result = &mut backfill_handle, if !backfill_done => {
                 backfill_done = true;
-                result.expect("Backfill task panicked")?;
+                result.map_err(|error| anyhow!("Backfill task failed: {error}"))??;
             }
             result = &mut snapshot_handle, if !snapshot_done => {
                 snapshot_done = true;
-                result.expect("Snapshot task panicked")?;
+                result.map_err(|error| anyhow!("Snapshot task failed: {error}"))??;
             }
         }
     }
@@ -1005,16 +1019,15 @@ pub async fn download_formal_snapshot(
         )?;
     }
 
-    // Wait for remaining tasks to complete
     while !snapshot_done || !backfill_done {
         tokio::select! {
             result = &mut backfill_handle, if !backfill_done => {
                 backfill_done = true;
-                result.expect("Backfill task panicked")?;
+                result.map_err(|error| anyhow!("Backfill task failed: {error}"))??;
             }
             result = &mut snapshot_handle, if !snapshot_done => {
                 snapshot_done = true;
-                result.expect("Snapshot task panicked")?;
+                result.map_err(|error| anyhow!("Snapshot task failed: {error}"))??;
             }
         }
     }

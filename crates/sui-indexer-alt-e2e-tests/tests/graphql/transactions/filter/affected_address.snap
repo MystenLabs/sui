@@ -46,11 +46,12 @@ created: object(8,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 9, lines 41-43:
+task 9, line 41:
 //# create-checkpoint
 Checkpoint created: 5
 
-task 10, lines 44-50:
+task 10, lines 43-50:
+// Send 1000 address balance from A to B and A to C
 //# programmable --sender A --inputs 1000 @B @C
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));

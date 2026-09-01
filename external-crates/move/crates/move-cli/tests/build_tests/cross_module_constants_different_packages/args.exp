@@ -1,0 +1,25 @@
+Command `build -v`:
+INCLUDING DEPENDENCY Defn
+BUILDING Usage
+error[EC04001]: restricted visibility
+  ┌─ ./sources/usage.move:6:25
+  │
+6 │     const DOUBLE: u64 = defn::MAX * 2;
+  │                         ^^^^^^^^^ Invalid access of 'public(package)' visible constant 'Defn::defn::MAX'
+  │
+  ┌─ defn/sources/defn.move:2:5
+  │
+2 │     public(package) const MAX: u64 = 100;
+  │     --------------- A 'public(package)' constant can only be accessed from the same address and package as module 'Defn::defn' in package 'Defn'. This access is from address 'Usage' in package 'Usage'
+
+error[EC04001]: restricted visibility
+  ┌─ ./sources/usage.move:9:29
+  │
+9 │     public fun max(): u64 { defn::MAX }
+  │                             ^^^^^^^^^ Invalid access of 'public(package)' visible constant 'Defn::defn::MAX'
+  │
+  ┌─ defn/sources/defn.move:2:5
+  │
+2 │     public(package) const MAX: u64 = 100;
+  │     --------------- A 'public(package)' constant can only be accessed from the same address and package as module 'Defn::defn' in package 'Defn'. This access is from address 'Usage' in package 'Usage'
+

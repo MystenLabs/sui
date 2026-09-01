@@ -1224,13 +1224,19 @@ impl Object {
                     return Ok(None);
                 };
 
-                // Check execution context cache first and return if available
-                if let Some(cached_object) = self
-                    .super_
-                    .scope
-                    .execution_output_object(self.super_.address.into(), version.into())
+                // Serve from in-memory sources before the KV backend: the execution output cache
+                // (mutation/simulation output), then the streamed object store (a live subscription
+                // may reach an object from an earlier streamed checkpoint, still ahead of the index).
+                let scope = &self.super_.scope;
+                if let Some(executed) =
+                    scope.execution_output_object(self.super_.address.into(), version.into())
                 {
-                    Ok(Some(cached_object.clone()))
+                    Ok(Some(executed.clone()))
+                } else if let Some(streamed) = scope
+                    .streamed_object_store()
+                    .and_then(|store| store.get(self.super_.address.into(), version.into()))
+                {
+                    Ok(Some(streamed))
                 } else {
                     Ok(kv_loader
                         .load_one_object(self.super_.address.into(), version.into())

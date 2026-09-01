@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// tests that shared objects cannot be transfered in a way that will result
+// in their ownership no longer being shared
+
 task 1, lines 9-24:
 //# publish
 created: object(1,0)

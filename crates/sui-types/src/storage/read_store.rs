@@ -683,11 +683,9 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
 
 /// Trait used to provide functionality to the REST API service.
 ///
-/// It extends both ObjectStore and ReadStore by adding functionality that may require more
+/// It extends ReadStore and RuntimeObjectResolver by adding functionality that may require more
 /// detailed underlying databases or indexes to support.
-pub trait RpcStateReader:
-    ObjectStore + ReadStore + super::RuntimeObjectResolver + Send + Sync
-{
+pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync {
     /// Lowest available checkpoint for which object data can be requested.
     ///
     /// Specifically this is the lowest checkpoint for which input/output object data will be

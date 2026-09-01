@@ -25,7 +25,7 @@ use crate::error::RpcError;
 use crate::pagination::Page;
 use crate::scope::Scope;
 use crate::task::streaming::ProcessedCheckpoint;
-use crate::task::streaming::StreamingPackageStore;
+use crate::task::streaming::StreamedCaches;
 
 use super::scan_then_live::Subscribable;
 
@@ -34,6 +34,10 @@ impl Subscribable for Transaction {
     type Cursor = CTransaction;
     type Filter = TransactionFilter;
     type ScanItem = v2::ExecutedTransaction;
+
+    fn subscription_type() -> &'static str {
+        "transactions"
+    }
 
     fn scan<'a>(
         reader: &'a AlphaLedgerGrpcReader,
@@ -45,18 +49,23 @@ impl Subscribable for Transaction {
         Transaction::scan_grpc(reader, cp_bounds, page, filter)
     }
 
-    fn build_node(scope: &Scope, payload: &v2::ExecutedTransaction) -> Result<Self, RpcError> {
-        transaction_from_stream_item(scope.clone(), payload)
+    fn build_node(
+        caches: &Arc<StreamedCaches>,
+        resolver_limits: &sui_package_resolver::Limits,
+        payload: &v2::ExecutedTransaction,
+    ) -> Result<Self, RpcError> {
+        let scope = Scope::for_indexed(caches.clone(), resolver_limits.clone());
+        transaction_from_stream_item(scope, payload)
     }
 
     fn matching_edges(
         checkpoint: &Arc<ProcessedCheckpoint>,
-        package_store: &Arc<StreamingPackageStore>,
+        caches: &Arc<StreamedCaches>,
         resolver_limits: &sui_package_resolver::Limits,
         filter: &TransactionFilter,
     ) -> Result<Vec<Edge<String, Self, EmptyFields>>, RpcError> {
         let scope = Scope::for_streamed_checkpoint(
-            package_store.clone(),
+            caches.clone(),
             resolver_limits.clone(),
             checkpoint.clone(),
         );

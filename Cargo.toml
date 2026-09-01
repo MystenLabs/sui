@@ -59,24 +59,24 @@ exclude = [
   "external-crates/move/crates/move-vm-transactional-tests",
   "external-crates/move/crates/serializer-tests",
   "external-crates/move/crates/test-generation",
-  "external-crates/move/move-execution/v0/crates/move-bytecode-verifier",
-  "external-crates/move/move-execution/v0/crates/move-stdlib-natives",
-  "external-crates/move/move-execution/v0/crates/move-vm-runtime",
-  "external-crates/move/move-execution/v0/crates/move-vm-types",
-  "external-crates/move/move-execution/v1/crates/move-bytecode-verifier",
-  "external-crates/move/move-execution/v1/crates/move-stdlib-natives",
-  "external-crates/move/move-execution/v1/crates/move-vm-runtime",
-  "external-crates/move/move-execution/v1/crates/move-vm-types",
-  "external-crates/move/move-execution/v2/crates/move-abstract-interpreter",
-  "external-crates/move/move-execution/v2/crates/move-bytecode-verifier",
-  "external-crates/move/move-execution/v2/crates/move-stdlib-natives",
-  "external-crates/move/move-execution/v2/crates/move-vm-runtime",
-  "external-crates/move/move-execution/v2/crates/move-vm-types",
-  "external-crates/move/move-execution/v3/crates/move-abstract-interpreter",
-  "external-crates/move/move-execution/v3/crates/move-bytecode-verifier",
-  "external-crates/move/move-execution/v3/crates/move-stdlib-natives",
-  "external-crates/move/move-execution/v3/crates/move-vm-runtime",
-  "external-crates/move/move-execution/v3/crates/move-vm-types",
+  "external-crates/move/historical-versions/v0/crates/move-bytecode-verifier",
+  "external-crates/move/historical-versions/v0/crates/move-stdlib-natives",
+  "external-crates/move/historical-versions/v0/crates/move-vm-runtime",
+  "external-crates/move/historical-versions/v0/crates/move-vm-types",
+  "external-crates/move/historical-versions/v1/crates/move-bytecode-verifier",
+  "external-crates/move/historical-versions/v1/crates/move-stdlib-natives",
+  "external-crates/move/historical-versions/v1/crates/move-vm-runtime",
+  "external-crates/move/historical-versions/v1/crates/move-vm-types",
+  "external-crates/move/historical-versions/v2/crates/move-abstract-interpreter",
+  "external-crates/move/historical-versions/v2/crates/move-bytecode-verifier",
+  "external-crates/move/historical-versions/v2/crates/move-stdlib-natives",
+  "external-crates/move/historical-versions/v2/crates/move-vm-runtime",
+  "external-crates/move/historical-versions/v2/crates/move-vm-types",
+  "external-crates/move/historical-versions/v3/crates/move-abstract-interpreter",
+  "external-crates/move/historical-versions/v3/crates/move-bytecode-verifier",
+  "external-crates/move/historical-versions/v3/crates/move-stdlib-natives",
+  "external-crates/move/historical-versions/v3/crates/move-vm-runtime",
+  "external-crates/move/historical-versions/v3/crates/move-vm-types",
 ]
 
 members = [
@@ -210,26 +210,26 @@ members = [
     "crates/x",
     "sui-execution",
     "sui-execution/cut",
+    "sui-execution/historical-versions/v0/sui-adapter",
+    "sui-execution/historical-versions/v0/sui-move-natives",
+    "sui-execution/historical-versions/v0/sui-verifier",
+    "sui-execution/historical-versions/v1/sui-adapter",
+    "sui-execution/historical-versions/v1/sui-move-natives",
+    "sui-execution/historical-versions/v1/sui-verifier",
+    "sui-execution/historical-versions/v2/sui-adapter",
+    "sui-execution/historical-versions/v2/sui-move-natives",
+    "sui-execution/historical-versions/v2/sui-verifier",
+    "sui-execution/historical-versions/v3/sui-adapter",
+    "sui-execution/historical-versions/v3/sui-move-natives",
+    "sui-execution/historical-versions/v3/sui-verifier",
     "sui-execution/latest/sui-adapter",
     "sui-execution/latest/sui-move-natives",
     "sui-execution/latest/sui-verifier",
-    "sui-execution/v0/sui-adapter",
-    "sui-execution/v0/sui-move-natives",
-    "sui-execution/v0/sui-verifier",
-    "sui-execution/v1/sui-adapter",
-    "sui-execution/v1/sui-move-natives",
-    "sui-execution/v1/sui-verifier",
-    "sui-execution/v2/sui-adapter",
-    "sui-execution/v2/sui-move-natives",
-    "sui-execution/v2/sui-verifier",
-    "sui-execution/v3/sui-adapter",
-    "sui-execution/v3/sui-move-natives",
-    "sui-execution/v3/sui-verifier",
 ]
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.79.0"
+version = "1.80.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -369,7 +369,7 @@ derive_more = "1.0.0"
 diesel = "2.3"
 diesel_migrations = "2.3"
 diesel-async = "0.9"
-dirs = "4.0.0"
+dirs = "5.0.1"
 duration-str = "0.5.0"
 ed25519 = { version = "2", features = ["pkcs8", "alloc", "zeroize"] }
 ed25519-consensus = { version = "2.0.1", features = ["serde"] }
@@ -453,7 +453,7 @@ object_store = { version = "0.13.0", features = [
 ] }
 once_cell = "1.18.0"
 oneshot = { version = "0.2.1", features = ["std"] }
-ouroboros = "0.17"
+ouroboros = "0.18.4"
 parking_lot = { version = "0.12.3", features = ["arc_lock"] }
 parquet = "57.3"
 pin-project = "1"
@@ -558,7 +558,7 @@ tower = { version = "0.5", features = [
   "load-shed",
   "limit",
 ] }
-tower-http = { version = "0.5", features = [
+tower-http = { version = "0.6", features = [
   "cors",
   "full",
   "trace",
@@ -595,7 +595,7 @@ which = "8.0.2"
 winnow = "0.7"
 wiremock = "0.6"
 x509-parser = { version = "0.17.0", features = ["verify"] }
-zstd = "0.12.3"
+zstd = "0.13.2"
 versions = "4.1.0"
 shlex = "1.3.0"
 starlark = "0.13.0"
@@ -626,10 +626,10 @@ move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack"
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 move-trace-format = { path = "external-crates/move/crates/move-trace-format" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a9f994cd6b2882c7e916786943712fce1f2b6013" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a9f994cd6b2882c7e916786943712fce1f2b6013" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a9f994cd6b2882c7e916786943712fce1f2b6013", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a9f994cd6b2882c7e916786943712fce1f2b6013", features = [
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "076bf5ad8cea140dc7cf5c5861c24a36acdf64ce" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "076bf5ad8cea140dc7cf5c5861c24a36acdf64ce" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "076bf5ad8cea140dc7cf5c5861c24a36acdf64ce", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "076bf5ad8cea140dc7cf5c5861c24a36acdf64ce", features = [
   "experimental",
 ] }
 passkey-types = { version = "0.4.0" }
@@ -652,9 +652,9 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "68adc31d4e
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "68adc31d4ea1f4573f08c2c75317fcb205b823de" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "c406a6ca42f4cc7b1409e133421eec123b7875d6", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "c406a6ca42f4cc7b1409e133421eec123b7875d6", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "c406a6ca42f4cc7b1409e133421eec123b7875d6", features = [ "unstable" ] }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d71f9d6f788afc6b30baef85a342e0e7867c0019", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d71f9d6f788afc6b30baef85a342e0e7867c0019", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d71f9d6f788afc6b30baef85a342e0e7867c0019", features = [ "unstable" ] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }

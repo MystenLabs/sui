@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 937
 ---
 processed 13 tasks
 
@@ -36,7 +37,7 @@ Contents: tto::M1::A {
     },
 }
 
-task 5, lines 45-47:
+task 5, line 45:
 //# view-object 2,1
 Owner: Account Address ( fake(2,0) )
 Version: 3
@@ -48,7 +49,8 @@ Contents: tto::M1::B {
     },
 }
 
-task 6, line 48:
+task 6, lines 47-48:
+// Can receive the object and then send it
 //# run tto::M1::send_back --args object(2,0) receiving(2,1)
 mutated: object(0,1), object(2,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 3385800, non_refundable_storage_fee: 34200
@@ -65,7 +67,7 @@ Contents: tto::M1::A {
     },
 }
 
-task 8, lines 52-54:
+task 8, line 52:
 //# view-object 2,1
 Owner: Account Address ( fake(2,0) )
 Version: 4
@@ -77,22 +79,26 @@ Contents: tto::M1::B {
     },
 }
 
-task 9, lines 55-57:
+task 9, lines 54-55:
+// Can no longer receive that object at the previous version number
 //# run tto::M1::send_back --args object(2,0) receiving(2,1)@3
 Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 15) at offset 0, Abort Code: 3
 Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 15, instruction: 0, function_name: Some("receive_impl") }, 3) at command Some(0)
 
-task 10, lines 58-60:
+task 10, lines 57-58:
+// Can receive the object at the new version number
 //# run tto::M1::send_back --args object(2,0) receiving(2,1)@4
 mutated: object(0,1), object(2,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 3385800, non_refundable_storage_fee: 34200
 
-task 11, lines 61-63:
+task 11, lines 60-61:
+// Cannot try and receive the object with an invalid owner even if it has the right type
 //# run tto::M1::send_back --summarize --args object(3,0) receiving(2,1)@6 --sender A
 Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 15) at offset 0, Abort Code: 3
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 15, instruction: 0, function_name: Some("receive_impl") }, 3), source: Some(VMError { major_status: ABORTED, sub_status: Some(3), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(15), 0)] }), command: Some(0) } }
 
-task 12, line 64:
+task 12, lines 63-64:
+// Can run still receive and send back so state is all good still, and version number hasn't been incremented for the object
 //# run tto::M1::send_back --args object(2,0) receiving(2,1)@6
 mutated: object(0,1), object(2,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 3385800, non_refundable_storage_fee: 34200

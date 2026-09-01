@@ -6,6 +6,9 @@ processed 5 tasks
 init:
 A: object(0,0)
 
+// 1. Parent ID does not exist
+// 2. Parent ID exists, but the field does not
+
 task 1, lines 9-11:
 //# programmable --sender A --inputs @A
 //> 0: sui::bag::new();

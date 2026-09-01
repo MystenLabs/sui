@@ -3,7 +3,8 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 38 tasks
 
-task 6, lines 193-202:
+task 6, lines 192-202:
+// Casting to u8, overflowing.
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
@@ -124,7 +125,7 @@ Error: Function execution failed with VMError: {
     message: "Cannot cast u16(65535) to u8",
 }
 
-task 17, lines 314-325:
+task 17, lines 314-323:
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
@@ -135,7 +136,8 @@ Error: Function execution failed with VMError: {
     message: "Cannot cast u32(4294967295) to u8",
 }
 
-task 18, lines 326-335:
+task 18, lines 325-335:
+// Casting to u64, overflowing.
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
@@ -190,7 +192,7 @@ Error: Function execution failed with VMError: {
     message: "Cannot cast u128(18446744073709551647) to u64",
 }
 
-task 23, lines 381-392:
+task 23, lines 381-390:
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
@@ -201,7 +203,8 @@ Error: Function execution failed with VMError: {
     message: "Cannot cast u256(57896044618658097711785492504343953926634992332820282019728792003956564819967) to u64",
 }
 
-task 24, lines 393-402:
+task 24, lines 392-402:
+// Casting to u16, overflowing.
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
@@ -278,7 +281,7 @@ Error: Function execution failed with VMError: {
     message: "Cannot cast u32(2561233) to u16",
 }
 
-task 31, lines 470-481:
+task 31, lines 470-479:
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
@@ -289,7 +292,8 @@ Error: Function execution failed with VMError: {
     message: "Cannot cast u32(4294967295) to u16",
 }
 
-task 32, lines 482-491:
+task 32, lines 481-491:
+// Casting to u32, overflowing.
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,

@@ -354,8 +354,11 @@ def cut_command(f):
     return [
         *["./target/debug/cut", "--feature", f],
         *[repo_root()],
-        *["-d", f"sui-execution/latest:sui-execution/{f}:-latest"],
-        *["-d", f"external-crates/move:external-crates/move/move-execution/{f}"],
+        *[
+            "-d",
+            f"sui-execution/latest:sui-execution/historical-versions/{f}:-latest",
+        ],
+        *["-d", f"external-crates/move:external-crates/move/historical-versions/{f}"],
         *["-p", "sui-adapter-latest"],
         *["-p", "sui-move-natives-latest"],
         *["-p", "sui-verifier-latest"],
@@ -371,10 +374,11 @@ def cut_directories(f):
     sui_base = Path() / "sui-execution"
     external = Path() / "external-crates"
 
+    sui_cut = sui_base / f if f == "latest" else sui_base / "historical-versions" / f
     crates = [
-        sui_base / f / "sui-adapter",
-        sui_base / f / "sui-move-natives",
-        sui_base / f / "sui-verifier",
+        sui_cut / "sui-adapter",
+        sui_cut / "sui-move-natives",
+        sui_cut / "sui-verifier",
     ]
 
     if f == "latest":
@@ -389,10 +393,10 @@ def cut_directories(f):
     else:
         crates.extend(
             [
-                external / "move" / "move-execution" / f / "crates" / "move-abstract-interpreter",
-                external / "move" / "move-execution" / f / "crates" / "move-bytecode-verifier",
-                external / "move" / "move-execution" / f / "crates" / "move-vm-runtime",
-                external / "move" / "move-execution" / f / "crates" / "bytecode-verifier-tests",
+                external / "move" / "historical-versions" / f / "crates" / "move-abstract-interpreter",
+                external / "move" / "historical-versions" / f / "crates" / "move-bytecode-verifier",
+                external / "move" / "historical-versions" / f / "crates" / "move-vm-runtime",
+                external / "move" / "historical-versions" / f / "crates" / "bytecode-verifier-tests",
             ]
         )
 

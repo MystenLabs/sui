@@ -20,6 +20,7 @@ use tracing::warn;
 use super::ProcessedCheckpoint;
 use super::checkpoint_stream_task::checkpoint_field_mask;
 use super::checkpoint_stream_task::process_checkpoint;
+use crate::metrics::SubscriptionMetrics;
 use crate::task::watermark::Watermarks;
 
 /// Abstraction over the source that gap recovery fetches checkpoints from. The production
@@ -58,6 +59,7 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
     fetcher: &F,
     watermarks_rx: &watch::Receiver<Arc<Watermarks>>,
     sender: &broadcast::Sender<Arc<ProcessedCheckpoint>>,
+    metrics: &SubscriptionMetrics,
     lo: u64,
     hi_inclusive: u64,
     chunk_size: usize,
@@ -78,6 +80,11 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
 
         let processed = fetch_and_process(fetcher, &mask, cursor..=chunk_hi_inclusive).await?;
         for cp in processed {
+            metrics.record_processed_checkpoint(
+                "recovery",
+                cp.summary.sequence_number,
+                cp.summary.timestamp_ms,
+            );
             // Ignore send errors: no active subscribers is a normal state during recovery.
             let _ = sender.send(cp);
         }
@@ -288,7 +295,17 @@ mod tests {
         let mock = fetcher(&[]);
         let (_tx, rx) = recovery_watermarks(0);
         let (sender, _rx) = broadcast::channel(16);
-        recover_gap(&mock, &rx, &sender, 5, 4, 10).await.unwrap();
+        recover_gap(
+            &mock,
+            &rx,
+            &sender,
+            &SubscriptionMetrics::new(&prometheus::Registry::new()),
+            5,
+            4,
+            10,
+        )
+        .await
+        .unwrap();
         // No keys configured; if anything was fetched, MockFetcher would panic.
     }
 
@@ -308,8 +325,18 @@ mod tests {
 
         let mock_arc = Arc::new(mock);
         let mock_for_task = mock_arc.clone();
-        let task =
-            tokio::spawn(async move { recover_gap(&*mock_for_task, &rx, &sender, 1, 6, 3).await });
+        let task = tokio::spawn(async move {
+            recover_gap(
+                &*mock_for_task,
+                &rx,
+                &sender,
+                &SubscriptionMetrics::new(&prometheus::Registry::new()),
+                1,
+                6,
+                3,
+            )
+            .await
+        });
 
         // Should not progress while watermark is at 0. 200ms is comfortably more than the
         // task scheduling overhead so the spawned `recover_gap` reaches its watermark wait.
@@ -357,8 +384,18 @@ mod tests {
 
         let mock_arc = Arc::new(mock);
         let mock_for_task = mock_arc.clone();
-        let task =
-            tokio::spawn(async move { recover_gap(&*mock_for_task, &rx, &sender, 1, 3, 3).await });
+        let task = tokio::spawn(async move {
+            recover_gap(
+                &*mock_for_task,
+                &rx,
+                &sender,
+                &SubscriptionMetrics::new(&prometheus::Registry::new()),
+                1,
+                3,
+                3,
+            )
+            .await
+        });
 
         // ledger_grpc has caught up but kv_packages is still at 0. Recovery must
         // not progress because subscribers would resolve packages from a DB that

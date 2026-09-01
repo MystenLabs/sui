@@ -1,8 +1,11 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
 ---
 processed 4 tasks
+
+// Transfer objects to not-yet-generated addresses with
+// a nested derived path (parent -> derived_a -> derived_b).
+// then claim using `derived_a` and `derived_b`.
 
 init:
 A: object(0,0)

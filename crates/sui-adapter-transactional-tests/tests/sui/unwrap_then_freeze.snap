@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 7 tasks
 
+// Exercise test functions that wrap and object and subsequently unwrap it
+// Ensure that the object's version is consistent
+
 init:
 A: object(0,0)
 

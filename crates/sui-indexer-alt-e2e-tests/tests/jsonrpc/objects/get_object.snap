@@ -6,6 +6,15 @@ processed 23 tasks
 init:
 A: object(0,0)
 
+// 1. Fetching a freshly created object
+// 2. ...the same object after it has been modified
+// 3. ...after it has been wrapped
+// 4. ...after it has been unwrapped
+// 5. ...after it has been deleted
+// 6. Fetching an object that just doesn't exist
+// 7. Fetching a newly created package
+// 8. Fetching an upgraded package
+
 task 1, lines 15-17:
 //# programmable --sender A --inputs @A
 //> 0: sui::table::new<u64, sui::coin::Coin<sui::sui::SUI>>();

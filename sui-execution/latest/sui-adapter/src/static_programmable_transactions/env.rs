@@ -190,13 +190,32 @@ where
         module: &IdentStr,
         function: &IdentStr,
         type_arguments: Vec<Type>,
+        unified_linkage: Option<&ExecutableLinkage>,
     ) -> Result<LoadedFunction, Mode::Error> {
-        self.load_function(
+        let mut loaded = self.load_function(
             SUI_FRAMEWORK_PACKAGE_ID,
             module.to_string(),
             function.to_string(),
             type_arguments,
-        )
+        )?;
+        if self.protocol_config.harden_linkage_consistency() {
+            let Some(unified_linkage) = unified_linkage else {
+                invariant_violation!(
+                    "Unified linkage is required when hardened linkage consistency is enabled"
+                )
+            };
+            assert_invariant!(
+                loaded
+                    .linkage
+                    .0
+                    .linkage
+                    .keys()
+                    .all(|original_id| unified_linkage.0.linkage.contains_key(original_id)),
+                "transaction linkage drops a package resolved by a framework MoveCall"
+            );
+            loaded.linkage = unified_linkage.clone();
+        }
+        Ok(loaded)
     }
 
     pub fn load_function(
@@ -631,11 +650,11 @@ where
             dep_ids,
             /* hash_modules */ true,
         );
-        Ok(DeserializedPackage {
+        Ok(DeserializedPackage::new(
             deserialized_modules,
             total_bytes,
             computed_digest,
-        })
+        ))
     }
 }
 

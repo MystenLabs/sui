@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 14 tasks
 
+// tests accessing the versions of a child of a child
+
 init:
 A: object(0,0)
 
@@ -59,7 +61,7 @@ mutated: object(0,0), object(2,0)
 deleted: object(2,2), object(2,3)
 gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 5951484, non_refundable_storage_fee: 60116
 
-task 7, lines 83-86:
+task 7, line 83:
 //# view-object 2,0
 Owner: Account Address ( A )
 Version: 4
@@ -71,6 +73,8 @@ Contents: test::m::Obj {
     },
     value: 1u64,
 }
+
+// dev-inspect with 'check' and correct values
 
 task 8, lines 88-89:
 //# programmable --sender A --inputs object(2,0)@2 0 0 vector[0] --dev-inspect
@@ -84,12 +88,13 @@ task 9, lines 91-92:
 mutated: object(_), object(2,0)
 gas summary: computation_cost: 500000, storage_cost: 2272400,  storage_rebate: 1271556, non_refundable_storage_fee: 12844
 
-task 10, lines 94-98:
+task 10, lines 94-95:
 //# programmable --sender A --inputs object(2,0)@4 1 2 vector[] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))
-// dev-inspect with 'check' and _incorrect_ values
 mutated: object(_), object(2,0)
 gas summary: computation_cost: 500000, storage_cost: 2272400,  storage_rebate: 1271556, non_refundable_storage_fee: 12844
+
+// dev-inspect with 'check' and _incorrect_ values
 
 task 11, lines 100-101:
 //# programmable --sender A --inputs object(2,0)@3 0 0 vector[0] --dev-inspect

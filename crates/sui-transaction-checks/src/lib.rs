@@ -18,7 +18,7 @@ mod checked {
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_types::object::ObjectPermission;
     use sui_types::transaction::{
-        CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
+        CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjects, SharedObjectMutability, TransactionData,
         TransactionDataAPI, TransactionKind,
     };
@@ -61,7 +61,7 @@ mod checked {
         gas_ownership_checks: bool,
     ) -> SuiResult<SuiGasStatus> {
         if transaction.kind().is_system_tx() {
-            Ok(SuiGasStatus::new_unmetered())
+            Ok(SuiGasStatus::new_unmetered(protocol_config))
         } else {
             let is_gasless =
                 protocol_config.enable_gasless() && transaction.is_gasless_transaction();
@@ -95,38 +95,6 @@ mod checked {
             &[],
         )?;
         check_receiving_objects(&input_objects, receiving_objects)?;
-        // Runs verifier, which could be expensive.
-        check_non_system_packages_to_be_published(
-            transaction,
-            protocol_config,
-            metrics,
-            verifier_signing_config,
-        )?;
-
-        Ok((gas_status, input_objects.into_checked()))
-    }
-
-    pub fn check_transaction_input_with_given_gas(
-        protocol_config: &ProtocolConfig,
-        reference_gas_price: u64,
-        transaction: &TransactionData,
-        mut input_objects: InputObjects,
-        receiving_objects: ReceivingObjects,
-        gas_object: Object,
-        metrics: &Arc<BytecodeVerifierMetrics>,
-        verifier_signing_config: &VerifierSigningConfig,
-    ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
-        let gas_object_ref = gas_object.compute_object_reference();
-        input_objects.push(ObjectReadResult::new_from_gas_object(&gas_object));
-
-        let gas_status = check_transaction_input_inner(
-            protocol_config,
-            reference_gas_price,
-            transaction,
-            &input_objects,
-            &[gas_object_ref],
-        )?;
-        check_receiving_objects(&input_objects, &receiving_objects)?;
         // Runs verifier, which could be expensive.
         check_non_system_packages_to_be_published(
             transaction,

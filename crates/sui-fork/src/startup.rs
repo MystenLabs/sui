@@ -186,6 +186,7 @@ pub async fn initialize(
         keystore,
         base_checkpoint,
         system_state,
+        rpc_chain_identifier,
         &config,
         store,
         rng,

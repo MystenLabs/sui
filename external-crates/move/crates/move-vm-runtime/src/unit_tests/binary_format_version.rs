@@ -19,7 +19,7 @@ fn test_publish_module_with_custom_max_binary_format_version() {
 
     // Should accept both modules with the default settings
     {
-        let move_runtime = MoveRuntime::new_with_default_config(
+        let move_runtime = MoveRuntime::new_with_test_config(
             stdlib_native_functions(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
                 GasParameters::zeros(),
@@ -60,7 +60,8 @@ fn test_publish_module_with_custom_max_binary_format_version() {
 
     // Should reject the module with newer version with max binary format version being set to VERSION_MAX - 1
     {
-        let mut vm_config = VMConfig::default();
+        let mut vm_config =
+            VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None);
         // lower the max version allowed
         let max_updated = VERSION_MAX.checked_sub(1).unwrap();
         vm_config.max_binary_format_version = max_updated;

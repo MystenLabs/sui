@@ -467,6 +467,8 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
             stop_line: _,
             data: _,
             task_text: _,
+            unattached_comments_before: _,
+            unattached_comments_after: _,
         } = task;
         match command {
             Subcommand::ViewAbstractState(view_abstract_state_command) => {
@@ -642,7 +644,7 @@ fn test_vm_config(switch_to_regex_reference_safety: bool) -> VMConfig {
             ..VerifierConfig::default()
         },
 
-        ..VMConfig::default()
+        ..VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None)
     }
 }
 

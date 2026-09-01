@@ -1,8 +1,12 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
 ---
 processed 10 tasks
+
+// This test attempts to receive two objects, remove a child, add it back, remove it again, and then transfer/delete it.
+// This is an interesting test case because when child objects are removed, added back and removed again,
+// they won't show up in the child_object_effects in the object runtiem. We must look at either transfers
+// or deleted_object_ids to figure them out.
 
 init:
 A: object(0,0)

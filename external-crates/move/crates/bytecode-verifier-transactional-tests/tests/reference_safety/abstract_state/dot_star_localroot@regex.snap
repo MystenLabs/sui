@@ -193,7 +193,7 @@ task 2, line 95:
   }
 }
 
-task 3, lines 97-99:
+task 3, line 97:
 //# view-abstract-state 0x91::zzds_localroot::freeze_then_reborrow
 {
   "b0": {
@@ -262,7 +262,8 @@ task 3, lines 97-99:
   }
 }
 
-task 4, lines 100-125:
+task 4, lines 99-125:
+// w descends from o only via the alias z
 //# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000092::zzds_alias_descendant'. Got VMError: {
     major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,

@@ -1,8 +1,9 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
 ---
 processed 13 tasks
+
+// This test verifies the deny list also applies to receiving coin objects.
 
 init:
 A: object(0,0)
@@ -139,7 +140,7 @@ Contents: sui::coin::RegulatedCoinMetadata<test::regulated_coin::REGULATED_COIN>
     },
 }
 
-task 8, lines 61-63:
+task 8, line 61:
 //# view-object 1,1
 Owner: Immutable
 Version: 2
@@ -154,23 +155,27 @@ Contents: sui::coin::TreasuryCap<test::regulated_coin::REGULATED_COIN> {
     },
 }
 
-task 9, lines 64-66:
+task 9, lines 63-64:
+// Deny account A.
 //# run sui::coin::deny_list_add --args object(0x403) object(1,3) @A --type-args test::regulated_coin::REGULATED_COIN --sender A
 created: object(9,0), object(9,1)
 mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
 gas summary: computation_cost: 1000000, storage_cost: 11415200,  storage_rebate: 2723688, non_refundable_storage_fee: 27512
 
-task 10, lines 67-69:
+task 10, lines 66-67:
+// Try to receive coin in Wallet. This should now fail.
 //# run test::regulated_coin::receive_coin --args object(1,6) receiving(1,5) --sender A
 Error: Error checking transaction input objects: Address @A is denied for coin object(1,0)::regulated_coin::REGULATED_COIN
 
-task 11, lines 70-72:
+task 11, lines 69-70:
+// Undeny account A.
 //# run sui::coin::deny_list_remove --args object(0x403) object(1,3) @A --type-args test::regulated_coin::REGULATED_COIN --sender A
 mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(9,1)
 deleted: object(9,0)
 gas summary: computation_cost: 1000000, storage_cost: 9522800,  storage_rebate: 11301048, non_refundable_storage_fee: 114152
 
-task 12, line 73:
+task 12, lines 72-73:
+// Try to receive coin in Wallet. This should now succeed.
 //# run test::regulated_coin::receive_coin --args object(1,6) receiving(1,5) --sender A
 mutated: object(0,0), object(1,5), object(1,6)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403

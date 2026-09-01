@@ -323,6 +323,36 @@ impl TransactionContents {
         }))
     }
 
+    /// A minimal instance whose `digest()` returns `digest`, for tests that only need identity. All
+    /// other accessors resolve to empty or absent values.
+    #[cfg(feature = "testing")]
+    pub fn for_test(digest: TransactionDigest) -> Self {
+        let mut effects = TransactionEffects::default();
+        *effects.transaction_digest_mut_for_testing() = digest;
+
+        let pt = sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder::new()
+            .finish();
+        let transaction_data = TransactionData::new_programmable(
+            sui_types::base_types::SuiAddress::ZERO,
+            vec![],
+            pt,
+            0,
+            0,
+        );
+
+        Self::ExecutedTransaction(ExecutedTransactionData {
+            effects: Box::new(effects),
+            events: vec![],
+            transaction_data: Box::new(transaction_data),
+            signatures: vec![],
+            balance_changes: vec![],
+            proto_effects: None,
+            proto_transaction: None,
+            timestamp_ms: None,
+            cp_sequence_number: None,
+        })
+    }
+
     pub fn data(&self) -> anyhow::Result<TransactionData> {
         match self {
             Self::LedgerGrpc(txn) => Ok(txn.transaction_data.as_ref().clone()),

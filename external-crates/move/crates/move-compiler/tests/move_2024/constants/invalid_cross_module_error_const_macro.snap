@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[EC04001]: restricted visibility
+   ┌─ tests/move_2024/constants/invalid_cross_module_error_const_macro.move:11:22
+   │
+ 8 │ const ENotValid: vector<u8> = b"invalid";
+   │       --------- This constant is internal to its module. Only 'public(package)' constants can be accessed outside of their module
+   ·
+11 │     assert!($x < 10, ENotValid);
+   │                      ^^^^^^^^^ Invalid access of internal constant '0x42::a::ENotValid'
+   ·
+21 │     a::check_valid!(x)
+   │     ------------------ While expanding this macro
+   │
+   = This visibility error occurs in a macro body while expanding the macro '0x42::a::check_valid'
+   = Visibility inside of expanded macros is resolved in the scope of the caller.

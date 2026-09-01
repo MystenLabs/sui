@@ -3,6 +3,11 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 17 tasks
 
+// tests invalid attempts at manually supplying &mut/&TxContext. The chained calls fail the arity
+// check during translation; the standalone reference-returning calls at the end are rejected by
+// the TxContext return rule, so TxContext can never become a PTB result even with references
+// allowed in PTBs
+
 task 1, lines 11-49:
 //# publish
 created: object(1,0)

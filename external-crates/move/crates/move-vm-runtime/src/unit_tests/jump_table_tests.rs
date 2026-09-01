@@ -49,17 +49,32 @@ fn create_test_input_package() -> input::Package {
     }
 }
 
+/// Translate `input_package` with a default VM config, empty natives, and a fresh interner.
+fn translate_test_package(
+    input_package: input::Package,
+) -> move_binary_format::errors::PartialVMResult<crate::jit::execution::ast::Package> {
+    let natives = create_test_natives();
+    let interner = IdentifierInterner::new();
+    package(
+        &move_vm_config::runtime::VMConfig::new_for_test(
+            /* allow_unpublishable_code_execution */ false, None,
+        ),
+        &interner,
+        &natives,
+        &BTreeMap::new(),
+        input_package,
+    )
+}
+
 // -------------------------------------------------------------------------------------------------
 // Tests
 // -------------------------------------------------------------------------------------------------
 
 #[test]
 fn test_package_empty() {
-    let natives = create_test_natives();
-    let interner = IdentifierInterner::new();
     let input_package = create_test_input_package();
 
-    let result = package(&natives, &interner, &BTreeMap::new(), input_package);
+    let result = translate_test_package(input_package);
     assert!(result.is_ok());
 
     let pkg = result.unwrap();
@@ -69,8 +84,6 @@ fn test_package_empty() {
 
 #[test]
 fn test_package_preserves_version_and_original_id() {
-    let natives = create_test_natives();
-    let interner = IdentifierInterner::new();
     let mut input_package = create_test_input_package();
 
     let test_version_id = VersionId::from(AccountAddress::from([3u8; AccountAddress::LENGTH]));
@@ -78,7 +91,7 @@ fn test_package_preserves_version_and_original_id() {
     input_package.version_id = test_version_id;
     input_package.original_id = test_original_id;
 
-    let result = package(&natives, &interner, &BTreeMap::new(), input_package);
+    let result = translate_test_package(input_package);
     assert!(result.is_ok());
 
     let pkg = result.unwrap();
@@ -88,8 +101,6 @@ fn test_package_preserves_version_and_original_id() {
 
 #[test]
 fn test_package_with_type_origin_table() {
-    let natives = create_test_natives();
-    let interner = IdentifierInterner::new();
     let mut input_package = create_test_input_package();
 
     // Add a type origin entry
@@ -101,15 +112,12 @@ fn test_package_with_type_origin_table() {
         input_package.original_id,
     );
 
-    let result = package(&natives, &interner, &BTreeMap::new(), input_package);
+    let result = translate_test_package(input_package);
     assert!(result.is_ok());
 }
 
 #[test]
 fn test_package_multiple_modules_dependency_order() {
-    let natives = create_test_natives();
-    let interner = IdentifierInterner::new();
-
     // Create a simpler test with just two distinct modules
     let module_a = create_empty_input_module();
     let mut module_b = create_empty_input_module();
@@ -144,7 +152,7 @@ fn test_package_multiple_modules_dependency_order() {
         linkage_table: BTreeMap::from([(original_id, version_id)]),
     };
 
-    let result = package(&natives, &interner, &BTreeMap::new(), input_package);
+    let result = translate_test_package(input_package);
     assert!(result.is_ok());
 
     let pkg = result.unwrap();
@@ -153,11 +161,9 @@ fn test_package_multiple_modules_dependency_order() {
 
 #[test]
 fn test_package_creates_virtual_table() {
-    let natives = create_test_natives();
-    let interner = IdentifierInterner::new();
     let input_package = create_test_input_package();
 
-    let result = package(&natives, &interner, &BTreeMap::new(), input_package);
+    let result = translate_test_package(input_package);
     assert!(result.is_ok());
 
     let pkg = result.unwrap();
@@ -168,8 +174,6 @@ fn test_package_creates_virtual_table() {
 
 #[test]
 fn test_package_error_handling_invalid_identifier() {
-    let natives = create_test_natives();
-    let interner = IdentifierInterner::new();
     let mut input_package = create_test_input_package();
 
     // Add a type origin entry
@@ -181,7 +185,7 @@ fn test_package_error_handling_invalid_identifier() {
         input_package.original_id,
     );
 
-    let result = package(&natives, &interner, &BTreeMap::new(), input_package);
+    let result = translate_test_package(input_package);
     assert!(result.is_ok());
 }
 
