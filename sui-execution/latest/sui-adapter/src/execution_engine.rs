@@ -221,7 +221,7 @@ pub(crate) mod checked {
         store: &dyn BackingStore,
         input_objects: CheckedInputObjects,
         system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
-        gas_data: GasData,
+        mut gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
@@ -241,6 +241,16 @@ pub(crate) mod checked {
         let receiving_objects = transaction_kind.receiving_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
 
+        // Apply the legacy gas-payment recovery before constructing the store so the gas charger
+        // and transaction-derived reservation inputs see the same final payment list.
+        if !bump_only_enabled(protocol_config.gas_model_version()) {
+            legacy::iffw_filter_address_balance_gas_payments(
+                &mut gas_data,
+                &execution_params,
+                protocol_config,
+            );
+        }
+
         let mut temporary_store = TemporaryStore::new(
             store,
             input_objects,
@@ -249,6 +259,7 @@ pub(crate) mod checked {
             protocol_config,
             *epoch_id,
             system_object_versions,
+            (&transaction_kind, &gas_data, transaction_signer),
         );
 
         if bump_only_enabled(protocol_config.gas_model_version()) {
@@ -399,9 +410,6 @@ pub(crate) mod checked {
         execution_succeeded: bool,
     ) -> Result<(), (Mode::Error, BumpOnlyReason)> {
         // FIXME: we cannot fail the transaction if this is an epoch change transaction.
-        // Conservation + ownership read the cached invariant inputs from the store
-        // (`set_invariant_inputs`); genesis flag, advance-epoch summary and the reservation budget
-        // are no longer threaded here (#27051).
         run_conservation_checks::<Mode>(
             temporary_store,
             gas_charger,
@@ -512,18 +520,12 @@ pub(crate) mod checked {
         metrics: Arc<ExecutionMetrics>,
         move_vm: &Arc<MoveRuntime>,
         tx_context: Rc<RefCell<TxContext>>,
-        input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
-        let input_objects = input_objects.into_inner();
-        let mut temporary_store = TemporaryStore::new(
+        let mut temporary_store = TemporaryStore::new_for_genesis_state_update(
             store,
-            input_objects,
-            vec![],
             tx_context.borrow().digest(),
             protocol_config,
-            0,
-            BTreeMap::new(),
         );
         let mut gas_charger =
             GasCharger::new_unmetered(tx_context.borrow().digest(), protocol_config);
@@ -687,9 +689,6 @@ pub(crate) mod checked {
             protocol_config,
         );
         let tx_ctx = Rc::new(RefCell::new(tx_ctx));
-
-        // Cache transaction-derived invariant inputs
-        temporary_store.set_invariant_inputs(&transaction_kind, &gas_data, transaction_signer);
 
         let payment_kind = match payment_kind(&gas_data, &transaction_kind) {
             Ok(payment_kind) => payment_kind,
@@ -1003,12 +1002,33 @@ pub(crate) mod checked {
                     }))
         }
 
+        /// On the legacy IFFW recovery path, discard address-balance payments while keeping real
+        /// gas coins. The caller runs this before constructing the temporary store so its input
+        /// reservations are derived from the same payment list used for gas smashing.
+        pub(crate) fn iffw_filter_address_balance_gas_payments(
+            gas_data: &mut GasData,
+            execution_params: &ExecutionOrEarlyError,
+            protocol_config: &ProtocolConfig,
+        ) {
+            if should_short_circuit_insufficient_funds(execution_params, protocol_config) {
+                return;
+            }
+            if should_filter_address_balance_gas_smash(execution_params, protocol_config)
+                && gas_data.payment.len() > 1
+                && ParsedDigest::try_from(gas_data.payment[0].2).is_err()
+            {
+                gas_data
+                    .payment
+                    .retain(|entry| ParsedDigest::try_from(entry.2).is_err());
+            }
+        }
+
         /// Frozen pre-v15 (`gas_model_version < 15`) execution; mirrors `origin/main`.
         #[allow(clippy::too_many_arguments)]
         pub(super) fn execute_transaction_inner<Mode: ExecutionMode>(
             store: &dyn BackingStore,
             mut temporary_store: TemporaryStore<'_>,
-            mut gas_data: GasData,
+            gas_data: GasData,
             gas_status: SuiGasStatus,
             transaction_kind: TransactionKind,
             rewritten_inputs: Option<Vec<bool>>,
@@ -1079,18 +1099,6 @@ pub(crate) mod checked {
             let gas_price = gas_status.gas_price();
             let rgp = gas_status.reference_gas_price();
 
-            // On an IFFW abort, drop the address-balance gas payments (keeping real coins) so the
-            // pruned list flows into `payment_kind`/`compute_input_reservations` with no special
-            // handling. See `should_filter_address_balance_gas_smash` for when this applies.
-            if should_filter_address_balance_gas_smash(&execution_params, protocol_config)
-                && gas_data.payment.len() > 1
-                && ParsedDigest::try_from(gas_data.payment[0].2).is_err()
-            {
-                gas_data
-                    .payment
-                    .retain(|entry| ParsedDigest::try_from(entry.2).is_err());
-            }
-
             let mut gas_charger = GasCharger::new(
                 transaction_digest,
                 legacy_payment_kind(&gas_data, &transaction_kind, protocol_config),
@@ -1115,11 +1123,6 @@ pub(crate) mod checked {
             let is_gasless = protocol_config.enable_gasless()
                 && is_gasless_transaction(&gas_data, &transaction_kind);
             let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
-
-            // Cache the transaction-derived invariant-check inputs (reservation budget, advance-epoch
-            // mint/burn, genesis flag) on the store, after the gas-smash filtering above. The
-            // conservation checks and the ownership-invariant check read them from there.
-            temporary_store.set_invariant_inputs(&transaction_kind, &gas_data, transaction_signer);
 
             let ExecutionOutcome {
                 cost_summary: gas_cost_summary,
