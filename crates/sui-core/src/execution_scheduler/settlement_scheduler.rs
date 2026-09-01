@@ -107,7 +107,7 @@ impl SettlementScheduler {
         // writes, so the batch's index must sit below theirs.
         let env = ExecutionEnv::new()
             .with_assigned_versions(settlement.assigned_versions.clone())
-            .with_causal_guard(self.execution_scheduler.causal_window().assign());
+            .with_causal_guard(self.execution_scheduler.causal_admission().assign());
         let queue = self.get_or_start_queue(epoch_store);
         queue.send(SettlementWorkItem {
             settlement_key: settlement.settlement_key,
