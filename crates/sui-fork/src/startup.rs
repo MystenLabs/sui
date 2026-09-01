@@ -55,6 +55,7 @@ pub(crate) struct ForkParts {
     pub(crate) context: Context,
     pub(crate) subscription_handle: SubscriptionServiceHandle,
     pub(crate) indexer_service: Service,
+    pub(crate) data_dir: PathBuf,
     pub(crate) resumed: bool,
 }
 
@@ -141,6 +142,7 @@ pub(crate) async fn initialize(
     };
     let chain_identifier = gql.chain();
     let local = MetadataStore::new(&node, forked_at_checkpoint, data_dir)?;
+    let data_dir = local.root().to_path_buf();
     crate::seed::ensure_seed_policy(&local, &seed_input)?;
 
     // 2. Fetch the startup checkpoint, open the RPC store using its chain identity,
@@ -228,6 +230,7 @@ pub(crate) async fn initialize(
         context,
         subscription_handle,
         indexer_service,
+        data_dir,
         resumed: resolved.resuming,
     })
 }
