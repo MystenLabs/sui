@@ -38,38 +38,39 @@
 //! A transaction with causal index `i` is admitted for execution when:
 //!
 //! ```text
-//!     i == C + 1  OR  (i < C + W  AND  in_flight < K)
+//!     in_flight < K  OR  i == C + 1
 //! ```
 //!
 //! where `in_flight` counts admitted-but-unfinished transactions (including parked
-//! ones), K is the concurrency limit, and W is the window size.
+//! ones) and K is the concurrency limit. The second branch admits at most one
+//! transaction over the limit at a time; when it finishes, C advances and the new
+//! C+1 transaction may again be admitted over the limit, while the capacity branch
+//! stays closed until in-flight drops below K.
 //!
 //! ## Why this cannot deadlock
 //!
 //! The transaction with index C+1 can always run to completion: everything below it is
 //! done, so every value it could wait for - declared or undeclared - already exists.
-//! It is always admitted (the first branch ignores the window and the concurrency
-//! limit), and a pool thread is always free for it: admissions are bounded well below
-//! the pool size, so admission never queues behind parked threads. When it finishes,
-//! C advances and the next transaction gains the same guarantee. So the system always
-//! makes progress, one transaction at a time in the worst case, no matter how many
-//! admitted transactions are parked.
+//! It is admitted even when the concurrency limit is exhausted by parked transactions,
+//! and a pool thread is always free for it (the pool is one thread larger than
+//! in-flight can ever get, so admission never queues behind parked threads). When it
+//! finishes, C advances and the next transaction gains the same guarantee. So the
+//! system always makes progress, one transaction at a time in the worst case, no
+//! matter how many admitted transactions are parked.
 //!
 //! Transactions parked on an undeclared dependency do not park forever for the same
 //! reason: the writer they wait for has a lower index, so the watermark reaches it and
 //! it executes.
 //!
-//! ## Throughput and sizing
+//! ## Throughput
 //!
-//! The second branch provides parallelism: up to K transactions run concurrently within
-//! a window of W indices above the watermark. W bounds how far execution runs ahead of
-//! an unarrived unit (e.g. a settlement batch that has not materialized yet); it is
-//! sized at several times K so that run-ahead, not the concurrency limit, is rarely the
-//! binding constraint. The pool has more threads than the admission rule can ever
-//! occupy, so parked transactions consume a concurrency slot but never delay another
-//! admitted transaction's start. Parked transactions do hold their slot; if occupancy
-//! by parked transactions ever shows up as a throughput problem, releasing the slot on
-//! park (the blocking primitives have the hook) is the escalation path.
+//! Admission takes waiting transactions in causal-index order, so execution slots
+//! always go to the nearest available work first; how far execution may run ahead of a
+//! parked or not-yet-materialized unit is deliberately unbounded (the far
+//! transactions are committed work that must execute anyway). Parked transactions do
+//! hold their concurrency slot; if occupancy by parked transactions ever shows up as
+//! a throughput problem, releasing the slot on park (the blocking primitives have the
+//! hook) is the escalation path.
 
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
@@ -85,7 +86,7 @@ use tracing::{error_span, info, trace, warn};
 
 use crate::authority::AuthorityState;
 use crate::execution_scheduler::PendingCertificate;
-use crate::execution_scheduler::causal_order::CausalWindow;
+use crate::execution_scheduler::causal_order::CausalAdmission;
 
 #[cfg(test)]
 #[path = "unit_tests/execution_driver_tests.rs"]
@@ -138,11 +139,11 @@ pub async fn execution_process(
     authority_state: Weak<AuthorityState>,
     mut rx_ready_certificates: UnboundedReceiver<PendingCertificate>,
     mut rx_execution_shutdown: oneshot::Receiver<()>,
-    causal_window: Arc<CausalWindow>,
+    causal_admission: Arc<CausalAdmission>,
 ) {
     info!("Starting pending certificates execution process.");
 
-    let pool = DedicatedThreadPool::new("sui-execution", causal_window.required_pool_size());
+    let pool = DedicatedThreadPool::new("sui-execution", causal_admission.required_pool_size());
     // Transactions that have arrived but are not yet admitted, ordered by causal index.
     let mut waiting: BinaryHeap<Reverse<QueuedCertificate>> = BinaryHeap::new();
 
@@ -164,7 +165,7 @@ pub async fn execution_process(
                 };
             }
             // The watermark advanced or a concurrency slot freed; re-check admission.
-            _ = causal_window.changed() => {}
+            _ = causal_admission.changed() => {}
             _ = &mut rx_execution_shutdown => {
                 info!("Shutdown signal received. Exiting executor ...");
                 return;
@@ -219,7 +220,7 @@ pub async fn execution_process(
                 continue;
             }
 
-            let Some(slot) = causal_window.try_admit(head_index) else {
+            let Some(slot) = causal_admission.try_admit(head_index) else {
                 break;
             };
 
