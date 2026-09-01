@@ -32,13 +32,15 @@ impl Processor for PackagesPipeline {
                     continue;
                 };
 
-                let original_id = package.original_package_id().to_vec();
-                let package_id = obj.id().to_vec();
                 let version = obj.version().value();
 
                 let entry = tables::make_entry(
-                    tables::packages::encode_key(&original_id, version),
-                    tables::packages::encode(cp_sequence_number, &package_id, is_system_package),
+                    tables::packages::encode_key(package.original_package_id().as_ref(), version),
+                    tables::packages::encode(
+                        cp_sequence_number,
+                        obj.id().as_ref(),
+                        is_system_package,
+                    ),
                     Some(timestamp_ms),
                 );
                 entries.push(entry);
