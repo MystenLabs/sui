@@ -6,8 +6,9 @@
 //! A transaction without a usable allowed-proposers list can be submitted to every validator
 //! at once, amplifying its consensus cost while paying gas once. Rejecting such transactions
 //! outright would break existing clients, so instead — when duplication is detected on the
-//! network — each validator derives a deterministic rank for itself from the transaction and
-//! delays its own submission by that rank. The first `free_slots` validators in the derived
+//! network — each validator derives a deterministic rank for itself from a stake-weighted
+//! permutation of the committee seeded by the transaction, and delays its own submission by
+//! that rank. The first `free_slots` validators in the derived
 //! order submit immediately (mirroring the proposer set an explicit list would grant), and
 //! every later validator waits long enough that an earlier copy can commit first, at which
 //! point the pending submission is dropped (see the processed-notify race in
@@ -31,8 +32,10 @@ use std::time::Duration;
 
 use fastcrypto::hash::HashFunction;
 use parking_lot::RwLock;
+use rand::SeedableRng as _;
+use rand::rngs::StdRng;
 use sui_types::base_types::ObjectID;
-use sui_types::committee::EpochId;
+use sui_types::committee::{Committee, CommitteeTrait as _, EpochId};
 use sui_types::crypto::DefaultHash;
 use sui_types::digests::TransactionDigest;
 use sui_types::transaction::{MAX_UNPAID_ALLOWED_PROPOSERS, Transaction, TransactionDataAPI as _};
@@ -116,7 +119,6 @@ impl StaggeredSubmission {
         }
         // A non-member has no rank in the order; it also has no consensus to submit to.
         let own_index = epoch_store.own_committee_index()?;
-        let committee_size = epoch_store.committee().num_members() as u32;
 
         let gas_payment: Vec<ObjectID> = tx_data
             .gas_data()
@@ -125,7 +127,7 @@ impl StaggeredSubmission {
             .map(|(id, _, _)| *id)
             .collect();
         let seed = stagger_seed(&gas_payment, tx.digest(), epoch);
-        let rank = stagger_rank(&seed, committee_size, own_index);
+        let rank = stagger_rank(&seed, epoch_store.committee(), own_index);
 
         // SIP-45: a raised gas price pays for amplification, which maps here to that many
         // immediate slots. Matches the sizing an explicit proposer set is allowed.
@@ -177,21 +179,23 @@ fn stagger_seed(
     hasher.finalize().into()
 }
 
-/// This validator's position in the seed-derived permutation of the committee: each member's
-/// score is `H(seed ‖ index)`, and the rank is the number of members scoring lower (ties —
-/// impossible in practice — broken by index).
-fn stagger_rank(seed: &[u8; 32], committee_size: u32, own_index: u32) -> u32 {
-    debug_assert!(own_index < committee_size);
-    let score = |index: u32| -> [u8; 32] {
-        let mut hasher = DefaultHash::new();
-        hasher.update(seed);
-        hasher.update(index.to_le_bytes());
-        hasher.finalize().into()
-    };
-    let own_score = score(own_index);
-    (0..committee_size)
-        .filter(|&index| (score(index), index) < (own_score, own_index))
-        .count() as u32
+/// This validator's position in a stake-weighted permutation of the committee derived from
+/// `seed`: members are drawn without replacement with probability proportional to voting
+/// power, the same primitive as `Committee::shuffle_by_stake_from_tx_digest` and the
+/// consensus leader schedule. Weighting by stake makes early-slot honesty track honest
+/// *stake* (the BFT assumption) rather than validator count, makes splitting stake across
+/// seats buy no extra slot-0 share, and lands the implied submission load on validators in
+/// proportion to their stake.
+fn stagger_rank(seed: &[u8; 32], committee: &Committee, own_index: u32) -> u32 {
+    let own_name = committee
+        .authority_by_index(own_index)
+        .expect("own_index is a committee member");
+    let mut rng = StdRng::from_seed(*seed);
+    let shuffled = committee.shuffle_by_stake_with_rng(None, None, &mut rng);
+    shuffled
+        .iter()
+        .position(|name| name == own_name)
+        .expect("every committee member appears in the shuffle") as u32
 }
 
 #[cfg(test)]
@@ -202,30 +206,60 @@ mod tests {
         [byte; 32]
     }
 
+    fn ranks(committee: &Committee, seed: &[u8; 32]) -> Vec<u32> {
+        (0..committee.num_members() as u32)
+            .map(|index| stagger_rank(seed, committee, index))
+            .collect()
+    }
+
     #[test]
     fn rank_is_a_permutation() {
         for seed_byte in 0..3u8 {
             let seed = test_seed(seed_byte);
-            for committee_size in [1u32, 4, 7, 100] {
-                let mut ranks: Vec<u32> = (0..committee_size)
-                    .map(|index| stagger_rank(&seed, committee_size, index))
-                    .collect();
+            for committee_size in [1usize, 4, 7, 100] {
+                let (committee, _) = Committee::new_simple_test_committee_of_size(committee_size);
+                let mut ranks = ranks(&committee, &seed);
                 ranks.sort();
-                assert_eq!(ranks, (0..committee_size).collect::<Vec<_>>());
+                assert_eq!(ranks, (0..committee_size as u32).collect::<Vec<_>>());
             }
         }
     }
 
     #[test]
     fn rank_is_deterministic_and_seed_sensitive() {
-        let a = stagger_rank(&test_seed(1), 100, 42);
-        assert_eq!(a, stagger_rank(&test_seed(1), 100, 42));
+        let (committee, _) = Committee::new_simple_test_committee_of_size(100);
+        assert_eq!(
+            stagger_rank(&test_seed(1), &committee, 42),
+            stagger_rank(&test_seed(1), &committee, 42)
+        );
         // Different seeds must not produce the same permutation. Compare the full
         // permutations (a single rank can collide legitimately).
-        let permutation = |seed: &[u8; 32]| -> Vec<u32> {
-            (0..100).map(|i| stagger_rank(seed, 100, i)).collect()
-        };
-        assert_ne!(permutation(&test_seed(1)), permutation(&test_seed(2)));
+        assert_ne!(
+            ranks(&committee, &test_seed(1)),
+            ranks(&committee, &test_seed(2))
+        );
+    }
+
+    #[test]
+    fn rank_is_stake_weighted() {
+        // One member holds 85% of the voting power; it must take slot 0 for the large
+        // majority of seeds. The bound is loose (the exact count is deterministic but
+        // depends on the rand version) while a uniform permutation would put the heavy
+        // member first only ~25% of the time.
+        let (committee, _) =
+            Committee::new_simple_test_committee_with_normalized_voting_power(vec![
+                8500, 500, 500, 500,
+            ]);
+        let heavy_index = (0..4)
+            .find(|&index| committee.weight(committee.authority_by_index(index).unwrap()) == 8500)
+            .unwrap();
+        let heavy_first = (0..=u8::MAX)
+            .filter(|&byte| stagger_rank(&test_seed(byte), &committee, heavy_index) == 0)
+            .count();
+        assert!(
+            heavy_first > 150,
+            "heavy member ranked first only {heavy_first}/256 times"
+        );
     }
 
     #[test]
@@ -390,7 +424,7 @@ mod adapter_tests {
         let own_index = epoch_store.own_committee_index().unwrap();
         let rank_of = |object: &Object| {
             let seed = stagger_seed(&[object.id()], &TransactionDigest::default(), epoch);
-            stagger_rank(&seed, COMMITTEE_SIZE, own_index)
+            stagger_rank(&seed, epoch_store.committee(), own_index)
         };
         // 32 candidates make both picks overwhelmingly likely (miss odds ~(1/4)^32 and
         // ~(3/4)^32 respectively).
