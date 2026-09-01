@@ -885,6 +885,28 @@ impl ExpectedEffectsDigest {
     }
 }
 
+/// (test-only) Argument to the `simulate_fork_during_execution` failpoint.
+#[cfg(any(msim, fail_points))]
+#[derive(Clone, Default)]
+pub struct SimulatedForkConfig {
+    /// Validators the injection has diverged. Inserted into the first time a validator forks;
+    /// tests read it to learn which validators forked.
+    pub forked_validators: std::sync::Arc<
+        std::sync::Mutex<std::collections::HashSet<sui_types::base_types::AuthorityName>>,
+    >,
+    /// Fork past the validity threshold rather than staying strictly below it, so that no digest
+    /// reaches quorum and checkpoint certification stalls in split brain. `false` forks a minority
+    /// instead, leaving the honest majority to certify canonically.
+    ///
+    /// Assumes roughly even stake: if one validator alone held quorum, forking it would certify
+    /// the divergent digest rather than stall, producing a majority fork instead of split brain.
+    pub split_brain: bool,
+    /// Fork exclusively on the checkpoint-executor path (`true`) or exclusively on the
+    /// consensus/builder path (`false`). Exclusive so that a validator which falls behind cannot
+    /// turn a checkpoint fork into a transaction fork or vice versa.
+    pub fork_on_executor_path: bool,
+}
+
 /// Execution env contains the "environment" for the transaction to be executed in, that is,
 /// all the information necessary for execution that is not specified by the transaction itself.
 #[derive(Debug, Clone)]
@@ -2105,42 +2127,24 @@ impl AuthorityState {
             return ExecutionOutput::RetryLater;
         }
 
-        // (test-only) Inject a fork before the effects-digest check below. Placed here so that a
-        // forked validator executing a *certified* checkpoint (expected_effects_digest is set, i.e.
-        // the checkpoint-executor path) trips the transaction-fork check. On the builder path
-        // (expected_effects_digest is None) the check is skipped, so this still produces a checkpoint
-        // fork as before.
-        fail_point_arg!("simulate_fork_during_execution", |(
-            forked_validators,
-            full_halt,
-            effects_overrides,
-            fork_probability,
-            executor_path_only,
-        ): (
-            std::sync::Arc<
-                std::sync::Mutex<std::collections::HashSet<sui_types::base_types::AuthorityName>>,
-            >,
-            bool,
-            std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<String, String>>>,
-            f32,
-            bool,
-        )| {
-            #[cfg(msim)]
-            // When `executor_path_only` is set, fork only while executing a certified checkpoint
-            // (expected_effects_digest is set) so the divergence trips the transaction-fork check
-            // below; otherwise fork on any path (the builder path yields a checkpoint fork).
-            if !executor_path_only || expected_effects_digest.is_some() {
-                self.simulate_fork_during_execution(
-                    certificate,
-                    epoch_store,
-                    &mut effects,
-                    forked_validators,
-                    full_halt,
-                    effects_overrides,
-                    fork_probability,
-                );
+        // (test-only) Inject a fork before the effects-digest check below. `fork_on_executor_path`
+        // picks the path exclusively — true trips the transaction-fork check below, false yields a
+        // checkpoint fork — so a validator that falls behind can't turn one into the other.
+        fail_point_arg!(
+            "simulate_fork_during_execution",
+            |config: SimulatedForkConfig| {
+                #[cfg(msim)]
+                if config.fork_on_executor_path == expected_effects_digest.is_some() {
+                    self.simulate_fork_during_execution(
+                        certificate,
+                        epoch_store,
+                        &mut effects,
+                        config.forked_validators,
+                        config.split_brain,
+                    );
+                }
             }
-        });
+        );
 
         if let Some(expected) = expected_effects_digest
             && effects.digest() != expected.digest()
@@ -2647,13 +2651,14 @@ impl AuthorityState {
         forked_validators: std::sync::Arc<
             std::sync::Mutex<std::collections::HashSet<sui_types::base_types::AuthorityName>>,
         >,
-        full_halt: bool,
-        effects_overrides: std::sync::Arc<
-            std::sync::Mutex<std::collections::BTreeMap<String, String>>,
-        >,
-        fork_probability: f32,
+        split_brain: bool,
     ) {
         static TOTAL_FAILING_STAKE: std::sync::Mutex<u64> = std::sync::Mutex::new(0);
+        // tx digest -> pre-fork effects digest, for every transaction forked so far. Process-global
+        // like TOTAL_FAILING_STAKE: it is shared by every simulated node, and there is at most one
+        // simulation per process.
+        static FORKED_TRANSACTIONS: std::sync::Mutex<std::collections::BTreeMap<String, String>> =
+            std::sync::Mutex::new(std::collections::BTreeMap::new());
         if !certificate.data().intent_message().value.is_system_tx() {
             let committee = epoch_store.committee();
             let cur_stake = (**committee).weight(&self.name);
@@ -2668,11 +2673,13 @@ impl AuthorityState {
                         .unwrap_or(false);
 
                     if !already_forked {
-                        let should_fork = if full_halt {
-                            // For full halt, fork enough nodes to reach validity threshold
+                        let should_fork = if split_brain {
+                            // Fork past the validity threshold, so neither the forked nor the
+                            // canonical digest can reach quorum.
                             *total_stake <= committee.validity_threshold()
                         } else {
-                            // For partial fork, stay strictly below validity threshold
+                            // Fork a minority, staying strictly below the validity threshold so
+                            // the honest majority still certifies canonically.
                             *total_stake + cur_stake < committee.validity_threshold()
                         };
 
@@ -2688,31 +2695,21 @@ impl AuthorityState {
 
                     if let Ok(external_set) = forked_validators.lock() {
                         if external_set.contains(&self.name) {
-                            // If effects_overrides is empty, deterministically select a tx_digest to fork with 1/100 probability.
-                            // Fork this transaction and record the digest and the original effects to original_effects.
-                            // If original_effects is nonempty and contains a key matching this transaction digest (i.e.
-                            // the transaction was forked on a different validator), fork this txn as well.
-
+                            // Fork the first transaction executed by a forked validator after the
+                            // failpoint is armed. If FORKED_TRANSACTIONS already names this
+                            // transaction (i.e. it was forked on a different validator first),
+                            // fork it here too so all forked validators diverge identically.
                             let tx_digest = certificate.digest().to_string();
-                            if let Ok(mut overrides) = effects_overrides.lock() {
-                                if overrides.contains_key(&tx_digest)
-                                    || overrides.is_empty()
-                                        && sui_simulator::random::deterministic_probability(
-                                            &tx_digest,
-                                            fork_probability,
-                                        )
-                                {
-                                    let original_effects_digest = effects.digest().to_string();
-                                    overrides
-                                        .insert(tx_digest.clone(), original_effects_digest.clone());
-                                    info!(
-                                        ?tx_digest,
-                                        ?original_effects_digest,
-                                        "Captured forked effects digest for transaction"
-                                    );
-                                    effects.gas_cost_summary_mut_for_testing().computation_cost +=
-                                        1;
-                                }
+                            let mut forked = FORKED_TRANSACTIONS.lock().unwrap();
+                            if forked.contains_key(&tx_digest) || forked.is_empty() {
+                                let original_effects_digest = effects.digest().to_string();
+                                forked.insert(tx_digest.clone(), original_effects_digest.clone());
+                                info!(
+                                    ?tx_digest,
+                                    ?original_effects_digest,
+                                    "Captured forked effects digest for transaction"
+                                );
+                                effects.gas_cost_summary_mut_for_testing().computation_cost += 1;
                             }
                         }
                     }
