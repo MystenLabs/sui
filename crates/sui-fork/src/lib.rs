@@ -4,6 +4,7 @@
 //! Building blocks for the experimental `sui-fork` tool.
 
 pub mod args;
+#[doc(hidden)]
 pub mod cli;
 pub(crate) mod context;
 mod gql;
@@ -17,15 +18,14 @@ pub(crate) mod remote;
 mod rpc;
 pub(crate) mod seed;
 pub(crate) mod services;
-pub mod startup;
-pub mod store;
+mod startup;
+pub(crate) mod store;
 #[cfg(test)]
 #[path = "tests/support.rs"]
 mod test_support;
 
 pub use args::DEFAULT_RPC_ADDR;
 pub use args::StartArgs;
-pub use gql::GraphQLClient;
 pub use node::Node;
 pub use proto::forking::AdvanceCheckpointRequest;
 pub use proto::forking::AdvanceCheckpointResponse;
@@ -34,8 +34,6 @@ pub use proto::forking::AdvanceClockResponse;
 pub use proto::forking::GetStatusRequest;
 pub use proto::forking::GetStatusResponse;
 pub use proto::forking::forking_service_client::ForkingServiceClient;
-pub use seed::SeedInput;
-pub use store::ForkStore;
 
 use std::net::SocketAddr;
 use std::path::Path;
@@ -52,6 +50,7 @@ use sui_futures::service::GRACE;
 use sui_futures::service::Service;
 
 use crate::context::Context;
+use crate::seed::SeedInput;
 use crate::startup::ForkParts;
 
 /// A running forked network, served over gRPC and administered in-process.

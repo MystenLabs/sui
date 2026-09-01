@@ -28,11 +28,11 @@ use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
-use crate::ForkStore;
 use crate::gql::AddressOwnedObject;
 use crate::gql::ObjectSeedMetadata;
 use crate::metadata::MetadataStore;
 use crate::remote::RemoteSource;
+use crate::store::ForkStore;
 
 /// Objects fetched per GraphQL query when querying for seed objects. The load commits as one batch
 /// regardless, and this only bounds the size of an individual query.
@@ -40,11 +40,11 @@ const OBJECTS_PER_QUERY: usize = 50;
 
 /// CLI seed input before it has been resolved against the upstream chain.
 #[derive(Clone, Debug, Default)]
-pub struct SeedInput {
+pub(crate) struct SeedInput {
     /// Addresses whose owned objects should be recorded in the seed manifest.
-    pub addresses: BTreeSet<SuiAddress>,
+    pub(crate) addresses: BTreeSet<SuiAddress>,
     /// Object IDs to fetch and seed.
-    pub object_ids: BTreeSet<ObjectID>,
+    pub(crate) object_ids: BTreeSet<ObjectID>,
 }
 
 /// Object reference recorded in the manifest and hydrated by the seed load.
@@ -79,7 +79,7 @@ impl SeedManifest {
 
 impl SeedInput {
     /// Return true when no addresses or objects were requested for seeding.
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.addresses.is_empty() && self.object_ids.is_empty()
     }
 }

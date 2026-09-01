@@ -37,7 +37,7 @@ pub(crate) struct CreatedCheckpointMetadata {
 }
 
 /// Shared execution state for the forked network and its durable indexing progress.
-pub struct Context {
+pub(crate) struct Context {
     simulacrum: Arc<RwLock<ForkedSimulacrum>>,
     services: ServiceManager,
     checkpoint_publication_lock: Mutex<()>,
