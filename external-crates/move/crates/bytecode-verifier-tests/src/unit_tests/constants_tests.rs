@@ -236,10 +236,9 @@ fn invalid_types() {
     invalid_type(SignatureToken::Signer, vec![0]);
     invalid_type(tvec(SignatureToken::Signer), vec![0]);
 
-    // Signed integer constants are not yet supported: `is_valid_for_constant` returns false
-    // for them, so — even with well-formed data — they must fail the *type* check
-    // (INVALID_CONSTANT_TYPE), not the data check (MALFORMED_CONSTANT_DATA). #26274 flips
-    // these together when signed constants become real.
+    // `is_valid_for_constant` returns false for signed integers, so they fail the type check
+    // (INVALID_CONSTANT_TYPE) even with well-formed data. These should pass once signed
+    // integers are enabled.
     invalid_type(SignatureToken::I8, vec![0]);
     invalid_type(SignatureToken::I16, vec![0; 2]);
     invalid_type(SignatureToken::I32, vec![0; 4]);

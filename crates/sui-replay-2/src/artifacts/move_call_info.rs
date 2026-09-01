@@ -307,7 +307,7 @@ impl MoveCallInfo {
                     Ok(MoveType::TypeParameter(*idx))
                 }
             }
-            // Signed integer types are not yet supported in replay MoveType
+            // TODO (signed-ints): not yet supported in replay MoveType
             SignatureToken::I8
             | SignatureToken::I16
             | SignatureToken::I32

@@ -19,6 +19,23 @@ use std::{
     io::{Cursor, Read},
 };
 
+// Opcodes gated behind `SIGNED_INT_VERSION`; a deserializer below that version rejects them.
+const SIGNED_INTEGER_OPCODES: &[Opcodes] = &[
+    Opcodes::LD_I8,
+    Opcodes::LD_I16,
+    Opcodes::LD_I32,
+    Opcodes::LD_I64,
+    Opcodes::LD_I128,
+    Opcodes::LD_I256,
+    Opcodes::CAST_I8,
+    Opcodes::CAST_I16,
+    Opcodes::CAST_I32,
+    Opcodes::CAST_I64,
+    Opcodes::CAST_I128,
+    Opcodes::CAST_I256,
+    Opcodes::NEG,
+];
+
 impl CompiledModule {
     /// Deserialize a &[u8] slice into a `CompiledModule` instance.
     pub fn deserialize_with_defaults(binary: &[u8]) -> BinaryLoaderResult<Self> {
@@ -1758,33 +1775,16 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
             _ => (),
         };
 
-        // TODO (signed-ints): add a test entry for load_code at VERSION_8 to exercise the
-        // signed opcode path when possible
-        match opcode {
-            Opcodes::LD_I8
-            | Opcodes::LD_I16
-            | Opcodes::LD_I32
-            | Opcodes::LD_I64
-            | Opcodes::LD_I128
-            | Opcodes::LD_I256
-            | Opcodes::CAST_I8
-            | Opcodes::CAST_I16
-            | Opcodes::CAST_I32
-            | Opcodes::CAST_I64
-            | Opcodes::CAST_I128
-            | Opcodes::CAST_I256
-            | Opcodes::NEG
-                if (cursor.version() < SIGNED_INT_VERSION) =>
-            {
-                return Err(
-                    PartialVMError::new(StatusCode::MALFORMED).with_message(format!(
-                        "Signed integer bytecodes not supported in bytecode version {}",
-                        cursor.version()
-                    )),
-                );
-            }
-            _ => (),
-        };
+        // TODO (signed-ints): add a load_code test entry at SIGNED_INT_VERSION to exercise the
+        // signed opcode path.
+        if cursor.version() < SIGNED_INT_VERSION && SIGNED_INTEGER_OPCODES.contains(&opcode) {
+            return Err(
+                PartialVMError::new(StatusCode::MALFORMED).with_message(format!(
+                    "Signed integer bytecodes not supported in bytecode version {}",
+                    cursor.version()
+                )),
+            );
+        }
 
         // conversion
         let bytecode = match opcode {

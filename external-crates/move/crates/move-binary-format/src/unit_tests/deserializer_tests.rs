@@ -15,8 +15,8 @@ use crate::{
 use move_core_types::{metadata::Metadata, vm_status::StatusCode};
 
 fn malformed_simple_versioned_test(version: u32) {
-    // Versions 7+ encode the flavor into the version bytes; `encode_version` is the identity
-    // for earlier versions.
+    // `encode_version` folds the binary flavor into the version bytes at version 7 and later,
+    // and returns the version unchanged below that.
     let version = BinaryFlavor::encode_version(version);
     // bad uleb (more than allowed for table count)
     let mut binary = BinaryConstants::MOVE_MAGIC.to_vec();
@@ -210,7 +210,7 @@ fn malformed_simple() {
         StatusCode::UNKNOWN_VERSION
     );
 
-    // versioned tests (the helper applies flavor encoding where a version requires it)
+    // versioned tests
     for version in VERSION_1..=VERSION_MAX {
         malformed_simple_versioned_test(version);
     }
@@ -449,10 +449,12 @@ fn serializer_rejects_signed_signature_token_below_version_8() {
     let mut module = basic_test_module();
     // Inject a signed integer type into the signature pool.
     module.signatures.push(Signature(vec![SignatureToken::I8]));
+
     let mut v = vec![];
-    // VERSION_MAX is VERSION_7 in this branch, so serialize_with_version(VERSION_MAX, ...)
-    // must reject the signed integer signature token.
+    // TODO (signed-ints): VERSION_MAX is VERSION_7 here, so serializing at VERSION_MAX must
+    // reject the signed signature token. Revisit when VERSION_MAX reaches SIGNED_INT_VERSION.
     let res = module.serialize_with_version(VERSION_MAX, &mut v);
+
     assert!(
         res.is_err(),
         "Expected rejection of signed integer types at version {VERSION_MAX}"
@@ -476,10 +478,12 @@ fn serialize_and_patch_single_byte(
     let mut base_bytes = vec![];
     base.serialize_with_version(VERSION_MAX, &mut base_bytes)
         .unwrap();
+
     let mut variant_bytes = vec![];
     variant
         .serialize_with_version(VERSION_MAX, &mut variant_bytes)
         .unwrap();
+
     assert_eq!(base_bytes.len(), variant_bytes.len());
     let diffs: Vec<usize> = base_bytes
         .iter()
@@ -512,20 +516,21 @@ fn assert_signed_rejected_below_version_8(bytes: &[u8], what: &str) {
     );
 }
 
-// The fail-closed property this PR rests on: a max-version-7 deserializer rejects blobs
-// containing signed integer types or opcodes as MALFORMED, wherever they occur. The
-// serializer refuses to emit them below SIGNED_INT_VERSION, so each test serializes a valid v7
-// module and byte-patches the position of interest to a signed tag.
+// A max-version-7 deserializer must reject any blob containing signed integer types or opcodes
+// as MALFORMED. The serializer refuses to emit them below SIGNED_INT_VERSION, so each test
+// serializes a valid v7 module and byte-patches one position to a signed tag.
 
 #[test]
 fn deserializer_rejects_signed_token_in_signature() {
     use crate::file_format::{Signature, SignatureToken};
     let mut base = basic_test_module();
     base.signatures.push(Signature(vec![SignatureToken::U8]));
+
     let mut variant = basic_test_module();
     variant
         .signatures
         .push(Signature(vec![SignatureToken::U16]));
+
     let bytes = serialize_and_patch_single_byte(&base, &variant, SerializedType::I8 as u8);
     assert_signed_rejected_below_version_8(&bytes, "I8 in signature pool");
 }
@@ -540,10 +545,13 @@ fn deserializer_rejects_signed_token_in_struct_field() {
         };
         fields[0].signature = TypeSignature(ty);
     };
+
     let mut base = basic_test_module();
     field_type(&mut base, SignatureToken::U8);
+
     let mut variant = basic_test_module();
     field_type(&mut variant, SignatureToken::U16);
+
     let bytes = serialize_and_patch_single_byte(&base, &variant, SerializedType::I16 as u8);
     assert_signed_rejected_below_version_8(&bytes, "I16 in struct field definition");
 }
@@ -556,11 +564,13 @@ fn deserializer_rejects_signed_token_in_constant_type() {
         type_: SignatureToken::U8,
         data: vec![0],
     });
+
     let mut variant = basic_test_module();
     variant.constant_pool.push(Constant {
         type_: SignatureToken::Bool,
         data: vec![0],
     });
+
     let bytes = serialize_and_patch_single_byte(&base, &variant, SerializedType::I8 as u8);
     assert_signed_rejected_below_version_8(&bytes, "I8 in constant type");
 }
@@ -578,8 +588,10 @@ fn deserializer_rejects_signed_opcodes_in_code_unit() {
         };
         let mut base = basic_test_module();
         code(&mut base, Bytecode::LdTrue);
+
         let mut variant = basic_test_module();
         code(&mut variant, Bytecode::LdFalse);
+
         let bytes = serialize_and_patch_single_byte(&base, &variant, patch);
         assert_signed_rejected_below_version_8(&bytes, what);
     }

@@ -14,6 +14,8 @@ use crate::{
 use move_core_types::vm_status::StatusCode;
 use std::io::Cursor;
 
+// The depth-limit tests are version-independent, so they serialize at VERSION_MAX. Signed-token
+// version gating is covered separately below.
 #[test]
 fn serialize_and_deserialize_nested_types_max() {
     let mut ty = SignatureToken::Datatype(DatatypeHandleIndex::new(0));

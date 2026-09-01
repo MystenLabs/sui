@@ -1140,8 +1140,8 @@ impl Arbitrary for SignatureToken {
     fn arbitrary_with(_params: Self::Parameters) -> Self::Strategy {
         use SignatureToken::*;
 
-        // Default strategies must only generate tokens serializable at `VERSION_MAX`,
-        // so signed tokens join once `VERSION_MAX` reaches `SIGNED_INT_VERSION`.
+        // TODO (signed-ints): signed tokens join the default strategy once `VERSION_MAX`
+        // reaches `SIGNED_INT_VERSION`.
         let leaf = if file_format_common::VERSION_MAX >= file_format_common::SIGNED_INT_VERSION {
             prop_oneof![
                 Just(Bool),
@@ -1276,10 +1276,8 @@ impl SignatureToken {
 
         match self {
             Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address => true,
-            // Signed integer constants are not yet supported: this must agree with
-            // `constant::sig_to_ty` (and the VM's constant deserialization), which currently
-            // reject signed types. #26274 flips these sites together when signed constants
-            // become real.
+            // TODO (signed-ints): constants are not yet supported. Keep in sync with
+            // `constant::sig_to_ty` and the VM's constant deserialization.
             I8 | I16 | I32 | I64 | I128 | I256 => false,
             Vector(inner) => inner.is_valid_for_constant(),
             Signer
@@ -1331,8 +1329,8 @@ pub struct Constant {
     pub data: Vec<u8>,
 }
 
-/// Generates any `Bytecode` serializable at `VERSION_MAX`: signed instructions join
-/// once `VERSION_MAX` reaches `SIGNED_INT_VERSION`.
+/// Generates any `Bytecode` serializable at `VERSION_MAX`.
+// TODO (signed-ints): signed instructions join once `VERSION_MAX` reaches `SIGNED_INT_VERSION`.
 #[cfg(any(test, feature = "fuzzing"))]
 fn version_max_bytecode_strategy() -> impl Strategy<Value = Bytecode> {
     any::<Bytecode>().prop_filter("signed bytecodes need SIGNED_INT_VERSION", |op| {
@@ -1926,9 +1924,8 @@ pub enum Bytecode {
     ///
     /// ```..., integer_value -> ..., i256_value```
     CastI256,
-    /// Negate the signed integer value at the top of the stack. Valid only on signed integer
-    /// types (i8..i256) and type-preserving: the result has the same type as the operand.
-    /// Aborts at runtime when the operand is the type's minimum value (`-MIN` overflows).
+    /// Negate the signed integer on top of the stack, aborting when the operand is `MIN`.
+    /// The result has the same type as the operand.
     ///
     /// Stack transition:
     /// ```..., signed_integer_value -> ..., signed_integer_value```
@@ -2288,8 +2285,7 @@ impl Bytecode {
         self.is_conditional_branch() || self.is_unconditional_branch()
     }
 
-    /// Returns true if this bytecode instruction operates on signed integers and therefore
-    /// requires bytecode version `SIGNED_INT_VERSION` or later.
+    /// Whether this instruction operates on signed integers.
     pub fn is_signed_integer_instruction(&self) -> bool {
         matches!(
             self,
@@ -3008,11 +3004,8 @@ impl CompiledModule {
     }
 }
 
-/// Returns true if the module uses signed integer types or instructions anywhere they can
-/// occur: signature tokens in the signature pool, constant types, struct/enum field definition
-/// types, or code-unit bytecodes. A module for which this returns true requires bytecode
-/// version `SIGNED_INT_VERSION` or later; as signed integers are enabled, version selection
-/// keys off this predicate to pick that version.
+/// Indicates whether the module uses signed integer types or instructions anywhere they can
+/// occur (signature pool, constant types, field definitions, or code-unit bytecodes).
 pub fn module_uses_signed_integers(module: &CompiledModule) -> bool {
     fn token_uses_signed_integers(token: &SignatureToken) -> bool {
         token

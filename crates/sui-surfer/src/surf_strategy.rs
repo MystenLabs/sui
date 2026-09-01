@@ -109,18 +109,13 @@ impl SurfStrategy {
                         }
                     }
                 }
-                // Signed entry params are not pure-arg-eligible until the enablement PR
-                // flips `is_primitive`; fail closed with them until then.
-                Type::U256
-                | Type::I8
-                | Type::I16
-                | Type::I32
-                | Type::I64
-                | Type::I128
-                | Type::I256
-                | Type::Signer
-                | Type::Vector(_)
-                | Type::TypeParameter(_) => {
+                // TODO (signed-ints): signed entry params are not pure-arg-eligible until the
+                // enablement PR flips `is_primitive`.
+                Type::I8 | Type::I16 | Type::I32 | Type::I64 | Type::I128 | Type::I256 => {
+                    failed = true;
+                    break;
+                }
+                Type::U256 | Type::Signer | Type::Vector(_) | Type::TypeParameter(_) => {
                     failed = true;
                     break;
                 }

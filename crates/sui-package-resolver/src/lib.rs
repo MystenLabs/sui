@@ -1141,7 +1141,7 @@ impl OpenSignatureBody {
             S::U64 => O::U64,
             S::U128 => O::U128,
             S::U256 => O::U256,
-            // Signed integer signatures are not yet supported in the package resolver
+            // TODO (signed-ints): signature tokens are not yet supported in the package resolver
             S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => {
                 return Err(Error::UnexpectedError(std::sync::Arc::new(
                     std::io::Error::other("Signed integer types are not yet supported"),

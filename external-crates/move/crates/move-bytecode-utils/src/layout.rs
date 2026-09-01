@@ -188,8 +188,6 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
             T::I32 => Format::I32,
             T::I64 => Format::I64,
             T::I128 => Format::I128,
-            // i256 has no native `Format` primitive, so fall back to a named type the same way
-            // `u256` does (see `U256_SERDE_NAME`). Downstream codegen must know how to resolve it.
             T::I256 => Format::TypeName(I256_SERDE_NAME.to_string()),
             T::Address => Format::TypeName(ADDRESS.to_string()),
             T::Signer => Format::TypeName(SIGNER.to_string()),
@@ -508,6 +506,7 @@ impl TypeLayoutBuilder {
             U64 => A::MoveTypeLayout::U64,
             U128 => A::MoveTypeLayout::U128,
             U256 => A::MoveTypeLayout::U256,
+            // TODO (signed-ints): type layouts are not yet supported.
             I8 | I16 | I32 | I64 | I128 | I256 => {
                 bail!("Signed integer type layouts are not yet supported")
             }

@@ -690,10 +690,8 @@ fn serialize_signature_token_single_node_impl(
     binary: &mut BinaryData,
     token: &SignatureToken,
 ) -> Result<()> {
-    // Version-gate at the token peel-off: every signature token serializes through this
-    // function, whether it appears in a signature, a struct/enum field definition, or a
-    // constant type, so gating here covers all positions by construction. Signed-integer
-    // *opcodes* do not flow through this path; they are gated in `serialize_instruction_inner`.
+    // Version-gate signed types. Every signature token serializes through this function, so
+    // gating here covers all positions. Opcodes are gated in `serialize_instruction_inner`.
     if major_version < SIGNED_INT_VERSION && token.is_signed_integer() {
         bail!(
             "Signed integer types (i8..i256) not supported in bytecode version {}",
@@ -850,9 +848,8 @@ fn serialize_instruction_inner(
     binary: &mut BinaryData,
     opcode: &Bytecode,
 ) -> Result<()> {
-    // Signed-integer *opcodes* must be gated here: they are not signature tokens, so they
-    // never flow through `serialize_signature_token_single_node_impl` (which gates signed
-    // *types* in signatures, field definitions, and constant types).
+    // Version-gate signed opcodes. Signature tokens are gated in
+    // `serialize_signature_token_single_node_impl`.
     if major_version < SIGNED_INT_VERSION && opcode.is_signed_integer_instruction() {
         return Err(anyhow!(
             "Signed integer bytecodes not supported in bytecode version {}",

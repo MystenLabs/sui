@@ -264,9 +264,8 @@ pub fn is_primitive(
     use SignatureToken as S;
     match s {
         S::Bool | S::U8 | S::U16 | S::U32 | S::U64 | S::U128 | S::U256 | S::Address => true,
-        // TODO (signed-ints): fail closed until the signed value/BCS layer lands: signed
-        // entry params must not be treated as primitive pure-arg-eligible before then. Flip
-        // deliberately in the enablement PR.
+        // TODO (signed-ints): signed entry params must not count as primitive pure-arg-eligible
+        // until the signed value/BCS layer lands. Flip deliberately in the enablement PR.
         S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => false,
         S::Signer => false,
         // optimistic, but no primitive has key
@@ -358,11 +357,10 @@ mod tests {
     use super::*;
     use expect_test::expect;
 
-    // Signed integer types must fail closed in `is_primitive` until the signed value/BCS layer
-    // lands: the entry-points verifier uses this predicate to decide pure-arg eligibility, so a
-    // `true` here would pre-commit Sui to accepting signed pure PTB args. A full e2e publish
-    // test is impossible while the protocol rejects VERSION_8 modules, so we pin the predicate
-    // directly on hand-constructed signature tokens (the same values the verifier passes).
+    // `is_primitive` must reject signed integers so the entry-points verifier does not treat
+    // them as pure-arg-eligible before the signed value/BCS layer lands. The protocol still
+    // rejects VERSION_8 modules, so this pins the predicate on hand-built signature tokens
+    // rather than a full e2e publish.
     #[test]
     fn test_signed_integers_are_not_primitive() {
         use move_binary_format::file_format::{SignatureToken as S, empty_module};

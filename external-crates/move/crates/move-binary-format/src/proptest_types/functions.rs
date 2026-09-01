@@ -1126,8 +1126,6 @@ impl BytecodeGen {
         1 => any::<u32>().prop_map(Bytecode::LdU32),
         1 => any::<Box<U256>>().prop_map(Bytecode::LdU256),
         ];
-        // Default strategies must only generate bytecodes serializable at `VERSION_MAX`,
-        // so signed loads join once `VERSION_MAX` reaches `SIGNED_INT_VERSION`.
         if VERSION_MAX >= SIGNED_INT_VERSION {
             prop_oneof![
             9 => unsigned,

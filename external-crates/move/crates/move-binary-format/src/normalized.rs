@@ -559,8 +559,9 @@ impl<S> Datatype<S> {
         }
     }
 
-    /// Returns `None` when any type argument has no `TypeTag` representation, e.g. a
-    /// reference.
+    /// Returns `None` when a type argument has no `TypeTag`, such as a reference or a signed
+    /// integer.
+    // TODO (signed-ints): the signed case goes away once `TypeTag` has signed variants.
     pub fn to_struct_tag<Pool: StringPool<String = S>>(&self, pool: &Pool) -> Option<StructTag> {
         let Datatype {
             module,

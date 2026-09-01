@@ -132,9 +132,7 @@ impl SignatureTokenGen {
         ]
     }
 
-    /// Generates a signature token for a non-struct owned type. Default strategies must
-    /// only generate modules serializable at `VERSION_MAX`, so signed tokens join once
-    /// `VERSION_MAX` reaches `SIGNED_INT_VERSION`.
+    /// Generates a signature token for a non-struct owned type.
     pub fn owned_non_struct_strategy() -> impl Strategy<Value = Self> {
         use SignatureTokenGen::*;
 
