@@ -815,9 +815,6 @@ MergeCoinsCommand.coin
 MergeCoinsCommand.coins
   => {}
 
-MlDsa65PublicKey.bytes
-  => {}
-
 MoveCallCommand.function
   => {}
 

@@ -1699,13 +1699,12 @@ impl TryFrom<crate::crypto::SignatureScheme> for SignatureScheme {
     }
 }
 
-/// Proto3 enums are open: schemes without a proto variant are carried as their raw flag byte.
-// TODO: drop once sui.rpc.v2 defines MLDSA65.
-fn signature_scheme_to_proto_i32(value: crate::crypto::SignatureScheme) -> i32 {
-    match SignatureScheme::try_from(value) {
-        Ok(proto) => proto as i32,
-        Err(unrepresented) => unrepresented.flag() as i32,
-    }
+/// Schemes without a proto variant leave the field unset; the gRPC wire
+/// representation lands with the dedicated RPC support PR.
+fn signature_scheme_to_proto_i32(value: crate::crypto::SignatureScheme) -> Option<i32> {
+    SignatureScheme::try_from(value)
+        .ok()
+        .map(|proto| proto as i32)
 }
 
 //
@@ -1724,7 +1723,7 @@ impl From<&crate::crypto::Signature> for SimpleSignature {
         let public_key = value.public_key_bytes();
 
         let mut message = Self::default();
-        message.scheme = Some(signature_scheme_to_proto_i32(value.scheme()));
+        message.scheme = signature_scheme_to_proto_i32(value.scheme());
         message.signature = Some(signature.to_vec().into());
         message.public_key = Some(public_key.to_vec().into());
         message
@@ -1766,7 +1765,7 @@ impl From<&crate::crypto::PublicKey> for MultisigMemberPublicKey {
             }
         }
 
-        message.scheme = Some(signature_scheme_to_proto_i32(value.scheme()));
+        message.scheme = signature_scheme_to_proto_i32(value.scheme());
         message
     }
 }
@@ -1901,13 +1900,13 @@ impl Merge<&crate::signature::GenericSignature> for UserSignature {
                 if mask.contains(Self::MULTISIG_FIELD) {
                     self.signature = Some(Signature::Multisig(multi_sig.into()));
                 }
-                SignatureScheme::Multisig as i32
+                Some(SignatureScheme::Multisig as i32)
             }
             crate::signature::GenericSignature::MultiSigLegacy(multi_sig_legacy) => {
                 if mask.contains(Self::MULTISIG_FIELD) {
                     self.signature = Some(Signature::Multisig(multi_sig_legacy.into()));
                 }
-                SignatureScheme::Multisig as i32
+                Some(SignatureScheme::Multisig as i32)
             }
             crate::signature::GenericSignature::Signature(signature) => {
                 let scheme = signature_scheme_to_proto_i32(signature.scheme());
@@ -1920,18 +1919,18 @@ impl Merge<&crate::signature::GenericSignature> for UserSignature {
                 if mask.contains(Self::ZKLOGIN_FIELD) {
                     self.signature = Some(Signature::Zklogin(z.into()));
                 }
-                SignatureScheme::Zklogin as i32
+                Some(SignatureScheme::Zklogin as i32)
             }
             crate::signature::GenericSignature::PasskeyAuthenticator(p) => {
                 if mask.contains(Self::PASSKEY_FIELD) {
                     self.signature = Some(Signature::Passkey(p.into()));
                 }
-                SignatureScheme::Passkey as i32
+                Some(SignatureScheme::Passkey as i32)
             }
         };
 
         if mask.contains(Self::SCHEME_FIELD) {
-            self.scheme = Some(scheme);
+            self.scheme = scheme;
         }
     }
 }
