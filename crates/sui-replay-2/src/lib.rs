@@ -34,6 +34,7 @@ pub mod displays;
 pub mod execution;
 pub mod package_tools;
 pub mod replay_txn;
+pub mod simulation;
 pub mod summary_metrics;
 pub mod tracing;
 
