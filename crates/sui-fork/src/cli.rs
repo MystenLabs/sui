@@ -109,7 +109,10 @@ impl Cli {
 
     pub async fn execute(self, version: &'static str) -> Result<()> {
         match self.command {
-            Command::Start { args } => cmd_start(args, self.json_output, version).await,
+            Command::Start { mut args } => {
+                args.version = version;
+                cmd_start(args, self.json_output).await
+            }
             Command::AdvanceClock {
                 rpc_addr,
                 duration_ms,
@@ -133,7 +136,7 @@ fn print_output<T: Serialize + std::fmt::Display>(value: &T, json_output: bool) 
     }
 }
 
-async fn cmd_start(args: StartArgs, json_output: bool, version: &'static str) -> Result<()> {
+async fn cmd_start(args: StartArgs, json_output: bool) -> Result<()> {
     let StartArgs {
         network: node,
         checkpoint,
@@ -141,6 +144,7 @@ async fn cmd_start(args: StartArgs, json_output: bool, version: &'static str) ->
         addresses,
         object_ids,
         rpc_addr,
+        version,
     } = args;
     let seed_input = SeedInput {
         addresses: addresses.into_iter().collect(),

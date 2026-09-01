@@ -18,6 +18,8 @@ use crate::Node;
 /// Default address for the fork's RPC server.
 pub const DEFAULT_RPC_ADDR: &str = "127.0.0.1:9000";
 
+const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Configuration for starting a forked network.
 #[derive(clap::Args, Clone, Debug)]
 pub struct StartArgs {
@@ -44,6 +46,10 @@ pub struct StartArgs {
     /// Address for the fork's RPC server.
     #[arg(long, default_value = DEFAULT_RPC_ADDR)]
     pub rpc_addr: SocketAddr,
+
+    /// Version reported as the RPC server version and in live network requests.
+    #[arg(skip = CRATE_VERSION)]
+    pub version: &'static str,
 }
 
 impl Default for StartArgs {
@@ -57,6 +63,7 @@ impl Default for StartArgs {
             rpc_addr: DEFAULT_RPC_ADDR
                 .parse()
                 .expect("default RPC address should be valid"),
+            version: CRATE_VERSION,
         }
     }
 }
