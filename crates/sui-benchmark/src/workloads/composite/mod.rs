@@ -11,8 +11,8 @@ pub use operations::{
     AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AuthenticatedEventEmit,
     CoinReservationWithdraw, INVALID_ALIAS_TX, ImmutableObjectRead, ObjectBalanceDeposit,
     ObjectBalanceOverdraw, ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead,
-    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
-    TestCoinMint, TestCoinObjectWithdraw,
+    RestrictProposers, SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit,
+    TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 
@@ -73,6 +73,12 @@ fn address_alias_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
 fn authenticated_events_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
     protocol_config
         .map(|cfg| !cfg.enable_authenticated_event_streams())
+        .unwrap_or(false)
+}
+
+fn allowed_proposers_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
+    protocol_config
+        .map(|cfg| !cfg.allowed_proposers())
         .unwrap_or(false)
 }
 
@@ -319,6 +325,7 @@ impl CompositeWorkloadConfig {
         probabilities.insert(AuthenticatedEventEmit::NAME, 0.1);
         probabilities.insert(ImmutableObjectRead::NAME, 0.2);
         probabilities.insert(CoinReservationWithdraw::NAME, 0.1);
+        probabilities.insert(RestrictProposers::NAME, 0.2);
         Self {
             probabilities,
             alias_tx_probability: 0.3,
@@ -343,7 +350,11 @@ impl CompositeWorkloadConfig {
             .map(|desc| (desc.factory)())
             .collect();
 
-        if ops.is_empty()
+        // An empty selection, or one made up only of transaction-level modifiers, cannot form
+        // a transaction; fall back to the first operation.
+        if ops
+            .iter()
+            .all(|op| op.constraints().modifies_transaction_only)
             && let Some(desc) = ALL_OPERATIONS.first()
         {
             ops.push((desc.factory)());
@@ -404,6 +415,7 @@ pub struct OperationPool {
     pub test_coin_type: Option<TypeTag>,
     pub chain_identifier: sui_types::digests::ChainIdentifier,
     pub immutable_object: Option<ObjectRef>,
+    pub committee_size: Option<usize>,
 }
 
 impl OperationPool {
@@ -529,6 +541,7 @@ impl CompositePayload {
         let mut test_coin_cap = None;
         let mut chain_identifier = None;
         let mut epoch = None;
+        let mut committee_size = None;
 
         for req in op.resource_requests() {
             match req {
@@ -554,6 +567,11 @@ impl CompositePayload {
                     epoch = Some(current_epoch);
                     accumulator_root = Some(pool.accumulator_root_initial_shared_version);
                 }
+                ResourceRequest::AllowedProposers => {
+                    chain_identifier = Some(pool.chain_identifier);
+                    epoch = Some(current_epoch);
+                    committee_size = pool.committee_size;
+                }
             }
         }
 
@@ -569,6 +587,7 @@ impl CompositePayload {
             immutable_object: pool.immutable_object,
             chain_identifier,
             current_epoch: epoch,
+            committee_size,
         }
     }
 
@@ -581,6 +600,7 @@ impl CompositePayload {
             .clone();
         let filter_address_balance = address_balance_disabled(protocol_config.as_ref());
         let filter_authenticated_events = authenticated_events_disabled(protocol_config.as_ref());
+        let filter_allowed_proposers = allowed_proposers_disabled(protocol_config.as_ref());
 
         loop {
             let mut ops = self.config.sample_operations();
@@ -600,7 +620,15 @@ impl CompositePayload {
             if filter_authenticated_events {
                 ops.retain(|op| op.name() != AuthenticatedEventEmit::NAME);
             }
-            if !ops.is_empty() {
+            if filter_allowed_proposers {
+                ops.retain(|op| op.name() != RestrictProposers::NAME);
+            }
+            // The filters above may leave only transaction-level modifiers, which cannot form
+            // a transaction on their own; resample in that case.
+            if !ops
+                .iter()
+                .all(|op| op.constraints().modifies_transaction_only)
+            {
                 return ops;
             }
         }
@@ -631,20 +659,29 @@ impl CompositePayload {
             op_names
         );
 
+        let resources: Vec<OperationResources> = ops
+            .iter()
+            .map(|op| {
+                Self::resolve_resources_for_op(op.as_ref(), &self.pool, &self.config, current_epoch)
+            })
+            .collect();
+
         {
             let builder = tx_builder.ptb_builder_mut();
-            for op in &ops {
-                let resources = Self::resolve_resources_for_op(
-                    op.as_ref(),
-                    &self.pool,
-                    &self.config,
-                    current_epoch,
-                );
-                op.apply(builder, &resources, account_state);
+            for (i, op) in ops.iter().enumerate() {
+                op.apply(builder, &resources[i], account_state);
             }
         }
 
-        (tx_builder.ensure_unique().build_and_sign(keypair), op_set)
+        let mut data = tx_builder.ensure_unique().build();
+        for (i, op) in ops.iter().enumerate() {
+            op.modify_transaction(&mut data, &resources[i]);
+        }
+
+        (
+            Transaction::from_data_and_signer(data, vec![keypair]),
+            op_set,
+        )
     }
 
     fn generate_alias_transaction(
@@ -1928,6 +1965,9 @@ impl Workload<dyn Payload> for CompositeWorkload {
             test_coin_type,
             chain_identifier: self.chain_identifier.unwrap(),
             immutable_object: self.immutable_object,
+            committee_size: fullnode_proxies
+                .first()
+                .map(|proxy| proxy.clone_committee().num_members()),
         });
 
         let config = Arc::new(self.config.clone());
@@ -1995,5 +2035,24 @@ impl Workload<dyn Payload> for CompositeWorkload {
 
     fn name(&self) -> &str {
         "Composite"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn modifier_only_selection_falls_back_to_a_real_operation() {
+        let mut config = CompositeWorkloadConfig::default();
+        config.probabilities.insert(RestrictProposers::NAME, 1.0);
+        for _ in 0..32 {
+            let ops = config.sample_operations();
+            assert!(
+                ops.iter()
+                    .any(|op| !op.constraints().modifies_transaction_only),
+                "sampled operations must be able to form a transaction"
+            );
+        }
     }
 }

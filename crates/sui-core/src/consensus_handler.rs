@@ -1774,13 +1774,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // validity_check, which sizes the proposer set against the gas price, so there is nothing
         // left to charge for here. A set recorded for another epoch is ignored and so bounds
         // nothing, leaving the transaction subject to deferral like any other.
-        if protocol_config.defer_unpaid_amplification()
-            && !transaction
-                .tx()
-                .transaction_data()
-                .expiration()
-                .restricts_proposers(self.epoch_store.epoch())
-        {
+        let restricts_proposers = transaction
+            .tx()
+            .transaction_data()
+            .expiration()
+            .restricts_proposers(self.epoch_store.epoch());
+        if restricts_proposers {
+            assert_reachable!("committed a proposer-restricted transaction");
+        }
+        if protocol_config.defer_unpaid_amplification() && !restricts_proposers {
             let occurrence_count = state
                 .occurrence_counts
                 .get(&tx_digest)

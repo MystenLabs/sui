@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use mysten_common::random::get_rng;
+use nonempty::NonEmpty;
 use rand::Rng;
 use sui_types::TypeTag;
 use sui_types::accumulator_root::AccumulatorValue;
@@ -13,7 +14,8 @@ use sui_types::digests::ChainIdentifier;
 use sui_types::gas_coin::GAS;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
-    Argument, CallArg, Command, FundsWithdrawalArg, ObjectArg, SharedObjectMutability,
+    AllowedProposers, Argument, CallArg, Command, FundsWithdrawalArg, MAX_UNPAID_ALLOWED_PROPOSERS,
+    ObjectArg, SharedObjectMutability, TransactionData, TransactionDataAPI, TransactionExpiration,
 };
 use sui_types::{
     Identifier, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
@@ -61,6 +63,7 @@ pub const ALL_OPERATIONS: &[OperationDescriptor] = &[
     AuthenticatedEventEmit::DESCRIPTOR,
     ImmutableObjectRead::DESCRIPTOR,
     CoinReservationWithdraw::DESCRIPTOR,
+    RestrictProposers::DESCRIPTOR,
 ];
 
 #[derive(Debug, Clone)]
@@ -73,11 +76,15 @@ pub enum ResourceRequest {
     AccumulatorRoot,
     ImmutableObject,
     CoinReservation,
+    AllowedProposers,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct OperationConstraints {
     pub must_be_last_shared_access: bool,
+    /// The operation only adjusts transaction-level fields and adds no PTB commands, so it
+    /// cannot form a transaction on its own.
+    pub modifies_transaction_only: bool,
 }
 
 pub struct OperationResources {
@@ -92,6 +99,7 @@ pub struct OperationResources {
     pub immutable_object: Option<ObjectRef>,
     pub chain_identifier: Option<ChainIdentifier>,
     pub current_epoch: Option<EpochId>,
+    pub committee_size: Option<usize>,
 }
 
 pub trait Operation: Send + Sync {
@@ -109,6 +117,8 @@ pub trait Operation: Send + Sync {
         resources: &OperationResources,
         account_state: &AccountState,
     );
+    /// Adjusts transaction-level fields after the PTB is built but before signing.
+    fn modify_transaction(&self, _data: &mut TransactionData, _resources: &OperationResources) {}
 }
 
 pub struct SharedCounterIncrement;
@@ -219,6 +229,7 @@ impl Operation for RandomnessRead {
     fn constraints(&self) -> OperationConstraints {
         OperationConstraints {
             must_be_last_shared_access: true,
+            ..Default::default()
         }
     }
 
@@ -1176,6 +1187,109 @@ impl Operation for ImmutableObjectRead {
     }
 }
 
+pub struct RestrictProposers;
+
+impl RestrictProposers {
+    pub const NAME: &'static str = "allowed_proposers";
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: Self::NAME,
+        factory: || Box::new(RestrictProposers),
+    };
+}
+
+impl Operation for RestrictProposers {
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::AllowedProposers]
+    }
+
+    fn constraints(&self) -> OperationConstraints {
+        OperationConstraints {
+            modifies_transaction_only: true,
+            ..Default::default()
+        }
+    }
+
+    fn apply(
+        &self,
+        _builder: &mut ProgrammableTransactionBuilder,
+        _resources: &OperationResources,
+        _account_state: &AccountState,
+    ) {
+    }
+
+    /// Restricts the transaction to a randomly chosen proposer set.
+    ///
+    /// The set is stamped with the observer's current epoch; if the epoch changes before
+    /// commit the stale set is simply ignored by validators.
+    fn modify_transaction(&self, data: &mut TransactionData, resources: &OperationResources) {
+        let Some(committee_size) = resources.committee_size.filter(|size| *size > 0) else {
+            return;
+        };
+        let Some(epoch) = resources.current_epoch else {
+            return;
+        };
+        let Some(chain) = resources.chain_identifier else {
+            return;
+        };
+
+        let mut rng = get_rng();
+        let count =
+            rng.gen_range(1..=MAX_UNPAID_ALLOWED_PROPOSERS.min(committee_size as u64)) as usize;
+        let mut proposers: Vec<u32> = rand::seq::index::sample(&mut rng, committee_size, count)
+            .into_iter()
+            .map(|i| i as u32)
+            .collect();
+        proposers.sort_unstable();
+        let allowed = AllowedProposers {
+            epoch,
+            proposers: NonEmpty::from_vec(proposers).expect("count is at least 1"),
+        };
+
+        let expiration = data.expiration_mut();
+        *expiration = match expiration {
+            // Address-balance gas transactions already carry a validity window for replay
+            // protection; keep it and only add the proposer restriction.
+            TransactionExpiration::ValidDuring {
+                min_epoch,
+                max_epoch,
+                min_timestamp,
+                max_timestamp,
+                chain,
+                nonce,
+            } => TransactionExpiration::Validity {
+                min_epoch: *min_epoch,
+                max_epoch: *max_epoch,
+                min_timestamp: *min_timestamp,
+                max_timestamp: *max_timestamp,
+                chain: *chain,
+                nonce: *nonce,
+                allowed_proposers: Some(allowed),
+            },
+            TransactionExpiration::Validity {
+                allowed_proposers, ..
+            } => {
+                *allowed_proposers = Some(allowed);
+                return;
+            }
+            TransactionExpiration::None | TransactionExpiration::Epoch(_) => {
+                TransactionExpiration::Validity {
+                    min_epoch: Some(epoch),
+                    max_epoch: Some(epoch + 1),
+                    min_timestamp: None,
+                    max_timestamp: None,
+                    chain,
+                    nonce: rng.r#gen(),
+                    allowed_proposers: Some(allowed),
+                }
+            }
+        };
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1190,5 +1304,100 @@ mod tests {
                 desc.name
             );
         }
+    }
+
+    fn test_transaction_data() -> TransactionData {
+        TransactionData::new_programmable(
+            SuiAddress::ZERO,
+            vec![],
+            ProgrammableTransactionBuilder::new().finish(),
+            1_000_000,
+            1_000,
+        )
+    }
+
+    fn test_resources(committee_size: usize, epoch: EpochId) -> OperationResources {
+        OperationResources {
+            counter: None,
+            randomness: None,
+            accumulator_root: None,
+            package_id: ObjectID::ZERO,
+            address_balance_amount: 0,
+            balance_pool: None,
+            test_coin_cap: None,
+            test_coin_type: None,
+            immutable_object: None,
+            chain_identifier: Some(ChainIdentifier::default()),
+            current_epoch: Some(epoch),
+            committee_size: Some(committee_size),
+        }
+    }
+
+    fn assert_valid_proposer_set(allowed: &AllowedProposers, committee_size: u32, epoch: EpochId) {
+        assert_eq!(allowed.epoch, epoch);
+        assert!(allowed.proposers.len() as u64 <= MAX_UNPAID_ALLOWED_PROPOSERS);
+        assert!(allowed.proposers.iter().is_sorted_by(|a, b| a < b));
+        assert!(allowed.proposers.iter().all(|p| *p < committee_size));
+    }
+
+    #[test]
+    fn restrict_proposers_installs_validity_expiration() {
+        let mut data = test_transaction_data();
+
+        RestrictProposers.modify_transaction(&mut data, &test_resources(4, 7));
+
+        let TransactionExpiration::Validity {
+            min_epoch,
+            max_epoch,
+            allowed_proposers,
+            ..
+        } = data.expiration()
+        else {
+            panic!("expected Validity expiration, got {:?}", data.expiration());
+        };
+        assert_eq!(*min_epoch, Some(7));
+        assert_eq!(*max_epoch, Some(8));
+        assert_valid_proposer_set(allowed_proposers.as_ref().unwrap(), 4, 7);
+    }
+
+    #[test]
+    fn restrict_proposers_keeps_existing_validity_window() {
+        let mut data = test_transaction_data();
+        *data.expiration_mut() = TransactionExpiration::ValidDuring {
+            min_epoch: Some(3),
+            max_epoch: Some(4),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: ChainIdentifier::default(),
+            nonce: 42,
+        };
+
+        RestrictProposers.modify_transaction(&mut data, &test_resources(4, 7));
+
+        let TransactionExpiration::Validity {
+            min_epoch,
+            max_epoch,
+            nonce,
+            allowed_proposers,
+            ..
+        } = data.expiration()
+        else {
+            panic!("expected Validity expiration, got {:?}", data.expiration());
+        };
+        assert_eq!(*min_epoch, Some(3));
+        assert_eq!(*max_epoch, Some(4));
+        assert_eq!(*nonce, 42);
+        assert_valid_proposer_set(allowed_proposers.as_ref().unwrap(), 4, 7);
+    }
+
+    #[test]
+    fn restrict_proposers_without_committee_context_is_a_noop() {
+        let mut data = test_transaction_data();
+        let mut resources = test_resources(4, 7);
+        resources.committee_size = None;
+
+        RestrictProposers.modify_transaction(&mut data, &resources);
+
+        assert_eq!(*data.expiration(), TransactionExpiration::None);
     }
 }
