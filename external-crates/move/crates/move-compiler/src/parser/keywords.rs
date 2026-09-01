@@ -42,8 +42,8 @@ pub const CONTEXTUAL_KEYWORDS: &[&str] = &[
     "macro",
 ];
 
-/// Re-export of all primitive type names. Not feature-gated; all types (including signed integers)
-/// are included regardless of edition so that the parser can always recognize them as keywords.
+/// All primitive type names. Signed integers are included regardless of edition so the parser
+/// always recognizes them as keywords.
 pub use crate::shared::builtin_types::PRIMITIVE_TYPES;
 
 pub const BUILTINS: &[&str] = &["assert", "freeze"];

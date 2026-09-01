@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 module 0x42::m {
     // i8 boundaries: 0 to 127 (non-negative range, since negation is separate)
     fun i8_zero() {

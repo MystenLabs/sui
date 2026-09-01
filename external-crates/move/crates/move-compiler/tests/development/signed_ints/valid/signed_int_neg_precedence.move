@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 module 0x42::m {
     // Negation binds tighter than binary ops
     // -a + b  should parse as  (-a) + b

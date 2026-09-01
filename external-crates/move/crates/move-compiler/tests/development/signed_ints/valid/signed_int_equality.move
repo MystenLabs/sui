@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 module 0x42::m {
     // Equality between same signed types
     fun eq_i8() {

@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 module 0x42::m {
     const C_I8: i8 = 42i8;
     const C_I16: i16 = 1000i16;

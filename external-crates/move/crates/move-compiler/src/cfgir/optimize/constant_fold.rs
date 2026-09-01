@@ -267,7 +267,7 @@ fn fold_unary_op(loc: Loc, op: &UnaryOp, v: &Value_) -> Option<UnannotatedExp_> 
     Some(evalue_(loc, fold_unary_op_(op, v)?))
 }
 
-// `None` means the operation errors at runtime (e.g. negating `MIN`), so it cannot be folded.
+// `None` means the operation errors at runtime, e.g. negating `MIN`.
 fn fold_unary_op_(sp!(_, op_): &UnaryOp, v: &Value_) -> Option<Value_> {
     use UnaryOp_ as U;
     use Value_ as V;
@@ -357,8 +357,7 @@ fn fold_shl(v1: &Value_, v2: &Value_) -> Option<Value_> {
         V::U64(a) => a.checked_shl(rhs).map(V::U64),
         V::U128(a) => a.checked_shl(rhs).map(V::U128),
         V::U256(a) => a.checked_shl(rhs).map(V::U256),
-        // For signed left shift, verify no overflow by roundtrip:
-        // (a << rhs) >> rhs == a ensures no significant bits were lost.
+        // checked_shl does not detect signed overflow, so reject shifts whose bits do not round-trip.
         V::I8(a) => a.checked_shl(rhs).filter(|r| r >> rhs == *a).map(V::I8),
         V::I16(a) => a.checked_shl(rhs).filter(|r| r >> rhs == *a).map(V::I16),
         V::I32(a) => a.checked_shl(rhs).filter(|r| r >> rhs == *a).map(V::I32),
@@ -398,9 +397,8 @@ fn fold_binary_op(loc: Loc, op: &BinOp, v1: &Value_, v2: &Value_) -> Option<Unan
     Some(evalue_(loc, fold_binary_op_(op, v1, v2)?))
 }
 
-// `None` means the operation cannot be folded. For most operations this means it errors at
-// runtime, but signed left shifts by less than the bit width instead wrap at runtime; they are
-// simply not folded. See `report_binop_always_errors`.
+// `None` means the operation is not folded, because it errors at runtime or is a signed left
+// shift below the bit width that wraps instead. See `report_binop_always_errors`.
 fn fold_binary_op_(sp!(_, op_): &BinOp, v1: &Value_, v2: &Value_) -> Option<Value_> {
     use BinOp_ as B;
     use Value_ as V;
@@ -437,12 +435,10 @@ fn fold_binary_op_(sp!(_, op_): &BinOp, v1: &Value_, v2: &Value_) -> Option<Valu
     }
 }
 
-// Casts mirror the VM's value-preserving semantics: any source value that fits in the target
-// type is preserved exactly, and any that does not errors at runtime. This includes casts
-// across signedness in both directions.
+// Casts mirror the VM's value-preserving semantics. A value that fits the target is preserved,
+// otherwise the cast errors at runtime.
 
-// Casts to an unsigned target (`u8`..`u128`). All arms are `try_from`, so out-of-range
-// magnitudes and negative sources both fail.
+// Casts to an unsigned target (`u8`..`u128`). Out-of-range magnitudes and negative sources fail.
 macro_rules! cast_u {
     ($v:expr, $target_v:ident, $target_ty:ty) => {
         match $v {
@@ -458,9 +454,7 @@ macro_rules! cast_u {
             V::I64(i) => V::$target_v(<$target_ty>::try_from(*i).ok()?),
             V::I128(i) => V::$target_v(<$target_ty>::try_from(*i).ok()?),
             V::I256(i) => {
-                // A negative value never fits an unsigned target, and a non-negative I256
-                // has the same bit representation as its U256 view, so the sign check plus
-                // the (value-preserving) U256 conversion cover the range.
+                // A negative I256 never fits an unsigned target, and a non-negative I256 shares its U256 bit view.
                 if *i < I256::zero() {
                     return None;
                 }
@@ -471,8 +465,7 @@ macro_rules! cast_u {
     };
 }
 
-// Casts to a signed target (`i8`..`i128`). All arms are `try_from`; unsigned sources fail
-// when the value exceeds the target's `MAX` (they can never be negative).
+// Casts to a signed target (`i8`..`i128`). Unsigned sources fail when the value exceeds the target's `MAX`.
 macro_rules! cast_i {
     ($v:expr, $target_v:ident, $target_ty:ty) => {
         match $v {
@@ -482,8 +475,7 @@ macro_rules! cast_i {
             V::U64(u) => V::$target_v(<$target_ty>::try_from(*u).ok()?),
             V::U128(u) => V::$target_v(<$target_ty>::try_from(*u).ok()?),
             V::U256(u) => {
-                // Signed targets are at most 128 bits, so narrowing through u128 first
-                // loses nothing: both steps are value-preserving `try_from`s.
+                // Signed targets are at most 128 bits, so narrowing through u128 first loses nothing.
                 V::$target_v(
                     u128::try_from(*u)
                         .ok()
@@ -510,9 +502,7 @@ fn fold_cast_(sp!(_, bt_): &BuiltinTypeName, v: &Value_) -> Option<Value_> {
     use BuiltinTypeName_ as BT;
     use Value_ as V;
     use move_core_types::{i256::I256, u256::U256};
-    // A negative value never fits u256; a non-negative I256 has the same bit representation
-    // as its U256 view, so widening to I256 and taking the bits is value-preserving for
-    // every signed source.
+    // A negative value never fits u256, and a non-negative I256 shares its U256 bit view.
     fn signed_to_u256(x: I256) -> Option<U256> {
         if x < I256::zero() {
             None
@@ -553,17 +543,14 @@ fn fold_cast_(sp!(_, bt_): &BuiltinTypeName, v: &Value_) -> Option<Value_> {
             V::I64(i) => V::I256(I256::from(*i)),
             V::I128(i) => V::I256(I256::from(*i)),
             V::I256(i) => V::I256(*i),
-            // Lossless widening: every u8..u128 value is below 2^255, so its U256 bit view
-            // is non-negative as an I256.
+            // Every u8..u128 value is below 2^255, so its U256 bit view is non-negative as an I256.
             V::U8(u) => V::I256(I256::from_u256_bits(U256::from(*u))),
             V::U16(u) => V::I256(I256::from_u256_bits(U256::from(*u))),
             V::U32(u) => V::I256(I256::from_u256_bits(U256::from(*u))),
             V::U64(u) => V::I256(I256::from_u256_bits(U256::from(*u))),
             V::U128(u) => V::I256(I256::from_u256_bits(U256::from(*u))),
             V::U256(u) => {
-                // The only fallible source: a u256 above `I256::MAX` has its top bit set,
-                // which `from_u256_bits` reinterprets as negative — reject those instead
-                // of bit-casting.
+                // A u256 above `I256::MAX` has its top bit set, so reject it instead of bit-casting to a negative.
                 let result = I256::from_u256_bits(*u);
                 if result < I256::zero() {
                     return None;
@@ -789,8 +776,7 @@ fn report_binop_always_errors(
             format!("Taking '{n1}' modulo '{n2}' is outside the range of '{ty}'")
         }
         B::Mod => "Cannot take the remainder modulo zero".to_owned(),
-        // Signed left shifts by less than the bit width wrap at runtime instead of erroring;
-        // they are deliberately not folded, so there is nothing to report.
+        // Signed left shifts below the bit width wrap at runtime instead of erroring, so nothing is reported.
         B::Shl if signed && shift_amount_in_range(v1, v2) => return,
         B::Shl | B::Shr => format!(
             "The shift amount '{n2}' is greater than or equal to the number of bits in '{ty}'"
@@ -886,8 +872,8 @@ fn is_zero(v: &Value_) -> bool {
     }
 }
 
-// The shift amount is in range (less than the bit width of the shifted value); such a signed
-// left shift wraps at runtime rather than erroring.
+// True when the shift amount is below the bit width of the shifted value, where a signed left
+// shift wraps at runtime rather than erroring.
 fn shift_amount_in_range(v1: &Value_, v2: &Value_) -> bool {
     use Value_ as V;
     let V::U8(rhs) = v2 else { return false };

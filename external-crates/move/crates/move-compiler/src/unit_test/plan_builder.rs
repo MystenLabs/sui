@@ -382,10 +382,7 @@ fn convert_builtin_type_to_typetag(context: &Context, s_type: &HA::SingleType_) 
                         TypeTag::Vector(Box::new(tts.remove(0)))
                     }
                     NA::BuiltinTypeName_::Signer => TypeTag::Signer,
-                    // TODO (signed-ints): Fix this when we have signed ints in the bytecode.
-                    // Reaching this branch means signed-int code made it through earlier
-                    // bytecode-gen layers without being rejected, which is currently
-                    // expected to be impossible.
+                    // TODO (signed-ints): support signed ints once they exist in the bytecode.
                     NA::BuiltinTypeName_::I8
                     | NA::BuiltinTypeName_::I16
                     | NA::BuiltinTypeName_::I32

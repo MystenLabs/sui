@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 module 0x42::m {
     // Higher-order function with signed int
     macro fun apply($f: |i64| -> i64, $x: i64): i64 {

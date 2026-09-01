@@ -6,9 +6,9 @@ info:
   lint: false
 ---
 error[EC04035]: invalid constant usage in error context
-  ┌─ tests/development/signed_ints/invalid/signed_int_abort_error.move:7:15
+  ┌─ tests/development/signed_ints/invalid/signed_int_abort_error.move:4:15
   │
-7 │         abort 1i64
+4 │         abort 1i64
   │               ^^^^
   │               │
   │               Invalid error code for abort, expected a u64 or constant declared with '#[error]' annotation
@@ -17,12 +17,12 @@ error[EC04035]: invalid constant usage in error context
   = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.
 
 error[EC04035]: invalid constant usage in error context
-   ┌─ tests/development/signed_ints/invalid/signed_int_abort_error.move:12:15
-   │
-12 │         abort code
-   │               ^^^^
-   │               │
-   │               Invalid error code for abort, expected a u64 or constant declared with '#[error]' annotation
-   │               If you want to use a non-u64 as an abort code, you must use a '#[error]' attribute on a constant
-   │
-   = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.
+  ┌─ tests/development/signed_ints/invalid/signed_int_abort_error.move:9:15
+  │
+9 │         abort code
+  │               ^^^^
+  │               │
+  │               Invalid error code for abort, expected a u64 or constant declared with '#[error]' annotation
+  │               If you want to use a non-u64 as an abort code, you must use a '#[error]' attribute on a constant
+  │
+  = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.

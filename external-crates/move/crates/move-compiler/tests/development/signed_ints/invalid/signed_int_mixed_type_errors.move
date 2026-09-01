@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 module 0x42::m {
     // Mixing signed and unsigned in binary ops should error
     fun add_signed_unsigned() {

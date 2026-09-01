@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Signed constant expressions that would abort at runtime are deliberately not folded, so in a
 // 'const' they surface as "cannot compute constant value" errors (the signed counterpart to
 // move_check/folding/unfoldable_constants.move).

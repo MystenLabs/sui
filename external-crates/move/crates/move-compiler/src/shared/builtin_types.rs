@@ -23,8 +23,8 @@ pub const VECTOR: &str = "vector";
 pub const UNSIGNED_INT_SUFFIXES: &[&str] = &[U256, U128, U64, U32, U16, U8];
 pub const SIGNED_INT_SUFFIXES: &[&str] = &[I256, I128, I64, I32, I16, I8];
 
-/// All primitive type names recognized by the parser. This list is not feature-gated; all types
-/// are included regardless of edition so that the parser can always recognize them as keywords.
+/// All primitive type names recognized by the parser. Not feature-gated, so every edition
+/// recognizes them as keywords.
 pub const PRIMITIVE_TYPES: &[&str] = &[
     U8, U16, U32, U64, U128, U256, I8, I16, I32, I64, I128, I256, BOOL, VECTOR,
 ];
@@ -33,14 +33,14 @@ pub const PRIMITIVE_TYPES: &[&str] = &[
 // Suffix helpers
 //**************************************************************************************************
 
-/// Checks whether a numeric literal token string (e.g., `"123i64"`) ends with a signed integer
-/// type suffix. Intended to be called on lexer token content, not on arbitrary strings.
+/// Whether a numeric literal token string ends with a signed integer type suffix.
+/// Intended for lexer token content, not arbitrary strings.
 pub fn has_signed_suffix(s: &str) -> bool {
     SIGNED_INT_SUFFIXES.iter().any(|sfx| s.ends_with(sfx))
 }
 
-/// Checks whether a numeric literal token string (e.g., `"123u64"`) ends with an unsigned integer
-/// type suffix. Intended to be called on lexer token content, not on arbitrary strings.
+/// Whether a numeric literal token string ends with an unsigned integer type suffix.
+/// Intended for lexer token content, not arbitrary strings.
 pub fn has_unsigned_suffix(s: &str) -> bool {
     UNSIGNED_INT_SUFFIXES.iter().any(|sfx| s.ends_with(sfx))
 }
@@ -56,8 +56,8 @@ pub use move_core_types::parsing::parser::{
 
 use std::num::ParseIntError;
 
-// Signed integer parsing. When `negated` is false, the valid range is 0..=MAX; when true, it is
-// 0..=abs(MIN). Returns the final signed value directly (negated when requested).
+// Signed integer parsing. When `negated` is false the valid range is 0..=MAX, when true it is
+// 0..=abs(MIN). Returns the final signed value directly, negated when requested.
 // `ParseIntError` has no public constructor, so we produce one via a known-failing parse.
 fn signed_overflow_parse_error() -> ParseIntError {
     "256".parse::<u8>().unwrap_err()
@@ -72,8 +72,7 @@ macro_rules! define_parse_signed_int {
                     return Err(signed_overflow_parse_error());
                 }
                 // `-MIN` isn't representable as a positive signed value, so handle it
-                // explicitly. Every other in-range magnitude fits in the positive half of
-                // `$signed`, so plain negation is safe.
+                // explicitly.
                 if magnitude == <$signed>::MIN.unsigned_abs() {
                     <$signed>::MIN
                 } else {
@@ -103,14 +102,13 @@ pub fn parse_i256(
     use move_core_types::i256::I256;
     let (magnitude, fmt) = parse_u256(s).map_err(|_| signed_overflow_parse_error())?;
     let max_pos = I256::max_value().to_u256_bits();
-    // Two's complement bit pattern of MIN, which equals 2^255 (same as abs(MIN)).
+    // Two's complement bit pattern of MIN, equal to abs(MIN).
     let max_neg = I256::min_value().to_u256_bits();
     let value = if negated {
         if magnitude > max_neg {
             return Err(signed_overflow_parse_error());
         }
         // `-MIN` isn't representable as a positive `I256`, so handle it explicitly.
-        // Every other in-range magnitude fits in the positive half of `I256`.
         if magnitude == max_neg {
             I256::min_value()
         } else {

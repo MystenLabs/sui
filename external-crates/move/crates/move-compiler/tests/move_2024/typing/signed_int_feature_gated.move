@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests that signed integer types and literals are rejected in legacy edition.
 module a::m {
     fun type_annotations() {

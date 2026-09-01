@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests that MIN values for all signed types can be expressed via negation.
 module 0x42::m {
     fun i8_min() {

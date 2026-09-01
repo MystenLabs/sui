@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 module 0x42::m {
     // Unconstrained negation should default to i64
     fun neg_defaults_to_i64() {
@@ -12,7 +9,7 @@ module 0x42::m {
         let _x = -(5);
     }
 
-    // Negation of negation with no context — use annotation to be deterministic
+    // Negation of negation with no context. Use annotation to be deterministic
     fun double_neg_default() {
         let _x: i64 = -(-1);
     }

@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Invalid negative literals in match-pattern position.
 module 0x42::m {
     // Negative pattern literals must carry a signed suffix: unlike expressions, patterns have no

@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests that unification across variables correctly preserves the signed/unsigned
 // distinction for the is_signed_numeric check in inferred_numerical_value.
 

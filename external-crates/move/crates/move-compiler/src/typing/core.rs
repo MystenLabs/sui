@@ -1099,10 +1099,8 @@ impl<'env, 'outer> Context<'env, 'outer> {
     }
 
     pub fn add_signed_numeric_constraint(&mut self, loc: Loc, op: &'static str, t: Type) {
-        // If the type is a numeric type variable (e.g., from an untyped literal as `1`), upgrade
-        // its VarConstraint from Num to SignedNum so it defaults to i64 instead of u64. For all
-        // other types the deferred constraint handles error reporting later to avoid 'default'
-        // errors for non-numerical values (e.g., `bool`).
+        // Upgrade a Num var to SignedNum so it defaults to i64 instead of u64. Non-numeric types
+        // are left for the deferred constraint to report, avoiding spurious defaults for e.g. `bool`.
         if let TI::Var(v) = t.value.inner() {
             let cur = forward_tvar(&self.subst, *v);
             if let Some(c) = self.subst.tvar_constraints.get(&cur)
@@ -2628,7 +2626,7 @@ pub fn solve_constraints(context: &mut Context) {
                 // Already resolved above.
             }
             VarConstraint::Num(loc) => {
-                // If this var was merged with a SignedNum var, skip — handled below
+                // A var merged with a SignedNum var is resolved by the SignedNum arm
                 let last_var = forward_tvar(&subst, var);
                 if subst.is_signed_num_var(&last_var) {
                     continue;
@@ -3670,7 +3668,7 @@ pub fn join_var_constraints(
 ) -> Result<Option<VarConstraint>, TypingError> {
     use VarConstraint as C;
     match (&lhs, &rhs) {
-        // divergence propagates only if both arms are divergent; otherwise, use the other constraint
+        // divergence propagates only if both arms are divergent, otherwise use the other constraint
         (Some(C::Divergent(_)), Some(C::Divergent(_))) => Ok(rhs),
         (Some(C::Divergent(_)), other) | (other, Some(C::Divergent(_))) => Ok(other.clone()),
 

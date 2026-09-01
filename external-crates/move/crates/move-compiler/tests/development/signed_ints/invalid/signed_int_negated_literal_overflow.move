@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests that negated literals with magnitude > abs(MIN) are rejected.
 module 0x42::m {
     fun i8_neg_overflow() {

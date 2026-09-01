@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Overflow counterparts to signed_int_boundary_values: one past MAX, one past MIN,
 // and one past the negatable range for each signed type.
 module 0x42::m {

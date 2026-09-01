@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 module 0x42::m {
     // Untyped literal that exceeds signed range when inferred
     fun i8_overflow_inferred() {

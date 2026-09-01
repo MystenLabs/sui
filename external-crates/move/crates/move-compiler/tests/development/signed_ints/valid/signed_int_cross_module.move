@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 module 0x42::helper {
     public fun get_i64(): i64 { 42i64 }
     public fun get_i8(): i8 { 1i8 }

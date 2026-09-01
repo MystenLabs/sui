@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Non-exhaustive matches over signed subjects: the counterexample reports must render the
 // negative literals from the existing arms correctly.
 module 0x42::m {

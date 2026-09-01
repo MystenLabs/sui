@@ -2388,13 +2388,13 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
             Tok::Minus => {
                 let start_loc = context.tokens.start_loc();
                 let minus_loc = current_token_loc(context.tokens);
-                context.tokens.advance()?; // consume the '-'
+                context.tokens.advance()?;
                 match context.tokens.peek() {
                     Tok::NumValue | Tok::NumTypedValue
                         if context.tokens.lookahead() != Tok::ColonColon =>
                     {
-                        // Signed-suffixed literals report their own feature-gate error in
-                        // `maybe_parse_value`; gate the '-' itself for the other numeric forms.
+                        // maybe_parse_value gates signed-suffixed literals, so gate the bare '-'
+                        // here only for unsuffixed numbers.
                         if !has_signed_suffix(context.tokens.content()) {
                             context.check_feature(FeatureGate::SignedIntegers, minus_loc);
                         }
@@ -2403,9 +2403,7 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
                             unreachable!("ICE numeric tokens always parse to Value_::Num")
                         };
                         let end_loc = context.tokens.previous_end_loc();
-                        // Fold the '-' into the literal token so expansion parses the negated
-                        // magnitude directly; this is what makes MIN literals (e.g. '-128i8')
-                        // expressible.
+                        // Fold the '-' into the literal so MIN literals (e.g. '-128i8') stay expressible.
                         let value = spanned(
                             context.tokens.file_hash(),
                             start_loc,

@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Negative literals in match-pattern position, including each width's MIN (which requires the
 // parser to fold the '-' into the literal, mirroring negated literal expressions).
 module 0x42::m {

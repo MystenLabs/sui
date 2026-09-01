@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // These tests will overflow at runtime. Kept here to ensure that the compiler allows them to
 // compile, despite the fact that they will fail at runtime.
 module 0x42::m {

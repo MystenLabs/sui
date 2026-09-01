@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests that overflow is detected and fix suggestions preserve the signed/unsigned
 // distinction when types flow through variable unification.
 

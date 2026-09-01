@@ -299,12 +299,12 @@ impl I256 {
         Self(ethnum::I256::ONE)
     }
 
-    /// Minimum value of I256: -(2^255)
+    /// Minimum value of I256, -(2^255).
     pub const fn min_value() -> Self {
         Self(ethnum::I256::MIN)
     }
 
-    /// Maximum value of I256: 2^255 - 1
+    /// Maximum value of I256, 2^255 - 1.
     pub const fn max_value() -> Self {
         Self(ethnum::I256::MAX)
     }
@@ -344,37 +344,37 @@ impl I256 {
 
     // Checked arithmetic
 
-    /// Checked integer addition. Computes self + rhs, returning None if overflow occurred.
+    /// Returns None on overflow.
     pub fn checked_add(self, rhs: Self) -> Option<Self> {
         self.0.checked_add(rhs.0).map(Self)
     }
 
-    /// Checked integer subtraction. Computes self - rhs, returning None if overflow occurred.
+    /// Returns None on overflow.
     pub fn checked_sub(self, rhs: Self) -> Option<Self> {
         self.0.checked_sub(rhs.0).map(Self)
     }
 
-    /// Checked integer multiplication. Computes self * rhs, returning None if overflow occurred.
+    /// Returns None on overflow.
     pub fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.0.checked_mul(rhs.0).map(Self)
     }
 
-    /// Checked integer division. Computes self / rhs, returning None if rhs == 0 or on overflow.
+    /// Returns None if rhs == 0 or on overflow.
     pub fn checked_div(self, rhs: Self) -> Option<Self> {
         self.0.checked_div(rhs.0).map(Self)
     }
 
-    /// Checked integer remainder. Computes self % rhs, returning None if rhs == 0 or on overflow.
+    /// Returns None if rhs == 0 or on overflow.
     pub fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.0.checked_rem(rhs.0).map(Self)
     }
 
-    /// Checked negation. Computes -self, returning None if self == MIN.
+    /// Returns None if self == MIN.
     pub fn checked_neg(self) -> Option<Self> {
         self.0.checked_neg().map(Self)
     }
 
-    /// Checked shift left. Computes self << rhs, returning None if rhs >= 256.
+    /// Returns None if rhs >= 256.
     pub fn checked_shl(self, rhs: u32) -> Option<Self> {
         if rhs >= I256_NUM_BITS as u32 {
             return None;
@@ -382,7 +382,7 @@ impl I256 {
         Some(Self(self.0 << rhs))
     }
 
-    /// Checked shift right. Computes self >> rhs (arithmetic), returning None if rhs >= 256.
+    /// Arithmetic shift right. Returns None if rhs >= 256.
     pub fn checked_shr(self, rhs: u32) -> Option<Self> {
         if rhs >= I256_NUM_BITS as u32 {
             return None;
@@ -392,33 +392,30 @@ impl I256 {
 
     // Wrapping arithmetic
 
-    /// Wrapping integer addition. Computes self + rhs, wrapping around at the boundary of the type.
+    /// Wraps around at the boundary of the type.
     pub fn wrapping_add(self, rhs: Self) -> Self {
         Self(self.0.wrapping_add(rhs.0))
     }
 
-    /// Wrapping integer subtraction. Computes self - rhs, wrapping around at the boundary of the type.
+    /// Wraps around at the boundary of the type.
     pub fn wrapping_sub(self, rhs: Self) -> Self {
         Self(self.0.wrapping_sub(rhs.0))
     }
 
-    /// Wrapping integer multiplication. Computes self * rhs, wrapping around at the boundary of the type.
+    /// Wraps around at the boundary of the type.
     pub fn wrapping_mul(self, rhs: Self) -> Self {
         Self(self.0.wrapping_mul(rhs.0))
     }
 
-    /// Wrapping negation. Computes -self, wrapping MIN to MIN.
+    /// Wraps MIN to MIN.
     pub fn wrapping_neg(self) -> Self {
         Self(self.0.wrapping_neg())
     }
 
-    /// Downcast to a smaller signed type by truncating to the target's width and reinterpreting
-    /// the low bits as two's complement, mirroring `U256::down_cast_lossy`'s pure-bit-truncation
-    /// contract (e.g., `I256::from(200).down_cast_lossy::<i8>() == -56`).
-    /// T must be at most i128. Never panics for such targets.
+    /// Truncates to the target's width and reinterprets the low bits as two's complement.
+    /// T must be at most i128.
     pub fn down_cast_lossy<T: TryFrom<i128>>(self) -> T {
-        // Truncate to the low 128 bits, then sign-extend from the target's width so the result
-        // always fits in T.
+        // Sign-extend from the target's width so the result fits in T.
         let low = self.0.as_i128();
         let target_bits = (size_of::<T>() * 8) as u32;
         let truncated = if target_bits < 128 {
@@ -473,8 +470,7 @@ impl From<i128> for I256 {
 // TryFrom impls (fallible narrowing conversions)
 //**************************************************************************************************
 
-/// Helper: returns true if the I256 value fits within [min, max] of a narrower type.
-/// We check by comparing the I256 against I256 versions of the bounds.
+/// Returns true if the value fits within [min, max] of a narrower type.
 fn fits_in_range(n: I256, min: i128, max: i128) -> bool {
     let lo = I256::from(min);
     let hi = I256::from(max);
@@ -554,15 +550,11 @@ impl Distribution<I256> for Standard {
     }
 }
 
-// Uniform sampling for I256.
-// Strategy: map the signed range [low, high] to an unsigned range of the same width by adding
-// an offset (MIN is mapped to 0), sample uniformly from U256 within that range, then map back.
+// Uniform sampling maps the signed range to an unsigned range of the same width, samples
+// uniformly in U256, then maps back.
 
-/// Offset to convert between I256 and U256 ranges: U256 representation of 2^255.
-/// Adding this to a signed value (reinterpreted as U256 via two's complement) maps
-/// I256::MIN -> 0, I256::MAX -> U256::MAX.
+/// U256 representation of 2^255, added to map I256::MIN to 0 and I256::MAX to U256::MAX.
 fn i256_to_u256_offset(val: I256) -> U256 {
-    // Two's complement reinterpretation then add 2^255 (XOR the sign bit)
     let mut bytes = val.to_le_bytes();
     bytes[31] ^= 0x80; // flip sign bit
     U256::from_le_bytes(&bytes)
@@ -611,14 +603,14 @@ impl UniformSampler for UniformI256 {
         );
         let low_u = i256_to_u256_offset(low);
         let high_u = i256_to_u256_offset(high);
-        // range = high_u - low_u + 1; when wrapping to 0 it means the full range
+        // range = high_u - low_u + 1, where wrapping to 0 means the full range
         let range_u = high_u.wrapping_sub(low_u).wrapping_add(U256::one());
         UniformI256 { low_u, range_u }
     }
 
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Self::X {
         if self.range_u == U256::zero() {
-            // Full range: any random I256
+            // Full range means any random I256
             rng.r#gen()
         } else {
             // Rejection sampling in the unsigned domain
@@ -1001,33 +993,31 @@ mod tests {
         assert_eq!(neg.down_cast_lossy::<i128>(), -5i128);
     }
 
-    // The down_cast truncates I256 to the target's width and reinterprets the low bits as two's
-    // complement (matching `U256::down_cast_lossy`). These tests pin the wrap behavior so it's
-    // clear what crossing each width boundary returns.
+    // Checks the wrap behavior when crossing each width boundary.
     #[test]
     fn down_cast_lossy_i128_wrap() {
-        // i128::MAX + 1 == 2^127 — low 128 bits become i128::MIN (high bit set).
+        // i128::MAX + 1 down-casts to i128::MIN.
         let one_past_i128_max = I256::from(i128::MAX) + I256::one();
         assert_eq!(one_past_i128_max.down_cast_lossy::<i128>(), i128::MIN);
 
-        // i128::MIN - 1 == -(2^127 + 1) — low 128 bits become i128::MAX.
+        // i128::MIN - 1 down-casts to i128::MAX.
         let one_before_i128_min = I256::from(i128::MIN) - I256::one();
         assert_eq!(one_before_i128_min.down_cast_lossy::<i128>(), i128::MAX);
     }
 
     #[test]
     fn down_cast_lossy_full_width_wrap() {
-        // Low 128 bits of I256::MAX is all-ones == i128(-1).
+        // I256::MAX down-casts to i128(-1).
         assert_eq!(I256::max_value().down_cast_lossy::<i128>(), -1i128);
-        // Low 128 bits of I256::MIN is zero (the bit set is bit 255, not in the low 128).
+        // I256::MIN down-casts to zero.
         assert_eq!(I256::min_value().down_cast_lossy::<i128>(), 0i128);
     }
 
     #[test]
     fn down_cast_lossy_truncates_out_of_range_values() {
-        // 200 == 0xC8; as an i8 bit pattern that is -56.
+        // 200 down-casts to i8 as -56.
         assert_eq!(I256::from(200i32).down_cast_lossy::<i8>(), -56i8);
-        // -200 == ...FF38; low byte 0x38 == 56.
+        // -200 down-casts to i8 as 56.
         assert_eq!(I256::from(-200i32).down_cast_lossy::<i8>(), 56i8);
     }
 
@@ -1045,14 +1035,13 @@ mod tests {
             i64::MIN
         );
 
-        // Bits above the target width are discarded entirely.
         assert_eq!(I256::from(0x1_2345i32).down_cast_lossy::<i16>(), 0x2345i16);
 
-        // MIN's only set bit is bit 255, so every narrower target truncates to zero.
+        // MIN down-casts to zero for every narrower target.
         assert_eq!(I256::min_value().down_cast_lossy::<i8>(), 0i8);
         assert_eq!(I256::min_value().down_cast_lossy::<i64>(), 0i64);
 
-        // MAX's low bits are all ones, so every narrower target truncates to -1.
+        // MAX down-casts to -1 for every narrower target.
         assert_eq!(I256::max_value().down_cast_lossy::<i8>(), -1i8);
         assert_eq!(I256::max_value().down_cast_lossy::<i64>(), -1i64);
 
@@ -1099,27 +1088,24 @@ mod tests {
 
     #[test]
     fn shift_to_sign_bit() {
-        // 1 << 255 sets only the sign bit — that is exactly I256::MIN in two's complement.
+        // 1 << 255 equals I256::MIN.
         assert_eq!(I256::one() << 255u32, I256::min_value());
         // 1 << 254 is the largest positive power of two below MAX.
         let near_max = I256::one() << 254u32;
         assert!(near_max > I256::zero());
         assert!(near_max < I256::max_value());
-        // (MIN >> 1) is arithmetic — sign extends — giving roughly MIN/2 (still negative).
+        // MIN >> 1 stays negative (arithmetic shift).
         assert!((I256::min_value() >> 1u8) < I256::zero());
     }
 
     #[test]
     fn bitwise_extreme_patterns() {
-        // All-ones (xor-cascading) is interpretable as -1 in two's complement.
+        // All-ones equals -1.
         let all_ones = I256::from(-1i8);
         assert_eq!(all_ones, !I256::zero());
-        // Sign bit alone via XOR.
         let sign_bit = I256::one() << 255u32;
         assert_eq!(I256::zero() ^ sign_bit, sign_bit);
-        // AND with sign bit isolates it.
         assert_eq!(all_ones & sign_bit, sign_bit);
-        // OR fills the rest.
         assert_eq!(I256::zero() | all_ones, all_ones);
     }
 
@@ -1129,7 +1115,7 @@ mod tests {
         let sign_only = I256::one() << 255u32;
         let bytes = sign_only.to_le_bytes();
         assert_eq!(I256::from_le_bytes(&bytes), I256::min_value());
-        // bytes representation: only the high byte's high bit is set (little-endian).
+        // MIN serializes with only the high byte's high bit set.
         assert_eq!(bytes[31], 0x80);
         for b in &bytes[..31] {
             assert_eq!(*b, 0);
@@ -1140,7 +1126,7 @@ mod tests {
 
     #[test]
     fn neg_operator() {
-        // Wrapping behaviour: matches `wrapping_neg`.
+        // Neg matches wrapping_neg.
         assert_eq!(-I256::from(42i32), I256::from(-42i32));
         assert_eq!(-I256::from(-42i32), I256::from(42i32));
         assert_eq!(-I256::zero(), I256::zero());
@@ -1270,7 +1256,7 @@ mod tests {
         use rand::rngs::StdRng;
         let mut rng = StdRng::seed_from_u64(42);
         let val: I256 = rng.r#gen();
-        // Just verify it doesn't panic and produces *some* value
+        // Verify it does not panic and produces a value.
         let _ = val;
     }
 

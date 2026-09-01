@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests constant folding with negative values, exercising:
 // - Arithmetic right shift (must sign-extend, not zero-fill)
 // - Sign-extending widening casts

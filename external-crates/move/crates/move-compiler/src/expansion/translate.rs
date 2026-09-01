@@ -654,12 +654,12 @@ pub(super) enum ValueError {
     NegativeUnsigned {
         loc: Loc,
     },
-    // A '-'-prefixed literal (from a match pattern) with no type suffix; the target type cannot
+    // A '-'-prefixed literal (from a match pattern) with no type suffix. The target type cannot
     // be inferred at expansion time.
     NegativeUntyped {
         loc: Loc,
     },
-    // An internal invariant was broken; reported through the `ice!` machinery.
+    // An internal invariant was broken.
     Ice {
         loc: Loc,
         msg: &'static str,
@@ -3312,9 +3312,8 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 op,
                 exp(context, Box::new(sp(vloc, PE::Value(sp(vloc, v_))))),
             ),
-            // We could just allow these through because the type error will be caught later, but
-            // we are already looking at the literal here, so we might as well catch the error and
-            // provide a better error message to the user.
+            // Catch the error here for a better message, even though the type checker would
+            // also reject it later.
             sp!(vloc, PE::Value(sp!(_, v_))) => {
                 let error_kind: &str = match &v_ {
                     P::Value_::Bool(_) => "'bool'",
@@ -3323,7 +3322,6 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                     P::Value_::ByteString(_) => "a byte string",
                     P::Value_::String(_) => "a string",
                     P::Value_::Num(_) => {
-                        // This should be unreachable.
                         context.add_diag(ice!((
                             vloc,
                             "ICE: unexpected numeric literal without a signed suffix in negation"
@@ -3897,7 +3895,7 @@ fn signed_num(loc: Loc, s: &str, negated: bool) -> Result<E::Value_, ValueError>
     } else if let Some(num) = s.strip_suffix(BT::I8) {
         parse_signed!(num, parse_i8, I8, "'i8'")
     } else {
-        // Callers guard with `has_signed_suffix`, so this is unreachable.
+        // Callers guard with `has_signed_suffix`.
         Err(ValueError::Ice {
             loc,
             msg: "expected a signed integer suffix on the literal",
@@ -3931,7 +3929,7 @@ fn unsigned_num(loc: Loc, s: &str) -> Result<E::Value_, ValueError> {
     } else if let Some(num) = s.strip_suffix(BT::U8) {
         parse_unsigned!(num, parse_u8, U8, "'u8'")
     } else {
-        // Callers guard with `has_unsigned_suffix`, so this is unreachable.
+        // Callers guard with `has_unsigned_suffix`.
         Err(ValueError::Ice {
             loc,
             msg: "expected an unsigned integer suffix on the literal",

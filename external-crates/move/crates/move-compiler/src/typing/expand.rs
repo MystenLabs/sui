@@ -248,8 +248,8 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
                 e.exp.value = E::UnresolvedError
             }
         }
-        // `e.ty` is already substituted (above); `inner.ty` may still be a type variable.
-        // Neg unifies operand and result types, so `e.ty` stands in for the inner's type.
+        // Neg unifies operand and result types, so the substituted `e.ty` stands in for
+        // `inner.ty`, which may still be a type variable.
         E::UnaryExp(sp!(_, UnaryOp_::Neg), inner)
             if matches!(&inner.exp.value, E::Value(sp!(_, Value_::InferredNum(_))))
                 && matches!(
@@ -396,7 +396,7 @@ fn find_fit_unsigned(value: U256) -> BuiltinTypeName_ {
 }
 
 /// Returns the smallest signed type whose representable range contains `value`. When `negated`,
-/// compares against `|MIN|` (e.g., 128 for `i8`); otherwise compares against `MAX` (e.g., 127).
+/// bounds against `|MIN|` rather than `MAX`.
 fn find_fit_signed(value: U256, negated: bool) -> BuiltinTypeName_ {
     use BuiltinTypeName_ as BT;
     let bound = if negated {
@@ -444,7 +444,7 @@ fn max_value_for(bt: BuiltinTypeName_) -> U256 {
     }
 }
 
-/// Returns `|MIN|` for signed builtin types (e.g., 128 for `i8`). Panics for non-signed-numeric.
+/// Returns `|MIN|` for signed builtin types. Panics for non-signed-numeric.
 fn abs_min_value_for(bt: BuiltinTypeName_) -> U256 {
     use BuiltinTypeName_ as BT;
     match bt {
@@ -505,10 +505,8 @@ fn inferred_numerical_value(
         None
     } else if negated {
         use move_core_types::i256::I256;
-        // `value` is the literal's magnitude. Truncate it to the unsigned twin of the target
-        // width, wrapping-negate to get the two's-complement bit pattern, and reinterpret as
-        // signed. Wrapping is what makes MIN work, e.g. for `-128i8`:
-        // magnitude 128 -> u8 0x80 -> wrapping_neg 0x80 -> as i8 -128.
+        // Wrapping negation over the unsigned twin is what makes MIN representable.
+        // For `-128i8`: magnitude 128 -> u8 0x80 -> wrapping_neg 0x80 -> as i8 -128.
         let value_ = match bt {
             BT::I8 => Value_::I8(value.down_cast_lossy::<u8>().wrapping_neg() as i8),
             BT::I16 => Value_::I16(value.down_cast_lossy::<u16>().wrapping_neg() as i16),

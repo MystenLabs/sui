@@ -6,9 +6,9 @@ info:
   lint: false
 ---
 error[EC01002]: unexpected token
-  ┌─ tests/development/signed_ints/invalid/signed_int_match_negative_nonnumeric.move:8:13
+  ┌─ tests/development/signed_ints/invalid/signed_int_match_negative_nonnumeric.move:5:13
   │
-8 │             -true => 0,
+5 │             -true => 0,
   │             ^---- Expected a numeric literal after '-' in a pattern
   │             │ 
   │             Invalid pattern

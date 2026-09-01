@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 module 0x42::m {
     fun vector_i8() {
         let _v = vector[1i8, 2i8, 3i8];
