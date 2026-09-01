@@ -3,6 +3,7 @@
 
 //! Building blocks for the experimental `sui-fork` tool.
 
+pub mod args;
 pub mod cli;
 pub(crate) mod context;
 mod gql;
@@ -22,6 +23,8 @@ pub mod store;
 #[path = "tests/support.rs"]
 mod test_support;
 
+pub use args::DEFAULT_RPC_ADDR;
+pub use args::StartArgs;
 pub use gql::GraphQLClient;
 pub use node::Node;
 pub use proto::forking::AdvanceCheckpointRequest;
