@@ -25,7 +25,7 @@ use crate::{
     CommitRange, Context,
     error::{ConsensusError, ConsensusResult},
     network::{
-        ObserverBlockStream, ObserverNetworkClient, PeerId,
+        BlockStreamFilter, ObserverBlockStream, ObserverNetworkClient, PeerId,
         metrics_layer::MetricsCallbackMaker,
         to_host_port_str,
         tonic_network::{
@@ -43,6 +43,11 @@ use super::{ObserverNetworkService, tonic_gen::observer_service_server::Observer
 pub(crate) struct BlockStreamRequest {
     #[prost(uint32, repeated, tag = "1")]
     pub(crate) highest_round_per_authority: Vec<Round>,
+    /// Committee indices of the authorities whose blocks should be streamed. Empty means
+    /// no filtering: blocks from all authorities are streamed. Unknown or duplicate
+    /// indices cause the request to be rejected.
+    #[prost(uint32, repeated, tag = "2")]
+    pub(crate) authors: Vec<u32>,
 }
 
 /// Auxiliary data carried alongside blocks in the observer stream.
@@ -265,12 +270,14 @@ impl ObserverNetworkClient for TonicObserverClient {
         &self,
         peer: PeerId,
         highest_round_per_authority: Vec<Round>,
+        filter: BlockStreamFilter,
         timeout: Duration,
     ) -> ConsensusResult<ObserverBlockStream> {
         let mut client = self.get_client(peer.clone(), timeout).await?;
 
         let request = Request::new(BlockStreamRequest {
             highest_round_per_authority,
+            authors: filter.authors,
         });
         let response = client
             .stream_blocks(request)
@@ -441,13 +448,21 @@ impl<S: ObserverNetworkService> ObserverService for ObserverServiceProxy<S> {
                 )
             })?;
 
-        let highest_round_per_authority = request.into_inner().highest_round_per_authority;
+        let request = request.into_inner();
+        let filter = BlockStreamFilter {
+            authors: request.authors,
+        };
 
         let block_stream = self
             .service()?
-            .handle_stream_blocks(peer_id, highest_round_per_authority)
+            .handle_stream_blocks(peer_id, request.highest_round_per_authority, filter)
             .await
-            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
+            .map_err(|e| match e {
+                ConsensusError::InvalidBlockStreamFilter(_) => {
+                    tonic::Status::invalid_argument(format!("{e:?}"))
+                }
+                _ => tonic::Status::internal(format!("{e:?}")),
+            })?;
 
         let response_stream = block_stream.map(|item| {
             Ok(BlockStreamResponse {
@@ -559,8 +574,8 @@ mod tests {
     use crate::{
         context::Context,
         network::{
-            ExtendedSerializedBlock, ObserverNetworkService, SerializedBlockForm,
-            test_network::TestService,
+            BlockStreamFilter, ExtendedSerializedBlock, ObserverNetworkService,
+            SerializedBlockForm, test_network::TestService,
         },
     };
 
@@ -587,7 +602,11 @@ mod tests {
         let observer_peer_id = keys[0].0.public().clone();
 
         let block_stream = service
-            .handle_stream_blocks(observer_peer_id.clone(), vec![0u32, 0, 0, 0])
+            .handle_stream_blocks(
+                observer_peer_id.clone(),
+                vec![0u32, 0, 0, 0],
+                BlockStreamFilter::default(),
+            )
             .await
             .unwrap();
 
@@ -622,7 +641,11 @@ mod tests {
         let highest_round_per_authority = vec![50u32, 50, 50, 50];
 
         let block_stream = service
-            .handle_stream_blocks(observer_peer_id, highest_round_per_authority)
+            .handle_stream_blocks(
+                observer_peer_id,
+                highest_round_per_authority,
+                BlockStreamFilter::default(),
+            )
             .await
             .unwrap();
 
@@ -688,7 +711,12 @@ mod tests {
         let peer_id = PeerId::Validator(context.committee.to_authority_index(0).unwrap());
 
         let result = observer_client_0
-            .stream_blocks(peer_id, vec![10u32, 10, 10, 10], Duration::from_secs(5))
+            .stream_blocks(
+                peer_id,
+                vec![10u32, 10, 10, 10],
+                BlockStreamFilter::default(),
+                Duration::from_secs(5),
+            )
             .await;
 
         // This should work with proper TonicManager setup
