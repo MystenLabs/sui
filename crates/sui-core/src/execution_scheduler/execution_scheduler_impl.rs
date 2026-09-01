@@ -10,7 +10,7 @@ use crate::{
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{
         ExecutingGuard, PendingCertificateStats,
-        causal_order::CausalWindow,
+        causal_order::CausalAdmission,
         funds_withdraw_scheduler::{
             AddressFundsSchedulerMetrics, FundsSettlement, ScheduleStatus, TxFundsWithdraw,
             WithdrawReservations, scheduler::FundsWithdrawScheduler,
@@ -93,7 +93,7 @@ pub struct ExecutionScheduler {
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     overload_tracker: Arc<OverloadTracker>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
-    causal_window: Arc<CausalWindow>,
+    causal_admission: Arc<CausalAdmission>,
     address_funds_withdraw_scheduler: Arc<Mutex<Option<FundsWithdrawScheduler>>>,
     funds_withdraw_scheduler_type: FundsWithdrawSchedulerType,
     metrics: Arc<AuthorityMetrics>,
@@ -159,7 +159,7 @@ impl ExecutionScheduler {
             transaction_cache_read,
             overload_tracker: Arc::new(OverloadTracker::new()),
             tx_ready_certificates,
-            causal_window: CausalWindow::new_with_default_sizing(),
+            causal_admission: CausalAdmission::new_with_default_sizing(),
             address_funds_withdraw_scheduler: Arc::new(Mutex::new(
                 address_funds_withdraw_scheduler,
             )),
@@ -196,8 +196,8 @@ impl ExecutionScheduler {
     }
 
     /// The causal-order state shared with the execution driver.
-    pub fn causal_window(&self) -> &Arc<CausalWindow> {
-        &self.causal_window
+    pub fn causal_admission(&self) -> &Arc<CausalAdmission> {
+        &self.causal_admission
     }
 
     #[instrument(level = "debug", skip_all, fields(tx_digest = ?cert.digest()))]
@@ -521,7 +521,7 @@ impl ExecutionScheduler {
             // transactions must run under the key's index: units enqueued after it may
             // already be parked waiting for its outputs, and a later-assigned index
             // would sit above them, out of the admission window's reach.
-            let env = env.with_causal_guard(self.causal_window.assign());
+            let env = env.with_causal_guard(self.causal_admission.assign());
             match schedulable {
                 Schedulable::Transaction(tx) => {
                     if tx.transaction_data().has_funds_withdrawals() {
@@ -568,7 +568,7 @@ impl ExecutionScheduler {
                     // causal index; internal re-enqueues keep the one assigned at
                     // their original enqueue.
                     if env.causal_guard.is_none() {
-                        env.causal_guard = Some(self.causal_window.assign());
+                        env.causal_guard = Some(self.causal_admission.assign());
                     }
                     Some((cert, env))
                 } else {
