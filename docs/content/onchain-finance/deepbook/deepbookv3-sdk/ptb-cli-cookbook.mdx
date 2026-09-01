@@ -177,34 +177,12 @@ For compile-checked SDK versions of these compositions, plus a three-legged lend
 
 Get the DeepBookV3 package ID, pool, and coin types from [Contract Information](/onchain-finance/deepbook/deepbookv3/contract-information). Set `DEEPBOOK` to the DeepBookV3 package ID. Do not use the CLI `deepbook` name alias, which resolves to the legacy DeepBook address, not DeepBookV3.
 
-Placing an order requires a trade proof and takes 13 typed arguments. The TypeScript SDK generates the proof and encodes the arguments for you, so it is the recommended path. Deposit into the `BalanceManager` and place the order in the same transaction so both settle atomically.
+Placing an order requires a trade proof and a long argument list. The TypeScript SDK generates the proof and encodes the arguments for you, so it is the recommended path. Deposit into the `BalanceManager` and place the order in the same transaction so both settle atomically.
 
 <Tabs groupId="ptb-interface">
 <TabItem value="ts" label="TypeScript (SDK)">
 
-```tsx
-import { Transaction } from '@mysten/sui/transactions';
-
-// `client` is a Sui client extended with the deepbook() plugin.
-// See the DeepBookV3 SDK page for setup.
-const tx = new Transaction();
-
-// 1. Deposit into the balance manager.
-tx.add(client.deepbook.balanceManager.depositIntoManager('MANAGER_1', 'DBUSDC', 100));
-
-// 2. Place a limit bid in the same PTB.
-tx.add(
-	client.deepbook.placeLimitOrder({
-		poolKey: 'SUI_DBUSDC',
-		balanceManagerKey: 'MANAGER_1',
-		clientOrderId: '1',
-		price: 2.5,
-		quantity: 10,
-		isBid: true,
-		payWithDeep: true,
-	}),
-);
-```
+<ImportContent source="examples/deepbook-spot/src/compose.ts" mode="code" tag="fund-order" />
 
 See [Balance Manager](/onchain-finance/deepbook/deepbookv3-sdk/balance-manager) and [Orders](/onchain-finance/deepbook/deepbookv3-sdk/orders) for the full parameter set and cancel and modify calls.
 
@@ -219,7 +197,7 @@ $ sui client ptb \
     --gas-budget 10000000
 ```
 
-Placing an order from the CLI is impractical: `pool::place_limit_order` needs a `TradeProof` from `balance_manager::generate_proof_as_owner` plus 13 typed arguments (client order ID, order type, self-matching option, price, quantity, `is_bid`, `pay_with_deep`, expiration, the `0x6` clock, and the 2 pool type arguments). Use the TypeScript SDK for order placement.
+Placing an order from the CLI is impractical. [`pool::place_limit_order`](https://github.com/MystenLabs/deepbookv3/blob/main/packages/deepbook/sources/pool.move) takes 12 value arguments and 2 type arguments: the pool, the `BalanceManager`, a `TradeProof` from `balance_manager::generate_proof_as_owner`, then the client order ID, order type, self-matching option, price, quantity, `is_bid`, `pay_with_deep`, expiration, and the `0x6` clock, all under the pool's base and quote types. Use the TypeScript SDK for order placement.
 
 </TabItem>
 </Tabs>
@@ -231,22 +209,7 @@ A flash loan returns a `FlashLoan` hot potato that you must return in the same t
 <Tabs groupId="ptb-interface">
 <TabItem value="ts" label="TypeScript (SDK)">
 
-```tsx
-import { Transaction } from '@mysten/sui/transactions';
-
-const tx = new Transaction();
-
-// Borrow base asset. `flashLoan` is the hot potato you must return.
-const [base, flashLoan] = tx.add(client.deepbook.flashLoans.borrowBaseAsset('DEEP_SUI', 1000));
-
-// ... use `base` here, for example swap it through another pool ...
-
-// Repay in the same PTB. The remaining coin returns to you.
-const remainder = tx.add(
-	client.deepbook.flashLoans.returnBaseAsset('DEEP_SUI', 1000, base, flashLoan),
-);
-tx.transferObjects([remainder], SENDER);
-```
+<ImportContent source="examples/deepbook-spot/src/compose.ts" mode="code" tag="flash-loan" />
 
 See [Flash Loans](/onchain-finance/deepbook/deepbookv3-sdk/flash-loans) for the quote-asset variants.
 

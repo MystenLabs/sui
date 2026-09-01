@@ -9,9 +9,9 @@
 // network. See https://docs.pyth.network/price-feeds/contract-addresses/sui and
 // https://pyth.network/developers/price-feed-ids for the canonical values.
 export const TESTNET = {
-	// A JSON-RPC endpoint. The Pyth SDK needs JSON-RPC; the Mysten Testnet
-	// fullnode serves gRPC, so point this at a JSON-RPC provider or your own node.
-	rpcUrl: 'https://rpc-testnet.suiscan.xyz',
+	// The Mysten Testnet fullnode's gRPC endpoint. `pyth-sui-js` 4.x reads through
+	// the `@mysten/sui` 2.x `.core` API, so it works over gRPC or JSON-RPC.
+	grpcUrl: 'https://fullnode.testnet.sui.io:443',
 	// Pyth and Wormhole shared state objects on Sui Testnet.
 	pythStateId: '0x243759059f4c3111179da5878c12f68d612c21a8d54d85edc86164bb18be1c7c',
 	wormholeStateId: '0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790',

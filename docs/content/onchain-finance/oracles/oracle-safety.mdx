@@ -86,5 +86,5 @@ Each push is a transaction that costs gas plus the Pyth base update fee, so the 
 ## Troubleshooting
 
 - **`MoveAbort` in `check_price_is_fresh` (code 3):** observed. The feed is older than your bound. In a pull flow, confirm the update command runs before the read in the same transaction. For a push feed, the keeper has fallen behind.
-- **`getFullnodeUrl('testnet')` calls return 404:** observed. The Mysten Testnet fullnode serves gRPC; the Pyth SDK needs JSON-RPC. Point the client at a JSON-RPC endpoint.
+- **The update runs before the read and the read still aborts as stale:** observed. The update applied the freshest price Hermes served, and that price was already older than your bound. On a Testnet run the beta Hermes deployment was several days behind, so no bound tighter than that could pass. Read the publish time Hermes returns before blaming the transaction. The guard is working: a consumer that widened the bound to make this pass would be choosing to act on a days-old price.
 - **A price passes the staleness check but looks wrong:** hypothesized. A single feed can be manipulated or briefly diverge. Add a deviation check against a second source, and reject rather than act when they disagree.

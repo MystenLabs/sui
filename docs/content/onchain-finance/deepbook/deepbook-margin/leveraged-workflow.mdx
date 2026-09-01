@@ -71,6 +71,14 @@ This walkthrough uses the `SUI_DBUSDC` pool, borrowing the stable quote asset (D
 
 The samples live in the `examples/deepbook-margin` package, type-checked with `tsc --noEmit` against `@mysten/deepbook-v3` and `@mysten/sui`, and reference pools, coins, and margin pools by SDK key rather than hardcoding onchain IDs.
 
+:::info[Testnet support]
+
+The setup steps run on Testnet today: reading the pool's risk parameters, checking borrow liquidity, and creating a `MarginManager` all work.
+
+The steps that value a position (deposit, borrow, order placement, and risk reads) additionally need fresh Pyth prices, and that support is not yet in place on Testnet. The margin protocol caps `max_price_age` at 1 hour, and the Testnet feeds the margin pools depend on currently publish less often than that, so those calls revert on the age check rather than returning a stale value. Check the current feed age before you start, as [Keep the price feeds fresh](#keep-the-price-feeds-fresh) shows, and run the oracle-dependent steps once the feeds are publishing inside the pool's window.
+
+:::
+
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
 - [x] A current CLI: run `suiup update sui`, then `sui --version` to confirm it.
@@ -95,6 +103,34 @@ A `MarginManager` borrows from one margin pool at a time, base or quote, which k
 The client references pools, coins, and margin pools by SDK key. On Testnet it auto-loads the margin package IDs and Pyth config. Read-only calls work without a manager; borrowing and trading need one.
 
 <ImportContent source="examples/deepbook-margin/src/client.ts" mode="code" tag="client" />
+
+## Keep the price feeds fresh
+
+Every margin operation that values a position (borrow, withdraw, order placement, risk read) reads the pool's Pyth `PriceInfoObject` for both the base and the quote coin, and reverts if that price is older than the pool's maximum age. The [`pool_proxy`](https://github.com/MystenLabs/deepbookv3/blob/main/packages/deepbook_margin/sources/pool_proxy.move) entry points take both price objects as arguments. Spot trading has no such dependency, so this is the step that most often surprises people coming from the spot workflow.
+
+The SDK refreshes the feeds for you as part of the transaction that depends on them. [`getPriceInfoObjects`](https://github.com/MystenLabs/ts-sdks/blob/main/packages/deepbook-v3/src/queries/priceFeedQueries.ts) returns the existing object IDs when the onchain price is still fresh, and appends the Pyth verify-and-update commands to your transaction when it is stale:
+
+<ImportContent
+	source="packages/deepbook-v3/src/queries/priceFeedQueries.ts"
+	mode="code"
+	org="MystenLabs"
+	repo="ts-sdks"
+	fun="getPriceInfoObjects"
+	signatureOnly
+/>
+
+Call it on the same `Transaction` you are about to add the margin command to, and call it first. Because it fetches from Pyth over the network it is async, so it has to run before you build the rest of the transaction.
+
+To decide whether a read-only call is about to revert, check the age directly. Read-only calls cannot append an update, because they do not build a transaction:
+
+<ImportContent
+	source="packages/deepbook-v3/src/queries/priceFeedQueries.ts"
+	mode="code"
+	org="MystenLabs"
+	repo="ts-sdks"
+	fun="getPriceInfoObjectAge"
+	signatureOnly
+/>
 
 ## Create a `MarginManager`
 
@@ -176,11 +212,11 @@ If the price is older than the pool's maximum age, valuation reverts rather than
 
 If you hold the position and SUI falls, your collateral is worth less against a debt that only grows with interest, so the risk ratio falls. Nothing intervenes on your behalf. When the ratio reaches the pool's liquidation risk ratio, [`can_liquidate`](/onchain-finance/deepbook/deepbook-margin/contract-information/risk-ratio) returns true and the position becomes eligible for liquidation.
 
-Liquidation is permissionless. Today it runs through the `margin_liquidation` package: `liquidate_base` (and its quote counterpart) is callable by anyone, checks eligibility with `can_liquidate`, and sources the repay capital from a shared liquidation vault.
+Liquidation is permissionless, and two entry points reach it. `margin_manager::liquidate` is the direct call: the liquidator supplies the repay coin and receives your collateral back, including the user liquidation reward. `liquidation_vault::liquidate_base` and its quote counterpart wrap that call, funding the repayment from a shared vault and returning every proceed to the vault rather than to whoever called it. Neither takes a capability. See [Liquidation paths and who gets paid](/onchain-finance/deepbook/deepbook-margin/margin-integration#liquidation-paths-and-who-gets-paid) for the full contrast.
 
 <ImportContent source="packages/margin_liquidation/sources/liquidation_vault.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="liquidate_base" noComments />
 
-That entry point calls the inner `margin_manager::liquidate`, which does the settlement: it repays part of your debt and pays the liquidator and the pool a reward out of your collateral, sized to restore your risk ratio to the target liquidation ratio rather than closing the whole position.
+Both routes end in the inner `margin_manager::liquidate`, which does the settlement: it repays part of your debt and pays the caller and the pool a reward out of your collateral, sized to restore your risk ratio to the target liquidation ratio rather than closing the whole position. Note that the vault entry returns silently when the position is not liquidatable, whereas the direct call aborts with `ECannotLiquidate`.
 
 <ImportContent source="packages/deepbook_margin/sources/margin_manager.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="liquidate" signatureOnly />
 
@@ -211,6 +247,6 @@ Withdraw your collateral back to your wallet. A withdraw must leave your risk ra
 - **Borrow aborts on risk ratio:** the borrow would leave your ratio below the pool's min borrow risk ratio. Deposit more collateral or borrow less. Read the current threshold with `getMinBorrowRiskRatio`.
 - **Withdraw aborts on risk ratio:** you are trying to withdraw collateral that a borrow still depends on. Repay first, then withdraw, and keep the ratio at or above the min withdraw ratio.
 - **Borrow fails for insufficient pool liquidity:** the margin pool has no headroom under its max utilization rate. Check `borrowableNow` from [Check borrow liquidity](#check-borrow-liquidity), borrow less, or wait for supply.
-- **Valuation reverts on a stale price:** the Pyth price is older than the pool's maximum price age. Refresh the price feed before the risk-reading or trading call. See [Oracle risk](/onchain-finance/deepbook/deepbook-margin/margin-risks#oracle-risk).
+- **Valuation reverts on a stale price:** the Pyth price is older than the pool's maximum price age. Append `getPriceInfoObjects` to the same transaction, as in [Keep the price feeds fresh](#keep-the-price-feeds-fresh). See [Oracle risk](/onchain-finance/deepbook/deepbook-margin/margin-risks#oracle-risk).
 - **`Cannot convert <value> to a BigInt`:** `clientOrderId` is encoded as `u64`. The SDK types it as a string, but a non-numeric value fails to encode. Use a numeric string, such as a timestamp.
 - **Every run mints a new manager:** you are not reusing an existing `MarginManager`. Discover or persist the ID and create only when absent, as in [Create a MarginManager](#create-a-marginmanager).

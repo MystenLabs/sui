@@ -5,10 +5,11 @@
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
-import { deepbook, type DeepBookClient, type BalanceManager } from '@mysten/deepbook-v3';
-import type { ClientWithExtensions } from '@mysten/sui/client';
+import { deepbook, type BalanceManager } from '@mysten/deepbook-v3';
 
-export type DeepBookTestnetClient = ClientWithExtensions<{ deepbook: DeepBookClient }>;
+// Inferred from the concrete client rather than annotated, so the SuiGrpcClient
+// methods stay visible alongside the deepbook extension.
+export type DeepBookTestnetClient = ReturnType<typeof deepbookClient>;
 
 export function getKeypair(privateKey: string): Ed25519Keypair {
 	const { secretKey } = decodeSuiPrivateKey(privateKey);
@@ -21,7 +22,7 @@ export function getKeypair(privateKey: string): Ed25519Keypair {
 export function deepbookClient(
 	address: string,
 	balanceManagers?: { [key: string]: BalanceManager },
-): DeepBookTestnetClient {
+) {
 	return new SuiGrpcClient({
 		network: 'testnet',
 		baseUrl: 'https://fullnode.testnet.sui.io:443',

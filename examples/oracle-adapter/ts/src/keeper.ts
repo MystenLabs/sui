@@ -3,7 +3,7 @@
 
 // docs::#keeper
 import { Transaction } from '@mysten/sui/transactions';
-import type { SuiClient } from '@mysten/sui/client';
+import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import type { Signer } from '@mysten/sui/cryptography';
 import type { SuiPythClient, SuiPriceServiceConnection } from '@pythnetwork/pyth-sui-js';
 
@@ -16,7 +16,7 @@ import type { SuiPythClient, SuiPriceServiceConnection } from '@pythnetwork/pyth
 // choose an interval that balances freshness against cost. A push consumer must
 // still check the stored price's age, because the keeper can fall behind.
 export async function pushOnce(
-	sui: SuiClient,
+	sui: SuiGrpcClient,
 	pyth: SuiPythClient,
 	hermes: SuiPriceServiceConnection,
 	signer: Signer,
@@ -29,9 +29,14 @@ export async function pushOnce(
 	const r = await sui.signAndExecuteTransaction({
 		transaction: tx,
 		signer,
-		options: { showEffects: true },
+		include: { effects: true },
 	});
-	return r.digest;
+	if (r.$kind === 'FailedTransaction') {
+		throw new Error(`push failed: ${r.FailedTransaction.status.error?.message}`);
+	}
+	// Wait before the next cycle builds against the object this one just wrote.
+	await sui.waitForTransaction({ digest: r.Transaction.digest });
+	return r.Transaction.digest;
 }
 
 // Keeper loop: push on an interval, and back off exponentially on failure so a

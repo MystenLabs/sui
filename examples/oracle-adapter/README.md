@@ -10,8 +10,9 @@ Reference material for the "Oracles for DeFi on Sui" docs cluster.
   cd move && sui move test
   ```
 
-- `ts/` — TypeScript consumption samples (Pyth pull update + read, the stale-read
-  rejection, and the Switchboard on-demand variant). Standalone package:
+- `ts/` — Pyth TypeScript samples (pull update + read, the stale-read rejection,
+  and the keeper push cycle) on `@mysten/sui` 2.x and `pyth-sui-js` 4.x.
+  Standalone package:
 
   ```sh
   cd ts && npm install && npm run build   # tsc --noEmit

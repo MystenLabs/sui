@@ -86,44 +86,12 @@ The code examples in this section use Sui Foundation-managed RPC endpoints for i
 
 :::
 
-```tsx
-import { deepbook, type DeepBookClient } from '@mysten/deepbook-v3';
-import type { ClientWithExtensions } from '@mysten/sui/client';
-import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
-import { SuiGrpcClient } from '@mysten/sui/grpc';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-
-class DeepBookMarginTrader {
-	client: ClientWithExtensions<{ deepbook: DeepBookClient }>;
-	keypair: Ed25519Keypair;
-
-	constructor(privateKey: string, env: 'testnet' | 'mainnet') {
-		this.keypair = this.getSignerFromPK(privateKey);
-		this.client = new SuiGrpcClient({
-			network: env,
-			baseUrl:
-				env === 'mainnet'
-					? 'https://fullnode.mainnet.sui.io:443'
-					: 'https://fullnode.testnet.sui.io:443',
-		}).$extend(
-			deepbook({
-				address: this.getActiveAddress(),
-			}),
-		);
-	}
-
-	getSignerFromPK = (privateKey: string): Ed25519Keypair => {
-		const { scheme, secretKey } = decodeSuiPrivateKey(privateKey);
-		if (scheme === 'ED25519') return Ed25519Keypair.fromSecretKey(secretKey);
-
-		throw new Error(`Unsupported scheme: ${scheme}`);
-	};
-
-	getActiveAddress() {
-		return this.keypair.toSuiAddress();
-	}
-}
-```
+<ImportContent
+	source="packages/deepbook-v3/examples/useDeepbookClientMarginManager.ts"
+	mode="code"
+	org="MystenLabs"
+	repo="ts-sdks"
+/>
 
 ## Keys: Coin, Pool, and MarginManager {#keys}
 
@@ -133,154 +101,11 @@ Functions that require the input of a coin, pool, or a margin manager require th
 
 Before placing any margin trade, you must supply a margin manager address to the client. The manager key points to an object defined by the `MarginManager` interface in the client. [MarginManager docs](/onchain-finance/deepbook/deepbook-margin/contract-information/margin-manager). Initialize the margin manager with the client. If you don't create a margin manager, you can rely on the client to create one, but then the user must reinitialize the client.
 
-Example using an existing margin manager:
+Pass the manager under `marginManagers` when you construct the client, keyed by a name you choose, with the `poolKey` it is bound to. The [margin manager example](#deepbookclient) shows that map.
 
-```tsx
-import { deepbook, type DeepBookClient } from '@mysten/deepbook-v3';
-import type { MarginManager } from '@mysten/deepbook-v3';
-import type { ClientWithExtensions } from '@mysten/sui/client';
-import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
-import { SuiGrpcClient } from '@mysten/sui/grpc';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { config } from 'dotenv';
+If you do not have one yet, create one first, then reinitialize the client with its object ID:
 
-config();
-
-const MARGIN_MANAGER_KEY = 'MARGIN_MANAGER_1';
-
-class DeepBookMarginTrader {
-	client: ClientWithExtensions<{ deepbook: DeepBookClient }>;
-	keypair: Ed25519Keypair;
-
-	constructor(privateKey: string, env: 'testnet' | 'mainnet') {
-		this.keypair = this.getSignerFromPK(privateKey);
-		this.client = new SuiGrpcClient({
-			network: env,
-			baseUrl:
-				env === 'mainnet'
-					? 'https://fullnode.mainnet.sui.io:443'
-					: 'https://fullnode.testnet.sui.io:443',
-		}).$extend(
-			deepbook({
-				address: this.getActiveAddress(),
-				marginManagers: this.getMarginManagers(),
-			}),
-		);
-	}
-
-	getSignerFromPK = (privateKey: string): Ed25519Keypair => {
-		const { scheme, secretKey } = decodeSuiPrivateKey(privateKey);
-		if (scheme === 'ED25519') return Ed25519Keypair.fromSecretKey(secretKey);
-
-		throw new Error(`Unsupported scheme: ${scheme}`);
-	};
-
-	getActiveAddress() {
-		return this.keypair.toSuiAddress();
-	}
-
-	getMarginManagers(): { [key: string]: MarginManager } {
-		const marginManagerAddress = process.env.MARGIN_MANAGER_ADDRESS;
-		const poolKey = process.env.POOL_KEY || 'SUI_DBUSDC';
-		if (!marginManagerAddress) {
-			throw new Error('No margin manager address found');
-		}
-		return {
-			[MARGIN_MANAGER_KEY]: {
-				address: marginManagerAddress,
-				poolKey: poolKey,
-			},
-		};
-	}
-}
-```
-
-Example creating a margin manager:
-
-```tsx
-import { deepbook, type DeepBookClient } from '@mysten/deepbook-v3';
-import type { MarginManager } from '@mysten/deepbook-v3';
-import type { ClientWithExtensions } from '@mysten/sui/client';
-import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
-import { SuiGrpcClient } from '@mysten/sui/grpc';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { Transaction } from '@mysten/sui/transactions';
-
-const MARGIN_MANAGER_KEY = 'MARGIN_MANAGER_1';
-
-class DeepBookMarginTrader {
-	client: ClientWithExtensions<{ deepbook: DeepBookClient }>;
-	keypair: Ed25519Keypair;
-	env: 'testnet' | 'mainnet';
-
-	constructor(privateKey: string, env: 'testnet' | 'mainnet') {
-		this.env = env;
-		this.keypair = this.getSignerFromPK(privateKey);
-		this.client = this.#createClient(env);
-	}
-
-	#createClient(env: 'testnet' | 'mainnet', marginManagers?: { [key: string]: MarginManager }) {
-		return new SuiGrpcClient({
-			network: env,
-			baseUrl:
-				env === 'mainnet'
-					? 'https://fullnode.mainnet.sui.io:443'
-					: 'https://fullnode.testnet.sui.io:443',
-		}).$extend(
-			deepbook({
-				address: this.getActiveAddress(),
-				marginManagers,
-			}),
-		);
-	}
-
-	getSignerFromPK = (privateKey: string): Ed25519Keypair => {
-		const { scheme, secretKey } = decodeSuiPrivateKey(privateKey);
-		if (scheme === 'ED25519') return Ed25519Keypair.fromSecretKey(secretKey);
-
-		throw new Error(`Unsupported scheme: ${scheme}`);
-	};
-
-	getActiveAddress() {
-		return this.keypair.toSuiAddress();
-	}
-
-	async createMarginManagerAndReinitialize() {
-		let tx = new Transaction();
-		const poolKey = 'SUI_DBUSDC';
-		tx.add(this.client.deepbook.marginManager.newMarginManager(poolKey));
-
-		const result = await this.client.core.signAndExecuteTransaction({
-			transaction: tx,
-			signer: this.keypair,
-			include: { effects: true, objectTypes: true },
-		});
-
-		if (result.$kind === 'FailedTransaction') {
-			throw new Error('Transaction failed');
-		}
-
-		const objectTypes = result.Transaction?.objectTypes ?? {};
-		const marginManagerAddress = result.Transaction?.effects?.changedObjects?.find(
-			(obj) =>
-				obj.idOperation === 'Created' && objectTypes[obj.objectId]?.includes('MarginManager'),
-		)?.objectId;
-
-		if (!marginManagerAddress) {
-			throw new Error('Failed to create margin manager');
-		}
-
-		const marginManagers: { [key: string]: MarginManager } = {
-			[MARGIN_MANAGER_KEY]: {
-				address: marginManagerAddress,
-				poolKey: poolKey,
-			},
-		};
-
-		this.client = this.#createClient(this.env, marginManagers);
-	}
-}
-```
+<ImportContent source="examples/deepbook-margin/src/margin-manager.ts" mode="code" tag="create-manager" />
 
 ### Coin
 
@@ -305,140 +130,24 @@ You can also initialize the SDK with custom coins to interact with margin pools 
 
 ### Pool
 
-Similar to coins, the SDK comes with default pools. You can provide a `PoolMap` during construction to override this behavior.
-
-```tsx
-import { deepbook, type DeepBookClient } from '@mysten/deepbook-v3';
-import type { MarginManager } from '@mysten/deepbook-v3';
-import type { ClientWithExtensions } from '@mysten/sui/client';
-import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
-import type { Keypair } from '@mysten/sui/cryptography';
-import { SuiGrpcClient } from '@mysten/sui/grpc';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import type { Transaction } from '@mysten/sui/transactions';
-
-export class DeepBookMarginTrader {
-	keypair: Keypair;
-	client: ClientWithExtensions<{ deepbook: DeepBookClient }>;
-
-	constructor(
-		keypair: string | Keypair,
-		env: 'testnet' | 'mainnet',
-		marginManagers?: { [key: string]: MarginManager },
-		maintainerCap?: string,
-	) {
-		if (typeof keypair === 'string') {
-			this.keypair = DeepBookMarginTrader.#getSignerFromPK(keypair);
-		} else {
-			this.keypair = keypair;
-		}
-
-		this.client = new SuiGrpcClient({
-			network: env,
-			baseUrl:
-				env === 'mainnet'
-					? 'https://fullnode.mainnet.sui.io:443'
-					: 'https://fullnode.testnet.sui.io:443',
-		}).$extend(
-			deepbook({
-				address: this.getActiveAddress(),
-				marginManagers,
-				marginMaintainerCap: maintainerCap,
-			}),
-		);
-	}
-
-	static #getSignerFromPK = (privateKey: string) => {
-		const { scheme, secretKey } = decodeSuiPrivateKey(privateKey);
-		if (scheme === 'ED25519') return Ed25519Keypair.fromSecretKey(secretKey);
-
-		throw new Error(`Unsupported scheme: ${scheme}`);
-	};
-
-	signAndExecute = async (tx: Transaction) => {
-		const result = await this.client.core.signAndExecuteTransaction({
-			transaction: tx,
-			signer: this.keypair,
-			include: { effects: true },
-		});
-		if (result.$kind === 'FailedTransaction') {
-			throw new Error('Transaction failed');
-		}
-		return result.Transaction;
-	};
-
-	getActiveAddress() {
-		return this.keypair.getPublicKey().toSuiAddress();
-	}
-}
-```
+Similar to coins, the SDK comes with default pools. Pass a `PoolMap` as the `pools` option, alongside `coins`, to override the defaults. The [margin manager example](#deepbookclient) shows where those options go.
 
 ### Example setup
 
 The following example uses the default pools and coins provided, and demonstrates margin trading operations.
 
-```tsx
-import { Transaction } from '@mysten/sui/transactions';
-
-import { DeepBookMarginTrader } from './deepbookMarginTrader.js';
-
-(async () => {
-	const privateKey = ''; // Can encapsulate this in a .env file
-
-	// Initialize with margin managers if created
-	const marginManagers = {
-		MARGIN_MANAGER_1: {
-			address: '',
-			poolKey: 'SUI_DBUSDC',
-		},
-	};
-	const traderClient = new DeepBookMarginTrader(privateKey, 'testnet', marginManagers);
-
-	const tx = new Transaction();
-
-	// Margin manager contract calls
-	traderClient.client.deepbook.marginManager.deposit('MARGIN_MANAGER_1', 'DBUSDC', 10000)(tx);
-	traderClient.client.deepbook.marginManager.borrowBase('MARGIN_MANAGER_1', 'SUI_DBUSDC', 100)(tx);
-
-	// Place leveraged orders
-	traderClient.client.deepbook.poolProxy.placeLimitOrder({
-		poolKey: 'SUI_DBUSDC',
-		marginManagerKey: 'MARGIN_MANAGER_1',
-		clientOrderId: '12345',
-		price: 2.5,
-		quantity: 100,
-		isBid: true,
-		payWithDeep: true,
-	})(tx);
-
-	// Margin pool operations
-	const supplierCap = tx.add(traderClient.client.deepbook.marginPool.mintSupplierCap());
-	traderClient.client.deepbook.marginPool.supplyToMarginPool('DBUSDC', supplierCap, 5000)(tx);
-
-	let res = await traderClient.signAndExecute(tx);
-
-	console.dir(res, { depth: null });
-})();
-```
+<ImportContent
+	source="packages/deepbook-v3/examples/marginManagerStates.ts"
+	mode="code"
+	org="MystenLabs"
+	repo="ts-sdks"
+/>
 
 ## Margin manager referral functions
 
 The SDK provides functions for managing referrals with margin managers. Referrals are pool-specific and must first be minted using the core DeepBook SDK before they can be associated with a margin manager.
 
-```tsx
-// Set a referral for a margin manager (pool-specific)
-// The referral must be a DeepBookPoolReferral minted for the pool the margin manager is associated with
-traderClient.client.deepbook.marginManager.setMarginManagerReferral(
-	'MARGIN_MANAGER_1',
-	referralId,
-)(tx);
-
-// Unset the referral for a margin manager for a specific pool
-traderClient.client.deepbook.marginManager.unsetMarginManagerReferral(
-	'MARGIN_MANAGER_1',
-	'SUI_DBUSDC',
-)(tx);
-```
+The [margin manager example](#deepbookclient) shows these calls in context; `setMarginManagerReferral` and `unsetMarginManagerReferral` live on `client.deepbook.marginManager`.
 
 :::info
 

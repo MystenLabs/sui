@@ -33,7 +33,7 @@ export async function safeCollateralAmount(
 	want: number,
 	reserve = 0,
 ): Promise<number> {
-	const b = await client.core.getBalance({ owner, coinType });
+	const b = await client.getBalance({ owner, coinType });
 	const have = Number(b?.balance?.balance ?? '0') / 10 ** decimals;
 	return Math.max(0, Math.min(want, have - reserve));
 }
