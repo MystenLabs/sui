@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use nonempty::NonEmpty;
-use shared_crypto::intent::Intent;
+use shared_crypto::intent::{Intent, IntentMessage};
+use sui_types_verified::signature_verification::{SigVerifyError, SignatureVerifiable};
 
 use crate::base_types::SuiAddress;
 use crate::committee::EpochId;
 use crate::digests::ZKLoginInputsDigest;
-use crate::error::{SuiErrorKind, SuiResult};
-use crate::signature::VerifyParams;
-use crate::transaction::{SenderSignedData, TransactionDataAPI};
+use crate::error::{SuiError, SuiErrorKind, SuiResult};
+use crate::signature::{GenericSignature, VerifyParams};
+use crate::transaction::{SenderSignedData, TransactionData, TransactionDataAPI};
 use lru::LruCache;
 use parking_lot::RwLock;
 use prometheus::IntCounter;
@@ -124,9 +125,77 @@ impl<D: Hash + Eq + Copy> VerifiedDigestCache<D, ()> {
     }
 }
 
-/// Does crypto validation for a transaction which may be user-provided, or may be from a checkpoint.
-/// Returns the signature index (into `tx_signatures`) used to verify each required signer,
-/// in the same order as `required_signers`.
+/// A `GenericSignature` bundled with the context needed to verify it.
+///
+/// This wrapper implements `SignatureVerifiable<SuiAddress>` so that the
+/// generic verified function has no dependency on `sui-types` concrete types.
+pub struct VerifiableSig<'a> {
+    sig: &'a GenericSignature,
+    intent_message: &'a IntentMessage<TransactionData>,
+    verify_params: &'a VerifyParams,
+    zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
+}
+
+impl<'a> SignatureVerifiable<SuiAddress> for VerifiableSig<'a> {
+    fn try_derive_addresses(&self) -> Result<Vec<SuiAddress>, SigVerifyError> {
+        let mut addrs = Vec::new();
+        // A zklogin signature with legacy-address support yields two addresses.
+        if self.verify_params.verify_legacy_zklogin_address {
+            if let GenericSignature::ZkLoginAuthenticator(z) = self.sig {
+                addrs.push(
+                    SuiAddress::try_from_padded(&z.inputs)
+                        .map_err(|_| SigVerifyError::AddressDerivationFailed)?,
+                );
+            }
+        }
+        let canonical =
+            SuiAddress::try_from(self.sig).map_err(|_| SigVerifyError::AddressDerivationFailed)?;
+        addrs.push(canonical);
+        Ok(addrs)
+    }
+
+    fn verify_for_address(&self, addr: &SuiAddress, epoch: u64) -> Result<(), SigVerifyError> {
+        self.sig
+            .verify_authenticator(
+                self.intent_message,
+                *addr,
+                epoch,
+                self.verify_params,
+                self.zklogin_inputs_cache.clone(),
+            )
+            .map_err(|_| SigVerifyError::CryptoVerificationFailed)
+    }
+}
+
+fn sig_verify_err_to_sui(e: SigVerifyError) -> SuiError {
+    match e {
+        SigVerifyError::SignerCountMismatch { actual, expected } => {
+            SuiErrorKind::SignerSignatureNumberMismatch { actual, expected }.into()
+        }
+        SigVerifyError::AddressDerivationFailed => SuiErrorKind::InvalidSignature {
+            error: "address derivation failed".to_owned(),
+        }
+        .into(),
+        SigVerifyError::SignerAbsent => SuiErrorKind::SignerSignatureAbsent {
+            expected: String::new(),
+            actual: vec![],
+        }
+        .into(),
+        SigVerifyError::CryptoVerificationFailed => SuiErrorKind::InvalidSignature {
+            error: "cryptographic verification failed".to_owned(),
+        }
+        .into(),
+    }
+}
+
+/// Crypto validation for a sender-signed transaction.
+///
+/// Returns the signature index (into `tx_signatures`) used to verify each
+/// required signer, in the same order as `required_signers`.
+///
+/// Handles intent checking and the system-transaction bypass, then delegates
+/// user-transaction verification to the Verus-verified
+/// [`sui_types_verified::signature_verification::verify_signatures`].
 pub fn verify_sender_signed_data_message_signatures(
     txn: &SenderSignedData,
     current_epoch: EpochId,
@@ -135,65 +204,42 @@ pub fn verify_sender_signed_data_message_signatures(
     aliased_addresses: Vec<(SuiAddress, NonEmpty<SuiAddress>)>,
 ) -> SuiResult<Vec<u8>> {
     let intent_message = txn.intent_message();
-    assert_eq!(intent_message.intent, Intent::sui_transaction());
 
-    // 1. One signature per signer is required.
-    let required_signers = txn.intent_message().value.required_signers();
-    fp_ensure!(
-        txn.inner().tx_signatures.len() == required_signers.len(),
-        SuiErrorKind::SignerSignatureNumberMismatch {
-            actual: txn.inner().tx_signatures.len(),
-            expected: required_signers.len()
+    // Intent check: must be a Sui transaction.
+    if intent_message.intent != Intent::sui_transaction() {
+        return Err(SuiErrorKind::InvalidSignature {
+            error: "wrong intent".to_owned(),
         }
-        .into()
+        .into());
+    }
+
+    let required_signers = sui_types_verified::signature_verification::build_required_signers(
+        &intent_message.value.required_signers(),
+        &aliased_addresses,
     );
 
-    // 2. System transactions do not require valid signatures. User-submitted transactions are
-    // verified not to be system transactions before this point.
+    // System transactions are unconditionally valid; return sequential indices.
     if intent_message.value.is_system_tx() {
-        // System tx are defined to use all of the dummy signatures provided.
         return Ok((0..required_signers.len() as u8).collect());
     }
 
-    // 3. Each signer must provide a signature from one of the set of allowed aliases.
-    // Use index mapping to track which signature index satisfies each required signer.
-    let sig_mapping = txn.get_signer_sig_mapping(verify_params.verify_legacy_zklogin_address)?;
-
-    let mut signer_to_sig_index = Vec::with_capacity(required_signers.len());
-    for signer in required_signers.iter() {
-        let alias_set = aliased_addresses
-            .iter()
-            .find(|(addr, _)| *addr == *signer)
-            .map(|(_, aliases)| aliases.clone())
-            .unwrap_or(NonEmpty::new(*signer));
-
-        // Find the signature that matches any alias for this signer.
-        let Some(sig_index) = alias_set
-            .iter()
-            .find_map(|alias| sig_mapping.get(alias).map(|(idx, _)| *idx))
-        else {
-            return Err(SuiErrorKind::SignerSignatureAbsent {
-                expected: alias_set
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>()
-                    .join(" or "),
-                actual: sig_mapping.keys().map(|s| s.to_string()).collect(),
-            }
-            .into());
-        };
-        signer_to_sig_index.push(sig_index);
-    }
-
-    // 4. Every signature must be valid.
-    for (signer, (_, signature)) in sig_mapping {
-        signature.verify_authenticator(
+    // Importing SenderSignedData into sui-types-verified would be prohibitively
+    // difficult, so we pull out the sigs here.
+    let verifiable_sigs: Vec<VerifiableSig<'_>> = txn
+        .tx_signatures()
+        .iter()
+        .map(|sig| VerifiableSig {
+            sig,
             intent_message,
-            signer,
-            current_epoch,
             verify_params,
-            zklogin_inputs_cache.clone(),
-        )?;
-    }
-    Ok(signer_to_sig_index)
+            zklogin_inputs_cache: zklogin_inputs_cache.clone(),
+        })
+        .collect();
+
+    sui_types_verified::signature_verification::verify_signatures(
+        &verifiable_sigs,
+        &required_signers,
+        current_epoch,
+    )
+    .map_err(sig_verify_err_to_sui)
 }
