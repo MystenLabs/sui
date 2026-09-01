@@ -1,6 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Submits transactions to consensus and tracks each submission until its
+//! positions reach a terminal status or it is observed processed via another path.
+//!
+//! See `consensus_submission_pipeline.md` (same directory) for the end-to-end
+//! submission dataflow and behaviors; keep it in sync with behavior changes here.
+
 use std::net::IpAddr;
 use std::ops::Deref;
 use std::sync::Arc;
