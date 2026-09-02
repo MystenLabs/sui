@@ -43,12 +43,10 @@
 //! original index, and why settlement transactions - which materialize long after
 //! their waiters enqueue - are admitted unconditionally rather than indexed late.
 
-use std::{
-    collections::BTreeSet,
-    sync::{Arc, Mutex},
-};
+use std::{collections::BTreeSet, sync::Arc};
 
-use mysten_common::assert_sometimes;
+use mysten_common::{assert_reachable, assert_sometimes};
+use parking_lot::Mutex;
 use sui_types::base_types::SequenceNumber;
 use tokio::sync::Notify;
 
@@ -123,10 +121,10 @@ impl CausalAdmission {
     /// The check, assignment and watermark bump are atomic, serializing version
     /// admission across the consensus and checkpoint paths.
     pub fn admit_enqueue(&self, version: Option<SequenceNumber>, count: usize) -> Option<u64> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock();
         if let Some(version) = version {
             if inner.enqueue_watermark.is_some_and(|w| version <= w) {
-                assert_sometimes!(true, "rejected duplicate enqueue of a version group");
+                assert_reachable!("rejected duplicate enqueue of a version group");
                 return None;
             }
             inner.enqueue_watermark = Some(version);
@@ -146,7 +144,7 @@ impl CausalAdmission {
     /// matter how many admitted transactions are parked. In-flight is thereby bounded
     /// at concurrency_limit + 1.
     pub fn try_admit(self: &Arc<Self>, index: u64) -> Option<InFlightSlot> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock();
         debug_assert!(index > inner.watermark, "admitting an already-done index");
         let is_next = if inner.in_flight < self.concurrency_limit {
             false
@@ -161,6 +159,7 @@ impl CausalAdmission {
         Some(InFlightSlot {
             admission: self.clone(),
             is_next,
+            done_on_drop: None,
         })
     }
 
@@ -173,7 +172,13 @@ impl CausalAdmission {
     /// Marks `index` done - its transaction finished executing, or was dropped as no
     /// longer needed. Called exactly once per index.
     pub fn mark_done(&self, index: u64) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock();
+        Self::mark_done_locked(&mut inner, index);
+        drop(inner);
+        self.notify.notify_one();
+    }
+
+    fn mark_done_locked(inner: &mut AdmissionInner, index: u64) {
         if index == inner.watermark + 1 {
             inner.watermark = index;
             loop {
@@ -187,13 +192,11 @@ impl CausalAdmission {
             debug_assert!(index > inner.watermark, "index done twice");
             inner.done_above.insert(index);
         }
-        drop(inner);
-        self.notify.notify_one();
     }
 
     #[cfg(test)]
     pub fn watermark_for_testing(&self) -> u64 {
-        self.inner.lock().unwrap().watermark
+        self.inner.lock().watermark
     }
 }
 
@@ -202,14 +205,26 @@ impl CausalAdmission {
 pub struct InFlightSlot {
     admission: Arc<CausalAdmission>,
     is_next: bool,
+    done_on_drop: Option<u64>,
+}
+
+impl InFlightSlot {
+    /// Releases the slot and, when `done` names an index, retires it - one lock and
+    /// one driver wakeup for the common completion path instead of two.
+    pub fn complete(mut self, done: Option<u64>) {
+        self.done_on_drop = done;
+    }
 }
 
 impl Drop for InFlightSlot {
     fn drop(&mut self) {
-        let mut inner = self.admission.inner.lock().unwrap();
+        let mut inner = self.admission.inner.lock();
         inner.in_flight -= 1;
         if self.is_next {
             inner.next_admitted = false;
+        }
+        if let Some(index) = self.done_on_drop {
+            CausalAdmission::mark_done_locked(&mut inner, index);
         }
         drop(inner);
         self.admission.notify.notify_one();
