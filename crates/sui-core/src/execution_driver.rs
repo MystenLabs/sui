@@ -49,6 +49,12 @@
 //! C+1 transaction may again be admitted over the limit, while the capacity branch
 //! stays closed until in-flight drops below K.
 //!
+//! Settlement transactions carry no index and are admitted unconditionally: they can
+//! never block (they are constructed from their batch's already-available effects),
+//! and running them immediately is what unblocks transactions waiting on the
+//! accumulator versions they write. Any transaction admitted unconditionally must be
+//! unable to block - that is what keeps unconditional admission safe.
+//!
 //! ## Why this cannot deadlock
 //!
 //! The transaction with index C+1 can always run to completion: everything below it is
@@ -99,28 +105,26 @@ mod execution_driver_tests;
 const QUEUEING_DELAY_SAMPLING_RATIO: f64 = 0.05;
 
 /// Heap entry ordering pending transactions by causal index (min-heap via `Reverse`).
+/// Index-less transactions (settlements, admitted unconditionally) sort first.
 struct QueuedCertificate {
-    index: u64,
+    index: Option<u64>,
     cert: PendingCertificate,
 }
 
 impl QueuedCertificate {
     fn new(cert: PendingCertificate) -> Self {
-        let index = cert
-            .execution_env
-            .causal_index
-            .expect("causal index is assigned at enqueue");
+        let index = cert.execution_env.causal_index;
         Self { index, cert }
     }
 
-    fn index(&self) -> u64 {
+    fn index(&self) -> Option<u64> {
         self.index
     }
 
     /// Retires the causal index of a transaction the driver drops without executing.
     fn retire(self, causal_admission: &CausalAdmission) {
-        if self.cert.execution_env.retires_causal_index {
-            causal_admission.mark_done(self.index);
+        if let Some(index) = self.index {
+            causal_admission.mark_done(index);
         }
     }
 }
@@ -228,8 +232,16 @@ pub async fn execution_process(
                 continue;
             }
 
-            let Some(slot) = causal_admission.try_admit(head_index) else {
-                break;
+            let slot = match head_index {
+                // Settlement transactions are admitted unconditionally: they never
+                // block (they are built from their batch's already-available effects),
+                // and running them is what unblocks transactions waiting on the
+                // accumulator versions they write.
+                None => None,
+                Some(index) => match causal_admission.try_admit(index) {
+                    Some(slot) => Some(slot),
+                    None => break,
+                },
             };
 
             let pending_cert = waiting.pop().unwrap().0.cert;
@@ -263,7 +275,6 @@ pub async fn execution_process(
             // so re-enter the span inside the blocking closure to keep execution logs attributed.
             let blocking_span = execution_span.clone();
             let causal_admission = causal_admission.clone();
-            let retires_causal_index = execution_env.retires_causal_index;
             spawn_monitored_task!(async move {
                 let _scope = monitored_scope("ExecutionDriver::task");
                 // Released when this task completes (including the early return below),
@@ -275,8 +286,8 @@ pub async fn execution_process(
                 // for in-flight execution to finish. Skip if the epoch has already ended.
                 let Some(_alive_guard) = epoch_store.enter_alive_epoch().await else {
                     info!("Epoch ended before execution could start; transaction will be retried in the next epoch");
-                    if retires_causal_index {
-                        causal_admission.mark_done(head_index);
+                    if let Some(index) = head_index {
+                        causal_admission.mark_done(index);
                     }
                     return;
                 };
@@ -289,8 +300,8 @@ pub async fn execution_process(
                     // Every outcome except RetryLater retires the transaction's causal
                     // index (a retried transaction is re-submitted under its original
                     // index; an EpochEnded one is re-enqueued next epoch with a fresh
-                    // one). Settlement-batch members retire only through the barrier.
-                    let mut retire = retires_causal_index;
+                    // one).
+                    let mut retire = head_index;
                     match authority.try_execute_immediately(
                         &certificate,
                         execution_env,
@@ -312,15 +323,15 @@ pub async fn execution_process(
                             // Transaction will be retried later and auto-rescheduled under
                             // its original causal index (carried in the retry's env clone),
                             // so the index stays live.
-                            retire = false;
+                            retire = None;
                             authority
                                 .metrics
                                 .execution_driver_paused_transactions
                                 .inc();
                         }
                     }
-                    if retire {
-                        causal_admission.mark_done(head_index);
+                    if let Some(index) = retire {
+                        causal_admission.mark_done(index);
                     }
                 })
                 .await

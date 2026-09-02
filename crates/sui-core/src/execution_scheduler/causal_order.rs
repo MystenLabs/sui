@@ -12,15 +12,15 @@
 //! deadlock-free (see the design comment in `execution_driver.rs`).
 //!
 //! Index lifecycle. Indices are assigned at enqueue time via [`CausalAdmission::admit_enqueue`]
-//! (or [`CausalAdmission::assign`] for internal units) and travel as plain data in the
-//! unit's `ExecutionEnv`. Every assigned index is *retired* (marked done) by the
-//! execution driver - the sole execution and retirement point - when its transaction
-//! finishes executing or is dropped as no longer needed. This relies on every indexed
-//! unit reaching the driver: enqueued transactions are deduplicated (below), and every
-//! transaction committed in an epoch executes before the epoch closes, so no indexed
-//! unit is ever abandoned upstream. The one exception is a settlement batch, whose
-//! transactions share the batch's index: only the final transaction of the batch (the
-//! barrier) retires it, marked by `ExecutionEnv::retires_causal_index`.
+//! and travel as plain data in the unit's `ExecutionEnv`. Every assigned index is
+//! *retired* (marked done) by the execution driver - the sole execution and retirement
+//! point - when its transaction finishes executing or is dropped as no longer needed.
+//! This relies on every indexed unit reaching the driver: enqueued transactions are
+//! deduplicated (below), and every transaction committed in an epoch executes before
+//! the epoch closes, so no indexed unit is ever abandoned upstream. Settlement
+//! transactions carry no index at all: the driver admits them unconditionally (they
+//! can never block, and running them is what unblocks transactions waiting on the
+//! accumulator versions they write), so there is nothing to admit against or retire.
 //!
 //! Deduplication. `admit_enqueue` admits or rejects an entire version group
 //! atomically, keyed on the group's assigned accumulator root version: all
@@ -39,9 +39,9 @@
 //! One rule must hold for assignment: a unit that other, already-indexed units may
 //! wait on must never be re-assigned a *new, higher* index (transactions blocked
 //! waiting on it would pin the concurrency limit while the causal-next lane can never
-//! reach it). This is why a settlement batch takes its index when the batch is
-//! enqueued, not when its transactions materialize, and why the funds-withdraw retry
-//! re-submits with the transaction's original index.
+//! reach it). This is why the funds-withdraw retry re-submits with the transaction's
+//! original index, and why settlement transactions - which materialize long after
+//! their waiters enqueue - are admitted unconditionally rather than indexed late.
 
 use std::{
     collections::BTreeSet,
@@ -136,16 +136,6 @@ impl CausalAdmission {
         Some(first)
     }
 
-    /// Assigns one causal index without deduplication, for internally-scheduled units
-    /// (settlement batches). Callers must call this in causal order relative to
-    /// `admit_enqueue`.
-    pub fn assign(&self) -> u64 {
-        let mut inner = self.inner.lock().unwrap();
-        let index = inner.next_index;
-        inner.next_index += 1;
-        index
-    }
-
     /// Attempts to admit the transaction with `index` for execution. On success,
     /// returns a slot that must be held for the duration of execution; dropping it
     /// releases the concurrency slot.
@@ -180,9 +170,8 @@ impl CausalAdmission {
         self.notify.notified().await;
     }
 
-    /// Marks `index` done - its unit finished executing, or was dropped as no longer
-    /// needed. Called by the execution driver, exactly once per index (for settlement
-    /// batches, for the barrier only).
+    /// Marks `index` done - its transaction finished executing, or was dropped as no
+    /// longer needed. Called exactly once per index.
     pub fn mark_done(&self, index: u64) {
         let mut inner = self.inner.lock().unwrap();
         if index == inner.watermark + 1 {
@@ -272,10 +261,10 @@ mod tests {
         let _slot2 = admission.try_admit(2).unwrap();
         // The capacity branch is closed, but index 1 == watermark+1 is still admitted.
         let slot1 = admission.try_admit(1).unwrap();
-        // Only one causal-next admission may be outstanding, so another transaction
-        // with the same index (a settlement-batch member) must wait for it.
+        // Only one causal-next admission may be outstanding at a time.
         assert!(admission.try_admit(1).is_none());
         drop(slot1);
+        // An unretired index (a RetryLater re-submission) can be admitted again.
         let slot1b = admission.try_admit(1).unwrap();
 
         drop(slot1b);
