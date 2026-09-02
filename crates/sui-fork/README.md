@@ -182,3 +182,18 @@ builds it from the manifest by fetching the exact seeded object versions.
 - Objects deleted or wrapped after the fork point are no longer available through direct current-ID lookup, but exact historical versions remain readable when available.
 - If it forks at checkpoint X, you cannot depend on objects created after checkpoint X from the actual real network. You'll need to restart the network at that checkpoint or a later one.
 - Not recommended for parallel test execution since all transactions are executed sequentially on a single validator.
+
+## Testing
+
+End-to-end shell tests live in `crates/sui-fork-e2e-tests/tests/shell_tests`. Each `.sh` script
+forks a localnet through the `sui-fork` binary, drives the fork with `sui client`, and has its
+combined output snapshotted next to it, so the scripts double as worked examples of the CLI flow.
+The harness starts the localnet with an indexer, a consistent store, and GraphQL, which needs the
+PostgreSQL binaries (`initdb`, `postgres`, `pg_ctl`) on `PATH`, and it builds `sui` and `sui-fork`
+itself.
+
+```bash
+cargo nextest run -p sui-fork-e2e-tests --test shell_tests
+cargo nextest run -p sui-fork-e2e-tests --test shell_tests -E 'test(/seeding/)'
+cargo insta test -p sui-fork-e2e-tests --test shell_tests --review   # after changing a script
+```
