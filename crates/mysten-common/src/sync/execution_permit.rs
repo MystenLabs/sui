@@ -3,17 +3,23 @@
 
 //! Per-thread execution permit, released when the thread blocks.
 //!
-//! Sui runs transaction execution on a pool of blocking threads whose concurrency is
-//! capped by a semaphore permit. Execution may need to block waiting for a value that
-//! another execution must produce (e.g. an object version). If a blocked thread keeps
-//! holding its permit, and enough threads block this way, no permit is left for the
-//! execution that would unblock them - a deadlock.
+//! NOTE: currently dormant. Sui's execution driver schedules by causal order (see
+//! `sui-core::execution_driver`) and no longer installs a permit, so the
+//! [`release_execution_permit`] hooks in this crate's blocking primitives fire against
+//! an empty slot in production. The mechanism is kept as the escalation path for
+//! releasing a concurrency slot when execution parks, should parked-transaction slot
+//! occupancy ever become a throughput problem.
 //!
-//! To avoid this, the permit is installed on the thread with [`set_execution_permit`],
-//! and the blocking sync primitives in this crate call [`release_execution_permit`] the
-//! first time they must actually block (after a non-blocking `try_` check fails). The
-//! permit is intentionally *not* re-acquired afterwards: this may briefly exceed the
-//! configured concurrency, but the excess resolves itself as tasks complete.
+//! The design it supports: execution concurrency is capped by a permit held per
+//! executing thread. Execution may need to block waiting for a value that another
+//! execution must produce (e.g. an object version). If a blocked thread keeps holding
+//! its permit, and enough threads block this way, no permit is left for the execution
+//! that would unblock them - a deadlock. To avoid this, the permit is installed on the
+//! thread with [`set_execution_permit`], and the blocking sync primitives in this
+//! crate call [`release_execution_permit`] the first time they must actually block
+//! (after a non-blocking `try_` check fails). The permit is intentionally *not*
+//! re-acquired afterwards: this may briefly exceed the configured concurrency, but the
+//! excess resolves itself as tasks complete.
 //!
 //! The permit is stored type-erased (`Box<dyn Send>`) so this crate need not depend on
 //! the specific semaphore; releasing it simply drops the box.

@@ -8,7 +8,7 @@ use prometheus::IntGauge;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use tokio::time::Instant;
 
-pub mod causal_order;
+pub(crate) mod causal_order;
 pub(crate) mod execution_scheduler_impl;
 pub(crate) mod funds_withdraw_scheduler;
 mod overload_tracker;

@@ -909,7 +909,7 @@ pub struct ExecutionEnv {
     /// longer needed. None at the driver means the transaction is admitted
     /// unconditionally (settlement transactions - see
     /// `execution_scheduler::causal_order`).
-    pub causal_index: Option<u64>,
+    pub(crate) causal_index: Option<u64>,
 }
 
 impl Default for ExecutionEnv {
@@ -949,11 +949,6 @@ impl ExecutionEnv {
         barrier_dependencies: BTreeSet<TransactionDigest>,
     ) -> Self {
         self.barrier_dependencies = barrier_dependencies.into_iter().collect();
-        self
-    }
-
-    pub fn with_causal_index(mut self, causal_index: u64) -> Self {
-        self.causal_index = Some(causal_index);
         self
     }
 }

@@ -26,8 +26,8 @@
 //! `execution_scheduler::causal_order`). Both sources enqueue in causal order, so
 //! anything a transaction can wait for - declared or undeclared - is produced by a unit
 //! with a *lower* index. Keys that materialize into transactions later (randomness
-//! updates, settlement batches) take their index at key-enqueue time, so this stays
-//! true for them as well.
+//! updates) take their index at key-enqueue time, so this stays true for them as well;
+//! settlement transactions are the exception and carry no index at all (below).
 //!
 //! Let C be the watermark: the highest index such that every index at or below it is
 //! *done* (finished executing, or dropped here as no longer needed). The driver is the
@@ -85,12 +85,14 @@
 
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
+use std::collections::binary_heap::PeekMut;
 use std::sync::{Arc, Weak};
 
 use mysten_common::{fatal, random::get_rng};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::Rng;
 use sui_types::execution::ExecutionOutput;
+use sui_types::transaction::TransactionDataAPI;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
 use tracing::{Instrument, error_span, info, trace, warn};
 
@@ -104,26 +106,34 @@ mod execution_driver_tests;
 
 const QUEUEING_DELAY_SAMPLING_RATIO: f64 = 0.05;
 
+/// Max certificates pulled from the ready channel per loop pass; a longer backlog is
+/// picked up by the immediately-ready next pass.
+const RECV_BATCH_SIZE: usize = 1024;
+
 /// Heap entry ordering pending transactions by causal index (min-heap via `Reverse`).
 /// Index-less transactions (settlements, admitted unconditionally) sort first.
 struct QueuedCertificate {
-    index: Option<u64>,
     cert: PendingCertificate,
+    /// Whether the driver has already checked this transaction for prior execution,
+    /// so a head stuck behind a closed admission gate is not re-checked every wakeup.
+    executed_checked: bool,
 }
 
 impl QueuedCertificate {
     fn new(cert: PendingCertificate) -> Self {
-        let index = cert.execution_env.causal_index;
-        Self { index, cert }
+        Self {
+            cert,
+            executed_checked: false,
+        }
     }
 
     fn index(&self) -> Option<u64> {
-        self.index
+        self.cert.execution_env.causal_index
     }
 
     /// Retires the causal index of a transaction the driver drops without executing.
     fn retire(self, causal_admission: &CausalAdmission) {
-        if let Some(index) = self.index {
+        if let Some(index) = self.index() {
             causal_admission.mark_done(index);
         }
     }
@@ -158,23 +168,19 @@ pub async fn execution_process(
 
     // Transactions that have arrived but are not yet admitted, ordered by causal index.
     let mut waiting: BinaryHeap<Reverse<QueuedCertificate>> = BinaryHeap::new();
+    let mut arrivals: Vec<PendingCertificate> = Vec::new();
 
     loop {
         let _scope = monitored_scope("ExecutionDriver::loop");
 
         tokio::select! {
-            result = rx_ready_certificates.recv() => {
-                if let Some(pending_cert) = result {
-                    if let Some(authority) = authority_state.upgrade() {
-                        authority.metrics.execution_driver_dispatch_queue.dec();
-                    }
-                    waiting.push(Reverse(QueuedCertificate::new(pending_cert)));
-                } else {
+            received = rx_ready_certificates.recv_many(&mut arrivals, RECV_BATCH_SIZE) => {
+                if received == 0 {
                     // Should only happen after the AuthorityState has shut down and tx_ready_certificate
                     // has been dropped by ExecutionScheduler.
                     info!("No more certificate will be received. Exiting executor ...");
                     return;
-                };
+                }
             }
             // The watermark advanced or a concurrency slot freed; re-check admission.
             _ = causal_admission.changed() => {}
@@ -184,13 +190,27 @@ pub async fn execution_process(
             }
         };
 
-        // Drain any further arrivals so admission sees the full picture.
-        while let Ok(pending_cert) = rx_ready_certificates.try_recv() {
-            if let Some(authority) = authority_state.upgrade() {
-                authority.metrics.execution_driver_dispatch_queue.dec();
-            }
-            waiting.push(Reverse(QueuedCertificate::new(pending_cert)));
+        let Some(authority) = authority_state.upgrade() else {
+            // Terminate the execution if authority has already shutdown, even if there can be more
+            // items in rx_ready_certificates.
+            info!("Authority state has shutdown. Exiting ...");
+            return;
+        };
+        if !arrivals.is_empty() {
+            authority
+                .metrics
+                .execution_driver_dispatch_queue
+                .sub(arrivals.len() as i64);
+            waiting.extend(
+                arrivals
+                    .drain(..)
+                    .map(|c| Reverse(QueuedCertificate::new(c))),
+            );
         }
+
+        // TODO: Ideally execution_driver should own a copy of epoch store and recreate each epoch.
+        // Loading it once per pass is sound: the admission loop below never awaits.
+        let epoch_store = authority.load_epoch_store_one_call_per_task();
 
         // Admit in causal-index order for as long as the admission rule allows.
         while !waiting.is_empty() {
@@ -202,18 +222,6 @@ pub async fn execution_process(
                     *head.cert.certificate.digest(),
                 )
             };
-
-            let authority = if let Some(authority) = authority_state.upgrade() {
-                authority
-            } else {
-                // Terminate the execution if authority has already shutdown, even if there can be more
-                // items in rx_ready_certificates.
-                info!("Authority state has shutdown. Exiting ...");
-                return;
-            };
-
-            // TODO: Ideally execution_driver should own a copy of epoch store and recreate each epoch.
-            let epoch_store = authority.load_epoch_store_one_call_per_task();
 
             // Drop and retire transactions that no longer need to run, without
             // consuming an execution slot.
@@ -227,9 +235,15 @@ pub async fn execution_process(
                 waiting.pop().unwrap().0.retire(&causal_admission);
                 continue;
             }
-            if authority.is_tx_already_executed(&digest) {
-                waiting.pop().unwrap().0.retire(&causal_admission);
-                continue;
+            {
+                let mut head = waiting.peek_mut().unwrap();
+                if !head.0.executed_checked {
+                    head.0.executed_checked = true;
+                    if authority.is_tx_already_executed(&digest) {
+                        PeekMut::pop(head).0.retire(&causal_admission);
+                        continue;
+                    }
+                }
             }
 
             let slot = match head_index {
@@ -237,7 +251,21 @@ pub async fn execution_process(
                 // block (they are built from their batch's already-available effects),
                 // and running them is what unblocks transactions waiting on the
                 // accumulator versions they write.
-                None => None,
+                None => {
+                    debug_assert!(
+                        waiting
+                            .peek()
+                            .unwrap()
+                            .0
+                            .cert
+                            .certificate
+                            .transaction_data()
+                            .kind()
+                            .is_system_tx(),
+                        "only settlement transactions may bypass causal admission"
+                    );
+                    None
+                }
                 Some(index) => match causal_admission.try_admit(index) {
                     Some(slot) => Some(slot),
                     None => break,
@@ -269,25 +297,25 @@ pub async fn execution_process(
 
             // Certificate execution is CPU-bound and can take significant time, so run it on a
             // blocking thread to avoid stalling the async runtime's worker threads.
+            let authority = authority.clone();
+            let task_epoch_store = epoch_store.clone();
             let epoch_store_clone = epoch_store.clone();
             let execution_span = error_span!("execution_driver", tx_digest = ?digest);
             // spawn_blocking runs on a thread that does not inherit the current tracing span,
             // so re-enter the span inside the blocking closure to keep execution logs attributed.
             let blocking_span = execution_span.clone();
-            let causal_admission = causal_admission.clone();
             spawn_monitored_task!(async move {
                 let _scope = monitored_scope("ExecutionDriver::task");
-                // Released when this task completes (including the early return below),
-                // freeing the concurrency slot and waking the driver loop.
-                let _slot = slot;
                 let _executing_guard = _executing_guard;
 
                 // Hold the epoch-alive guard across execution so that `epoch_terminated()` waits
                 // for in-flight execution to finish. Skip if the epoch has already ended.
-                let Some(_alive_guard) = epoch_store.enter_alive_epoch().await else {
+                let Some(_alive_guard) = task_epoch_store.enter_alive_epoch().await else {
                     info!("Epoch ended before execution could start; transaction will be retried in the next epoch");
-                    if let Some(index) = head_index {
-                        causal_admission.mark_done(index);
+                    // Releases the slot and retires the index; the transaction is
+                    // re-enqueued (and re-indexed) in the next epoch.
+                    if let Some(slot) = slot {
+                        slot.complete(head_index);
                     }
                     return;
                 };
@@ -330,8 +358,10 @@ pub async fn execution_process(
                                 .inc();
                         }
                     }
-                    if let Some(index) = retire {
-                        causal_admission.mark_done(index);
+                    // Releases the slot and retires the index in one step, waking the
+                    // driver once.
+                    if let Some(slot) = slot {
+                        slot.complete(retire);
                     }
                 })
                 .await
