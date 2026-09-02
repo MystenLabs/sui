@@ -11,11 +11,15 @@ processed 17 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 11-53:
+task 1, lines 11-49:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 7562000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+//
+// Test remove
+//
 
 task 2, line 55:
 //# run test::m::mint --sender A

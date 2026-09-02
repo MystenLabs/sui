@@ -5,11 +5,13 @@ processed 2 tasks
 
 // invalid as NoStore doesn't have store, so Obj doesn't have key
 
-task 0, lines 6-21:
+task 0, lines 6-19:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5046400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+// invalid, T doesn't have store so Obj is not an object
 
 task 1, lines 23-35:
 //# publish

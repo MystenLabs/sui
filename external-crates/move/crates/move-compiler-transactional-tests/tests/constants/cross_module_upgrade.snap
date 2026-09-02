@@ -5,4 +5,6 @@ processed 6 tasks
 
 // upgrade the package, changing the constant's value
 
+// running against the upgraded version sees the new value
+
 // the original version is untouched: it still returns the values it was compiled with
