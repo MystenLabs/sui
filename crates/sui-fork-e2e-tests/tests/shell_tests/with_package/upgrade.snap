@@ -1,0 +1,76 @@
+---
+source: crates/sui-fork-e2e-tests/tests/shell_tests.rs
+---
+----- script -----
+#!/usr/bin/env bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Publish a package on a fork, upgrade it with a compatible change, and check that an
+# incompatible change is rejected.
+set -euo pipefail
+source ./lib.sh
+
+sender=$(on_localnet active-address)
+fork_start --address "$sender"
+fork_env
+add_env_to_toml counter fork on_fork
+gas=$(gas_coin on_fork)
+
+run_json publish.json on_fork publish counter --gas "$gas" --gas-budget 100000000
+assert_eq "$(tx_status_of publish.json)" success "publish executed on the fork"
+package_v1=$(published_package_id publish.json)
+cap=$(created_object_id publish.json "::package::UpgradeCap")
+echo "=== counter/Published.toml after publish ==="
+extract_published counter/Published.toml
+
+echo 'module counter::v2; public fun two(): u64 { 2 }' > counter/sources/v2.move
+tip_before=$(fork_status_field checkpoint_sequence_number)
+run_json upgrade.json on_fork upgrade counter --gas "$gas" --gas-budget 100000000
+assert_eq "$(tx_status_of upgrade.json)" success "upgrade executed on the fork"
+package_v2=$(published_package_id upgrade.json)
+assert_ne "$package_v2" "$package_v1" "the upgrade produced a new package id"
+assert_eq "$(mutated_object_id upgrade.json "::package::UpgradeCap")" "$cap" \
+  "the upgrade updated the UpgradeCap from the publish"
+tip_after=$(fork_status_field checkpoint_sequence_number)
+assert_eq "$((tip_after - tip_before))" 1 "the upgrade sealed exactly one checkpoint"
+assert_eq "$(object_field on_fork "$package_v1" .objType)" package \
+  "the original package is still readable"
+assert_eq "$(object_field on_fork "$package_v2" '.version | tostring')" 2 \
+  "the upgraded package is at version 2"
+echo "=== counter/Published.toml after upgrade ==="
+extract_published counter/Published.toml
+
+echo "=== an incompatible upgrade is rejected ==="
+echo 'module counter::v2; public fun two(): bool { true }' > counter/sources/v2.move
+if on_fork upgrade counter --gas "$gas" --gas-budget 100000000 > incompatible.log 2>&1; then
+  fail "an incompatible upgrade must fail"
+  cat incompatible.log
+else
+  assert_grep "Upgrade failed" incompatible.log \
+    "the compatibility check rejects the changed signature"
+fi
+
+exit "$FAILED"
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+ok: publish executed on the fork
+=== counter/Published.toml after publish ===
+[published.fork]
+version = 1
+ok: upgrade executed on the fork
+ok: the upgrade produced a new package id
+ok: the upgrade updated the UpgradeCap from the publish
+ok: the upgrade sealed exactly one checkpoint
+ok: the original package is still readable
+ok: the upgraded package is at version 2
+=== counter/Published.toml after upgrade ===
+[published.fork]
+version = 2
+=== an incompatible upgrade is rejected ===
+ok: the compatibility check rejects the changed signature
+
+----- stderr -----
