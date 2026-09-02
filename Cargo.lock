@@ -14543,6 +14543,7 @@ dependencies = [
  "consensus-config",
  "coset",
  "fastcrypto",
+ "fastcrypto-pq",
  "fastcrypto-zkp",
  "futures",
  "indexmap 2.8.0",

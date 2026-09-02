@@ -222,11 +222,20 @@ fn mldsa65_verify_secure_intent_message() {
 }
 
 #[test]
-fn mldsa65_not_parsed_as_generic_signature() {
-    // The transaction-level parser rejects 0x07 until verification is wired up.
+fn mldsa65_parses_as_generic_signature() {
+    // Network acceptance is decided separately, by the `mldsa65_auth` gate in
+    // `check_user_signature_protocol_compatibility`.
     let kp = mldsa65_random_keypair();
     let sig = kp.sign(b"message");
-    assert!(GenericSignature::from_bytes(sig.as_ref()).is_err());
+    let generic = GenericSignature::from_bytes(sig.as_ref()).unwrap();
+    assert!(matches!(generic, GenericSignature::Signature(_)));
+    assert_eq!(generic.as_ref(), sig.as_ref());
+
+    // Truncated or over-long envelopes still fail to parse.
+    assert!(GenericSignature::from_bytes(&sig.as_ref()[..sig.as_ref().len() - 1]).is_err());
+    let mut long = sig.as_ref().to_vec();
+    long.push(0);
+    assert!(GenericSignature::from_bytes(&long).is_err());
 }
 
 #[test]
