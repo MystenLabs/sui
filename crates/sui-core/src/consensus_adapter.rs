@@ -554,18 +554,16 @@ impl ConsensusAdapter {
             debug!("Submitting {:?} to consensus", transaction_keys);
             guard.submitted = true;
 
-            // Staggered submission of transactions without allowed proposers. Soft bundles
-            // are exempt: they are built by this validator from its own admission queue,
-            // not amplified fan-out from a submitter.
-            let stagger_delay = if is_soft_bundle {
-                None
-            } else {
-                transactions[0].kind.as_user_transaction().and_then(|tx| {
-                    epoch_store
-                        .staggered_submission()
-                        .submission_delay(tx, epoch_store)
-                })
-            };
+            // Staggered submission of transactions without allowed proposers. Soft
+            // bundles are external fan-out too, and are held whenever any member could
+            // have named its proposers and did not.
+            let user_transactions: Vec<_> = transactions
+                .iter()
+                .filter_map(|transaction| transaction.kind.as_user_transaction())
+                .collect();
+            let stagger_delay = epoch_store
+                .staggered_submission()
+                .submission_delay(&user_transactions, epoch_store);
 
             // Submit the transaction to consensus, racing against the processed waiter in
             // case another validator sequences the transaction first. The staggered delay
