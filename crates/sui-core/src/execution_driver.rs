@@ -30,8 +30,10 @@
 //! true for them as well.
 //!
 //! Let C be the watermark: the highest index such that every index at or below it is
-//! *done* (finished executing, or retired because the unit was dropped without
-//! executing - every drop path retires its index via `CausalIndexGuard`).
+//! *done* (finished executing, or dropped here as no longer needed). The driver is the
+//! sole point where transactions execute and where causal indices are retired; enqueue
+//! deduplication guarantees every assigned index reaches it (see
+//! `execution_scheduler::causal_order`).
 //!
 //! ## The admission rule
 //!
@@ -106,15 +108,20 @@ impl QueuedCertificate {
     fn new(cert: PendingCertificate) -> Self {
         let index = cert
             .execution_env
-            .causal_guard
-            .as_ref()
-            .expect("causal index is assigned at enqueue")
-            .index();
+            .causal_index
+            .expect("causal index is assigned at enqueue");
         Self { index, cert }
     }
 
     fn index(&self) -> u64 {
         self.index
+    }
+
+    /// Retires the causal index of a transaction the driver drops without executing.
+    fn retire(self, causal_admission: &CausalAdmission) {
+        if self.cert.execution_env.retires_causal_index {
+            causal_admission.mark_done(self.index);
+        }
     }
 }
 
@@ -204,7 +211,7 @@ pub async fn execution_process(
             // TODO: Ideally execution_driver should own a copy of epoch store and recreate each epoch.
             let epoch_store = authority.load_epoch_store_one_call_per_task();
 
-            // Drop (and thereby retire) transactions that no longer need to run, without
+            // Drop and retire transactions that no longer need to run, without
             // consuming an execution slot.
             if epoch_store.epoch() != cert_epoch {
                 info!(
@@ -213,11 +220,11 @@ pub async fn execution_process(
                     cert_epoch,
                     "Ignoring certificate from previous epoch."
                 );
-                waiting.pop();
+                waiting.pop().unwrap().0.retire(&causal_admission);
                 continue;
             }
             if authority.is_tx_already_executed(&digest) {
-                waiting.pop();
+                waiting.pop().unwrap().0.retire(&causal_admission);
                 continue;
             }
 
@@ -255,6 +262,8 @@ pub async fn execution_process(
             // spawn_blocking runs on a thread that does not inherit the current tracing span,
             // so re-enter the span inside the blocking closure to keep execution logs attributed.
             let blocking_span = execution_span.clone();
+            let causal_admission = causal_admission.clone();
+            let retires_causal_index = execution_env.retires_causal_index;
             spawn_monitored_task!(async move {
                 let _scope = monitored_scope("ExecutionDriver::task");
                 // Released when this task completes (including the early return below),
@@ -266,6 +275,9 @@ pub async fn execution_process(
                 // for in-flight execution to finish. Skip if the epoch has already ended.
                 let Some(_alive_guard) = epoch_store.enter_alive_epoch().await else {
                     info!("Epoch ended before execution could start; transaction will be retried in the next epoch");
+                    if retires_causal_index {
+                        causal_admission.mark_done(head_index);
+                    }
                     return;
                 };
 
@@ -274,9 +286,11 @@ pub async fn execution_process(
                 tokio::task::spawn_blocking(move || {
                     let _enter = blocking_span.enter();
                     let _scope = monitored_scope("ExecutionDriver::blocking_task");
-                    // `execution_env` carries the causal guard; consuming the env here
-                    // marks the transaction's causal index done at the end of execution,
-                    // unless a retry path cloned the env to keep the index alive.
+                    // Every outcome except RetryLater retires the transaction's causal
+                    // index (a retried transaction is re-submitted under its original
+                    // index; an EpochEnded one is re-enqueued next epoch with a fresh
+                    // one). Settlement-batch members retire only through the barrier.
+                    let mut retire = retires_causal_index;
                     match authority.try_execute_immediately(
                         &certificate,
                         execution_env,
@@ -295,13 +309,18 @@ pub async fn execution_process(
                             fatal!("Failed to execute certified transaction {digest:?}! error={e} certificate={certificate:?}");
                         }
                         ExecutionOutput::RetryLater => {
-                            // Transaction will be retried later and auto-rescheduled (keeping
-                            // its causal index via the retry's env clone), so we ignore it here.
+                            // Transaction will be retried later and auto-rescheduled under
+                            // its original causal index (carried in the retry's env clone),
+                            // so the index stays live.
+                            retire = false;
                             authority
                                 .metrics
                                 .execution_driver_paused_transactions
                                 .inc();
                         }
+                    }
+                    if retire {
+                        causal_admission.mark_done(head_index);
                     }
                 })
                 .await
