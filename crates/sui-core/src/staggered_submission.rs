@@ -45,12 +45,12 @@ const DEFAULT_STAGGER_MAX_DELAY: Duration = Duration::from_secs(5);
 
 /// Activation signal hysteresis over a single trailing window of
 /// `SIGNAL_WINDOW_COMMITS` commits (~20s at the typical ~15 commits/s, so a mode
-/// switch is always backed by at least 20 seconds of data). The signal arms when
+/// switch is always backed by at least 20 seconds of data). The signal activates when
 /// excess duplicate copies amount to at least `SIGNAL_ACTIVATE_DUPLICATE_THRESHOLD`
 /// percent of the unique user transactions in the window (the ratio can exceed 100%
 /// when duplication dominates) and their absolute count reaches
 /// `SIGNAL_MIN_EXCESS_COPIES` — the materiality floor keeps a couple of client
-/// double-submits on a quiet network from arming on a noisy ratio. It disarms when the
+/// double-submits on a quiet network from activating on a noisy ratio. It deactivates when the
 /// ratio falls to `SIGNAL_DEACTIVATE_DUPLICATE_THRESHOLD` percent or below; the gap
 /// is the hysteresis that keeps the mode from flickering around a single boundary.
 /// Identical on every validator (compiled in), so the mode flips in lockstep.
@@ -83,7 +83,7 @@ impl Default for StaggerParams {
 }
 
 /// Decides whether this validator should delay submitting a given user transaction to
-/// consensus, and by how much. Inactive by default; armed and disarmed by the
+/// consensus, and by how much. Inactive by default; activated and deactivated by the
 /// commit-derived duplication signal (`record_commit`), which every honest validator
 /// computes from identical commit output, so the mode flips in lockstep without
 /// coordination. A validator that restarts mid-epoch rebuilds its windows only from the
@@ -100,9 +100,9 @@ pub struct StaggeredSubmission {
 /// keeps them from flipping staggering — a dry run ahead of enablement.
 struct SignalState {
     /// Per-commit `(excess duplicate copies, unique user transactions)` counts, newest
-    /// last, trimmed to the larger of the two signal windows.
+    /// last, trimmed to `SIGNAL_WINDOW_COMMITS`.
     window: VecDeque<(u64, u64)>,
-    armed: bool,
+    activated: bool,
 }
 
 impl StaggeredSubmission {
@@ -112,7 +112,7 @@ impl StaggeredSubmission {
             params: RwLock::new(StaggerParams::default()),
             signal: Mutex::new(SignalState {
                 window: VecDeque::new(),
-                armed: false,
+                activated: false,
             }),
         }
     }
@@ -128,15 +128,15 @@ impl StaggeredSubmission {
     /// Feeds one commit's duplication counts into the activation signal:
     /// `excess_copies` duplicate copies of transactions without allowed proposers
     /// beyond their allowance, against `unique_user_txns` unique user transactions
-    /// sequenced. The hysteresis state machine always runs on the signal's own armed
+    /// sequenced. The hysteresis state machine always runs on the signal's own activated
     /// state, so transitions stay observable regardless of enablement; only when
     /// `apply` is set does a transition also flip staggering itself. Returns the new
     /// signal state on a transition, `None` otherwise.
     ///
-    /// Arming suppresses the very duplication it measures, so under a sustained attack
-    /// the mode oscillates with a mostly-armed duty cycle: once the arming evidence
+    /// Activation suppresses the very duplication it measures, so under a sustained attack
+    /// the mode oscillates with a mostly-activated duty cycle: once the activating evidence
     /// slides out of the window and the ratio drops through the deactivate threshold,
-    /// a brief burst of duplication gets through and re-arms it within a few commits.
+    /// a brief burst of duplication gets through and re-activates it within a few commits.
     pub fn record_commit(
         &self,
         excess_copies: u64,
@@ -155,21 +155,21 @@ impl StaggeredSubmission {
                 (excess + e, total + t)
             });
 
-        let transition = if !signal.armed {
+        let transition = if !signal.activated {
             (excess >= SIGNAL_MIN_EXCESS_COPIES
                 && excess * 100 >= total * SIGNAL_ACTIVATE_DUPLICATE_THRESHOLD)
                 .then_some(true)
         } else {
-            // Disarm once quiet traffic dilutes (or eviction removes) the arming
+            // Deactivate once quiet traffic dilutes (or eviction removes) the activating
             // evidence past the deactivate threshold; the threshold gap absorbs
             // boundary noise after that.
             (excess * 100 <= total * SIGNAL_DEACTIVATE_DUPLICATE_THRESHOLD).then_some(false)
         };
 
-        if let Some(armed) = transition {
-            signal.armed = armed;
+        if let Some(activated) = transition {
+            signal.activated = activated;
             if apply {
-                self.set_active(armed);
+                self.set_active(activated);
             }
         }
         transition
@@ -414,19 +414,19 @@ mod tests {
     mod signal {
         use super::*;
 
-        // Compiled-in thresholds over a single SIGNAL_WINDOW_COMMITS window: arm at
-        // >= 5% excess-copy ratio with an absolute floor of 20 excess copies; disarm
+        // Compiled-in thresholds over a single SIGNAL_WINDOW_COMMITS window: activate at
+        // >= 5% excess-copy ratio with an absolute floor of 20 excess copies; deactivate
         // at <= 3% — the 5%/3% gap is the anti-flicker hysteresis.
 
         #[test]
-        fn arms_on_burst_over_ratio_and_floor() {
+        fn activates_on_burst_over_ratio_and_floor() {
             let staggered = StaggeredSubmission::new();
             assert_eq!(staggered.record_commit(100, 200, true), Some(true));
             assert!(staggered.is_active());
         }
 
         #[test]
-        fn ratio_below_threshold_does_not_arm() {
+        fn ratio_below_threshold_does_not_activate() {
             let staggered = StaggeredSubmission::new();
             // 4% per commit: the absolute floor is passed but the ratio never is.
             for _ in 0..30 {
@@ -438,7 +438,7 @@ mod tests {
         #[test]
         fn floor_blocks_high_ratio_at_low_volume() {
             let staggered = StaggeredSubmission::new();
-            // 10% ratio, but only one excess copy per commit: the floor holds arming
+            // 10% ratio, but only one excess copy per commit: the floor holds activating
             // back until 20 of them have accumulated in the enter window.
             for _ in 0..19 {
                 assert_eq!(staggered.record_commit(1, 10, true), None);
@@ -462,23 +462,23 @@ mod tests {
         }
 
         #[test]
-        fn disarms_once_quiet_traffic_dilutes_the_spike() {
+        fn deactivates_once_quiet_traffic_dilutes_the_spike() {
             let staggered = StaggeredSubmission::new();
             assert_eq!(staggered.record_commit(100, 200, true), Some(true));
-            // Quiet traffic dilutes the arming spike's window ratio; the mode holds
-            // until the ratio crosses the deactivate threshold, and disarms within
+            // Quiet traffic dilutes the activating spike's window ratio; the mode holds
+            // until the ratio crosses the deactivate threshold, and deactivates within
             // one window at the latest (eviction of the spike).
             let mut quiet_commits = 0;
             loop {
                 quiet_commits += 1;
                 assert!(
                     quiet_commits <= SIGNAL_WINDOW_COMMITS,
-                    "never disarmed within a full window"
+                    "never deactivated within a full window"
                 );
                 match staggered.record_commit(0, 100, true) {
                     None => assert!(staggered.is_active()),
-                    Some(armed) => {
-                        assert!(!armed);
+                    Some(activated) => {
+                        assert!(!activated);
                         break;
                     }
                 }
@@ -490,13 +490,13 @@ mod tests {
         fn threshold_gap_holds_mode_between_deactivate_and_activate() {
             let staggered = StaggeredSubmission::new();
             assert_eq!(staggered.record_commit(100, 200, true), Some(true));
-            // 4% duplication sits inside the 3%..5% gap: armed stays armed, even long
-            // after the arming spike has left the window...
+            // 4% duplication sits inside the 3%..5% gap: activated stays activated, even long
+            // after the activating spike has left the window...
             for _ in 0..2 * SIGNAL_WINDOW_COMMITS {
                 assert_eq!(staggered.record_commit(4, 100, true), None);
                 assert!(staggered.is_active());
             }
-            // ...and once disarmed by a 2% trickle, 4% does not re-arm.
+            // ...and once deactivated by a 2% trickle, 4% does not re-activate.
             let mut transitions = Vec::new();
             for _ in 0..SIGNAL_WINDOW_COMMITS {
                 transitions.extend(staggered.record_commit(2, 100, true));
@@ -515,7 +515,7 @@ mod tests {
             assert_eq!(staggered.record_commit(100, 200, false), Some(true));
             // ...but staggering itself stays untouched.
             assert!(!staggered.is_active());
-            // Quiet traffic eventually reports the disarm transition too, still
+            // Quiet traffic eventually reports the deactivate transition too, still
             // without touching staggering.
             let mut transitions = Vec::new();
             for _ in 0..SIGNAL_WINDOW_COMMITS {
@@ -526,11 +526,11 @@ mod tests {
         }
 
         #[test]
-        fn signal_state_is_independent_of_manual_arming() {
+        fn signal_state_is_independent_of_manual_activation() {
             let staggered = StaggeredSubmission::new();
             staggered.set_active(true);
-            // The signal's own state machine starts disarmed, so quiet commits produce
-            // no transition and manual arming is left in place.
+            // The signal's own state machine starts deactivated, so quiet commits produce
+            // no transition and manual activating is left in place.
             for _ in 0..50 {
                 assert_eq!(staggered.record_commit(0, 100, true), None);
             }

@@ -1804,12 +1804,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .epoch_store
             .protocol_config()
             .staggered_submission_signal();
-        if let Some(armed) = self.epoch_store.staggered_submission().record_commit(
+        if let Some(activated) = self.epoch_store.staggered_submission().record_commit(
             excess_copies,
             unique_user_txns,
             apply,
         ) {
-            let state = if armed { "armed" } else { "disarmed" };
+            let state = if activated {
+                "activated"
+            } else {
+                "deactivated"
+            };
             info!(
                 "Duplication signal {state} \
                  ({excess_copies} excess copies over {unique_user_txns} unique user transactions in commit){}",
@@ -1820,8 +1824,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 },
             );
             self.metrics
-                .staggered_submission_signal_armed
-                .set(armed as i64);
+                .staggered_submission_signal_activated
+                .set(activated as i64);
             self.metrics
                 .staggered_submission_signal_transitions
                 .with_label_values(&[state])
