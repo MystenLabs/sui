@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! The execution driver receives ready transactions from the ExecutionScheduler and
-//! runs them on a dedicated thread pool, admitting them in an order that makes it safe
-//! for execution to block waiting on values produced by other transactions.
+//! runs them on blocking threads, admitting them in an order that makes it safe for
+//! execution to block waiting on values produced by other transactions.
 //!
 //! ## The problem
 //!
@@ -51,12 +51,15 @@
 //!
 //! The transaction with index C+1 can always run to completion: everything below it is
 //! done, so every value it could wait for - declared or undeclared - already exists.
-//! It is admitted even when the concurrency limit is exhausted by parked transactions,
-//! and a pool thread is always free for it (the pool is one thread larger than
-//! in-flight can ever get, so admission never queues behind parked threads). When it
-//! finishes, C advances and the next transaction gains the same guarantee. So the
-//! system always makes progress, one transaction at a time in the worst case, no
+//! It is admitted even when the concurrency limit is exhausted by parked transactions.
+//! When it finishes, C advances and the next transaction gains the same guarantee. So
+//! the system always makes progress, one transaction at a time in the worst case, no
 //! matter how many admitted transactions are parked.
+//!
+//! Execution runs on tokio's shared blocking pool and occupies at most K+1 of its
+//! threads (in-flight is bounded by the admission rule). We assume the shared pool is
+//! not permanently exhausted by other subsystems: its other users run terminating
+//! work, and exhausting it would halt much of the node regardless of execution.
 //!
 //! Transactions parked on an undeclared dependency do not park forever for the same
 //! reason: the writer they wait for has a lower index, so the watermark reaches it and
@@ -76,13 +79,12 @@ use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::sync::{Arc, Weak};
 
-use mysten_common::thread_pool::DedicatedThreadPool;
 use mysten_common::{fatal, random::get_rng};
-use mysten_metrics::monitored_scope;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::Rng;
 use sui_types::execution::ExecutionOutput;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
-use tracing::{error_span, info, trace, warn};
+use tracing::{Instrument, error_span, info, trace, warn};
 
 use crate::authority::AuthorityState;
 use crate::execution_scheduler::PendingCertificate;
@@ -143,7 +145,6 @@ pub async fn execution_process(
 ) {
     info!("Starting pending certificates execution process.");
 
-    let pool = DedicatedThreadPool::new("sui-execution", causal_admission.required_pool_size());
     // Transactions that have arrived but are not yet admitted, ordered by causal index.
     let mut waiting: BinaryHeap<Reverse<QueuedCertificate>> = BinaryHeap::new();
 
@@ -247,58 +248,65 @@ pub async fn execution_process(
 
             authority.metrics.execution_rate_tracker.lock().record();
 
-            // Hold an epoch-alive guard across execution so that `epoch_terminated()` waits
-            // for in-flight execution to finish. Awaiting inline stalls admission during
-            // reconfiguration, which is intended.
-            let Some(alive_guard) = epoch_store.enter_alive_epoch_owned().await else {
-                info!(
-                    ?digest,
-                    "Epoch ended before execution could start; transaction will be retried in the next epoch"
-                );
-                continue;
-            };
-
-            // Certificate execution is CPU-bound, can take significant time, and may park
-            // the thread waiting on another transaction's output, so it runs on the
-            // dedicated pool. The admission rule guarantees a free thread.
-            let epoch_store = epoch_store.clone();
+            // Certificate execution is CPU-bound and can take significant time, so run it on a
+            // blocking thread to avoid stalling the async runtime's worker threads.
+            let epoch_store_clone = epoch_store.clone();
             let execution_span = error_span!("execution_driver", tx_digest = ?digest);
-            pool.spawn(move || {
-                // Released on completion (or on drop at any early exit), freeing the
-                // concurrency slot and waking the driver loop.
+            // spawn_blocking runs on a thread that does not inherit the current tracing span,
+            // so re-enter the span inside the blocking closure to keep execution logs attributed.
+            let blocking_span = execution_span.clone();
+            spawn_monitored_task!(async move {
+                let _scope = monitored_scope("ExecutionDriver::task");
+                // Released when this task completes (including the early return below),
+                // freeing the concurrency slot and waking the driver loop.
                 let _slot = slot;
-                let _alive_guard = alive_guard;
                 let _executing_guard = _executing_guard;
-                // The pool thread does not inherit the current tracing span, so re-enter
-                // it to keep execution logs attributed.
-                let _enter = execution_span.enter();
-                let _scope = monitored_scope("ExecutionDriver::blocking_task");
-                // `execution_env` carries the causal guard; consuming the env here
-                // marks the transaction's causal index done at the end of execution,
-                // unless a retry path cloned the env to keep the index alive.
-                match authority.try_execute_immediately(&certificate, execution_env, &epoch_store) {
-                    ExecutionOutput::Success(_) => {
-                        authority
-                            .metrics
-                            .execution_driver_executed_transactions
-                            .inc();
+
+                // Hold the epoch-alive guard across execution so that `epoch_terminated()` waits
+                // for in-flight execution to finish. Skip if the epoch has already ended.
+                let Some(_alive_guard) = epoch_store.enter_alive_epoch().await else {
+                    info!("Epoch ended before execution could start; transaction will be retried in the next epoch");
+                    return;
+                };
+
+                // Await unconditionally: once dispatched, execution always runs to completion
+                // within the alive-epoch guard and is never detached at epoch end.
+                tokio::task::spawn_blocking(move || {
+                    let _enter = blocking_span.enter();
+                    let _scope = monitored_scope("ExecutionDriver::blocking_task");
+                    // `execution_env` carries the causal guard; consuming the env here
+                    // marks the transaction's causal index done at the end of execution,
+                    // unless a retry path cloned the env to keep the index alive.
+                    match authority.try_execute_immediately(
+                        &certificate,
+                        execution_env,
+                        &epoch_store_clone,
+                    ) {
+                        ExecutionOutput::Success(_) => {
+                            authority
+                                .metrics
+                                .execution_driver_executed_transactions
+                                .inc();
+                        }
+                        ExecutionOutput::EpochEnded => {
+                            warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
+                        }
+                        ExecutionOutput::Fatal(e) => {
+                            fatal!("Failed to execute certified transaction {digest:?}! error={e} certificate={certificate:?}");
+                        }
+                        ExecutionOutput::RetryLater => {
+                            // Transaction will be retried later and auto-rescheduled (keeping
+                            // its causal index via the retry's env clone), so we ignore it here.
+                            authority
+                                .metrics
+                                .execution_driver_paused_transactions
+                                .inc();
+                        }
                     }
-                    ExecutionOutput::EpochEnded => {
-                        warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
-                    }
-                    ExecutionOutput::Fatal(e) => {
-                        fatal!("Failed to execute certified transaction {digest:?}! error={e} certificate={certificate:?}");
-                    }
-                    ExecutionOutput::RetryLater => {
-                        // Transaction will be retried later and auto-rescheduled (keeping
-                        // its causal index via the retry's env clone), so we ignore it here.
-                        authority
-                            .metrics
-                            .execution_driver_paused_transactions
-                            .inc();
-                    }
-                }
-            });
+                })
+                .await
+                .expect("transaction execution task panicked");
+            }.instrument(execution_span));
         }
     }
 }
