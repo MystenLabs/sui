@@ -106,10 +106,6 @@ mod execution_driver_tests;
 
 const QUEUEING_DELAY_SAMPLING_RATIO: f64 = 0.05;
 
-/// Max certificates pulled from the ready channel per loop pass; a longer backlog is
-/// picked up by the immediately-ready next pass.
-const RECV_BATCH_SIZE: usize = 1024;
-
 /// Heap entry ordering pending transactions by causal index (min-heap via `Reverse`).
 /// Index-less transactions (settlements, admitted unconditionally) sort first.
 struct QueuedCertificate(PendingCertificate);
@@ -188,7 +184,6 @@ pub async fn execution_process(
 
     // Transactions that have arrived but are not yet admitted, ordered by causal index.
     let mut waiting: BinaryHeap<Reverse<QueuedCertificate>> = BinaryHeap::new();
-    let mut arrivals: Vec<PendingCertificate> = Vec::new();
 
     loop {
         let _scope = monitored_scope("ExecutionDriver::loop");
@@ -196,17 +191,17 @@ pub async fn execution_process(
         // Get the next admissible transaction, buffering arrivals meanwhile.
         let (pending_cert, mut slot) = loop {
             tokio::select! {
-                received = rx_ready_certificates.recv_many(&mut arrivals, RECV_BATCH_SIZE) => {
-                    if received == 0 {
+                received = rx_ready_certificates.recv() => {
+                    let Some(pending_cert) = received else {
                         // Should only happen after the AuthorityState has shut down and tx_ready_certificate
                         // has been dropped by ExecutionScheduler.
                         info!("No more certificate will be received. Exiting executor ...");
                         return;
-                    }
+                    };
                     if let Some(authority) = authority_state.upgrade() {
-                        authority.metrics.execution_driver_dispatch_queue.sub(received as i64);
+                        authority.metrics.execution_driver_dispatch_queue.dec();
                     }
-                    waiting.extend(arrivals.drain(..).map(|c| Reverse(QueuedCertificate(c))));
+                    waiting.push(Reverse(QueuedCertificate(pending_cert)));
                 }
                 next = pop(&mut waiting, &causal_admission) => break next,
                 _ = &mut rx_execution_shutdown => {
@@ -316,9 +311,6 @@ pub async fn execution_process(
                             .inc();
                     }
                 }
-                // Dropping the slot releases it and retires the causal index (unless a
-                // retry kept it alive), waking the driver once.
-                drop(slot);
             })
             .await
             .expect("transaction execution task panicked");
