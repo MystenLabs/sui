@@ -261,7 +261,7 @@ impl SettlementScheduler {
             .collect::<Vec<_>>();
 
         self.execution_scheduler
-            .enqueue_settlement_transactions(txns, epoch_store);
+            .spawn_transaction_scheduling(txns, epoch_store);
 
         let settlement_effects = self
             .transaction_cache_read
@@ -286,7 +286,7 @@ impl SettlementScheduler {
         let deps = barrier_deps.process_tx(*barrier_tx.digest(), barrier_tx.transaction_data());
         let env = env.with_barrier_dependencies(deps);
         self.execution_scheduler
-            .enqueue_settlement_transactions(vec![(barrier_tx, env)], epoch_store);
+            .spawn_transaction_scheduling(vec![(barrier_tx, env)], epoch_store);
 
         let barrier_effects = self
             .transaction_cache_read
