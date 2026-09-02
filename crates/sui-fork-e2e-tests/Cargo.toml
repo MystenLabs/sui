@@ -1,0 +1,29 @@
+[package]
+name = "sui-fork-e2e-tests"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+prometheus.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+serde_json.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["full"] }
+url.workspace = true
+
+sui-futures.workspace = true
+sui-indexer-alt.workspace = true
+sui-indexer-alt-consistent-store.workspace = true
+sui-indexer-alt-framework = { workspace = true, features = ["postgres"] }
+sui-indexer-alt-graphql.workspace = true
+sui-indexer-alt-reader.workspace = true
+sui-pg-db.workspace = true
+sui-types.workspace = true
+test-cluster.workspace = true
