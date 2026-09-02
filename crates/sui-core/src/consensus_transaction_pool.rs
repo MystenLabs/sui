@@ -215,7 +215,7 @@ struct PoolEntry {
     processed: Vec<ProcessedWatch>,
     /// Staggered submission of transactions without allowed proposers: `take()`
     /// leaves the entry queued until this time, so a copy committed by an
-    /// earlier-ranked validator during the hold resolves it through the
+    /// earlier-slotted validator during the hold resolves it through the
     /// `processed` watches without it ever occupying block space. `None` submits
     /// on the next proposal.
     eligible_at: Option<Instant>,
@@ -414,18 +414,15 @@ impl ConsensusTransactionPool {
 
         let tx_type = tx_type_label(&transactions);
         let (serialized, total_bytes) = self.serialize_and_validate(&transactions)?;
-        // Staggered submission of transactions without allowed proposers. Soft bundles
-        // are exempt: they are built by this validator from its own submissions, not
-        // amplified fan-out from a submitter. Computed after validation so rejected
-        // inserts don't pay for the rank derivation.
-        let stagger_delay = match &transactions[..] {
-            [transaction] => transaction.kind.as_user_transaction().and_then(|tx| {
-                self.epoch_store
-                    .staggered_submission()
-                    .submission_delay(tx, &self.epoch_store)
-            }),
-            _ => None,
-        };
+
+        let user_transactions: Vec<_> = transactions
+            .iter()
+            .filter_map(|transaction| transaction.kind.as_user_transaction())
+            .collect();
+        let stagger_delay = self
+            .epoch_store
+            .staggered_submission()
+            .submission_delay(&user_transactions, &self.epoch_store);
         let (sender, receiver) = oneshot::channel();
         let entry = PoolEntry {
             transactions: serialized,
@@ -1018,9 +1015,6 @@ impl TransactionPool for ConsensusTransactionPool {
             let mut pending_count = transactions.len();
             let mut pending_bytes = total_bytes;
             let now = Instant::now();
-            // Re-read on every proposal so that disarming staggering also releases
-            // entries whose eligibility was stamped while it was armed.
-            let stagger_active = self.epoch_store.staggered_submission().is_active();
             let popped;
             (popped, already_processed) = user.pop_batch_while(|entry| {
                 // An already-processed entry is excluded without consuming block budget.
@@ -1030,12 +1024,13 @@ impl TransactionPool for ConsensusTransactionPool {
                     return PopAction::Exclude;
                 }
                 // A staggered entry stays queued (occupying pool capacity, which is the
-                // overload backstop) until its delay elapses. Held entries deliberately
-                // leave `limit_reached` untouched: no block limit was hit.
-                if stagger_active
-                    && entry
-                        .eligible_at
-                        .is_some_and(|eligible_at| eligible_at > now)
+                // overload backstop) until its delay elapses — even if staggering was
+                // disarmed after the hold was stamped, bounding the residual by
+                // max_delay. Held entries deliberately leave `limit_reached` untouched:
+                // no block limit was hit.
+                if entry
+                    .eligible_at
+                    .is_some_and(|eligible_at| eligible_at > now)
                 {
                     return PopAction::Skip;
                 }
