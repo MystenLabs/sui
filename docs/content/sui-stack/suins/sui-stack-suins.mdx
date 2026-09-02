@@ -98,8 +98,8 @@ flowchart LR
     end
 
     subgraph offchain ["Offchain resolution (RPC)"]
-        RPC["SUI RPC\nsuix_resolveNameServiceAddress"]
-        GQL["GRAPHQL\nresolveSuinsAddress"]
+        RPC["TYPESCRIPT SDK\nresolveNameServiceAddress"]
+        GQL["GRAPHQL\naddress(name:)"]
     end
 
     subgraph subnames ["Subname provisioning (Enoki)"]
@@ -113,7 +113,7 @@ flowchart LR
 
     USER -->|"resolveNameServiceAddress"| RPC
     RPC -->|"address"| USER
-    USER -->|"resolveSuinsAddress"| GQL
+    USER -->|"address(name:)"| GQL
     GQL -->|"address"| USER
 
     USER -->|"POST /v1/subnames"| ENOKI
@@ -251,7 +251,7 @@ For offchain resolution in a TypeScript or JavaScript app, you have 2 options:
 {/* TODO: Import code from MystenLabs/sui-typescript — show resolveNameServiceNames example */}
 {/* Description: Reverse lookup (address to default name) using SuiClient.resolveNameServiceNames */}
 
-For [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc), use the `resolveSuinsAddress` query for lookup and the `defaultSuinsName` field on the `Address` type for reverse lookup. See the [Sui GraphQL reference](https://docs.sui.io/references/sui-api/sui-graphql/reference/api/queries/resolve-suins-address) for the full schema.
+For [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc), pass a name to the [`address`](/references/sui-api/sui-graphql/beta/reference/operations/queries/address) query for lookup, and read [`defaultNameRecord`](/references/sui-api/sui-graphql/beta/reference/types/objects/address) on the `Address` type for reverse lookup. To fetch a full name record, including expiration and metadata, use the [`nameRecord`](/references/sui-api/sui-graphql/beta/reference/operations/queries/name-record) query.
 
 ### Lookup with the SuiNS SDK extension
 
