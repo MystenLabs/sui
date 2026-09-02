@@ -4,14 +4,15 @@
 use crate::{
     diag,
     diagnostics::filter::FilterScope,
-    expansion::ast::{ModuleIdent, Value_},
+    expansion::ast::{Fields, ModuleIdent, Value, Value_},
     ice, ice_assert,
-    naming::ast::{BuiltinTypeName_, TypeInner},
+    naming::ast::{BuiltinTypeName_, Type, TypeInner},
     parser::ast::{DatatypeName, VariantName},
     shared::{
         Identifier,
         ide::{IDEAnnotation, MissingMatchArmsInfo, PatternSuggestion},
         matching::{MatchContext, PatternMatrix},
+        program_info::DatatypeKind,
         string_utils::{debug_print, format_oxford_list},
     },
     typing::{
@@ -23,7 +24,7 @@ use crate::{
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use std::{
-    collections::{BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     fmt::Display,
 };
 
@@ -238,6 +239,45 @@ impl Display for CounterExample {
     }
 }
 
+fn subject_enum_ctors(
+    context: &mut Context,
+    mident: &ModuleIdent,
+    datatype_name: &DatatypeName,
+    ctors: BTreeMap<VariantName, (Loc, Fields<Type>)>,
+) -> BTreeMap<VariantName, (Loc, Fields<Type>)> {
+    let (valid, foreign): (BTreeMap<_, _>, BTreeMap<_, _>) =
+        ctors.into_iter().partition(|(ctor, _)| {
+            context
+                .info()
+                .enum_variant_fields(mident, datatype_name, ctor)
+                .is_some()
+        });
+    for (ctor, (ploc, _)) in &foreign {
+        ice_assert!(
+            context,
+            context.env().has_errors(),
+            *ploc,
+            "Variant '{}' is not part of the matched enum '{}'",
+            ctor,
+            datatype_name
+        );
+    }
+    valid
+}
+
+fn bool_lits(context: &mut Context, lits: BTreeSet<Value>, loc: Loc) -> BTreeSet<Value> {
+    let (bools, non_bools): (BTreeSet<Value>, BTreeSet<Value>) = lits
+        .into_iter()
+        .partition(|lit| matches!(lit.value, Value_::Bool(_)));
+    ice_assert!(
+        context,
+        non_bools.is_empty() || context.env().has_errors(),
+        loc,
+        "Non-bool literal pattern in a bool match column"
+    );
+    bools
+}
+
 /// Returns true if it found a counter-example. Assumes all arms with guards have been removed from
 /// the provided matrix.
 fn find_counterexample(
@@ -274,8 +314,7 @@ fn find_counterexample_impl(
         arity: u32,
         ndx: &mut u32,
     ) -> Option<Vec<CounterExample>> {
-        let literals = matrix.first_lits();
-        assert!(literals.len() <= 2, "ICE match exhaustiveness failure");
+        let literals = bool_lits(context, matrix.first_lits(), matrix.loc);
         if literals.len() == 2 {
             // Saturated
             for lit in literals {
@@ -385,92 +424,28 @@ fn find_counterexample_impl(
             context.debug().match_counterexample,
             (lines "matrix types" => &matrix.tys; verbose)
         );
-        if context.info().is_struct(&mident, &datatype_name) {
-            // For a struct, we only care if we destructure it. If we do, we want to specialize and
-            // recur. If we don't, we check it as a default specialization.
-            if let Some((ploc, arg_types)) = matrix.first_struct_ctors() {
-                let ctor_arity = arg_types.len() as u32;
-                // Native structs have no fields. An error for destructuring a native struct
-                // should have already been reported during typing.
-                let Some(decl_fields) = context.info().struct_fields(&mident, &datatype_name)
-                else {
-                    ice_assert!(
-                        context,
-                        context.env().has_errors(),
-                        ploc,
-                        "Native struct reached match counterexample without a prior error"
-                    );
-                    return None;
-                };
-                let fringe_binders =
-                    context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
-                let is_positional = context.info().struct_is_positional(&mident, &datatype_name);
-                let names = fringe_binders
-                    .iter()
-                    .map(|(name, _, _)| name.to_string())
-                    .collect::<Vec<_>>();
-                let bind_tys = fringe_binders
-                    .iter()
-                    .map(|(_, _, ty)| ty)
-                    .collect::<Vec<_>>();
-                let (_, inner_matrix) = matrix.specialize_struct(context, bind_tys);
-                if let Some(mut counterexample) =
-                    counterexample_rec(context, inner_matrix, ctor_arity + arity - 1, ndx)
-                {
-                    let ctor_args = counterexample
-                        .drain(0..(ctor_arity as usize))
-                        .collect::<Vec<_>>();
-                    assert!(ctor_args.len() == names.len());
-                    let output = [CounterExample::Struct(
-                        datatype_name,
-                        is_positional,
-                        names.into_iter().zip(ctor_args).collect::<Vec<_>>(),
-                    )]
-                    .into_iter()
-                    .chain(counterexample)
-                    .collect();
-                    Some(output)
-                } else {
-                    // If we didn't find a counterexample in the destructuring cases, we're done.
-                    None
-                }
-            } else {
-                let (_, default) = matrix.specialize_default(context);
-                // `_` is a reasonable counterexample since we never unpacked this struct
-                if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
-                    // If we didn't match any head constructor, `_` is a reasonable
-                    // counter-example entry.
-                    let mut result = vec![CounterExample::Wildcard];
-                    result.extend(&mut counterexample.into_iter());
-                    Some(result)
-                } else {
-                    None
-                }
-            }
-        } else {
-            let mut unmatched_variants = context
-                .info()
-                .enum_variants(&mident, &datatype_name)
-                .into_iter()
-                .collect::<BTreeSet<_>>();
-
-            let ctors = matrix.first_variant_ctors();
-            for ctor in ctors.keys() {
-                unmatched_variants.remove(ctor);
-            }
-            if unmatched_variants.is_empty() {
-                for (ctor, (ploc, arg_types)) in ctors {
+        match context.info().datatype_kind(&mident, &datatype_name) {
+            DatatypeKind::Struct => {
+                // For a struct, we only care if we destructure it. If we do, we want to specialize and
+                // recur. If we don't, we check it as a default specialization.
+                if let Some((ploc, arg_types)) = matrix.first_struct_ctors() {
                     let ctor_arity = arg_types.len() as u32;
-                    let decl_fields = context
-                        .info()
-                        .enum_variant_fields(&mident, &datatype_name, &ctor)
-                        .unwrap();
+                    // Native structs have no fields. An error for destructuring a native struct
+                    // should have already been reported during typing.
+                    let Some(decl_fields) = context.info().struct_fields(&mident, &datatype_name)
+                    else {
+                        ice_assert!(
+                            context,
+                            context.env().has_errors(),
+                            ploc,
+                            "Native struct reached match counterexample without a prior error"
+                        );
+                        return None;
+                    };
                     let fringe_binders =
                         context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
                     let is_positional =
-                        context
-                            .info()
-                            .enum_variant_is_positional(&mident, &datatype_name, &ctor);
+                        context.info().struct_is_positional(&mident, &datatype_name);
                     let names = fringe_binders
                         .iter()
                         .map(|(name, _, _)| name.to_string())
@@ -479,7 +454,7 @@ fn find_counterexample_impl(
                         .iter()
                         .map(|(_, _, ty)| ty)
                         .collect::<Vec<_>>();
-                    let (_, inner_matrix) = matrix.specialize_variant(context, &ctor, bind_tys);
+                    let (_, inner_matrix) = matrix.specialize_struct(context, bind_tys);
                     if let Some(mut counterexample) =
                         counterexample_rec(context, inner_matrix, ctor_arity + arity - 1, ndx)
                     {
@@ -487,61 +462,139 @@ fn find_counterexample_impl(
                             .drain(0..(ctor_arity as usize))
                             .collect::<Vec<_>>();
                         assert!(ctor_args.len() == names.len());
-                        let output = [CounterExample::Variant(
+                        let output = [CounterExample::Struct(
                             datatype_name,
-                            ctor,
                             is_positional,
-                            names
-                                .into_iter()
-                                .zip(ctor_args.into_iter())
-                                .collect::<Vec<_>>(),
+                            names.into_iter().zip(ctor_args).collect::<Vec<_>>(),
                         )]
                         .into_iter()
                         .chain(counterexample)
                         .collect();
-                        return Some(output);
+                        Some(output)
+                    } else {
+                        // If we didn't find a counterexample in the destructuring cases, we're done.
+                        None
                     }
-                }
-                None
-            } else {
-                let (_, default) = matrix.specialize_default(context);
-                if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
-                    if ctors.is_empty() {
+                } else {
+                    let (_, default) = matrix.specialize_default(context);
+                    // `_` is a reasonable counterexample since we never unpacked this struct
+                    if let Some(counterexample) =
+                        counterexample_rec(context, default, arity - 1, ndx)
+                    {
                         // If we didn't match any head constructor, `_` is a reasonable
                         // counter-example entry.
                         let mut result = vec![CounterExample::Wildcard];
                         result.extend(&mut counterexample.into_iter());
                         Some(result)
                     } else {
-                        let variant_name = unmatched_variants.first().unwrap();
+                        None
+                    }
+                }
+            }
+            DatatypeKind::Enum => {
+                let mut unmatched_variants = context
+                    .info()
+                    .enum_variants(&mident, &datatype_name)
+                    .into_iter()
+                    .collect::<BTreeSet<_>>();
+
+                let ctors = subject_enum_ctors(
+                    context,
+                    &mident,
+                    &datatype_name,
+                    matrix.first_variant_ctors(),
+                );
+                for ctor in ctors.keys() {
+                    unmatched_variants.remove(ctor);
+                }
+                if unmatched_variants.is_empty() {
+                    for (ctor, (ploc, arg_types)) in ctors {
+                        let ctor_arity = arg_types.len() as u32;
+                        let decl_fields = context
+                            .info()
+                            .enum_variant_fields(&mident, &datatype_name, &ctor)
+                            .unwrap();
+                        let fringe_binders =
+                            context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
                         let is_positional = context.info().enum_variant_is_positional(
                             &mident,
                             &datatype_name,
-                            variant_name,
+                            &ctor,
                         );
-                        let ctor_args = context
-                            .info()
-                            .enum_variant_fields(&mident, &datatype_name, variant_name)
-                            .unwrap();
-                        let names = ctor_args
+                        let names = fringe_binders
                             .iter()
-                            .map(|(_, field, _)| field.to_string())
+                            .map(|(name, _, _)| name.to_string())
                             .collect::<Vec<_>>();
-                        let ctor_arity = names.len();
-                        let result = [CounterExample::Variant(
-                            datatype_name,
-                            *variant_name,
-                            is_positional,
-                            names.into_iter().zip(make_wildcards(ctor_arity)).collect(),
-                        )]
-                        .into_iter()
-                        .chain(counterexample)
-                        .collect();
-                        Some(result)
+                        let bind_tys = fringe_binders
+                            .iter()
+                            .map(|(_, _, ty)| ty)
+                            .collect::<Vec<_>>();
+                        let (_, inner_matrix) = matrix.specialize_variant(context, &ctor, bind_tys);
+                        if let Some(mut counterexample) =
+                            counterexample_rec(context, inner_matrix, ctor_arity + arity - 1, ndx)
+                        {
+                            let ctor_args = counterexample
+                                .drain(0..(ctor_arity as usize))
+                                .collect::<Vec<_>>();
+                            assert!(ctor_args.len() == names.len());
+                            let output = [CounterExample::Variant(
+                                datatype_name,
+                                ctor,
+                                is_positional,
+                                names
+                                    .into_iter()
+                                    .zip(ctor_args.into_iter())
+                                    .collect::<Vec<_>>(),
+                            )]
+                            .into_iter()
+                            .chain(counterexample)
+                            .collect();
+                            return Some(output);
+                        }
                     }
-                } else {
-                    // If we are missing a variant but everything else is fine, we're done.
                     None
+                } else {
+                    let (_, default) = matrix.specialize_default(context);
+                    if let Some(counterexample) =
+                        counterexample_rec(context, default, arity - 1, ndx)
+                    {
+                        if ctors.is_empty() {
+                            // If we didn't match any head constructor, `_` is a reasonable
+                            // counter-example entry.
+                            let mut result = vec![CounterExample::Wildcard];
+                            result.extend(&mut counterexample.into_iter());
+                            Some(result)
+                        } else {
+                            let variant_name = unmatched_variants.first().unwrap();
+                            let is_positional = context.info().enum_variant_is_positional(
+                                &mident,
+                                &datatype_name,
+                                variant_name,
+                            );
+                            let ctor_args = context
+                                .info()
+                                .enum_variant_fields(&mident, &datatype_name, variant_name)
+                                .unwrap();
+                            let names = ctor_args
+                                .iter()
+                                .map(|(_, field, _)| field.to_string())
+                                .collect::<Vec<_>>();
+                            let ctor_arity = names.len();
+                            let result = [CounterExample::Variant(
+                                datatype_name,
+                                *variant_name,
+                                is_positional,
+                                names.into_iter().zip(make_wildcards(ctor_arity)).collect(),
+                            )]
+                            .into_iter()
+                            .chain(counterexample)
+                            .collect();
+                            Some(result)
+                        }
+                    } else {
+                        // If we are missing a variant but everything else is fine, we're done.
+                        None
+                    }
                 }
             }
         }
@@ -559,7 +612,17 @@ fn find_counterexample_impl(
         let result = if matrix.patterns_empty() {
             None
         } else if let Some(ty) = matrix.tys.first() {
-            if let Some(sp!(_, BuiltinTypeName_::Bool)) = ty.value.unfold_to_builtin_type_name() {
+            if matrix.first_column_binders_only() {
+                let (_, default) = matrix.specialize_default(context);
+                counterexample_rec(context, default, arity - 1, ndx).map(|counterexample| {
+                    [CounterExample::Wildcard]
+                        .into_iter()
+                        .chain(counterexample)
+                        .collect()
+                })
+            } else if let Some(sp!(_, BuiltinTypeName_::Bool)) =
+                ty.value.unfold_to_builtin_type_name()
+            {
                 counterexample_bool(context, matrix, arity, ndx)
             } else if let Some(_builtin) = ty.value.unfold_to_builtin_type_name() {
                 counterexample_builtin(context, matrix, arity, ndx)
@@ -570,17 +633,13 @@ fn find_counterexample_impl(
             {
                 counterexample_datatype(context, matrix, arity, ndx, mident, datatype_name)
             } else {
-                // This can only be a binding or wildcard, so we act accordingly.
-                let (_, default) = matrix.specialize_default(context);
-                if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
-                    let result = [CounterExample::Wildcard]
-                        .into_iter()
-                        .chain(counterexample)
-                        .collect();
-                    Some(result)
-                } else {
-                    None
-                }
+                ice_assert!(
+                    context,
+                    context.env().has_errors(),
+                    matrix.loc,
+                    "Constructor pattern against a subject with no inspectable structure"
+                );
+                None
             }
         } else if matrix.is_empty() {
             Some(make_wildcards(arity as usize))
@@ -635,8 +694,7 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
     // IDE add an arm to address that missing one.
 
     fn report_bool(context: &mut Context, loc: Loc, matrix: &PatternMatrix) {
-        let literals = matrix.first_lits();
-        assert!(literals.len() <= 2, "ICE match exhaustiveness failure");
+        let literals = bool_lits(context, matrix.first_lits(), loc);
         // Figure out which are missing
         let mut unused = BTreeSet::from([Value_::Bool(true), Value_::Bool(false)]);
         for lit in literals {
@@ -667,108 +725,126 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
         mident: ModuleIdent,
         name: DatatypeName,
     ) {
-        if context.info().is_struct(&mident, &name) {
-            if !matrix.is_empty() {
-                // If the matrix isn't empty, we _must_ have matched the struct with at least one
-                // non-guard arm (either wildcards or the struct itself), so we're fine.
-                return;
+        match context.info().datatype_kind(&mident, &name) {
+            DatatypeKind::Struct => report_struct(context, loc, matrix, mident, name),
+            DatatypeKind::Enum => report_enum(context, loc, matrix, mident, name),
+        }
+    }
+
+    fn report_struct(
+        context: &mut Context,
+        loc: Loc,
+        matrix: &PatternMatrix,
+        mident: ModuleIdent,
+        name: DatatypeName,
+    ) {
+        if !matrix.is_empty() {
+            // If the matrix isn't empty, we _must_ have matched the struct with at least one
+            // non-guard arm (either wildcards or the struct itself), so we're fine.
+            return;
+        }
+        // If the matrix _is_ empty, we suggest adding an unpack.
+        let is_positional = context.info().struct_is_positional(&mident, &name);
+        let Some(fields) = context.info().struct_fields(&mident, &name) else {
+            context.add_diag(ice!((
+                loc,
+                "Tried to look up fields for this struct and found none"
+            )));
+            return;
+        };
+        // NB: We might not have a concrete type for the type parameters to the datatype (due
+        // to type errors or otherwise), so we use stand-in types. Since this is IDE
+        // information that should be inserted and then re-compiled, this should work for our
+        // purposes.
+
+        let suggestion = if is_positional {
+            PS::UnpackPositionalStruct {
+                module: mident,
+                name,
+                field_count: fields.len(),
             }
-            // If the matrix _is_ empty, we suggest adding an unpack.
-            let is_positional = context.info().struct_is_positional(&mident, &name);
-            let Some(fields) = context.info().struct_fields(&mident, &name) else {
+        } else {
+            PS::UnpackNamedStruct {
+                module: mident,
+                name,
+                fields: fields.into_iter().map(|(field, _)| field.value()).collect(),
+            }
+        };
+        let info = MissingMatchArmsInfo {
+            arms: vec![suggestion],
+        };
+        context.add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
+    }
+
+    fn report_enum(
+        context: &mut Context,
+        loc: Loc,
+        matrix: &PatternMatrix,
+        mident: ModuleIdent,
+        name: DatatypeName,
+    ) {
+        // If there's a default arm, no suggestion is necessary.
+        if matrix.has_default_arm() {
+            return;
+        }
+
+        let mut unmatched_variants = context
+            .info()
+            .enum_variants(&mident, &name)
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+        let ctors = matrix.first_variant_ctors();
+        for ctor in ctors.keys() {
+            unmatched_variants.remove(ctor);
+        }
+        // If all of the variants were matched, no suggestion is necessary.
+        if unmatched_variants.is_empty() {
+            return;
+        }
+        let mut arms = vec![];
+        // re-iterate the original so we generate these in definition order
+        for variant in context.info().enum_variants(&mident, &name).into_iter() {
+            if !unmatched_variants.contains(&variant) {
+                continue;
+            }
+            let is_empty = context
+                .info()
+                .enum_variant_is_empty(&mident, &name, &variant);
+            let is_positional = context
+                .info()
+                .enum_variant_is_positional(&mident, &name, &variant);
+            let Some(fields) = context.info().enum_variant_fields(&mident, &name, &variant) else {
                 context.add_diag(ice!((
                     loc,
-                    "Tried to look up fields for this struct and found none"
+                    "Tried to look up fields for this enum and found none"
                 )));
-                return;
+                continue;
             };
-            // NB: We might not have a concrete type for the type parameters to the datatype (due
-            // to type errors or otherwise), so we use stand-in types. Since this is IDE
-            // information that should be inserted and then re-compiled, this should work for our
-            // purposes.
-
-            let suggestion = if is_positional {
-                PS::UnpackPositionalStruct {
+            let suggestion = if is_empty {
+                PS::UnpackEmptyVariant {
                     module: mident,
-                    name,
+                    enum_name: name,
+                    variant_name: variant,
+                }
+            } else if is_positional {
+                PS::UnpackPositionalVariant {
+                    module: mident,
+                    enum_name: name,
+                    variant_name: variant,
                     field_count: fields.len(),
                 }
             } else {
-                PS::UnpackNamedStruct {
+                PS::UnpackNamedVariant {
                     module: mident,
-                    name,
+                    enum_name: name,
+                    variant_name: variant,
                     fields: fields.into_iter().map(|(field, _)| field.value()).collect(),
                 }
             };
-            let info = MissingMatchArmsInfo {
-                arms: vec![suggestion],
-            };
-            context.add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
-        } else {
-            // If there's a default arm, no suggestion is necessary.
-            if matrix.has_default_arm() {
-                return;
-            }
-
-            let mut unmatched_variants = context
-                .info()
-                .enum_variants(&mident, &name)
-                .into_iter()
-                .collect::<BTreeSet<_>>();
-            let ctors = matrix.first_variant_ctors();
-            for ctor in ctors.keys() {
-                unmatched_variants.remove(ctor);
-            }
-            // If all of the variants were matched, no suggestion is necessary.
-            if unmatched_variants.is_empty() {
-                return;
-            }
-            let mut arms = vec![];
-            // re-iterate the original so we generate these in definition order
-            for variant in context.info().enum_variants(&mident, &name).into_iter() {
-                if !unmatched_variants.contains(&variant) {
-                    continue;
-                }
-                let is_empty = context
-                    .info()
-                    .enum_variant_is_empty(&mident, &name, &variant);
-                let is_positional = context
-                    .info()
-                    .enum_variant_is_positional(&mident, &name, &variant);
-                let Some(fields) = context.info().enum_variant_fields(&mident, &name, &variant)
-                else {
-                    context.add_diag(ice!((
-                        loc,
-                        "Tried to look up fields for this enum and found none"
-                    )));
-                    continue;
-                };
-                let suggestion = if is_empty {
-                    PS::UnpackEmptyVariant {
-                        module: mident,
-                        enum_name: name,
-                        variant_name: variant,
-                    }
-                } else if is_positional {
-                    PS::UnpackPositionalVariant {
-                        module: mident,
-                        enum_name: name,
-                        variant_name: variant,
-                        field_count: fields.len(),
-                    }
-                } else {
-                    PS::UnpackNamedVariant {
-                        module: mident,
-                        enum_name: name,
-                        variant_name: variant,
-                        fields: fields.into_iter().map(|(field, _)| field.value()).collect(),
-                    }
-                };
-                arms.push(suggestion);
-            }
-            let info = MissingMatchArmsInfo { arms };
-            context.add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
+            arms.push(suggestion);
         }
+        let info = MissingMatchArmsInfo { arms };
+        context.add_ide_annotation(loc, IDEAnnotation::MissingMatchArms(Box::new(info)));
     }
 
     let Some(ty) = matrix.tys.first() else {
@@ -789,7 +865,10 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
     {
         report_datatype(context, loc, matrix, mident, datatype_name)
     } else {
-        if !context.env().has_errors() {
+        // A type parameter subject is legal and has no constructors to suggest; only a
+        // wildcard or binder arm can cover it. Any other type here is unexpected.
+        let is_type_param = matches!(ty.value.base_type_().inner(), TypeInner::Param(_));
+        if !is_type_param && !context.env().has_errors() {
             // It's unclear how we got here, so report an ICE and suggest a wildcard.
             context.add_diag(ice!((
                 loc,

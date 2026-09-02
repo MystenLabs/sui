@@ -154,6 +154,23 @@ impl PatternArm {
             .all(|pat| matches!(pat.pat.value, TP::Wildcard | TP::Binder(_, _)))
     }
 
+    fn head_is_bindable_only(&self) -> bool {
+        fn bindable_only(pat: &MatchPattern) -> bool {
+            match &pat.pat.value {
+                TP::Binder(_, _) | TP::Wildcard => true,
+                TP::At(_, inner) => bindable_only(inner),
+                TP::Variant(..)
+                | TP::BorrowVariant(..)
+                | TP::Struct(..)
+                | TP::BorrowStruct(..)
+                | TP::Literal(_)
+                | TP::ErrorPat => false,
+                TP::Constant(_, _) | TP::Or(_, _) => unreachable!(),
+            }
+        }
+        self.pats.front().is_some_and(bindable_only)
+    }
+
     fn all_wild_arm<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
         &mut self,
         context: &MC,
@@ -563,6 +580,12 @@ impl PatternMatrix {
                 .iter()
                 .all(|pat| matches!(pat.pat.value, TP::ErrorPat))
         })
+    }
+
+    /// Returns true if each row's head pattern is a binder or wildcard
+    /// (e.g., none discriminate the subject)
+    pub fn first_column_binders_only(&self) -> bool {
+        self.patterns.iter().all(|pat| pat.head_is_bindable_only())
     }
 
     /// Returns true if there is an arm made up entirely of wildcards / binders with no guard.
