@@ -7,13 +7,10 @@
 //! for a value produced elsewhere without being async (e.g. execution threads blocking
 //! until an object version is committed). It is a thin wrapper over the [`oneshot`]
 //! crate that adds a [`Receiver::blocking_recv`] tailored to Sui's execution model:
-//!
-//! * The wait always begins with a non-blocking `try_recv`, so a value that is already
-//!   available is returned without blocking.
-//! * Under msim, parking the OS thread would hang the single-threaded simulator, so it
-//!   instead polls in a loop, yielding the simulated thread quantum between checks. This
-//!   would busy-wait on a real system, but the simulator only wakes the thread at a
-//!   controlled rate, and only blocking-pool threads may wait this way.
+//! under msim, parking the OS thread would hang the single-threaded simulator, so it
+//! instead polls in a loop, yielding the simulated thread quantum between checks. This
+//! would busy-wait on a real system, but the simulator only wakes the thread at a
+//! controlled rate, and only blocking-pool threads may wait this way.
 
 /// Create a new oneshot channel.
 pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
@@ -58,12 +55,6 @@ impl<T> Receiver<T> {
     /// a blocking-pool thread (e.g. inside `spawn_blocking`); it yields the thread's
     /// quantum between readiness checks.
     pub fn blocking_recv(self) -> Result<T, RecvError> {
-        match self.0.try_recv() {
-            Ok(value) => return Ok(value),
-            Err(oneshot::TryRecvError::Disconnected) => return Err(RecvError),
-            Err(oneshot::TryRecvError::Empty) => {}
-        }
-
         #[cfg(msim)]
         loop {
             match self.0.try_recv() {
