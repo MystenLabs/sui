@@ -104,12 +104,12 @@ impl TaskifyState {
 
     fn start_new_task(&mut self) {
         if self.has_task {
-            if self.source_body_started {
-                for comments in self.pending_comments.drain(..) {
-                    self.cur_text.extend(comments);
-                }
-            }
-            let bucketed = self.take_bucketed(CommentBlocks::new());
+            let unattached_after = if self.source_body_started {
+                std::mem::take(&mut self.pending_comments)
+            } else {
+                CommentBlocks::new()
+            };
+            let bucketed = self.take_bucketed(unattached_after);
             self.bucketed_lines.push(bucketed);
         }
         self.cur_unattached_before = std::mem::take(&mut self.pending_comments);
