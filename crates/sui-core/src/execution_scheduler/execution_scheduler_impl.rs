@@ -329,6 +329,12 @@ impl ExecutionScheduler {
                 &digests,
             ) => {
                 debug!(?tx_digest, "Transaction already executed");
+                // Deliver anyway: the driver is the sole retirement point for the
+                // causal index, and will drop the executed transaction there. (With
+                // enqueue deduplication this arm should be unreachable - execution
+                // only happens via the driver, and no duplicate copy exists - but it
+                // is kept as a safety net.)
+                self.send_transaction_for_execution(&cert, execution_env, enqueue_time);
             }
         };
     }
@@ -431,9 +437,14 @@ impl ExecutionScheduler {
                         ScheduleStatus::SkipSchedule => {
                             assert_reachable!("tx withdrawal scheduling skipped");
                             debug!(?tx_digest, "Skip scheduling funds withdraw");
-                            // The tx will not execute via this enqueue; drop it so its
-                            // causal index retires promptly rather than at task end.
-                            cert_map.remove(&tx_digest);
+                            // The tx will not execute via this enqueue; retire its
+                            // causal index here since it will never reach the driver.
+                            if let Some((_, env)) = cert_map.remove(&tx_digest)
+                                && let Some(index) = env.causal_index
+                                && env.retires_causal_index
+                            {
+                                scheduler.causal_admission().mark_done(index);
+                            }
                         }
                     },
                     Err(e) => {
@@ -510,18 +521,18 @@ impl ExecutionScheduler {
         certs: Vec<(Schedulable, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
+        // Deduplicate and assign causal indices for the whole batch first, in enqueue
+        // order, for every unit - including keys whose transactions materialize only
+        // later. A key's transactions must run under the key's index: units enqueued
+        // after it may already be parked waiting for its outputs.
+        let certs = self.dedup_and_assign_causal_indices(certs);
+
         // schedule all transactions immediately
         let mut ordinary_txns = Vec::with_capacity(certs.len());
         let mut tx_with_keys = Vec::new();
         let mut tx_with_withdraws = Vec::new();
 
         for (schedulable, env) in certs {
-            // The causal index is assigned here, in enqueue order, for every unit -
-            // including keys whose transactions materialize only later. A key's
-            // transactions must run under the key's index: units enqueued after it may
-            // already be parked waiting for its outputs, and a later-assigned index
-            // would sit above them, out of the admission window's reach.
-            let env = env.with_causal_guard(self.causal_admission.assign());
             match schedulable {
                 Schedulable::Transaction(tx) => {
                     if tx.transaction_data().has_funds_withdrawals() {
@@ -545,9 +556,47 @@ impl ExecutionScheduler {
             }
         }
 
-        self.enqueue_transactions(ordinary_txns, epoch_store);
+        self.spawn_transaction_scheduling(ordinary_txns, epoch_store);
         self.schedule_tx_keys(tx_with_keys, epoch_store);
         self.schedule_funds_withdraws(tx_with_withdraws, epoch_store);
+    }
+
+    /// Deduplicates a batch of enqueued units and assigns causal indices to the
+    /// survivors, preserving batch order. Units are grouped into consecutive runs of
+    /// the same accumulator root version; a run is admitted or rejected atomically
+    /// (all transactions of a version are enqueued together, so a rejected run was
+    /// already enqueued in full by the other source). Runs without a version are
+    /// never deduplicated.
+    fn dedup_and_assign_causal_indices<T>(
+        &self,
+        certs: Vec<(T, ExecutionEnv)>,
+    ) -> Vec<(T, ExecutionEnv)> {
+        let mut out = Vec::with_capacity(certs.len());
+        let mut iter = certs.into_iter().peekable();
+        while let Some(first) = iter.next() {
+            let version = first.1.assigned_versions.accumulator_version();
+            let mut run = vec![first];
+            while let Some((_, next_env)) = iter.peek() {
+                if next_env.assigned_versions.accumulator_version() != version {
+                    break;
+                }
+                run.push(iter.next().unwrap());
+            }
+            let Some(first_index) = self.causal_admission.admit_enqueue(version, run.len()) else {
+                debug!(
+                    ?version,
+                    "rejecting duplicate enqueue of {} transactions",
+                    run.len()
+                );
+                continue;
+            };
+            out.extend(
+                run.into_iter()
+                    .enumerate()
+                    .map(|(i, (item, env))| (item, env.with_causal_index(first_index + i as u64))),
+            );
+        }
+        out
     }
 
     pub fn enqueue_transactions(
@@ -555,21 +604,14 @@ impl ExecutionScheduler {
         certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
-        // Filter out certificates from wrong epoch. Dropping a certificate anywhere
-        // past this point retires its causal index via the guard in its env.
+        // Filter out certificates from wrong epoch.
         let certs: Vec<_> = certs
             .into_iter()
-            .filter_map(|(cert, mut env)| {
+            .filter_map(|(cert, env)| {
                 if cert.epoch() == epoch_store.epoch() {
                     #[cfg(debug_assertions)]
                     self.assert_cert_not_executed_previous_epochs(&cert);
 
-                    // External callers (checkpoint executor, tests) enqueue without a
-                    // causal index; internal re-enqueues keep the one assigned at
-                    // their original enqueue.
-                    if env.causal_guard.is_none() {
-                        env.causal_guard = Some(self.causal_admission.assign());
-                    }
                     Some((cert, env))
                 } else {
                     debug_fatal!(
@@ -577,27 +619,59 @@ impl ExecutionScheduler {
                         epoch_store.epoch(),
                         cert.epoch()
                     );
+                    // An internally re-enqueued certificate already holds an index
+                    // that must not leak.
+                    if let (Some(index), true) = (env.causal_index, env.retires_causal_index) {
+                        self.causal_admission.mark_done(index);
+                    }
                     None
                 }
             })
             .collect();
-        let digests: Vec<_> = certs.iter().map(|(cert, _)| *cert.digest()).collect();
+
+        // Internal re-enqueues (settlement transactions, funds-withdraw results)
+        // arrive already indexed and must reach the driver for index retirement, so
+        // they skip the executed filter and deduplication below.
+        let (indexed, unindexed): (Vec<_>, Vec<_>) = certs
+            .into_iter()
+            .partition(|(_, env)| env.causal_index.is_some());
+        self.spawn_transaction_scheduling(indexed, epoch_store);
+
+        // Externally enqueued certificates (checkpoint executor, tests) are filtered
+        // and deduplicated before index assignment, so dropped ones never hold an
+        // index.
+        let digests: Vec<_> = unindexed.iter().map(|(cert, _)| *cert.digest()).collect();
         let executed = self
             .transaction_cache_read
             .multi_get_executed_effects_digests(&digests);
         let mut already_executed_certs_num = 0;
-        let pending_certs = certs.into_iter().zip_debug_eq(executed).filter_map(
-            |((cert, execution_env), executed)| {
+        let pending_certs: Vec<_> = unindexed
+            .into_iter()
+            .zip_debug_eq(executed)
+            .filter_map(|((cert, execution_env), executed)| {
                 if executed.is_none() {
                     Some((cert, execution_env))
                 } else {
                     already_executed_certs_num += 1;
                     None
                 }
-            },
-        );
+            })
+            .collect();
+        let pending_certs = self.dedup_and_assign_causal_indices(pending_certs);
+        self.spawn_transaction_scheduling(pending_certs, epoch_store);
 
-        for (cert, execution_env) in pending_certs {
+        self.metrics
+            .transaction_manager_num_enqueued_certificates
+            .with_label_values(&["already_executed"])
+            .inc_by(already_executed_certs_num);
+    }
+
+    fn spawn_transaction_scheduling(
+        &self,
+        certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        for (cert, execution_env) in certs {
             let scheduler = self.clone();
             let epoch_store = epoch_store.clone();
             spawn_monitored_task!(
@@ -608,11 +682,6 @@ impl ExecutionScheduler {
                 ))
             );
         }
-
-        self.metrics
-            .transaction_manager_num_enqueued_certificates
-            .with_label_values(&["already_executed"])
-            .inc_by(already_executed_certs_num);
     }
 
     pub fn settle_address_funds(&self, settlement: FundsSettlement) {
