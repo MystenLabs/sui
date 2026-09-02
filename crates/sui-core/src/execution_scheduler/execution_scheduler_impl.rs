@@ -441,7 +441,6 @@ impl ExecutionScheduler {
                             // causal index here since it will never reach the driver.
                             if let Some((_, env)) = cert_map.remove(&tx_digest)
                                 && let Some(index) = env.causal_index
-                                && env.retires_causal_index
                             {
                                 scheduler.causal_admission().mark_done(index);
                             }
@@ -621,7 +620,7 @@ impl ExecutionScheduler {
                     );
                     // An internally re-enqueued certificate already holds an index
                     // that must not leak.
-                    if let (Some(index), true) = (env.causal_index, env.retires_causal_index) {
+                    if let Some(index) = env.causal_index {
                         self.causal_admission.mark_done(index);
                     }
                     None
@@ -629,9 +628,9 @@ impl ExecutionScheduler {
             })
             .collect();
 
-        // Internal re-enqueues (settlement transactions, funds-withdraw results)
-        // arrive already indexed and must reach the driver for index retirement, so
-        // they skip the executed filter and deduplication below.
+        // Internal re-enqueues (funds-withdraw results) arrive already indexed and
+        // must reach the driver for index retirement, so they skip the executed
+        // filter and deduplication below.
         let (indexed, unindexed): (Vec<_>, Vec<_>) = certs
             .into_iter()
             .partition(|(_, env)| env.causal_index.is_some());
@@ -664,6 +663,18 @@ impl ExecutionScheduler {
             .transaction_manager_num_enqueued_certificates
             .with_label_values(&["already_executed"])
             .inc_by(already_executed_certs_num);
+    }
+
+    /// Entry point for settlement transactions, which carry no causal index (the
+    /// driver admits them unconditionally) and are never duplicates or already
+    /// executed at construction time, so they skip the filters in
+    /// [`Self::enqueue_transactions`].
+    pub(crate) fn enqueue_settlement_transactions(
+        &self,
+        certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        self.spawn_transaction_scheduling(certs, epoch_store);
     }
 
     fn spawn_transaction_scheduling(
