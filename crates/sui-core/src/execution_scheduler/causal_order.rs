@@ -68,9 +68,7 @@ impl CausalAdmission {
     /// consensus, networking and checkpointing. In test configurations the limit is
     /// randomized instead - both because the host's CPU count must not influence
     /// simulation behavior, and to explore admission interleavings, including small
-    /// limits that force transactions through the causal-next lane. (The sim's
-    /// blocking pool, default 32 threads shared with other spawn_blocking users, must
-    /// accommodate the largest randomized K + 1.)
+    /// limits that force transactions through the causal-next lane.
     pub fn new_with_default_sizing() -> Arc<Self> {
         let concurrency_limit = if mysten_common::in_test_configuration() {
             use rand::Rng;
@@ -97,13 +95,6 @@ impl CausalAdmission {
         })
     }
 
-    /// The number of pool threads needed so that admission never has to queue:
-    /// in-flight never exceeds concurrency_limit plus the single outstanding
-    /// causal-next admission.
-    pub fn required_pool_size(&self) -> usize {
-        self.concurrency_limit + 1
-    }
-
     /// Assigns the next causal index. Callers must call this in causal order (the
     /// order units are enqueued from consensus handler / checkpoint executor).
     pub fn assign(self: &Arc<Self>) -> CausalIndexGuard {
@@ -120,9 +111,9 @@ impl CausalAdmission {
     ///
     /// Admission policy: under the concurrency limit, anything goes. At the limit, the
     /// next transaction in causal order is still admitted, one at a time - it can
-    /// never block (everything below it is done) and a pool thread is always free for
-    /// it, which is what guarantees progress no matter how many admitted transactions
-    /// are parked.
+    /// never block (everything below it is done), which is what guarantees progress no
+    /// matter how many admitted transactions are parked. In-flight is thereby bounded
+    /// at concurrency_limit + 1.
     pub fn try_admit(self: &Arc<Self>, index: u64) -> Option<InFlightSlot> {
         let mut inner = self.inner.lock().unwrap();
         debug_assert!(index > inner.watermark, "admitting an already-done index");
