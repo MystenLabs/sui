@@ -14,22 +14,17 @@ pub trait ObjectStore {
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object>;
 
     /// Load an implicitly read system object at the given version.
-    /// The version will be exact in normal execution, but in other cases the store can fall back
-    /// to the latest version to ensure a result is always available.
+    /// Returns None if the store no longer has that version.
     /// Below is the default implementation that works for all the store except the main store,
     /// which is implemented in the writeback cache.
+    // TODO: It is not ideal to have a default implementation like this.
+    // We should consider moving this function to a dedicated trait.
     fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
         version: ConsensusObjectVersion,
-    ) -> Object {
+    ) -> Option<Object> {
         self.get_object_by_key(object_id, version.version)
-            .unwrap_or_else(|| {
-                panic!(
-                    "system object {object_id} not found at required version {}",
-                    version.version
-                )
-            })
     }
 
     fn multi_get_objects(&self, object_ids: &[ObjectID]) -> Vec<Option<Object>> {
@@ -56,7 +51,7 @@ impl<T: ObjectStore + ?Sized> ObjectStore for &T {
         &self,
         object_id: &ObjectID,
         version: ConsensusObjectVersion,
-    ) -> Object {
+    ) -> Option<Object> {
         (*self).load_implicitly_read_system_object(object_id, version)
     }
 
@@ -82,7 +77,7 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Box<T> {
         &self,
         object_id: &ObjectID,
         version: ConsensusObjectVersion,
-    ) -> Object {
+    ) -> Option<Object> {
         (**self).load_implicitly_read_system_object(object_id, version)
     }
 
@@ -108,7 +103,7 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Arc<T> {
         &self,
         object_id: &ObjectID,
         version: ConsensusObjectVersion,
-    ) -> Object {
+    ) -> Option<Object> {
         (**self).load_implicitly_read_system_object(object_id, version)
     }
 

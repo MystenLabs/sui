@@ -802,7 +802,8 @@ impl LocalExec {
                 &tx_info.executed_epoch,
                 tx_info.epoch_start_timestamp,
                 checked_input_objects,
-                sui_types::base_types::SystemObjectVersions::default(),
+                // TODO: Support implicit system object reads for replay.
+                sui_types::base_types::SystemObjectVersions::empty(),
                 gas_data,
                 gas_status,
                 transaction_kind.clone(),
@@ -890,6 +891,7 @@ impl LocalExec {
                             &tx_info.executed_epoch,
                             tx_info.epoch_start_timestamp,
                             CheckedInputObjects::new_for_replay(input_objects),
+                            sui_types::base_types::SystemObjectVersions::empty(),
                             gas_data,
                             SuiGasStatus::new(
                                 tx_info.gas_budget,
@@ -999,7 +1001,7 @@ impl LocalExec {
                 &executed_epoch,
                 epoch_start_timestamp,
                 input_objects,
-                sui_types::base_types::SystemObjectVersions::default(),
+                sui_types::base_types::SystemObjectVersions::empty(),
                 gas_data,
                 gas_status,
                 kind,

@@ -94,7 +94,6 @@ pub async fn execution_process(
         }
 
         let limit = if certificate
-            .data()
             .transaction_data()
             .kind()
             .mutates_implicitly_read_system_object()
@@ -158,6 +157,8 @@ pub async fn execution_process(
 
             // Await unconditionally: once dispatched, execution always runs to completion
             // within the alive-epoch guard and is never detached at epoch end.
+            // TODO: Currently it is possible that enough transactions get blocked waiting during execution,
+            // and exhausted all blocking threads, causing the execution to stall. A fix is on the way.
             tokio::task::spawn_blocking(move || {
                 // Install the permit so a blocking sync primitive can release it while
                 // execution waits; otherwise it is released when this guard drops at the

@@ -38,7 +38,7 @@ pub trait Executor {
         epoch_timestamp_ms: u64,
         // Transaction Inputs
         input_objects: CheckedInputObjects,
-        // Versions of system objects this transaction may read, keyed by object ID.
+        // Versions of system objects this transaction may read.
         system_object_versions: SystemObjectVersions,
         // Gas related
         gas: GasData,
@@ -98,6 +98,7 @@ pub trait Executor {
         epoch_timestamp_ms: u64,
         // Transaction Inputs
         input_objects: CheckedInputObjects,
+        system_object_versions: SystemObjectVersions,
         // Gas related
         gas: GasData,
         gas_status: SuiGasStatus,

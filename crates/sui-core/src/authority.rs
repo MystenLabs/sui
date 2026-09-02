@@ -906,7 +906,7 @@ pub struct ExecutionEnv {
 impl Default for ExecutionEnv {
     fn default() -> Self {
         Self {
-            assigned_versions: Default::default(),
+            assigned_versions: AssignedVersions::empty(),
             expected_effects_digest: None,
             funds_withdraw_status: FundsWithdrawStatus::MaybeSufficient,
             barrier_dependencies: Default::default(),

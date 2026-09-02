@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use mysten_common::ZipDebugEqIteratorExt;
+use mysten_common::debug_fatal;
 
 use crate::authority::AuthorityPerEpochStore;
 use crate::authority::authority_per_epoch_store::CancelConsensusCertificateReason;
-use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::execution_cache::ObjectCacheRead;
 use either::Either;
 use std::collections::BTreeMap;
@@ -38,7 +38,7 @@ use tracing::trace;
 pub struct SharedObjVerManager {}
 
 /// Version assignments for a single transaction
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AssignedVersions {
     pub shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
     /// Versions of system objects, keyed by object ID, that this transaction may read during
@@ -62,6 +62,10 @@ impl AssignedVersions {
             shared_object_versions,
             system_object_versions,
         }
+    }
+
+    pub fn empty() -> Self {
+        Self::new(vec![], SystemObjectVersions::empty())
     }
 
     /// Construct with only the accumulator root as the system object read during execution. The
@@ -375,40 +379,44 @@ impl SharedObjVerManager {
                 .into_iter()
                 .map(|iso| iso.id_and_version())
                 .collect();
-            debug_assert!(
-                accessed_versions
-                    .keys()
-                    .all(|id| initial_version_map.contains_key(id)
-                        || IMPLICITLY_READ_SYSTEM_OBJECTS.contains(id)),
-                "accessed consensus object is neither a declared input nor a known implicitly read system object: \
-                 accessed={accessed_versions:?} declared={initial_version_map:?}"
-            );
             let cert_assigned_versions: Vec<_> = accessed_versions
                 .iter()
                 .filter_map(|(id, version)| {
-                    initial_version_map
+                    let v = initial_version_map
                         .get(id)
-                        .map(|initial_version| ((*id, *initial_version), *version))
+                        .map(|initial_version| ((*id, *initial_version), *version));
+                    if v.is_none() {
+                        debug_assert!(
+                            IMPLICITLY_READ_SYSTEM_OBJECTS.contains(id),
+                            "accessed consensus object is neither a declared input nor a known implicitly read system object: \
+                             accessed={accessed_versions:?} declared={initial_version_map:?}"
+                        );
+                    }
+                    v
                 })
                 .collect();
             if let (Some(effects_version), Some(sequenced_version)) = (
                 accessed_versions.get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID),
                 accumulator_version,
-            ) {
-                assert!(
-                    effects_version.is_cancelled() || effects_version == sequenced_version,
+            ) && !effects_version.is_cancelled()
+                && effects_version != sequenced_version
+            {
+                debug_fatal!(
                     "accumulator root version from effects {:?} disagrees \
-                     with the reconstructed accumulator version {:?} for tx {:?}",
+                        with the reconstructed accumulator version {:?} for tx {:?}",
                     effects_version,
                     sequenced_version,
                     cert.digest()
                 );
             }
+            // Note that for accumulator version, we cannot rely on the one from effects yet, since it won't
+            // be produced until implicitly read system objects are fully shipped. But the old object funds withdraw
+            // still need it. Hence we always use the one provided from the caller (i.e. checkpoint executor).
             let system_object_versions =
                 SystemObjectVersions::new(accumulator_version.map(|version| {
                     let initial_shared_version = epoch_store
                         .epoch_start_config()
-                        .system_object_initial_shared_version(SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                        .accumulator_root_obj_initial_shared_version()
                         .expect(
                             "initial shared version must be known for an implicitly read system object",
                         );

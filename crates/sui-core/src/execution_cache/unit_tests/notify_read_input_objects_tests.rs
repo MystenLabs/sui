@@ -13,7 +13,7 @@ use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::base_types::{ConsensusObjectVersion, ObjectID, SequenceNumber, SuiAddress};
 use sui_types::object::{Object, Owner};
-use sui_types::storage::InputKey;
+use sui_types::storage::{BackingStore, InputKey, TrackingBackingStore};
 use tempfile::tempdir;
 use tokio::time::timeout;
 
@@ -357,16 +357,94 @@ async fn test_load_implicitly_read_system_object() {
     let object = timeout(Duration::from_secs(3), blocked)
         .await
         .unwrap()
+        .unwrap()
         .unwrap();
     assert_eq!(object.version(), target_version);
     assert_eq!(semaphore.available_permits(), 1);
+
+    let object = cache
+        .as_ref()
+        .load_implicitly_read_system_object(
+            &object_id,
+            ConsensusObjectVersion {
+                initial_shared_version: init_version,
+                version: target_version,
+            },
+        )
+        .unwrap();
+    assert_eq!(object.version(), target_version);
+}
+
+/// A dry-run pins the latest version before execution, and that version can be pruned
+/// before it is read. When a newer version already exists, the load must return None
+/// immediately instead of waiting for a version that will never be written again.
+#[tokio::test]
+async fn test_load_implicitly_read_system_object_superseded_version() {
+    let cache = create_writeback_cache().await;
+
+    let object_id = sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
+    let init_version = SequenceNumber::from(1);
+    for version in [2, 4] {
+        cache.write_object_entry_for_test(Object::with_id_owner_version_for_testing(
+            object_id,
+            SequenceNumber::from(version),
+            Owner::Shared {
+                initial_shared_version: init_version,
+            },
+        ));
+    }
 
     let object = cache.as_ref().load_implicitly_read_system_object(
         &object_id,
         ConsensusObjectVersion {
             initial_shared_version: init_version,
-            version: target_version,
+            version: SequenceNumber::from(3),
         },
     );
+    assert!(object.is_none());
+}
+
+/// The executor only sees `&dyn BackingStore`, and `ObjectStore` has a non-blocking default
+/// for this method. This calls through the same chain execution uses (`TrackingBackingStore`
+/// over the cache's `BackingStore` pointer) and checks that it reaches the blocking
+/// implementation in the writeback cache rather than the default.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_load_implicitly_read_system_object_via_backing_store() {
+    let cache = create_writeback_cache().await;
+
+    let object_id = sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
+    let init_version = SequenceNumber::from(1);
+    let target_version = SequenceNumber::from(3);
+
+    let blocked = tokio::task::spawn_blocking({
+        let cache = cache.clone();
+        move || {
+            let backing_store: Arc<dyn BackingStore + Send + Sync> = cache;
+            let tracking_store = TrackingBackingStore::new(backing_store.as_ref());
+            let store: &dyn BackingStore = &tracking_store;
+            store.load_implicitly_read_system_object(
+                &object_id,
+                ConsensusObjectVersion {
+                    initial_shared_version: init_version,
+                    version: target_version,
+                },
+            )
+        }
+    });
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(!blocked.is_finished());
+
+    cache.write_object_entry_for_test(Object::with_id_owner_version_for_testing(
+        object_id,
+        target_version,
+        Owner::Shared {
+            initial_shared_version: init_version,
+        },
+    ));
+    let object = timeout(Duration::from_secs(3), blocked)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
     assert_eq!(object.version(), target_version);
 }

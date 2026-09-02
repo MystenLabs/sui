@@ -233,7 +233,7 @@ pub struct ConsensusObjectVersion {
     pub version: SequenceNumber,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SystemObjectVersions {
     accumulator_version: Option<ConsensusObjectVersion>,
 }
@@ -243,6 +243,10 @@ impl SystemObjectVersions {
         Self {
             accumulator_version,
         }
+    }
+
+    pub fn empty() -> Self {
+        Self::new(None)
     }
 
     pub fn get(&self, object_id: &ObjectID) -> Option<ConsensusObjectVersion> {

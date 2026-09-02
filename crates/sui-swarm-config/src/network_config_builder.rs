@@ -782,7 +782,7 @@ mod test {
                 &epoch.epoch_id(),
                 epoch.epoch_start_timestamp(),
                 input_objects,
-                sui_types::base_types::SystemObjectVersions::default(),
+                sui_types::base_types::SystemObjectVersions::empty(),
                 gas_data,
                 SuiGasStatus::new_unmetered(&protocol_config),
                 kind,

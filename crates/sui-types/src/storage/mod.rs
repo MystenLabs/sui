@@ -841,13 +841,11 @@ impl SystemObjectVersions {
             })
             .map(|version| {
                 let initial_shared_version = store
-                    .get_object_by_key(&SUI_ACCUMULATOR_ROOT_OBJECT_ID, version)
+                    .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
                     .and_then(|object| object.owner().start_version())
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "accumulator root at version {version} must be a consensus object in the store"
-                        )
-                    });
+                    // unwrap safe because if effects contain the accumulator root object, it must
+                    // exist in the store and is a shared object.
+                    .unwrap();
                 ConsensusObjectVersion {
                     initial_shared_version,
                     version,
@@ -858,8 +856,7 @@ impl SystemObjectVersions {
 
     /// Before execution, get the latest versions of the implicitly read system objects from the store,
     /// and use these versions as the exact version to read during execution.
-    /// This is different from SystemObjectVersionRequirements::Latest in that the versions are pinned and won't change during execution.
-    /// This is used only in environments where there is no consensus but also can only have sequential execution, e.g. simulacrum.
+    /// This is used only in environments where there is no consensus to assign versions, e.g. simulacrum and dry-run.
     pub fn from_latest_in_store(store: &dyn ObjectStore) -> Self {
         let accumulator_version = store
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
@@ -1018,7 +1015,7 @@ impl crate::storage::ObjectStore for TrackingBackingStore<'_> {
         &self,
         object_id: &ObjectID,
         version: crate::base_types::ConsensusObjectVersion,
-    ) -> Object {
+    ) -> Option<Object> {
         self.inner
             .load_implicitly_read_system_object(object_id, version)
     }

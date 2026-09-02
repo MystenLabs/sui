@@ -497,11 +497,15 @@ macro_rules! check_cache_entry_by_latest {
 }
 
 impl WritebackCache {
+    /// Load an implicitly read system object at the requested version.
+    /// In normal execution, this function can block wait until the object is available at the requested version,
+    /// and it is guaranteed to return an object with the requested version.
+    /// In dry-runs, this function will never block wait, but may return None if the requested version was pruned by this point.
     pub(crate) fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
         version: ConsensusObjectVersion,
-    ) -> Object {
+    ) -> Option<Object> {
         assert!(
             sui_types::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(object_id),
             "{object_id} is not an implicitly read system object"
@@ -511,7 +515,7 @@ impl WritebackCache {
             version,
         } = version;
         if let Some(object) = ObjectCacheRead::get_object_by_key(self, object_id, version) {
-            return object;
+            return Some(object);
         }
         self.metrics
             .implicit_system_object_read_waits
@@ -522,21 +526,26 @@ impl WritebackCache {
             id: FullObjectID::Consensus((*object_id, initial_shared_version)),
             version,
         };
+        // Block wait until the object is available at the requested version.
+        // Note that before blocking, we check if the latest version already passed the requested version,
+        // if so it must imply that we have already produced the requested version.
+        // We are doing this check instead of exact version comparison to handle the rare case during
+        // dry-runs where the requested version was pruned by this point.
+        // Also note that in the case of dry-run, this will never block wait.
         self.object_notify_read.read_one_blocking(
             "load_implicitly_read_system_object",
             &key,
-            |_key| self.object_exists_by_key(object_id, version).then_some(()),
+            |_key| {
+                ObjectCacheRead::get_object(self, object_id)
+                    .is_some_and(|latest| latest.version() >= version)
+                    .then_some(())
+            },
         );
         self.metrics
             .implicit_system_object_read_wait_latency
             .with_label_values(&[object_id.to_string().as_str()])
             .observe(wait_start.elapsed().as_secs_f64());
-        ObjectCacheRead::get_object_by_key(self, object_id, version).unwrap_or_else(|| {
-            panic!(
-                "system object {object_id} not found at version {version} after its write was \
-                 committed"
-            )
-        })
+        ObjectCacheRead::get_object_by_key(self, object_id, version)
     }
 
     pub fn new(
