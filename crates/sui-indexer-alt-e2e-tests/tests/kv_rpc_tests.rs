@@ -3726,7 +3726,15 @@ async fn test_list_checkpoints_query_options() {
         response3.end,
         "cursor after final checkpoint should include end frame"
     );
-    assert_eq!(response3.end_reason, Some(QueryEndReason::CursorBound));
+    assert_eq!(response3.end_reason, Some(QueryEndReason::CheckpointBound));
+    let (_, terminal_watermark) = response3
+        .frames
+        .last()
+        .expect("empty-window terminal watermark");
+    assert_eq!(
+        terminal_watermark.checkpoint, None,
+        "empty-window terminal watermark must not claim checkpoint coverage"
+    );
 
     let mut reverse_req = ListCheckpointsRequest::default();
     reverse_req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
@@ -3869,7 +3877,15 @@ async fn test_list_checkpoints_query_options() {
     );
     assert_eq!(
         exact_next_result.end_reason,
-        Some(QueryEndReason::CursorBound)
+        Some(QueryEndReason::CheckpointBound)
+    );
+    let (_, terminal_watermark) = exact_next_result
+        .frames
+        .last()
+        .expect("empty-window terminal watermark");
+    assert_eq!(
+        terminal_watermark.checkpoint, None,
+        "empty-window terminal watermark must not claim checkpoint coverage"
     );
 }
 
