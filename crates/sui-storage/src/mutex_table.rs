@@ -334,6 +334,9 @@ async fn test_mutex_table_concurrent_in_same_bucket() {
         let mutex_table = mutex_table.clone();
         let waiter_entered = waiter_entered.clone();
         move || {
+            // This flag used to be set from inside the contended wait, via the
+            // (since removed) execution-permit release hook; signal just before
+            // entering the wait instead.
             waiter_entered.store(true, Ordering::SeqCst);
             drop(mutex_table.acquire_lock("john".to_string()));
         }
