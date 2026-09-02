@@ -199,7 +199,6 @@ async fn construct_shared_object_transaction_with_sequence_number(
             "share",
             vec![],
             vec![],
-            true,
         )
         .await
         .unwrap();
@@ -375,7 +374,6 @@ async fn test_dev_inspect_object_by_bytes() {
             TestCallArg::Pure(bcs::to_bytes(&(16_u64)).unwrap()),
             TestCallArg::Pure(bcs::to_bytes(&sender).unwrap()),
         ],
-        false,
     )
     .await
     .unwrap();
@@ -440,7 +438,6 @@ async fn test_dev_inspect_object_by_bytes() {
             TestCallArg::Object(created_object_id),
             TestCallArg::Pure(bcs::to_bytes(&100_u64).unwrap()),
         ],
-        false,
     )
     .await
     .unwrap();
@@ -478,7 +475,6 @@ async fn test_dev_inspect_unowned_object() {
             TestCallArg::Pure(bcs::to_bytes(&(16_u64)).unwrap()),
             TestCallArg::Pure(bcs::to_bytes(&bob).unwrap()),
         ],
-        false,
     )
     .await
     .unwrap();
@@ -545,7 +541,6 @@ async fn test_dev_inspect_dynamic_field() {
                         TestCallArg::Pure(bcs::to_bytes(&(16_u64)).unwrap()),
                         TestCallArg::Pure(bcs::to_bytes(&sender).unwrap()),
                     ],
-                    false,
                 )
                 .await
                 .unwrap();
@@ -652,7 +647,6 @@ async fn test_dev_inspect_return_values() {
             TestCallArg::Pure(bcs::to_bytes(&(init_value)).unwrap()),
             TestCallArg::Pure(bcs::to_bytes(&sender).unwrap()),
         ],
-        false,
     )
     .await
     .unwrap();
@@ -758,7 +752,6 @@ async fn test_dev_inspect_return_values() {
         "wrap_object",
         vec![],
         vec![TestCallArg::Object(created_object_id)],
-        false,
     )
     .await
     .unwrap();
@@ -1021,7 +1014,6 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
             TestCallArg::Pure(bcs::to_bytes(&(16_u64)).unwrap()),
             TestCallArg::Pure(bcs::to_bytes(&sender).unwrap()),
         ],
-        false,
     )
     .await
     .unwrap();
@@ -1044,7 +1036,6 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
             TestCallArg::Pure(bcs::to_bytes(&(32_u64)).unwrap()),
             TestCallArg::Pure(bcs::to_bytes(&sender).unwrap()),
         ],
-        false,
     )
     .await
     .unwrap();
@@ -1064,7 +1055,6 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
         "add_field",
         vec![],
         vec![TestCallArg::Object(parent.0), TestCallArg::Object(child.0)],
-        false,
     )
     .await
     .unwrap();
@@ -4188,7 +4178,6 @@ pub async fn call_move(
         function,
         type_args,
         test_args,
-        false, // no shared objects
     )
     .await
 }
@@ -4204,7 +4193,6 @@ pub async fn call_move_(
     function: &'_ str,
     type_args: Vec<TypeTag>,
     test_args: Vec<TestCallArg>,
-    with_shared: bool, // Move call includes shared objects
 ) -> SuiResult<TransactionEffects> {
     let gas_object = authority.get_object(gas_object_id);
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
@@ -4230,10 +4218,9 @@ pub async fn call_move_(
     );
 
     let transaction = to_sender_signed_transaction(data, sender_key);
-    let signed_effects =
-        submit_and_execute_with_options(authority, fullnode, transaction, with_shared)
-            .await?
-            .1;
+    let signed_effects = submit_and_execute_with_options(authority, fullnode, transaction)
+        .await?
+        .1;
     Ok(signed_effects.into_data())
 }
 
@@ -4252,7 +4239,6 @@ pub async fn execute_programmable_transaction(
         sender,
         sender_key,
         pt,
-        /* with_shared */ false,
         gas_unit,
     )
     .await
@@ -4273,7 +4259,6 @@ pub async fn execute_programmable_transaction_with_shared(
         sender,
         sender_key,
         pt,
-        /* with_shared */ true,
         gas_unit,
     )
     .await
@@ -4303,7 +4288,6 @@ async fn execute_programmable_transaction_(
     sender: &SuiAddress,
     sender_key: &AccountKeyPair,
     pt: ProgrammableTransaction,
-    with_shared: bool, // Move call includes shared objects
     gas_unit: u64,
 ) -> SuiResult<TransactionEffects> {
     let rgp = authority.reference_gas_price_for_testing().unwrap();
@@ -4313,10 +4297,9 @@ async fn execute_programmable_transaction_(
         TransactionData::new_programmable(*sender, vec![gas_object_ref], pt, rgp * gas_unit, rgp);
 
     let transaction = to_sender_signed_transaction(data, sender_key);
-    let signed_effects =
-        submit_and_execute_with_options(authority, fullnode, transaction, with_shared)
-            .await?
-            .1;
+    let signed_effects = submit_and_execute_with_options(authority, fullnode, transaction)
+        .await?
+        .1;
     Ok(signed_effects.into_data())
 }
 
@@ -4332,7 +4315,6 @@ async fn call_move_with_gas_coins(
     function: &'_ str,
     type_args: Vec<TypeTag>,
     test_args: Vec<TestCallArg>,
-    with_shared: bool, // Move call includes shared objects
 ) -> SuiResult<TransactionEffects> {
     let mut gas_object_refs = vec![];
     for obj_id in gas_object_ids {
@@ -4362,10 +4344,9 @@ async fn call_move_with_gas_coins(
     );
 
     let transaction = to_sender_signed_transaction(data, sender_key);
-    let signed_effects =
-        submit_and_execute_with_options(authority, fullnode, transaction, with_shared)
-            .await?
-            .1;
+    let signed_effects = submit_and_execute_with_options(authority, fullnode, transaction)
+        .await?
+        .1;
     Ok(signed_effects.into_data())
 }
 
@@ -4416,7 +4397,6 @@ async fn create_move_object_with_gas_coins(
             TestCallArg::Pure(bcs::to_bytes(&(16_u64)).unwrap()),
             TestCallArg::Pure(bcs::to_bytes(sender).unwrap()),
         ],
-        false,
     )
     .await
 }
