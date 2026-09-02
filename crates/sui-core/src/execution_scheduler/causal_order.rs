@@ -136,7 +136,7 @@ impl CausalAdmission {
 
     /// Attempts to admit the transaction with `index` for execution. On success,
     /// returns a slot that must be held for the duration of execution; dropping it
-    /// releases the concurrency slot.
+    /// releases the concurrency slot and retires the index.
     ///
     /// Admission policy: under the concurrency limit, anything goes. At the limit, the
     /// next transaction in causal order is still admitted, one at a time - it can
@@ -159,7 +159,7 @@ impl CausalAdmission {
         Some(InFlightSlot {
             admission: self.clone(),
             is_next,
-            done_on_drop: None,
+            retire_on_drop: Some(index),
         })
     }
 
@@ -200,19 +200,19 @@ impl CausalAdmission {
     }
 }
 
-/// A held execution-concurrency slot; dropping it releases the slot and wakes the
-/// driver.
+/// A held execution-concurrency slot. Dropping it releases the slot and retires the
+/// admitted index - one lock and one driver wakeup for the whole completion.
 pub struct InFlightSlot {
     admission: Arc<CausalAdmission>,
     is_next: bool,
-    done_on_drop: Option<u64>,
+    retire_on_drop: Option<u64>,
 }
 
 impl InFlightSlot {
-    /// Releases the slot and, when `done` names an index, retires it - one lock and
-    /// one driver wakeup for the common completion path instead of two.
-    pub fn complete(mut self, done: Option<u64>) {
-        self.done_on_drop = done;
+    /// Keeps the admitted causal index alive past this execution attempt, for a
+    /// transaction that will be re-submitted under the same index (RetryLater).
+    pub fn skip_retire(&mut self) {
+        self.retire_on_drop = None;
     }
 }
 
@@ -223,7 +223,7 @@ impl Drop for InFlightSlot {
         if self.is_next {
             inner.next_admitted = false;
         }
-        if let Some(index) = self.done_on_drop {
+        if let Some(index) = self.retire_on_drop {
             CausalAdmission::mark_done_locked(&mut inner, index);
         }
         drop(inner);
@@ -273,20 +273,25 @@ mod tests {
         admission.admit_enqueue(None, 2).unwrap();
 
         // Fill the single concurrency slot with index 2.
-        let _slot2 = admission.try_admit(2).unwrap();
+        let mut slot2 = admission.try_admit(2).unwrap();
         // The capacity branch is closed, but index 1 == watermark+1 is still admitted.
-        let slot1 = admission.try_admit(1).unwrap();
+        let mut slot1 = admission.try_admit(1).unwrap();
         // Only one causal-next admission may be outstanding at a time.
         assert!(admission.try_admit(1).is_none());
+        // A RetryLater release keeps the index alive, and it can be admitted again.
+        slot1.skip_retire();
         drop(slot1);
-        // An unretired index (a RetryLater re-submission) can be admitted again.
         let slot1b = admission.try_admit(1).unwrap();
 
+        // Completing index 1 retires it via the slot drop.
         drop(slot1b);
-        admission.mark_done(1);
         assert_eq!(admission.watermark_for_testing(), 1);
-        // Index 2 is now watermark+1; admitting again bypasses the (full) limit.
-        assert!(admission.try_admit(2).is_some());
+        // Index 2 is now watermark+1; re-admitting it bypasses the (full) limit.
+        slot2.skip_retire();
+        drop(slot2);
+        let slot2b = admission.try_admit(2).unwrap();
+        drop(slot2b);
+        assert_eq!(admission.watermark_for_testing(), 2);
     }
 
     #[test]

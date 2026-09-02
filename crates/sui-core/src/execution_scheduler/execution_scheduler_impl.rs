@@ -329,9 +329,9 @@ impl ExecutionScheduler {
                 &digests,
             ) => {
                 debug!(?tx_digest, "Transaction already executed");
-                // Deliver indexed transactions anyway: the driver is the sole
-                // retirement point for the causal index, and will drop the executed
-                // transaction there. (With enqueue deduplication this arm should be
+                // Deliver indexed transactions anyway so the driver retires the
+                // causal index; try_execute_immediately no-ops on an executed
+                // transaction. (With enqueue deduplication this arm should be
                 // unreachable - execution only happens via the driver, and no
                 // duplicate copy exists - but it is kept as a safety net.)
                 if execution_env.causal_index.is_some() {
