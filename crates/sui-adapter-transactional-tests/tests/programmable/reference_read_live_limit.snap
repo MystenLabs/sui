@@ -1,0 +1,24 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+// A generated `Read` releases its reference immediately, so reading one reference more times than
+// `max_ptb_live_references` in a single command stays under the limit.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-19:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5046400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 21-24:
+//# programmable --sender A --inputs 7u64 65u64
+//> 0: test::m::id_ref(Input(0));
+//> 1: MakeMoveVec<u64>([Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0), Result(0)]);
+//> 2: test::m::check_vec(Result(1), Input(1), Input(0));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0

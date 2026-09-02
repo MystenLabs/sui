@@ -1,0 +1,35 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+// Generated `Read`s require the dereferenced type to have `copy`.
+// Generated `Read`s require the underlying reference to still be live (i.e. not moved).
+
+init:
+A: object(0,0)
+
+task 1, lines 9-37:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6308000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 39-42:
+//# programmable --sender A --inputs 112u64
+//> 0: test::m::new_obj(Input(0));
+//> 1: test::m::id_ref<test::m::Obj>(Result(0));
+//> 2: test::m::take(Result(1));
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(2) } }
+
+// Referent moved while a reference into it is still read later
+
+task 3, lines 46-50:
+//# programmable --sender A --inputs 112u64
+//> 0: test::m::new_obj(Input(0));
+//> 1: test::m::borrow_value(Result(0));
+//> 2: test::m::take(Result(0));
+//> 3: test::m::check(Result(1), Input(0));
+Error: Transaction Effects Status: Invalid command argument at 0. Cannot move a borrowed value. The value's type does resulted in this argument usage being inferred as a move. This is likely due to the type not having the `copy` ability; although in rare cases, it could also be this is the last usage of a value without the `drop` ability.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: CannotMoveBorrowedValue }, source: None, command: Some(2) } }
