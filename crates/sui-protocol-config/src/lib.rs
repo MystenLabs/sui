@@ -1185,6 +1185,12 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     allowed_proposers: bool,
 
+    // If true, validators derive the staggered-submission activation signal from commit
+    // output: unpaid duplication of transactions without allowed proposers arms staggered
+    // consensus submission in lockstep across honest validators.
+    #[serde(skip_serializing_if = "is_false")]
+    staggered_submission_signal: bool,
+
     #[serde(skip_serializing_if = "is_false")]
     randomize_checkpoint_tx_limit_in_tests: bool,
 
@@ -4696,6 +4702,10 @@ impl ProtocolConfig {
                 137 => {
                     cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(621);
                     cfg.max_bulletproofs_total_bits = Some(1024);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.staggered_submission_signal = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
