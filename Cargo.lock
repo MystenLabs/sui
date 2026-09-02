@@ -14851,9 +14851,14 @@ name = "sui-fork-e2e-tests"
 version = "1.80.0"
 dependencies = [
  "anyhow",
+ "datatest-stable",
+ "fs_extra",
+ "move-command-line-common",
  "prometheus",
+ "regex",
  "reqwest",
  "serde_json",
+ "sui-config",
  "sui-futures",
  "sui-indexer-alt",
  "sui-indexer-alt-consistent-store",

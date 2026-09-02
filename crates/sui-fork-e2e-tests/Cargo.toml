@@ -9,6 +9,10 @@ edition = "2024"
 [lints]
 workspace = true
 
+[[test]]
+name = "shell_tests"
+harness = false
+
 [dependencies]
 anyhow.workspace = true
 prometheus.workspace = true
@@ -27,3 +31,11 @@ sui-indexer-alt-reader.workspace = true
 sui-pg-db.workspace = true
 sui-types.workspace = true
 test-cluster.workspace = true
+
+[dev-dependencies]
+datatest-stable.workspace = true
+fs_extra.workspace = true
+move-command-line-common.workspace = true
+regex.workspace = true
+
+sui-config.workspace = true
