@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Publish a Move package on a fork with `sui client publish` and check that the package exists on
+# the fork but not on the localnet it was forked from.
+set -euo pipefail
+source ./lib.sh
+
+sender=$(on_localnet active-address)
+fork_start --address "$sender"
+fork_env
+
+assert_ne "$(on_fork chain-identifier --format=hex)" "$(on_localnet chain-identifier --format=hex)" \
+  "the fork derives its own chain identifier from the fork checkpoint"
+add_env_to_toml counter fork on_fork
+
+gas=$(gas_coin on_fork)
+tip_before=$(fork_status_field checkpoint_sequence_number)
+run_json publish.json on_fork publish counter --gas "$gas" --gas-budget 100000000
+assert_eq "$(tx_status_of publish.json)" success "publish executed on the fork"
+package=$(published_package_id publish.json)
+cap=$(created_object_id publish.json "::package::UpgradeCap")
+assert_nonempty "$package" "publish reported the new package id"
+assert_nonempty "$cap" "publish created an UpgradeCap"
+tip_after=$(fork_status_field checkpoint_sequence_number)
+assert_eq "$((tip_after - tip_before))" 1 "publish sealed exactly one checkpoint"
+
+assert_eq "$(object_field on_fork "$package" .objType)" package \
+  "the package is readable on the fork"
+assert_eq "$(object_field on_fork "$cap" .owner.AddressOwner)" "$sender" \
+  "the UpgradeCap is owned by the sender on the fork"
+if on_localnet object "$package" > localnet_package.log 2>&1; then
+  fail "the package must not exist on the localnet"
+  cat localnet_package.log
+else
+  assert_grep "not found" localnet_package.log "the package does not exist on the localnet"
+fi
+
+echo "=== counter/Published.toml ==="
+extract_published counter/Published.toml
+
+exit "$FAILED"
