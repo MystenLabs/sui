@@ -316,7 +316,8 @@ pub struct AuthorityMetrics {
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
     pub(crate) consensus_handler_duplicate_tx_count: Histogram,
     pub(crate) staggered_submission_excess_copies: Histogram,
-    pub(crate) staggered_submission_active: IntGauge,
+    pub(crate) staggered_submission_signal_armed: IntGauge,
+    pub(crate) staggered_submission_signal_transitions: IntCounterVec,
 
     pub(crate) authority_overload_status: IntGauge,
     pub(crate) authority_load_shedding_percentage: IntGauge,
@@ -641,9 +642,16 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            staggered_submission_active: register_int_gauge_with_registry!(
-                "staggered_submission_active",
-                "Whether staggered consensus submission is currently armed by the duplication signal (1) or not (0)",
+            staggered_submission_signal_armed: register_int_gauge_with_registry!(
+                "staggered_submission_signal_armed",
+                "Whether the duplication signal is currently armed (1) or not (0); staggering itself only follows when the staggered_submission_signal protocol flag is enabled",
+                registry,
+            )
+            .unwrap(),
+            staggered_submission_signal_transitions: register_int_counter_vec_with_registry!(
+                "staggered_submission_signal_transitions",
+                "Number of duplication-signal transitions, labeled by the state entered",
+                &["state"],
                 registry,
             )
             .unwrap(),
