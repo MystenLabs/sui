@@ -1,20 +1,21 @@
 ---
 title: Market Keys
 description: >-
-  Learn how DeepBook Predict identifies binary positions and vertical ranges
-  with MarketKey and RangeKey.
+  Learn how DeepBook Predict addresses a position with absolute strike ticks, a
+  half-open tick pair, sentinel ticks, and a packed order ID.
 keywords:
-  - deepbook predict market key
-  - marketkey
-  - rangekey
-  - binary position
-  - vertical range
-  - strike
-  - expiry
+  - deepbook predict strike tick
+  - absolute tick grid
+  - tick size
+  - admission tick size
+  - pos_inf_tick
+  - range position
+  - order id
+  - expiry market
 goal:
   description: >-
-    Reader can learn how DeepBook Predict identifies binary positions and
-    vertical ranges with MarketKey and RangeKey
+    Reader can learn how DeepBook Predict addresses a position with absolute
+    strike ticks, a half-open tick pair, sentinel ticks, and a packed order ID
   requires:
     - has_frontmatter:
         - title
@@ -28,261 +29,345 @@ goal:
     - has_answer: true
       label: Needs answer summary for AI citation
 questions:
-  - What is a MarketKey in DeepBook Predict?
-  - How do I build a MarketKey or RangeKey in a transaction block?
-  - Should I use a binary position or a vertical range?
-  - Why does a DeepBook Predict mint fail with an invalid strike error?
+  - How does DeepBook Predict identify a strike?
+  - What are the sentinel ticks for an open-ended DeepBook Predict range?
+  - Why does a DeepBook Predict mint fail with an invalid admission tick error?
+  - How do I find the expiry market object for an underlying and expiry?
 answer: >-
-  `MarketKey` identifies a binary position by oracle ID, expiry, strike, and
-  direction. `RangeKey` identifies a vertical range by oracle ID, expiry, lower
-  strike, and higher strike. Both are plain value types that key the position
-  tables inside a `PredictManager` and the exposure state inside the vault.
+  DeepBook Predict addresses every strike as an absolute integer tick, where the
+  raw strike equals the tick multiplied by the market's tick_size. A position is
+  the tick pair (lower_tick, higher_tick) and pays when settlement lands in the
+  half-open region (lower, higher]. Tick 0 is the negative-infinity sentinel and
+  tick 1073741823 is the positive-infinity sentinel. A minted position is a
+  packed u256 order ID that is unique only within one expiry market.
+last_verified: 2026-09-02
+verified_against: predict-testnet-8-21
 ---
 
-`MarketKey` and `RangeKey` identify the internal position quantities stored in a `PredictManager`. Neither is an object. Both are plain `copy`, `drop`, `store` value types that you build inside a transaction, pass to a trading function, and discard.
+Every strike in DeepBook Predict is an absolute integer tick counted from zero. One expiry market fixes one `tick_size`, and the raw strike is the product:
 
-Use `MarketKey` for binary positions keyed by oracle ID, expiry, strike, and direction. Use `RangeKey` for vertical ranges keyed by oracle ID, expiry, lower strike, and higher strike.
-
-## Choose a key {#choose-a-key}
-
-The instrument you want determines the key you build. Both instruments pay the same way, where a quantity of `1_000_000` pays 1 USD when the instrument wins and nothing when it loses.
-
-| **Your view on settlement** | **Instrument** | **Constructor** | **Wins when** |
-|---|---|---|---|
-| Ends above one level | Binary up | `market_key::up` | `settlement > strike` |
-| Ends at or below one level | Binary down | `market_key::down` | `settlement <= strike` |
-| Lands between two levels | Vertical range | `range_key::new` | `lower < settlement <= higher` |
-
-Pick a binary position for a one-sided directional view. It wins on an unbounded outcome, so it costs more per contract and wins more often.
-
-Pick a vertical range for a view that settlement lands inside a band. A range wins on a bounded outcome, so it costs less per contract and wins less often. Ranges suit a view on where a price settles rather than which direction it moves.
-
-A range is economically a spread of two binary positions, but do not build it that way. The protocol prices a range as one instrument through `predict::mint_range`, stores it as one row keyed by `RangeKey`, and adjusts vault exposure for the pairing. Two separate binary mints cost more gas, create two rows you must track independently, and price without that adjustment.
-
-## `MarketKey` {#market-key}
-
-A `MarketKey` identifies one binary instrument: a single strike on a single oracle, in one direction.
-
-### Fields {#market-key-fields}
-
-| **Field** | **Type** | **Description** |
-|---|---|---|
-| `oracle_id` | `ID` | Object ID of the `OracleSVI` that defines the underlying asset and expiry. |
-| `expiry` | `u64` | Expiration timestamp in milliseconds. Redundant with the oracle, but stored explicitly. |
-| `strike` | `u64` | Strike price in fixed point, on the oracle's configured grid. |
-| `direction` | `u8` | `0` for up, `1` for down. Private, so read it with `is_up()` or `is_down()`. |
-
-### Constructors {#market-key-constructors}
-
-```move title='packages/predict/sources/market_key/market_key.move'
-public fun up(oracle_id: ID, expiry: u64, strike: u64): MarketKey
-public fun down(oracle_id: ID, expiry: u64, strike: u64): MarketKey
-public fun new(oracle_id: ID, expiry: u64, strike: u64, is_up: bool): MarketKey
+```text
+raw_strike = tick * tick_size
 ```
 
-`up()` and `down()` set the direction for you. `new()` takes a `bool` and normalizes it to the same `0` or `1` byte, so all three produce identical keys for the same inputs. Use `new()` when direction is a runtime value and the named constructors when it is fixed.
+A position is a pair of those ticks, `(lower_tick, higher_tick)`, and it pays its full quantity when settlement lands inside the half-open region `(lower, higher]`. There is no second strike representation anywhere in the protocol: the same tick means the same price at the mint call, in the events, in the payout index, and at settlement. Nothing is expressed relative to a per-market origin, and market creation reads no live spot price.
 
-None of the three validates its arguments. They always succeed, even with a nonexistent oracle ID or an off-grid strike. Validation happens later, when you pass the key to `predict::mint` or `predict::redeem`. See [Validation rules](#validation-rules).
+Positions are not objects. A mint returns a packed `u256` order ID, and that ID together with its market identifies the position.
 
-### Read fields {#market-key-reads}
+## The tick grid {#tick-grid}
 
-```move title='packages/predict/sources/market_key/market_key.move'
-public fun oracle_id(key: &MarketKey): ID
-public fun expiry(key: &MarketKey): u64
-public fun strike(key: &MarketKey): u64
-public fun is_up(key: &MarketKey): bool
-public fun is_down(key: &MarketKey): bool
+Each expiry market snapshots its `tick_size` from the cadence configuration the registry holds for its underlying, and never changes it. Raw strikes use the protocol's 1e9 fixed-point price scale, so a `tick_size` of `10_000_000` is 0.01 USD per tick. Every configured `tick_size` must be a multiple of `constants::market_tick_size_unit!()`, which is `10_000`.
+
+Read the grid off an `ExpiryMarket` with these public accessors:
+
+```move title='packages/predict/sources/expiry_market.move'
+public fun tick_size(market: &ExpiryMarket): u64
+public fun admission_tick_size(market: &ExpiryMarket): u64
+public fun reference_tick(market: &ExpiryMarket): Option<u64>
+public fun reference_tick_source_timestamp_ms(market: &ExpiryMarket): u64
 ```
-
-`is_up()` and `is_down()` are exact complements. No third direction value exists, because the constructors are the only way to set the field.
-
-### Worked example {#market-key-example}
-
-These values describe an up position on a BTC oracle expiring 2026-01-01, struck at 95,000 USD. Strikes use the same 1e9 fixed-point scale as `oracle::spot_price` and `oracle::forward_price`, so 1 USD is `1_000_000_000`.
-
-| **Input** | **Value** | **Reads as** |
-|---|---|---|
-| `oracle_id` | `0x7c2f9a1d8e3b45607f1a2c9d0b8e6534a7f10d92c3b8e45f6a0d17b93c2e8f41` | Example ID. Read the real one from the Predict server. |
-| `expiry` | `1767225600000` | 2026-01-01T00:00:00Z in milliseconds |
-| `strike` | `95_000_000_000_000` | 95,000 USD |
-
-In Move:
-
-```move
-let key = market_key::up(
-    oracle_id,
-    1767225600000,
-    95_000_000_000_000,
-);
-```
-
-The following Testnet example builds the same key in a transaction block and passes it straight to `predict::mint`. Step 2 is the `market_key::up` call, and step 3 consumes its result:
-
-<ImportContent source="examples/deepbook-predict/src/mint.ts" mode="code" tag="mint-binary" />
-
-Pass the key result straight into the next `moveCall` as an argument. A key is a value, not an object, so never wrap it in `tx.object`.
 
 <details>
-<summary>Source for the `MarketKey` struct and functions</summary>
+<summary>Source for the tick accessors</summary>
 
 <ImportContent
-	source="packages/predict/sources/market_key/market_key.move"
+	source="packages/predict/sources/expiry_market.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
+	branch="predict-testnet-8-21"
+	fun="tick_size,admission_tick_size,reference_tick,reference_tick_source_timestamp_ms"
+	noComments
+/>
+
+</details>
+
+The only conversion in the other direction is `range_codec::strike_from_tick`, which applies the sentinel mapping first and multiplies otherwise. It is the single public entry into the raw-price domain:
+
+<ImportContent
+	source="packages/predict/sources/strike_exposure/range_codec.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	fun="strike_from_tick"
+	noComments
+/>
+
+The Testnet deployment runs one underlying, BTC, with five enabled cadences. Every enabled cadence uses the same fine grid and differs only in how coarse its admission grid is:
+
+| **Cadence** | **`tick_size` raw** | **Fine grid** | **`admission_tick_size` raw** | **Admission grid** |
+|---|---|---|---|---|
+| 1m | `10_000_000` | 0.01 USD | `1_000_000_000` | 1 USD |
+| 5m | `10_000_000` | 0.01 USD | `1_000_000_000` | 1 USD |
+| 1h | `10_000_000` | 0.01 USD | `1_000_000_000` | 1 USD |
+| 1d | `10_000_000` | 0.01 USD | `100_000_000_000` | 100 USD |
+| 1w | `10_000_000` | 0.01 USD | `100_000_000_000` | 100 USD |
+
+The 1mo cadence is configured and disabled, and a disabled cadence reads back as an all-zero configuration. Read the live values with `registry::cadence_config` or `registry::cadence_configs` rather than hardcoding them, because an admin can change a cadence and each market keeps the terms it was created with.
+
+## A position is a tick pair {#range-key}
+
+Both mint functions take `lower_tick` and `higher_tick` as separate `u64` arguments, and both order events carry them the same way. The pair is packed into one integer only inside the durable order ID.
+
+The payout region is left-open and right-closed. A settlement exactly at the lower strike loses, and a settlement exactly at the higher strike wins. The chain decides that in `range_codec::settlement_in_range`, which first rounds the settlement price up onto the tick grid:
+
+```text
+prefix_limit_tick = ceil(settlement / tick_size)
+in_range          = lower_tick < prefix_limit_tick
+                    && (higher_tick == pos_inf_tick || prefix_limit_tick <= higher_tick)
+```
+
+Rounding up is what makes the boundary asymmetric: a finite boundary tick is active in the settlement walk only when its own strike sits strictly below the settlement price. The `higher_tick == pos_inf_tick` branch short-circuits because a settlement above the encodable range produces a `prefix_limit_tick` that legitimately exceeds `pos_inf_tick`, so the comparison is a plain `u64` bound and is never validated as a domain tick.
+
+Worked against a 0.01 USD grid and a settlement of exactly 105,000 USD, `prefix_limit_tick` is `10_500_000`:
+
+| **Position** | **Ticks** | **Test** | **Result** |
+|---|---|---|---|
+| 104,000 to 105,000 USD | `(10_400_000, 10_500_000]` | `10_400_000 < 10_500_000` and `10_500_000 <= 10_500_000` | Pays in full |
+| 105,000 to 106,000 USD | `(10_500_000, 10_600_000]` | `10_500_000 < 10_500_000` is false | Pays zero |
+
+A winning position pays its full quantity, and quantity is measured in DUSDC base units where `1_000_000` pays 1 USD at settlement.
+
+## Sentinel ticks {#sentinels}
+
+Two ticks are reserved so that an open-ended range needs no artificial outer strike:
+
+| **End** | **Tick** | **Raw strike** | **Constant** | **Visibility** |
+|---|---|---|---|---|
+| Negative infinity | `0` | `0` | `constants::neg_inf!()` | `public` |
+| Positive infinity | `1073741823` | `std::u64::max_value!()` | `constants::pos_inf!()` | `public` |
+
+`1073741823` is `(1 << 30) - 1`, the maximum value of the 30-bit tick field. Onchain it is `constants::pos_inf_tick!()`, which is `public(package)` and therefore not callable from an integrator package. Hardcode the literal `1073741823`, or take it from the SDK's `POS_INF_TICK` export. The raw-strike sentinels `neg_inf!()` and `pos_inf!()` are public, but they live on the price axis rather than the tick axis, so they are not what a mint call takes.
+
+Finite ticks occupy `1` through `1073741822`. A tick above `pos_inf_tick` aborts with `order::EInvalidTick`.
+
+## Choose a range shape {#choose-a-key}
+
+A directional view is a one-sided range, and the protocol prices it through exactly the same path as a two-sided one. Pick the shape that matches your view on settlement:
+
+| **Your view on settlement** | **Shape** | **Ticks** | **Wins when** |
+|---|---|---|---|
+| Ends above one level | Directional up | `(K, 1073741823]` | `settlement > K` |
+| Ends at or below one level | Directional down | `(0, K]` | `settlement <= K` |
+| Lands between two levels | Two-sided range | `(L, H]` | `L < settlement <= H` |
+
+A one-sided range wins on an unbounded outcome, so it costs more per contract and wins more often. A two-sided range wins on a bounded outcome, so it costs less per contract and wins less often. Ranges suit a view on where a price settles rather than on which direction it moves.
+
+Two shapes are rejected outright by the `order` module:
+
+- `lower_tick >= higher_tick` aborts with `EInvalidRange`, so a zero-width or inverted band cannot exist.
+- The fully open range `(0, 1073741823]` aborts with `EInvalidRange`, because it always pays and is not a tradable contract.
+
+## Two grids: tick size and admission tick size {#validation-rules}
+
+Confusing the two grids is the most common integration failure on this surface. A new mint's strike must satisfy both conditions:
+
+- **Fine grid:** the raw strike must be an exact multiple of the market's `tick_size`, otherwise it is not a tick at all.
+- **Admission grid:** each finite boundary must additionally land on the coarser `admission_tick_size`, which varies by cadence.
+
+The chain tests the second condition in tick units. With `admission_multiple = admission_tick_size / tick_size`, a boundary is admitted when it is a sentinel, when `tick % admission_multiple == 0`, or when it equals the market's recorded `reference_tick`. Anything else aborts with `strike_exposure::EInvalidAdmissionTick`.
+
+On the Testnet cadences, `admission_multiple` is `100` for the 1m, 5m, and 1h markets and `10_000` for the 1d and 1w markets.
+
+The `reference_tick` is the one finite strike a market admits off the admission grid. It is the market's window anchor, floored onto the fine grid from an exact Propbook Pyth observation at `reference_tick_source_timestamp_ms`, and a permissionless call records it:
+
+<ImportContent
+	source="packages/predict/sources/expiry_market.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	fun="set_reference_tick"
+	noComments
+/>
+
+`reference_tick` reads back as none until that call succeeds, and recording a different tick afterwards aborts with `strike_exposure::EReferenceTickAlreadySet`. Calling it before the source observation is inserted into the feed aborts with `expiry_market::EReferenceTickObservationMissing`.
+
+Grid state lives in the market's `StrikeExposure`, which has no public functions of its own. Every value an integrator needs is mirrored by an `ExpiryMarket` getter:
+
+<details>
+<summary>Source for the `StrikeExposure` struct</summary>
+
+<ImportContent
+	source="packages/predict/sources/strike_exposure/strike_exposure.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	struct="StrikeExposure"
+/>
+
+</details>
+
+### Build a valid range {#build-a-valid-key}
+
+Follow these steps before you submit a mint:
+
+1. Resolve the market for your underlying and expiry, then read `tick_size`, `admission_tick_size`, and `reference_tick` from that `ExpiryMarket`.
+1. Convert each finite boundary price to a tick with `tick = raw_strike / tick_size`, and reject any price that leaves a remainder.
+1. Snap each finite tick to the admission grid, or set it to the market's `reference_tick`.
+1. Replace an open lower bound with `0` and an open higher bound with `1073741823`.
+1. Confirm `lower_tick < higher_tick` and that the pair is not `(0, 1073741823]`.
+1. Round the quantity to a whole lot of `10_000` base units, which is 0.01 USD of payout.
+
+Using a 0.01 USD fine grid, the same numeric strike passes or fails depending on the cadence:
+
+| **Strike** | **Tick** | **1m market** | **1d market** |
+|---|---|---|---|
+| 105,000 USD | `10_500_000` | Admitted | Admitted |
+| 105,050 USD | `10_505_000` | Admitted | Aborts with `EInvalidAdmissionTick` |
+| 105,000.005 USD | Not a tick | Off the fine grid | Off the fine grid |
+
+## The packed order ID {#order-id}
+
+`mint_exact_quantity` and `mint_exact_amount` both return a `u256` order ID. That integer carries the durable contract terms and nothing else, so mint-only inputs such as entry probability, premium, and fee policy are deliberately absent. Tightening admission policy in a later version therefore cannot retroactively invalidate an existing ID.
+
+The layout is dense in the low bits:
+
+| **Field** | **Offset** | **Width** | **Meaning** |
+|---|---|---|---|
+| `quantity_lots` | bit 100 | 32 bits | Quantity in lots. Payout quantity is `quantity_lots * 10_000` base units. |
+| `lower_tick` | bit 70 | 30 bits | Lower boundary tick, where `0` is negative infinity. |
+| `higher_tick` | bit 40 | 30 bits | Higher boundary tick, where `1073741823` is positive infinity. |
+| `sequence` | bits 0 to 39 | 40 bits | Expiry-local monotonic counter. |
+
+Total width is 132 bits, and any bit set at or above 132 aborts with `order::EInvalidOrderId`. Quantity must be nonzero, a whole multiple of `10_000`, and at most `4_294_967_295` lots.
+
+Treat the ID as an opaque handle. Pass it back unchanged to redeem, claim, or query a position, and read range facts from the order events rather than by unpacking bits yourself.
+
+The `sequence` counter is expiry-local, so an order ID is unique only within one expiry market. An ID alone carries no expiry or market identity. A position is the pair `(expiry_market_id, order_id)`, which is why every trade event carries `expiry_market_id` alongside `order_id`.
+
+<details>
+<summary>Source for the `Order` view</summary>
+
+`order` declares no public functions. The module validates and decodes packed IDs for the rest of the package, and integrators observe the same terms through the `OrderMinted`, `LiveOrderRedeemed`, and `SettledOrderRedeemed` events.
+
+<ImportContent
+	source="packages/predict/sources/order.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	struct="Order"
+/>
+
+</details>
+
+## Where positions are tracked {#keys-as-table-keys}
+
+A holder's positions live in Predict's app-data slot on the account package's `Account`, not in the expiry market. `predict_account::PredictData` keeps a `Table<PositionKey, Position>` where `PositionKey` is exactly the `(expiry_market_id, order_id)` pair, and the stored `Position` records the root order ID plus the millisecond timestamp the position was opened.
+
+The root order ID is the original mint's ID, carried forward unchanged across partial-close replacements. One economic position keeps one stable handle even though a partial close retires the current ID and issues a new one. Check membership with the public read:
+
+```move title='packages/predict/sources/predict_account.move'
+public fun has_position(account: &Account, expiry_market_id: ID, order_id: u256): bool
+```
+
+For the account model, the shared `AccountWrapper`, and the `Auth` hot potato that opens it, see [Predict Manager](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager).
+
+## Find a market {#market-key}
+
+Resolve an `ExpiryMarket` object ID from the shared `Registry`:
+
+```move title='packages/predict/sources/registry/registry.move'
+public fun expiry_market_id(
+    registry: &Registry,
+    propbook_underlying_id: u32,
+    expiry: u64,
+): Option<ID>
+```
+
+<details>
+<summary>Source for `expiry_market_id`</summary>
+
+<ImportContent
+	source="packages/predict/sources/registry/registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	fun="expiry_market_id"
+	noComments
+/>
+
+</details>
+
+The registry stores those IDs in a `Table` keyed by `market_manager::MarketKey`, a `u32` underlying ID paired with a `u64` expiry. That struct is an internal uniqueness key: it has no accessors, no exported constructor, and no role in any integrator call. Use `expiry_market_id` instead, and take `propbook_underlying_id` from the deployment manifest, where the live BTC underlying is `1`.
+
+<details>
+<summary>Source for the `MarketKey` uniqueness key</summary>
+
+<ImportContent
+	source="packages/predict/sources/registry/market_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
 	struct="MarketKey"
 />
 
-<ImportContent
-	source="packages/predict/sources/market_key/market_key.move"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="up,down,new,oracle_id,expiry,strike,is_up,is_down"
-	noComments
-/>
-
 </details>
 
-## `RangeKey` {#range-key}
+## Ticks in the TypeScript SDK {#sdk}
 
-A `RangeKey` identifies one vertical range: a band between two strikes on a single oracle.
+`@mysten/deepbook-v3` version 2.1.3 ships a `/predict` subpath that does the tick arithmetic for you. Describe a position with a `MarketDescriptor` in USD, and the SDK resolves the market, converts each strike, and admission-checks each finite boundary before it builds the transaction.
 
-### Fields {#range-key-fields}
+The descriptor has two arms:
 
-| **Field** | **Type** | **Description** |
+- **Binary arm:** `{ side: 'up' | 'down', strike: number | 'reference' }`, where `'reference'` resolves to the market's `referencePrice`.
+- **Range arm:** `{ side: 'range', lower: number, upper: number }`, where both bounds are finite USD prices and `lower` must be below `upper`.
+
+Each arm maps onto the same tick pair the chain takes:
+
+| **Descriptor** | **`lowerTick`** | **`higherTick`** |
 |---|---|---|
-| `oracle_id` | `ID` | Object ID of the `OracleSVI` that defines the underlying asset and expiry. |
-| `expiry` | `u64` | Expiration timestamp in milliseconds. |
-| `lower_strike` | `u64` | Bottom of the band, exclusive at settlement. |
-| `higher_strike` | `u64` | Top of the band, inclusive at settlement. |
+| `{ side: 'up', strike: K }` | `K / tickSize` | `POS_INF_TICK` |
+| `{ side: 'down', strike: K }` | `0` | `K / tickSize` |
+| `{ side: 'range', lower: L, upper: H }` | `L / tickSize` | `H / tickSize` |
 
-`RangeKey` has no direction field. A bull-call range and a bear-put range with the same strikes are identical to the vault and share one row. Do not model them as separate holdings.
+`POS_INF_TICK` is exported as a `bigint` equal to `1073741823n`. `strike: 'reference'` is available on the binary arm only, and it throws when the keeper has not seeded the market yet.
 
-### Constructor and reads {#range-key-constructor}
+`read.markets()` returns `tickSize`, `admissionTickSize`, and `referencePrice` as USD decimals, so snap a target price with plain arithmetic:
 
-```move title='packages/predict/sources/market_key/range_key.move'
-public fun new(oracle_id: ID, expiry: u64, lower_strike: u64, higher_strike: u64): RangeKey
-public fun oracle_id(key: &RangeKey): ID
-public fun expiry(key: &RangeKey): u64
-public fun lower_strike(key: &RangeKey): u64
-public fun higher_strike(key: &RangeKey): u64
+```ts
+const markets = await client.predict.read.markets();
+const m = markets[0];
+const strike = Math.round(target / m.admissionTickSize) * m.admissionTickSize;
 ```
 
-Unlike the `MarketKey` constructors, `range_key::new` validates. It aborts with `EInvalidStrikes` when `lower_strike` is not less than `higher_strike`. Equal strikes fail, so a zero-width band cannot exist. This abort happens during key construction, so a bad range fails before the transaction reaches `mint_range`.
+The SDK raises a typed `PredictInputError` before it builds a transaction when a strike is off the fine grid, off the admission grid and not the reference price, outside the finite tick domain, or when `lower` is not below `upper`.
 
-### Why the band is half-open {#half-open-band}
+The following Testnet example mints a directional position, quoting first and capping the all-in cost:
 
-A range pays when settlement lands in `(lower_strike, higher_strike]`. That asymmetry follows from the binary rules rather than from a separate convention. The vault records a range as a long up leg at the lower strike plus a long down leg at the higher strike. The up leg wins when `settlement > lower`, and the down leg wins when `settlement <= higher`. Both conditions hold exactly when settlement sits inside the half-open band.
+<ImportContent source="examples/deepbook-predict/src/mint.ts" mode="code" tag="mint-binary" />
 
-A settlement exactly at `lower_strike` loses. A settlement exactly at `higher_strike` wins.
-
-### Worked example {#range-key-example}
-
-A range on the same oracle, covering 90,000 USD to 100,000 USD:
-
-| **Input** | **Value** | **Reads as** |
-|---|---|---|
-| `lower_strike` | `90_000_000_000_000` | 90,000 USD |
-| `higher_strike` | `100_000_000_000_000` | 100,000 USD |
-
-The following Testnet example builds a `RangeKey` with `range_key::new` and mints against it. The four arguments follow the field order in the preceding table:
+This one mints a two-sided range through the same builder, with both bounds snapped to the admission grid:
 
 <ImportContent source="examples/deepbook-predict/src/mint-range.ts" mode="code" tag="mint-range" />
 
-<details>
-<summary>Source for the `RangeKey` struct and functions</summary>
-
-<ImportContent
-	source="packages/predict/sources/market_key/range_key.move"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	struct="RangeKey"
-/>
-
-<ImportContent
-	source="packages/predict/sources/market_key/range_key.move"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="new,oracle_id,expiry,lower_strike,higher_strike"
-	noComments
-/>
-
-</details>
-
-## Validation rules {#validation-rules}
-
-Building a key almost never fails. Using one does. `predict::mint` and `predict::redeem` call `assert_key_matches`, and the range functions call `assert_range_key_matches`. Both compare the key against the `OracleSVI` you passed in the same call, then check every strike against that oracle's grid.
-
-Each oracle registers a strike grid at creation with a minimum strike and a tick size. The grid always spans 100,000 ticks:
-
-```text
-max_strike = min_strike + tick_size * 100_000
-```
-
-A strike is valid when it sits inside `[min_strike, max_strike]` and lands exactly on a tick:
-
-```text
-(strike - min_strike) % tick_size == 0
-```
-
-### Build a valid key {#build-a-valid-key}
-
-1. Fetch a live oracle from the Predict server. Read its object ID, expiry, and strike grid.
-1. Set `oracle_id` to that oracle's object ID. A mismatch aborts with `EMarketKeyOracleMismatch` or `ERangeKeyOracleMismatch`.
-1. Set `expiry` to the value the oracle reports. Do not compute or round it. A mismatch aborts with `EMarketKeyExpiryMismatch` or `ERangeKeyExpiryMismatch`.
-1. Snap each strike to the grid so it satisfies both conditions above. An off-grid or out-of-range strike aborts with `EInvalidStrike`.
-1. For a range, confirm `lower_strike < higher_strike` before you call `range_key::new`. The constructor checks both strikes against the grid, so the narrowest valid band is one tick wide.
-1. Confirm the oracle is still live. A key can be perfectly valid and still fail on `EOracleStale`, `EOracleInactive`, `EOracleExpired`, or `EOracleSettled`.
-
-Using the grid from the earlier example, with a minimum strike of 50,000 USD and a 100 USD tick:
-
-| **Strike** | **Value** | **Result** |
-|---|---|---|
-| 95,000 USD | `95_000_000_000_000` | Valid. Exactly 450 ticks above the minimum. |
-| 95,050 USD | `95_050_000_000_000` | Aborts with `EInvalidStrike`. Lands 450.5 ticks above the minimum. |
-| 40,000 USD | `40_000_000_000_000` | Aborts with `EInvalidStrike`. Below the minimum strike. |
-
-## Keys as table keys {#keys-as-table-keys}
-
-Both types carry `copy`, `drop`, and `store`, the exact abilities Sui requires of a `Table` key. That is why the protocol can store positions as table rows instead of as objects:
-
-| **Table** | **Location** | **Type** |
-|---|---|---|
-| `positions` | `PredictManager` | `Table<MarketKey, u64>` |
-| `range_positions` | `PredictManager` | `Table<RangeKey, u64>` |
-
-`predict::mint` increases the row at your `MarketKey`, and `predict::redeem` decreases it. The vault tracks the same trades separately in per-oracle strike matrices, so the manager records what a user holds while the vault records what the protocol owes. See [Predict Manager](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager) and [Vault](/onchain-finance/deepbook/deepbook-predict/contract-information/vault).
-
-### Equality {#equality}
-
-Two keys are equal when every field matches. Move compares them structurally with `==`, and Sui tables compare the BCS serialization of the key, which follows declaration order. For `MarketKey` that order is `oracle_id`, `expiry`, `strike`, `direction`.
-
-Because the constructors normalize `direction` to `0` or `1` and expose no other path to set it, two keys built from the same inputs always serialize to the same bytes. No equivalent-but-different encoding exists.
-
-Off chain, compare keys by their BCS bytes rather than by field-by-field JSON. To read one specific row, call `predict_manager::position` with a key you build in the same transaction. To enumerate every row, list the dynamic fields of the table's `id`, where each field name is a BCS-serialized key, or read the indexed portfolio endpoint from the Predict server.
-
-:::caution
-
-`expiry` duplicates information the oracle already holds, and it is part of the key. A key with the correct oracle but a wrong expiry is a different table row, not an error at construction time. It reads back as `0` from `position()` and aborts with an expiry mismatch at mint. Always copy the expiry the oracle reports.
-
-:::
-
 ## Error codes {#error-codes}
 
-| **Code** | **Constant** | **Module** | **Cause** |
-|---|---|---|---|
-| `0` | `EInvalidStrikes` | `range_key` | `lower_strike` is not less than `higher_strike`. |
-| `0` | `EMarketKeyOracleMismatch` | `oracle_config` | The key's `oracle_id` does not match the oracle passed in the call. |
-| `1` | `EMarketKeyExpiryMismatch` | `oracle_config` | The key's `expiry` does not match the oracle's expiry. |
-| `2` | `EInvalidStrike` | `oracle_config` | A strike is outside the grid or not on a tick. |
-| `9` | `ERangeKeyOracleMismatch` | `oracle_config` | The range key's `oracle_id` does not match the oracle passed in the call. |
-| `10` | `ERangeKeyExpiryMismatch` | `oracle_config` | The range key's `expiry` does not match the oracle's expiry. |
+Range shape and quantity are validated by `order`:
 
-Error numbers repeat across modules, so resolve an abort against the module in the abort location rather than against the number alone.
+| **Code** | **Constant** | **Cause** |
+|---|---|---|
+| `0` | `EInvalidOrderId` | The packed ID sets a bit at or above 132. |
+| `1` | `EInvalidTick` | A tick exceeds the 30-bit field or `pos_inf_tick`. |
+| `2` | `EInvalidRange` | `lower_tick >= higher_tick`, or the range is the fully open `(0, pos_inf_tick]`. |
+| `3` | `EInvalidQuantity` | Quantity is zero, not a whole `10_000` lot, above `4_294_967_295` lots, or a replacement is not strictly smaller. |
+| `4` | `EInvalidSequence` | The sequence exceeds 40 bits. |
+
+Grid admission and exposure bookkeeping are validated by `strike_exposure`:
+
+| **Code** | **Constant** | **Cause** |
+|---|---|---|
+| `0` | `EInvalidCloseQuantity` | A live close asks for more than the order's quantity. |
+| `1` | `EInvalidAdmissionTick` | A finite boundary is neither on the admission grid nor equal to the market's `reference_tick`. |
+| `2` | `EInvalidReferenceTick` | A reference tick resolves to `0` or to at least `pos_inf_tick`. |
+| `3` | `EReferenceTickAlreadySet` | A different reference tick is recorded after one is already set. |
+| `4` | `ETermsExposureMismatch` | Terms priced against another market's exposure book. |
+| `5` | `EMintQuantityBelowMin` | The sized or budgeted quantity is below `min_quantity`. |
+| `6` | `EInvalidInventoryImpactScale` | The market's inventory-impact scale is zero at construction. |
+
+Error numbers repeat across modules, so resolve an abort against the module named in the abort location rather than against the number alone. For the mint and redeem calls these ticks feed, see [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict). For cadence configuration and market creation, see [Registry](/onchain-finance/deepbook/deepbook-predict/contract-information/registry).

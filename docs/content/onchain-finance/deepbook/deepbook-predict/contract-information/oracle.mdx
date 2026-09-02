@@ -1,21 +1,26 @@
 ---
 title: Oracle
 description: >-
-  Learn about OracleSVI lifecycle, price updates, SVI updates, settlement, and
-  oracle read functions in DeepBook Predict.
+  Propbook oracle reference for DeepBook Predict: the OracleRegistry and its
+  canonical bindings, PythFeed spot reads, Block Scholes value and SVI stores,
+  and how Predict pricing, reference ticks, and settlement consume them.
 keywords:
-  - oraclesvi
   - deepbook predict oracle
-  - oracle lifecycle
-  - svi
-  - spot price
-  - forward price
-  - settlement price
-  - oracle events
+  - propbook
+  - oracle registry
+  - pyth feed
+  - block scholes store
+  - svi params
+  - oracle read
+  - pricer
+  - oracle freshness
+last_verified: 2026-09-02
+verified_against: predict-testnet-8-21
 goal:
   description: >-
-    Reader can learn about OracleSVI lifecycle, price updates, SVI updates,
-    settlement, and oracle read functions in DeepBook Predict
+    Reader can resolve the canonical Propbook oracle objects for an underlying,
+    read spot, forward, and SVI observations from them, and pass the right
+    objects to Predict pricing, reference-tick, and settlement calls
   requires:
     - has_frontmatter:
         - title
@@ -29,166 +34,442 @@ goal:
     - has_answer: true
       label: Needs answer summary for AI citation
 questions:
-  - What is Oracle in Sui?
-  - How does oracle work on Sui?
-  - Why should I use oracle?
-answer: '`OracleSVI` is the market state for one underlying asset and one expiry.'
+  - Which oracle objects does DeepBook Predict read on Sui Testnet?
+  - How do I find the canonical Pyth feed and Block Scholes stores for an underlying?
+  - Why does a DeepBook Predict pricing call abort with a wrong feed or stale oracle error?
+answer: >-
+  DeepBook Predict reads oracles from the separate propbook package. An
+  OracleRegistry binds each underlying to one PythFeed, one
+  BlockScholesValueStore, and one BlockScholesSVIStore. Predict validates the
+  objects you pass against those bindings, so load_live_pricer needs all four
+  objects, try_settle needs three and no SVI store, and set_reference_tick needs
+  two.
 ---
 
-`OracleSVI` is the market state for one underlying asset and one expiry. It stores spot and forward prices, SVI volatility surface parameters, activation state, the last update timestamp, and the settlement price after expiry.
+DeepBook Predict declares no oracle object of its own. Oracle data lives in the separate `propbook` package, which publishes an `OracleRegistry` plus one shared object per feed, and Predict reads those objects by reference at call time. Every priced call therefore takes concrete oracle objects as arguments, and Predict checks each one against the registry's current canonical binding before it prices anything.
 
-## Lifecycle
+The object IDs for this deployment are on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#underlyings-and-oracle-objects). Resolve them from the registry at runtime rather than caching them, because rebinding an underlying changes which object is canonical.
 
-An oracle starts inactive, becomes active after `activate()`, accepts live price and SVI updates before expiry, enters pending settlement at expiry, and becomes settled when the first post-expiry price update freezes the settlement price.
+## Oracle objects
 
-Mints require a live oracle. Redeems can use quoteable live or settled oracle state. After settlement, price and SVI updates are rejected.
+Four shared objects take part in a Predict pricing call:
 
-## API
+| Object | Module | Holds |
+| --- | --- | --- |
+| `OracleRegistry` | `propbook::registry` | The source catalog and the canonical binding per underlying, oracle kind, and value kind |
+| `PythFeed` | `propbook::pyth_feed` | Raw and normalized Pyth spot observations for one Pyth source |
+| `BlockScholesValueStore` | `propbook::block_scholes_store` | Block Scholes spot and per-expiry forward observations for one underlying |
+| `BlockScholesSVIStore` | `propbook::block_scholes_store` | Block Scholes SVI surface parameters per expiry for one underlying |
 
-<details>
-<summary>Activate an oracle</summary>
+There is one `OracleRegistry` per deployment, one `PythFeed` per Pyth source, and one value store and one SVI store per underlying. No `entry fun` exists in the Propbook package: every function here is a `public fun` invoked as a `moveCall`.
 
-The `activate()` function moves an oracle into the active state before expiry.
+## The oracle registry
+
+`OracleRegistry` is the shared object that says which feed object is authoritative for which underlying:
 
 <ImportContent
-	source="packages/predict/sources/oracle.move"
+	source="packages/propbook/sources/registry.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="activate"
+	branch="predict-testnet-8-21"
+	struct="OracleRegistry,BlockScholesStorePair,OracleMetadata"
+/>
+
+A binding is keyed by the underlying ID, the oracle kind, and the value kind. Pyth is oracle kind `0` and spot is value kind `0`. The Block Scholes stores are tracked separately, as a pair per underlying, because a value store and an SVI store are always registered together and share one base asset string.
+
+### Discover the canonical objects
+
+Resolve an underlying to its three feed objects before building a transaction:
+
+<ImportContent
+	source="packages/propbook/sources/registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	fun="propbook_pyth_id_for_underlying,propbook_block_scholes_store_pair_for_underlying,block_scholes_value_store_id,block_scholes_svi_store_id"
 	noComments
 />
 
-</details>
+Both lookups return an `Option`, which is empty when the underlying has no binding of that kind. `BlockScholesStorePair` comes back by value, so read the two IDs off it with the accessors above and read the vendor's base asset string with `block_scholes_base_asset`.
 
-<details>
-<summary>Update prices</summary>
-
-The `update_prices()` function pushes high-frequency spot and forward prices. If the oracle is past expiry and not yet settled, this call freezes the settlement price instead of recording another live update.
+Richer metadata is available when you need the source ID behind a binding rather than just the object ID:
 
 <ImportContent
-	source="packages/predict/sources/oracle.move"
+	source="packages/propbook/sources/registry.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="update_prices"
+	branch="predict-testnet-8-21"
+	fun="pyth_metadata_for_underlying,propbook_underlying_id,oracle_kind,source_id,propbook_oracle_id,value_kind"
 	noComments
 />
 
-</details>
+`contains_pyth_source` and `propbook_pyth_id_for_source` answer the same question from the source side, for callers that hold a Pyth source ID rather than a Predict underlying ID.
 
-<details>
-<summary>Update SVI parameters</summary>
+### Create and bind feeds
 
-The `update_svi()` function pushes lower-frequency SVI volatility surface parameters before expiry.
+Creating a Pyth feed object is permissionless, but binding one to an underlying is not:
 
 <ImportContent
-	source="packages/predict/sources/oracle.move"
+	source="packages/propbook/sources/registry.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="update_svi"
+	branch="predict-testnet-8-21"
+	fun="create_and_share_pyth_feed,create_and_share_block_scholes_stores,bind_pyth_to_underlying,replace_pyth_binding_for_underlying"
 	noComments
 />
 
-</details>
+`RegistryAdminCap` is a Propbook capability, separate from the Predict `AdminCap`. `create_and_share_block_scholes_stores` runs once per underlying and aborts with `EBlockScholesStoresAlreadyExist` on a second call. `bind_pyth_to_underlying` aborts with `EBindingAlreadyExists` if a binding is already present, so moving an underlying to a different feed goes through `replace_pyth_binding_for_underlying` instead, which aborts with `EBindingNotFound` when there is nothing to replace.
 
-<details>
-<summary>Read oracle state</summary>
+Binding changes emit `OracleSourceRegistered`, `OracleBound`, `BlockScholesStoresRegistered`, and `OracleRebound`. Those events carry `copy, drop` but no `store`, so they exist only in the transaction's event stream.
 
-Use these functions to read oracle identifiers, underlying asset, prices, SVI parameters, expiry, timestamp, settlement, and lifecycle status.
+`propbook::registry` raises these errors:
+
+| Code | Name | Raised when |
+| --- | --- | --- |
+| `0` | `ESourceAlreadyExists` | A source key is registered twice |
+| `1` | `ESourceNotFound` | The replacement feed is not in the source catalog |
+| `2` | `EInvalidOracleObject` | The supplied object ID does not match the catalogued source object |
+| `3` | `ESourceAlreadyBound` | The source key is already assigned to a different underlying |
+| `4` | `EBindingAlreadyExists` | `bind_pyth_to_underlying` on an underlying that already has a binding |
+| `5` | `EBindingNotFound` | `replace_pyth_binding_for_underlying` with no existing binding |
+| `6` | `EBlockScholesStoresAlreadyExist` | A second store pair for one underlying |
+| `7` | `EInvalidBlockScholesBaseAsset` | An empty base asset, or one longer than 32 bytes |
+
+## Pyth feed
+
+`PythFeed` is a shared object holding one observation lane of raw Pyth spot values:
 
 <ImportContent
-	source="packages/predict/sources/oracle.move"
+	source="packages/propbook/sources/feeds/pyth_feed.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="id,underlying_asset,spot_price,forward_price,prices,svi,expiry,timestamp,settlement_price,is_settled,is_active,status"
+	branch="predict-testnet-8-21"
+	struct="PythFeed,RawSpot"
+/>
+
+`RawSpot` keeps Pyth's own representation: a price magnitude and sign, an exponent magnitude and sign, and the feed's update timestamp in microseconds. Sign and magnitude are separate fields because Move has no signed integer type.
+
+### Read spot
+
+Four accessors cover the latest observation and an exact historical one:
+
+<ImportContent
+	source="packages/propbook/sources/feeds/pyth_feed.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	fun="raw_spot,normalized_spot,raw_spot_at,normalized_spot_at"
 	noComments
 />
 
-</details>
+The raw reads abort with `ERawSpotNotFound` when no observation exists, while the normalized reads return an `Option` so a caller can distinguish absence from a value. Normalization applies the exponent and returns a fixed-point price on the standard 1e9 scale. The exact reads take a source timestamp in whole milliseconds and match it exactly, which is what makes reference ticks and settlement reproducible rather than dependent on when a transaction lands.
 
-<details>
-<summary>Create price and SVI data</summary>
+The `raw_pyth_source_id`, `raw_price_magnitude`, `raw_price_is_negative`, `raw_exponent_magnitude`, `raw_exponent_is_negative`, and `raw_feed_update_timestamp_us` accessors unpack a `RawSpot`.
 
-These helper constructors build `PriceData` and `SVIParams` values for oracle updates.
+### Write observations
+
+Writes are permissionless because possession of a verified Pyth Lazer update is the authority:
 
 <ImportContent
-	source="packages/predict/sources/oracle.move"
+	source="packages/propbook/sources/feeds/pyth_feed.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="new_price_data,new_svi_params"
+	branch="predict-testnet-8-21"
+	fun="update,insert_at,migrate"
 	noComments
 />
 
-</details>
+The two write paths are separate and never overlap. `update` replaces the latest observation, and only when the new source timestamp strictly advances: a zero, future, duplicate, or stale generation timestamp is ignored without an abort and without an event, so redelivering a carried-forward price cannot renew a consumer's freshness window. `insert_at` writes the exact-timestamp slot and leaves the latest observation untouched. The first valid observation owns an exact key and cannot be replaced, so a backfill can never overwrite history. `insert_at` also aborts with `EInsertTimestampNotExactMillisecond` when the envelope timestamp is not a whole millisecond, and with `ESettlementCarryExceedsWindow` when Pyth generated the price more than 2,000 ms before that envelope, so a long-carried price cannot claim a settlement key.
 
-<details>
-<summary>Read status constants</summary>
+`migrate` moves the object forward to the current package version and never backward.
 
-These functions return the numeric status values used by `status()`.
+`propbook::pyth_feed` raises these errors:
+
+| Code | Name | Raised when |
+| --- | --- | --- |
+| `0` | `EWrongVersion` | Writing to a feed whose version is not the current one |
+| `1` | `ENotNewerVersion` | `migrate` that would not advance the version |
+| `2` | `ERawSpotNotFound` | `raw_spot` or `raw_spot_at` with no observation |
+| `3` | `ELazerFeedNotFound` | The update carries no matching Lazer feed |
+| `4` | `ELazerValueUnavailable` | The Lazer feed carries no usable price |
+| `5` | `EInsertTimestampNotExactMillisecond` | The `insert_at` envelope is not a whole millisecond |
+| `6` | `EFeedTimestampAfterEnvelope` | The generation time is after the envelope time |
+| `7` | `ESettlementCarryExceedsWindow` | Carry above the 2,000 ms maximum |
+| `8` | `EUnderlyingAlreadyAssigned` | Rebinding a feed to a different underlying |
+
+## Block Scholes stores
+
+Two shared objects hold the vendor surface. `BlockScholesValueStore` holds spot and per-expiry forward values, and `BlockScholesSVIStore` holds SVI parameters per expiry:
 
 <ImportContent
-	source="packages/predict/sources/oracle.move"
+	source="packages/propbook/sources/feeds/block_scholes_store.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="status_inactive,status_active,status_pending_settlement,status_settled"
+	branch="predict-testnet-8-21"
+	struct="BlockScholesValueStore,BlockScholesSVIStore"
+/>
+
+Both stores key their tables by a series identifier, a `u256` derived from the base asset string and, for a forward or SVI series, the expiry.
+
+### Reads and series identifiers
+
+Every observation comes back wrapped in a `BsRead`, and SVI values carry an `SVIParams`:
+
+<ImportContent
+	source="packages/propbook/sources/feeds/block_scholes_store.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	struct="BsRead,SVIParams"
+/>
+
+`SVIParams` uses the same magnitude-and-sign split as the Pyth raw spot, because `a`, `rho`, and `m` can be negative while `b` and `sigma` cannot. The eight accessors named `svi_a_magnitude` through `svi_m_is_negative` unpack it.
+
+Read the observations themselves:
+
+<ImportContent
+	source="packages/propbook/sources/feeds/block_scholes_store.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	fun="spot,spot_at,forward,svi"
 	noComments
 />
 
-</details>
+Each returns an `Option`, empty when that series has no observation. `spot_at` matches an exact source timestamp, which is the read settlement falls back to.
 
-## Structs
-
-<details>
-<summary>`OracleSVI`</summary>
+Compute a series identifier when you need to address a series directly:
 
 <ImportContent
-	source="packages/predict/sources/oracle.move"
+	source="packages/propbook/sources/feeds/block_scholes_store.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	struct="OracleSVI"
+	branch="predict-testnet-8-21"
+	fun="spot_sid,forward_sid,svi_sid"
+	noComments
 />
 
-</details>
-
-<details>
-<summary>`PriceData` and `SVIParams`</summary>
+Unpack a `BsRead` with the read accessors:
 
 <ImportContent
-	source="packages/predict/sources/oracle.move"
+	source="packages/propbook/sources/feeds/block_scholes_store.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	struct="PriceData,SVIParams"
+	branch="predict-testnet-8-21"
+	fun="read_model_timestamp_ms,read_source_timestamp_ms,read_onchain_timestamp_ms,read_writer_digest,read_value"
+	noComments
 />
 
-</details>
+The three timestamps answer three different questions. `model_timestamp_ms` is when the vendor's model ran, `source_timestamp_ms` is the observation's own time, and `onchain_timestamp_ms` is when the write landed on Sui. Judge vendor freshness from the source timestamp and landing order from the onchain timestamp, and never sort by source timestamp alone, because an older source observation can land later.
 
-## Events
+`writer_digest` records the transaction digest that wrote the observation. Predict reads it to enforce the same-transaction guard described later on this page.
 
-<details>
-<summary>Oracle events</summary>
+### Write batches
+
+Writes are permissionless because the signed vendor batch is the authority:
 
 <ImportContent
-	source="packages/predict/sources/oracle.move"
+	source="packages/propbook/sources/feeds/block_scholes_store.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	struct="OracleActivated,OraclePricesUpdated,OracleSVIUpdated,OracleSettled"
+	branch="predict-testnet-8-21"
+	fun="apply_spot_batch,apply_forward_batch,apply_svi_batch"
+	noComments
 />
 
-</details>
+The forward and SVI batches take a parallel `expiries_ms` vector and abort with `EUnexpectedBatchLength` when its length does not match the batch. A row whose derived series identifier does not match the row's own identifier aborts with `ESeriesIdMismatch`. `insert_at` fills unoccupied exact spot slots only, and `migrate_value_store` and `migrate_svi_store` move a store forward to the current package version. Applying a batch emits `BlockScholesBatchIngested` alongside per-observation events.
+
+Store creation is internal to the package and reachable only through `registry::create_and_share_block_scholes_stores`.
+
+## Oracle reads
+
+`propbook::oracle_lane` supplies the lane type that `PythFeed` embeds and the read wrapper it returns:
+
+<ImportContent
+	source="packages/propbook/sources/oracle_lane/oracle_lane.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	struct="OracleRead"
+/>
+
+`OracleRead` is the Pyth-side counterpart of `BsRead`, without the model timestamp, and it carries the same four accessors:
+
+<ImportContent
+	source="packages/propbook/sources/oracle_lane/oracle_lane.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	fun="read_source_timestamp_ms,read_onchain_timestamp_ms,read_writer_digest,read_value"
+	noComments
+/>
+
+The lane declares no error constants. Its write paths silently ignore an invalid, stale, or already-occupied observation rather than aborting, so a keeper that submits a late batch loses the write instead of losing the transaction.
+
+## How Predict consumes oracles
+
+Predict validates whatever objects you pass, so a call fails rather than pricing against the wrong feed. Different calls need different objects:
+
+| Call | `OracleRegistry` | `PythFeed` | `BlockScholesValueStore` | `BlockScholesSVIStore` |
+| --- | --- | --- | --- | --- |
+| `expiry_market::load_live_pricer` | Yes | Yes | Yes | Yes |
+| `plp::value_expiry` | Yes | Yes | Yes | Yes |
+| `expiry_market::try_settle` | Yes | Yes | Yes | No |
+| `expiry_market::set_reference_tick` | Yes | Yes | No | No |
+| `registry::create_and_share_expiry_market` | Yes | No | No | No |
+
+Settlement needs no volatility surface, so `try_settle` takes no SVI store. A reference tick is a single spot reading, so `set_reference_tick` takes only the Pyth feed. Market creation reads no price at all: it takes the registry solely to confirm the underlying has canonical bindings.
+
+### The pricer
+
+Live pricing runs through a `Pricer`, built once per transaction from all four objects:
+
+<ImportContent
+	source="packages/predict/sources/expiry_market.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	fun="load_live_pricer"
+	noComments
+/>
+
+<ImportContent
+	source="packages/predict/sources/pricing/pricing.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	struct="Pricer"
+/>
+
+`Pricer` has `copy` and `drop` but no `store`. It cannot be put in an object, a dynamic field, or anything that outlives the transaction, so every transaction that quotes, mints, redeems, or values a market must call `load_live_pricer` again. Build it once per programmable transaction block and pass the same value into every quote and trade command in that block.
+
+A pricer is bound to the market it was loaded for. Passing it to a different market aborts with `expiry_market::EWrongPricer`. Loading one at or after the market's expiry aborts with `pricing::ELivePricingExpired`.
+
+Two read functions consume a pricer:
+
+<ImportContent
+	source="packages/predict/sources/pricing/pricing.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	fun="up_price,range_price"
+	noComments
+/>
+
+Both return a 1e9-scaled probability and take `range_codec::Strike` values, which you build from a tick with `range_codec::strike_from_tick`. The SVI shapes behind them, `pricing::RawSVI` and `pricing::PricingSVI`, have no public constructors or accessors: the pricer is the only public view of the surface.
+
+### Binding validation
+
+Loading a pricer first checks all three feed objects against the registry's current bindings, then checks that the market has not expired. A mismatch aborts before any price is read:
+
+| Code | Name | Raised when |
+| --- | --- | --- |
+| `7` | `EWrongPythFeed` | The supplied `PythFeed` is not the canonical binding for the underlying |
+| `8` | `EWrongBlockScholesValueStore` | The supplied `BlockScholesValueStore` is not the canonical binding |
+| `11` | `EWrongBlockScholesSVIStore` | The supplied `BlockScholesSVIStore` is not the canonical binding |
+
+`try_settle` and `set_reference_tick` run the same check over the subset of objects they take, so a rebinding invalidates a cached object ID everywhere at once. That is the reason to resolve object IDs from `OracleRegistry` at runtime.
+
+### Freshness windows
+
+Freshness is measured against the wall clock, not against how recently a value changed. The deployed configuration, verified 2026-09-02, sets these windows on `ProtocolConfig`:
+
+| Setting | Value | Meaning |
+| --- | --- | --- |
+| `use_pyth_spot_for_forward` | `true` | A fresh Pyth spot reanchors the Block Scholes forward basis |
+| `pyth_spot_freshness_ms` | `10000` | Maximum age of a Pyth spot used to reanchor the forward |
+| `block_scholes_price_freshness_ms` | `10000` | Maximum age of a Block Scholes spot or forward observation |
+| `block_scholes_svi_freshness_ms` | `60000` | Maximum age of a Block Scholes SVI observation |
+
+Block Scholes staleness is fatal to live pricing: a spot or forward outside its window aborts with `EBlockScholesPriceStale`, and an SVI observation outside its window aborts with `EBlockScholesSVIStale`. A stale Pyth spot is not fatal while `use_pyth_spot_for_forward` is on. A missing, non-normalizable, or stale Pyth spot is ignored, and pricing uses the Block Scholes forward directly, which is also what happens when the setting is off.
+
+These four values are mutable protocol state with no public getter. Read them from the `PricingConfigUpdated` event or from the indexed configuration on the Predict server rather than assuming the values above still hold.
+
+### The same-transaction write guard
+
+Predict refuses to price against an observation written by the transaction that is doing the pricing. Every contributing observation carries the digest of the transaction that wrote it, and live pricing compares that digest to the current transaction's digest:
+
+- The Block Scholes spot observation.
+- The Block Scholes forward observation for the market's expiry.
+- The SVI observation for the market's expiry.
+- The Pyth spot observation, when `use_pyth_spot_for_forward` is on and it is used.
+
+A match aborts with `pricing::EOracleWrittenInThisTransaction`, error code `15`. The guard means a caller cannot bundle an oracle write and a trade into one transaction and mint against a price it just placed. Split the two into separate transactions.
+
+### Pricing errors
+
+`deepbook_predict::pricing` raises the full set:
+
+| Code | Name | Raised when |
+| --- | --- | --- |
+| `0` | `EZeroForward` | The forward normalizes to zero |
+| `1` | `ECannotBeNegative` | A negative value appears where a magnitude is required |
+| `2` | `ENonPositiveVariance` | Total variance is not positive |
+| `3` | `EInvalidRange` | The strike pair is inverted or otherwise invalid |
+| `4` | `EBlockScholesPriceStale` | Block Scholes spot or forward outside the price freshness window |
+| `5` | `EBlockScholesInputsInvalid` | Block Scholes inputs fail normalization |
+| `6` | `EPythSpotInvalid` | The Pyth spot is not a usable positive normalized value |
+| `7` | `EWrongPythFeed` | The `PythFeed` is not the canonical binding |
+| `8` | `EWrongBlockScholesValueStore` | The value store is not the canonical binding |
+| `9` | `ELivePricingExpired` | The clock has reached or passed the market's expiry |
+| `10` | `EBlockScholesSVIStale` | SVI outside the SVI freshness window |
+| `11` | `EWrongBlockScholesSVIStore` | The SVI store is not the canonical binding |
+| `12` | `EBlockScholesPriceUnavailable` | No Block Scholes price observation exists |
+| `13` | `EBlockScholesSVIUnavailable` | No Block Scholes SVI observation exists |
+| `14` | `EBlockScholesMinVarianceInvalid` | Sigma below the `1000000` minimum |
+| `15` | `EOracleWrittenInThisTransaction` | A contributing observation was written by this transaction |
+| `16` | `EBlockScholesInputTooWide` | An input exceeds the SVI input ceiling or the basis envelope factor of `100` |
+
+## Reference ticks and settlement
+
+Two market functions read oracles outside of live pricing, and both are permissionless:
+
+<ImportContent
+	source="packages/predict/sources/expiry_market.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	fun="set_reference_tick,try_settle"
+	noComments
+/>
+
+`set_reference_tick` reads the exact Pyth observation at the market's `reference_tick_source_timestamp_ms`, which market creation set to the expiry minus one cadence period. With no observation at that exact timestamp the call aborts with `expiry_market::EReferenceTickObservationMissing`. The reference tick is the one finite boundary a market admits off its admission grid, and it can be set once: a second, different value aborts with `strike_exposure::EReferenceTickAlreadySet`. A successful call emits `ReferenceTickSet`.
+
+`try_settle` is idempotent and returns a boolean rather than aborting on the common failure. It returns `false` before the expiry, and it returns `true` when the market is now settled or was already settled. Settlement resolves in two stages:
+
+1. The exact Pyth spot at the market's expiry timestamp. This is the preferred source and records `settlement_source` `0`.
+2. If Pyth has nothing at that exact timestamp, the call waits a 30,000 ms grace period after the expiry, then tries the exact Block Scholes minute-boundary spot. That records `settlement_source` `1`.
+
+Because both stages read an exact timestamp rather than the latest observation, the settlement price does not depend on when anyone calls `try_settle`. Anyone can call it, and calling it again after settlement is harmless.
+
+Settlement emits `MarketSettled`, which carries the settlement price and the source:
+
+<ImportContent
+	source="packages/predict/sources/events/config_events.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	struct="ReferenceTickSet,MarketSettled"
+/>
+
+Trigger claim workers from `MarketSettled` rather than from an expiry timestamp. Until someone calls `try_settle` successfully, the market has no settlement price, `is_settled` returns false, and every settled-position flow aborts with `expiry_market::EMarketNotSettled`.

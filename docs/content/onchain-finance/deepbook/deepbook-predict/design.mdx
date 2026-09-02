@@ -1,22 +1,26 @@
 ---
 title: Design
 description: >-
-  Learn about DeepBook Predict design, including Predict, PredictManager,
-  OracleSVI, Vault, and PLP.
+  DeepBook Predict architecture: the Registry, ProtocolConfig, PoolVault, and
+  ExpiryMarket shared objects, account custody, propbook oracle feeds, the
+  absolute tick grid, settlement, and the PLP flush.
 keywords:
   - deepbook predict design
-  - predict
-  - predictmanager
-  - oraclesvi
-  - vault
+  - predict architecture
+  - expirymarket
+  - poolvault
+  - accountwrapper
+  - propbook oracle
   - plp
-  - binary position
-  - vertical range
+  - tick grid
   - prediction market
+last_verified: 2026-09-02
+verified_against: predict-testnet-8-21
 goal:
   description: >-
-    Reader can learn about DeepBook Predict design, including Predict,
-    PredictManager, OracleSVI, Vault, and PLP
+    Reader can explain how DeepBook Predict splits state across the Registry,
+    ProtocolConfig, PoolVault, and per-expiry ExpiryMarket objects, where
+    accounts and oracle feeds live, and how the pool flush prices liquidity.
   requires:
     - has_frontmatter:
         - title
@@ -30,70 +34,143 @@ goal:
     - has_answer: true
       label: Needs answer summary for AI citation
 questions:
-  - What is Design in Sui?
-  - How does design work on Sui?
-  - Why should I use design?
+  - Which onchain objects make up DeepBook Predict?
+  - Where do DeepBook Predict oracle prices come from?
+  - How does DeepBook Predict represent strikes and ranges?
+  - How do DeepBook Predict PLP supply and withdraw requests get filled?
 answer: >-
-  At a high level, DeepBook Predict revolves around four main onchain
-  components:.
+  DeepBook Predict splits its onchain state across a Registry, a ProtocolConfig,
+  a PoolVault, and one ExpiryMarket per expiry. Trader balances and positions
+  live in a shared AccountWrapper from the account package, oracle data lives in
+  the separate propbook package, and PLP supply and withdraw requests queue until
+  a privileged flush fills them at one exact net asset value.
 ---
 
-At a high level, DeepBook Predict revolves around four main onchain components:
+DeepBook Predict keeps its protocol state in four kinds of shared object, custodies user funds in the DeepBook `account` package, and reads every price from feeds that belong to a separate `propbook` package. Knowing which object owns which piece of state is enough to follow any Predict transaction.
 
-- `Predict`: The top-level shared object. It holds vault balances, pricing config, risk config, the quote-asset allowlist, oracle strike grids, withdrawal-limiter config, and the `PLP` treasury cap.
-- `PredictManager`: A per-user shared account object. It wraps a DeepBook `BalanceManager`, stores deposited quote balances, and tracks a user's binary position and vertical range quantities.
-- `OracleSVI`: The market state for one underlying asset and one expiry. It stores spot, forward, SVI parameters, activation status, timestamps, and settlement price.
-- `Vault`: The shared liquidity and exposure state machine. It stores accepted quote assets, tracks mark-to-market liability, tracks maximum payout, and supports `PLP` supply and withdrawal flows.
+The protocol's own shared objects are:
 
-## `Predict` shared object {#predict}
+- `Registry`: The index and governance anchor. It records approved underlyings, the cadence policy that creates markets, the unique market for each underlying and expiry, and the allowlists of pause and market lifecycle capabilities.
+- `ProtocolConfig`: Every admin-tunable value, together with the global gates that each flow checks before it runs.
+- `PoolVault`: The liquidity pool that writes every contract. It holds idle DUSDC, the protocol reserve, the PLP treasury cap, the per-expiry accounting ledger, and the two liquidity request queues.
+- `ExpiryMarket`: One object per underlying and expiry, holding that expiry's strike exposure, payout backing, and working DUSDC.
 
-`Predict` is the main protocol object that applications pass to trading and liquidity functions. It validates quote assets, checks trading pause state, prices mints and redeems from oracle state, applies spread and utilization configuration, updates vault exposure, and emits protocol events.
+Trader balances and positions live in the account layer, and oracle data lives outside Predict entirely.
 
-For a mint, `Predict` first validates that the manager owner is the signer, the quote asset is accepted, the oracle is live, and the requested market key or range key matches the oracle. It then inserts the new liability into the vault before pricing the trade, so the trader pays for the post-trade state they create. After collecting payment from the `PredictManager`, it checks total exposure and increases the user's internal position quantity.
+## Protocol shared objects {#shared-objects}
 
-For a redeem, `Predict` decreases the user's internal position quantity, removes or compacts the vault exposure as needed, dispenses the payout from the vault, and deposits the payout back into the `PredictManager`.
+`Registry` indexes the protocol. It records each admin-approved propbook underlying, the cadence deployment policy for that underlying, and one `ExpiryMarket` for each underlying and expiry pair. It also holds the allowlists that make a `PauseCap` or a `MarketLifecycleCap` valid, and it derives the `BuilderCode` objects that attribute builder fees to order-flow routers. It holds no trading state.
 
-## `PredictManager` shared object {#predict-manager}
+Package publication creates `Registry` and `ProtocolConfig` together and sends one `AdminCap` to the deployer. `ProtocolConfig` carries the tunable configuration plus three global gates: `trading_paused` blocks new risk, `frozen` halts the whole version-gated surface, and `version_watermark` sets the lowest package version a gated call can run. A fourth flag, `valuation_in_progress`, holds the pool valuation lock for the length of one flush transaction. One configuration struct is a template: each new `ExpiryMarket` snapshots the current strike-exposure policy at creation, so a template change reaches later expiries and never a live one.
 
-Each user creates one `PredictManager` and reuses it across Predict flows. The manager owns an inner `BalanceManager` plus deposit and withdraw capabilities, which lets the protocol move balances during mints, redeems, and payouts without exposing the internal capabilities directly.
+`ExpiryMarket` is the hot object for one expiry. It owns trade execution, the tick-keyed payout tree that tracks strike exposure, and an embedded `ExpiryCash` component that holds that expiry's working DUSDC. It stores the propbook underlying ID rather than any oracle object ID, alongside its tick size, admission tick size, and mint pause flag. A new market opens with zero cash and cannot mint until pool capital funds it. `plp::rebalance_expiry_cash` moves that cash from the pool's idle balance, and anyone can call it.
 
-Positions and ranges are not standalone objects. The manager stores binary position quantities in a table keyed by `MarketKey`, and vertical range quantities in a table keyed by `RangeKey`. Applications should read those quantities from the manager object or from the indexed server API rather than looking for separate position objects.
+Capabilities are owned objects rather than roles stored on a shared object. `AdminCap` sets policy, `MarketLifecycleCap` creates markets and starts a pool flush, and `PauseCap` is a one-way emergency brake that cannot unpause anything. Predict holds no price-writing capability at all.
 
-## Positions and ranges {#positions-and-ranges}
+Every function an integrator calls is a `public fun` invoked from a [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks). Several return a value that the same transaction must consume, such as the pricer a quote reads or the authorization an account call spends.
 
-Binary positions are keyed by `(oracle_id, expiry, strike, is_up)`. The `is_up` direction represents whether the position pays when settlement is above the strike. A corresponding down position is created with the same oracle, expiry, and strike but the opposite direction.
+## Accounts and custody {#predict-manager}
 
-Vertical ranges are keyed by `(oracle_id, expiry, lower_strike, higher_strike)`. A range is priced as a single bounded instrument. At settlement, it pays out when the settlement lands in the band `(lower, higher]`.
+Predict defines no account object of its own. It uses the shared `AccountWrapper` from the `account` package, which embeds an `Account` holding coin balances, the root for app data, and optional referral attribution. That `Account` is a field inside the wrapper, not a separate object.
 
-## Oracle lifecycle {#oracle-lifecycle}
+Both the wrapper and the account address derive from the owner address through the `AccountRegistry`, so an application can compute the wrapper ID offchain before the account exists. `account_registry::new` creates the wrapper permissionlessly with the transaction sender as owner, and `account::share` publishes it in the same transaction. A second creation for the same owner aborts.
 
-`OracleSVI` moves through four lifecycle states:
+Predict attaches its own state to that account under the `PredictApp` namespace: a table of open positions keyed by the pair of expiry market ID and order ID, plus the sticky builder code the account trades under. Positions are not standalone objects, so read them from the account or from the public read APIs.
 
-- **Inactive:** The oracle exists but has not been activated.
-- **Active:** The oracle accepts live spot, forward, and SVI updates before expiry.
-- **Pending settlement:** The oracle has reached expiry but has not yet received the first post-expiry price push.
-- **Settled:** The first post-expiry price update freezes the settlement price and prevents further live price or SVI updates.
+Account mutation runs on an `Auth` value that `load_account_mut` consumes, and that value comes from one of two sources:
 
-Tradeability depends on this lifecycle. Mints require a live oracle. Redeems can quote against live or settled oracle state. After settlement, the vault can compact dense strike matrix exposure into constant-size settled state.
+- **Owner authorization:** The account owner, or an owning object, generates it. Minting, live redemption, settled exits, liquidity requests and cancellations, and builder code configuration all use it.
+- **Predict app authorization:** Predict generates it internally through the account registry so a keeper can sweep settled positions into an account without the owner signing. Deauthorizing the `PredictApp` type disables that automation while owner-authorized exits keep working.
 
-## Vault and `PLP` {#vault-and-plp}
+Payouts, liquidity fills, refunds, and referral shares reach an account through the balance accumulator at its receive address. The account absorbs them into stored custody on its next capital operation, so a balance read settles pending deliveries first.
 
-The vault takes the opposite side of every Predict trade. It stores concrete quote asset balances, a shared quote-denominated vault balance, per-oracle strike matrices, compact settled-oracle state, total mark-to-market liability, and total maximum payout.
+## Oracle feeds {#oracle-feeds}
 
-Liquidity providers call `predict::supply` with an accepted quote asset and receive `PLP` shares. The first supplier receives shares one-to-one with the supplied amount. Later suppliers receive shares proportional to their deposit relative to current vault value. Withdrawals burn `PLP` and return quote assets only when the withdrawal amount is available after covering current max payout.
+Oracle data is not Predict state. Three shared objects in the separate `propbook` package carry it, and Predict reads them without ever writing to them:
 
-## Pricing and risk {#pricing-and-risk}
+- `PythFeed`: One source-native Pyth Lazer spot payload per feed ID, plus exact timestamp history. Predict reads the normalized spot and the timestamp of the observation behind it.
+- `BlockScholesValueStore`: The latest Block Scholes spot and the per-expiry forward, plus exact minute-boundary spot history.
+- `BlockScholesSVIStore`: The latest per-expiry SVI parameter set, which describes the shape of the implied distribution.
 
-Predict prices binary positions and ranges from oracle fair prices plus protocol spread and utilization adjustments. The protocol can set global ask bounds and tighter per-oracle ask bounds. These bounds prevent mints with post-spread ask prices outside configured limits.
+Updates to all three are permissionless, because a verified Pyth Lazer payload, or a signed Block Scholes batch, is its own proof of origin. The relayer that lands one needs no capability.
 
-Risk is enforced by the vault's total exposure check. After minting, the vault asserts that total mark-to-market liability remains within `max_total_exposure_pct` of the vault balance.
+Propbook's `OracleRegistry` records which feed objects are canonical for an underlying. Market creation asserts those bindings exist, and every priced call revalidates the objects it receives against the current binding, so passing a feed that is not canonical aborts. Predict also rejects an observation whose writer digest matches the current transaction, which stops a caller from pushing an oracle update and trading against it in the same transaction.
+
+Freshness is a read-time check rather than a writer promise. Three admin-tunable windows gate live pricing: one for the Pyth spot, one for the Block Scholes spot and forward, and a looser one for the SVI parameters, which change more slowly. An observation is fresh only when its source timestamp is positive, not in the future, and inside its window.
+
+## Strikes, ticks, and positions {#positions-and-ranges}
+
+Predict has one strike representation across the whole protocol: an absolute integer tick, where the raw strike is the tick multiplied by the market's `tick_size`. There is no centered grid and no per-market origin, so the same tick means the same price at the public function, in the event, in the payout tree, and at settlement. Because the tick domain is fixed in advance, market creation reads no live spot.
+
+A position is a range, carried as the tick pair `lower_tick` and `higher_tick`, and its payout region is half-open: it pays when settlement lands above the lower strike and at or below the higher strike. Two sentinel ticks give a range an open end:
+
+- Tick `0` is the negative infinity sentinel, so a downside position runs from `0` to the strike tick.
+- Tick `1073741823`, the largest 30-bit value, is the positive infinity sentinel, so an upside position runs from the strike tick to `1073741823`.
+- Finite strikes occupy every tick in between, from `1` to `1073741822`.
+
+The protocol rejects the fully open range from `0` to `1073741823`, because it would pay in every outcome. A finite boundary must also land on the market's coarser admission grid, with one exception: each market records a reference tick taken from the exact Pyth spot at its reference timestamp, and the protocol admits that tick even when it falls off the admission grid. Anyone can record it with `expiry_market::set_reference_tick`, and until a market has one, a quote against the reference strike fails.
+
+Minting returns one packed `u256` order ID that encodes the quantity in lots, both ticks, and a market-local sequence number. Treat it as an opaque handle. Quantity moves in whole lots of `10000` base units, which is 0.01 DUSDC. An order ID is unique only inside one market, so identify a position by the pair of market ID and order ID. Closing part of a position retires its order ID and issues a replacement for the remaining quantity, while the original mint's root ID stays stable across those replacements.
+
+## Pricing and settlement {#pricing-and-risk}
+
+Pricing is transaction-local. `expiry_market::load_live_pricer` takes the protocol configuration, the propbook registry, and the three oracle objects, then returns a pricer bound to that one market. The pricer has no `store` ability, so every transaction that quotes, mints, redeems live, or values a market builds a fresh one.
+
+The pricer resolves a forward, then reads each range's probability off the SVI curve as the difference between its two strike boundaries. While `use_pyth_spot_for_forward` is set, which is the shipped default, a fresh usable Pyth spot anchors the forward and the Block Scholes basis scales it. A missing, stale, or unusable Pyth spot falls back to the Block Scholes forward for that expiry. A position's live value is its quantity multiplied by its range probability, and a winning position settles at its full quantity. Mint admission holds the quoted entry probability inside a per-market band and requires a minimum premium, so a quote at the extreme edge of the distribution fails rather than rounding. Live pricing aborts once a market's expiry has passed.
+
+Settlement is one permissionless transition, `expiry_market::try_settle`, and repeat calls are harmless. It first looks for the exact Pyth spot at the market's expiry timestamp. If Pyth remains unavailable 30 seconds after expiry, the same call can use the exact Block Scholes minute-boundary spot instead. Both lookups are exact matches, with no nearest, rounded, or interpolated fallback. The transition records the terminal price and the exact remaining payout liability together, and `MarketSettled` reports which source won. When neither source is usable, the call returns `false` and the market stays unsettled. Settled redemption, cash rebalancing, and flush valuation read only the recorded state, so they touch no oracle.
+
+Predict enforces solvency per expiry rather than through a protocol-wide exposure ratio. Every cash movement re-asserts that a market's `ExpiryCash` balance covers its payout liability plus its isolated inventory-impact escrow, and only the surplus above that line is cash the pool can sweep. Monetary math rounds in the protocol's favor, so an expiry can always pay its winners. At the pool level, `max_lp_pool_value` caps how much liquidity the pool accepts.
+
+### Fee components {#fee-components}
+
+A quote reports every charge separately, and a mint debits the premium plus the trading fee net of any subsidy, plus the builder fee, the congestion surcharge, and the inventory-impact charge. A live close withholds the same charges from the payout, and a settled winner collects its full quantity. The components are:
+
+- **Trading fee:** A rate proportional to the standard deviation of the contract's Bernoulli outcome, so it peaks where the quoted probability is nearest to a coin flip and falls toward the tails, with a per-unit floor underneath it. A linear ramp lifts that rate inside a configured window before expiry.
+- **Fee incentive subsidy:** A reduction in the trading fee, funded from the market's sponsored incentive balance. Anyone can top that balance up.
+- **Builder fee:** An optional add-on for accounts that carry a builder code, computed from the trading fee and capped by a per-quantity rate. It routes to the builder code's address rather than into the pool.
+- **Congestion surcharge:** A flat per-unit charge that fires only when the transaction's gas price is a high outlier against the market's own smoothed estimate. Admin can disable it, and it ships disabled.
+- **Inventory-impact charge:** A charge sized by the change a trade makes to the book's payout profile, held in the market's isolated escrow and rebated when a trade closes that exposure. Its rate ships at zero, which makes the mechanism inert.
+
+A referral share is not another charge. On a referred mint it redistributes protocol proceeds to the referring account after the trader's total is already fixed.
+
+## Pool liquidity and PLP {#vault-and-plp}
+
+`PoolVault` is the counterparty to every trade. Liquidity providers deposit DUSDC and receive PLP shares, a 6-decimal coin that matches DUSDC's decimals. The vault holds idle DUSDC available for withdrawals and expiry funding, a protocol reserve excluded from PLP redemption, the PLP treasury cap, the per-expiry accounting ledger, and the supply and withdraw queues.
+
+Supply and withdrawal are asynchronous, so nobody mints or burns PLP against a live price:
+
+- `plp::request_supply` escrows DUSDC with a `min_plp_out` floor and returns a queue index.
+- `plp::request_withdraw` escrows PLP with a `min_dusdc_out` floor and returns a queue index.
+- `plp::cancel_supply_request` and `plp::cancel_withdraw_request` reclaim the escrow at that index any time before a flush reaches it.
+
+A periodic flush values the whole pool once and fills eligible queue heads at that single frozen mark. It runs as exactly three stages inside one transaction:
+
+1. `start_pool_valuation` engages the valuation lock and snapshots the active market set into a hot potato.
+1. `value_expiry` runs once per snapshotted market. It rebalances that market's cash with the pool, then folds the market's value into a running total: a live market contributes its exact net asset value, and a settled market contributes zero.
+1. `finish_flush` proves the flush valued every snapshotted market exactly once, computes the pool's net asset value as idle DUSDC plus the total it accumulated, drains the queues at that one mark, and releases the lock.
+
+```mermaid
+flowchart TD
+  CAP["MarketLifecycleCap"] --> START["start_pool_valuation: lock and snapshot active markets"]
+  START --> VAL["value_expiry per market: rebalance cash, fold exact NAV"]
+  VAL --> FIN["finish_flush: pool NAV = idle + sum of market NAV"]
+  FIN --> SUP["supplies first: mint PLP, join escrow into idle"]
+  FIN --> WD["withdrawals next: burn PLP, pay from idle, in queue order"]
+```
+
+The flush is privileged rather than permissionless. Only a `MarketLifecycleCap` on the registry's allowlist can produce the proof that `start_pool_valuation` consumes, and the hot potato exists only through that call, so gating the start gates the whole flush. That boundary is what makes one mark safe in both directions, because an adversary cannot time the valuation against an oracle update they control. The later stages need no capability of their own: holding the potato is the authority, and the potato has no abilities, so a flush cannot be left half-finished.
+
+The drain runs supplies first, then withdrawals in queue order until idle DUSDC runs out, and an operator-supplied budget bounds each pass. The flush refunds a head request whose quote misses its own floor instead of letting it block the queue, and a withdrawal larger than the remaining idle balance takes what idle covers and keeps its unfilled balance queued. The flush delivers every fill and refund to the recipient account's receive address through the balance accumulator.
+
+Because supplies fill before withdrawals, DUSDC supplied in a flush can pay that same flush's withdrawals. Cash already funded into an expiry stays there until rebalancing or settlement returns it, so idle liquidity bounds a large exit and spreads it across flushes instead of draining a live market.
 
 ## Data flow {#data-flow}
 
-Applications should split reads by freshness and purpose:
+Split reads by freshness and purpose:
 
-1. Render markets, portfolios, vault summaries, and history from the public Predict server.
-1. Subscribe to Sui checkpoints or events for second-level oracle updates when the UI needs a live tape.
-1. Read onchain `Predict`, `PredictManager`, `OracleSVI`, and quote coin objects around wallet flows that require authoritative state.
+1. Build quotes, balances, positions, pool state, and market state with the Predict client in [`@mysten/deepbook-v3`](https://www.npmjs.com/package/@mysten/deepbook-v3). Every read runs against the Sui node core API through simulation and object reads, and the event decoders parse a transaction result with no network call at all, so these reads need no indexer.
+1. Render history, portfolios, and oracle observation series from the public read services at `predict-server-v4.testnet.mystenlabs.com`, `propbook-server-v4.testnet.mystenlabs.com`, and `account-server-v4.testnet.mystenlabs.com`. Check a service's `/status` response before you treat its recent data as complete.
+1. Subscribe to Sui checkpoints or protocol events when an interface needs a live tape of oracle updates and trades.
 
-This keeps page rendering fast while still letting transaction flows confirm exact onchain state.
+Quotes are the one read that doubles as a preflight check, because a quote simulates the exact transaction its matching builder produces and raises the same errors the mint or redemption would. For endpoint paths, package IDs, and object IDs, see [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information).

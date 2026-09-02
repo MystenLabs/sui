@@ -71,7 +71,7 @@ The pattern is a market that settles exactly once, at or after a defined expiry,
 
 Two failure modes stay separate from any oracle failure: settling before expiry and settling twice, both rejected before the oracle is read. Because `resolve` goes through the adapter's `price_from_pyth`, a market cannot settle against a stale price.
 
-For a production worked example, DeepBook Predict's [`OracleSVI`](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle) does exactly this at scale: it accepts live price updates before expiry, then freezes a settlement price on the first post-expiry update, after which price updates are rejected. The mechanism, freeze once at expiry, is the same.
+For a production worked example, DeepBook Predict settles each market through a permissionless [`try_settle`](/onchain-finance/deepbook/deepbook-predict/contract-information/predict) transition that anyone can call after expiry. It reads the exact price stamped at the expiry timestamp, records that price and the payout liability once, and returns `false` rather than inventing a mark when no exact price is available yet. Every later read, including settled redemption, consumes the recorded price instead of reading an [oracle](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle). The mechanism, resolve once at expiry and read recorded state afterward, is the same.
 
 ## Optimistic resolution for subjective outcomes
 
