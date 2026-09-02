@@ -182,6 +182,7 @@ pub struct AdmissionQueueMetrics {
 
     pub pool_depth: IntGaugeVec,
     pub pool_bytes: IntGaugeVec,
+    pub pool_staggered_held: IntGauge,
     pub pool_taken_per_proposal: Histogram,
     pub pool_requeued_on_dropped_ack: IntCounter,
     pub pool_gc_notified: IntCounter,
@@ -237,6 +238,12 @@ impl AdmissionQueueMetrics {
                 "consensus_transaction_pool_bytes",
                 "Current serialized transaction bytes in each consensus transaction pool lane",
                 &["lane"],
+                registry,
+            )
+            .unwrap(),
+            pool_staggered_held: register_int_gauge_with_registry!(
+                "consensus_transaction_pool_staggered_held",
+                "User-lane entries in the pool stamped with a staggered-submission hold, whether or not the hold has elapsed",
                 registry,
             )
             .unwrap(),
