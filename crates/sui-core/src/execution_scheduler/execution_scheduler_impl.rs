@@ -525,7 +525,7 @@ impl ExecutionScheduler {
         // order, for every unit - including keys whose transactions materialize only
         // later. A key's transactions must run under the key's index: units enqueued
         // after it may already be parked waiting for its outputs.
-        let certs = self.dedup_and_assign_causal_indices(certs);
+        let certs = self.causal_admission.dedup_and_assign(certs);
 
         // schedule all transactions immediately
         let mut ordinary_txns = Vec::with_capacity(certs.len());
@@ -559,47 +559,6 @@ impl ExecutionScheduler {
         self.spawn_transaction_scheduling(ordinary_txns, epoch_store);
         self.schedule_tx_keys(tx_with_keys, epoch_store);
         self.schedule_funds_withdraws(tx_with_withdraws, epoch_store);
-    }
-
-    /// Deduplicates a batch of enqueued units and assigns causal indices to the
-    /// survivors, preserving batch order. Units are grouped into consecutive runs of
-    /// the same accumulator root version; a run is admitted or rejected atomically
-    /// (all transactions of a version are enqueued together, so a rejected run was
-    /// already enqueued in full by the other source). Runs without a version are
-    /// never deduplicated.
-    fn dedup_and_assign_causal_indices<T>(
-        &self,
-        mut certs: Vec<(T, ExecutionEnv)>,
-    ) -> Vec<(T, ExecutionEnv)> {
-        // Internal re-submissions of already-indexed certificates must not pass
-        // through here again - they keep their original index.
-        debug_assert!(certs.iter().all(|(_, env)| env.causal_index.is_none()));
-        // Assign in place; rejection is rare, so the batch is usually returned as-is.
-        let mut rejected = false;
-        for run in certs.chunk_by_mut(|(_, a), (_, b)| {
-            a.assigned_versions.accumulator_version() == b.assigned_versions.accumulator_version()
-        }) {
-            let version = run[0].1.assigned_versions.accumulator_version();
-            match self.causal_admission.admit_enqueue(version, run.len()) {
-                Some(first_index) => {
-                    for (i, (_, env)) in run.iter_mut().enumerate() {
-                        env.causal_index = Some(first_index + i as u64);
-                    }
-                }
-                None => {
-                    debug!(
-                        ?version,
-                        "rejecting duplicate enqueue of {} transactions",
-                        run.len()
-                    );
-                    rejected = true;
-                }
-            }
-        }
-        if rejected {
-            certs.retain(|(_, env)| env.causal_index.is_some());
-        }
-        certs
     }
 
     pub fn enqueue_transactions(
@@ -646,7 +605,7 @@ impl ExecutionScheduler {
                 }
             })
             .collect();
-        let pending_certs = self.dedup_and_assign_causal_indices(pending_certs);
+        let pending_certs = self.causal_admission.dedup_and_assign(pending_certs);
         self.spawn_transaction_scheduling(pending_certs, epoch_store);
 
         self.metrics

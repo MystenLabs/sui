@@ -11,7 +11,7 @@
 //! admit transactions in a way that makes blocking on not-yet-available values
 //! deadlock-free (see the design comment in `execution_driver.rs`).
 //!
-//! Index lifecycle. Indices are assigned at enqueue time via [`CausalAdmission::admit_enqueue`]
+//! Index lifecycle. Indices are assigned at enqueue time via [`CausalAdmission::dedup_and_assign`]
 //! and travel as plain data in the unit's `ExecutionEnv`. Every assigned index is
 //! *retired* (marked done) by the execution driver - the sole execution and retirement
 //! point - when its transaction finishes executing or is dropped as no longer needed.
@@ -22,15 +22,16 @@
 //! can never block, and running them is what unblocks transactions waiting on the
 //! accumulator versions they write), so there is nothing to admit against or retire.
 //!
-//! Deduplication. `admit_enqueue` admits or rejects an entire version group
-//! atomically, keyed on the group's assigned accumulator root version: all
-//! transactions of a root version are enqueued together (one consensus chunk, or one
-//! whole group within a checkpoint), so a group at or below the enqueue watermark has
-//! already been enqueued in full by whichever source got there first, and is rejected
-//! without assigning indices. Performing the version check, index assignment and
-//! watermark bump under one lock serializes version admission across the consensus and
-//! checkpoint paths: a rejected group's transactions are guaranteed to already hold
-//! lower indices. Units with no accumulator version bypass deduplication - that only
+//! Deduplication. `dedup_and_assign` processes a whole enqueue batch atomically:
+//! units whose assigned accumulator root version is at or below the enqueue watermark
+//! are dropped, survivors are indexed in batch order, and the watermark rises to the
+//! batch's highest version. This is sound because all transactions of a root version
+//! are enqueued together (one consensus chunk, or whole groups within a checkpoint),
+//! so a version at or below the watermark was already enqueued in full by whichever
+//! source got there first. Performing the whole batch under one lock serializes
+//! version admission across the consensus and checkpoint paths: a rejected unit's
+//! transactions are guaranteed to already hold lower indices. Units with no
+//! accumulator version bypass deduplication - that only
 //! occurs when replaying epochs that predate accumulators (checkpoint path only, which
 //! never self-duplicates) plus the end-of-epoch transaction; execution cannot block on
 //! undeclared dependencies in such epochs, so any future blocking feature must be
@@ -49,6 +50,8 @@ use mysten_common::{assert_reachable, assert_sometimes};
 use parking_lot::Mutex;
 use sui_types::base_types::SequenceNumber;
 use tokio::sync::Notify;
+
+use crate::authority::ExecutionEnv;
 
 /// Shared state between the ExecutionScheduler (index assignment and enqueue
 /// deduplication) and the execution driver (admission and retirement). See the module
@@ -112,26 +115,38 @@ impl CausalAdmission {
         })
     }
 
-    /// Deduplicates and assigns indices for one externally-enqueued version group of
-    /// `count` units, in enqueue order. Returns the first of `count` consecutive
-    /// indices, or None if the group's version is at or below the enqueue watermark -
-    /// meaning the whole group was already enqueued (with lower indices) by the other
-    /// source. Groups without an accumulator version are never deduplicated.
+    /// Deduplicates an enqueue batch and assigns causal indices to the survivors, in
+    /// batch order, atomically: units whose assigned accumulator root version is at
+    /// or below the enqueue watermark were already enqueued in full by the other
+    /// source and are dropped; the watermark then rises to the batch's highest
+    /// version. Units without an accumulator version are never deduplicated.
     ///
-    /// The check, assignment and watermark bump are atomic, serializing version
-    /// admission across the consensus and checkpoint paths.
-    pub fn admit_enqueue(&self, version: Option<SequenceNumber>, count: usize) -> Option<u64> {
+    /// Processing the whole batch under one lock serializes version admission across
+    /// the consensus and checkpoint paths.
+    pub fn dedup_and_assign<T>(&self, certs: Vec<(T, ExecutionEnv)>) -> Vec<(T, ExecutionEnv)> {
+        // Internal re-submissions of already-indexed certificates must not pass
+        // through here again - they keep their original index.
+        debug_assert!(certs.iter().all(|(_, env)| env.causal_index.is_none()));
         let mut inner = self.inner.lock();
-        if let Some(version) = version {
-            if inner.enqueue_watermark.is_some_and(|w| version <= w) {
-                assert_reachable!("rejected duplicate enqueue of a version group");
-                return None;
-            }
-            inner.enqueue_watermark = Some(version);
-        }
-        let first = inner.next_index;
-        inner.next_index += count as u64;
-        Some(first)
+        let watermark = inner.enqueue_watermark;
+        let mut max_version = watermark;
+        let certs = certs
+            .into_iter()
+            .filter_map(|(item, mut env)| {
+                if let Some(version) = env.assigned_versions.accumulator_version() {
+                    if watermark.is_some_and(|w| version <= w) {
+                        assert_reachable!("rejected duplicate enqueue of a version group");
+                        return None;
+                    }
+                    max_version = max_version.max(Some(version));
+                }
+                env.causal_index = Some(inner.next_index);
+                inner.next_index += 1;
+                Some((item, env))
+            })
+            .collect();
+        inner.enqueue_watermark = max_version;
+        certs
     }
 
     /// Attempts to admit the transaction with `index` for execution. On success,
@@ -234,12 +249,28 @@ impl Drop for InFlightSlot {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::authority::shared_object_version_manager::AssignedVersions;
+
+    fn env(version: Option<u64>) -> ExecutionEnv {
+        ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
+            vec![],
+            version.map(SequenceNumber::from_u64),
+        ))
+    }
+
+    /// Enqueues `n` version-less units and returns their assigned indices.
+    fn assign(admission: &CausalAdmission, n: usize) -> Vec<u64> {
+        admission
+            .dedup_and_assign((0..n).map(|_| ((), env(None))).collect())
+            .into_iter()
+            .map(|(_, env)| env.causal_index.unwrap())
+            .collect()
+    }
 
     #[test]
     fn watermark_advances_over_done_indices() {
         let admission = CausalAdmission::new(2);
-        let first = admission.admit_enqueue(None, 3).unwrap();
-        assert_eq!(first, 1);
+        assert_eq!(assign(&admission, 3), vec![1, 2, 3]);
         assert_eq!(admission.watermark_for_testing(), 0);
 
         // Out-of-order completion parks above the watermark until the gap fills.
@@ -254,23 +285,29 @@ mod tests {
     #[test]
     fn duplicate_version_groups_are_rejected() {
         let admission = CausalAdmission::new(2);
-        let v1 = SequenceNumber::from_u64(5);
-        let v2 = SequenceNumber::from_u64(6);
 
-        assert_eq!(admission.admit_enqueue(Some(v1), 3), Some(1));
-        // The same version from the other source is a duplicate.
-        assert_eq!(admission.admit_enqueue(Some(v1), 3), None);
-        // A higher version is new work.
-        assert_eq!(admission.admit_enqueue(Some(v2), 2), Some(4));
-        // Groups without a version are never deduplicated.
-        assert_eq!(admission.admit_enqueue(None, 1), Some(6));
-        assert_eq!(admission.admit_enqueue(None, 1), Some(7));
+        // A batch with versions 5 and 6 is admitted in full.
+        let batch = vec![((), env(Some(5))), ((), env(Some(5))), ((), env(Some(6)))];
+        assert_eq!(admission.dedup_and_assign(batch).len(), 3);
+        // Versions at or below the watermark are duplicates from the other source.
+        let batch = vec![((), env(Some(5))), ((), env(Some(6)))];
+        assert!(admission.dedup_and_assign(batch).is_empty());
+        // A higher version is new work, and version-less units always pass.
+        let batch = vec![((), env(Some(7))), ((), env(None))];
+        let admitted = admission.dedup_and_assign(batch);
+        assert_eq!(
+            admitted
+                .into_iter()
+                .map(|(_, env)| env.causal_index.unwrap())
+                .collect::<Vec<_>>(),
+            vec![4, 5]
+        );
     }
 
     #[test]
     fn next_consecutive_is_admitted_at_the_limit() {
         let admission = CausalAdmission::new(1);
-        admission.admit_enqueue(None, 2).unwrap();
+        assign(&admission, 2);
 
         // Fill the single concurrency slot with index 2.
         let mut slot2 = admission.try_admit(2).unwrap();
@@ -297,7 +334,7 @@ mod tests {
     #[test]
     fn concurrency_limit_bounds_admissions() {
         let admission = CausalAdmission::new(2);
-        admission.admit_enqueue(None, 5).unwrap();
+        assign(&admission, 5);
 
         // Admit indices 2 and 3 through the capacity branch, filling the limit.
         let _s2 = admission.try_admit(2).unwrap();
@@ -314,7 +351,7 @@ mod tests {
     #[test]
     fn retirement_without_admission_advances_watermark() {
         let admission = CausalAdmission::new(2);
-        admission.admit_enqueue(None, 2).unwrap();
+        assign(&admission, 2);
         // Unit 1 is dropped by the driver without being admitted (e.g. already
         // executed).
         admission.mark_done(1);
