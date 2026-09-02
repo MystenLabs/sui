@@ -1,19 +1,20 @@
 ---
 title: Example Apps
 description: >-
-  End-to-end example applications that demonstrate Sui development patterns,
-  from Move smart contracts to React frontends and onchain security challenges.
+  Source repositories for end-to-end Sui example applications, covering Move
+  patterns, dApp Kit frontends, custom indexers, and onchain security
+  challenges.
 keywords:
   - examples
-  - tutorials
+  - example apps
+  - sample code
   - move
-  - react
   - dapp-kit
-  - onchain
   - bootcamp
+  - CTF
 goal:
   description: >-
-    Introduce the example apps and link to available examples.
+    Reader can find the source repository for each Sui example application.
   requires:
     - has_frontmatter:
         - title
@@ -24,17 +25,51 @@ goal:
     - has_answer: true
       label: Needs answer summary for AI citation
 questions:
+  - Where can I find Sui example app source code?
   - What example projects are available for learning Sui?
   - Which example should I start with as a new Sui developer?
-  - What patterns do the Sui examples demonstrate?
 answer: >-
-  Explore examples that demonstrate common Sui development patterns. Each
-  example includes source code, setup instructions, key code highlights, and
-  troubleshooting guidance.
+  Sui example applications live in 3 GitHub repositories. The
+  sui-move-bootcamp repository holds Move patterns, dApp Kit frontends, and a
+  custom event indexer. The CTF repository holds onchain security challenges.
+  The plinko-poc repository holds a complete randomness-based game. Each
+  repository contains its own README with setup and run instructions.
 ---
 
-Explore examples that demonstrate common Sui development patterns. Each example includes source code, setup instructions, key code highlights, and troubleshooting guidance.
+Each example below ships as a runnable repository with its own README. Clone the repository, publish the Move package to Testnet, and run the app.
 
-import DocCardList from '@theme/DocCardList';
+If you are new to Sui, start with ["Hello, World!"](/getting-started/onboarding) to install the toolchain and publish your first package, then come back here.
 
-<DocCardList />
+## Move patterns
+
+| Example | What it demonstrates | Source |
+| --- | --- | --- |
+| Capability pattern | Gating privileged functions behind an `AdminCap` instead of hardcoded address checks. | [sui-move-bootcamp/C1](https://github.com/MystenLabs/sui-move-bootcamp/tree/solution/C1/capability) |
+| Derived objects | Predicting an object ID before creation, and looking up objects by key without an indexer. | [sui-move-bootcamp/C5](https://github.com/MystenLabs/sui-move-bootcamp/tree/solution/C5) |
+| Scenario testing | Multi-transaction Move tests with `test_scenario`, including access control and transaction effects. | [sui-move-bootcamp/G1](https://github.com/MystenLabs/sui-move-bootcamp/tree/solution/G1/scenario) |
+
+## Frontend apps
+
+| Example | What it demonstrates | Source |
+| --- | --- | --- |
+| dApp Kit starter | Wallet connection, network switching, and owned-object queries in a React app. | [sui-move-bootcamp/E2](https://github.com/MystenLabs/sui-move-bootcamp/tree/solution/E2/my-first-sui-dapp) |
+| NFT minting app | A shared registry Move package plus a frontend that mints through a programmable transaction block. | [sui-move-bootcamp/F1](https://github.com/MystenLabs/sui-move-bootcamp/tree/solution/F1) |
+| Plinko | Onchain randomness in a house-managed game, with sponsored transactions and a payout table. | [plinko-poc](https://github.com/MystenLabs/plinko-poc) |
+
+## Data and indexing
+
+| Example | What it demonstrates | Source |
+| --- | --- | --- |
+| Real-time event indexer | A gRPC checkpoint subscription that decodes BCS event data into structured TypeScript fields. | [sui-move-bootcamp/K1](https://github.com/MystenLabs/sui-move-bootcamp/tree/main/K1) |
+
+To add an indexer to your own service rather than run this one, see the [custom indexer guide](/develop/accessing-data/custom-indexer/build).
+
+## Security challenges
+
+The [CTF repository](https://github.com/MystenLabs/CTF) holds capture-the-flag challenges. Each one deploys a deliberately vulnerable contract to Testnet and asks you to exploit it.
+
+| Challenge | What it teaches |
+| --- | --- |
+| Lootbox | Why functions that consume `sui::random` must be `entry` rather than `public`. |
+| Merchant using USDC | Passing exact `Coin<T>` amounts to Move functions with `splitCoins`. |
+| Staking with time-accumulation | How time-based access control breaks when the client controls accumulation. |

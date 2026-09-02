@@ -265,43 +265,7 @@ export default {
         'getting-started/onboarding/next-steps',
       ],
     },
-    {
-      type: 'category',
-      label: 'Example Apps',
-      link: { type: 'doc', id: 'getting-started/examples/index'},
-      items: [
-        {
-          type: 'category',
-          label: 'Move Patterns',
-          items: [
-            'getting-started/examples/capability-pattern',
-            'getting-started/examples/derived-objects',
-            'getting-started/examples/scenario-testing',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Frontend Apps',
-          items: [
-            'getting-started/examples/dapp-kit-frontend',
-            'getting-started/examples/nft-app',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Digital Assets',
-          items: [
-            'getting-started/examples/lootbox-ctf',
-            'getting-started/examples/merchant-ctf',
-            'getting-started/examples/staking-ctf',
-            'getting-started/examples/consumer-app-zklogin',
-            'getting-started/examples/defi-trading-zklogin',
-          ],
-        },
-        'getting-started/examples/event-indexer',
-        'getting-started/examples/plinko',
-      ]
-    },
+    'getting-started/examples/index',
     'getting-started/tooling',
     'getting-started/dev-cheat-sheet',
     'getting-started/sui-for-ethereum',
@@ -755,6 +719,8 @@ suiStackSidebar: [
       items: [
         'sui-stack/zklogin-integration/integration-guide',
         'sui-stack/zklogin-integration/developer-account',
+        'sui-stack/zklogin-integration/consumer-app-zklogin',
+        'sui-stack/zklogin-integration/defi-trading-zklogin',
         'sui-stack/zklogin-integration/zklogin-demo',
         'sui-stack/zklogin-integration/zklogin',
       ],
