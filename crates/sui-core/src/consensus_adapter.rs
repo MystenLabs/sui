@@ -70,6 +70,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_in_flight_submissions: IntGauge,
     pub sequencing_best_effort_timeout: IntCounterVec,
     pub sequencing_staggered_delay: Histogram,
+    pub sequencing_staggered_held: IntGauge,
     pub consensus_latency: Histogram,
     pub num_rejected_cert_in_epoch_boundary: IntCounter,
 }
@@ -161,6 +162,11 @@ impl ConsensusAdapterMetrics {
                 "sequencing_staggered_delay",
                 "The staggered-submission delay applied before submitting a transaction without allowed proposers to consensus.",
                 mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            sequencing_staggered_held: register_int_gauge_with_registry!(
+                "sequencing_staggered_held",
+                "Number of submissions currently held in their staggered-submission delay.",
                 registry,
             ).unwrap(),
             // These two metrics originally lived in ValidatorServiceMetrics (authority_server.rs)
@@ -575,6 +581,9 @@ impl ConsensusAdapter {
                     self.metrics
                         .sequencing_staggered_delay
                         .observe(delay.as_secs_f64());
+                    // GaugeGuard also decrements when the processed race cancels a
+                    // held submission mid-sleep.
+                    let _held_guard = GaugeGuard::acquire(&self.metrics.sequencing_staggered_held);
                     time::sleep(delay).await;
                 }
 

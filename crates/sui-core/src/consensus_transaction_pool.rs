@@ -247,6 +247,9 @@ impl AdmissionQueueEntry for PoolEntry {
             .pool_bytes
             .with_label_values(&["user"])
             .sub(self.total_bytes as i64);
+        if self.eligible_at.is_some() {
+            self.metrics.pool_staggered_held.dec();
+        }
         self.ack.resolve_error(
             SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price }
                 .into(),
@@ -454,6 +457,7 @@ impl ConsensusTransactionPool {
             self.adapter_metrics
                 .sequencing_staggered_delay
                 .observe(delay.as_secs_f64());
+            self.metrics.pool_staggered_held.inc();
         }
         self.metrics.pool_depth.with_label_values(&["user"]).inc();
         self.metrics
@@ -716,6 +720,10 @@ impl ConsensusTransactionPool {
             .pool_bytes
             .with_label_values(&[lane])
             .sub(entry.total_bytes as i64);
+        // Only user entries stamped with a staggered hold carry an eligibility time.
+        if entry.eligible_at.is_some() {
+            self.metrics.pool_staggered_held.dec();
+        }
     }
 
     #[cfg(test)]
@@ -890,6 +898,9 @@ impl Drop for TakenTransactionsGuard {
                             .pool_bytes
                             .with_label_values(&["user"])
                             .add(taken.entry.total_bytes as i64);
+                        if taken.entry.eligible_at.is_some() {
+                            self.metrics.pool_staggered_held.inc();
+                        }
                         user.reinsert_front(taken.entry);
                     }
                     UserLane::Closed => halted.push(taken.entry),
