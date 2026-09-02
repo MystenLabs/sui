@@ -80,8 +80,9 @@
 //! parked or not-yet-materialized unit is deliberately unbounded (the far
 //! transactions are committed work that must execute anyway). Parked transactions do
 //! hold their concurrency slot; if occupancy by parked transactions ever shows up as
-//! a throughput problem, releasing the slot on park (the blocking primitives have the
-//! hook) is the escalation path.
+//! a throughput problem, the escalation path is to release the slot when execution
+//! parks (the blocking primitives once carried a release hook for this - see
+//! mysten-common's deleted `sync::execution_permit`).
 
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
