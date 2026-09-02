@@ -50,8 +50,8 @@ use sui_types::{
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
-        InputObjectKind, PlainTransactionWithClaims, SenderSignedData, TransactionDataAPI,
-        TransactionKey, VerifiedTransaction, WithAliases,
+        InputObjectKind, MAX_UNPAID_ALLOWED_PROPOSERS, PlainTransactionWithClaims,
+        SenderSignedData, TransactionDataAPI, TransactionKey, VerifiedTransaction, WithAliases,
     },
 };
 use tokio::task::JoinSet;
@@ -1419,6 +1419,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut deferred_txns = BTreeMap::new();
         let mut cancelled_txns = BTreeMap::new();
 
+        self.record_duplication_signal(state, &ordered_txns, &ordered_randomness_txns);
+
         for transaction in ordered_txns {
             self.handle_deferral_and_cancellation(
                 state,
@@ -1752,6 +1754,66 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         Some(VerifiedExecutableTransactionWithAliases::no_aliases(
             transaction,
         ))
+    }
+
+    /// Feeds the staggered-submission activation signal with this commit's duplication
+    /// among transactions that do not restrict their proposers: the duplicate copies
+    /// beyond what each transaction may legitimately reach — the free stagger slots or
+    /// its paid SIP-45 amplification, whichever is larger. Summing copies rather than
+    /// counting offending transactions makes the signal track wasted bandwidth, so a
+    /// few massively-amplified transactions weigh as much as many lightly-amplified
+    /// ones. Both counts derive from commit output and the deterministic dedup state,
+    /// so every honest validator computes the same values and the mode flips in
+    /// lockstep.
+    fn record_duplication_signal(
+        &self,
+        state: &CommitHandlerState,
+        ordered_txns: &[VerifiedExecutableTransactionWithAliases],
+        ordered_randomness_txns: &[VerifiedExecutableTransactionWithAliases],
+    ) {
+        if !self
+            .epoch_store
+            .protocol_config()
+            .staggered_submission_signal()
+        {
+            return;
+        }
+        let epoch = self.epoch_store.epoch();
+        let rgp = self.epoch_store.reference_gas_price().max(1);
+
+        let mut unique_user_txns = 0u64;
+        let mut excess_copies = 0u64;
+        for transaction in ordered_txns.iter().chain(ordered_randomness_txns) {
+            // No occurrence count means the transaction was not sequenced in this
+            // commit (it re-entered from an earlier commit's deferral); it belongs to
+            // neither count.
+            let Some(&occurrences) = state.occurrence_counts.get(transaction.tx().digest()) else {
+                continue;
+            };
+            unique_user_txns += 1;
+            let tx_data = transaction.tx().transaction_data();
+            if tx_data.expiration().restricts_proposers(epoch) {
+                continue;
+            }
+            let allowance = MAX_UNPAID_ALLOWED_PROPOSERS.max(tx_data.gas_price() / rgp + 1);
+            excess_copies += (occurrences as u64).saturating_sub(allowance);
+        }
+
+        self.metrics
+            .staggered_submission_excess_copies
+            .observe(excess_copies as f64);
+        if let Some(armed) = self
+            .epoch_store
+            .staggered_submission()
+            .record_commit(excess_copies, unique_user_txns)
+        {
+            info!(
+                "Staggered submission {} by duplication signal \
+                 ({excess_copies} excess copies over {unique_user_txns} unique user transactions in commit)",
+                if armed { "armed" } else { "disarmed" },
+            );
+            self.metrics.staggered_submission_active.set(armed as i64);
+        }
     }
 
     fn handle_deferral_and_cancellation(

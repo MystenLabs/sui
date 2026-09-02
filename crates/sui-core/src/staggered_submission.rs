@@ -21,12 +21,13 @@
 //! variants still share the sender's address balance and stay visible to sender-level
 //! accounting.
 
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use fastcrypto::hash::HashFunction;
 use mysten_common::debug_fatal;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use rand::SeedableRng as _;
 use rand::rngs::StdRng;
 use sui_types::base_types::ObjectID;
@@ -41,6 +42,21 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 const DEFAULT_STAGGER_STEP: Duration = Duration::from_millis(350);
 /// Default upper bound on any submission delay.
 const DEFAULT_STAGGER_MAX_DELAY: Duration = Duration::from_secs(5);
+
+/// Activation signal hysteresis, evaluated over trailing windows of commits. The mode
+/// arms when excess duplicate copies amount to at least
+/// `SIGNAL_ENTER_DUPLICATE_PERCENT` of the unique user transactions sequenced in the
+/// enter window (~5s of commits at mainnet cadence; the ratio can exceed 100% when
+/// duplication dominates) and their absolute count reaches
+/// `SIGNAL_ENTER_MIN_EXCESS_COPIES` — the materiality floor keeps a couple of client
+/// double-submits on a quiet network from arming the mode on a noisy ratio. It disarms
+/// when the ratio over the exit window (~10s) falls to `SIGNAL_EXIT_DUPLICATE_PERCENT`
+/// or below. Identical on every validator (compiled in), so the mode flips in lockstep.
+const SIGNAL_ENTER_WINDOW_COMMITS: usize = 20;
+const SIGNAL_EXIT_WINDOW_COMMITS: usize = 40;
+const SIGNAL_ENTER_DUPLICATE_PERCENT: u64 = 5;
+const SIGNAL_EXIT_DUPLICATE_PERCENT: u64 = 1;
+const SIGNAL_ENTER_MIN_EXCESS_COPIES: u64 = 20;
 
 /// Parameters of the staggering schedule.
 #[derive(Debug, Clone)]
@@ -66,10 +82,18 @@ impl Default for StaggerParams {
 }
 
 /// Decides whether this validator should delay submitting a given user transaction to
-/// consensus, and by how much. Inactive by default;
+/// consensus, and by how much. Inactive by default; armed and disarmed by the
+/// commit-derived duplication signal (`record_commit`), which every honest validator
+/// computes from identical commit output, so the mode flips in lockstep without
+/// coordination. A validator that restarts mid-epoch rebuilds its windows only from the
+/// commits it processes after recovery, so its flip can lag peers by up to one window —
+/// acceptable for local policy.
 pub struct StaggeredSubmission {
     active: AtomicBool,
     params: RwLock<StaggerParams>,
+    /// Per-commit `(excess duplicate copies, unique user transactions)` counts, newest
+    /// last, trimmed to the larger of the two signal windows.
+    signal_window: Mutex<VecDeque<(u64, u64)>>,
 }
 
 impl StaggeredSubmission {
@@ -77,6 +101,7 @@ impl StaggeredSubmission {
         Self {
             active: AtomicBool::new(false),
             params: RwLock::new(StaggerParams::default()),
+            signal_window: Mutex::new(VecDeque::new()),
         }
     }
 
@@ -86,6 +111,52 @@ impl StaggeredSubmission {
 
     pub fn set_active(&self, active: bool) {
         self.active.store(active, Ordering::Relaxed);
+    }
+
+    /// Feeds one commit's duplication counts into the activation signal:
+    /// `excess_copies` duplicate copies of transactions without allowed proposers
+    /// beyond their allowance, against `unique_user_txns` unique user transactions
+    /// sequenced. Arms or disarms staggering with hysteresis on the duplication ratio;
+    /// returns the new state on a transition, `None` otherwise.
+    ///
+    /// Arming suppresses the very duplication it measures, so under a sustained attack
+    /// the mode oscillates with a mostly-armed duty cycle: disarming after a quiet exit
+    /// window lets a brief burst of duplication through, which re-arms it within a few
+    /// commits.
+    pub fn record_commit(&self, excess_copies: u64, unique_user_txns: u64) -> Option<bool> {
+        let mut window = self.signal_window.lock();
+        window.push_back((excess_copies, unique_user_txns));
+        while window.len() > SIGNAL_ENTER_WINDOW_COMMITS.max(SIGNAL_EXIT_WINDOW_COMMITS) {
+            window.pop_front();
+        }
+        let sums_of_last = |commits: usize| {
+            window
+                .iter()
+                .rev()
+                .take(commits)
+                .fold((0u64, 0u64), |(excess, total), (e, t)| {
+                    (excess + e, total + t)
+                })
+        };
+
+        if !self.is_active() {
+            let (excess, total) = sums_of_last(SIGNAL_ENTER_WINDOW_COMMITS);
+            if excess >= SIGNAL_ENTER_MIN_EXCESS_COPIES
+                && excess * 100 >= total * SIGNAL_ENTER_DUPLICATE_PERCENT
+            {
+                self.set_active(true);
+                return Some(true);
+            }
+        } else if window.len() >= SIGNAL_EXIT_WINDOW_COMMITS {
+            // Disarm only on a full quiet window, so the spike that armed the mode
+            // cannot also satisfy the exit condition while it is still in view.
+            let (excess, total) = sums_of_last(SIGNAL_EXIT_WINDOW_COMMITS);
+            if excess * 100 <= total * SIGNAL_EXIT_DUPLICATE_PERCENT {
+                self.set_active(false);
+                return Some(false);
+            }
+        }
+        None
     }
 
     #[cfg(test)]
@@ -322,6 +393,100 @@ mod tests {
             Some(Duration::from_millis(250))
         );
         assert_eq!(compute_delay(&params, 2, 1), None);
+    }
+
+    mod signal {
+        use super::*;
+
+        // Compiled-in thresholds: arm at >= 5% excess-copy ratio with an absolute
+        // floor of 20 excess copies, over a 20-commit window; disarm at <= 1% over a
+        // 40-commit window.
+
+        #[test]
+        fn arms_on_burst_over_ratio_and_floor() {
+            let staggered = StaggeredSubmission::new();
+            assert_eq!(staggered.record_commit(100, 200), Some(true));
+            assert!(staggered.is_active());
+        }
+
+        #[test]
+        fn ratio_below_threshold_does_not_arm() {
+            let staggered = StaggeredSubmission::new();
+            // 4% per commit: the absolute floor is passed but the ratio never is.
+            for _ in 0..30 {
+                assert_eq!(staggered.record_commit(4, 100), None);
+            }
+            assert!(!staggered.is_active());
+        }
+
+        #[test]
+        fn floor_blocks_high_ratio_at_low_volume() {
+            let staggered = StaggeredSubmission::new();
+            // 10% ratio, but only one excess copy per commit: the floor holds arming
+            // back until 20 of them have accumulated in the enter window.
+            for _ in 0..19 {
+                assert_eq!(staggered.record_commit(1, 10), None);
+                assert!(!staggered.is_active());
+            }
+            assert_eq!(staggered.record_commit(1, 10), Some(true));
+        }
+
+        #[test]
+        fn old_spikes_slide_out_of_enter_window() {
+            let staggered = StaggeredSubmission::new();
+            // 10 excess copies at 10%: below the floor on its own.
+            assert_eq!(staggered.record_commit(10, 100), None);
+            // 20 quiet commits push the spike past the enter window, so an identical
+            // second spike cannot combine with it to reach the floor.
+            for _ in 0..20 {
+                assert_eq!(staggered.record_commit(0, 100), None);
+            }
+            assert_eq!(staggered.record_commit(10, 100), None);
+            assert!(!staggered.is_active());
+        }
+
+        #[test]
+        fn disarms_only_after_full_quiet_exit_window() {
+            let staggered = StaggeredSubmission::new();
+            assert_eq!(staggered.record_commit(100, 200), Some(true));
+            // The arming spike stays inside the 40-commit exit window until 40 quiet
+            // commits have passed, so the mode holds through the first 39.
+            for _ in 0..39 {
+                assert_eq!(staggered.record_commit(0, 100), None);
+                assert!(staggered.is_active());
+            }
+            assert_eq!(staggered.record_commit(0, 100), Some(false));
+            assert!(!staggered.is_active());
+        }
+
+        #[test]
+        fn exit_tolerates_sub_percent_trickle_but_not_more() {
+            let staggered = StaggeredSubmission::new();
+            assert_eq!(staggered.record_commit(100, 200), Some(true));
+            // 3% duplication keeps the mode armed indefinitely.
+            for _ in 0..80 {
+                assert_eq!(staggered.record_commit(3, 100), None);
+                assert!(staggered.is_active());
+            }
+            // At 0.5% the exit ratio is satisfied once the 3% commits leave the
+            // 40-commit exit window.
+            let mut transitions = Vec::new();
+            for _ in 0..40 {
+                transitions.extend(staggered.record_commit(1, 200));
+            }
+            assert_eq!(transitions, vec![false]);
+            assert!(!staggered.is_active());
+        }
+
+        #[test]
+        fn signal_disarms_manual_arming_after_quiet_window() {
+            let staggered = StaggeredSubmission::new();
+            staggered.set_active(true);
+            for _ in 0..39 {
+                assert_eq!(staggered.record_commit(0, 100), None);
+            }
+            assert_eq!(staggered.record_commit(0, 100), Some(false));
+        }
     }
 
     #[test]
