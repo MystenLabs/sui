@@ -6,6 +6,11 @@ processed 12 tasks
 init:
 A: object(0,0), B: object(0,1)
 
+// 1. All the objects of a certain type, for a particular owner
+// 2. All the objects of another type, for that same owner
+// 3. ...limited
+// 4. ...limited, with a cursor
+
 task 1, lines 11-38:
 //# publish
 created: object(1,0)

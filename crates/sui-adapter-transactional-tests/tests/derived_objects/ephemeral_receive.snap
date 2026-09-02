@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// Transfer an object to a derived address ahead of its creation,
+// then claim the object and delete the claimed uid (ephemeral uid).
+
 init:
 A: object(0,0)
 

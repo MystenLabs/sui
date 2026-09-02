@@ -205,6 +205,73 @@ pub fn encode_object_ref(
         .encode(version, chain_identifier)
 }
 
+fn get_owner_and_type_for_object_impl(
+    runtime_object_resolver: &dyn RuntimeObjectResolver,
+    object_id: ObjectID,
+    accumulator_version: Option<SequenceNumber>,
+) -> UserInputResult<Option<(SuiAddress, TypeTag)>> {
+    let Some(object) = AccumulatorValue::load_object_by_id(
+        runtime_object_resolver,
+        accumulator_version,
+        object_id,
+    )
+    .map_err(|e| invalid_res_error!("could not load coin reservation object id {}", e))?
+    else {
+        return Ok(None);
+    };
+
+    let move_object = object.data.try_as_move().unwrap();
+
+    let type_tag: TypeTag = move_object
+        .type_()
+        .balance_accumulator_field_type_maybe()
+        .ok_or_else(|| {
+            invalid_res_error!(
+                "coin reservation object id {} is not a balance accumulator field",
+                object_id
+            )
+        })?;
+
+    let (key, _): (AccumulatorKey, AccumulatorValue) = move_object
+        .try_into()
+        .map_err(|e| invalid_res_error!("could not load coin reservation object id {}", e))?;
+
+    Ok(Some((key.owner, type_tag)))
+}
+
+fn resolve_funds_withdrawal_impl(
+    runtime_object_resolver: &dyn RuntimeObjectResolver,
+    sender: SuiAddress,
+    coin_reservation: ParsedObjectRefWithdrawal,
+    accumulator_version: Option<SequenceNumber>,
+) -> UserInputResult<FundsWithdrawalArg> {
+    let (owner, type_tag) = get_owner_and_type_for_object_impl(
+        runtime_object_resolver,
+        coin_reservation.unmasked_object_id,
+        accumulator_version,
+    )?
+    .ok_or_else(|| {
+        invalid_res_error!(
+            "coin reservation object id {} not found",
+            coin_reservation.unmasked_object_id
+        )
+    })?;
+
+    if sender != owner {
+        return Err(invalid_res_error!(
+            "coin reservation object id {} is owned by {}, not sender {}",
+            coin_reservation.unmasked_object_id,
+            owner,
+            sender
+        ));
+    }
+
+    Ok(FundsWithdrawalArg::balance_from_sender(
+        coin_reservation.reservation_amount(),
+        type_tag,
+    ))
+}
+
 /// Resolves coin reservations by looking up the accumulator object to determine
 /// the owner and type of the balance being withdrawn.
 pub struct CoinReservationResolver {
@@ -228,33 +295,11 @@ impl CoinReservationResolver {
         object_id: ObjectID,
         accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<Option<(SuiAddress, TypeTag)>> {
-        let Some(object) = AccumulatorValue::load_object_by_id(
+        get_owner_and_type_for_object_impl(
             self.runtime_object_resolver.as_ref(),
-            accumulator_version,
             object_id,
+            accumulator_version,
         )
-        .map_err(|e| invalid_res_error!("could not load coin reservation object id {}", e))?
-        else {
-            return Ok(None);
-        };
-
-        let move_object = object.data.try_as_move().unwrap();
-
-        let type_tag: TypeTag = move_object
-            .type_()
-            .balance_accumulator_field_type_maybe()
-            .ok_or_else(|| {
-                invalid_res_error!(
-                    "coin reservation object id {} is not a balance accumulator field",
-                    object_id
-                )
-            })?;
-
-        let (key, _): (AccumulatorKey, AccumulatorValue) = move_object
-            .try_into()
-            .map_err(|e| invalid_res_error!("could not load coin reservation object id {}", e))?;
-
-        Ok(Some((key.owner, type_tag)))
     }
 
     pub fn resolve_funds_withdrawal(
@@ -263,31 +308,42 @@ impl CoinReservationResolver {
         coin_reservation: ParsedObjectRefWithdrawal,
         accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<FundsWithdrawalArg> {
-        let (owner, type_tag) = self
-            .get_owner_and_type_for_object(
-                coin_reservation.unmasked_object_id,
-                accumulator_version,
-            )?
-            .ok_or_else(|| {
-                invalid_res_error!(
-                    "coin reservation object id {} not found",
-                    coin_reservation.unmasked_object_id
-                )
-            })?;
+        resolve_funds_withdrawal_impl(
+            self.runtime_object_resolver.as_ref(),
+            sender,
+            coin_reservation,
+            accumulator_version,
+        )
+    }
+}
 
-        if sender != owner {
-            return Err(invalid_res_error!(
-                "coin reservation object id {} is owned by {}, not sender {}",
-                coin_reservation.unmasked_object_id,
-                owner,
-                sender
-            ));
+/// Borrow a runtime object resolver for coin-reservation lookups.
+pub struct BorrowedCoinReservationResolver<'a> {
+    runtime_object_resolver: &'a dyn RuntimeObjectResolver,
+}
+
+impl<'a> BorrowedCoinReservationResolver<'a> {
+    /// Create a coin-reservation resolver over borrowed storage.
+    pub fn new(runtime_object_resolver: &'a dyn RuntimeObjectResolver) -> Self {
+        Self {
+            runtime_object_resolver,
         }
+    }
+}
 
-        Ok(FundsWithdrawalArg::balance_from_sender(
-            coin_reservation.reservation_amount(),
-            type_tag,
-        ))
+impl CoinReservationResolverTrait for BorrowedCoinReservationResolver<'_> {
+    fn resolve_funds_withdrawal(
+        &self,
+        sender: SuiAddress,
+        coin_reservation: ParsedObjectRefWithdrawal,
+        accumulator_version: Option<SequenceNumber>,
+    ) -> UserInputResult<FundsWithdrawalArg> {
+        resolve_funds_withdrawal_impl(
+            self.runtime_object_resolver,
+            sender,
+            coin_reservation,
+            accumulator_version,
+        )
     }
 }
 
@@ -367,6 +423,24 @@ mod tests {
         assert!(
             ParsedObjectRefWithdrawal::parse(&object_ref, ChainIdentifier::default()).is_none()
         );
+    }
+
+    #[test]
+    fn test_borrowed_resolver_uses_runtime_object_resolver() {
+        let store = crate::in_memory_storage::InMemoryStorage::default();
+        let resolver = BorrowedCoinReservationResolver::new(&store);
+        let object_id = ObjectID::random();
+        let result = resolver.resolve_funds_withdrawal(
+            SuiAddress::random_for_testing_only(),
+            ParsedObjectRefWithdrawal::new(object_id, 0, 1),
+            None,
+        );
+
+        assert!(matches!(
+            result,
+            Err(UserInputError::InvalidWithdrawReservation { error })
+                if error == format!("coin reservation object id {object_id} not found")
+        ));
     }
 
     #[test]

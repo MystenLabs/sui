@@ -30,7 +30,6 @@ use sui_kvstore::ALL_PIPELINE_NAMES;
 use sui_kvstore::BigTableBitmapSource;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
-use sui_kvstore::BigTableStore;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::BitmapQuery;
 use sui_kvstore::IndexerConfig;
@@ -185,7 +184,6 @@ impl TestHarness {
                 .await
                 .context("Failed to create BigTable client")?;
 
-        let store = BigTableStore::new(client.clone());
         let registry = prometheus::Registry::new();
 
         let indexer_args = IndexerArgs::default();
@@ -205,7 +203,7 @@ impl TestHarness {
         let ingestion_config = IngestionConfig::default();
 
         let bigtable_indexer = BigTableIndexer::new(
-            store,
+            client.clone(),
             indexer_args,
             client_args,
             ingestion_config.into(),

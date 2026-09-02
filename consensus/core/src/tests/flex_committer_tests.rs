@@ -742,6 +742,47 @@ async fn try_commit_multi_leader_all_skipped() {
     assert!(committer.try_commit(next).is_none());
 }
 
+/// All four authorities are leaders at round 2, fully connected DAG → every
+/// leader's DFS walks into the same four round-1 blocks. Round 1 is never a
+/// leader round itself (min_next_leader_round = 2), so those blocks are only
+/// ever discovered as ancestors — this exercises the case where a later
+/// leader's DFS re-encounters an ancestor a previous leader's DFS, within
+/// the same `build_commit` call, already committed.
+#[tokio::test]
+async fn try_commit_multi_leader_shared_ancestor_visited_once() {
+    telemetry_subscribers::init_for_testing();
+    let (context, dag_state, mut committer) = setup(4);
+
+    build_dag(context, dag_state, None, 3);
+
+    let next = schedule(1, 2, &[0, 1, 2, 3]);
+    let (commit, subdag) = committer
+        .try_commit(next)
+        .expect("expected a commit when round 2 is fully voted");
+
+    assert_eq!(commit.leader().round, 2);
+
+    let refs: Vec<_> = subdag.blocks.iter().map(|b| b.reference()).collect();
+    let unique: BTreeSet<_> = refs.iter().copied().collect();
+    assert_eq!(
+        refs.len(),
+        unique.len(),
+        "a shared ancestor must not be committed twice"
+    );
+
+    let round_1_authors: BTreeSet<AuthorityIndex> = subdag
+        .blocks
+        .iter()
+        .filter(|b| b.round() == 1)
+        .map(|b| b.author())
+        .collect();
+    let expected: BTreeSet<AuthorityIndex> = (0..4).map(AuthorityIndex::new_for_test).collect();
+    assert_eq!(
+        round_1_authors, expected,
+        "each shared round-1 ancestor must still be included exactly once",
+    );
+}
+
 /// Retained round decisions report one metric for each local commit.
 #[tokio::test]
 async fn try_commit_retained_rounds_report_metrics_once() {

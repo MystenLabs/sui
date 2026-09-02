@@ -6,17 +6,18 @@ processed 5 tasks
 init:
 A: object(0,0), B: object(0,1), C: object(0,2)
 
-task 1, lines 7-12:
+task 1, lines 6-10:
+// Create a consensus-owned (party) object owned by B, sent by A
 //# programmable --sender A --inputs 1000 @B
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::party::single_owner(Input(1));
 //> 2: sui::transfer::public_party_transfer<sui::coin::Coin<sui::sui::SUI>>(Result(0), Result(1));
-// Create a regular address-owned object sent to C by A
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 13-15:
+task 2, lines 12-15:
+// Create a regular address-owned object sent to C by A
 //# programmable --sender A --inputs 2000 @C
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))

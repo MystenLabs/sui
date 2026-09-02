@@ -4,6 +4,7 @@
 #![allow(unsafe_code)]
 
 use move_binary_format::{errors::PartialVMResult, partial_vm_error};
+use move_vm_config::runtime::VMConfig;
 
 use bumpalo::Bump;
 
@@ -31,20 +32,24 @@ pub struct ArenaVec<T>(std::mem::ManuallyDrop<Vec<T>>);
 #[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ArenaBox<T>(std::mem::ManuallyDrop<Box<T>>);
 
-/// Size of a package arena.
-/// This is 10 megabytes, which should be more than enough room for any pacakge on chain.
-/// FIXME: Test this limit and validate. See how large packages are in backtesting and double that
-/// limit, setting it here.
-const ARENA_SIZE: usize = 10_000_000;
+/// Default size of a package arena.
+/// This is 10 megabytes, which should be more than enough room for any package on chain.
+const DEFAULT_ARENA_SIZE: usize = 10_000_000;
 
 // -------------------------------------------------------------------------------------------------
 // Impls
 // -------------------------------------------------------------------------------------------------
 
 impl ArenaBuilder {
-    pub fn new_bounded() -> Self {
+    /// Create a bounded allocator that will set each arena's size as specified by the config
+    pub fn new_bounded(config: &VMConfig) -> Self {
         let bump = Bump::new();
-        bump.set_allocation_limit(Some(ARENA_SIZE));
+        let size = config
+            .runtime_limits_config
+            .package_arena_size
+            .map(|size| usize::try_from(size).unwrap_or(usize::MAX))
+            .unwrap_or(DEFAULT_ARENA_SIZE);
+        bump.set_allocation_limit(Some(size));
         ArenaBuilder(bump)
     }
 

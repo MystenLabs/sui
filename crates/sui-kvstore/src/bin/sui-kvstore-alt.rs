@@ -12,7 +12,6 @@ use sui_indexer_alt_framework::service::Error;
 use sui_indexer_alt_metrics::MetricsArgs;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
-use sui_kvstore::BigTableStore;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::default_committer_config;
 use sui_kvstore::set_write_legacy_data;
@@ -127,12 +126,10 @@ async fn main() -> Result<()> {
     )
     .await?;
 
-    let store = BigTableStore::new(client);
-
     let indexer_config = config.clone();
     let committer = config.committer.finish(default_committer_config());
     let bigtable_indexer = BigTableIndexer::new(
-        store,
+        client,
         args.indexer_args,
         args.client_args,
         config.ingestion,

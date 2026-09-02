@@ -1665,7 +1665,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 self.test_coin_cap = Some((obj_ref.0, initial_shared_version));
                 info!("Created TestCoinCap {:?}", self.test_coin_cap);
             } else {
-                info!("TreasuryCap not found in publish effects - test_coin operations disabled");
+                panic!("TreasuryCap not found in publish effects");
             }
         }
 

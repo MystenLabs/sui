@@ -1293,7 +1293,11 @@ mod consensus_tests {
     }
 
     impl TransactionVerifier for RandomizedTransactionVerifier {
-        fn verify_batch(&self, _transactions: &[&[u8]]) -> Result<(), ValidationError> {
+        fn verify_batch(
+            &self,
+            _block_ref: &BlockRef,
+            _transactions: &[&[u8]],
+        ) -> Result<(), ValidationError> {
             Ok(())
         }
 

@@ -3,67 +3,44 @@
 
 use std::sync::Arc;
 
-use dashmap::DashMap;
 use move_core_types::account_address::AccountAddress;
 use sui_package_resolver::Package;
 use sui_package_resolver::PackageStore;
 use sui_package_resolver::Result;
 
+use crate::task::watermark::KV_PACKAGES_PIPELINE;
+
+use super::streamed_cache_eviction::EvictableCache;
+use super::streamed_store::StreamedStore;
+
 /// Package store for streaming subscriptions that holds packages not yet indexed by the DB.
 ///
-/// Packages from streamed checkpoints are indexed here. Once the `kv_packages` pipeline
-/// catches up, a separate eviction task removes them — at that point the inner store
-/// (LRU → PackageCache → DB) can serve them instead.
-///
-/// Each package entry stores the checkpoint that introduced it, so that eviction of an
-/// older checkpoint does not accidentally remove a system package that was upgraded at a
-/// later checkpoint.
+/// Packages from streamed checkpoints are indexed here. Once the `kv_packages` pipeline catches up,
+/// the eviction task removes them, at which point the inner store (LRU → PackageCache → DB) serves
+/// them instead. Each entry records the checkpoint that introduced it, so eviction of an older
+/// checkpoint does not remove a system package that was upgraded at a later checkpoint.
 pub(crate) struct StreamedPackageStore<S> {
-    /// Primary index: packages from streamed checkpoints not yet in the DB.
-    packages: DashMap<AccountAddress, IndexedPackage>,
+    /// Packages from streamed checkpoints not yet in the DB.
+    cache: StreamedStore<AccountAddress, Arc<Package>>,
 
     /// Fallback store (typically the shared PackageCache → DB).
     inner: S,
 }
 
-struct IndexedPackage {
-    checkpoint: u64,
-    package: Arc<Package>,
-}
-
 impl<S> StreamedPackageStore<S> {
     pub(crate) fn new(inner: S) -> Self {
         Self {
-            packages: DashMap::new(),
+            cache: StreamedStore::new(),
             inner,
         }
     }
 
-    /// Index packages from a streamed checkpoint. Called by the checkpoint stream task.
-    ///
-    /// Checkpoints are processed sequentially, so the latest insert for a given package
-    /// ID is always the newest version.
+    /// Index packages from a streamed checkpoint. Called by the checkpoint stream task. Checkpoints
+    /// are processed in order, so the latest insert for a package ID is the newest version.
     pub(crate) fn index_packages(&self, checkpoint_seq: u64, packages: &[Arc<Package>]) {
         for package in packages {
-            self.packages.insert(
-                package.storage_id(),
-                IndexedPackage {
-                    checkpoint: checkpoint_seq,
-                    package: package.clone(),
-                },
-            );
-        }
-    }
-
-    /// Remove packages that were introduced at `checkpoint_seq` from the primary index.
-    ///
-    /// Uses `DashMap::remove_if` for atomic checked removal: a package is only removed
-    /// if its stored checkpoint still matches. This handles system package upgrades where
-    /// the same ID is re-inserted at a later checkpoint.
-    pub(crate) fn evict_checkpoint(&self, checkpoint_seq: u64, package_ids: &[AccountAddress]) {
-        for id in package_ids {
-            self.packages
-                .remove_if(id, |_, entry| entry.checkpoint == checkpoint_seq);
+            self.cache
+                .insert(checkpoint_seq, package.storage_id(), package.clone());
         }
     }
 }
@@ -71,11 +48,21 @@ impl<S> StreamedPackageStore<S> {
 #[async_trait::async_trait]
 impl<S: PackageStore> PackageStore for StreamedPackageStore<S> {
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
-        if let Some(entry) = self.packages.get(&id) {
-            return Ok(entry.package.clone());
+        if let Some(package) = self.cache.get(&id) {
+            return Ok(package);
         }
 
         self.inner.fetch(id).await
+    }
+}
+
+impl<S: Send + Sync> EvictableCache for StreamedPackageStore<S> {
+    fn watermark_pipeline(&self) -> &'static str {
+        KV_PACKAGES_PIPELINE
+    }
+
+    fn evict_up_to(&self, indexed_checkpoint: u64) {
+        self.cache.evict_up_to(indexed_checkpoint);
     }
 }
 
@@ -87,6 +74,7 @@ mod tests {
     use sui_package_resolver::error::Error as PackageResolverError;
     use sui_types::base_types::SequenceNumber;
 
+    use super::super::streamed_cache_eviction::EvictableCache;
     use super::*;
 
     struct MockStore {
@@ -156,35 +144,35 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn evict_removes_matching_checkpoint() {
+    async fn evict_up_to_removes_indexed_checkpoint() {
         let store = StreamedPackageStore::new(MockStore::new());
         store.index_packages(5, &[pkg(addr(1), 1)]);
 
-        store.evict_checkpoint(5, &[addr(1)]);
+        store.evict_up_to(5);
 
         assert!(store.fetch(addr(1)).await.is_err());
     }
 
     #[tokio::test]
-    async fn evict_skips_mismatched_checkpoint() {
-        // Simulates a system package upgrade: same ID indexed twice at different
-        // checkpoints. Evicting the older checkpoint should NOT remove the newer entry.
+    async fn evict_up_to_keeps_later_system_package_upgrade() {
+        // A system package upgrade re-indexes the same ID at a later checkpoint; evicting up to the
+        // older checkpoint must keep the newer entry.
         let store = StreamedPackageStore::new(MockStore::new());
         store.index_packages(5, &[pkg(addr(1), 1)]);
         let upgraded = pkg(addr(1), 2);
         store.index_packages(10, std::slice::from_ref(&upgraded));
 
-        store.evict_checkpoint(5, &[addr(1)]);
+        store.evict_up_to(5);
 
         assert!(Arc::ptr_eq(&store.fetch(addr(1)).await.unwrap(), &upgraded));
     }
 
     #[tokio::test]
-    async fn evict_handles_multiple_packages() {
+    async fn evict_up_to_handles_multiple_packages() {
         let store = StreamedPackageStore::new(MockStore::new());
         store.index_packages(5, &[pkg(addr(1), 1), pkg(addr(2), 1), pkg(addr(3), 1)]);
 
-        store.evict_checkpoint(5, &[addr(1), addr(2), addr(3)]);
+        store.evict_up_to(5);
 
         assert!(store.fetch(addr(1)).await.is_err());
         assert!(store.fetch(addr(2)).await.is_err());

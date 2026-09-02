@@ -23,15 +23,18 @@ use arc_swap::ArcSwap;
 use effects_certifier::*;
 use mysten_common::backoff::ExponentialBackoff;
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
+use nonempty::NonEmpty;
 use parking_lot::Mutex;
 use rand::Rng;
+use request_retrier::SELECT_LATENCY_DELTA;
 use sui_config::NodeConfig;
 use sui_types::{
     base_types::AuthorityName,
     committee::EpochId,
     error::{ErrorCategory, UserInputError},
     messages_grpc::{SubmitTxRequest, SubmitTxResult, TxType},
-    transaction::TransactionDataAPI as _,
+    transaction::{AllowedProposers, TransactionDataAPI as _},
+    transaction_executor::ProposerSelector,
 };
 use tokio::{
     task::JoinSet,
@@ -47,6 +50,10 @@ use crate::{
         OperationFeedback, OperationType, ValidatorClientMetrics, ValidatorClientMonitor,
     },
 };
+
+#[cfg(test)]
+#[path = "unit_tests/proposer_selector_tests.rs"]
+mod proposer_selector_tests;
 
 /// Trait for components that can update their AuthorityAggregator during reconfiguration.
 /// Used by ReconfigObserver to notify components of epoch changes.
@@ -146,6 +153,36 @@ where
         let authority_aggregator = self.authority_aggregator.load();
         self.client_monitor
             .select_shuffled_preferred_validators(&authority_aggregator.committee, delta)
+    }
+
+    /// The validators this node would prefer to submit to, as committee indices.
+    ///
+    /// These are the same targets `RequestRetrier` would pick, so a transaction restricted to them
+    /// names the validators it was going to be sent to anyway.
+    fn preferred_proposers_impl(&self, max: usize) -> Option<AllowedProposers> {
+        // Before any latency has been observed the ranking is an arbitrary shuffle, so pinning to
+        // it would be worse than leaving the transaction unrestricted.
+        if !self.client_monitor.has_observed_latencies() {
+            return None;
+        }
+
+        let authority_aggregator = self.authority_aggregator.load();
+        let committee = &authority_aggregator.committee;
+        let mut proposers: Vec<u32> = self
+            .client_monitor
+            .select_shuffled_preferred_validators(committee, SELECT_LATENCY_DELTA)
+            .into_iter()
+            .filter_map(|name| committee.authority_index(&name))
+            .take(max)
+            .collect();
+        // The set is unordered preference; `Validity` requires it strictly increasing.
+        proposers.sort_unstable();
+        proposers.dedup();
+
+        Some(AllowedProposers {
+            epoch: committee.epoch(),
+            proposers: NonEmpty::from_vec(proposers)?,
+        })
     }
 
     /// Drives transaction to finalization.
@@ -462,6 +499,15 @@ where
             let mut reconfig_observer = reconfig_observer.clone_boxed();
             reconfig_observer.run(driver).await;
         }));
+    }
+}
+
+impl<A> ProposerSelector for TransactionDriver<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    fn preferred_proposers(&self, max: usize) -> Option<AllowedProposers> {
+        self.preferred_proposers_impl(max)
     }
 }
 

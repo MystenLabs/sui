@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[EC02016]: invalid visibility modifier
+  ┌─ tests/move_2024/constants/invalid_cross_module_error_const.move:6:1
+  │
+5 │ #[error]
+  │   ----- Declared as '#[error]' here
+6 │ public(package) const ENotFound: vector<u8> = b"not found";
+  │ ^^^^^^^^^^^^^^^ Invalid constant declaration. '#[error]' constants may only be used internal to their module, and may not be declared 'public(package)'

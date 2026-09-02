@@ -3,16 +3,23 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 8 tasks
 
+// Storage-OOG reset + re-smash for pure `[AddressBalance]` gas payment. The
+// workload creates many new objects; with a tight budget, storage charging
+// fails, triggering reset + re-smash. Verifies the re-smash invariant holds
+// and the post-reset accumulator event is emitted cleanly without
+// duplication.
+
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 12-23:
+task 1, lines 12-21:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 5502400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 24-27:
+task 2, lines 23-27:
+// Seed A's address balance.
 //# programmable --sender A --inputs 100000000000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
@@ -25,11 +32,12 @@ task 3, line 29:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 31-33:
+task 4, line 31:
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
 100000000000
 
-task 5, lines 34-35:
+task 5, lines 33-35:
+// Pure address-balance gas payment; large object count exceeds budget storage.
 //# programmable --sender A --gas-budget 5000000 --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(5000000) --inputs 100
 //> test::oog::make(Input(0))
 Error: Transaction Effects Status: Insufficient Gas.

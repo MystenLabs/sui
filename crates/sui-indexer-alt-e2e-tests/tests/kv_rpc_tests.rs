@@ -4157,6 +4157,33 @@ async fn test_get_checkpoint_with_transactions_and_objects() {
         saw_gas_object,
         "expected gas object {gas_id_string} in checkpoint objects[]"
     );
+
+    // Balance changes are stored on transaction rows and must be populated even
+    // when checkpoint objects are not requested.
+    let mut balance_changes_req = GetCheckpointRequest::default();
+    balance_changes_req.checkpoint_id = Some(CheckpointId::SequenceNumber(seq));
+    balance_changes_req.read_mask = Some(FieldMask::from_paths([
+        "transactions.digest",
+        "transactions.balance_changes",
+    ]));
+
+    let balance_changes_checkpoint = client
+        .get_checkpoint(balance_changes_req)
+        .await
+        .unwrap()
+        .into_inner()
+        .checkpoint
+        .expect("checkpoint populated");
+    let digest = digest.to_string();
+    let transaction = balance_changes_checkpoint
+        .transactions
+        .iter()
+        .find(|transaction| transaction.digest.as_deref() == Some(digest.as_str()))
+        .unwrap_or_else(|| panic!("expected transaction {digest} in checkpoint"));
+    assert!(
+        !transaction.balance_changes.is_empty(),
+        "expected transaction {digest} to include balance changes"
+    );
 }
 
 // --- Watermark contract tests ---

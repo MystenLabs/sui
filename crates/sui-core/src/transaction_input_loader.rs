@@ -6,6 +6,7 @@ use crate::{
         authority_per_epoch_store::CertLockGuard, shared_object_version_manager::AssignedVersions,
     },
     execution_cache::ObjectCacheRead,
+    transaction_simulation::SimulationInputLoader,
 };
 use mysten_common::{ZipDebugEqIteratorExt, izip_debug_eq};
 use std::collections::BTreeMap;
@@ -256,6 +257,18 @@ impl TransactionInputLoader {
             .map(Option::unwrap)
             .collect::<Vec<_>>()
             .into())
+    }
+}
+
+impl SimulationInputLoader for TransactionInputLoader {
+    fn read_objects_for_simulation(
+        &self,
+        _transaction_digest: &TransactionDigest,
+        input_object_kinds: &[InputObjectKind],
+        receiving_object_refs: &[ObjectRef],
+        epoch_id: EpochId,
+    ) -> SuiResult<(InputObjects, ReceivingObjects)> {
+        self.read_objects_for_signing(None, input_object_kinds, receiving_object_refs, epoch_id)
     }
 }
 

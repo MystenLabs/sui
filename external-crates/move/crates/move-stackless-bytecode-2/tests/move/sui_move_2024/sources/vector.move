@@ -26,7 +26,7 @@ module sui_move_2024::vector_test {
     }
 
     public fun create_and_destroy_vector() {
-        let mut v = vector[1, 2, 3];
+        let mut v: vector<u64> = vector[1, 2, 3];
         v.pop_back(); // Removes the last element
         v.pop_back(); // Removes the second last element
         v.pop_back(); // Removes the first element

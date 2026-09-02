@@ -3,6 +3,10 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// similar to dynamic_object_field_tests but over multiple transactions,
+// as this uses a different code path
+// test borrow with the wrong value type
+
 init:
 A: object(0,0)
 

@@ -2,24 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // A generic TxContext slot is injected at its declared position among real
-// parameters, whether it leads or trails the user arguments; supplying it
-// explicitly on top of the real arguments is an arity error.
+// parameters, whether it leads or trails the user arguments; supplying an
+// extra argument on top of the real arguments is an arity error.
 
-//# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0
 
 //# publish
 module test::m;
 
-public fun tx_context_mut_id(ctx: &mut TxContext): &mut TxContext {
-    ctx
+public fun gen_leading<T>(_x: &mut T, _y: u64) {
 }
 
-public fun gen_leading<T>(x: &mut T, _y: u64): &mut T {
-    x
-}
-
-public fun gen_trailing<T>(_x: u64, y: &mut T): &mut T {
-    y
+public fun gen_trailing<T>(_x: u64, _y: &mut T) {
 }
 
 //# programmable --inputs 0
@@ -30,7 +24,6 @@ public fun gen_trailing<T>(_x: u64, y: &mut T): &mut T {
 // only the u64 is supplied; the trailing &mut T (TxContext) is injected
 //> test::m::gen_trailing<sui::tx_context::TxContext>(Input(0));
 
-//# programmable --inputs 0
-// supplying both the u64 and a TxContext result is one arg too many
-//> 0: test::m::tx_context_mut_id();
-//> test::m::gen_trailing<sui::tx_context::TxContext>(Input(0), Result(0));
+//# programmable --inputs 0 0
+// supplying an argument for the injected TxContext slot is one arg too many
+//> test::m::gen_trailing<sui::tx_context::TxContext>(Input(0), Input(1));

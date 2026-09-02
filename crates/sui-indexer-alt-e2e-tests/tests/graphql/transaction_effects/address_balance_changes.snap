@@ -3,10 +3,13 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 14 tasks
 
+// Test send_funds and redeem_funds from sui::balance
+
 init:
 A: object(0,0), B: object(0,1), C: object(0,2)
 
-task 1, lines 9-15:
+task 1, lines 8-15:
+// Send 1000000000 from A to B and A to C
 //# programmable --sender A --inputs 1000000000 @B @C
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
@@ -26,7 +29,7 @@ task 3, line 19:
 //# view-funds sui::balance::Balance<sui::sui::SUI> B
 1000000000
 
-task 4, lines 21-23:
+task 4, line 21:
 //# view-object 0,1
 Owner: Account Address ( B )
 Version: 1
@@ -41,7 +44,8 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 5, line 24:
+task 5, lines 23-24:
+// Use address balance as gas
 //# transfer-object --recipient A --sender B 0,1 --gas-budget 1000000000 --address-balance-gas
 mutated: object(0,1)
 accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Split, 1988000)
@@ -51,11 +55,12 @@ task 6, line 26:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 7, lines 28-30:
+task 7, line 28:
 //# view-funds sui::balance::Balance<sui::sui::SUI> B
 998012000
 
-task 8, lines 31-33:
+task 8, lines 30-33:
+// Now have B send address balance to C using address balance as gas
 //# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(5000000) @C --gas-budget 1000000000 --address-balance-gas
 //> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(1));

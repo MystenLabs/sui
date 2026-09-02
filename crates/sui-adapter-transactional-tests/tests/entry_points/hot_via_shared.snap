@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// Simple test of hot value rules for entry functions, where the heat is caused by taking a
+// shared object by value
+
 init:
 A: object(0,0)
 

@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 10 tasks
 
+// Valid unifications resolve (no InvalidLinkage): exact ~ at_least when exact >= at_least, the
+// exact == at_least boundary, and at_least ~ at_least taking the max.
+
 init:
 A: object(0,0)
 

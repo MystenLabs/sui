@@ -1,66 +1,79 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
 ---
 processed 22 tasks
+
+// This test verifies the basic e2e work flow of coin global pause.
+// Regulated coin issuer can enable global pause, which will deny all transfers of such coin.
+// Receiving such coin should also be denied at newer epoch.
 
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 10-73:
+task 1, lines 10-71:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 22002000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 74-76:
+task 2, lines 73-74:
+// Transfer the newly minted coin works normally.
 //# run sui::pay::split_and_transfer --args object(1,5) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,5)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
 
-task 3, lines 77-79:
+task 3, lines 76-77:
+// Wrap part of the coin in a wrapper object. We will need this later.
 //# run test::regulated_coin::partial_wrap --args object(1,5) --sender A
 created: object(3,0)
 mutated: object(0,0), object(1,5)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 4119200,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
 
-task 4, lines 80-82:
+task 4, lines 79-80:
+// Create another wrapper. We will need this later.
 //# run test::regulated_coin::partial_wrap --args object(1,5) --sender A
 created: object(4,0)
 mutated: object(0,0), object(1,5)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 4119200,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
 
-task 5, lines 83-85:
+task 5, lines 82-83:
+// Enable global pause.
 //# run sui::coin::deny_list_v2_enable_global_pause --args object(0x403) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
 events: Event { package_id: sui, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 96, 98, 100, 51, 52, 53, 48, 50, 55, 101, 101, 99, 53, 57, 50, 98, 100, 49, 51, 49, 100, 101, 48, 100, 49, 51, 101, 57, 56, 48, 50, 49, 101, 101, 52, 97, 54, 102, 102, 101, 102, 50, 48, 98, 57, 57, 98, 50, 102, 98, 49, 102, 101, 48, 49, 50, 100, 99, 52, 102, 53, 49, 100, 48, 102, 58, 58, 114, 101, 103, 117, 108, 97, 116, 101, 100, 95, 99, 111, 105, 110, 58, 58, 82, 69, 71, 85, 76, 65, 84, 69, 68, 95, 67, 79, 73, 78, 125, 5, 164, 86, 221, 60, 17, 8, 221, 72, 229, 67, 171, 232, 66, 9, 134, 97, 224, 43, 185, 202, 224, 71, 113, 76, 30, 88, 144, 25, 104, 0] }
 created: object(5,0), object(5,1), object(5,2)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
 gas summary: computation_cost: 1000000, storage_cost: 11985200,  storage_rebate: 2746260, non_refundable_storage_fee: 27740
 
-task 6, lines 86-88:
+task 6, lines 85-86:
+// Assert that global pause is enabled.
 //# run test::regulated_coin::assert_global_pause_status --args immshared(0x403) true --sender A
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7, lines 89-91:
+task 7, lines 88-89:
+// Transfer the regulated coin from A no longer works.
 //# run sui::pay::split_and_transfer --args object(1,5) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 Error: Error checking transaction input objects: Coin type is globally paused for use: object(1,0)::regulated_coin::REGULATED_COIN
 
-task 8, lines 92-94:
+task 8, lines 91-92:
+// Transfer the coin from B also no longer works.
 //# transfer-object 2,0 --sender B --recipient A
 Error: Error checking transaction input objects: Coin type is globally paused for use: object(1,0)::regulated_coin::REGULATED_COIN
 
-task 9, lines 95-98:
+task 9, lines 94-95:
+// Try using the coin in a Move call. This should also be denied.
 //# run sui::pay::split_and_transfer --args object(2,0) 1 @A --type-args test::regulated_coin::REGULATED_COIN --sender B
 Error: Error checking transaction input objects: Coin type is globally paused for use: object(1,0)::regulated_coin::REGULATED_COIN
 
-task 10, line 99:
+task 10, lines 97-99:
+// Unwrap the wrapper. This still works and A will receive the coin, since global pause check
+// for receiving will only take effect at the new epoch.
 //# run test::regulated_coin::unwrap --args object(3,0) --sender A
 mutated: object(0,0)
 unwrapped: object(10,0)
@@ -68,58 +81,69 @@ deleted: object(3,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2618352, non_refundable_storage_fee: 26448
 
-task 11, lines 101-104:
+task 11, line 101:
 //# advance-epoch
 Epoch advanced: 1
 
-task 12, lines 105-107:
+task 12, lines 103-105:
+// Unwrap the other wrapper. This should be denied now since global pause
+// will also apply to execution in the new epoch. A cannot receive the coin.
 //# run test::regulated_coin::unwrap --args object(4,0) --sender A
 Error: Transaction Effects Status: Coin type is globally paused for use: test::regulated_coin::REGULATED_COIN
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
 
-task 13, lines 108-110:
+task 13, lines 107-108:
+// Transfer still doesn't work as the previous epoch.
 //# run sui::pay::split_and_transfer --args object(1,5) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 Error: Error checking transaction input objects: Coin type is globally paused for use: object(1,0)::regulated_coin::REGULATED_COIN
 
-task 14, lines 111-113:
+task 14, lines 110-111:
+// Assert that global pause is still enabled.
 //# run test::regulated_coin::assert_global_pause_status --args immshared(0x403) true --sender A
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 15, lines 114-116:
+task 15, lines 113-114:
+// Disable global pause.
 //# run sui::coin::deny_list_v2_disable_global_pause --args object(0x403) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(5,1)
 gas summary: computation_cost: 1000000, storage_cost: 6657600,  storage_rebate: 6591024, non_refundable_storage_fee: 66576
 
-task 16, lines 117-119:
+task 16, lines 116-117:
+// Assert that global pause is disabled.
 //# run test::regulated_coin::assert_global_pause_status --args immshared(0x403) false --sender A
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 17, lines 120-122:
+task 17, lines 119-120:
+// Transfer the regulated coin from A works again.
 //# run sui::pay::split_and_transfer --args object(1,5) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 Error: Transaction Effects Status: Coin type is globally paused for use: test::regulated_coin::REGULATED_COIN
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
 
-task 18, lines 123-126:
+task 18, lines 122-123:
+// Create a new wrapper. This works now since spending coin is allowed again.
 //# run test::regulated_coin::full_wrap --args object(1,5) --sender A
 created: object(18,0)
 mutated: object(0,0)
 wrapped: object(1,5)
 gas summary: computation_cost: 1000000, storage_cost: 2644800,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
 
-task 19, line 127:
+task 19, lines 125-127:
+// However unwrapping still does not work since it involves receiving coin.
+// This is still disabled until the next epoch.
 //# run test::regulated_coin::unwrap --args object(18,0) --sender A
 Error: Transaction Effects Status: Coin type is globally paused for use: test::regulated_coin::REGULATED_COIN
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
 
-task 20, lines 129-131:
+task 20, line 129:
 //# advance-epoch
 Epoch advanced: 2
 
-task 21, line 132:
+task 21, lines 131-132:
+// Unwrap the wrapper. This works now since receiving coin is allowed again.
 //# run test::regulated_coin::unwrap --args object(18,0) --sender A
 mutated: object(0,0)
 unwrapped: object(1,5)

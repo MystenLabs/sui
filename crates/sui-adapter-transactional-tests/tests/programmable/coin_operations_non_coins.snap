@@ -3,32 +3,35 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 7 tasks
 
+// test invalid usages of coin commands
+
 init:
 A: object(0,0)
 
-task 1, lines 8-25:
+task 1, lines 8-23:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 4902000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 26-30:
+task 2, lines 25-28:
+// split non-coin
 //# programmable --sender A --inputs 0
 //> 0: test::m1::mint<sui::sui::SUI>();
 //> SplitCoins(Result(0), [Input(0)])
-// merge into non-coin
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
 
-task 3, lines 31-35:
+task 3, lines 30-33:
+// merge into non-coin
 //# programmable --sender A --inputs 0
 //> 0: test::m1::mint<sui::sui::SUI>();
 //> MergeCoins(Result(0), [Gas])
-// merge non-coin into gas
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
 
-task 4, lines 36-38:
+task 4, lines 35-38:
+// merge non-coin into gas
 //# programmable --sender A --inputs 0
 //> 0: test::m1::mint<sui::sui::SUI>();
 //> MergeCoins(Gas, [Result(0)])

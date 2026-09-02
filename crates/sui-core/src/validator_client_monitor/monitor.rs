@@ -231,6 +231,13 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         client_stats.record_interaction_result(feedback);
     }
 
+    /// Whether any latency has been observed yet. Until then
+    /// `select_shuffled_preferred_validators` returns an arbitrary shuffle rather than a real
+    /// preference.
+    pub fn has_observed_latencies(&self) -> bool {
+        !self.cached_latencies.read().is_empty()
+    }
+
     /// Select validators based on client-observed performance for the given transaction type.
     ///
     /// The current committee is passed in to ensure this function has the latest committee information.

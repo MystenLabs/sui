@@ -94,6 +94,42 @@ const DEFAULT_CHANNEL_TIMEOUT: Duration = Duration::from_secs(60);
 /// user-tunable knob.
 pub(crate) const MAX_TX_DIGESTS_PER_REQUEST: usize = 10_000;
 
+/// Inclusive checkpoints that produced the records in an emitted batch.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CheckpointSpan {
+    checkpoint_lo_inclusive: u64,
+    checkpoint_hi_inclusive: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum BatchWriteFlowControl {
+    Disabled,
+    BackfillThrough(u64),
+}
+
+impl CheckpointSpan {
+    pub fn single(checkpoint: u64) -> Self {
+        Self {
+            checkpoint_lo_inclusive: checkpoint,
+            checkpoint_hi_inclusive: checkpoint,
+        }
+    }
+
+    pub fn include(&mut self, checkpoint: u64) {
+        self.checkpoint_lo_inclusive = self.checkpoint_lo_inclusive.min(checkpoint);
+        self.checkpoint_hi_inclusive = self.checkpoint_hi_inclusive.max(checkpoint);
+    }
+
+    pub(crate) fn include_span(&mut self, other: Self) {
+        self.include(other.checkpoint_lo_inclusive);
+        self.include(other.checkpoint_hi_inclusive);
+    }
+
+    fn lower_bound(self) -> u64 {
+        self.checkpoint_lo_inclusive
+    }
+}
+
 /// Error returned when a batch write has per-entry failures.
 /// Contains the keys and error details for each failed mutation.
 #[derive(Debug)]
@@ -142,6 +178,7 @@ impl ChannelPrimer for BigtablePrimer {
 pub struct BigTableClient {
     table_prefix: String,
     client: BigtableInternalClient<AuthChannel<ChannelPool>>,
+    batch_write_flow_control: BatchWriteFlowControl,
     client_name: String,
     metrics: Option<Arc<KvMetrics>>,
     flow_controller: Option<Arc<BatchWriteFlowController>>,
@@ -176,6 +213,7 @@ impl BigTableClient {
         Ok(Self {
             table_prefix: format!("projects/emulator/instances/{}/tables/", instance_id),
             client: BigtableInternalClient::new(auth_channel),
+            batch_write_flow_control: BatchWriteFlowControl::Disabled,
             client_name,
             metrics: None,
             flow_controller,
@@ -263,19 +301,28 @@ impl BigTableClient {
             Some(token_provider),
             bigtable_features_header(batch_write_flow_control),
         );
-        let client = BigtableInternalClient::new(auth_channel).max_decoding_message_size(
-            max_decoding_message_size.unwrap_or(DEFAULT_MAX_DECODING_MESSAGE_SIZE),
-        );
+        let max_decoding_message_size =
+            max_decoding_message_size.unwrap_or(DEFAULT_MAX_DECODING_MESSAGE_SIZE);
+        let client = BigtableInternalClient::new(auth_channel)
+            .max_decoding_message_size(max_decoding_message_size);
         let flow_controller = batch_write_flow_control
             .then(|| BatchWriteFlowController::new(client_name.clone(), metrics.clone()));
         Ok(Self {
             table_prefix,
             client,
+            batch_write_flow_control: BatchWriteFlowControl::Disabled,
             client_name,
             metrics,
             flow_controller,
             app_profile_id,
         })
+    }
+
+    pub(crate) fn with_backfill_through(mut self, checkpoint: u64) -> Self {
+        if self.flow_controller.is_some() {
+            self.batch_write_flow_control = BatchWriteFlowControl::BackfillThrough(checkpoint);
+        }
+        self
     }
 
     /// Fetch transactions with an optional column filter for partial reads.
@@ -662,11 +709,20 @@ impl BigTableClient {
         &mut self,
         table: &str,
         entries: impl IntoIterator<Item = Entry>,
+        checkpoints: CheckpointSpan,
     ) -> Result<()> {
         let entries: Vec<Entry> = entries.into_iter().collect();
         if entries.is_empty() {
             return Ok(());
         }
+        let flow_controller = match self.batch_write_flow_control {
+            BatchWriteFlowControl::BackfillThrough(boundary)
+                if checkpoints.lower_bound() <= boundary =>
+            {
+                self.flow_controller.clone()
+            }
+            BatchWriteFlowControl::Disabled | BatchWriteFlowControl::BackfillThrough(_) => None,
+        };
 
         let row_keys: Vec<Bytes> = entries.iter().map(|e| e.row_key.clone()).collect();
 
@@ -678,7 +734,7 @@ impl BigTableClient {
         if let Some(ref app_profile_id) = self.app_profile_id {
             request.app_profile_id = app_profile_id.clone();
         }
-        let write_admission = match &self.flow_controller {
+        let write_admission = match &flow_controller {
             Some(flow_controller) => Some(flow_controller.admit_rpc().await),
             None => None,
         };
@@ -1502,46 +1558,42 @@ impl BigTableClient {
         })
     }
 
-    /// Resolve inclusive checkpoint bounds to a tx_sequence_number range.
-    ///
-    /// Returns `[start_tx, end_tx)` where `start_tx` is the first tx in
-    /// `start_checkpoint` and `end_tx` is one past the last tx in `end_checkpoint`.
-    /// Reads checkpoint summaries from the checkpoints table.
+    /// Resolve a half-open checkpoint range to the tx_sequence_number range it spans. Checkpoint 0
+    /// resolves to tx_sequence_number 0. An empty checkpoint range can only be of the form [x, x)
+    /// and maps to an empty transaction range [t, t).
     pub async fn checkpoint_to_tx_range(
         &mut self,
         checkpoint_range: Range<u64>,
     ) -> Result<Range<u64>> {
         use crate::tables::checkpoints;
 
-        let start_checkpoint = checkpoint_range.start;
-        let end_checkpoint = checkpoint_range.end.saturating_sub(1);
+        let mut keys: Vec<u64> = [checkpoint_range.start, checkpoint_range.end]
+            .into_iter()
+            .filter(|&cp| cp > 0)
+            .map(|cp| cp - 1)
+            .collect();
+        keys.dedup();
 
-        let start_tx = if start_checkpoint == 0 {
-            0u64
+        let rows = if keys.is_empty() {
+            vec![]
         } else {
-            let prev = self
-                .get_checkpoints_filtered(
-                    &[start_checkpoint - 1],
-                    Some(&[checkpoints::col::SUMMARY]),
-                )
-                .await?;
-            let summary = prev
-                .first()
-                .and_then(|cp| cp.summary.as_ref())
-                .context("checkpoint summary not found for start bound")?;
-            summary.network_total_transactions
+            self.get_checkpoints_filtered(&keys, Some(&[checkpoints::col::SUMMARY]))
+                .await?
         };
 
-        let end_cps = self
-            .get_checkpoints_filtered(&[end_checkpoint], Some(&[checkpoints::col::SUMMARY]))
-            .await?;
-        let end_summary = end_cps
-            .first()
-            .and_then(|cp| cp.summary.as_ref())
-            .context("checkpoint summary not found for end bound")?;
-        let end_tx = end_summary.network_total_transactions;
+        let boundary = |cp: u64| -> Result<u64> {
+            if cp == 0 {
+                return Ok(0);
+            }
+            let lookup_cp = cp - 1;
+            rows.iter()
+                .filter_map(|row| row.summary.as_ref())
+                .find(|summary| summary.sequence_number == lookup_cp)
+                .map(|summary| summary.network_total_transactions)
+                .with_context(|| format!("checkpoint summary {} not found", lookup_cp))
+        };
 
-        Ok(start_tx..end_tx)
+        Ok(boundary(checkpoint_range.start)?..boundary(checkpoint_range.end)?)
     }
 
     /// Resolve `tx_sequence_number`s to fully-populated transaction rows in
@@ -2293,7 +2345,7 @@ mod tests {
         tokio::time::timeout(MAX_DRIVE_TIME, async {
             for _ in 0..MAX_WRITES {
                 client
-                    .write_entries("flow-control", [make_entry()])
+                    .write_entries("flow-control", [make_entry()], CheckpointSpan::single(10))
                     .await
                     .unwrap();
                 let effective_qps = enabled_client_effective_qps(client);
@@ -2305,6 +2357,45 @@ mod tests {
         })
         .await
         .expect("successful writes took too long to isolate flow-control feedback")
+    }
+
+    #[tokio::test]
+    async fn disabled_capability_ignores_backfill_policy() {
+        let mock = MockBigtableServer::new();
+        mock.set_mutate_rows_rate_limit_info(Some(RateLimitInfo {
+            period: Some(prost_types::Duration {
+                seconds: 1,
+                nanos: 0,
+            }),
+            factor: 0.3,
+        }))
+        .await;
+        let (addr, _handle) = mock.start().await.unwrap();
+        let mut client = BigTableClient::new_for_host(
+            addr.to_string(),
+            "test".to_string(),
+            "flow-control",
+            false,
+        )
+        .await
+        .unwrap()
+        .with_backfill_through(10);
+        let entry = tables::make_entry(
+            Bytes::from_static(b"flow-control-row"),
+            [("col", Bytes::from_static(b"value"))],
+            None,
+        );
+
+        client
+            .write_entries("flow-control", [entry], CheckpointSpan::single(10))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            client.batch_write_flow_control,
+            BatchWriteFlowControl::Disabled
+        );
+        assert!(client.flow_controller.is_none());
     }
 
     #[tokio::test]
@@ -2328,13 +2419,18 @@ mod tests {
             true,
         )
         .await
-        .unwrap();
+        .unwrap()
+        .with_backfill_through(10);
 
         let batch_started_at = tokio::time::Instant::now();
         let writes = (0..OBSERVED_STARTS).map(|_| {
             let mut client = client.clone();
             let entry = make_entry();
-            async move { client.write_entries("flow-control", [entry]).await }
+            async move {
+                client
+                    .write_entries("flow-control", [entry], CheckpointSpan::single(10))
+                    .await
+            }
         });
         futures::future::try_join_all(writes).await.unwrap();
         assert!(
@@ -2345,7 +2441,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn streamed_server_feedback_decreases_rate_and_missing_feedback_is_a_noop() {
+    async fn checkpoint_policy_selects_server_feedback() {
         let mock = MockBigtableServer::new();
         let (addr, _handle) = mock.start().await.unwrap();
         let make_entry = || {
@@ -2362,7 +2458,8 @@ mod tests {
             true,
         )
         .await
-        .unwrap();
+        .unwrap()
+        .with_backfill_through(10);
         let initial_qps = enabled_client_effective_qps(&client);
 
         mock.set_mutate_rows_rate_limit_info(Some(RateLimitInfo {
@@ -2374,7 +2471,13 @@ mod tests {
         }))
         .await;
         client
-            .write_entries("flow-control", [make_entry()])
+            .write_entries("flow-control", [make_entry()], CheckpointSpan::single(11))
+            .await
+            .unwrap();
+        assert_eq!(enabled_client_effective_qps(&client), initial_qps);
+
+        client
+            .write_entries("flow-control", [make_entry()], CheckpointSpan::single(10))
             .await
             .unwrap();
 
@@ -2387,7 +2490,7 @@ mod tests {
 
         mock.set_mutate_rows_rate_limit_info(None).await;
         client
-            .write_entries("flow-control", [make_entry()])
+            .write_entries("flow-control", [make_entry()], CheckpointSpan::single(10))
             .await
             .unwrap();
         assert_eq!(enabled_client_effective_qps(&client), reduced_qps);
@@ -2418,11 +2521,12 @@ mod tests {
             true,
         )
         .await
-        .unwrap();
+        .unwrap()
+        .with_backfill_through(10);
         let initial_qps = enabled_client_effective_qps(&client);
 
         let error = client
-            .write_entries("flow-control", [make_entry()])
+            .write_entries("flow-control", [make_entry()], CheckpointSpan::single(10))
             .await
             .unwrap_err();
         let partial = error.downcast_ref::<PartialWriteError>().unwrap();

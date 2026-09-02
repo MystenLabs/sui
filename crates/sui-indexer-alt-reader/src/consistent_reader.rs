@@ -126,8 +126,7 @@ impl ConsistentReader {
     pub async fn batch_get_balances(
         &self,
         checkpoint: u64,
-        address: String,
-        coin_types: Vec<String>,
+        requests: Vec<(String, String)>,
     ) -> Result<Vec<proto::Balance>, Error> {
         let response = self
             .request(
@@ -135,10 +134,10 @@ impl ConsistentReader {
                 Some(checkpoint),
                 |mut client, request| async move { client.batch_get_balances(request).await },
                 proto::BatchGetBalancesRequest {
-                    requests: coin_types
+                    requests: requests
                         .into_iter()
-                        .map(|coin_type| proto::GetBalanceRequest {
-                            owner: Some(address.clone()),
+                        .map(|(owner, coin_type)| proto::GetBalanceRequest {
+                            owner: Some(owner),
                             coin_type: Some(coin_type),
                         })
                         .collect(),

@@ -46,8 +46,11 @@ impl MoveRuntime {
         Self::new_with_system_packages(natives, vm_config, SystemPackages::empty())
     }
 
-    pub fn new_with_default_config(natives: NativeFunctions) -> Self {
-        Self::new(natives, VMConfig::default())
+    pub fn new_with_test_config(natives: NativeFunctions) -> Self {
+        Self::new(
+            natives,
+            VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None),
+        )
     }
 
     /// Construct a `MoveRuntime` with a set of pinned system packages installed at start-up.

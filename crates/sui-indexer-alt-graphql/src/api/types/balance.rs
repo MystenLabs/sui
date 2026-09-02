@@ -3,6 +3,7 @@
 
 use anyhow::Context as _;
 use async_graphql::Context;
+use async_graphql::InputObject;
 use async_graphql::SimpleObject;
 use async_graphql::connection::Connection;
 use async_graphql::connection::CursorType;
@@ -11,10 +12,12 @@ use sui_indexer_alt_reader::consistent_reader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
 use sui_indexer_alt_reader::consistent_reader::proto::Balance as ProtoBalance;
 use sui_types::TypeTag;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
 
 use crate::api::scalars::big_int::BigInt;
 use crate::api::scalars::cursor;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::type_filter::TypeInput;
 use crate::api::types::move_type::MoveType;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
@@ -23,20 +26,32 @@ use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::scope::Scope;
 
-/// The total balance for a particular coin type.
+/// The balance of a particular coin type held by an address.
+///
+/// Balances can be held in coin objects, in the address's balance accumulator, or both.
 #[derive(SimpleObject)]
 pub(crate) struct Balance {
     /// Coin type for the balance, such as `0x2::sui::SUI`.
     pub(crate) coin_type: Option<MoveType>,
 
-    /// The sum total of the accumulator balance and individual coin balances owned by the address.
+    /// The sum of `coinBalance` and `addressBalance`.
     pub(crate) total_balance: Option<BigInt>,
 
-    /// Total balance across all owned coin objects of the coin type.
+    /// The balance held in coin objects owned by the address.
     pub(crate) coin_balance: Option<BigInt>,
 
-    /// The balance as tracked by the accumulator object for the address.
+    /// The balance held in the address's balance accumulator.
     pub(crate) address_balance: Option<BigInt>,
+}
+
+/// Identifies the balance for one coin type owned by an address.
+#[derive(InputObject)]
+pub(crate) struct BalanceKey {
+    /// The address that owns the balance.
+    pub(crate) address: SuiAddress,
+
+    /// The coin type of the balance.
+    pub(crate) coin_type: TypeInput,
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -81,7 +96,7 @@ impl Balance {
     pub(crate) async fn fetch_one(
         ctx: &Context<'_>,
         scope: &Scope,
-        address: SuiAddress,
+        address: NativeSuiAddress,
         coin_type: TypeTag,
     ) -> Result<Option<Balance>, RpcError<Error>> {
         if scope.root_version().is_some() {
@@ -106,13 +121,13 @@ impl Balance {
         Ok(Some(Balance::try_from_proto(balance, scope.clone())?))
     }
 
-    /// Fetch balances for multiple coin types owned by the given address, live at the current
-    /// checkpoint. Returns `None` when no checkpoint is set in scope (e.g. execution scope).
+    /// Fetch balances for multiple address and coin type pairs, live at the current checkpoint.
+    ///
+    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn fetch_many(
         ctx: &Context<'_>,
         scope: &Scope,
-        address: SuiAddress,
-        coin_types: Vec<TypeTag>,
+        keys: Vec<(NativeSuiAddress, TypeTag)>,
     ) -> Result<Option<Vec<Balance>>, RpcError<Error>> {
         if scope.root_version().is_some() {
             return Err(bad_user_input(Error::RootVersionOwnership));
@@ -124,15 +139,18 @@ impl Balance {
 
         query_limits::rich::debit(ctx)?;
         let consistent_reader: &ConsistentReader = ctx.data()?;
+        let requests = keys
+            .into_iter()
+            .map(|(address, coin_type)| {
+                (
+                    address.to_string(),
+                    coin_type.to_canonical_string(/* with_prefix */ true),
+                )
+            })
+            .collect();
+
         let balances = consistent_reader
-            .batch_get_balances(
-                checkpoint,
-                address.to_string(),
-                coin_types
-                    .into_iter()
-                    .map(|t| t.to_canonical_string(true))
-                    .collect(),
-            )
+            .batch_get_balances(checkpoint, requests)
             .await
             .map_err(|e| consistent_error(checkpoint, e))?;
 
@@ -144,12 +162,11 @@ impl Balance {
         ))
     }
 
-    /// Paginate through balances for coins owned by the given address, live at the current
-    /// checkpoint.
+    /// Paginate through balances held by the given address, live at the current checkpoint.
     pub(crate) async fn paginate(
         ctx: &Context<'_>,
         scope: Scope,
-        address: SuiAddress,
+        address: NativeSuiAddress,
         page: Page<Cursor>,
     ) -> Result<Connection<String, Balance>, RpcError<Error>> {
         if scope.root_version().is_some() {

@@ -49,6 +49,7 @@ runs:
           - '.github/workflows/cargo-llvm-cov.yml'
           - '.github/workflows/rust.yml'
           - '.github/workflows/external.yml'
+          - '.github/workflows/bridge.yml'
           - 'Cargo.lock'
           - 'Cargo.toml'
           - 'deny.toml'

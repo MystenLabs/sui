@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// Same as `upgrade_add_init_existing_and_new`, but the new init module (`a`) sorts before the
+// offending existing module (`z`).
+
 init:
 A: object(0,0)
 

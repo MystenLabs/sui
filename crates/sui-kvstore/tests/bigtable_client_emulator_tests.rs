@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{Context, Result};
+use sui_kvstore::CheckpointSpan;
 use sui_kvstore::testing::{
     BigTableEmulator, INSTANCE_ID, create_tables, require_bigtable_emulator,
 };
@@ -38,7 +39,11 @@ async fn test_get_latest_object_bounds_scan() -> Result<()> {
     let cells = tables::objects::encode(&obj_b)?;
     let entry = tables::make_entry(tables::objects::encode_key(&key_b), cells, None);
     client
-        .write_entries(tables::objects::NAME, vec![entry])
+        .write_entries(
+            tables::objects::NAME,
+            vec![entry],
+            CheckpointSpan::single(0),
+        )
         .await?;
 
     // Query for the latest version of A (which does not exist).

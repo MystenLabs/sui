@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 2 tasks
 
+// Publishing must be done at with the initial address of the module set to 0x0
+
 task 1, lines 8-10:
 //# publish
 Error: Transaction Effects Status: Publish Error, Non-zero Address. The modules in the package must have their self-addresses set to zero.

@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 10 tasks
 
+// tests TransferObject with an object with public transfer
+
 init:
 A: object(0,0), B: object(0,1)
 
@@ -35,7 +37,7 @@ task 4, line 31:
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
-task 5, lines 33-36:
+task 5, line 33:
 //# view-object 2,0
 Owner: Account Address ( B )
 Version: 3
@@ -46,6 +48,8 @@ Contents: test::m::S {
         },
     },
 }
+
+// Mint Cup<S> to A. Transfer Cup<S> from A to B
 
 task 6, line 38:
 //# run test::m::mint_cup --type-args test::m::S --sender A

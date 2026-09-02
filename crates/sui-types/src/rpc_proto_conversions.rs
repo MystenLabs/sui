@@ -4,6 +4,7 @@
 //! Module for conversions from sui-core types to rpc protos
 
 use crate::crypto::SuiSignature;
+use nonempty::NonEmpty;
 
 fn ms_to_timestamp(ms: u64) -> prost_types::Timestamp {
     prost_types::Timestamp {
@@ -1479,6 +1480,7 @@ impl From<crate::execution_status::CommandArgumentError> for CommandArgumentErro
                 CommandArgumentErrorKind::CannotWriteToExtendedReference
             }
             E::InvalidReferenceArgument => CommandArgumentErrorKind::InvalidReferenceArgument,
+            E::InvalidTxContext => CommandArgumentErrorKind::InvalidTxContext,
         };
 
         message.set_kind(kind);
@@ -2274,7 +2276,7 @@ fn merge_transaction_data(
     }
 
     if mask.contains(Transaction::EXPIRATION_FIELD.name) {
-        message.expiration = Some(source.expiration.into());
+        message.expiration = Some(source.expiration.clone().into());
     }
 }
 
@@ -2331,6 +2333,30 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
 
                 TransactionExpirationKind::ValidDuring
             }
+            E::Validity {
+                min_epoch,
+                max_epoch,
+                min_timestamp,
+                max_timestamp,
+                chain,
+                nonce,
+                allowed_proposers,
+            } => {
+                message.epoch = max_epoch;
+                message.min_epoch = min_epoch;
+                message.min_timestamp = min_timestamp.map(ms_to_timestamp);
+                message.max_timestamp = max_timestamp.map(ms_to_timestamp);
+                message.set_chain(sui_sdk_types::Digest::new(*chain.as_bytes()));
+                message.set_nonce(nonce);
+                if let Some(allowed) = allowed_proposers {
+                    let mut proposers = AllowedProposers::default();
+                    proposers.set_epoch(allowed.epoch);
+                    proposers.proposers = allowed.proposers.into();
+                    message.set_allowed_proposers(proposers);
+                }
+
+                TransactionExpirationKind::Validity
+            }
         };
 
         message.set_kind(kind);
@@ -2347,7 +2373,8 @@ impl TryFrom<&TransactionExpiration> for crate::transaction::TransactionExpirati
         Ok(match value.kind() {
             TransactionExpirationKind::None => Self::None,
             TransactionExpirationKind::Epoch => Self::Epoch(value.epoch()),
-            TransactionExpirationKind::ValidDuring => {
+            kind @ (TransactionExpirationKind::ValidDuring
+            | TransactionExpirationKind::Validity) => {
                 let chain_str = value
                     .chain
                     .as_deref()
@@ -2371,13 +2398,39 @@ impl TryFrom<&TransactionExpiration> for crate::transaction::TransactionExpirati
                     .as_ref()
                     .map(timestamp_to_ms)
                     .transpose()?;
-                Self::ValidDuring {
-                    min_epoch: value.min_epoch,
-                    max_epoch: value.epoch,
-                    min_timestamp,
-                    max_timestamp,
-                    chain,
-                    nonce,
+                let min_epoch = value.min_epoch;
+                let max_epoch = value.epoch;
+
+                if kind == TransactionExpirationKind::ValidDuring {
+                    Self::ValidDuring {
+                        min_epoch,
+                        max_epoch,
+                        min_timestamp,
+                        max_timestamp,
+                        chain,
+                        nonce,
+                    }
+                } else {
+                    let allowed_proposers = value
+                        .allowed_proposers
+                        .as_ref()
+                        .map(|allowed| -> Result<_, Self::Error> {
+                            Ok(crate::transaction::AllowedProposers {
+                                epoch: allowed.epoch(),
+                                proposers: NonEmpty::from_vec(allowed.proposers.clone())
+                                    .ok_or("allowed_proposers must not be empty")?,
+                            })
+                        })
+                        .transpose()?;
+                    Self::Validity {
+                        min_epoch,
+                        max_epoch,
+                        min_timestamp,
+                        max_timestamp,
+                        chain,
+                        nonce,
+                        allowed_proposers,
+                    }
                 }
             }
             TransactionExpirationKind::Unknown | _ => {
@@ -3076,6 +3129,10 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
                 .collect();
         }
 
+        if mask.contains(Self::LAMPORT_VERSION_FIELD.name) {
+            self.lamport_version = Some(value.lamport_version().value());
+        }
+
         if mask.contains(Self::CHANGED_OBJECTS_FIELD.name)
             || mask.contains(Self::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name)
             || mask.contains(Self::GAS_OBJECT_FIELD.name)
@@ -3612,5 +3669,20 @@ impl TryFrom<&ObjectSet> for crate::full_checkpoint_content::ObjectSet {
         }
 
         Ok(objects)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::effects::TransactionEffectsAPI;
+
+    #[test]
+    fn transaction_effects_v1_proto_includes_lamport_version() {
+        let effects = crate::effects::TransactionEffectsV1::default();
+        let lamport_version = effects.lamport_version().value();
+        let proto: sui_rpc::proto::sui::rpc::v2::TransactionEffects =
+            crate::effects::TransactionEffects::V1(effects).into();
+
+        assert_eq!(proto.lamport_version, Some(lamport_version));
     }
 }

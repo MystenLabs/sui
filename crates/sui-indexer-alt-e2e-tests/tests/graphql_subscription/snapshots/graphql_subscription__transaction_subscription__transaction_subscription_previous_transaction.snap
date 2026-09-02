@@ -1,0 +1,550 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_subscription/transaction_subscription.rs
+assertion_line: 1003
+expression: live_nodes
+---
+[
+  {
+    "digest": "[digest]",
+    "effects": {
+      "objectChanges": {
+        "nodes": [
+          {
+            "inputState": {
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  }
+                }
+              },
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": null,
+                "kind": {
+                  "__typename": "GenesisTransaction"
+                }
+              }
+            },
+            "outputState": {
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  }
+                }
+              },
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                },
+                "effects": {
+                  "objectChanges": {
+                    "nodes": [
+                      {
+                        "inputState": {
+                          "asMoveObject": {
+                            "contents": {
+                              "type": {
+                                "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "inputState": null
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "inputState": null,
+            "outputState": {
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::wrapping::Item"
+                  }
+                }
+              },
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                },
+                "effects": {
+                  "objectChanges": {
+                    "nodes": [
+                      {
+                        "inputState": {
+                          "asMoveObject": {
+                            "contents": {
+                              "type": {
+                                "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "inputState": null
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "digest": "[digest]",
+    "effects": {
+      "objectChanges": {
+        "nodes": [
+          {
+            "inputState": {
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  }
+                }
+              },
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": null,
+                "kind": {
+                  "__typename": "GenesisTransaction"
+                }
+              }
+            },
+            "outputState": {
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  }
+                }
+              },
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                },
+                "effects": {
+                  "objectChanges": {
+                    "nodes": [
+                      {
+                        "inputState": {
+                          "asMoveObject": {
+                            "contents": {
+                              "type": {
+                                "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "inputState": {
+                          "asMoveObject": {
+                            "contents": {
+                              "type": {
+                                "repr": "[pkg]::wrapping::Item"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "inputState": {
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::wrapping::Item"
+                  }
+                }
+              },
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                }
+              }
+            },
+            "outputState": {
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::wrapping::Item"
+                  }
+                }
+              },
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                },
+                "effects": {
+                  "objectChanges": {
+                    "nodes": [
+                      {
+                        "inputState": {
+                          "asMoveObject": {
+                            "contents": {
+                              "type": {
+                                "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "inputState": {
+                          "asMoveObject": {
+                            "contents": {
+                              "type": {
+                                "repr": "[pkg]::wrapping::Item"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "digest": "[digest]",
+    "effects": {
+      "objectChanges": {
+        "nodes": [
+          {
+            "inputState": {
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  }
+                }
+              },
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": null,
+                "kind": {
+                  "__typename": "GenesisTransaction"
+                }
+              }
+            },
+            "outputState": {
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  }
+                }
+              },
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                },
+                "effects": {
+                  "objectChanges": {
+                    "nodes": [
+                      {
+                        "inputState": {
+                          "asMoveObject": {
+                            "contents": {
+                              "type": {
+                                "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "inputState": {
+                          "asMoveObject": {
+                            "contents": {
+                              "type": {
+                                "repr": "[pkg]::wrapping::Item"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "inputState": null
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "inputState": {
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::wrapping::Item"
+                  }
+                }
+              },
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                }
+              }
+            },
+            "outputState": null
+          },
+          {
+            "inputState": null,
+            "outputState": {
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::wrapping::Wrapper"
+                  }
+                }
+              },
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                },
+                "effects": {
+                  "objectChanges": {
+                    "nodes": [
+                      {
+                        "inputState": {
+                          "asMoveObject": {
+                            "contents": {
+                              "type": {
+                                "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "inputState": {
+                          "asMoveObject": {
+                            "contents": {
+                              "type": {
+                                "repr": "[pkg]::wrapping::Item"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "inputState": null
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "digest": "[digest]",
+    "effects": {
+      "objectChanges": {
+        "nodes": [
+          {
+            "inputState": {
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  }
+                }
+              },
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": null,
+                "kind": {
+                  "__typename": "GenesisTransaction"
+                }
+              }
+            },
+            "outputState": {
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  }
+                }
+              },
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                },
+                "effects": {
+                  "objectChanges": {
+                    "nodes": [
+                      {
+                        "inputState": {
+                          "asMoveObject": {
+                            "contents": {
+                              "type": {
+                                "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "inputState": {
+                          "asMoveObject": {
+                            "contents": {
+                              "type": {
+                                "repr": "[pkg]::wrapping::Wrapper"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "inputState": null
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "inputState": null,
+            "outputState": {
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::wrapping::Item"
+                  }
+                }
+              },
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                },
+                "effects": {
+                  "objectChanges": {
+                    "nodes": [
+                      {
+                        "inputState": {
+                          "asMoveObject": {
+                            "contents": {
+                              "type": {
+                                "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "inputState": {
+                          "asMoveObject": {
+                            "contents": {
+                              "type": {
+                                "repr": "[pkg]::wrapping::Wrapper"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "inputState": null
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "inputState": {
+              "asMoveObject": {
+                "contents": {
+                  "type": {
+                    "repr": "[pkg]::wrapping::Wrapper"
+                  }
+                }
+              },
+              "previousTransaction": {
+                "digest": "[digest]",
+                "sender": {
+                  "address": "[address]"
+                },
+                "kind": {
+                  "__typename": "ProgrammableTransaction"
+                }
+              }
+            },
+            "outputState": null
+          }
+        ]
+      }
+    }
+  }
+]

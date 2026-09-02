@@ -53,9 +53,8 @@ fn translate_without_optimization() {
     let version_id = AccountAddress::from([2u8; 32]);
     let verified = make_verified_empty_package(original_id, version_id);
 
-    let vm_config = VMConfig {
-        ..VMConfig::default()
-    };
+    let vm_config =
+        VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None);
     let natives = NativeFunctions::empty_for_testing().unwrap();
     let interner = IdentifierInterner::new();
 
@@ -75,7 +74,7 @@ fn translate_without_optimization() {
 //
 //     let vm_config = VMConfig {
 //         // FUTURE: Enable optimizations here when we have some implemented.
-//         ..VMConfig::default()
+//         ..VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None)
 //     };
 //     let natives = NativeFunctions::empty_for_testing().unwrap();
 //     let interner = IdentifierInterner::new();
@@ -143,7 +142,8 @@ fn translate_and_verify(
     verified: verif_ast::Package,
     expected_module_count: usize,
 ) -> RuntimePackage {
-    let vm_config = VMConfig::default();
+    let vm_config =
+        VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None);
     let natives = NativeFunctions::empty_for_testing().unwrap();
     let interner = IdentifierInterner::new();
 

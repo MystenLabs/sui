@@ -72,6 +72,7 @@ pub fn verify<Mode: ExecutionMode>(
         withdrawal_compatibility_conversions: _,
         original_command_len: _,
         commands,
+        unified_linkage: _,
     } = txn;
     for pure in pure {
         check_pure_input::<Mode>(bytes, pure)?;

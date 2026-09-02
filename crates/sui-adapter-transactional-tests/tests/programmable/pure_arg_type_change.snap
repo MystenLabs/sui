@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 6 tasks
 
+// tests that pure arguments have their types fixed/changed after being used by a mutable reference
+
 init:
 A: object(0,0)
 

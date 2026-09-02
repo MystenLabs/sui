@@ -70,8 +70,8 @@ Seal is a decentralized secrets management (DSM) service that uses access contro
 
 Seal has 3 core components:
 
-- **Onchain access policies:** Move functions you write that define who is allowed to decrypt. [Key servers](https://seal-docs.wal.app/ServerOverview) evaluate your policy by running a `dry_run_transaction_block` on Sui when a user requests decryption key shares. If the policy approves, the servers return the key shares.
-- **Key servers:** Offchain services that hold [IBE (identity-based encryption)](https://seal-docs.wal.app/Design) master secret keys. Each server returns derived decryption key shares only when the request satisfies the associated onchain policy. You configure a threshold, so decryption requires at least `t` out of `n` servers to agree.
+- **Onchain access policies:** Move functions you write that define who is allowed to decrypt. [Key servers](/sui-stack/seal/server-overview) evaluate your policy by running a `dry_run_transaction_block` on Sui when a user requests decryption key shares. If the policy approves, the servers return the key shares.
+- **Key servers:** Offchain services that hold [IBE (identity-based encryption)](/sui-stack/seal/design) master secret keys. Each server returns derived decryption key shares only when the request satisfies the associated onchain policy. You configure a threshold, so decryption requires at least `t` out of `n` servers to agree.
 - **Client-side encryption:** The user encrypts and decrypts data locally in their environment. Key servers never see plaintext.
 
 In OnlyFins, the access policy is: the user must own a `ViewerToken` object for the specific post they want to unlock. The user receives a `ViewerToken`, a [Sui object](/develop/sui-architecture/object-model), after requesting access onchain. Seal key servers check this ownership before issuing key shares.
@@ -110,7 +110,7 @@ sequenceDiagram
 ```
 
 :::caution
-Seal should not be used to protect highly sensitive data such as wallet keys, personal health information, or government-level secrets. Review the [Seal Terms of Service](https://seal-docs.wal.app/TermsOfService) and [security best practices](https://seal-docs.wal.app/) before deploying to production.
+Seal should not be used to protect highly sensitive data such as wallet keys, personal health information, or government-level secrets. Review the [Seal Terms of Service](/sui-stack/seal/terms-of-service) and [security best practices](/sui-stack/seal/security-best-practices) before deploying to production.
 :::
 
 :::caution
@@ -137,7 +137,7 @@ The blob on Walrus is always public. What is secret is the encryption key, and a
 
 ### Seal CLI
 
-The Seal CLI (`seal-cli`) lets you encrypt and decrypt data, generate key pairs, inspect encrypted objects, and fetch keys for testing. It is useful for verifying your Move policy and testing key server connectivity before integrating the SDK. See the [Seal CLI documentation](https://seal-docs.wal.app/SealCLI) for usage.
+The Seal CLI (`seal-cli`) lets you encrypt and decrypt data, generate key pairs, inspect encrypted objects, and fetch keys for testing. It is useful for verifying your Move policy and testing key server connectivity before integrating the SDK. See the [Seal CLI documentation](/sui-stack/seal/seal-cli) for usage.
 
 ### Seal TypeScript SDK
 
@@ -168,7 +168,7 @@ OnlyFins uses `SealClient` in standalone mode. The `createSealClient` factory in
 Some code examples in this guide use older Sui transports: OnlyFins uses `SuiClient` from `@mysten/sui/client`, and the seal-demo standalone script uses `SuiJsonRpcClient` from `@mysten/sui/jsonRpc`, which is deprecated. `SuiGrpcClient` from `@mysten/sui/grpc` is the recommended transport for all new integrations. All `SealClient` constructor and encrypt/decrypt APIs are identical regardless of which transport you use. See the [Sui SDK v2 migration guide](https://sdk.mystenlabs.com/sui/migrations/sui-2.0) for upgrade instructions.
 :::
 
-The key server object IDs come from `constants.ts`. These IDs point to onchain `KeyServer` objects that always hold the latest URL as the source of truth. See the [Seal documentation](https://seal-docs.wal.app/Pricing) for the full list of verified key servers and their modes (open vs. permissioned).
+The key server object IDs come from `constants.ts`. These IDs point to onchain `KeyServer` objects that always hold the latest URL as the source of truth. See the [Seal documentation](/sui-stack/seal/pricing) for the full list of verified key servers and their modes (open vs. permissioned).
 
 <ImportContent
   source="frontend/src/constants.ts"
@@ -299,7 +299,7 @@ A few things to note about the OnlyFins encryption setup:
 The `encryptionId` is then stored as the `encryption_id` field on the `Post` Sui object when `createPosts.ts` registers the post onchain. This links the Walrus blob, the Seal encryption, and the Sui object together.
 
 :::tip
-Seal supports envelope encryption for large files. Generate a symmetric key, encrypt the image data with AES, then encrypt only the symmetric key with Seal. This is more efficient for large payloads and is the recommended pattern for anything larger than a few hundred KB. See the [Seal documentation](https://seal-docs.wal.app/UsingSeal) for details.
+Seal supports envelope encryption for large files. Generate a symmetric key, encrypt the image data with AES, then encrypt only the symmetric key with Seal. This is more efficient for large payloads and is the recommended pattern for anything larger than a few hundred KB. See the [Seal documentation](/sui-stack/seal/using-seal) for details.
 :::
 
 ### Browser-side encryption

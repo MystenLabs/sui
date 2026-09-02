@@ -60,6 +60,7 @@ use self::store::in_mem_store::KeyStore;
 use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::sui_system_state::SuiSystemState;
+use sui_types::transaction_executor::SimulateTransactionResult;
 pub use sui_types::transaction_executor::TransactionChecks;
 use sui_types::{
     gas_coin::GasCoin,
@@ -216,17 +217,18 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     /// Useful for testing specific scenarios or starting from a non-genesis state.
     ///
     /// Note: the `system_state` should represent the state of the system that exists after the
-    /// provided `checkpoint`.
+    /// provided `checkpoint`. The `chain_identifier` must match the identity exposed to clients
+    /// because Simulacrum uses it to validate chain-bound transactions.
     pub fn new_from_custom_state(
         keystore: KeyStore,
         checkpoint: VerifiedCheckpoint,
         system_state: SuiSystemState,
+        chain_identifier: ChainIdentifier,
         config: &NetworkConfig,
         store: S,
         rng: R,
     ) -> Self {
         let checkpoint_builder = MockCheckpointBuilder::new(checkpoint);
-        let chain_identifier = (*config.genesis.checkpoint().digest()).into();
         let epoch_state = EpochState::new(system_state, chain_identifier);
         Self {
             rng,
@@ -239,6 +241,26 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             verifier_signing_config: VerifierSigningConfig::default(),
             data_ingestion_path: None,
         }
+    }
+
+    /// Simulate a transaction without committing its outputs.
+    pub fn simulate_transaction(
+        &self,
+        transaction: TransactionData,
+        checks: TransactionChecks,
+        allow_mock_gas_coin: bool,
+    ) -> SuiResult<SimulateTransactionResult>
+    where
+        S: Send + Sync,
+    {
+        self.epoch_state.simulate_transaction(
+            &self.store,
+            &self.deny_config,
+            &self.verifier_signing_config,
+            transaction,
+            checks,
+            allow_mock_gas_coin,
+        )
     }
 
     /// Execute a transaction, allowing empty-signature sender impersonation.
@@ -1016,6 +1038,94 @@ mod tests {
         let end_epoch = chain.store.get_highest_checkpint().unwrap().epoch;
         assert_eq!(end_epoch - start_epoch, steps);
         dbg!(chain.store().get_highest_checkpint());
+    }
+
+    #[test]
+    fn simulate_transaction_does_not_commit_outputs() {
+        let mut sim = Simulacrum::new();
+        let recipient = SuiAddress::random_for_testing_only();
+        let (tx, _) = sim.transfer_txn(recipient);
+        let transaction = tx.data().transaction_data().clone();
+        let transaction_digest = transaction.digest();
+        let gas_id = transaction.gas_data().payment[0].0;
+        let gas_before = SimulatorStore::get_object(sim.store(), &gas_id).unwrap();
+        let checkpoint_before = sim.store().get_highest_checkpint().unwrap();
+
+        let result = sim
+            .simulate_transaction(transaction, TransactionChecks::Enabled, false)
+            .unwrap();
+
+        assert!(result.effects.status().is_ok());
+        assert_eq!(result.suggested_gas_price, Some(sim.reference_gas_price()));
+        assert!(sim.store().get_transaction(&transaction_digest).is_none());
+        assert!(
+            sim.store()
+                .get_transaction_effects(&transaction_digest)
+                .is_none()
+        );
+        assert!(
+            sim.store()
+                .get_transaction_events(&transaction_digest)
+                .is_none()
+        );
+        assert_eq!(
+            SimulatorStore::get_object(sim.store(), &gas_id),
+            Some(gas_before)
+        );
+        assert!(sim.store().owned_objects(recipient).next().is_none());
+        assert_eq!(
+            sim.store().get_highest_checkpint().unwrap().digest(),
+            checkpoint_before.digest()
+        );
+
+        let executed_effects = sim.execute_transaction(tx).unwrap().0;
+        assert_eq!(result.effects, executed_effects);
+    }
+
+    #[test]
+    fn simulate_transaction_uses_custom_chain_identifier() {
+        use sui_types::digests::get_testnet_chain_identifier;
+        use sui_types::transaction::TransactionExpiration;
+
+        let mut rng = OsRng;
+        let config = ConfigBuilder::new_with_temp_dir()
+            .rng(&mut rng)
+            .with_chain_start_timestamp_ms(1)
+            .deterministic_committee_size(NonZeroUsize::MIN)
+            .build();
+        let chain_identifier = get_testnet_chain_identifier();
+        assert_ne!(
+            chain_identifier,
+            ChainIdentifier::from(*config.genesis.checkpoint().digest()),
+        );
+
+        let store = InMemoryStore::new(&config.genesis);
+        let keystore = KeyStore::from_network_config(&config);
+        let mut sim = Simulacrum::new_from_custom_state(
+            keystore,
+            config.genesis.checkpoint(),
+            config.genesis.sui_system_object(),
+            chain_identifier,
+            &config,
+            store,
+            rng,
+        );
+
+        let (tx, _) = sim.transfer_txn(SuiAddress::random_for_testing_only());
+        let mut transaction = tx.data().transaction_data().clone();
+        *transaction.expiration_mut_for_testing() = TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: chain_identifier,
+            nonce: 0,
+        };
+
+        let result = sim
+            .simulate_transaction(transaction, TransactionChecks::Enabled, false)
+            .expect("simulation should use the configured chain identifier");
+        assert!(result.effects.status().is_ok());
     }
 
     #[test]

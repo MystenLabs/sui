@@ -6,6 +6,23 @@ processed 13 tasks
 init:
 A: object(0,0)
 
+// Transactions:
+//
+// 1. Create a new gas coin and transfer it.
+// 2. Split off some more funds from that coin and transfer that too.
+// 3. Merge the split coin back into the gas coin.
+// 4. Merge the original coin back into the gas coin.
+//
+// RPC queries:
+//
+// 1. All Transactions
+// 2. Transactions affecting coin 1 (there should be 3).
+// 3. Transactions affecting coin 2 (there should be 2).
+// 4. The first transaction affecting coin 2, iterating forwards.
+// 5. The last transaction affecting coin 2, iterating backwards.
+// 6. The last transaction affecting coin 1, iterating forwards.
+// 7. The middle transaction affecting coin 1, iterating forwards.
+
 task 1, lines 23-25:
 //# programmable --sender A --inputs 42 @A
 //> SplitCoins(Gas, [Input(0)]);

@@ -6,6 +6,10 @@ processed 8 tasks
 init:
 A: object(0,0)
 
+// Trying to showDisplay when,
+// 1. the type has no Display format,
+// 2. the type is primitive (and could never have a Display format).
+
 task 1, lines 10-19:
 //# publish
 created: object(1,0)

@@ -23,9 +23,9 @@ pub struct TypeLayoutResolver<'state, 'runtime> {
     state_view: Box<dyn TypeLayoutStore + 'state>,
 }
 
-/// Implements SuiResolver traits by providing null implementations for module
+/// Implements BackingPackageStore traits by providing null implementations for module
 /// resolution and delegating backing package resolution to the trait object.
-struct NullSuiResolver<'a, 'state>(&'a (dyn TypeLayoutStore + 'state));
+struct NullPackageStore<'a, 'state>(&'a (dyn TypeLayoutStore + 'state));
 
 impl<'state, 'runtime> TypeLayoutResolver<'state, 'runtime> {
     pub fn new(
@@ -47,7 +47,7 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
         struct_tag: &StructTag,
     ) -> Result<A::MoveDatatypeLayout, SuiError> {
         let ids = struct_tag.all_addresses().into_iter().map(ObjectID::from);
-        let null_resolver = NullSuiResolver(&self.state_view);
+        let null_resolver = NullPackageStore(&self.state_view);
         let resolver =
             CachedPackageStore::new(self.vm, TransactionPackageStore::new(&null_resolver));
         let config = ResolutionConfig::new(
@@ -82,7 +82,7 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
     }
 }
 
-impl BackingPackageStore for NullSuiResolver<'_, '_> {
+impl BackingPackageStore for NullPackageStore<'_, '_> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         self.0.get_package_object(package_id)
     }

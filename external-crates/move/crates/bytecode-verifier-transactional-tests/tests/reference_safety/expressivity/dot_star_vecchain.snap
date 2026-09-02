@@ -3,7 +3,8 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 1 task
 
-task 0, lines 4-20:
+task 0, lines 3-20:
+// same, imm released before the second write
 //# publish
 Error: Unable to publish module '00000000000000000000000000000000000000000000000000000000000000c5::l5_imm_released_then_write'. Got VMError: {
     major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,

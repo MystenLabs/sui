@@ -492,12 +492,14 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e);
             type_(context, ty)
         }
-        E::Unit { .. }
+        // constant uses are fully resolved at compile time (folded into definitions and copied
+        // into using modules during CFGIR), so they create no module dependency
+        E::Constant(..)
+        | E::Unit { .. }
         | E::Value(_)
         | E::Move { .. }
         | E::Copy { .. }
         | E::Use(_)
-        | E::Constant(..)
         | E::Continue(_)
         | E::BorrowLocal(..)
         | E::ErrorConstant { .. }

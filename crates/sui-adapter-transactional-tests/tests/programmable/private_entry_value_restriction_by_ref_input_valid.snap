@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// tests that object values can be used private entry functions if they have been used
+// by other entry functions or primitive commands
+
 init:
 A: object(0,0)
 

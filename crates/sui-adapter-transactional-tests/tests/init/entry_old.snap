@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 4 tasks
 
+// init with entry used to be allowed
+
 init:
 A: object(0,0)
 
@@ -12,7 +14,22 @@ created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5639200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 24-39:
+task 3, line 24:
 //# run test::m::init
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+// TODO advance protocol version
+// //# run test::m::init --protocol-version 7
+
+// // m still loads
+// //# run test::m::foo --protocol-version 7
+
+// //# upgrade --package test  --sender A --upgrade-capability 1,1
+// module v2::m {
+//     use sui::tx_context::TxContext;
+//     fun init(_: &mut TxContext) {
+//     }
+
+//     public fun foo() {}
+// }

@@ -2,15 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashSet;
+use std::num::NonZeroUsize;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
 use std::time::Duration;
 
-use consensus_core::BlockStatus;
+use consensus_core::{BlockStatus, TransactionPool as _};
 use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX};
 use fastcrypto::traits::KeyPair;
+use nonempty::NonEmpty;
 use shared_crypto::intent::{Intent, IntentScope};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectRef, SuiAddress, random_object_ref};
@@ -20,28 +22,34 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI as _};
 use sui_types::error::{SuiError, SuiErrorKind, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message as _;
-use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
+use sui_types::messages_consensus::{
+    ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey,
+};
 use sui_types::messages_grpc::{
     RawSubmitTxRequest, SubmitTxRequest, SubmitTxResponse, SubmitTxResult, SubmitTxType,
 };
 use sui_types::object::Object;
+use sui_types::traffic_control::ClientIdSource;
 use sui_types::transaction::{
-    Transaction, TransactionDataAPI, TransactionExpiration, VerifiedTransaction,
+    AllowedProposers, Transaction, TransactionDataAPI, TransactionExpiration, VerifiedTransaction,
 };
 use sui_types::utils::to_sender_signed_transaction;
 
+use crate::admission_queue::AdmissionQueueMetrics;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
 use crate::consensus_adapter::{ConsensusAdapter, ConsensusClient};
+use crate::consensus_handler::SequencedConsensusTransactionKey;
 use crate::consensus_test_utils::{
     make_consensus_adapter_for_test, make_consensus_adapter_with_client_for_test,
 };
+use crate::consensus_transaction_pool::{ConsensusTransactionPool, TransactionPoolContext};
 use crate::mock_consensus::with_block_status;
 
-use super::AuthorityServerHandle;
+use super::{AuthorityServerHandle, UserSubmissionPath, ValidatorService, ValidatorServiceMetrics};
 
 struct TestContext {
     state: Arc<AuthorityState>,
@@ -94,18 +102,33 @@ impl TestContext {
     async fn new_with_adapter(
         make_adapter: impl FnOnce(Arc<AuthorityState>) -> Arc<ConsensusAdapter>,
     ) -> Self {
+        Self::new_with_committee_size_and_adapter(None, make_adapter).await
+    }
+
+    async fn new_with_committee_size_and_adapter(
+        committee_size: Option<NonZeroUsize>,
+        make_adapter: impl FnOnce(Arc<AuthorityState>) -> Arc<ConsensusAdapter>,
+    ) -> Self {
         telemetry_subscribers::init_for_testing();
         let (sender, keypair) = get_account_key_pair();
         let gas_object = Object::with_owner_for_testing(sender);
         let gas_object_ref = gas_object.compute_object_reference();
-        let authority = TestAuthorityBuilder::new()
-            .with_starting_objects(&[gas_object])
+        let builder = TestAuthorityBuilder::new()
             // Several tests assert that a resubmission is still suppressed as a recent duplicate;
             // pin a dedup window far longer than any test's runtime so entries cannot expire
             // mid-test under CI load (the default window is only 1s of wall-clock time).
-            .with_recent_submission_dedup_window_ms(600_000)
-            .build()
-            .await;
+            .with_recent_submission_dedup_window_ms(600_000);
+        // Hold the config alive for as long as the builder borrows it.
+        let network_config = committee_size.map(|size| {
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .committee_size(size)
+                .with_objects(vec![gas_object.clone()])
+                .build()
+        });
+        let authority = match &network_config {
+            Some(network_config) => builder.with_network_config(network_config, 0).build().await,
+            None => builder.with_starting_objects(&[gas_object]).build().await,
+        };
 
         let adapter = make_adapter(authority.clone());
         let server =
@@ -675,6 +698,69 @@ async fn test_submit_transaction_wrong_epoch() {
 
     let response = test_context.client.submit_transaction(request, None).await;
     assert!(response.is_err());
+}
+
+/// A transaction that does not name this validator among its proposers must be rejected at
+/// admission rather than submitted to consensus.
+#[tokio::test]
+async fn test_submit_transaction_disallowed_proposer() {
+    const COMMITTEE_SIZE: u32 = 4;
+    let test_context = TestContext::new_with_committee_size_and_adapter(
+        NonZeroUsize::new(COMMITTEE_SIZE as usize),
+        |authority| {
+            make_consensus_adapter_for_test(
+                authority,
+                HashSet::new(),
+                true,
+                vec![with_block_status(BlockStatus::Sequenced(BlockRef::MIN))],
+            )
+        },
+    )
+    .await;
+
+    let epoch_store = test_context.state.epoch_store_for_testing();
+    assert!(epoch_store.protocol_config().allowed_proposers());
+    let own_index = epoch_store.own_committee_index().unwrap();
+    let others: Vec<u32> = (0..COMMITTEE_SIZE).filter(|i| *i != own_index).collect();
+
+    let build = |proposers: Vec<u32>| {
+        let mut tx_data = TestTransactionBuilder::new(
+            test_context.sender,
+            test_context.gas_object_ref,
+            test_context
+                .state
+                .reference_gas_price_for_testing()
+                .unwrap(),
+        )
+        .transfer_sui(None, test_context.sender)
+        .build();
+        *tx_data.expiration_mut_for_testing() = TransactionExpiration::Validity {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: test_context.state.get_chain_identifier(),
+            nonce: 0,
+            allowed_proposers: Some(AllowedProposers {
+                epoch: epoch_store.epoch(),
+                proposers: NonEmpty::from_vec(proposers).unwrap(),
+            }),
+        };
+        test_context
+            .build_submit_request(to_sender_signed_transaction(tx_data, &test_context.keypair))
+    };
+
+    let response = test_context
+        .client
+        .submit_transaction(build(others.clone()), None)
+        .await;
+    assert!(response.is_err(), "{response:?}");
+
+    let response = test_context
+        .client
+        .submit_transaction(build(vec![own_index]), None)
+        .await;
+    assert!(response.is_ok(), "{response:?}");
 }
 
 #[tokio::test]
@@ -1424,5 +1510,118 @@ async fn test_soft_bundle_with_recently_processed_duplicate_rejects_only_that_in
     match result1 {
         SubmitTxResult::Submitted { .. } => {}
         other => panic!("expected tx2 to be submitted, got: {other:?}"),
+    }
+}
+
+// Pull-mode (transaction pool) counterpart of `test_submit_batched_transactions_with_already_processing`:
+// the pool reports an already-processed transaction with the same retriable
+// `TransactionProcessing` error, whether it detects it when the transaction is inserted or when
+// the proposer skips it. Both must surface as a per-transaction rejection, leaving the rest of
+// the batch — and the request as a whole — unaffected.
+#[tokio::test]
+async fn test_pool_mode_reports_processed_transactions_per_transaction() {
+    telemetry_subscribers::init_for_testing();
+    let (sender, keypair) = get_account_key_pair();
+    let gas_objects: Vec<Object> = (0..3)
+        .map(|_| Object::with_owner_for_testing(sender))
+        .collect();
+    let gas_object_refs: Vec<ObjectRef> = gas_objects
+        .iter()
+        .map(|object| object.compute_object_reference())
+        .collect();
+    let state = TestAuthorityBuilder::new()
+        .with_starting_objects(&gas_objects)
+        .build()
+        .await;
+    let epoch_store = state.epoch_store_for_testing().clone();
+
+    let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+    let pool = Arc::new(ConsensusTransactionPool::new_for_tests(
+        epoch_store.clone(),
+        10,
+        metrics.clone(),
+    ));
+    let context = Arc::new(TransactionPoolContext::new_for_tests(metrics));
+    context.set_active(epoch_store.epoch(), pool.clone());
+    let service = ValidatorService::new(
+        state.clone(),
+        make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, vec![]),
+        Arc::new(ValidatorServiceMetrics::new_for_tests()),
+        // The socket-address source panics on a request without a peer address; no header is
+        // set, so this resolves to no client address instead.
+        Some(ClientIdSource::XForwardedFor(1)),
+        UserSubmissionPath::Pool(context),
+    );
+
+    let gas_price = state.reference_gas_price_for_testing().unwrap();
+    let transactions: Vec<Transaction> = gas_object_refs
+        .iter()
+        .map(|gas_object_ref| {
+            let tx_data = TestTransactionBuilder::new(sender, *gas_object_ref, gas_price)
+                .transfer_sui(None, sender)
+                .build();
+            to_sender_signed_transaction(tx_data, &keypair)
+        })
+        .collect();
+
+    // The first transaction is recorded as executed in a checkpoint, which the pool rejects at
+    // insert time. The other two are admitted.
+    epoch_store
+        .insert_finalized_transactions(&[*transactions[0].digest()], 1)
+        .unwrap();
+
+    let request = RawSubmitTxRequest {
+        transactions: transactions
+            .iter()
+            .map(|transaction| bcs::to_bytes(transaction).unwrap().into())
+            .collect(),
+        ..Default::default()
+    };
+    let submit = tokio::spawn({
+        let service = service.clone();
+        async move {
+            service
+                .handle_submit_transaction(sui_network::tonic::Request::new(request))
+                .await
+        }
+    });
+    while pool.queue_depth("user") < 2 {
+        tokio::task::yield_now().await;
+    }
+
+    // The second transaction becomes processed while queued, so the proposer skips it.
+    epoch_store.process_notifications(std::iter::once(
+        &SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(
+            *transactions[1].digest(),
+        )),
+    ));
+    let (taken, ack, _) = pool.take(10, usize::MAX);
+    assert_eq!(taken.len(), 1, "only the live transaction is proposed");
+    ack(BlockRef::MIN);
+
+    let (response, _weight) = submit
+        .await
+        .unwrap()
+        .expect("a processed transaction must not fail the request");
+    let results = response.into_inner().results;
+    assert_eq!(results.len(), 3);
+    for (index, transaction) in transactions.iter().enumerate().take(2) {
+        let result: SubmitTxResult = results[index].clone().try_into().unwrap();
+        match result {
+            SubmitTxResult::Rejected { error } => assert!(
+                matches!(
+                    error.as_inner(),
+                    SuiErrorKind::TransactionProcessing { digest, .. }
+                        if *digest == *transaction.digest()
+                ),
+                "expected TransactionProcessing at index {index}, got: {error}"
+            ),
+            other => panic!("expected Rejected at index {index}, got: {other:?}"),
+        }
+    }
+    let result: SubmitTxResult = results[2].clone().try_into().unwrap();
+    match result {
+        SubmitTxResult::Submitted { .. } => {}
+        other => panic!("expected the live transaction to be submitted, got: {other:?}"),
     }
 }

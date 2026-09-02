@@ -1,0 +1,24 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+// The motivating case: a `&mut Y` from `borrow_mut(&mut X, &mut TxContext)` roots only in
+// the object, so it survives a later TxContext use and can still be written through.
+
+task 1, lines 9-43:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6528400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 45-51:
+//# programmable --inputs 1
+//> 0: test::m::new();
+//> 1: test::m::borrow_mut(Result(0));
+//> 2: test::m::mut_tx();
+//> 3: test::m::write(Result(1));
+//> 4: test::m::check(Result(1), Input(0));
+//> 5: test::m::delete(Result(0));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

@@ -931,7 +931,7 @@ fn create_genesis_transaction(
                 input_objects,
                 std::collections::BTreeMap::new(),
                 gas_data,
-                SuiGasStatus::new_unmetered(),
+                SuiGasStatus::new_unmetered(protocol_config),
                 kind,
                 None, // compat_args
                 signer,

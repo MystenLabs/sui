@@ -86,7 +86,7 @@ impl Context<'_> {
     fn check_named_constant(&mut self, arg_exp: &H::Exp, loc: Loc) {
         let is_constant = matches!(
             &arg_exp.exp.value,
-            H::UnannotatedExp_::Constant(_) | H::UnannotatedExp_::ErrorConstant { .. },
+            H::UnannotatedExp_::Constant(_, _) | H::UnannotatedExp_::ErrorConstant { .. },
         );
 
         if !is_constant {

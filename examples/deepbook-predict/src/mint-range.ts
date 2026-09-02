@@ -41,12 +41,21 @@ export async function mintRange(params: {
 		],
 	});
 
-	const result = await client.core.signAndExecuteTransaction({
+	const result = await client.signAndExecuteTransaction({
 		transaction: tx,
 		signer,
 		include: { effects: true },
 	});
-	if (result.$kind === 'FailedTransaction') throw new Error('mint_range failed');
+	// Wait for finality before acting on the result, so later reads reflect it.
+	await client.waitForTransaction({ result });
+
+	if (result.$kind === 'FailedTransaction') {
+		// The transaction is onchain and the sender paid gas. Do not retry it.
+		const { status } = result.FailedTransaction;
+		throw new Error(
+			`mint_range aborted: ${status.success ? 'unknown' : JSON.stringify(status.error)}`,
+		);
+	}
 	return result.Transaction;
 }
 // docs::/#mint-range

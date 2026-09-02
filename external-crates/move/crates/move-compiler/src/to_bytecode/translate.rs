@@ -627,6 +627,10 @@ fn enum_variants(
 // Constants
 //**************************************************************************************************
 
+// TODO(cross-module-constants): a follow-up constant-pool pass here should synthesize pool names
+// and perform common-pool elimination/CSE, giving the IR a pooled representation to eliminate
+// duplicates and reduce IR size.
+
 fn constants(
     context: &mut Context,
     m: &ModuleIdent,
@@ -1275,7 +1279,15 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
         }
         E::Copy { var: v, .. } => code.push(sp(loc, B::CopyLoc(var(v)))),
 
-        E::Constant(c) => code.push(sp(loc, B::LdNamedConst(context.constant_name(c)))),
+        E::Constant(m, c) => {
+            // cross-module references are replaced with module-local copies during CFGIR
+            assert!(
+                context.current_module() == Some(&m),
+                "ICE cross-module constant should have been replaced with a module-local constant \
+                 copy"
+            );
+            code.push(sp(loc, B::LdNamedConst(context.constant_name(c))))
+        }
 
         E::ErrorConstant {
             line_number_loc,

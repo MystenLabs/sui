@@ -23,6 +23,9 @@ public fun t3_u1(_: &TxContext, _: u64, _: &TxContext, _: &TxContext) {
 public fun t3_u2(_: &TxContext, _: u64, _: &TxContext, _: &TxContext, _: u64) {
 }
 
+public fun gen_imm_tx<T>(_: &T, _: &TxContext) {
+}
+
 //# programmable
 //> test::m::t2();
 
@@ -37,3 +40,7 @@ public fun t3_u2(_: &TxContext, _: u64, _: &TxContext, _: &TxContext, _: u64) {
 
 //# programmable --inputs 0 0
 //> test::m::t3_u2(Input(0), Input(1));
+
+//# programmable
+// a generic &T unifying to &TxContext alongside a concrete &TxContext is two immutable usages
+//> test::m::gen_imm_tx<sui::tx_context::TxContext>();

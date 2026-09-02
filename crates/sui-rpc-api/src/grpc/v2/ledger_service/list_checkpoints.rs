@@ -26,10 +26,11 @@ use crate::RpcError;
 use crate::RpcService;
 use crate::grpc::v2::ledger_service::get_checkpoint::get_checkpoint;
 use crate::ledger_history::filter::transaction_filter_to_query;
-use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::RangeExhaustion;
-use crate::ledger_history::query_options::ResolvedRange;
+use crate::ledger_history::query_options::ResolvedCheckpointRange;
+use crate::ledger_history::query_options::ResolvedScan;
+use crate::ledger_history::query_options::validate_checkpoint_bounds;
 use crate::metrics::ListRequestMetrics;
 use crate::metrics::ListStreamMetrics;
 use crate::read_mask_defaults;
@@ -52,7 +53,6 @@ use super::ledger_read::clamp_to_serving_floor;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::sequence_frontier_checkpoint;
-use super::ledger_read::validate_checkpoint_bounds;
 use crate::ledger_history::watermark::ScanTerminal;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
@@ -280,10 +280,11 @@ fn next_checkpoint_chunk(
             end_checkpoint,
             filter_query,
         } => {
-            let checkpoint_range = CheckpointRange::from_request(
+            let checkpoint_range = ResolvedCheckpointRange::from_request(
                 start_checkpoint,
                 end_checkpoint,
                 checkpoint_hi_exclusive(&service)?,
+                &options,
             )?;
             let mut cp_range = resolve_cp_range(checkpoint_range, &options);
             if cancel.is_cancelled() {
@@ -303,7 +304,7 @@ fn next_checkpoint_chunk(
             if !cp_range.is_empty()
                 && let Some(floor) = clamp_checkpoints_to_serving_floor(
                     &service,
-                    cp_range.range.start,
+                    cp_range.range().start,
                     start_checkpoint,
                     &options,
                 )?
@@ -321,11 +322,11 @@ fn next_checkpoint_chunk(
                 interval_empty,
             );
             let mut entry_checkpoint = if options.is_ascending() {
-                cp_range.range.start
+                cp_range.range().start
             } else {
-                cp_range.range.end.saturating_sub(1)
+                cp_range.range().end.saturating_sub(1)
             };
-            let range = cp_range.range;
+            let range = cp_range.range();
             if range.is_empty() {
                 return Ok(CheckpointChunkDone {
                     items: Vec::new(),
@@ -892,7 +893,7 @@ fn render_checkpoint_seq(
     Ok(response_for(watermark, checkpoint))
 }
 
-/// [`ResolvedRange::apply_serving_floor`]'s analogue for the filtered
+/// [`ResolvedScan::<u64>::apply_serving_floor`]'s analogue for the filtered
 /// checkpoint scan, whose watermark metadata lives in checkpoint space
 /// beside a transaction-space scan window. A floor inside the window starts
 /// the scan there (ascending entry rises to the floor checkpoint, a
@@ -922,10 +923,12 @@ fn apply_serving_floor_to_filtered_window(
     }
     false
 }
-fn resolve_cp_range(checkpoint_range: CheckpointRange, options: &QueryOptions) -> ResolvedRange {
-    let cp_range = checkpoint_range.resolve(options);
+fn resolve_cp_range(
+    cp_range: ResolvedCheckpointRange,
+    options: &QueryOptions,
+) -> ResolvedScan<u64> {
     let range = cp_range.range.clone();
-    options.apply_cursor_bounds(cp_range.with_range(range, options.ordering))
+    ResolvedScan::<u64>::resolve(cp_range, range, options)
 }
 
 fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsResponse {
@@ -989,7 +992,7 @@ mod tests {
     }
 
     /// The filtered checkpoint scan's serving-floor reconciliation mirrors
-    /// [`ResolvedRange::apply_serving_floor`]: floor inside the window moves
+    /// [`ResolvedScan::<u64>::apply_serving_floor`]: floor inside the window moves
     /// the scan start plus the direction-relevant checkpoint metadata; a
     /// floor at/past the window's end consumes it — the window canonicalizes
     /// to empty and no metadata (in particular the descending terminal)

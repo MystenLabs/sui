@@ -24,17 +24,19 @@ created: object(3,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5084400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 4, lines 28-30:
+task 4, line 28:
 //# run Test1::M1::f1
 Error: Transaction Effects Status: Move Runtime Abort. Location: Test1::M1::f1 (function index 0) at offset 1, Abort Code: 0
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: Test1, name: Identifier("M1") }, function: 0, instruction: 1, function_name: Some("f1") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("Test1::M1::f1 at offset 1"), exec_state: None, location: Module(ModuleId { address: Test1, name: Identifier("M1") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
 
-task 5, lines 31-33:
+task 5, lines 30-31:
+// Location will show up as Test1::M1::f1 since the module ID is not resolved to the upgraded version
 //# run Test2::M1::f1
 Error: Transaction Effects Status: Move Runtime Abort. Location: Test1::M1::f1 (function index 0) at offset 1, Abort Code: 0
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: Test1, name: Identifier("M1") }, function: 0, instruction: 1, function_name: Some("f1") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("Test1::M1::f1 at offset 1"), exec_state: None, location: Module(ModuleId { address: Test1, name: Identifier("M1") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
 
-task 6, line 34:
+task 6, lines 33-34:
+// Location will show up as Test1::M1::f1 since the module ID is not resolved to the upgraded version
 //# run Test3::M1::f1
 Error: Transaction Effects Status: Move Runtime Abort. Location: Test1::M1::f1 (function index 0) at offset 1, Abort Code: 0
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: Test1, name: Identifier("M1") }, function: 0, instruction: 1, function_name: Some("f1") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("Test1::M1::f1 at offset 1"), exec_state: None, location: Module(ModuleId { address: Test1, name: Identifier("M1") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }

@@ -12,6 +12,7 @@ use sui_indexer_alt_framework::pipeline::concurrent::Handler;
 use sui_indexer_alt_framework_store_traits::Store;
 use sui_types::full_checkpoint_content::Checkpoint;
 
+use crate::bigtable::client::CheckpointSpan;
 use crate::bigtable::client::PartialWriteError;
 use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
 use crate::config::ConcurrentLayer;
@@ -44,6 +45,18 @@ pub struct BigTableHandler<P> {
     rate_limiter: Arc<CompositeRateLimiter>,
 }
 
+/// A BigTable entry paired with the checkpoint that produced it.
+pub struct CheckpointedEntry {
+    checkpoint: u64,
+    entry: Entry,
+}
+
+impl CheckpointedEntry {
+    fn new(entry: Entry, checkpoint: u64) -> Self {
+        Self { checkpoint, entry }
+    }
+}
+
 /// Batch of BigTable entries.
 /// Uses RwLock for interior mutability so we can remove succeeded entries on partial write failures.
 #[derive(Default)]
@@ -55,6 +68,7 @@ pub struct BigTableBatch {
 struct BigTableBatchInner {
     entries: BTreeMap<Bytes, Entry>,
     total_mutations: usize,
+    checkpoints: Option<CheckpointSpan>,
 }
 
 impl<P> BigTableHandler<P>
@@ -80,10 +94,17 @@ where
     P: BigTableProcessor + Send + Sync,
 {
     const NAME: &'static str = P::NAME;
-    type Value = Entry;
+    type Value = CheckpointedEntry;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
-        self.processor.process(checkpoint).await
+        let checkpoint_number = checkpoint.summary.sequence_number;
+        Ok(self
+            .processor
+            .process(checkpoint)
+            .await?
+            .into_iter()
+            .map(|entry| CheckpointedEntry::new(entry, checkpoint_number))
+            .collect())
     }
 }
 
@@ -103,11 +124,15 @@ where
         batch: &mut Self::Batch,
         values: &mut std::vec::IntoIter<Self::Value>,
     ) -> BatchStatus {
-        let mut inner = batch.inner.write().unwrap();
+        let mut inner = batch.inner.write().expect("BigTable batch lock poisoned");
 
-        for entry in values {
-            inner.total_mutations += entry.mutations.len();
-            inner.entries.insert(entry.row_key.clone(), entry);
+        for next in values {
+            match &mut inner.checkpoints {
+                Some(checkpoints) => checkpoints.include(next.checkpoint),
+                None => inner.checkpoints = Some(CheckpointSpan::single(next.checkpoint)),
+            }
+            inner.total_mutations += next.entry.mutations.len();
+            inner.entries.insert(next.entry.row_key.clone(), next.entry);
 
             if inner.entries.len() >= self.max_rows
                 || inner.total_mutations >= MAX_MUTATIONS_PER_BATCH
@@ -124,26 +149,31 @@ where
         batch: &Self::Batch,
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> anyhow::Result<usize> {
-        let entries_to_write: Vec<Entry> = {
+        let (entries_to_write, checkpoints) = {
             let inner = batch.inner.read().unwrap();
             if inner.entries.is_empty() {
                 return Ok(0);
             }
-            inner.entries.values().cloned().collect()
+            let checkpoints = inner
+                .checkpoints
+                .expect("non-empty BigTable batch must have checkpoint provenance");
+            (
+                inner.entries.values().cloned().collect::<Vec<_>>(),
+                checkpoints,
+            )
         };
         let count = entries_to_write.len();
 
         self.rate_limiter.acquire(count).await;
 
         match conn
-            .client()
-            .write_entries(P::TABLE, entries_to_write)
+            .write_entries(P::TABLE, entries_to_write, checkpoints)
             .await
         {
             Ok(()) => Ok(count),
             Err(e) => {
                 if let Some(partial) = e.downcast_ref::<PartialWriteError>() {
-                    let mut inner = batch.inner.write().unwrap();
+                    let mut inner = batch.inner.write().expect("BigTable batch lock poisoned");
                     let failed: std::collections::BTreeSet<&Bytes> =
                         partial.failed_keys.iter().map(|f| &f.key).collect();
                     inner.entries.retain(|key, _| failed.contains(key));
@@ -185,6 +215,37 @@ mod tests {
         tables::make_entry(key.to_vec(), [("col", Bytes::from_static(b"value"))], None)
     }
 
+    fn checkpointed_entry(key: &[u8], checkpoint: u64) -> CheckpointedEntry {
+        CheckpointedEntry::new(make_entry(key), checkpoint)
+    }
+
+    #[test]
+    fn batch_accumulates_checkpoint_span() {
+        let handler = BigTableHandler::new(
+            TestProcessor,
+            &ConcurrentLayer::default(),
+            Arc::new(CompositeRateLimiter::noop()),
+        );
+        let mut entries = vec![
+            checkpointed_entry(b"later", 11),
+            checkpointed_entry(b"earlier", 10),
+        ]
+        .into_iter();
+
+        let mut batch = BigTableBatch::default();
+        assert!(matches!(
+            handler.batch(&mut batch, &mut entries),
+            BatchStatus::Pending
+        ));
+        assert_eq!(entries.len(), 0);
+
+        let inner = batch.inner.read().expect("BigTable batch lock poisoned");
+        let mut expected = CheckpointSpan::single(11);
+        expected.include(10);
+        assert_eq!(inner.checkpoints, Some(expected));
+        assert_eq!(inner.entries.len(), 2);
+    }
+
     #[tokio::test]
     async fn test_multi_round_partial_failure() {
         let mock = MockBigtableServer::new();
@@ -219,7 +280,7 @@ mod tests {
             BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
                 .await
                 .unwrap();
-        let store = BigTableStore::new(client);
+        let store = BigTableStore::new(client, u64::MAX);
         let mut conn = store.connect().await.unwrap();
 
         let handler = BigTableHandler::new(
@@ -228,8 +289,8 @@ mod tests {
             Arc::new(CompositeRateLimiter::noop()),
         );
         let mut batch = BigTableBatch::default();
-        let entries: Vec<Entry> = (0..10)
-            .map(|i| make_entry(format!("row{i}").as_bytes()))
+        let entries: Vec<CheckpointedEntry> = (0..10)
+            .map(|i| checkpointed_entry(format!("row{i}").as_bytes(), 0))
             .collect();
         handler.batch(&mut batch, &mut entries.into_iter());
 
@@ -237,7 +298,7 @@ mod tests {
         let result = handler.commit(&batch, &mut conn).await;
         assert!(result.is_err());
         {
-            let inner = batch.inner.read().unwrap();
+            let inner = batch.inner.read().expect("BigTable batch lock poisoned");
             assert_eq!(inner.entries.len(), 5);
             for key in [b"row1", b"row3", b"row5", b"row7", b"row9"] {
                 assert!(inner.entries.contains_key(key.as_slice()));
@@ -248,7 +309,7 @@ mod tests {
         let result = handler.commit(&batch, &mut conn).await;
         assert!(result.is_err());
         {
-            let inner = batch.inner.read().unwrap();
+            let inner = batch.inner.read().expect("BigTable batch lock poisoned");
             assert_eq!(inner.entries.len(), 3);
             for key in [b"row1", b"row5", b"row9"] {
                 assert!(inner.entries.contains_key(key.as_slice()));
@@ -259,7 +320,7 @@ mod tests {
         let result = handler.commit(&batch, &mut conn).await;
         assert_eq!(result.unwrap(), 3);
         {
-            let inner = batch.inner.read().unwrap();
+            let inner = batch.inner.read().expect("BigTable batch lock poisoned");
             assert_eq!(inner.entries.len(), 3);
         }
     }

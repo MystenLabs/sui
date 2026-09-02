@@ -32,10 +32,10 @@ use sui_types::storage::RpcStateReader;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 
-use crate::CheckpointRead;
-use crate::GraphQLClient;
 use crate::Node;
 use crate::context::Context;
+use crate::gql::CheckpointRead;
+use crate::gql::GraphQLClient;
 use crate::metadata::MetadataStore;
 use crate::proto::forking::forking_service_server::ForkingServiceServer;
 use crate::rpc::executor::ForkedTransactionExecutor;
@@ -186,6 +186,7 @@ pub async fn initialize(
         keystore,
         base_checkpoint,
         system_state,
+        rpc_chain_identifier,
         &config,
         store,
         rng,

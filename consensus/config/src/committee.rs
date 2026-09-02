@@ -271,6 +271,10 @@ impl AuthorityIndex {
     pub fn value(&self) -> usize {
         self.0 as usize
     }
+
+    pub fn value_u32(&self) -> u32 {
+        self.0
+    }
 }
 
 impl AuthorityIndex {

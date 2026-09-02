@@ -764,7 +764,7 @@ impl LocalExec {
         let expensive_checks = true;
         let transaction_kind = override_transaction_kind.unwrap_or(tx_info.kind.clone());
         let gas_status = if tx_info.kind.is_system_tx() {
-            SuiGasStatus::new_unmetered()
+            SuiGasStatus::new_unmetered(protocol_config)
         } else {
             SuiGasStatus::new(
                 tx_info.gas_budget,

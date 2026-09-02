@@ -369,6 +369,9 @@ pub enum UserInputError {
 
     #[error("Transaction {digest} appears more than once in the request")]
     RepeatedTransactions { digest: TransactionDigest },
+
+    #[error("Validator {proposer} is not an allowed proposer of this transaction")]
+    ProposerNotAllowed { proposer: u32 },
 }
 
 #[derive(

@@ -53,7 +53,6 @@ use sui_kv_rpc::KvRpcServer;
 use sui_kvstore::ALL_PIPELINE_NAMES;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
-use sui_kvstore::BigTableStore;
 use sui_kvstore::CHECKPOINTS_PIPELINE;
 use sui_kvstore::IndexerConfig as BtIndexerConfig;
 use sui_kvstore::IngestionConfig as BtIngestionConfig;
@@ -932,13 +931,12 @@ async fn start_archival(
             .await
             .context("Failed to create BigTable client")?;
 
-    let store = BigTableStore::new(
+    let indexer_client =
         BigTableClient::new_local(emulator.host().to_string(), INSTANCE_ID.to_string())
             .await
-            .context("Failed to create BigTable client for indexer")?,
-    );
+            .context("Failed to create BigTable client for indexer")?;
     let bt_indexer = BigTableIndexer::new(
-        store,
+        indexer_client,
         IndexerArgs::default(),
         client_args,
         BtIngestionConfig::default(),

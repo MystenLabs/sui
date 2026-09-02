@@ -6,6 +6,8 @@ processed 6 tasks
 init:
 A: object(0,0), B: object(0,1)
 
+// When an object's owner changes, it is considered "transferred".
+
 task 1, lines 8-17:
 //# publish
 created: object(1,0)

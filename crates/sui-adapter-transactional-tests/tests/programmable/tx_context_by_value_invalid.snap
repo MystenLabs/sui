@@ -1,0 +1,43 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+// tests TxContext taken by value in Move call parameters
+
+init:
+A: object(0,0)
+
+task 1, lines 8-21:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4552400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 23-25:
+//# programmable --inputs 0
+// a pure argument cannot be used for TxContext, checked before the signature rules
+//> test::m::by_value(Input(0));
+Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be instantiated from raw bytes
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidUsageOfPureArg }, source: Some("Invalid usage of `Pure` argument for a non-primitive argument type at index 0."), command: Some(0) } }
+
+task 3, lines 27-29:
+//# programmable --sender A --inputs 0 --dev-inspect
+// TxContext cannot be taken by value, even in dev-inspect where arbitrary pure values are allowed
+//> test::m::by_value(Input(0));
+Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext } in command 0
+Execution Error: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext } in command 0
+
+task 4, lines 31-33:
+//# programmable --sender A --inputs 0 0 --dev-inspect
+// TxContext cannot be taken by value, at any position
+//> test::m::by_value_trailing(Input(0), Input(1));
+Error: Transaction Effects Status: CommandArgumentError { arg_idx: 1, kind: InvalidTxContext } in command 0
+Execution Error: CommandArgumentError { arg_idx: 1, kind: InvalidTxContext } in command 0
+
+task 5, lines 35-37:
+//# programmable --sender A --inputs 0 --dev-inspect
+// TxContext cannot be taken by value, even via generic instantiation
+//> test::m::gen<sui::tx_context::TxContext>(Input(0));
+Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext } in command 0
+Execution Error: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext } in command 0

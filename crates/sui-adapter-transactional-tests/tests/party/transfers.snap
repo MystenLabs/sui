@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
 ---
 processed 21 tasks
 
@@ -13,19 +12,21 @@ created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 7949600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 41-43:
+task 2, line 41:
 //# run ex::m::mint
 created: object(2,0), object(2,1)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3, lines 44-46:
+task 3, lines 43-44:
+// Creates a party object using `public_party_transfer` on a struct with store
 //# run ex::m::create_party
 created: object(3,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4, lines 47-49:
+task 4, lines 46-47:
+// This is the `Priv` object.
 //# view-object 2,1
 Owner: Account Address ( _ )
 Version: 3
@@ -37,7 +38,8 @@ Contents: ex::m::Priv {
     },
 }
 
-task 5, lines 50-52:
+task 5, lines 49-50:
+// This is the `Pub` object.
 //# view-object 2,0
 Owner: Account Address ( _ )
 Version: 3
@@ -49,14 +51,15 @@ Contents: ex::m::Pub {
     },
 }
 
-task 6, lines 53-55:
+task 6, lines 52-55:
+// Transfers from fastpath to party via `party_transfer` on a struct without store
 //# programmable --inputs object(2,1) @A
 //> 0: sui::party::single_owner(Input(1));
 //> ex::m::priv_party(Input(0), Result(0))
 mutated: object(0,2), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2197008, non_refundable_storage_fee: 22192
 
-task 7, lines 57-59:
+task 7, line 57:
 //# view-object 2,1
 Owner: ConsensusAddressOwner( 5, A )
 Version: 5
@@ -68,14 +71,15 @@ Contents: ex::m::Priv {
     },
 }
 
-task 8, lines 60-62:
+task 8, lines 59-62:
+// Transfers from fastpath to party via `public_party_transfer` on a struct with store
 //# programmable --inputs object(2,0) @A
 //> 0: sui::party::single_owner(Input(1));
 //> ex::m::pub_party(Input(0), Result(0))
 mutated: object(0,2), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
 
-task 9, lines 64-66:
+task 9, line 64:
 //# view-object 2,0
 Owner: ConsensusAddressOwner( 6, A )
 Version: 6
@@ -87,21 +91,22 @@ Contents: ex::m::Pub {
     },
 }
 
-task 10, lines 67-71:
+task 10, lines 66-69:
+// Transfers a party object with wrong sender; should fail
 //# programmable --inputs object(2,0) @A --sender B
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::Pub>(Input(0), Result(0))
-// Transfers an existing party object back to party again
 Error: Error checking transaction input objects: Transaction was not signed by the correct sender: Object object(2,0) is owned by account address @A, but given owner/signer address is @B
 
-task 11, lines 72-74:
+task 11, lines 71-74:
+// Transfers an existing party object back to party again
 //# programmable --inputs object(2,0) @A --sender A
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::Pub>(Input(0), Result(0))
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 1211364, non_refundable_storage_fee: 12236
 
-task 12, lines 76-78:
+task 12, line 76:
 //# view-object 2,0
 Owner: ConsensusAddressOwner( 6, A )
 Version: 7
@@ -113,14 +118,15 @@ Contents: ex::m::Pub {
     },
 }
 
-task 13, lines 79-81:
+task 13, lines 78-81:
+// Transfers an existing party object to a different owner; start_version should update
 //# programmable --inputs object(2,0) @B --sender A
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::Pub>(Input(0), Result(0))
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
 
-task 14, lines 83-85:
+task 14, line 83:
 //# view-object 2,0
 Owner: ConsensusAddressOwner( 8, B )
 Version: 8
@@ -132,16 +138,18 @@ Contents: ex::m::Pub {
     },
 }
 
-task 15, lines 86-88:
+task 15, lines 85-86:
+// Transfers party object using transfer-object with wrong sender; should fail
 //# transfer-object 2,0 --sender A --recipient A
 Error: Error checking transaction input objects: Transaction was not signed by the correct sender: Object object(2,0) is owned by account address @B, but given owner/signer address is @A
 
-task 16, line 89:
+task 16, lines 88-89:
+// Transfers party object back to fastpath using transfer-object
 //# transfer-object 2,0 --sender B --recipient B
 mutated: object(0,1), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 1211364, non_refundable_storage_fee: 12236
 
-task 17, lines 91-93:
+task 17, line 91:
 //# view-object 2,0
 Owner: Account Address ( B )
 Version: 9
@@ -153,13 +161,14 @@ Contents: ex::m::Pub {
     },
 }
 
-task 18, lines 94-97:
+task 18, lines 93-95:
+// Transfers party object via `transfer` with wrong sender; should fail
 //# programmable --inputs object(2,1) @B --sender B
 //> ex::m::priv_fastpath(Input(0), Input(1));
-// Transfers party object back to fastpath and a different owner via `transfer`
 Error: Error checking transaction input objects: Transaction was not signed by the correct sender: Object object(2,1) is owned by account address @A, but given owner/signer address is @B
 
-task 19, lines 98-99:
+task 19, lines 97-99:
+// Transfers party object back to fastpath and a different owner via `transfer`
 //# programmable --inputs object(2,1) @B --sender A
 //> ex::m::priv_fastpath(Input(0), Input(1));
 mutated: object(0,0), object(2,1)

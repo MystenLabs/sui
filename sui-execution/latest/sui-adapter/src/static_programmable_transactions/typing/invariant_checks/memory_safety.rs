@@ -58,6 +58,7 @@ struct Location {
 
 #[derive(Debug)]
 struct Context {
+    allow_references_in_ptbs: bool,
     tx_context: Location,
     gas: Location,
     object_inputs: Vec<Location>,
@@ -292,7 +293,7 @@ impl Location {
 }
 
 impl Context {
-    fn new<Mode: ExecutionMode>(_env: &Env<Mode>, txn: &T::Transaction) -> anyhow::Result<Self> {
+    fn new<Mode: ExecutionMode>(env: &Env<Mode>, txn: &T::Transaction) -> anyhow::Result<Self> {
         let T::Transaction {
             gas_payment,
             bytes: _,
@@ -303,6 +304,7 @@ impl Context {
             withdrawal_compatibility_conversions: _,
             original_command_len: _,
             commands: _,
+            unified_linkage: _,
         } = txn;
         let tx_context = Location::non_ref(T::Location::TxContext);
         let mut gas = Location::non_ref(T::Location::GasCoin);
@@ -339,6 +341,7 @@ impl Context {
             })
             .collect::<Result<_, ExecutionError>>()?;
         Ok(Self {
+            allow_references_in_ptbs: env.protocol_config.allow_references_in_ptbs(),
             tx_context,
             gas,
             object_inputs,
@@ -359,11 +362,24 @@ impl Context {
         results: impl IntoIterator<Item = Option<Value>>,
     ) -> anyhow::Result<()> {
         let command = self.current_command()?;
+        let allow_references_in_ptbs = self.allow_references_in_ptbs;
         self.results.push(
             results
                 .into_iter()
                 .enumerate()
                 .map(|(i, v)| {
+                    // Post-condition of the source strip in `call`: for path sets, `TxContext`
+                    // can never be returned. Gated because flag-off dev-inspect legitimately
+                    // produces ctx-rooted results.
+                    if allow_references_in_ptbs && let Some(Value::Ref { paths, .. }) = &v {
+                        anyhow::ensure!(
+                            paths
+                                .0
+                                .iter()
+                                .all(|p| p.root != RootLocation::Known(T::Location::TxContext)),
+                            "TxContext can never be returned"
+                        );
+                    }
                     Ok(Location {
                         self_path: Rc::new(PathSet::initial(T::Location::Result(
                             command,
@@ -372,7 +388,7 @@ impl Context {
                         value: v,
                     })
                 })
-                .collect::<Result<_, ExecutionError>>()?,
+                .collect::<anyhow::Result<_>>()?,
         );
         Ok(())
     }
@@ -497,6 +513,7 @@ impl Context {
 
     fn all_references(&self) -> impl Iterator<Item = Rc<PathSet>> {
         let Self {
+            allow_references_in_ptbs: _,
             tx_context,
             gas,
             object_inputs,
@@ -544,6 +561,7 @@ impl Context {
 /// not be expressive enough in the presence of control flow. Luckily, PTBs do not have control flow
 /// so we can use this approach as a safety net for the Regex based implementation until that
 /// code is sufficiently. tested and hardened.
+/// Strip TxContext input arguments so that they do not flow as inputs
 /// Checks the following
 /// - Values are not used after being moved
 /// - Reference safety is upheld (no dangling references)
@@ -555,6 +573,13 @@ pub fn verify<Mode: ExecutionMode>(
 }
 
 fn verify_<Mode: ExecutionMode>(env: &Env<Mode>, txn: &T::Transaction) -> anyhow::Result<()> {
+    if env
+        .protocol_config
+        .max_ptb_live_references_as_option()
+        .is_some()
+    {
+        return Ok(());
+    }
     let mut context = Context::new(env, txn)?;
     let T::Transaction {
         gas_payment: _,
@@ -566,6 +591,7 @@ fn verify_<Mode: ExecutionMode>(env: &Env<Mode>, txn: &T::Transaction) -> anyhow
         withdrawal_compatibility_conversions: _,
         original_command_len: _,
         commands,
+        unified_linkage: _,
     } = txn;
     for c in commands {
         command(&mut context, c)?;
@@ -703,6 +729,14 @@ fn call(
         imm_paths.is_disjoint(&mut_paths),
         "Mutable and immutable borrows cannot overlap"
     );
+    // With references enabled in PTBs, TxContext still cannot be the
+    // root of a returned reference. We ensure this by removing them from
+    // any possible input.
+    if context.allow_references_in_ptbs {
+        let is_ctx = |p: &Path| p.root == RootLocation::Known(T::Location::TxContext);
+        mut_paths.0.retain(|p| !is_ctx(p));
+        all_paths.0.retain(|p| !is_ctx(p));
+    }
     let command = context.current_command()?;
     let mut_paths = if mut_paths.is_empty() {
         PathSet::unknown_root(command)

@@ -36,7 +36,6 @@ use sui_types::fp_ensure;
 use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_consensus::ConsensusTransactionKind;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKey};
-use sui_types::transaction::TransactionDataAPI;
 use tokio::sync::{Notify, Semaphore, SemaphorePermit, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
@@ -48,13 +47,14 @@ use crate::authority::consensus_tx_status_cache::{
     ConsensusTxStatus, NotifyReadConsensusTxStatusResult,
 };
 use crate::checkpoints::CheckpointStore;
-use crate::consensus_handler::{SequencedConsensusTransactionKey, classify};
+use crate::consensus_handler::{SequencedConsensusTransactionKey, classify, tx_type_label};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
 pub mod consensus_tests;
 
+#[derive(Clone)]
 pub struct ConsensusAdapterMetrics {
     // Certificate sequencing metrics
     pub sequencing_certificate_attempt: IntCounterVec,
@@ -471,18 +471,7 @@ impl ConsensusAdapter {
         }
 
         // Record submitted transactions early for DoS protection
-        for transaction in &transactions {
-            if let Some(tx) = transaction.kind.as_user_transaction() {
-                let amplification_factor = (tx.data().transaction_data().gas_price()
-                    / epoch_store.reference_gas_price().max(1))
-                .max(1);
-                epoch_store.submitted_transaction_cache.record_submitted_tx(
-                    tx.digest(),
-                    amplification_factor as u32,
-                    submitter_client_addr,
-                );
-            }
-        }
+        epoch_store.record_submitted_user_transactions(&transactions, submitter_client_addr);
 
         // Current code path ensures:
         // - If transactions.len() > 1, it is a soft bundle. System transactions should have been submitted individually.
@@ -503,31 +492,14 @@ impl ConsensusAdapter {
             let transaction_key = SequencedConsensusTransactionKey::External(transaction.key());
             transaction_keys.push(transaction_key);
         }
-        let tx_type = if is_soft_bundle {
-            "soft_bundle"
-        } else {
-            classify(&transactions[0])
-        };
+        let tx_type = tx_type_label(&transactions);
         tracing::Span::current().record("tx_type", tx_type);
         tracing::Span::current().record("tx_keys", tracing::field::debug(&transaction_keys));
 
         let mut guard = InflightDropGuard::acquire(&self, tx_type, transactions.len() as u64);
 
-        // Builds the error reported to a position-waiting caller (mfp) when the
-        // transaction is already being processed and we therefore skip (re)submission.
-        // The caller surfaces this as a retriable error so the client waits for
-        // effects / retries instead of receiving a meaningless consensus position.
-        let make_processing_error = |method: ProcessedMethod| -> SuiError {
-            let digest = transactions
-                .iter()
-                .find_map(|t| t.kind.as_user_transaction().map(|tx| *tx.digest()))
-                .unwrap_or_default();
-            SuiErrorKind::TransactionProcessing {
-                digest,
-                status: format!("processed via {}", method.method_name()),
-            }
-            .into()
-        };
+        let make_processing_error =
+            |method: ProcessedMethod| -> SuiError { processing_error(&transaction_keys, method) };
 
         // Skip submission if the tx is already processed via consensus output or
         // checkpoint state sync.
@@ -717,7 +689,7 @@ impl ConsensusAdapter {
                     for status in statuses {
                         self.metrics
                             .sequencing_certificate_settled_status
-                            .with_label_values(&[tx_type, status_label(status)])
+                            .with_label_values(&[tx_type, status.metric_label()])
                             .inc();
                     }
                     ProcessedMethod::ConsensusStatusReceived
@@ -1180,8 +1152,30 @@ impl Drop for InflightDropGuard<'_> {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-enum ProcessedMethod {
+/// The error reported to a position-waiting caller (mfp) when the transaction is
+/// already being processed and (re)submission is therefore skipped. The caller
+/// surfaces this as a retriable error so the client waits for effects / retries
+/// instead of receiving a meaningless consensus position. Shared with the pull-based
+/// transaction pool, which skips the same submissions at proposal time.
+pub(crate) fn processing_error<'a>(
+    keys: impl IntoIterator<Item = &'a SequencedConsensusTransactionKey>,
+    method: ProcessedMethod,
+) -> SuiError {
+    let digest = keys
+        .into_iter()
+        .find_map(SequencedConsensusTransactionKey::user_transaction_digest)
+        .unwrap_or_default();
+    SuiErrorKind::TransactionProcessing {
+        digest,
+        status: format!("processed via {}", method.method_name()),
+    }
+    .into()
+}
+
+/// Variant order is reporting priority: when a group is processed through several
+/// paths, the greatest variant is reported, so checkpoint execution dominates.
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum ProcessedMethod {
     ConsensusMessageProcessed,
     ConsensusStatusReceived,
     ConsensusStatusExpired,
@@ -1198,7 +1192,7 @@ impl ProcessedMethod {
         }
     }
 
-    fn metric_label(self) -> &'static str {
+    pub(crate) fn metric_label(self) -> &'static str {
         match self {
             ProcessedMethod::ConsensusMessageProcessed => "consensus_message",
             ProcessedMethod::ConsensusStatusReceived => "consensus_status",
@@ -1219,12 +1213,4 @@ enum SequencingOutcome {
     /// position expired from the status cache before its status was read. The
     /// terminal outcome existed and was missed; nothing further to wait for.
     StatusExpired,
-}
-
-fn status_label(status: ConsensusTxStatus) -> &'static str {
-    match status {
-        ConsensusTxStatus::Finalized => "finalized",
-        ConsensusTxStatus::Rejected => "rejected",
-        ConsensusTxStatus::Dropped => "dropped",
-    }
 }

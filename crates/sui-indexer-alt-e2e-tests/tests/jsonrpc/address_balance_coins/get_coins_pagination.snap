@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 7 tasks
 
+// Test pagination of suix_getCoins when address balance coins are mixed with real coins.
+
 init:
 A: object(0,0), B: object(0,1)
 

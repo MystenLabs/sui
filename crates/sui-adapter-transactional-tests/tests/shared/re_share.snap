@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 12 tasks
 
+// tests that shared objects can be re-shared as shared objects
+
 task 1, lines 8-29:
 //# publish
 created: object(1,0)

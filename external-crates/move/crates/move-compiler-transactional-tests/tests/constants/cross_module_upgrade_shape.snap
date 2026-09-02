@@ -1,0 +1,7 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+// An upgrade may drop a cross-module constant use: constants are not part of the
+// upgrade-compatibility surface

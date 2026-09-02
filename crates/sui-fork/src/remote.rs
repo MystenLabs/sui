@@ -24,15 +24,15 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 
-use crate::CheckpointRead;
-use crate::GraphQLClient;
-use crate::ObjectKey;
-use crate::ObjectRead;
-use crate::TransactionInfo;
-use crate::TransactionRead;
-use crate::VersionQuery;
 use crate::gql::AddressOwnedObject;
+use crate::gql::CheckpointRead;
+use crate::gql::GraphQLClient;
+use crate::gql::ObjectKey;
+use crate::gql::ObjectRead;
 use crate::gql::ObjectSeedMetadata;
+use crate::gql::TransactionInfo;
+use crate::gql::TransactionRead;
+use crate::gql::VersionQuery;
 use tracing::debug;
 
 /// Read access to the live network RPC, pinned at the fork checkpoint.

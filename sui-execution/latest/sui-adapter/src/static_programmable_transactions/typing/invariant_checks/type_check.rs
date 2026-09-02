@@ -65,6 +65,7 @@ fn verify_<Mode: ExecutionMode>(env: &Env<Mode>, txn: &T::Transaction) -> anyhow
         withdrawal_compatibility_conversions,
         original_command_len: _,
         commands,
+        unified_linkage: _,
     } = txn;
     for obj in objects {
         object_input(obj)?;

@@ -6,7 +6,9 @@
 // type parameter unifies to TxContext, because auto-injection fills the
 // generic's slot after unification. The tx_context_restrictions_verifier
 // only applies to system packages, so this user package publishes fine;
-// the PTB arity check is the safety mechanism here.
+// the PTB arity check rejects these chained calls during translation, and
+// the TxContext return rule rejects any standalone reference-returning call
+// (see tx_context_result_borrow_invalid).
 
 //# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
 

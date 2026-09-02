@@ -3,6 +3,18 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// This test is checking details about the test runner:
+//
+// (1) Tests will fail if the JSON-RPC query does not contain methods or
+//     params.
+//     - No JSON object.
+//     - Missing params.
+//     - Extra trailing comma (tricky!)
+// (2) Displaying response headers is supported.
+//
+// The test description is at the top because the JSON does not have explicit
+// syntax for comments.
+
 task 1, line 18:
 //# run-jsonrpc
 Error: Missing JSON-RPC query

@@ -140,8 +140,12 @@ impl ClientObservedStats {
 
         let operation = OperationType::SharedObjectFinality;
         let Some(latency) = stats.average_latencies.get(&operation) else {
-            // For the target validator and operation type, no latency data has been recorded yet.
-            return MAX_LATENCY;
+            // No latency measurements yet, but health checks may have already told us the
+            // validator is unreachable. Rank known-unhealthy below merely-unmeasured, so that
+            // cold-start selection avoids validators we know are down.
+            let reliability_penalty = MAX_LATENCY
+                .mul_f64((1.0 - stats.reliability.get()) * self.config.reliability_weight);
+            return MAX_LATENCY + reliability_penalty;
         };
 
         // Get the latency for the relevant operation

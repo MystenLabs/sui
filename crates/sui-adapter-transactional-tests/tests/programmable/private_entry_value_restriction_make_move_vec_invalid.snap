@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// tests MakeMoveVec makes a "dirty" value if at least one value has been used in a non-entry
+// function used private entry function
+
 init:
 A: object(0,0)
 

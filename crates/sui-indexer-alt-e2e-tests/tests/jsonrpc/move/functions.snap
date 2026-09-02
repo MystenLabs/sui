@@ -6,6 +6,17 @@ processed 15 tasks
 init:
 A: object(0,0)
 
+//  1. Public function from v1 of a package
+//  2. An entry function from v1 of a package
+//  3. Same public function from v2 of a package
+//  4. Same entry function at v2, with a different signature
+//  5. A new function introduced in v2 of a package, using a v2 type.
+//  6. Attempting to get a function with invalid identifiers.
+//  7. Attempting to get a function from an object that doesn't exist.
+//  8. Attempting to get a function from a move object (not a package)
+//  9. Attempting to get a function from a module that doesn't exist.
+// 10. Attempting to get a function that doesn't exist in its module.
+
 task 1, lines 17-28:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)

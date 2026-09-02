@@ -20,11 +20,8 @@ use tracing::warn;
 use super::ProcessedCheckpoint;
 use super::checkpoint_stream_task::checkpoint_field_mask;
 use super::checkpoint_stream_task::process_checkpoint;
-use crate::task::watermark::KV_PACKAGES_PIPELINE;
+use crate::metrics::SubscriptionMetrics;
 use crate::task::watermark::Watermarks;
-
-/// Pipeline name under which `WatermarkTask` tracks the kv-rpc / LedgerService source.
-const LEDGER_GRPC_PIPELINE: &str = "ledger_grpc";
 
 /// Abstraction over the source that gap recovery fetches checkpoints from. The production
 /// implementation talks to kv-rpc via `LedgerGrpcReader`; tests use an in-memory mock.
@@ -62,6 +59,7 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
     fetcher: &F,
     watermarks_rx: &watch::Receiver<Arc<Watermarks>>,
     sender: &broadcast::Sender<Arc<ProcessedCheckpoint>>,
+    metrics: &SubscriptionMetrics,
     lo: u64,
     hi_inclusive: u64,
     chunk_size: usize,
@@ -82,6 +80,11 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
 
         let processed = fetch_and_process(fetcher, &mask, cursor..=chunk_hi_inclusive).await?;
         for cp in processed {
+            metrics.record_processed_checkpoint(
+                "recovery",
+                cp.summary.sequence_number,
+                cp.summary.timestamp_ms,
+            );
             // Ignore send errors: no active subscribers is a normal state during recovery.
             let _ = sender.send(cp);
         }
@@ -92,11 +95,9 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
     Ok(())
 }
 
-/// Block until both indexer pipelines that gap recovery depends on have caught up to
-/// `target`: `ledger_grpc` (kv-rpc, serves checkpoint contents) and `kv_packages`
-/// (Postgres, serves package resolution from the DB). Recovered checkpoints don't go
-/// through `index_and_broadcast`, so subscribers resolving their packages fall through
-/// to the DB and need `kv_packages` to be ready.
+/// Block until every indexer pipeline has caught up to `target`. A delivered item's nested
+/// queries can read any data source, so waiting on all pipelines avoids tracking a specific set
+/// that would drift from the schema.
 pub(crate) async fn wait_for_pipelines_catching_up_at(
     target: u64,
     watermarks_rx: &mut watch::Receiver<Arc<Watermarks>>,
@@ -104,12 +105,7 @@ pub(crate) async fn wait_for_pipelines_catching_up_at(
     watermarks_rx
         .wait_for(|w| {
             let pipelines = w.per_pipeline();
-            let caught_up = |name| {
-                pipelines
-                    .get(name)
-                    .is_some_and(|p| p.hi().checkpoint() >= target)
-            };
-            caught_up(LEDGER_GRPC_PIPELINE) && caught_up(KV_PACKAGES_PIPELINE)
+            !pipelines.is_empty() && pipelines.values().all(|p| p.hi().checkpoint() >= target)
         })
         .await
         .ok()
@@ -194,6 +190,10 @@ mod tests {
     use super::*;
     use crate::task::streaming::test_utils::FetcherBehavior;
     use crate::task::streaming::test_utils::MockFetcher;
+    use crate::task::watermark::KV_PACKAGES_PIPELINE;
+
+    /// Pipeline name under which `WatermarkTask` tracks the kv-rpc / LedgerService source.
+    const LEDGER_GRPC_PIPELINE: &str = "ledger_grpc";
 
     fn fetcher(setup: &[(u64, FetcherBehavior)]) -> MockFetcher {
         MockFetcher::from_setup(setup)
@@ -295,7 +295,17 @@ mod tests {
         let mock = fetcher(&[]);
         let (_tx, rx) = recovery_watermarks(0);
         let (sender, _rx) = broadcast::channel(16);
-        recover_gap(&mock, &rx, &sender, 5, 4, 10).await.unwrap();
+        recover_gap(
+            &mock,
+            &rx,
+            &sender,
+            &SubscriptionMetrics::new(&prometheus::Registry::new()),
+            5,
+            4,
+            10,
+        )
+        .await
+        .unwrap();
         // No keys configured; if anything was fetched, MockFetcher would panic.
     }
 
@@ -315,8 +325,18 @@ mod tests {
 
         let mock_arc = Arc::new(mock);
         let mock_for_task = mock_arc.clone();
-        let task =
-            tokio::spawn(async move { recover_gap(&*mock_for_task, &rx, &sender, 1, 6, 3).await });
+        let task = tokio::spawn(async move {
+            recover_gap(
+                &*mock_for_task,
+                &rx,
+                &sender,
+                &SubscriptionMetrics::new(&prometheus::Registry::new()),
+                1,
+                6,
+                3,
+            )
+            .await
+        });
 
         // Should not progress while watermark is at 0. 200ms is comfortably more than the
         // task scheduling overhead so the spawned `recover_gap` reaches its watermark wait.
@@ -364,8 +384,18 @@ mod tests {
 
         let mock_arc = Arc::new(mock);
         let mock_for_task = mock_arc.clone();
-        let task =
-            tokio::spawn(async move { recover_gap(&*mock_for_task, &rx, &sender, 1, 3, 3).await });
+        let task = tokio::spawn(async move {
+            recover_gap(
+                &*mock_for_task,
+                &rx,
+                &sender,
+                &SubscriptionMetrics::new(&prometheus::Registry::new()),
+                1,
+                3,
+                3,
+            )
+            .await
+        });
 
         // ledger_grpc has caught up but kv_packages is still at 0. Recovery must
         // not progress because subscribers would resolve packages from a DB that

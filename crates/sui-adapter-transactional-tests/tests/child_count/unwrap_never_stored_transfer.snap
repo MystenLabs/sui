@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 4 tasks
 
+// DEPRECATED child count no longer tracked
+// tests transferring a wrapped object that has never previously been in storage
+
 init:
 A: object(0,0), B: object(0,1)
 

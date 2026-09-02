@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[EC08001]: cannot compute constant value
+  ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable_forms.move:6:35
+  │
+6 │ public(package) const BAD: bool = 1u64 / 0 == 0;
+  │                                   ^^^^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+  ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable_forms.move:8:36
+  │
+8 │ public(package) const BAD_N: u64 = 1 / 0;
+  │                                    ^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value

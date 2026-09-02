@@ -70,14 +70,12 @@ macro_rules! register_debug_fatal_handler {
     };
 }
 
-/// Like `debug_fatal!`, but records `$location` (a `&str`) as the
-/// `system_invariant_violations` metric label instead of the macro's own
-/// `file!():line!()`. Use this when forwarding a caller-supplied location
-/// (e.g. from `#[track_caller]` + `Location::caller()`) so the metric points
-/// at the user's call site rather than the wrapper.
+/// Like `debug_fatal!`, but records the violation on a metric of the caller's choosing instead of
+/// `system_invariant_violations`: `$record` is invoked with `&mysten_metrics::Metrics` when metrics
+/// are initialized. Use this when a violation has its own counter, and its own alert.
 #[macro_export]
-macro_rules! debug_fatal_at {
-    ($location:expr, $msg:literal $(, $arg:expr)*) => {{
+macro_rules! debug_fatal_with_metric {
+    ($record:expr, $msg:literal $(, $arg:expr)*) => {{
         loop {
             #[cfg(msim)]
             {
@@ -98,9 +96,8 @@ macro_rules! debug_fatal_at {
             } else {
                 let stacktrace = std::backtrace::Backtrace::capture();
                 tracing::error!(debug_fatal = true, stacktrace = ?stacktrace, $msg $(, $arg)*);
-                let location: &str = $location;
                 if let Some(metrics) = mysten_metrics::get_metrics() {
-                    metrics.system_invariant_violations.with_label_values(&[location]).inc();
+                    ($record)(metrics);
                 }
                 if $crate::in_antithesis() {
                     // antithesis requires a literal for first argument. pass the formatted argument
@@ -112,6 +109,24 @@ macro_rules! debug_fatal_at {
             }
             break;
         }
+    }};
+}
+
+/// Like `debug_fatal!`, but records `$location` (a `&str`) as the
+/// `system_invariant_violations` metric label instead of the macro's own
+/// `file!():line!()`. Use this when forwarding a caller-supplied location
+/// (e.g. from `#[track_caller]` + `Location::caller()`) so the metric points
+/// at the user's call site rather than the wrapper.
+#[macro_export]
+macro_rules! debug_fatal_at {
+    ($location:expr, $msg:literal $(, $arg:expr)*) => {{
+        $crate::debug_fatal_with_metric!(
+            |metrics: &mysten_metrics::Metrics| {
+                let location: &str = $location;
+                metrics.system_invariant_violations.with_label_values(&[location]).inc();
+            },
+            $msg $(, $arg)*
+        );
     }};
 }
 

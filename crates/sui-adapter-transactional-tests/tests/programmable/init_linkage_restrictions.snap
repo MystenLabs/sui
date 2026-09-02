@@ -3,6 +3,10 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 17 tasks
 
+// Publish with `init` pins the published package's deps `exact` (init runs in-tx). A conflicting
+// `exact`/`at_least` constraint from a root call then yields InvalidLinkage. Publish without `init`
+// contributes nothing.
+
 init:
 A: object(0,0)
 

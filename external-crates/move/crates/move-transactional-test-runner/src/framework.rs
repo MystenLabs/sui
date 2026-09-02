@@ -206,6 +206,8 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
             stop_line,
             data,
             task_text,
+            unattached_comments_before: _,
+            unattached_comments_after: _,
         } = task;
         match command {
             TaskCommand::Init { .. } => {
@@ -415,6 +417,8 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
                     stop_line,
                     data,
                     task_text,
+                    unattached_comments_before: vec![],
+                    unattached_comments_after: vec![],
                 })
                 .await
             }
@@ -807,12 +811,29 @@ pub fn compile_ir_module(
         .into_compiled_module_with_source_map(&code)
 }
 
-/// Creates an adapter for the given tasks, using the first task command to initialize the adapter
-/// if it is a `TaskCommand::Init`. Returns the adapter and the output string.
-pub async fn create_adapter<'a, Adapter>(
+/// Taskifies the test input and creates an adapter, using the first task command to initialize the
+/// adapter if it is a `TaskCommand::Init`. Returns the adapter, output string, and remaining tasks.
+pub async fn create_adapter_and_taskify<'a, Adapter>(
     path: &Path,
     pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
-) -> Result<(String, Adapter), Box<dyn std::error::Error>>
+) -> Result<
+    (
+        String,
+        Adapter,
+        VecDeque<
+            TaskInput<
+                TaskCommand<
+                    Adapter::ExtraInitArgs,
+                    Adapter::ExtraPublishArgs,
+                    Adapter::ExtraValueArgs,
+                    Adapter::ExtraRunArgs,
+                    Adapter::Subcommand,
+                >,
+            >,
+        >,
+    ),
+    Box<dyn std::error::Error>,
+>
 where
     Adapter: MoveTestAdapter<'a>,
     Adapter::ExtraInitArgs: Debug,
@@ -850,7 +871,17 @@ where
     )
     .unwrap();
 
-    let first_task = tasks.pop_front().unwrap();
+    let mut first_task = tasks.pop_front().unwrap();
+    let init_unattached_comments = std::mem::take(&mut first_task.unattached_comments_before);
+    write_unattached_comments(&mut output, &init_unattached_comments);
+    let init_comments = normalize_snapshot_comment_whitespace(
+        &first_task
+            .task_text
+            .lines()
+            .take_while(|line| !line.trim_start().starts_with("//#"))
+            .collect::<Vec<_>>()
+            .join("\n"),
+    );
     let init_opt = match &first_task.command {
         TaskCommand::Init(_, _) => Some(first_task.map(|known| match known {
             TaskCommand::Init(command, extra_args) => (command, extra_args),
@@ -864,19 +895,31 @@ where
     let (adapter, result_opt) =
         Adapter::init(default_syntax, pre_compiled_program, init_opt, path).await;
 
-    if let Some(result) = result_opt
-        && let Err(e) = writeln!(output, "\ninit:\n{}", result)
-    {
-        return Err(Box::new(e));
+    if let Some(result) = result_opt {
+        if !init_comments.is_empty() {
+            write!(output, "\n{init_comments}").map_err(Box::new)?;
+        }
+        writeln!(output, "\ninit:\n{}", result).map_err(Box::new)?;
     }
-    Ok((output, adapter))
+    Ok((output, adapter, tasks))
 }
 
-/// Consumes the adapter to run tasks from path.
+/// Consumes the adapter and task queue to run the test.
 pub async fn run_tasks_with_adapter<'a, Adapter>(
     path: &Path,
     mut adapter: Adapter,
     mut output: String,
+    tasks: VecDeque<
+        TaskInput<
+            TaskCommand<
+                Adapter::ExtraInitArgs,
+                Adapter::ExtraPublishArgs,
+                Adapter::ExtraValueArgs,
+                Adapter::ExtraRunArgs,
+                Adapter::Subcommand,
+            >,
+        >,
+    >,
     insta_options: Option<InstaOptions>,
 ) -> Result<()>
 where
@@ -887,25 +930,6 @@ where
     Adapter::ExtraRunArgs: Debug,
     Adapter::Subcommand: Debug,
 {
-    let mut tasks = taskify::<
-        TaskCommand<
-            Adapter::ExtraInitArgs,
-            Adapter::ExtraPublishArgs,
-            Adapter::ExtraValueArgs,
-            Adapter::ExtraRunArgs,
-            Adapter::Subcommand,
-        >,
-    >(path)?
-    .into_iter()
-    .collect::<VecDeque<_>>();
-    assert!(!tasks.is_empty());
-
-    // Pop off init command if present, this has already been handled before this function was
-    // called to initialize the adapter
-    if let Some(TaskCommand::Init(_, _)) = tasks.front().map(|t| &t.command) {
-        tasks.pop_front();
-    }
-
     for task in tasks {
         handle_known_task(&mut output, &mut adapter, task).await;
     }
@@ -941,15 +965,46 @@ where
     Adapter::ExtraRunArgs: Debug,
     Adapter::Subcommand: Debug,
 {
-    let (output, adapter) = create_adapter::<Adapter>(path, pre_compiled_program).await?;
-    run_tasks_with_adapter(path, adapter, output, insta_options).await?;
+    let (output, adapter, tasks) =
+        create_adapter_and_taskify::<Adapter>(path, pre_compiled_program).await?;
+    run_tasks_with_adapter(path, adapter, output, tasks, insta_options).await?;
     Ok(())
+}
+
+fn normalize_snapshot_comment_whitespace(text: &str) -> String {
+    text.lines()
+        .map(|line| {
+            if line.trim_start().starts_with("//") {
+                line.trim_end()
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Writes standalone comment blocks with one blank line before the first block and between blocks.
+fn write_unattached_comments(output: &mut String, comments: &[Vec<String>]) {
+    if comments.is_empty() {
+        return;
+    }
+
+    writeln!(output).unwrap();
+    for (index, block) in comments.iter().enumerate() {
+        if index > 0 {
+            writeln!(output).unwrap();
+        }
+        for line in block {
+            writeln!(output, "{}", normalize_snapshot_comment_whitespace(line)).unwrap();
+        }
+    }
 }
 
 async fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
     output: &mut String,
     adapter: &mut Adapter,
-    task: TaskInput<
+    mut task: TaskInput<
         TaskCommand<
             Adapter::ExtraInitArgs,
             Adapter::ExtraPublishArgs,
@@ -959,15 +1014,25 @@ async fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
         >,
     >,
 ) {
+    write_unattached_comments(output, &task.unattached_comments_before);
+    let trailing_comments = std::mem::take(&mut task.unattached_comments_after);
     let task_number = task.number;
     let start_line = task.start_line;
     let stop_line = task.stop_line;
-    let task_text = adapter
-        .render_command_input(&task)
-        .unwrap_or_else(|| task.task_text.clone());
+    let task_text = normalize_snapshot_comment_whitespace(
+        &adapter
+            .render_command_input(&task)
+            .unwrap_or_else(|| task.task_text.clone()),
+    );
     let result = adapter.handle_command(task).await;
     let result_string = match result {
-        Ok(None) => return,
+        Ok(None) => {
+            write_unattached_comments(output, &trailing_comments);
+            if !trailing_comments.is_empty() {
+                writeln!(output).unwrap();
+            }
+            return;
+        }
         Ok(Some(s)) => s,
         Err(e) => format!("Error: {}", adapter.process_error(e).await),
     };
@@ -984,4 +1049,8 @@ async fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
         "\ntask {task_number}, {line_number}:\n{task_text}\n{result_string}"
     )
     .unwrap();
+    write_unattached_comments(output, &trailing_comments);
+    if !trailing_comments.is_empty() {
+        writeln!(output).unwrap();
+    }
 }

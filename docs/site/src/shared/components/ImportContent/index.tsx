@@ -180,7 +180,7 @@ export default function ImportContent({
       setGhErr(null);
       try {
         const branchName = branch || "main";
-        const path = String(source || "").replace(/^\.\/?/, "");
+        const path = String(source || "").replace(/^\.\/?/, "").replace(/^\/+/, "");
         const url = `https://raw.githubusercontent.com/${org}/${repo}/${branchName}/${path}`;
         const headers: Record<string, string> = {};
 

@@ -153,6 +153,9 @@ fn thdb_config(metric_conf: &MetricConf) -> Config {
     let batch_codec = metric_conf
         .enable_th_batch_compression
         .then_some(BatchCodec::Lz4);
+    let compressed_batch_cache_bytes = metric_conf
+        .enable_th_batch_compression
+        .then_some(4 * 1024 * 1024 * 1024);
     let mut config = Config {
         frag_size,
         // run snapshot every 8 Gb written to wal
@@ -168,6 +171,7 @@ fn thdb_config(metric_conf: &MetricConf) -> Config {
         commit_pool_size,
         num_flusher_threads,
         batch_codec,
+        compressed_batch_cache_bytes,
         relocation_max_reclaim_pct: 100,
         ..Config::default()
     };

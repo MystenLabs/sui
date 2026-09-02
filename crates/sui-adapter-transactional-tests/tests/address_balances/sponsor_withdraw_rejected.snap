@@ -3,10 +3,14 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 4 tasks
 
+// A sponsored transaction cannot pay gas via an address-balance withdrawal.
+
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 10-13:
+task 1, lines 8-13:
+// Seed B's address balance so a hypothetical sponsor-side withdrawal would
+// have funds available.
 //# programmable --sender B --inputs 100000000000 @B
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
@@ -15,11 +19,14 @@ mutated: object(0,1)
 accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 100000000000)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 15-19:
+task 2, line 15:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 20-22:
+task 3, lines 17-22:
+// Sponsored tx with withdraw gas payment -- expected to be rejected by
+// validation. The withdraw amount targets B (the sponsor) at the test-runner
+// level, but validation resolves it against A (sender), producing a mismatch.
 //# programmable --sender A --sponsor B --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(500000000) --inputs 100000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))

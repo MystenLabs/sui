@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 10 tasks
 
+// Try different kinds of ownership for a freshly derived object.
+
 init:
 A: object(0,0)
 
@@ -30,7 +32,7 @@ created: object(4,0), object(4,1)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 5981200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
-task 5, lines 47-49:
+task 5, line 47:
 //# view-object 4,0
 Owner: ConsensusAddressOwner( 4, A )
 Version: 4
@@ -42,7 +44,8 @@ Contents: a::m::Derived {
     },
 }
 
-task 6, line 50:
+task 6, lines 49-50:
+// transfer this object back to single owner
 //# transfer-object 4,0 --sender A --recipient A
 mutated: object(0,0), object(4,0)
 gas summary: computation_cost: 1000000, storage_cost: 2242000,  storage_rebate: 2219580, non_refundable_storage_fee: 22420

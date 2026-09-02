@@ -68,4 +68,14 @@ module T::test {
             }
         }
     }
+    multiGetBalances(keys: [
+        { address: "@{B}", coinType: "@{T}::test::TEST" },
+        { address: "@{A}", coinType: "@{T}::test::TEST" },
+        { address: "@{A}", coinType: "@{T}::test::TEST" },
+    ]) {
+        coinType { repr }
+        totalBalance
+        coinBalance
+        addressBalance
+    }
 }

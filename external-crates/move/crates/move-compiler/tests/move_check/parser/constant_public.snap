@@ -5,8 +5,8 @@ info:
   edition: legacy
   lint: false
 ---
-error[EC01003]: invalid modifier
+error[EC02016]: invalid visibility modifier
   ┌─ tests/move_check/parser/constant_public.move:3:5
   │
 3 │     public const Foo: u64 = 0;
-  │     ^^^^^^ Invalid constant declaration. Constants cannot have visibility modifiers as they are always internal
+  │     ^^^^^^ Invalid constant declaration. Constants may only be internal or 'public(package)'

@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 6 tasks
 
+// Simple e2e test of coin, address, and total balance queries.
+
 init:
 A: object(0,0), B: object(0,1)
 
@@ -41,7 +43,7 @@ task 4, line 50:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, lines 52-71:
+task 5, lines 52-81:
 //# run-graphql
 Response: {
   "data": {
@@ -71,6 +73,32 @@ Response: {
           }
         ]
       }
-    }
+    },
+    "multiGetBalances": [
+      {
+        "coinType": {
+          "repr": "0xdb91759c4f4b950c448574d0f933cfd9b60f8f27b7dfe49a7ae89e14743e8fd1::test::TEST"
+        },
+        "totalBalance": "0",
+        "coinBalance": "0",
+        "addressBalance": "0"
+      },
+      {
+        "coinType": {
+          "repr": "0xdb91759c4f4b950c448574d0f933cfd9b60f8f27b7dfe49a7ae89e14743e8fd1::test::TEST"
+        },
+        "totalBalance": "1002000",
+        "coinBalance": "2000",
+        "addressBalance": "1000000"
+      },
+      {
+        "coinType": {
+          "repr": "0xdb91759c4f4b950c448574d0f933cfd9b60f8f27b7dfe49a7ae89e14743e8fd1::test::TEST"
+        },
+        "totalBalance": "1002000",
+        "coinBalance": "2000",
+        "addressBalance": "1000000"
+      }
+    ]
   }
 }

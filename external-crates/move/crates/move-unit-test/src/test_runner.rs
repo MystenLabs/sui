@@ -13,7 +13,6 @@ use anyhow::Result;
 use colored::*;
 
 use move_binary_format::{
-    binary_config::BinaryConfig,
     errors::{Location, VMResult},
     file_format::CompiledModule,
 };
@@ -141,6 +140,7 @@ fn convert_clever_move_abort_error(
 impl<V: VMTestSetup + Sync> TestRunner<V> {
     pub fn new(
         execution_bound: u64,
+        arena_size: Option<u64>,
         num_threads: usize,
         report_stacktrace_on_abort: bool,
         prng_seed: Option<u64>,
@@ -162,11 +162,9 @@ impl<V: VMTestSetup + Sync> TestRunner<V> {
         };
 
         let native_functions = NativeFunctions::new(vm_test_setup.native_function_table())?;
-        // Allow loading of unpublishable modules for the purpose of running tests.
-        let vm_config = move_vm_config::runtime::VMConfig {
-            binary_config: BinaryConfig::new_unpublishable(),
-            ..Default::default()
-        };
+        let vm_config = move_vm_config::runtime::VMConfig::new_for_test(
+            /* allow_unpublishable_code_execution */ true, arena_size,
+        );
         let runtime = MoveRuntime::new(native_functions, vm_config);
 
         let mut vm_test_adapter = InMemoryTestAdapter::new_with_runtime(runtime);

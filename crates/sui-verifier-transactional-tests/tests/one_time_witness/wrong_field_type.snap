@@ -1,8 +1,9 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 908
 ---
 processed 2 tasks
+
+// correct, wrong struct field type but not one-time witness candidate
 
 task 0, lines 6-23:
 //# publish

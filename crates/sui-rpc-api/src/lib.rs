@@ -8,6 +8,7 @@ use reader::StateReader;
 use subscription::SubscriptionServiceHandle;
 use sui_http::middleware::callback::CallbackLayer;
 use sui_types::storage::RpcStateReader;
+use sui_types::transaction_executor::ProposerSelector;
 use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
 use tonic::server::NamedService;
@@ -61,6 +62,7 @@ impl std::fmt::Display for ServerVersion {
 pub struct RpcService {
     reader: StateReader,
     executor: Option<Arc<dyn TransactionExecutor>>,
+    proposer_selector: Option<Arc<dyn ProposerSelector>>,
     subscription_service_handle: Option<SubscriptionServiceHandle>,
     chain_id: sui_types::digests::ChainIdentifier,
     server_version: Option<ServerVersion>,
@@ -78,6 +80,7 @@ impl RpcService {
         Self {
             reader: StateReader::new(reader),
             executor: None,
+            proposer_selector: None,
             subscription_service_handle: None,
             chain_id,
             server_version: None,
@@ -101,6 +104,10 @@ impl RpcService {
 
     pub fn with_executor(&mut self, executor: Arc<dyn TransactionExecutor + Send + Sync>) {
         self.executor = Some(executor);
+    }
+
+    pub fn with_proposer_selector(&mut self, proposer_selector: Arc<dyn ProposerSelector>) {
+        self.proposer_selector = Some(proposer_selector);
     }
 
     pub fn with_subscription_service(

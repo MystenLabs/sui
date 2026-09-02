@@ -3,16 +3,22 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 9 tasks
 
+// Storage-OOG reset + re-smash for `[Coin, AddressBalance]` gas payment.
+// Smash target is the Coin: reset must un-mutate the gas coin's smashed
+// value and clear the secondary's Split withdraw accumulator event; re-smash
+// must re-mutate and re-emit consistently.
+
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 11-22:
+task 1, lines 11-20:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 5502400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 23-26:
+task 2, lines 22-26:
+// Seed A's address balance.
 //# programmable --sender A --inputs 100000000000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
@@ -25,11 +31,12 @@ task 3, line 28:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 30-32:
+task 4, line 30:
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
 100000000000
 
-task 5, lines 33-34:
+task 5, lines 32-34:
+// Mixed [Coin, AddressBalance] payment with tight budget; workload OOGs storage.
 //# programmable --sender A --gas-budget 5000000 --gas-payment object(0,0) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(5000000) --inputs 100
 //> test::oog::make(Input(0))
 Error: Transaction Effects Status: Insufficient Gas.

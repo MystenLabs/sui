@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 8 tasks
 
+// tests that shared objects cannot become dynamic fields and that a shared object
+// dynamic field added and removed in the same transaction does not error
+
 init:
 A: object(0,0)
 

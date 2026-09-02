@@ -12,43 +12,48 @@ created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 7448000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 51-53:
+task 2, line 51:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, line 54:
+task 3, lines 53-54:
+// Transaction that emits a single event
 //# run P1::M1::emit_event --sender A --args 42
 events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [21, 72, 101, 108, 108, 111, 32, 102, 114, 111, 109, 32, 116, 101, 115, 116, 32, 101, 118, 101, 110, 116, 42, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 4, lines 56-58:
+task 4, line 56:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 5, lines 59-61:
+task 5, lines 58-59:
+// Transaction that emits a single event
 //# run P1::M1::emit_event --sender A --args 42
 events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [21, 72, 101, 108, 108, 111, 32, 102, 114, 111, 109, 32, 116, 101, 115, 116, 32, 101, 118, 101, 110, 116, 42, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6, line 62:
+task 6, lines 61-62:
+// Transaction that emits multiple events
 //# run P1::M1::emit_multiple_events --sender A
 events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [11, 70, 105, 114, 115, 116, 32, 101, 118, 101, 110, 116, 1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventB"), type_params: [] }, contents: [12, 83, 101, 99, 111, 110, 100, 32, 101, 118, 101, 110, 116, 2, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7, lines 64-66:
+task 7, line 64:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 8, lines 67-69:
+task 8, lines 66-67:
+// Transaction that emits multiple events
 //# run P1::M1::emit_multiple_events --sender A
 events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [11, 70, 105, 114, 115, 116, 32, 101, 118, 101, 110, 116, 1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventB"), type_params: [] }, contents: [12, 83, 101, 99, 111, 110, 100, 32, 101, 118, 101, 110, 116, 2, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 9, lines 70-72:
+task 9, lines 69-72:
+// Transaction with no events (transfer)
 //# programmable --sender A --inputs 100 @B
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))

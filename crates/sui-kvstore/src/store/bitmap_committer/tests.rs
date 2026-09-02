@@ -22,6 +22,7 @@ use super::NUM_SHARDS;
 use super::shard_for;
 use crate::WatermarkV1;
 use crate::bigtable::client::BigTableClient;
+use crate::bigtable::client::CheckpointSpan;
 use crate::bigtable::mock_server::ExpectedCall;
 use crate::bigtable::mock_server::MockBigtableServer;
 use crate::config::SequentialLayer;
@@ -93,7 +94,7 @@ async fn setup_without_init_watermark() -> (MockBigtableServer, BigTableStore, B
     let client = BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
         .await
         .unwrap();
-    let store = BigTableStore::new(client.clone());
+    let store = BigTableStore::new(client.clone(), u64::MAX);
     (mock, store, client)
 }
 
@@ -262,6 +263,7 @@ async fn write_seed_bitmap(
     client: &mut BigTableClient,
     row_key: &[u8],
     bits: &[u32],
+    checkpoint: u64,
     timestamp_ms: u64,
 ) {
     let mut bitmap = RoaringBitmap::new();
@@ -278,6 +280,7 @@ async fn write_seed_bitmap(
                 [(COL, Bytes::from(buf))],
                 Some(timestamp_ms),
             )],
+            CheckpointSpan::single(checkpoint),
         )
         .await
         .unwrap();
@@ -312,6 +315,24 @@ async fn wait_for_bitmap(mock: &MockBigtableServer, row_key: &[u8]) -> RoaringBi
         }
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
+}
+
+#[test]
+fn bitmap_batch_accumulates_checkpoint_span() {
+    let handler = BitmapIndexHandler::new(TestProcessor);
+    let mut batch = BitmapBatch::default();
+    handler.batch(
+        &mut batch,
+        vec![
+            value(b"later", 0, &[1], 11, 11_000),
+            value(b"earlier", 0, &[2], 10, 10_000),
+        ]
+        .into_iter(),
+    );
+
+    let mut expected = CheckpointSpan::single(11);
+    expected.include(10);
+    assert_eq!(batch.checkpoints(), Some(expected));
 }
 
 #[tokio::test]
@@ -1107,7 +1128,7 @@ async fn mid_bucket_restart_without_replay_loses_pre_restart_bits() {
     let w_seed = watermark(pre_cp, pre_tx_hi, 500);
     create_watermark_v1(seed_conn.client(), w_seed, Some(bucket_start_cp)).await;
 
-    write_seed_bitmap(seed_conn.client(), row_key, &[pre_bit], 500).await;
+    write_seed_bitmap(seed_conn.client(), row_key, &[pre_bit], pre_cp, 500).await;
 
     let init = seed_conn
         .init_watermark(PIPELINE, None)
@@ -1173,7 +1194,7 @@ async fn mid_bucket_restart_with_replay_preserves_pre_restart_bits() {
     let mut seed_conn = store.connect().await.unwrap();
     let w_seed = watermark(pre_cp, pre_tx_hi, 500);
     create_watermark_v1(seed_conn.client(), w_seed, Some(bucket_start_cp)).await;
-    write_seed_bitmap(seed_conn.client(), row_key, &[pre_bit], 500).await;
+    write_seed_bitmap(seed_conn.client(), row_key, &[pre_bit], pre_cp, 500).await;
 
     let init = seed_conn
         .init_watermark(PIPELINE, None)
@@ -1248,7 +1269,7 @@ async fn restart_replay_skips_buckets_sealed_before_startup() {
     let w_seed = watermark(startup_cp, startup_tx_hi, 7_000);
     create_watermark_v1(seed_conn.client(), w_seed, Some(bucket_start_cp)).await;
 
-    write_seed_bitmap(seed_conn.client(), &sealed_row, &[0, 1], 7_000).await;
+    write_seed_bitmap(seed_conn.client(), &sealed_row, &[0, 1], startup_cp, 7_000).await;
 
     let init = seed_conn
         .init_watermark(PIPELINE, None)

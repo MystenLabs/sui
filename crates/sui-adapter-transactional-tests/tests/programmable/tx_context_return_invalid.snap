@@ -1,0 +1,64 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+// tests TxContext in return position of Move calls; it can never become a PTB result
+
+init:
+A: object(0,0)
+
+task 1, lines 8-29:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4985600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 31-33:
+//# programmable
+// TxContext cannot be returned by value
+//> test::m::make();
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext }, source: Some("TxContext cannot be returned from a Move call"), command: Some(0) } }
+
+task 3, lines 35-37:
+//# programmable
+// TxContext cannot be returned by value, at any position
+//> test::m::make_trailing();
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidTxContext }, source: Some("TxContext cannot be returned from a Move call"), command: Some(0) } }
+
+task 4, lines 39-41:
+//# programmable
+// TxContext cannot be returned, even via generic instantiation
+//> test::m::gen_make<sui::tx_context::TxContext>();
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext }, source: Some("TxContext cannot be returned from a Move call"), command: Some(0) } }
+
+task 5, lines 43-45:
+//# programmable --sender A --dev-inspect
+// TxContext cannot be returned, even in dev-inspect
+//> test::m::make();
+Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext } in command 0
+Execution Error: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext } in command 0
+
+task 6, lines 47-49:
+//# programmable
+// rejected by the general no-references-in-return rule
+//> test::m::ref_mut_id();
+Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidPublicFunctionReturnType { idx: 0 }, source: None, command: Some(0) } }
+
+task 7, lines 51-53:
+//# programmable --sender A --dev-inspect
+// dev-inspect allows reference returns in general, but not of TxContext
+//> test::m::ref_mut_id();
+Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext } in command 0
+Execution Error: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext } in command 0
+
+task 8, lines 55-57:
+//# programmable --sender A --dev-inspect
+// dev-inspect allows reference returns in general, but not of TxContext
+//> test::m::ref_imm_id();
+Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext } in command 0
+Execution Error: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext } in command 0

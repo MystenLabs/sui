@@ -5,7 +5,7 @@ use crate::{
     data_store::VerifiedPackageStore,
     static_programmable_transactions::linkage::{
         config::ResolutionConfig,
-        resolution::{ResolutionTable, VersionConstraint},
+        resolution::{PackageResolution, ResolutionTable, VersionConstraint},
     },
 };
 use move_vm_runtime::shared::linkage_context::LinkageContext;
@@ -58,13 +58,23 @@ pub struct ResolvedLinkage {
     // A mapping of every package ID to its runtime ID.
     // Note: Multiple packages can have the same runtime ID in this mapping, and domain of this map
     // is a superset of range of `linkage`.
-    pub linkage_resolution: BTreeMap<ObjectID, ObjectID>,
+    pub linkage_resolution: BTreeMap<ObjectID, PackageResolution>,
 }
 
 impl ResolvedLinkage {
     /// In the current linkage resolve an object ID to its original package ID.
     pub fn resolve_to_original_id(&self, object_id: &ObjectID) -> Option<ObjectID> {
-        self.linkage_resolution.get(object_id).copied()
+        self.linkage_resolution
+            .get(object_id)
+            .map(|resolution| resolution.original_id)
+    }
+
+    /// The version of the `object_id`. `None` if this linkage never resolved that package version,
+    /// or if the entry was late-bound for publication or upgrade.
+    pub fn resolved_version(&self, object_id: &ObjectID) -> Option<u64> {
+        self.linkage_resolution
+            .get(object_id)
+            .and_then(|resolution| resolution.version)
     }
 
     /// Create a `ResolvedLinkage` from a `ResolutionTable`.
@@ -96,9 +106,13 @@ impl ResolvedLinkage {
             .linkage
             .insert(original_package_id, package_version_id);
         // Add resolution from the new package ID to the original package ID.
-        resolved_linkage
-            .linkage_resolution
-            .insert(package_version_id, original_package_id);
+        resolved_linkage.linkage_resolution.insert(
+            package_version_id,
+            PackageResolution {
+                original_id: original_package_id,
+                version: None,
+            },
+        );
         ExecutableLinkage::new(resolved_linkage)
     }
 }

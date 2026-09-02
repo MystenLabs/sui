@@ -3,16 +3,19 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 4 tasks
 
+// tests correct generic substitution in Move call
+
 init:
 A: object(0,0)
 
-task 1, lines 8-26:
+task 1, lines 8-24:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 5487200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 27-36:
+task 2, lines 26-34:
+// valid
 //# programmable
 //> 0: test::m1::a();
 //> 1: test::m1::b();
@@ -21,11 +24,11 @@ task 2, lines 27-36:
 //> 4: test::m1::swap<test::m1::A, test::m1::B>(Result(2), Result(3));
 //  correct usage A                  B                  A
 //> test::m1::eat(NestedResult(4,1), NestedResult(4,0), NestedResult(4,1));
-// invalid
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3, lines 37-44:
+task 3, lines 36-44:
+// invalid
 //# programmable
 //> 0: test::m1::a();
 //> 1: test::m1::b();

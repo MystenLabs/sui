@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 10 tasks
 
+// load an object at an old version
+
 init:
 A: object(0,0)
 
@@ -39,7 +41,7 @@ task 4, lines 38-39:
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
 
-task 5, lines 41-44:
+task 5, line 41:
 //# view-object 2,0
 Owner: Account Address ( A )
 Version: 3
@@ -52,18 +54,21 @@ Contents: test::m::S {
     value: 112u64,
 }
 
+// dev-inspect with 'check' and correct values
+
 task 6, lines 46-47:
 //# programmable --sender A --inputs object(2,0)@2 0 --dev-inspect
 //> test::m::check(Input(0), Input(1))
 mutated: object(_), object(2,0)
 gas summary: computation_cost: 500000, storage_cost: 2257200,  storage_rebate: 1256508, non_refundable_storage_fee: 12692
 
-task 7, lines 49-53:
+task 7, lines 49-50:
 //# programmable --sender A --inputs object(2,0)@3 112 --dev-inspect
 //> test::m::check(Input(0), Input(1))
-// dev-inspect with 'check' and _incorrect_ values
 mutated: object(_), object(2,0)
 gas summary: computation_cost: 500000, storage_cost: 2257200,  storage_rebate: 1256508, non_refundable_storage_fee: 12692
+
+// dev-inspect with 'check' and _incorrect_ values
 
 task 8, lines 55-56:
 //# programmable --sender A --inputs object(2,0)@2 112 --dev-inspect

@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// Removing an `init` from an existing module during an upgrade is allowed: the upgrade succeeds and
+// nothing is re-run.
+
 init:
 A: object(0,0)
 

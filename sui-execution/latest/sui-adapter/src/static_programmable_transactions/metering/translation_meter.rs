@@ -83,6 +83,22 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
         self.charge(amount)
     }
 
+    /// Charge for the references live at a single command, should include ALL live references,
+    /// not just those created by the command
+    pub fn charge_num_live_references<E: ExecutionErrorTrait>(
+        &mut self,
+        num_live_references: u64,
+    ) -> Result<(), E> {
+        let amount = self
+            .live_reference_cost_formula(num_live_references)
+            .saturating_mul(self.protocol_config.translation_per_live_reference_charge());
+        if amount == 0 {
+            // a command with no live references has no additional cost
+            return Ok(());
+        }
+        self.charge(amount)
+    }
+
     pub fn charge_num_linkage_entries<E: ExecutionErrorTrait>(
         &mut self,
         num_linkage_entries: usize,
@@ -119,6 +135,18 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
             invariant_violation!("u64 overflow when calculating type reference cost")
         };
         Ok(n.saturating_mul(n_succ) / 2)
+    }
+
+    // Live references are charged with a cubic cost function to account for the increased
+    // complexity in the underlying borrow graph:
+    // cost = (n * (n + 1) * (n + 2)) / 6
+    //
+    // Take &self to access protocol config if needed in the future.
+    fn live_reference_cost_formula(&self, n: u64) -> u64 {
+        let product = n
+            .saturating_mul(n.saturating_add(1))
+            .saturating_mul(n.saturating_add(2));
+        product / 6
     }
 
     // Charge gas using a point charge mechanism based on the cumulative number of units charged so

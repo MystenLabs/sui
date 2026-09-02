@@ -17,6 +17,7 @@ pub mod consensus_commit_summary;
 pub mod consensus_handler;
 pub mod consensus_manager;
 pub mod consensus_throughput_calculator;
+pub mod consensus_transaction_pool;
 pub(crate) mod consensus_types;
 pub mod consensus_validator;
 pub mod db_checkpoint_handler;
@@ -58,6 +59,7 @@ mod transaction_input_loader;
 pub mod transaction_orchestrator;
 mod transaction_outputs;
 mod transaction_signing_filter;
+pub mod transaction_simulation;
 pub mod validator_client_monitor;
 
 #[cfg(test)]

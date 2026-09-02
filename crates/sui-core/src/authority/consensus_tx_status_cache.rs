@@ -35,6 +35,16 @@ pub(crate) enum ConsensusTxStatus {
     Dropped,
 }
 
+impl ConsensusTxStatus {
+    pub(crate) fn metric_label(&self) -> &'static str {
+        match self {
+            ConsensusTxStatus::Finalized => "finalized",
+            ConsensusTxStatus::Rejected => "rejected",
+            ConsensusTxStatus::Dropped => "dropped",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum NotifyReadConsensusTxStatusResult {
     // The consensus position to be read has been updated with a new status.

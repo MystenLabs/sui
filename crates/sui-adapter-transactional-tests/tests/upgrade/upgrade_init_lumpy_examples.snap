@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 19 tasks
 
+// Additional end-to-end coverage for upgrade-init Lumpy examples
+
 init:
 A: object(0,0)
 

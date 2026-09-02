@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 4 tasks
 
+// tests error after serializing a large enum return value
+
 init:
 A: object(0,0)
 

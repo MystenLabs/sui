@@ -14,6 +14,6 @@ export function getKeypair(privateKey: string): Ed25519Keypair {
 
 export const client = new SuiGrpcClient({
 	network: PREDICT.network,
-	baseUrl: 'https://fullnode.testnet.sui.io:443',
+	baseUrl: PREDICT.fullnodeUrl,
 });
 // docs::/#client

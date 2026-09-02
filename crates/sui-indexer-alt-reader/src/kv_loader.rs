@@ -8,7 +8,6 @@ use anyhow::Context;
 use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
 use sui_rpc::proto::sui::rpc::v2 as grpc;
-use sui_types::balance_change::BalanceChange as NativeBalanceChange;
 use sui_types::base_types::ObjectID;
 use sui_types::crypto::AuthorityQuorumSignInfo;
 use sui_types::digests::CheckpointDigest;
@@ -95,13 +94,6 @@ pub struct ExecutedTransactionData {
     pub timestamp_ms: Option<u64>,
     /// Checkpoint sequence number. Set for streamed/checkpointed transactions, None for mutations.
     pub cp_sequence_number: Option<u64>,
-}
-
-// A wrapper for a single balance change, either from gRPC or from native type.
-#[derive(Clone)]
-pub enum BalanceChangeContents {
-    Grpc(grpc::BalanceChange),
-    Native(NativeBalanceChange),
 }
 
 impl KvArgs {
@@ -331,6 +323,36 @@ impl TransactionContents {
         }))
     }
 
+    /// A minimal instance whose `digest()` returns `digest`, for tests that only need identity. All
+    /// other accessors resolve to empty or absent values.
+    #[cfg(feature = "testing")]
+    pub fn for_test(digest: TransactionDigest) -> Self {
+        let mut effects = TransactionEffects::default();
+        *effects.transaction_digest_mut_for_testing() = digest;
+
+        let pt = sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder::new()
+            .finish();
+        let transaction_data = TransactionData::new_programmable(
+            sui_types::base_types::SuiAddress::ZERO,
+            vec![],
+            pt,
+            0,
+            0,
+        );
+
+        Self::ExecutedTransaction(ExecutedTransactionData {
+            effects: Box::new(effects),
+            events: vec![],
+            transaction_data: Box::new(transaction_data),
+            signatures: vec![],
+            balance_changes: vec![],
+            proto_effects: None,
+            proto_transaction: None,
+            timestamp_ms: None,
+            cp_sequence_number: None,
+        })
+    }
+
     pub fn data(&self) -> anyhow::Result<TransactionData> {
         match self {
             Self::LedgerGrpc(txn) => Ok(txn.transaction_data.as_ref().clone()),
@@ -380,20 +402,10 @@ impl TransactionContents {
         }
     }
 
-    pub fn balance_changes(&self) -> Option<Vec<BalanceChangeContents>> {
+    pub fn balance_changes(&self) -> &[grpc::BalanceChange] {
         match self {
-            Self::ExecutedTransaction(tx) => Some(
-                tx.balance_changes
-                    .iter()
-                    .map(|c| BalanceChangeContents::Grpc(c.clone()))
-                    .collect(),
-            ),
-            Self::LedgerGrpc(txn) => Some(
-                txn.balance_changes
-                    .iter()
-                    .map(|c| BalanceChangeContents::Grpc(c.clone()))
-                    .collect(),
-            ),
+            Self::ExecutedTransaction(tx) => &tx.balance_changes,
+            Self::LedgerGrpc(txn) => &txn.balance_changes,
         }
     }
 

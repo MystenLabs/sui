@@ -4,7 +4,7 @@
 use crate::{
     gas_charger::GasPayment,
     static_programmable_transactions::{
-        linkage::resolved_linkage::ResolvedLinkage,
+        linkage::resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
         loading::ast::{self as L, PackagePayload},
         spanned::Spanned,
     },
@@ -37,6 +37,7 @@ pub struct Transaction {
     /// < `original_command_len`
     pub original_command_len: usize,
     pub commands: Commands,
+    pub unified_linkage: Option<ExecutableLinkage>,
 }
 
 /// The original index into the `input` vector of the transaction, before the inputs were split

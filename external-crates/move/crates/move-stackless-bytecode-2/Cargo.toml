@@ -26,5 +26,5 @@ name = "from_source"
 harness = false
 
 [[test]]
-name = "from_bytecode"
+name = "from_compiled"
 harness = false

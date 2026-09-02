@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 29 tasks
 
+// Tests passing Gas by value to sui::coin::send_funds in various scenarios.
+
 init:
 A: object(0,0), B: object(0,1), C: object(0,2), D: object(0,3), E: object(0,4)
 

@@ -6,6 +6,7 @@
     "targetPath": "sui-stack/messaging",
     "transforms": ["frontmatter", "admonitions", "nav-header", "toc", "links"],
     "linkPrefix": "/sui-stack/messaging",
+    "preserve": ["index.mdx", "chat-app.mdx"],
     "exclude": [],
     "fileMap": {
       "Installation.md": "installation.mdx",
@@ -21,6 +22,34 @@
       "Extending.md": "extending.mdx",
       "Testing.md": "testing.mdx",
       "CommunityContributed.md": "community-contributed.mdx"
+    }
+  },
+  "seal": {
+    "repo": "MystenLabs/seal",
+    "branch": "main",
+    "sourcePath": "docs/content",
+    "targetPath": "sui-stack/seal",
+    "transforms": ["links"],
+    "linkPrefix": "/sui-stack/seal",
+    "preserve": ["sui-stack-seal.mdx"],
+    "exclude": ["Seal_White_Paper_v2.pdf"],
+    "staticAssets": ["Seal_White_Paper_v2.pdf"],
+    "fileMap": {
+      "index.mdx": "index.mdx",
+      "Aggregator.mdx": "aggregator.mdx",
+      "Design.mdx": "design.mdx",
+      "ExamplePatterns.mdx": "example-patterns.mdx",
+      "GettingStarted.mdx": "getting-started.mdx",
+      "KeyServerCommitteeOps.mdx": "key-server-committee-ops.mdx",
+      "KeyServerOps.mdx": "key-server-ops.mdx",
+      "Pricing.mdx": "pricing.mdx",
+      "SealCLI.mdx": "seal-cli.mdx",
+      "SecurityBestPractices.mdx": "security-best-practices.mdx",
+      "ServerOverview.mdx": "server-overview.mdx",
+      "TermsOfService.md": "terms-of-service.mdx",
+      "UsingSeal.mdx": "using-seal.mdx",
+      "_InfrastructureRequirements.mdx": "_InfrastructureRequirements.mdx",
+      "_SealPackageIds.mdx": "_SealPackageIds.mdx"
     }
   }
 }

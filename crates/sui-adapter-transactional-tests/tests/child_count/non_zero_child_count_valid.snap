@@ -1,8 +1,10 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
 ---
 processed 10 tasks
+
+// DEPRECATED child count no longer tracked
+// tests valid transfers of an object that has children
 
 init:
 A: object(0,0), B: object(0,1)
@@ -19,7 +21,7 @@ created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 49-53:
+task 3, line 49:
 //# view-object 2,0
 Owner: Shared( 2 )
 Version: 2
@@ -30,6 +32,10 @@ Contents: test::m::S {
         },
     },
 }
+
+//
+// Test transfer allows non-zero child count
+//
 
 task 4, line 55:
 //# run test::m::mint --sender A
@@ -42,7 +48,7 @@ task 5, line 57:
 mutated: object(0,0), object(4,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
-task 6, lines 59-63:
+task 6, line 59:
 //# view-object 4,0
 Owner: Account Address ( B )
 Version: 4
@@ -53,6 +59,10 @@ Contents: test::m::S {
         },
     },
 }
+
+//
+// Test TransferObject allows non-zero child count
+//
 
 task 7, line 65:
 //# run test::m::mint --sender A

@@ -6,6 +6,14 @@ processed 17 tasks
 init:
 A: object(0,0), B: object(0,1)
 
+// 1. Default behavior of getTransactionBlock (no options)
+// 2. "Not found" case
+// 3. Raw transaction and effects
+// 4. Structured transaction and effects
+// 5. Events
+// 6a. Balance Changes (gas only)
+// 6b. Balance Changes (transfer SUI)
+
 task 1, lines 14-48:
 //# publish
 created: object(1,0), object(1,1)

@@ -21,6 +21,7 @@ use sui_indexer_alt_framework_store_traits::testing::Harness;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableConnection;
 use sui_kvstore::BigTableStore;
+use sui_kvstore::CheckpointSpan;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::WatermarkV0;
 use sui_kvstore::WatermarkV1;
@@ -53,7 +54,7 @@ impl WatermarkHarness {
         create_tables(emulator.host(), INSTANCE_ID).await?;
         let client =
             BigTableClient::new_local(emulator.host().to_string(), INSTANCE_ID.to_string()).await?;
-        let store = BigTableStore::new(client.clone());
+        let store = BigTableStore::new(client.clone(), u64::MAX);
         Ok(Self {
             store,
             client,
@@ -204,7 +205,11 @@ async fn test_init_watermark_v0_bootstrap() -> Result<()> {
     harness
         .client
         .clone()
-        .write_entries(tables::watermarks::NAME, [entry])
+        .write_entries(
+            tables::watermarks::NAME,
+            [entry],
+            CheckpointSpan::single(CHECKPOINT_HI),
+        )
         .await?;
 
     // Now run init_watermark — it should bootstrap the v1 cells from the v0 committer
@@ -377,7 +382,11 @@ async fn test_get_watermark_for_pipelines_ignores_v0_only() -> Result<()> {
     harness
         .client
         .clone()
-        .write_entries(tables::watermarks::NAME, [entry])
+        .write_entries(
+            tables::watermarks::NAME,
+            [entry],
+            CheckpointSpan::single(CHECKPOINT_HI),
+        )
         .await?;
 
     let wm = harness.read_watermark(&[PIPELINE]).await?;

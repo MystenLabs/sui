@@ -30,7 +30,7 @@ use move_vm_runtime_latest::runtime::MoveRuntime;
 use mysten_common::debug_fatal;
 use sui_adapter_latest::adapter::{new_move_runtime, run_metered_move_bytecode_verifier};
 use sui_adapter_latest::execution_engine::{
-    execute_genesis_state_update, execute_transaction_to_effects,
+    ExecutionOutput, execute_genesis_state_update, execute_transaction_to_effects,
 };
 use sui_adapter_latest::type_layout_resolver::TypeLayoutResolver;
 use sui_move_natives_latest::all_natives;
@@ -89,26 +89,31 @@ impl executor::Executor for Executor {
         Vec<ExecutionTiming>,
         Result<(), ExecutionFailure>,
     ) {
-        let (store_out, gas_status_out, effects, timings, result) =
-            execute_transaction_to_effects::<execution_mode::Normal>(
-                store,
-                input_objects,
-                system_object_versions,
-                gas,
-                gas_status,
-                transaction_kind,
-                rewritten_inputs,
-                transaction_signer,
-                transaction_digest,
-                &self.0,
-                epoch_id,
-                epoch_timestamp_ms,
-                protocol_config,
-                metrics,
-                enable_expensive_checks,
-                execution_params,
-                trace_builder_opt,
-            );
+        let ExecutionOutput {
+            inner_store: store_out,
+            gas_status: gas_status_out,
+            effects,
+            timings,
+            execution_result: result,
+        } = execute_transaction_to_effects::<execution_mode::Normal>(
+            store,
+            input_objects,
+            system_object_versions,
+            gas,
+            gas_status,
+            transaction_kind,
+            rewritten_inputs,
+            transaction_signer,
+            transaction_digest,
+            &self.0,
+            epoch_id,
+            epoch_timestamp_ms,
+            protocol_config,
+            metrics,
+            enable_expensive_checks,
+            execution_params,
+            trace_builder_opt,
+        );
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
@@ -140,26 +145,31 @@ impl executor::Executor for Executor {
         Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
     ) {
-        let (store_out, gas_status_out, effects, timings, result) =
-            execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
-                store,
-                input_objects,
-                system_object_versions,
-                gas,
-                gas_status,
-                transaction_kind,
-                rewritten_inputs,
-                transaction_signer,
-                transaction_digest,
-                &self.0,
-                epoch_id,
-                epoch_timestamp_ms,
-                protocol_config,
-                metrics,
-                enable_expensive_checks,
-                execution_params,
-                trace_builder_opt,
-            );
+        let ExecutionOutput {
+            inner_store: store_out,
+            gas_status: gas_status_out,
+            effects,
+            timings,
+            execution_result: result,
+        } = execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
+            store,
+            input_objects,
+            system_object_versions,
+            gas,
+            gas_status,
+            transaction_kind,
+            rewritten_inputs,
+            transaction_signer,
+            transaction_digest,
+            &self.0,
+            epoch_id,
+            epoch_timestamp_ms,
+            protocol_config,
+            metrics,
+            enable_expensive_checks,
+            execution_params,
+            trace_builder_opt,
+        );
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
@@ -189,8 +199,16 @@ impl executor::Executor for Executor {
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     ) {
-        let (inner_temp_store, gas_status, effects, _timings, result) = if skip_all_checks {
-            execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
+        // The two arms return different `ExecutionOutput<Mode>` types, so each destructures
+        // into the common tuple.
+        let (inner_temp_store, gas_status, effects, result) = if skip_all_checks {
+            let ExecutionOutput {
+                inner_store,
+                gas_status,
+                effects,
+                timings: _,
+                execution_result,
+            } = execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
                 store,
                 input_objects,
                 // TODO: Support system object versions for dev-inspect.
@@ -209,9 +227,16 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 execution_params,
                 &mut None,
-            )
+            );
+            (inner_store, gas_status, effects, execution_result)
         } else {
-            execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
+            let ExecutionOutput {
+                inner_store,
+                gas_status,
+                effects,
+                timings: _,
+                execution_result,
+            } = execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
                 store,
                 input_objects,
                 // TODO: Support system object versions for dev-inspect.
@@ -230,7 +255,8 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 execution_params,
                 &mut None,
-            )
+            );
+            (inner_store, gas_status, effects, execution_result)
         };
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
@@ -249,6 +275,7 @@ impl executor::Executor for Executor {
         input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
+        debug_assert!(input_objects.inner().is_empty());
         let tx_context = TxContext::new_from_components(
             &SuiAddress::default(),
             transaction_digest,
@@ -262,15 +289,7 @@ impl executor::Executor for Executor {
             protocol_config,
         );
         let tx_context = Rc::new(RefCell::new(tx_context));
-        execute_genesis_state_update(
-            store,
-            protocol_config,
-            metrics,
-            &self.0,
-            tx_context,
-            input_objects,
-            pt,
-        )
+        execute_genesis_state_update(store, protocol_config, metrics, &self.0, tx_context, pt)
     }
 
     fn type_layout_resolver<'r, 'vm: 'r, 'store: 'r>(

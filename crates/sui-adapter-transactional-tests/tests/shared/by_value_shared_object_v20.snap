@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 7 tasks
 
+// tests that shared objects can
+
 task 1, lines 8-24:
 //# publish
 created: object(1,0)

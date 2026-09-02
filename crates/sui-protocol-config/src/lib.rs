@@ -29,7 +29,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 134;
+const MAX_PROTOCOL_VERSION: u64 = 137;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -377,6 +377,19 @@ const MAINNET_USDB: &str =
 //              Bound type nodes in accumulators.
 // Version 134: Add `package::original_package_id` and its native costs.
 //              Reduce the consensus block transaction count and payload limits.
+//              (Both gated to non-mainnet chains.)
+//              Disable defer_unpaid_amplification on mainnet.
+// Version 135: Apply the v134 config changes on mainnet.
+//              Disable defer_unpaid_amplification everywhere.
+// Version 136: Enable ptb_tx_context_restrictions: `TxContext` may appear in a
+//              PTB Move call signature at most once mutably or any number of
+//              times immutably (never by value), and never in return position.
+//              Enable allowed_proposers on devnet.
+//              Add limits for references used by programmable transactions.
+//              Add additional linkage invariant hardening/invariant checks in PTBs.
+//              Add package_arena_size_in_bytes.
+// Version 137: Lower the per-bit cost of bulletproofs range proof verification, and raise the
+//              bound on batch size * range bits from 512 to 1024.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -490,6 +503,12 @@ struct FeatureFlags {
     // been deployed everywhere.
     #[serde(skip_serializing_if = "is_false")]
     consensus_order_end_of_epoch_last: bool,
+
+    // If true, validators emit slim (ancestor-compressed) blocks on the consensus block
+    // subscription stream, framed in a block envelope. Gates the wire framing on both
+    // ends of the stream.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_slim_block_propagation: bool,
 
     // Disallow adding abilities to types during package upgrades.
     #[serde(skip_serializing_if = "is_false")]
@@ -981,6 +1000,11 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_order_independent_upgrade_init_linkage: bool,
 
+    // If true, adds additional hardening and checks to upgrade-init linkage entries, and adds
+    // additional linkage invariant checks around linkage.
+    #[serde(skip_serializing_if = "is_false")]
+    harden_linkage_consistency: bool,
+
     // Check shared object transfer restrictions per command.
     #[serde(skip_serializing_if = "is_false")]
     per_command_shared_object_transfer_rules: bool,
@@ -1045,6 +1069,13 @@ struct FeatureFlags {
     // Count function and local signatures towards type-node budgets.
     #[serde(skip_serializing_if = "is_false")]
     include_function_signatures_in_instantiation_limits: bool,
+
+    // If true, the static PTB verifier restricts `TxContext` in Move call
+    // signatures: it may appear at most once as `&mut TxContext`, or any
+    // number of times as `&TxContext`, never by value, and never in return
+    // position (it can never become a PTB result).
+    #[serde(skip_serializing_if = "is_false")]
+    ptb_tx_context_restrictions: bool,
 
     // Enable display registry protocol
     #[serde(skip_serializing_if = "is_false")]
@@ -1148,6 +1179,11 @@ struct FeatureFlags {
     // in the same commit attempted to lock the same object (double-spend attempt).
     #[serde(skip_serializing_if = "is_false")]
     defer_owned_object_double_spend: bool,
+
+    // If true, `TransactionExpiration::Validity` is accepted, allowing a transaction to
+    // restrict which validators may propose it in consensus.
+    #[serde(skip_serializing_if = "is_false")]
+    allowed_proposers: bool,
 
     #[serde(skip_serializing_if = "is_false")]
     randomize_checkpoint_tx_limit_in_tests: bool,
@@ -1547,6 +1583,10 @@ pub struct ProtocolConfig {
     /// Maximum depth of a Move value within the VM.
     max_move_value_depth: Option<u64>,
 
+    /// Maximum number of bytes a single package's arena may allocate when the package is loaded
+    /// into the VM. If unset, the VM uses its built-in default.
+    package_arena_size_in_bytes: Option<u64>,
+
     /// Maximum number of variants in an enum. Enforced by the bytecode verifier at signing.
     max_move_enum_variants: Option<u64>,
 
@@ -1924,6 +1964,9 @@ pub struct ProtocolConfig {
 
     verify_bulletproofs_ristretto255_base_cost: Option<u64>,
     verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: Option<u64>,
+    // Upper bound on batch size * range in bits for a bulletproofs range proof. Defaults to 512
+    // when unset.
+    max_bulletproofs_total_bits: Option<u64>,
 
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
@@ -2156,6 +2199,22 @@ pub struct ProtocolConfig {
     /// Maximum serialized size in bytes of a gasless transaction (SenderSignedData).
     /// Bounds the persistent storage impact of each admitted gasless transaction.
     gasless_max_tx_size_bytes: Option<u64>,
+
+    /// The multiplier for each live reference charging per-command. Only used when
+    /// `allow_references_in_ptbs` is enabled.
+    translation_per_live_reference_charge: Option<u64>,
+
+    /// The maximum number of live references while checking a command. Only used when
+    /// `allow_references_in_ptbs` is enabled.
+    max_ptb_live_references: Option<u64>,
+
+    /// The maximum number of references returned by a command. Only used when
+    /// `allow_references_in_ptbs` is enabled.
+    max_ptb_returned_references: Option<u64>,
+
+    /// The maximum number of references returned over the course of the transaction. Only used
+    /// when `allow_references_in_ptbs` is enabled.
+    max_ptb_total_returned_references: Option<u64>,
 }
 
 /// An aliased address.
@@ -2835,6 +2894,7 @@ impl ProtocolConfig {
 
             verify_bulletproofs_ristretto255_base_cost: None,
             verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: None,
+            max_bulletproofs_total_bits: None,
 
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
@@ -2892,6 +2952,7 @@ impl ProtocolConfig {
             // Limits the length of a Move identifier
             max_move_identifier_len: None,
             max_move_value_depth: None,
+            package_arena_size_in_bytes: None,
             max_move_enum_variants: None,
 
             gas_rounding_step: None,
@@ -2966,6 +3027,10 @@ impl ProtocolConfig {
             translation_per_type_node_charge: None,
             translation_per_reference_node_charge: None,
             translation_per_linkage_entry_charge: None,
+            translation_per_live_reference_charge: None,
+            max_ptb_live_references: None,
+            max_ptb_returned_references: None,
+            max_ptb_total_returned_references: None,
 
             max_updates_per_settlement_txn: None,
 
@@ -4580,6 +4645,29 @@ impl ProtocolConfig {
                     cfg.max_accumulator_type_nodes = Some(16);
                 }
                 134 => {
+                    // v134 was released to testnet with this content before the 1.77
+                    // branch backfilled its own v134 to disable defer_unpaid_amplification
+                    // on mainnet. To keep (v134, Mainnet) identical across the 1.77 and
+                    // 1.78 branches, the original v134 content is gated off mainnet here
+                    // (it applies to mainnet in v135 instead), and mainnet's v134 carries
+                    // only the deferral disable.
+                    if chain != Chain::Mainnet {
+                        cfg.package_original_package_id_impl_cost_base = Some(52);
+                        let package_read_cost_per_byte = cfg.obj_access_cost_read_per_byte();
+                        cfg.package_original_package_id_impl_cost_per_byte =
+                            Some(package_read_cost_per_byte);
+
+                        cfg.consensus_max_transactions_in_block_bytes = Some(288 * 1024);
+                        cfg.consensus_max_num_transactions_in_block = Some(128);
+                    }
+
+                    if chain == Chain::Mainnet {
+                        cfg.feature_flags.defer_unpaid_amplification = false;
+                    }
+                }
+                135 => {
+                    // Apply the original v134 content on mainnet (no-op re-assignment on
+                    // chains that already applied it in v134).
                     cfg.package_original_package_id_impl_cost_base = Some(52);
                     let package_read_cost_per_byte = cfg.obj_access_cost_read_per_byte();
                     cfg.package_original_package_id_impl_cost_per_byte =
@@ -4587,6 +4675,27 @@ impl ProtocolConfig {
 
                     cfg.consensus_max_transactions_in_block_bytes = Some(288 * 1024);
                     cfg.consensus_max_num_transactions_in_block = Some(128);
+
+                    cfg.feature_flags.defer_unpaid_amplification = false;
+                }
+                136 => {
+                    cfg.feature_flags.ptb_tx_context_restrictions = true;
+
+                    cfg.translation_per_live_reference_charge = Some(1);
+                    cfg.max_ptb_live_references = Some(64);
+                    cfg.max_ptb_returned_references = Some(16);
+                    cfg.max_ptb_total_returned_references = Some(256);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.allowed_proposers = true;
+                    }
+                    cfg.feature_flags.harden_linkage_consistency = true;
+
+                    cfg.package_arena_size_in_bytes = Some(10_000_000);
+                }
+                137 => {
+                    cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(621);
+                    cfg.max_bulletproofs_total_bits = Some(1024);
                 }
                 // Use this template when making changes:
                 //

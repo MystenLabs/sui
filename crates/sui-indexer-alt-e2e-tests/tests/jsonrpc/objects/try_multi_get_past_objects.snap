@@ -6,6 +6,9 @@ processed 11 tasks
 init:
 A: object(0,0), B: object(0,1)
 
+// 1. Multi-get objects (with found object, with non-existent object, with deleted object)
+// 2. Multi-get objects with options
+
 task 1, lines 9-11:
 //# programmable --sender A --inputs 42 @A
 //> 0: SplitCoins(Gas, [Input(0)]);

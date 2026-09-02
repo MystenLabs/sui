@@ -1,0 +1,36 @@
+// A module extension of a pre-compiled dependency package, where the extension and the
+// extended module use the package's `public(package)` constants. The Diagnostics suite asserts
+// the project compiles cleanly; the use-def assertions cover the extension function. The
+// extension body's own constant uses are not indexed: dependency-module bodies are skipped
+[
+  {
+    "Diagnostics": {
+      "project": "tests/cross-module-consts"
+    }
+  },
+  {
+    "UseDef": {
+      "project": "tests/cross-module-consts",
+      "file_tests": {
+        "user.move": [
+          {
+            "use_line": 4,
+            "use_ndx": 0
+          },
+          {
+            "use_line": 4,
+            "use_ndx": 1
+          },
+          {
+            "use_line": 5,
+            "use_ndx": 1
+          },
+          {
+            "use_line": 12,
+            "use_ndx": 0
+          }
+        ]
+      }
+    }
+  }
+]

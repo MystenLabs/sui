@@ -1,8 +1,14 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 908
 ---
 processed 7 tasks
+
+// Tests gasless transaction validation rejects unused inputs and oversized Pure inputs.
+// This tests:
+// 1. Too many unused Pure inputs (limit set to 1)
+// 2. Unused FundsWithdrawal inputs (always rejected)
+// 3. Unused Object inputs (always rejected)
+// 4. Pure inputs that exceed the size limit (32 bytes)
 
 init:
 A: object(0,0), B: object(0,1)

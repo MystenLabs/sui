@@ -14,7 +14,7 @@ created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 10-12:
+task 2, line 10:
 //# create-checkpoint
 Checkpoint created: 1
 

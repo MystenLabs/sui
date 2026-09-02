@@ -83,8 +83,6 @@ impl ExecutionCacheTraitPointers {
             + TransactionCacheRead
             + ExecutionCacheWrite
             + BackingStore
-            + BackingPackageStore
-            + ObjectStore
             + ExecutionCacheReconfigAPI
             + GlobalStateHashStore
             + CheckpointCache

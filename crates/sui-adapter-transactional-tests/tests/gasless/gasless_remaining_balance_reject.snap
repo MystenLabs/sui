@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 9 tasks
 
+// Tests that gasless withdrawals leaving a balance below the minimum are rejected.
+// gasless_verify_remaining_balance is enabled by --enable-gasless.
+
 init:
 A: object(0,0), B: object(0,1)
 

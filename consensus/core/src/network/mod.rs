@@ -31,12 +31,13 @@ use consensus_types::block::{BlockRef, Round};
 use fastcrypto::encoding::{Encoding, Hex};
 use futures::Stream;
 use mysten_network::{Multiaddr, multiaddr::Protocol};
+use prost::Message as _;
 
 use crate::{
     block::{ExtendedBlock, VerifiedBlock},
     commit::{CommitRange, TrustedCommit},
     context::Context,
-    error::ConsensusResult,
+    error::{ConsensusError, ConsensusResult},
 };
 
 /// Identifies an observer node by its network public key.
@@ -371,15 +372,52 @@ pub(crate) use clients::{CommitSyncerClient, SynchronizerClient};
 /// Serialized block with extended information from the proposing authority.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub(crate) struct ExtendedSerializedBlock {
-    pub(crate) block: Bytes,
+    pub(crate) block: SerializedBlockForm,
     // Serialized BlockRefs that are excluded from the blocks ancestors.
     pub(crate) excluded_ancestors: Vec<Vec<u8>>,
+}
+
+/// Wire framing for one block on live subscription streams, carried inside a bytes
+/// field so batch streams can reuse it.
+#[derive(Clone, PartialEq, prost::Message)]
+pub(crate) struct SerializedBlockEnvelope {
+    #[prost(oneof = "SerializedBlockForm", tags = "1, 2")]
+    pub(crate) block: Option<SerializedBlockForm>,
+}
+
+/// Which representation of a block a payload holds.
+#[derive(Clone, PartialEq, Eq, prost::Oneof)]
+pub(crate) enum SerializedBlockForm {
+    /// The block exactly as serialized and signed by its author.
+    #[prost(bytes = "bytes", tag = "1")]
+    Full(Bytes),
+    /// The same block with its ancestor digests stripped, to be rebuilt by the
+    /// receiver. Nothing emits this form yet; the encoder lands with the codec.
+    #[prost(bytes = "bytes", tag = "2")]
+    Slim(Bytes),
+}
+
+impl SerializedBlockEnvelope {
+    pub(crate) fn encode_form(form: SerializedBlockForm) -> Bytes {
+        Self { block: Some(form) }.encode_to_vec().into()
+    }
+
+    pub(crate) fn decode_form(bytes: &[u8]) -> ConsensusResult<SerializedBlockForm> {
+        Self::decode(bytes)
+            .map_err(ConsensusError::MalformedBlockEnvelope)?
+            .block
+            .ok_or_else(|| {
+                ConsensusError::MalformedBlockEnvelope(prost::DecodeError::new(
+                    "empty block envelope",
+                ))
+            })
+    }
 }
 
 impl From<ExtendedBlock> for ExtendedSerializedBlock {
     fn from(extended_block: ExtendedBlock) -> Self {
         Self {
-            block: extended_block.block.serialized().clone(),
+            block: SerializedBlockForm::Full(extended_block.block.serialized().clone()),
             excluded_ancestors: extended_block
                 .excluded_ancestors
                 .iter()

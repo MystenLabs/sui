@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// tests invalid attempts at manually supplying &mut/&TxContext in dev inspect
+// tests invalid attempts at manually supplying &mut/&TxContext in dev inspect. The arity check
+// during translation rejects the chained calls; standalone reference-returning calls are covered
+// by the TxContext return rule (see programmable/tx_context_return_invalid)
 
 //# init --addresses test=0x0
 

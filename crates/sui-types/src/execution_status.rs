@@ -395,6 +395,12 @@ pub enum CommandArgumentError {
         command."
     )]
     InvalidReferenceArgument,
+    #[error(
+        "Invalid usage of TxContext in the function signature. TxContext can only be used by \
+        reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only \
+        TxContext parameter, and TxContext can never be returned from a Move call."
+    )]
+    InvalidTxContext,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]

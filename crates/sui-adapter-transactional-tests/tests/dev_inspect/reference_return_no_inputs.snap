@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 6 tasks
 
+// tests returning a reference without any inputs
+
 init:
 A: object(0,0)
 

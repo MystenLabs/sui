@@ -114,7 +114,7 @@ impl Adapter {
                 max_dependency_depth: Some(100),
                 ..Default::default()
             },
-            ..Default::default()
+            ..VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None)
         };
         let runtime = MoveRuntime::new(NativeFunctions::empty_for_testing().unwrap(), config);
         let vm = Arc::new(RwLock::new(

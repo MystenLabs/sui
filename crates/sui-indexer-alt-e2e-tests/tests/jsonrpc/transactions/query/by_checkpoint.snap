@@ -6,6 +6,20 @@ processed 31 tasks
 init:
 A: object(0,0)
 
+// 1. Output all the checkpoints, for context
+// 2. Fetch transactions from an empty checkpoint
+// 3. ...from a checkpoint with a single transaction
+// 4. ...from a checkpoint with multiple transactions
+// 5,   6,  7. ...with reversed ordering
+// 8,   9, 10. ...limited to two transactions
+// 11, 12, 13. ...limited and reversed
+// 14. Fetch limited transactions from a checkpoint with multiple transactions,
+//     with a cursor
+// 17. ...reversed
+// 18. Cursor points before the expected checkpoint
+// 19. Cursor points after the expected checkpoint
+// 20, 21. Cursor points before and after the expected checkpoint, reversed
+
 task 1, line 20:
 //# create-checkpoint
 Checkpoint created: 1

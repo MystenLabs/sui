@@ -101,7 +101,7 @@ pub fn execute_transaction_to_effects(
         .ok_or_else(|| anyhow!(format!("Epoch {} not found", epoch)))?;
     let epoch_start_timestamp = epoch_data.start_timestamp;
     let gas_status = if txn_data.kind().is_system_tx() {
-        SuiGasStatus::new_unmetered()
+        SuiGasStatus::new_unmetered(protocol_config)
     } else {
         SuiGasStatus::new(
             txn_data.gas_data().budget,

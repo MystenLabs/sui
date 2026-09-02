@@ -126,7 +126,7 @@ fn execute_function_in_module(
         module.identifier_at(entry_name_idx).to_owned()
     };
     {
-        let move_runtime = MoveRuntime::new_with_default_config(
+        let move_runtime = MoveRuntime::new_with_test_config(
             move_vm_runtime::natives::move_stdlib::stdlib_native_functions(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
                 move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),

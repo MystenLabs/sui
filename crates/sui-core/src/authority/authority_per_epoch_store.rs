@@ -4,6 +4,7 @@
 use dashmap::DashMap;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::future::Future;
+use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -22,7 +23,7 @@ use move_bytecode_utils::module_cache::SyncModuleCache;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::assert_reachable;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
-use mysten_common::sync::notify_read::NotifyRead;
+use mysten_common::sync::notify_read::{NotifyRead, OwnedRegistration};
 use mysten_common::{debug_fatal, in_test_configuration};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
@@ -45,12 +46,13 @@ use sui_types::crypto::{AuthoritySignInfo, RandomnessRound};
 use sui_types::digests::{ChainIdentifier, TransactionEffectsDigest};
 use sui_types::dynamic_field::get_dynamic_field_from_store;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
 use sui_types::executable_transaction::{
     TrustedExecutableTransactionWithAliases, VerifiedExecutableTransaction,
     VerifiedExecutableTransactionWithAliases,
 };
 use sui_types::execution::{ExecutionTimeObservationKey, ExecutionTiming};
+use sui_types::fp_ensure;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary};
 use sui_types::messages_consensus::{
@@ -313,6 +315,9 @@ pub struct AuthorityPerEpochStore {
     /// Committee of validators for the current epoch.
     committee: Arc<Committee>,
 
+    /// This authority's index in `committee`, or None if it is not a member.
+    own_committee_index: Option<u32>,
+
     /// Holds the underlying per-epoch typed store tables.
     /// This is an ArcSwapOption because it needs to be used concurrently,
     /// and it needs to be cleared at the end of the epoch.
@@ -332,11 +337,11 @@ pub struct AuthorityPerEpochStore {
 
     /// In-memory cache of the content from the reconfig_state db table.
     reconfig_state_mem: RwLock<ReconfigState>,
-    consensus_notify_read: NotifyRead<SequencedConsensusTransactionKey, ()>,
+    consensus_notify_read: Arc<NotifyRead<SequencedConsensusTransactionKey, ()>>,
 
     // Subscribers will get notified when a transaction is executed via checkpoint execution.
     executed_transactions_to_checkpoint_notify_read:
-        NotifyRead<TransactionDigest, CheckpointSequenceNumber>,
+        Arc<NotifyRead<TransactionDigest, CheckpointSequenceNumber>>,
 
     /// Batch verifier for certificates - also caches certificates and tx sigs that are known to have
     /// valid signatures. Lives in per-epoch store because the caching/batching is only valid
@@ -1014,6 +1019,7 @@ impl AuthorityPerEpochStore {
 
         let s = Arc::new(Self {
             name,
+            own_committee_index: committee.authority_index(&name),
             committee: committee.clone(),
             protocol_config,
             tables: ArcSwapOption::new(Some(Arc::new(tables))),
@@ -1027,8 +1033,8 @@ impl AuthorityPerEpochStore {
             reconfig_state_mem: RwLock::new(reconfig_state),
             epoch_alive_token,
             epoch_alive: tokio::sync::RwLock::new(true),
-            consensus_notify_read: NotifyRead::new(),
-            executed_transactions_to_checkpoint_notify_read: NotifyRead::new(),
+            consensus_notify_read: Arc::new(NotifyRead::new()),
+            executed_transactions_to_checkpoint_notify_read: Arc::new(NotifyRead::new()),
             signature_verifier,
             checkpoint_state_notify_read: NotifyRead::new(),
             running_root_notify_read: NotifyRead::new(),
@@ -1311,7 +1317,45 @@ impl AuthorityPerEpochStore {
             epoch: self.epoch(),
             chain_identifier: self.get_chain_identifier(),
             reference_gas_price: self.reference_gas_price(),
+            committee_size: self.committee.num_members() as u32,
         }
+    }
+
+    /// This validator's index in the current epoch's committee, if it is a member.
+    pub fn own_committee_index(&self) -> Option<u32> {
+        self.own_committee_index
+    }
+
+    /// Checks that the validator at committee index `proposer` is allowed to propose `tx` in
+    /// consensus. Enforced at admission, and again when verifying blocks received from peers,
+    /// where proposal by a disallowed validator is byzantine behavior.
+    pub fn check_allowed_proposer(&self, tx: &TransactionData, proposer: u32) -> SuiResult {
+        // When the feature is disabled, `validity_check` rejects the expiration variant
+        // outright, so there is nothing to enforce here.
+        if !self.protocol_config().allowed_proposers() {
+            return Ok(());
+        }
+        fp_ensure!(
+            tx.expiration().is_allowed_proposer(proposer, self.epoch()),
+            UserInputError::ProposerNotAllowed { proposer }.into()
+        );
+        Ok(())
+    }
+
+    /// Checks that this validator is allowed to propose `tx` in consensus.
+    pub fn check_self_allowed_proposer(&self, tx: &TransactionData) -> SuiResult {
+        if !self.protocol_config().allowed_proposers()
+            || !tx.expiration().restricts_proposers(self.epoch())
+        {
+            return Ok(());
+        }
+        let Some(own_index) = self.own_committee_index() else {
+            return Err(SuiErrorKind::InvalidRequest(
+                "this node is not a member of the current committee".to_string(),
+            )
+            .into());
+        };
+        self.check_allowed_proposer(tx, own_index)
     }
 
     pub fn get_state_hash_for_checkpoint(
@@ -1424,6 +1468,31 @@ impl AuthorityPerEpochStore {
 
     pub fn reference_gas_price(&self) -> u64 {
         self.epoch_start_state().reference_gas_price()
+    }
+
+    /// Records user transactions in the submitted-transaction cache for gas-price-based
+    /// DoS accounting, shared by the push (`ConsensusAdapter`) and pull (consensus
+    /// transaction pool) submission paths. Paying k * RGP allows a transaction to appear
+    /// up to k times in consensus output; beyond that, the consensus handler's
+    /// `increment_submission_count` charges spam weight against the client addresses
+    /// recorded here.
+    pub(crate) fn record_submitted_user_transactions(
+        &self,
+        transactions: &[ConsensusTransaction],
+        submitter_client_addr: Option<IpAddr>,
+    ) {
+        for transaction in transactions {
+            if let Some(tx) = transaction.kind.as_user_transaction() {
+                let amplification_factor = (tx.data().transaction_data().gas_price()
+                    / self.reference_gas_price().max(1))
+                .max(1);
+                self.submitted_transaction_cache.record_submitted_tx(
+                    tx.digest(),
+                    amplification_factor as u32,
+                    submitter_client_addr,
+                );
+            }
+        }
     }
 
     pub fn protocol_version(&self) -> ProtocolVersion {
@@ -2419,6 +2488,29 @@ impl AuthorityPerEpochStore {
 
         join_all(unprocessed_keys_registrations).await;
         Ok(())
+    }
+
+    pub(crate) fn register_consensus_message_processed_notify(
+        &self,
+        key: &SequencedConsensusTransactionKey,
+    ) -> OwnedRegistration<SequencedConsensusTransactionKey, ()> {
+        self.consensus_notify_read.register_one_owned(key)
+    }
+
+    pub(crate) fn register_executed_in_checkpoint_notify(
+        &self,
+        digest: &TransactionDigest,
+    ) -> OwnedRegistration<TransactionDigest, CheckpointSequenceNumber> {
+        self.executed_transactions_to_checkpoint_notify_read
+            .register_one_owned(digest)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn num_pending_processed_notifications(&self) -> usize {
+        self.consensus_notify_read.num_pending()
+            + self
+                .executed_transactions_to_checkpoint_notify_read
+                .num_pending()
     }
 
     /// Get notified when transactions get executed as part of a checkpoint execution.

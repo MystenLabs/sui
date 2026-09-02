@@ -45,7 +45,7 @@ A Sui archive is a history of all transaction data on Sui. In some cases, peer n
 Starting with the 1.51 release, the default archive bucket for Mainnet switches to a requester-pays model. See the following section for a configuration example.
 :::
 
-`https://checkpoints.mainnet.sui.io` and `https://checkpoints.testnet.sui.io` retain only the most recent 30 days of checkpoints and are not suitable for full-retention backfill. For full checkpoint retention, use `gs://mysten-mainnet-checkpoints-use4` for Mainnet or `gs://mysten-testnet-checkpoints-use4` for Testnet with Requester Pays enabled. For standing up a new fullnode, always start it from a snapshot.
+The public HTTPS checkpoint endpoints retain only the most recent 30 days and are not suitable for full-retention backfill. For the full list of checkpoint stores, retention policies, and credential requirements, see [Available Data Stores](/operators/data-management/available-data-stores). For standing up a new full node, always start it from a [snapshot](/operators/snapshots).
 
 ## Set up archival fallback {#set-up-archival-fallback}
 
@@ -95,16 +95,11 @@ If the counter increases over time, the archival fallback is active.
 
 ### When to use each archive source {#archive-sources}
 
-| Source | Retention | Credentials | Use case |
-|--------|-----------|-------------|----------|
-| `https://s3.us-west-2.amazonaws.com/mysten-mainnet-checkpoints` | Full history | AWS credentials | Mainnet archival fallback and full-retention backfill |
-| `https://checkpoints.testnet.sui.io` | 30 days | None | Testnet archival fallback |
-| `gs://mysten-mainnet-checkpoints-use4` | Full history | GCS credentials and `x-goog-user-project` billing header | Mainnet checkpoint ingestion for indexers (GCS Requester Pays) |
-| `gs://mysten-testnet-checkpoints-use4` | Full history | GCS credentials and `x-goog-user-project` billing header | Testnet checkpoint ingestion for indexers (GCS Requester Pays) |
+For the full table of available checkpoint stores with retention policies and credential requirements, see [Available Data Stores](/operators/data-management/available-data-stores).
 
 :::caution
 
-Do not use `https://checkpoints.mainnet.sui.io` for Mainnet archival fallback. State sync rejects this endpoint. Use the S3 or GCS bucket instead. When you use a GCS Requester Pays bucket, configure credentials and pass your billing project in the `x-goog-user-project` header; see [Requester Pays checkpoint buckets](/operators/data-management/indexer-stack-setup#requester-pays).
+Do not use `https://checkpoints.mainnet.sui.io` for Mainnet archival fallback. State sync rejects this endpoint. Use the [S3](/operators/data-management/available-data-stores#checkpoint-s3) or [GCS](/operators/data-management/available-data-stores#checkpoint-gcs) bucket instead.
 
 :::
 

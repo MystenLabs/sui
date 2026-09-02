@@ -1,8 +1,10 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
 ---
 processed 20 tasks
+
+// Tests `public_receive` should fail for an object _without_ public transfer,
+// and that we cannot directly call `receive` from a PTB.
 
 init:
 A: object(0,0), B: object(0,1)
@@ -81,14 +83,15 @@ Contents: test::m::Parent {
     },
 }
 
-task 9, lines 95-99:
+task 9, lines 95-97:
 //# programmable --sender A --inputs object(6,0) receiving(6,1)
 //> 0: test::m::receive_cup<u64>(Input(0), Input(1));
 //> 1: test::m::destroy_cup<u64>(Result(0));
-// Try to directly call `public_receive` and `receive` on an object without public transfer.
 mutated: object(0,0), object(6,0)
 deleted: object(6,1)
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 3430944, non_refundable_storage_fee: 34656
+
+// Try to directly call `public_receive` and `receive` on an object without public transfer.
 
 task 10, line 101:
 //# run test::m::mint_s --sender A
@@ -127,17 +130,18 @@ task 13, lines 107-109:
 Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [] }), command: Some(1) } }
 
-task 14, lines 111-119:
+task 14, lines 111-115:
 //# programmable --sender A --inputs object(10,0) receiving(10,1)
 //> 0: test::m::parent_uid(Input(0));
 //> 1: sui::transfer::receive<test::m::S>(Result(0), Input(1));
 //> 2: sui::object::delete(Result(0));
 //> 3: test::m::destroy_s(Result(1));
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call function 'sui::transfer::receive' since type parameter #0 can only be instantiated with types defined within the caller's module. If the type has the 'store' ability, use the public variant instead: 'sui::transfer::public_receive'."), command: Some(1) } }
+
 // Now publish one with store. We should:
 // 1. Not be able to call `receive` to receive it.
 // 2. Be able to call `public_receive` to receive it.
-Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call function 'sui::transfer::receive' since type parameter #0 can only be instantiated with types defined within the caller's module. If the type has the 'store' ability, use the public variant instead: 'sui::transfer::public_receive'."), command: Some(1) } }
 
 task 15, line 121:
 //# run test::m::mint_store --sender A
@@ -169,17 +173,17 @@ Contents: test::m::Store {
     },
 }
 
-task 18, lines 127-133:
+task 18, lines 127-131:
 //# programmable --sender A --inputs object(15,0) receiving(15,1)
 //> 0: test::m::parent_uid(Input(0));
 //> 1: sui::transfer::receive<test::m::Store>(Result(0), Input(1));
 //> 2: sui::object::delete(Result(0));
 //> 3: test::m::destroy_store(Result(1));
-// Can receive it via a direct `public_receive` call since `Store` has the `store` ability.
 Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call function 'sui::transfer::receive' since type parameter #0 can only be instantiated with types defined within the caller's module. If the type has the 'store' ability, use the public variant instead: 'sui::transfer::public_receive'."), command: Some(1) } }
 
-task 19, lines 134-138:
+task 19, lines 133-138:
+// Can receive it via a direct `public_receive` call since `Store` has the `store` ability.
 //# programmable --sender A --inputs object(15,0) receiving(15,1)
 //> 0: test::m::parent_uid(Input(0));
 //> 1: sui::transfer::public_receive<test::m::Store>(Result(0), Input(1));

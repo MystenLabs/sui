@@ -10,7 +10,7 @@ use std::{
 };
 
 use json_comments::StripComments;
-use lsp_types::{InlayHintKind, InlayHintLabel, InlayHintTooltip, Position};
+use lsp_types::{DiagnosticSeverity, InlayHintKind, InlayHintLabel, InlayHintTooltip, Position};
 use move_analyzer::{
     code_action::access_chain_autofix_actions_for_error,
     completions::compute_completions_with_symbols,
@@ -69,6 +69,9 @@ enum TestSuite {
         project: String,
         file_tests: BTreeMap<String, Vec<RenameTest>>,
     },
+    /// Snapshots the compiler diagnostics of every file in the project; an empty listing
+    /// asserts the project compiles cleanly
+    Diagnostics { project: String },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -1131,6 +1134,66 @@ fn rename_test_suite<F: MoveFlavor + Default>(
     Ok(result)
 }
 
+/// Prints the compiler diagnostics of every file in the project, paths relative to the project
+/// root (external files are reduced to their file name to keep the snapshot machine-independent)
+fn diagnostics_test_suite<F: MoveFlavor + Default>(
+    project: String,
+) -> datatest_stable::Result<String> {
+    let base_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut project_path = base_path.clone();
+    project_path.push(project);
+    let canonical_project_path = canonicalize_path(project_path.clone());
+
+    let packages_info = Arc::new(Mutex::new(CachedPackages::new()));
+    let ide_files_root: VfsPath = MemoryFS::new().into();
+
+    let (compiled_pkg_info, _symbols) = test_symbols_with_optional_modifications::<F>(
+        packages_info,
+        ide_files_root,
+        project_path,
+        None,
+    )?;
+
+    let mut output: BufWriter<_> = BufWriter::new(Vec::new());
+    let writer: &mut dyn io::Write = output.get_mut();
+    writeln!(
+        writer,
+        "== diagnostics ========================================================"
+    )?;
+    let mut clean = true;
+    for (fpath, diags) in compiled_pkg_info.lsp_diags.iter() {
+        if diags.is_empty() {
+            continue;
+        }
+        clean = false;
+        let fname = match fpath.strip_prefix(&canonical_project_path) {
+            Ok(relative) => relative.display().to_string(),
+            Err(_) => format!(
+                "<external>/{}",
+                fpath.file_name().unwrap_or_default().display()
+            ),
+        };
+        for diag in diags {
+            let severity = match diag.severity {
+                Some(DiagnosticSeverity::ERROR) => "error",
+                Some(DiagnosticSeverity::WARNING) => "warning",
+                _ => "other",
+            };
+            writeln!(
+                writer,
+                "{fname}:{}:{}: {severity}: {}",
+                diag.range.start.line, diag.range.start.character, diag.message
+            )?;
+        }
+    }
+    if clean {
+        writeln!(writer, "no diagnostics in the project")?;
+    }
+
+    let result: String = String::from_utf8(output.into_inner().unwrap()).unwrap();
+    Ok(result)
+}
+
 fn move_ide_testsuite<F: MoveFlavor + Default>(test_path: &Path) -> datatest_stable::Result<()> {
     let suite_file = io::BufReader::new(File::open(test_path)?);
     let stripped = StripComments::new(suite_file);
@@ -1169,6 +1232,7 @@ fn move_ide_testsuite<F: MoveFlavor + Default>(test_path: &Path) -> datatest_sta
             project,
             file_tests,
         } => rename_test_suite::<F>(project, file_tests),
+        TestSuite::Diagnostics { project } => diagnostics_test_suite::<F>(project),
     };
 
     let output = match suites {

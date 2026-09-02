@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 2 tasks
 
+// Test of a basic GraphQL query.
+
 task 1, lines 8-11:
 //# run-graphql
 Response: {

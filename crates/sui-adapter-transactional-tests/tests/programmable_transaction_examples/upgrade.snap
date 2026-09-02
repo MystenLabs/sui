@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 11 tasks
 
+// simple test of upgrade
+
 init:
 A: object(0,0)
 

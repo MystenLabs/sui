@@ -1,8 +1,9 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
 ---
 processed 5 tasks
+
+// tests coin operations with custom coins
 
 init:
 A: object(0,0)

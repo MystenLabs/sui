@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 8 tasks
 
+// test impact to versions for wrapping and unwrapping an object
+
 init:
 A: object(0,0)
 

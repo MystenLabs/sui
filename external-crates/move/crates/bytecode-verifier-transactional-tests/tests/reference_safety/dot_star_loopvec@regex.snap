@@ -3,7 +3,8 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 4 tasks
 
-task 1, lines 33-56:
+task 1, lines 32-54:
+// element live across the loop, then push: rejected
 //# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000062::f2_elem_live_across_loop'. Got VMError: {
     major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
@@ -13,7 +14,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 19)],
 }
 
-task 3, lines 105-134:
+task 3, lines 104-134:
+// after the loop write through the parent: rejected
 //# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000064::f4_parent_after_loop'. Got VMError: {
     major_status: WRITEREF_EXISTS_BORROW_ERROR,

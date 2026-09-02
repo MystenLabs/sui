@@ -55,8 +55,8 @@ impl ScalarType for SuiAddress {
 impl SuiAddress {
     pub(crate) const ZERO: Self = Self([0u8; SUI_ADDRESS_LENGTH]);
 
-    pub fn into_vec(self) -> Vec<u8> {
-        self.0.to_vec()
+    pub(crate) fn to_inner(self) -> [u8; SUI_ADDRESS_LENGTH] {
+        self.0
     }
 }
 

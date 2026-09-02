@@ -255,27 +255,6 @@ pub struct SubscriptionConfig {
     /// Number of checkpoints fetched concurrently per chunk during upstream gap recovery.
     pub gap_recovery_chunk_size: usize,
 
-    /// Upper bound on the rate (queries per second) at which a single subscriber's catch-up
-    /// scan issues kv-rpc fetches. Prevents a single client with a large backfill from
-    /// monopolising shared kv-rpc throughput.
-    ///
-    /// This is a per-subscriber cap, so aggregate kv-rpc QPS scales linearly with subscriber
-    /// count; aggregate protection belongs on the kv-rpc server itself.
-    ///
-    /// Increasing this value lets each subscriber catch up faster, at the cost of more
-    /// kv-rpc QPS per subscriber. The aggregate (subscribers * this) shares capacity with
-    /// the main query API, so if kv-rpc saturates, fetch latency rises and the effective
-    /// rate falls below this cap for everyone.
-    pub per_subscriber_scan_max_qps: u32,
-
-    /// Maximum in-flight kv-rpc fetches per subscriber during the catch-up scan. Must be
-    /// large enough to keep the pipeline full at your kv-rpc's fetch latency; otherwise
-    /// actual throughput is limited by concurrency rather than the QPS cap.
-    ///
-    /// Increasing this value keeps the QPS cap saturated under higher-latency kv-rpc, at
-    /// the cost of more per-subscriber memory held.
-    pub per_subscriber_scan_max_concurrent_fetches: usize,
-
     /// Maximum payloads a subscription resolves concurrently. Applies to every subscription type;
     /// a higher value resolves more payloads at once, at the cost of more in-flight work per
     /// subscriber.
@@ -292,6 +271,17 @@ pub struct SubscriptionConfig {
     /// already rejects a query whose worst case is too large, so this bounds the sustained rate, not
     /// the peak.
     pub per_subscriber_max_output_nodes_per_second: u32,
+
+    /// Maximum number of checkpoints ahead of the current tip a subscription may start from. There
+    /// is nothing to backfill ahead of the tip, so a request beyond it just waits for the chain to
+    /// reach that checkpoint; a far-future request would hold a connection open indefinitely, so it
+    /// is rejected instead. Raising this admits starts further past the tip, at the cost of
+    /// connections parked waiting longer.
+    pub max_start_checkpoints_ahead_of_tip: u64,
+
+    /// Maximum number of concurrent subscriptions the server admits at once. A subscription opened
+    /// while this many are already active is rejected so it can retry later.
+    pub max_subscribers: usize,
 }
 
 impl Default for SubscriptionConfig {
@@ -300,10 +290,11 @@ impl Default for SubscriptionConfig {
             broadcast_buffer: 256,
             package_eviction_interval_ms: 300_000,
             gap_recovery_chunk_size: 50,
-            per_subscriber_scan_max_qps: 500,
-            per_subscriber_scan_max_concurrent_fetches: 50,
             max_concurrent_resolutions: 100,
             per_subscriber_max_output_nodes_per_second: 1_000_000,
+            // About a minute at the average checkpoint rate.
+            max_start_checkpoints_ahead_of_tip: 300,
+            max_subscribers: 1024,
         }
     }
 }
@@ -314,10 +305,10 @@ pub struct SubscriptionLayer {
     pub broadcast_buffer: Option<usize>,
     pub package_eviction_interval_ms: Option<u64>,
     pub gap_recovery_chunk_size: Option<usize>,
-    pub per_subscriber_scan_max_qps: Option<u32>,
-    pub per_subscriber_scan_max_concurrent_fetches: Option<usize>,
     pub max_concurrent_resolutions: Option<usize>,
     pub per_subscriber_max_output_nodes_per_second: Option<u32>,
+    pub max_start_checkpoints_ahead_of_tip: Option<u64>,
+    pub max_subscribers: Option<usize>,
 }
 
 impl SubscriptionLayer {
@@ -330,18 +321,16 @@ impl SubscriptionLayer {
             gap_recovery_chunk_size: self
                 .gap_recovery_chunk_size
                 .unwrap_or(base.gap_recovery_chunk_size),
-            per_subscriber_scan_max_qps: self
-                .per_subscriber_scan_max_qps
-                .unwrap_or(base.per_subscriber_scan_max_qps),
-            per_subscriber_scan_max_concurrent_fetches: self
-                .per_subscriber_scan_max_concurrent_fetches
-                .unwrap_or(base.per_subscriber_scan_max_concurrent_fetches),
             max_concurrent_resolutions: self
                 .max_concurrent_resolutions
                 .unwrap_or(base.max_concurrent_resolutions),
             per_subscriber_max_output_nodes_per_second: self
                 .per_subscriber_max_output_nodes_per_second
                 .unwrap_or(base.per_subscriber_max_output_nodes_per_second),
+            max_start_checkpoints_ahead_of_tip: self
+                .max_start_checkpoints_ahead_of_tip
+                .unwrap_or(base.max_start_checkpoints_ahead_of_tip),
+            max_subscribers: self.max_subscribers.unwrap_or(base.max_subscribers),
         }
     }
 }
@@ -658,14 +647,12 @@ impl From<SubscriptionConfig> for SubscriptionLayer {
             broadcast_buffer: Some(value.broadcast_buffer),
             package_eviction_interval_ms: Some(value.package_eviction_interval_ms),
             gap_recovery_chunk_size: Some(value.gap_recovery_chunk_size),
-            per_subscriber_scan_max_qps: Some(value.per_subscriber_scan_max_qps),
-            per_subscriber_scan_max_concurrent_fetches: Some(
-                value.per_subscriber_scan_max_concurrent_fetches,
-            ),
             max_concurrent_resolutions: Some(value.max_concurrent_resolutions),
             per_subscriber_max_output_nodes_per_second: Some(
                 value.per_subscriber_max_output_nodes_per_second,
             ),
+            max_start_checkpoints_ahead_of_tip: Some(value.max_start_checkpoints_ahead_of_tip),
+            max_subscribers: Some(value.max_subscribers),
         }
     }
 }

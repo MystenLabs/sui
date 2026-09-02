@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[EC08001]: cannot compute constant value
+  ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable_use_only.move:6:34
+  │
+6 │ public(package) const BAD: u64 = 1 / 0;
+  │                                  ^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value

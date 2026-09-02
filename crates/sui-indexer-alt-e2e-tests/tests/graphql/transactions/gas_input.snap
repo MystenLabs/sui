@@ -6,37 +6,38 @@ processed 13 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-25:
+task 1, lines 6-23:
 //# publish
 created: object(1,0), object(1,1)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 6992000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 26-30:
+task 2, lines 25-27:
+// Digest 2: Basic transaction with single gas payment
 //# programmable --sender A --inputs object(1,1)
 //> 0: test::simple::increment(Input(0));
-// Digest 3: Split gas coin into multiple pieces for later use as gas payments
-// This creates object(3,0) and object(3,1) which will be used in other digests
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 2340800,  storage_rebate: 1339272, non_refundable_storage_fee: 13528
 
-task 3, lines 31-35:
+task 3, lines 29-33:
+// Digest 3: Split gas coin into multiple pieces for later use as gas payments
+// This creates object(3,0) and object(3,1) which will be used in other digests
 //# programmable --sender A --inputs 500000000 300000000 @A
 //> 0: SplitCoins(Gas, [Input(0), Input(1)]);
 //> 1: TransferObjects([NestedResult(0,0), NestedResult(0,1)], Input(2));
-// Digest 4: Use BOTH split coins from Digest 3 as multiple gas payments
 created: object(3,0), object(3,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4, lines 36-37:
+task 4, lines 35-37:
+// Digest 4: Use BOTH split coins from Digest 3 as multiple gas payments
 //# programmable --sender A --gas-payment object(3,0) --gas-payment object(3,1) --gas-budget 500000000 --inputs object(1,1)
 //> 0: test::simple::increment(Input(0));
 mutated: object(1,1), object(3,0)
 deleted: object(3,1)
 gas summary: computation_cost: 1000000, storage_cost: 2340800,  storage_rebate: 3295512, non_refundable_storage_fee: 33288
 
-task 5, lines 39-41:
+task 5, line 39:
 //# create-checkpoint
 Checkpoint created: 1
 

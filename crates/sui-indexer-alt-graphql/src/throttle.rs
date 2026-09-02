@@ -9,6 +9,7 @@ use async_graphql::Response;
 use async_graphql::Value;
 use futures::Stream;
 use futures::StreamExt;
+use prometheus::Histogram;
 
 use crate::extensions::query_limits::QueryDepth;
 
@@ -33,14 +34,20 @@ const DEPTH_NODE_COST: u32 = 2;
 ///
 /// So a 10-node payload at query depth 5 costs `10 + 5*2 = 20`, and at 40 nodes/second is held
 /// `20 / 40 = 0.5s`. A rate of `0` disables pacing, and payloads are never dropped or reordered.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct Throttle {
     nodes_per_second: u32,
+    /// Observes each payload's pacing delay in seconds (including zero when the budget is not
+    /// binding), for the `throttle_delay` metric.
+    delay_metric: Histogram,
 }
 
 impl Throttle {
-    pub(crate) fn new(nodes_per_second: u32) -> Self {
-        Self { nodes_per_second }
+    pub(crate) fn new(nodes_per_second: u32, delay_metric: Histogram) -> Self {
+        Self {
+            nodes_per_second,
+            delay_metric,
+        }
     }
 
     /// Pace `stream`, delivering each payload immediately then pausing before the next for its delay.
@@ -55,6 +62,7 @@ impl Throttle {
                 // backpressures its resolution. Depth is constant but only known once validation has
                 // run, so read the slot here.
                 let delay = self.calculate_delay(&response.data, query_depth.get());
+                self.delay_metric.observe(delay.as_secs_f64());
                 yield response;
                 if !delay.is_zero() {
                     tokio::time::sleep(delay).await;
@@ -102,6 +110,14 @@ mod tests {
 
     use super::*;
 
+    fn throttle(nodes_per_second: u32) -> Throttle {
+        Throttle::new(nodes_per_second, test_histogram())
+    }
+
+    fn test_histogram() -> Histogram {
+        Histogram::with_opts(prometheus::HistogramOpts::new("test", "test")).unwrap()
+    }
+
     #[test]
     fn counts_scalars_and_objects() {
         // A single scalar.
@@ -133,10 +149,7 @@ mod tests {
     #[test]
     fn zero_rate_disables_pacing() {
         let payload = value!({ "a": 1, "b": 2 });
-        assert_eq!(
-            Throttle::new(0).calculate_delay(&payload, 100),
-            Duration::ZERO
-        );
+        assert_eq!(throttle(0).calculate_delay(&payload, 100), Duration::ZERO);
     }
 
     #[test]
@@ -145,20 +158,19 @@ mod tests {
 
         // No depth surcharge: cost 5 at 10 nodes/sec = 0.5s.
         assert_eq!(
-            Throttle::new(10).calculate_delay(&payload, 0),
+            throttle(10).calculate_delay(&payload, 0),
             Duration::from_millis(500)
         );
 
         // Depth surcharge included: cost 5 + 5 * 2 = 15 at 15 nodes/sec = 1s.
         assert_eq!(
-            Throttle::new(15).calculate_delay(&payload, 5),
+            throttle(15).calculate_delay(&payload, 5),
             Duration::from_secs(1)
         );
 
         // A higher rate paces the same payload proportionally faster.
         assert!(
-            Throttle::new(20).calculate_delay(&payload, 0)
-                < Throttle::new(10).calculate_delay(&payload, 0)
+            throttle(20).calculate_delay(&payload, 0) < throttle(10).calculate_delay(&payload, 0)
         );
     }
 
@@ -172,9 +184,8 @@ mod tests {
             Response::new(payload.clone()),
             Response::new(payload),
         ];
-        let mut paced = Box::pin(
-            Throttle::new(10).wrap(futures::stream::iter(responses), QueryDepth::default()),
-        );
+        let mut paced =
+            Box::pin(throttle(10).wrap(futures::stream::iter(responses), QueryDepth::default()));
 
         let start = tokio::time::Instant::now();
         paced.next().await.unwrap();
@@ -193,8 +204,7 @@ mod tests {
         let query_depth = QueryDepth::new_for_test(3);
         let payload = value!({ "a": 1, "b": 2, "c": 3 }); // 4 output nodes
         let responses = vec![Response::new(payload.clone()), Response::new(payload)];
-        let mut paced =
-            Box::pin(Throttle::new(20).wrap(futures::stream::iter(responses), query_depth));
+        let mut paced = Box::pin(throttle(20).wrap(futures::stream::iter(responses), query_depth));
 
         let start = tokio::time::Instant::now();
         paced.next().await.unwrap();
@@ -208,13 +218,27 @@ mod tests {
         // A rate of 0 disables pacing, so both payloads arrive immediately with no gap.
         let payload = value!({ "a": 1, "b": 2 });
         let responses = vec![Response::new(payload.clone()), Response::new(payload)];
-        let mut paced = Box::pin(
-            Throttle::new(0).wrap(futures::stream::iter(responses), QueryDepth::default()),
-        );
+        let mut paced =
+            Box::pin(throttle(0).wrap(futures::stream::iter(responses), QueryDepth::default()));
 
         let start = tokio::time::Instant::now();
         paced.next().await.unwrap();
         paced.next().await.unwrap();
         assert_eq!(start.elapsed(), Duration::ZERO);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn wrap_observes_one_delay_sample_per_payload() {
+        let metric = test_histogram();
+        let payload = value!({ "a": 1, "b": 2 });
+        let responses = vec![Response::new(payload.clone()), Response::new(payload)];
+        let mut paced = Box::pin(
+            Throttle::new(10, metric.clone())
+                .wrap(futures::stream::iter(responses), QueryDepth::default()),
+        );
+
+        while paced.next().await.is_some() {}
+
+        assert_eq!(metric.get_sample_count(), 2);
     }
 }

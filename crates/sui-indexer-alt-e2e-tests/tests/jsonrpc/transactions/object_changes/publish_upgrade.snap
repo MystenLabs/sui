@@ -6,6 +6,9 @@ processed 6 tasks
 init:
 A: object(0,0)
 
+// Publishes and upgrades of user packages both show up as "Published" object
+// changes.
+
 task 1, lines 9-12:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)

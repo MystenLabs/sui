@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// tests cannot call private with programmable transactions
+
 init:
 A: object(0,0)
 

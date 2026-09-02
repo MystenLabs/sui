@@ -30,7 +30,7 @@ use sui_types::messages_grpc::ObjectInfoRequestKind;
 use sui_types::move_package::TypeOrigin;
 use sui_types::object::Object;
 use sui_types::transaction::{
-    GenesisObject, Reservation, SenderSignedData, SharedObjectMutability,
+    AllowedProposers, GenesisObject, Reservation, SenderSignedData, SharedObjectMutability,
     StoredExecutionTimeObservations, TransactionData, WithdrawFrom, WithdrawalTypeArg,
 };
 use sui_types::type_input::{StructInput, TypeInput};
@@ -188,6 +188,16 @@ fn get_registry() -> Result<Registry> {
         type_params: vec![TypeInput::Bool],
     };
     tracer.trace_value(&mut samples, &si).unwrap();
+
+    // `proposers` serializes as a plain vector but refuses to deserialize an empty one, so the
+    // tracer needs a sample rather than a synthesized value.
+    let allowed_proposers = AllowedProposers {
+        epoch: 0,
+        proposers: nonempty::nonempty![0u32],
+    };
+    tracer
+        .trace_value(&mut samples, &allowed_proposers)
+        .unwrap();
 
     // 2. Trace the main entry point(s) + every enum separately.
     tracer.trace_type::<StructInput>(&samples).unwrap();

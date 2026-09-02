@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 8 tasks
 
+// tests that object values cannot be used private entry functions if they have been
+// dirtied by non-entry functions
+
 init:
 A: object(0,0)
 
@@ -12,14 +15,15 @@ created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 5684800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 26-31:
+task 2, lines 26-28:
 //# programmable --sender A --inputs @A
 //> 0: test::m1::r();
 //> TransferObjects([Result(0)], Input(0))
-// cannot use results from other functions
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+// cannot use results from other functions
 
 task 3, lines 33-35:
 //# programmable
@@ -28,21 +32,23 @@ task 3, lines 33-35:
 Error: Transaction Effects Status: Move Runtime Abort. Location: test::m1::priv (function index 4) at offset 1, Abort Code: 0
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m1") }, function: 4, instruction: 1, function_name: Some("priv") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("test::m1::priv at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m1") }), indices: [], offsets: [(FunctionDefinitionIndex(4), 1)] }), command: Some(1) } }
 
-task 4, lines 37-41:
+task 4, lines 37-39:
 //# programmable --sender A --inputs object(2,0)
 //> 0: test::m1::id(Input(0));
 //> test::m1::priv(Result(0));
-// cannot use an object once it has been used in a non-entry function
 Error: Transaction Effects Status: Move Runtime Abort. Location: test::m1::priv (function index 4) at offset 1, Abort Code: 0
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m1") }, function: 4, instruction: 1, function_name: Some("priv") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("test::m1::priv at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m1") }), indices: [], offsets: [(FunctionDefinitionIndex(4), 1)] }), command: Some(1) } }
 
-task 5, lines 43-47:
+// cannot use an object once it has been used in a non-entry function
+
+task 5, lines 43-45:
 //# programmable --sender A --inputs object(2,0)
 //> 0: test::m1::dirty(Input(0));
 //> test::m1::priv(Input(0));
-// the result of the function makes the split coin dirty
 Error: Transaction Effects Status: Move Runtime Abort. Location: test::m1::priv (function index 4) at offset 1, Abort Code: 0
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m1") }, function: 4, instruction: 1, function_name: Some("priv") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("test::m1::priv at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m1") }), indices: [], offsets: [(FunctionDefinitionIndex(4), 1)] }), command: Some(1) } }
+
+// the result of the function makes the split coin dirty
 
 task 6, lines 49-53:
 //# programmable --sender A --inputs @A  --gas-budget 10000000000

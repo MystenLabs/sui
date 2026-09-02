@@ -7,7 +7,7 @@ init:
 A: object(0,0)
 
 task 1, lines 7-8:
-//# programmable --sender A 
+//# programmable --sender A
 //> 0: MakeMoveVec<std::string::utf8>([]);
 Error: Transaction Effects Status: Error for type argument at index 0: A type was not found in the module specified.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: TypeArgumentError { argument_idx: 0, kind: TypeNotFound }, source: None, command: Some(0) } }

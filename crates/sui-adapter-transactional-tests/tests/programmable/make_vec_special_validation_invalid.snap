@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// tests that MakeMoveVec performs necessary validation for special types like Option or String
+
 init:
 A: object(0,0)
 

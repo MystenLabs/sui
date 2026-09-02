@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 1 task
 
+// TxContext can be immutable, even for init
+
 task 0, lines 6-13:
 //# publish
 Error: Transaction Effects Status: Move Runtime Abort. Location: _::m::init (function index 0) at offset 1, Abort Code: 0

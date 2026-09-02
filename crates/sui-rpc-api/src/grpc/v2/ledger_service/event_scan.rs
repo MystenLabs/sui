@@ -4,7 +4,7 @@
 use std::ops::Bound;
 use std::ops::Range;
 
-use crate::ledger_history::query_options::EventPosition;
+use crate::ledger_history::query_options::IntraTxCoordinate;
 use sui_inverted_index::BitmapQuery;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::event_seq;
@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::RpcError;
 use crate::RpcService;
-use crate::ledger_history::query_options::EventScanBounds;
+use crate::ledger_history::query_options::IntraTxScanBounds;
 
 use super::bitmap_scan::EVENT_BITMAP_BUCKET_SIZE;
 use super::bitmap_scan::LedgerBitmapKind;
@@ -24,29 +24,29 @@ use super::ledger_read::tx_checkpoint;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct EventRef {
-    pub(super) position: EventPosition,
+    pub(super) position: IntraTxCoordinate,
     pub(super) tx_seq_digest: Option<LedgerTxSeqDigest>,
 }
 
 pub(super) struct DrainedEventHits {
-    pub(super) items: Vec<EventPosition>,
+    pub(super) items: Vec<IntraTxCoordinate>,
     pub(super) pending_bucket: Option<PendingBitmapBucket>,
-    pub(super) next_bounds: Option<EventScanBounds>,
+    pub(super) next_bounds: Option<IntraTxScanBounds>,
     pub(super) buckets_scanned: usize,
-    pub(super) frontier: Option<EventPosition>,
+    pub(super) frontier: Option<IntraTxCoordinate>,
     pub(super) chunk_scan_limit_reached: bool,
 }
 
 pub(super) struct UnfilteredScan {
     pub(super) refs: Vec<EventRef>,
-    pub(super) next_bounds: Option<EventScanBounds>,
+    pub(super) next_bounds: Option<IntraTxScanBounds>,
     pub(super) rows_scanned: usize,
     pub(super) row_limit_reached: bool,
-    pub(super) frontier: Option<EventPosition>,
+    pub(super) frontier: Option<IntraTxCoordinate>,
 }
 
-fn bounds_from_packed(range: Range<u64>) -> EventScanBounds {
-    EventScanBounds {
+fn bounds_from_packed(range: Range<u64>) -> IntraTxScanBounds {
+    IntraTxScanBounds {
         lo: Bound::Included(event_seq::decode_event_seq(range.start).into()),
         hi: Bound::Excluded(event_seq::decode_event_seq(range.end).into()),
     }
@@ -56,7 +56,7 @@ pub(super) fn drain_event_bitmap_hits(
     service: RpcService,
     query: BitmapQuery,
     pending_bucket: Option<PendingBitmapBucket>,
-    bounds: Option<EventScanBounds>,
+    bounds: Option<IntraTxScanBounds>,
     direction: ScanDirection,
     hit_limit: usize,
     scan_budget: usize,
@@ -80,21 +80,21 @@ pub(super) fn drain_event_bitmap_hits(
         items: hits
             .items
             .into_iter()
-            .map(|seq| EventPosition::from(event_seq::decode_event_seq(seq)))
+            .map(|seq| IntraTxCoordinate::from(event_seq::decode_event_seq(seq)))
             .collect(),
         pending_bucket: hits.pending_bucket,
         next_bounds: hits.next_range.map(bounds_from_packed),
         buckets_scanned: hits.buckets_scanned,
         frontier: hits
             .coalesced_frontier
-            .map(|seq| EventPosition::from(event_seq::decode_event_seq(seq))),
+            .map(|seq| IntraTxCoordinate::from(event_seq::decode_event_seq(seq))),
         chunk_scan_limit_reached: hits.chunk_scan_limit_reached,
     })
 }
 
 pub(super) fn next_unfiltered_event_refs(
     service: &RpcService,
-    bounds: &EventScanBounds,
+    bounds: &IntraTxScanBounds,
     ascending: bool,
     event_ref_limit: usize,
     row_scan_limit: usize,
@@ -155,11 +155,11 @@ pub(super) fn next_unfiltered_event_refs(
 
 pub(super) fn event_frontier_checkpoint(
     service: &RpcService,
-    frontier: EventPosition,
+    frontier: IntraTxCoordinate,
     ascending: bool,
 ) -> Result<Option<u64>, RpcError> {
     let lookup_tx = if ascending {
-        if frontier.event_index > 0 {
+        if frontier.index > 0 {
             frontier.tx_seq
         } else {
             match frontier.tx_seq.checked_sub(1) {
@@ -176,20 +176,20 @@ pub(super) fn event_frontier_checkpoint(
 fn push_event_refs_for_row_until_limit(
     refs: &mut Vec<EventRef>,
     row: LedgerTxSeqDigest,
-    bounds: EventScanBounds,
+    bounds: IntraTxScanBounds,
     ascending: bool,
     event_ref_limit: usize,
-) -> Option<EventScanBounds> {
+) -> Option<IntraTxScanBounds> {
     if row.event_count == 0 {
         return None;
     }
 
     let mut next_bounds = None;
     if ascending {
-        for event_index in 0..row.event_count {
-            let position = EventPosition {
+        for index in 0..row.event_count {
+            let position = IntraTxCoordinate {
                 tx_seq: row.tx_sequence_number,
-                event_index,
+                index,
             };
             if !bounds.contains(position) {
                 continue;
@@ -204,10 +204,10 @@ fn push_event_refs_for_row_until_limit(
             }
         }
     } else {
-        for event_index in (0..row.event_count).rev() {
-            let position = EventPosition {
+        for index in (0..row.event_count).rev() {
+            let position = IntraTxCoordinate {
                 tx_seq: row.tx_sequence_number,
-                event_index,
+                index,
             };
             if !bounds.contains(position) {
                 continue;
@@ -227,10 +227,10 @@ fn push_event_refs_for_row_until_limit(
 }
 
 fn remaining_bounds_after_event(
-    mut bounds: EventScanBounds,
-    position: EventPosition,
+    mut bounds: IntraTxScanBounds,
+    position: IntraTxCoordinate,
     ascending: bool,
-) -> Option<EventScanBounds> {
+) -> Option<IntraTxScanBounds> {
     if ascending {
         bounds.lo = Bound::Excluded(position);
     } else {
@@ -240,19 +240,22 @@ fn remaining_bounds_after_event(
 }
 
 fn remaining_bounds_after_scanned_tx(
-    mut bounds: EventScanBounds,
+    mut bounds: IntraTxScanBounds,
     tx_seq: u64,
     ascending: bool,
-) -> Option<EventScanBounds> {
+) -> Option<IntraTxScanBounds> {
     if ascending {
-        bounds.lo = Bound::Included(EventPosition::start_of_tx(tx_seq.saturating_add(1)));
+        bounds.lo = Bound::Included(IntraTxCoordinate::start_of_tx(tx_seq.saturating_add(1)));
     } else {
-        bounds.hi = Bound::Excluded(EventPosition::start_of_tx(tx_seq));
+        bounds.hi = Bound::Excluded(IntraTxCoordinate::start_of_tx(tx_seq));
     }
     (!bounds.is_empty()).then_some(bounds)
 }
 
-fn frontier_from_resume_bounds(bounds: &EventScanBounds, ascending: bool) -> Option<EventPosition> {
+fn frontier_from_resume_bounds(
+    bounds: &IntraTxScanBounds,
+    ascending: bool,
+) -> Option<IntraTxCoordinate> {
     if ascending {
         match bounds.lo {
             Bound::Included(position) | Bound::Excluded(position) => Some(position),

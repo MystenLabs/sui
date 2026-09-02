@@ -3,6 +3,12 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 9 tasks
 
+// A public function's dependencies are pinned `at_least` and resolve to the
+// version the package was published against unless another command in the same
+// transaction pins them higher. `Dep::stamp` writes a per-version constant (1
+// in v1, 2 in v2) into the shared `S`, so the observed `v` tells us which
+// version of `Dep` actually ran behind `Root::go`.
+
 init:
 A: object(0,0)
 
