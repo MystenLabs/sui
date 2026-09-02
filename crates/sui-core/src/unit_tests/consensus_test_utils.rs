@@ -301,7 +301,7 @@ pub fn make_consensus_adapter_for_test_with_submit_limit(
                                 .into_iter()
                                 .next()
                                 .map(|(_, v)| v)
-                                .unwrap_or_default();
+                                .unwrap_or_else(crate::authority::shared_object_version_manager::AssignedVersions::empty);
 
                             self.state.execution_scheduler().enqueue(
                                 vec![(

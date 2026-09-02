@@ -99,7 +99,7 @@ pub async fn submit_to_consensus(
         .into_map()
         .get(&executable.key())
         .cloned()
-        .unwrap_or_default();
+        .unwrap_or_else(AssignedVersions::empty);
 
     Ok((executable, versions))
 }
@@ -180,7 +180,7 @@ pub async fn submit_and_execute_with_error(
         .into_map()
         .get(&executable.key())
         .cloned()
-        .unwrap_or_default();
+        .unwrap_or_else(AssignedVersions::empty);
 
     // State accumulator for validation
     let state_acc =
@@ -455,7 +455,7 @@ pub async fn assign_versions_and_schedule(
         .into_map()
         .get(&executable.key())
         .cloned()
-        .unwrap_or_default();
+        .unwrap_or_else(AssignedVersions::empty);
 
     let env = ExecutionEnv::new().with_assigned_versions(versions.clone());
     authority.execution_scheduler().enqueue_transactions(
@@ -484,5 +484,5 @@ pub async fn assign_shared_object_versions(
         .into_map()
         .get(&executable.key())
         .cloned()
-        .unwrap_or_default()
+        .unwrap_or_else(AssignedVersions::empty)
 }

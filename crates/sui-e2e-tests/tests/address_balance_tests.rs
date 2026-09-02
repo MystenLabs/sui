@@ -335,8 +335,8 @@ async fn test_deposits() {
             .get_transaction_cache_reader()
             .get_executed_effects(&settlement_digest)
             .expect("settlement digest should exist");
-        let input_consensus_objects = settlement_effects.input_consensus_objects();
-        input_consensus_objects.iter().find(|input_consensus_object| {
+        let accessed_consensus_objects = settlement_effects.accessed_consensus_objects();
+        accessed_consensus_objects.iter().find(|input_consensus_object| {
             matches!(input_consensus_object, InputConsensusObject::ReadOnly(obj_ref) if obj_ref.0 == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
         }).expect("settlement should have accumulator root object as read-only input consensus object");
     });

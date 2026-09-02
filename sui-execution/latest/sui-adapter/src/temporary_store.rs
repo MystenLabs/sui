@@ -4,15 +4,16 @@
 use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::GasCharger;
 use move_vm_runtime::runtime::MoveRuntime;
-use mysten_common::ZipDebugEqIteratorExt;
+use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::AccumulatorObjId;
-use sui_types::base_types::VersionDigest;
+use sui_types::base_types::{SystemObjectVersions, VersionDigest};
 use sui_types::coin_reservation::ParsedDigest;
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
@@ -32,6 +33,7 @@ use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_trans
 use sui_types::{
     SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
+    digests::ObjectDigest,
     effects::EffectsObjectChange,
     error::{ExecutionError, SuiResult},
     gas::GasCostSummary,
@@ -123,6 +125,14 @@ pub struct TemporaryStore<'backing> {
 
     /// Execution-attempt bookkeeping for post-execution system checks.
     invariants: InvariantChecker,
+
+    /// Versions of system objects this transaction may implicitly read during execution.
+    system_object_versions: SystemObjectVersions,
+
+    /// System objects implicitly read during execution, keyed by object ID, with the version (and its
+    /// digest) at which they were read.
+    /// Interior-mutable because reads happen behind `&self` (`RuntimeObjectResolver`).
+    loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -136,7 +146,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
-        _system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        system_object_versions: SystemObjectVersions,
         transaction: (&TransactionKind, &GasData, SuiAddress),
     ) -> Self {
         let post_execution_check_inputs =
@@ -148,6 +158,7 @@ impl<'backing> TemporaryStore<'backing> {
             tx_digest,
             protocol_config,
             cur_epoch,
+            system_object_versions,
             post_execution_check_inputs,
         )
     }
@@ -164,6 +175,7 @@ impl<'backing> TemporaryStore<'backing> {
             tx_digest,
             protocol_config,
             0,
+            SystemObjectVersions::empty(),
             PostExecutionCheckInputs {
                 is_genesis: true,
                 ..Default::default()
@@ -178,6 +190,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
+        system_object_versions: SystemObjectVersions,
         post_execution_check_inputs: PostExecutionCheckInputs,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
@@ -220,7 +233,38 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
             post_execution_check_inputs,
             invariants: InvariantChecker::default(),
+            system_object_versions,
+            loaded_system_objects: RefCell::new(BTreeMap::new()),
         }
+    }
+
+    /// Checks that the system object `object_id` is available at the version this transaction
+    /// requires, and records the read so it can be emitted into effects
+    /// and reproduced on replay.
+    /// This is expected to return Some in normal cases. If it ever returns None, it should be
+    /// treated as an invariant violation.
+    pub fn load_implicitly_read_system_object(&self, object_id: &ObjectID) -> Option<Object> {
+        let version = match self.system_object_versions.get(object_id) {
+            Some(version) => version,
+            None => {
+                debug_fatal!(
+                    "system_object_versions must contain entry for object_id: {:?}",
+                    object_id
+                );
+                return None;
+            }
+        };
+        let object = self
+            .store
+            // If this transaction needs to read an implicit system object,
+            // the version must be assigned before execution.
+            .load_implicitly_read_system_object(object_id, version)?;
+        // Record the read version so it can be emitted into effects as a read-only consensus object and
+        // reproduced on replay.
+        self.loaded_system_objects
+            .borrow_mut()
+            .insert(*object_id, (object.version(), object.digest()));
+        Some(object)
     }
 
     // Helpers to access private fields
@@ -502,10 +546,12 @@ impl<'backing> TemporaryStore<'backing> {
         let lamport_version = self.lamport_timestamp;
         // TODO: Cleanup this clone. Potentially add unchanged_shraed_objects directly to InnerTempStore.
         let loaded_per_epoch_config_objects = self.loaded_per_epoch_config_objects.read().clone();
+        let loaded_system_objects = self.loaded_system_objects.borrow().clone();
         let unchanged_consensus_objects = TransactionEffectsV2::compute_unchanged_consensus_objects(
             shared_object_refs,
             loaded_per_epoch_config_objects,
             &object_changes,
+            loaded_system_objects,
         );
         let inner = self.into_inner(accumulator_running_max_withdraws);
 
@@ -662,11 +708,13 @@ impl<'backing> TemporaryStore<'backing> {
             cur_epoch,
             protocol_config,
             post_execution_check_inputs,
+            system_object_versions,
             // Represents what happened during execution, which needs to be kept.
             loaded_runtime_objects,
             runtime_packages_loaded_from_db,
             loaded_per_epoch_config_objects,
-            // Execution outcomes, can be discarded.
+            loaded_system_objects,
+            // Execution outcomes can be discarded.
             execution_results: _,
             invariants: _,
         } = self;
@@ -685,6 +733,8 @@ impl<'backing> TemporaryStore<'backing> {
             runtime_packages_loaded_from_db,
             loaded_per_epoch_config_objects,
             post_execution_check_inputs,
+            system_object_versions,
+            loaded_system_objects,
             execution_results: ExecutionResultsV2::default(),
             invariants: InvariantChecker::default(),
         };

@@ -621,7 +621,10 @@ impl CheckpointQueue {
             .schedulables
             .into_iter()
             .map(|s| {
-                let versions = assigned_versions.get(&s.key()).cloned().unwrap_or_default();
+                let versions = assigned_versions
+                    .get(&s.key())
+                    .cloned()
+                    .unwrap_or_else(AssignedVersions::empty);
                 (s, versions)
             })
             .collect();
@@ -646,7 +649,7 @@ impl CheckpointQueue {
                 assigned_versions: assigned_versions
                     .get(&settlement_key)
                     .cloned()
-                    .unwrap_or_default(),
+                    .unwrap_or_else(AssignedVersions::empty),
             }
         });
 

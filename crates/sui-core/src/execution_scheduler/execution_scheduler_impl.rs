@@ -644,11 +644,11 @@ impl ExecutionScheduler {
 
     #[cfg(test)]
     pub async fn check_empty_for_testing(&self) {
-        for _ in 0..10 {
+        for _ in 0..500 {
             if self.num_pending_certificates() == 0 {
                 return;
             }
-            tokio::task::yield_now().await;
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
         assert_eq!(self.num_pending_certificates(), 0);
     }

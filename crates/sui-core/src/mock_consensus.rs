@@ -90,7 +90,7 @@ impl MockConsensusClient {
                             .into_iter()
                             .next()
                             .map(|(_, v)| v)
-                            .unwrap_or_default();
+                            .unwrap_or_else(crate::authority::shared_object_version_manager::AssignedVersions::empty);
                         ExecutionEnv::new().with_assigned_versions(assigned_version)
                     } else {
                         ExecutionEnv::new()

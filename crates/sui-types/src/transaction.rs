@@ -1872,6 +1872,14 @@ impl SharedInputObject {
     pub fn is_accessed_exclusively(&self) -> bool {
         self.mutability.is_exclusive()
     }
+
+    /// Whether this input object may be mutated by the transaction, either exclusively or non-exclusively.
+    pub fn may_mutate(&self) -> bool {
+        match self.mutability {
+            SharedObjectMutability::Immutable => false,
+            SharedObjectMutability::Mutable | SharedObjectMutability::NonExclusiveWrite => true,
+        }
+    }
 }
 
 impl TransactionKind {
@@ -1903,6 +1911,11 @@ impl TransactionKind {
             self,
             TransactionKind::EndOfEpochTransaction(_) | TransactionKind::ChangeEpoch(_)
         )
+    }
+
+    pub fn mutates_implicitly_read_system_object(&self) -> bool {
+        self.shared_input_objects()
+            .any(|obj| obj.may_mutate() && obj.id.is_implicitly_read_system_object())
     }
 
     pub fn is_accumulator_barrier_settle_tx(&self) -> bool {

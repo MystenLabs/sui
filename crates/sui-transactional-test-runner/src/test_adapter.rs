@@ -1215,7 +1215,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         },
                     );
                     if bench_programmable {
-                        let assigned_versions = AssignedVersions::default();
+                        let assigned_versions = AssignedVersions::empty();
                         let objects = self
                             .executor
                             .read_input_objects(transaction.clone(), assigned_versions)
@@ -1559,7 +1559,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     .unwrap();
 
                 // Note: benchmark does not support shared object version assignment
-                let assigned_versions = AssignedVersions::default();
+                let assigned_versions = AssignedVersions::empty();
                 let objects = self
                     .executor
                     .read_input_objects(tx.clone(), assigned_versions)
