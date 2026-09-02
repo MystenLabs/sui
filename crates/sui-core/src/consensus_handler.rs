@@ -1765,19 +1765,17 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     /// ones. Both counts derive from commit output and the deterministic dedup state,
     /// so every honest validator computes the same values and the mode flips in
     /// lockstep.
+    ///
+    /// The signal is measured and its transitions are tracked unconditionally; the
+    /// `staggered_submission_signal` protocol flag only decides whether a transition
+    /// actually flips staggering, so the signal can be observed in dry run before the
+    /// flag is enabled.
     fn record_duplication_signal(
         &self,
         state: &CommitHandlerState,
         ordered_txns: &[VerifiedExecutableTransactionWithAliases],
         ordered_randomness_txns: &[VerifiedExecutableTransactionWithAliases],
     ) {
-        if !self
-            .epoch_store
-            .protocol_config()
-            .staggered_submission_signal()
-        {
-            return;
-        }
         let epoch = self.epoch_store.epoch();
         let rgp = self.epoch_store.reference_gas_price().max(1);
 
@@ -1802,17 +1800,32 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         self.metrics
             .staggered_submission_excess_copies
             .observe(excess_copies as f64);
-        if let Some(armed) = self
+        let apply = self
             .epoch_store
-            .staggered_submission()
-            .record_commit(excess_copies, unique_user_txns)
-        {
+            .protocol_config()
+            .staggered_submission_signal();
+        if let Some(armed) = self.epoch_store.staggered_submission().record_commit(
+            excess_copies,
+            unique_user_txns,
+            apply,
+        ) {
+            let state = if armed { "armed" } else { "disarmed" };
             info!(
-                "Staggered submission {} by duplication signal \
-                 ({excess_copies} excess copies over {unique_user_txns} unique user transactions in commit)",
-                if armed { "armed" } else { "disarmed" },
+                "Duplication signal {state} \
+                 ({excess_copies} excess copies over {unique_user_txns} unique user transactions in commit){}",
+                if apply {
+                    ""
+                } else {
+                    " — staggering not flipped, protocol flag disabled"
+                },
             );
-            self.metrics.staggered_submission_active.set(armed as i64);
+            self.metrics
+                .staggered_submission_signal_armed
+                .set(armed as i64);
+            self.metrics
+                .staggered_submission_signal_transitions
+                .with_label_values(&[state])
+                .inc();
         }
     }
 
