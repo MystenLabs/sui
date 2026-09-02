@@ -625,6 +625,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     accept_passkey_in_multisig: bool,
 
+    // If true, multisig containing an ML-DSA-65 member is accepted.
+    #[serde(skip_serializing_if = "is_false")]
+    accept_mldsa65_in_multisig: bool,
+
     // If true, additional zkLogin public identifier structure is validated.
     #[serde(skip_serializing_if = "is_false")]
     validate_zklogin_public_identifier: bool,
@@ -767,6 +771,10 @@ struct FeatureFlags {
     // Enable passkey auth (SIP-9)
     #[serde(skip_serializing_if = "is_false")]
     passkey_auth: bool,
+
+    // Enable ML-DSA-65 (FIPS 204) account signatures.
+    #[serde(skip_serializing_if = "is_false")]
+    mldsa65_auth: bool,
 
     // Use AuthorityCapabilitiesV2
     #[serde(skip_serializing_if = "is_false")]

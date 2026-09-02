@@ -1298,6 +1298,7 @@
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
+                "accept_mldsa65_in_multisig": false,
                 "accept_passkey_in_multisig": false,
                 "accept_zklogin_in_multisig": false,
                 "additional_borrow_checks": false,
@@ -1411,6 +1412,7 @@
                 "merge_randomness_into_checkpoint": false,
                 "minimize_child_object_mutations": false,
                 "missing_type_is_compatibility_error": true,
+                "mldsa65_auth": false,
                 "move_native_context": false,
                 "mysticeti_fastpath": false,
                 "mysticeti_leader_scoring_and_schedule": false,
@@ -2133,6 +2135,7 @@
               },
               "configs": {
                 "abstract_size_in_object_runtime": false,
+                "accept_mldsa65_in_multisig": false,
                 "accept_passkey_in_multisig": false,
                 "accept_zklogin_in_multisig": false,
                 "additional_borrow_checks": false,
@@ -2373,6 +2376,7 @@
                 "merge_randomness_into_checkpoint": false,
                 "minimize_child_object_mutations": false,
                 "missing_type_is_compatibility_error": true,
+                "mldsa65_auth": false,
                 "move_binary_format_version": 6,
                 "move_native_context": false,
                 "mysticeti_fastpath": false,
