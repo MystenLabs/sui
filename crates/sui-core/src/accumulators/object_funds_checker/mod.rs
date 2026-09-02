@@ -201,10 +201,11 @@ impl ObjectFundsChecker {
                 let pending_metrics = self.metrics.clone();
                 let scheduler = execution_scheduler.clone();
                 let cert = certificate.clone();
-                // This env clone carries the transaction's causal guard, keeping its
-                // causal index alive across the retry - a freshly assigned (higher)
-                // index could sit beyond the execution driver's admission window
-                // forever while earlier-enqueued transactions wait on this one.
+                // This env clone carries the transaction's causal index, so the retry
+                // re-submits under the original index (the driver keeps it live on a
+                // RetryLater outcome) - a freshly assigned, higher index could be
+                // unreachable for admission while earlier-enqueued transactions block
+                // waiting on this one.
                 let mut execution_env = execution_env.clone();
                 let epoch_store = epoch_store.clone();
                 tokio::task::spawn(async move {

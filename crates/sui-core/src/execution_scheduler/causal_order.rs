@@ -11,46 +11,64 @@
 //! admit transactions in a way that makes blocking on not-yet-available values
 //! deadlock-free (see the design comment in `execution_driver.rs`).
 //!
-//! Index lifecycle. [`CausalAdmission::assign`] hands out the next index wrapped in a
-//! [`CausalIndexGuard`], which travels with the unit inside its `ExecutionEnv`.
-//! Cloning the env (and with it the guard) shares the index among all transactions
-//! materialized from one key (a group). The index is *done* when the last guard clone
-//! drops - whether because every transaction of the group finished executing (the env
-//! is consumed at the end of execution), or because the unit was dropped without
-//! executing (already executed, wrong epoch, epoch ended, scheduling skipped). This
-//! makes retirement structural: there is no code path that can leak an index without
-//! leaking the guard itself, and a leaked index would permanently stall the watermark.
+//! Index lifecycle. Indices are assigned at enqueue time via [`CausalAdmission::admit_enqueue`]
+//! (or [`CausalAdmission::assign`] for internal units) and travel as plain data in the
+//! unit's `ExecutionEnv`. Every assigned index is *retired* (marked done) by the
+//! execution driver - the sole execution and retirement point - when its transaction
+//! finishes executing or is dropped as no longer needed. This relies on every indexed
+//! unit reaching the driver: enqueued transactions are deduplicated (below), and every
+//! transaction committed in an epoch executes before the epoch closes, so no indexed
+//! unit is ever abandoned upstream. The one exception is a settlement batch, whose
+//! transactions share the batch's index: only the final transaction of the batch (the
+//! barrier) retires it, marked by `ExecutionEnv::retires_causal_index`.
 //!
-//! One rule must hold for assignment: a unit that other, already-indexed units may wait
-//! on must never be re-assigned a *new, higher* index (transactions blocked waiting on
-//! it would pin the concurrency limit while the causal-next lane can never reach it).
-//! Units that will execute later keep their original guard - a retry path clones the
-//! env before execution finishes; only units that are truly done may drop it.
+//! Deduplication. `admit_enqueue` admits or rejects an entire version group
+//! atomically, keyed on the group's assigned accumulator root version: all
+//! transactions of a root version are enqueued together (one consensus chunk, or one
+//! whole group within a checkpoint), so a group at or below the enqueue watermark has
+//! already been enqueued in full by whichever source got there first, and is rejected
+//! without assigning indices. Performing the version check, index assignment and
+//! watermark bump under one lock serializes version admission across the consensus and
+//! checkpoint paths: a rejected group's transactions are guaranteed to already hold
+//! lower indices. Units with no accumulator version bypass deduplication - that only
+//! occurs when replaying epochs that predate accumulators (checkpoint path only, which
+//! never self-duplicates) plus the end-of-epoch transaction; execution cannot block on
+//! undeclared dependencies in such epochs, so any future blocking feature must be
+//! gated on accumulator-versioned epochs.
+//!
+//! One rule must hold for assignment: a unit that other, already-indexed units may
+//! wait on must never be re-assigned a *new, higher* index (transactions blocked
+//! waiting on it would pin the concurrency limit while the causal-next lane can never
+//! reach it). This is why a settlement batch takes its index when the batch is
+//! enqueued, not when its transactions materialize, and why the funds-withdraw retry
+//! re-submits with the transaction's original index.
 
 use std::{
     collections::BTreeSet,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::{Arc, Mutex},
 };
 
 use mysten_common::assert_sometimes;
+use sui_types::base_types::SequenceNumber;
 use tokio::sync::Notify;
 
-/// Shared state between the ExecutionScheduler (index assignment) and the execution
-/// driver (admission). See the module comment and `execution_driver.rs`.
+/// Shared state between the ExecutionScheduler (index assignment and enqueue
+/// deduplication) and the execution driver (admission and retirement). See the module
+/// comment and `execution_driver.rs`.
 pub struct CausalAdmission {
     inner: Mutex<AdmissionInner>,
     /// Wakes the driver loop when the watermark or in-flight count changes.
     notify: Notify,
-    /// The next index to assign. Indices start at 1; watermark 0 means "nothing done".
-    next_index: AtomicU64,
     /// Max transactions admitted for execution concurrently via the capacity branch (K).
     concurrency_limit: usize,
 }
 
 struct AdmissionInner {
+    /// The next index to assign. Indices start at 1; watermark 0 means "nothing done".
+    next_index: u64,
+    /// The highest accumulator root version whose group has been fully enqueued.
+    /// Groups at or below it are duplicates.
+    enqueue_watermark: Option<SequenceNumber>,
     /// The watermark C: every index <= C is done (executed or retired).
     watermark: u64,
     /// Done indices > C, awaiting the gap below them to fill.
@@ -84,25 +102,48 @@ impl CausalAdmission {
         assert!(concurrency_limit > 0);
         Arc::new(Self {
             inner: Mutex::new(AdmissionInner {
+                next_index: 1,
+                enqueue_watermark: None,
                 watermark: 0,
                 done_above: BTreeSet::new(),
                 in_flight: 0,
                 next_admitted: false,
             }),
             notify: Notify::new(),
-            next_index: AtomicU64::new(1),
             concurrency_limit,
         })
     }
 
-    /// Assigns the next causal index. Callers must call this in causal order (the
-    /// order units are enqueued from consensus handler / checkpoint executor).
-    pub fn assign(self: &Arc<Self>) -> CausalIndexGuard {
-        let index = self.next_index.fetch_add(1, Ordering::Relaxed);
-        CausalIndexGuard(Arc::new(GuardInner {
-            index,
-            admission: self.clone(),
-        }))
+    /// Deduplicates and assigns indices for one externally-enqueued version group of
+    /// `count` units, in enqueue order. Returns the first of `count` consecutive
+    /// indices, or None if the group's version is at or below the enqueue watermark -
+    /// meaning the whole group was already enqueued (with lower indices) by the other
+    /// source. Groups without an accumulator version are never deduplicated.
+    ///
+    /// The check, assignment and watermark bump are atomic, serializing version
+    /// admission across the consensus and checkpoint paths.
+    pub fn admit_enqueue(&self, version: Option<SequenceNumber>, count: usize) -> Option<u64> {
+        let mut inner = self.inner.lock().unwrap();
+        if let Some(version) = version {
+            if inner.enqueue_watermark.is_some_and(|w| version <= w) {
+                assert_sometimes!(true, "rejected duplicate enqueue of a version group");
+                return None;
+            }
+            inner.enqueue_watermark = Some(version);
+        }
+        let first = inner.next_index;
+        inner.next_index += count as u64;
+        Some(first)
+    }
+
+    /// Assigns one causal index without deduplication, for internally-scheduled units
+    /// (settlement batches). Callers must call this in causal order relative to
+    /// `admit_enqueue`.
+    pub fn assign(&self) -> u64 {
+        let mut inner = self.inner.lock().unwrap();
+        let index = inner.next_index;
+        inner.next_index += 1;
+        index
     }
 
     /// Attempts to admit the transaction with `index` for execution. On success,
@@ -139,7 +180,10 @@ impl CausalAdmission {
         self.notify.notified().await;
     }
 
-    fn mark_done(&self, index: u64) {
+    /// Marks `index` done - its unit finished executing, or was dropped as no longer
+    /// needed. Called by the execution driver, exactly once per index (for settlement
+    /// batches, for the barrier only).
+    pub fn mark_done(&self, index: u64) {
         let mut inner = self.inner.lock().unwrap();
         if index == inner.watermark + 1 {
             inner.watermark = index;
@@ -161,36 +205,6 @@ impl CausalAdmission {
     #[cfg(test)]
     pub fn watermark_for_testing(&self) -> u64 {
         self.inner.lock().unwrap().watermark
-    }
-}
-
-struct GuardInner {
-    index: u64,
-    admission: Arc<CausalAdmission>,
-}
-
-impl Drop for GuardInner {
-    fn drop(&mut self) {
-        self.admission.mark_done(self.index);
-    }
-}
-
-/// Owns (a share of) a causal index. The index is marked done when the last clone
-/// drops. See the module comment for the lifecycle.
-#[derive(Clone)]
-pub struct CausalIndexGuard(Arc<GuardInner>);
-
-impl CausalIndexGuard {
-    pub fn index(&self) -> u64 {
-        self.0.index
-    }
-}
-
-impl std::fmt::Debug for CausalIndexGuard {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("CausalIndexGuard")
-            .field(&self.0.index)
-            .finish()
     }
 }
 
@@ -220,80 +234,82 @@ mod tests {
     #[test]
     fn watermark_advances_over_done_indices() {
         let admission = CausalAdmission::new(2);
-        let g1 = admission.assign();
-        let g2 = admission.assign();
-        let g3 = admission.assign();
+        let first = admission.admit_enqueue(None, 3).unwrap();
+        assert_eq!(first, 1);
         assert_eq!(admission.watermark_for_testing(), 0);
 
         // Out-of-order completion parks above the watermark until the gap fills.
-        drop(g2);
+        admission.mark_done(2);
         assert_eq!(admission.watermark_for_testing(), 0);
-        drop(g1);
+        admission.mark_done(1);
         assert_eq!(admission.watermark_for_testing(), 2);
-        drop(g3);
+        admission.mark_done(3);
         assert_eq!(admission.watermark_for_testing(), 3);
     }
 
     #[test]
-    fn group_index_is_done_when_last_clone_drops() {
+    fn duplicate_version_groups_are_rejected() {
         let admission = CausalAdmission::new(2);
-        let g1 = admission.assign();
-        let g1_clone = g1.clone();
-        drop(g1);
-        assert_eq!(admission.watermark_for_testing(), 0);
-        drop(g1_clone);
-        assert_eq!(admission.watermark_for_testing(), 1);
+        let v1 = SequenceNumber::from_u64(5);
+        let v2 = SequenceNumber::from_u64(6);
+
+        assert_eq!(admission.admit_enqueue(Some(v1), 3), Some(1));
+        // The same version from the other source is a duplicate.
+        assert_eq!(admission.admit_enqueue(Some(v1), 3), None);
+        // A higher version is new work.
+        assert_eq!(admission.admit_enqueue(Some(v2), 2), Some(4));
+        // Groups without a version are never deduplicated.
+        assert_eq!(admission.admit_enqueue(None, 1), Some(6));
+        assert_eq!(admission.admit_enqueue(None, 1), Some(7));
     }
 
     #[test]
     fn next_consecutive_is_admitted_at_the_limit() {
         let admission = CausalAdmission::new(1);
-        let g1 = admission.assign();
-        let g2 = admission.assign();
+        admission.admit_enqueue(None, 2).unwrap();
 
         // Fill the single concurrency slot with index 2.
-        let _slot2 = admission.try_admit(g2.index()).unwrap();
+        let _slot2 = admission.try_admit(2).unwrap();
         // The capacity branch is closed, but index 1 == watermark+1 is still admitted.
-        let slot1 = admission.try_admit(g1.index()).unwrap();
-        // Only one causal-next admission may be outstanding, so a second member of the
-        // watermark+1 group must wait for it.
-        assert!(admission.try_admit(g1.index()).is_none());
+        let slot1 = admission.try_admit(1).unwrap();
+        // Only one causal-next admission may be outstanding, so another transaction
+        // with the same index (a settlement-batch member) must wait for it.
+        assert!(admission.try_admit(1).is_none());
         drop(slot1);
-        let slot1b = admission.try_admit(g1.index()).unwrap();
+        let slot1b = admission.try_admit(1).unwrap();
 
         drop(slot1b);
-        drop(g1);
+        admission.mark_done(1);
         assert_eq!(admission.watermark_for_testing(), 1);
-        // Index 2 is now watermark+1; admitting another member of it again bypasses
-        // the (full) concurrency limit.
-        assert!(admission.try_admit(g2.index()).is_some());
+        // Index 2 is now watermark+1; admitting again bypasses the (full) limit.
+        assert!(admission.try_admit(2).is_some());
     }
 
     #[test]
     fn concurrency_limit_bounds_admissions() {
         let admission = CausalAdmission::new(2);
-        let guards: Vec<_> = (0..5).map(|_| admission.assign()).collect();
+        admission.admit_enqueue(None, 5).unwrap();
 
         // Admit indices 2 and 3 through the capacity branch, filling the limit.
-        let _s2 = admission.try_admit(guards[1].index()).unwrap();
-        let _s3 = admission.try_admit(guards[2].index()).unwrap();
+        let _s2 = admission.try_admit(2).unwrap();
+        let _s3 = admission.try_admit(3).unwrap();
         // Index 4 is neither under the limit nor the causal-next transaction.
-        assert!(admission.try_admit(guards[3].index()).is_none());
+        assert!(admission.try_admit(4).is_none());
 
         // Releasing a slot reopens the capacity branch, regardless of how far the
         // index runs ahead of the watermark.
         drop(_s2);
-        assert!(admission.try_admit(guards[4].index()).is_some());
+        assert!(admission.try_admit(5).is_some());
     }
 
     #[test]
     fn retirement_without_admission_advances_watermark() {
         let admission = CausalAdmission::new(2);
-        let g1 = admission.assign();
-        let g2 = admission.assign();
-        // Unit 1 is dropped without ever being admitted (e.g. already executed).
-        drop(g1);
+        admission.admit_enqueue(None, 2).unwrap();
+        // Unit 1 is dropped by the driver without being admitted (e.g. already
+        // executed).
+        admission.mark_done(1);
         assert_eq!(admission.watermark_for_testing(), 1);
-        assert!(admission.try_admit(g2.index()).is_some());
+        assert!(admission.try_admit(2).is_some());
     }
 }

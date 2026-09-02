@@ -104,10 +104,11 @@ impl SettlementScheduler {
         // and before the next commit is enqueued. All settlement transactions of the
         // batch (including the barrier) share it via clones of this env: later
         // commits' transactions may park waiting on the accumulator version the batch
-        // writes, so the batch's index must sit below theirs.
+        // writes, so the batch's index must sit below theirs. Only the barrier - the
+        // batch's final transaction - retires the index.
         let env = ExecutionEnv::new()
             .with_assigned_versions(settlement.assigned_versions.clone())
-            .with_causal_guard(self.execution_scheduler.causal_admission().assign());
+            .with_causal_index(self.execution_scheduler.causal_admission().assign());
         let queue = self.get_or_start_queue(epoch_store);
         queue.send(SettlementWorkItem {
             settlement_key: settlement.settlement_key,
@@ -258,7 +259,10 @@ impl SettlementScheduler {
             .into_iter()
             .map(|tx| {
                 let deps = barrier_deps.process_tx(*tx.digest(), tx.transaction_data());
-                let env = env.clone().with_barrier_dependencies(deps);
+                let mut env = env.clone().with_barrier_dependencies(deps);
+                // The batch's shared causal index is retired by the barrier below,
+                // not by these transactions.
+                env.retires_causal_index = false;
                 (tx, env)
             })
             .collect::<Vec<_>>();

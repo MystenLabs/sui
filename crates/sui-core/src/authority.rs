@@ -16,7 +16,6 @@ use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
 use crate::execution_cache::writeback_cache::WritebackCache;
 use crate::execution_scheduler::ExecutionScheduler;
-use crate::execution_scheduler::causal_order::CausalIndexGuard;
 use crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement;
 use crate::gasless_rate_limiter::ConsensusGaslessCounter;
 use crate::jsonrpc_index::CoinIndexKey2;
@@ -903,11 +902,14 @@ pub struct ExecutionEnv {
     /// Used to schedule barrier transactions after non-exclusive writes.
     pub barrier_dependencies: Vec<TransactionDigest>,
     /// The transaction's position in causal order, assigned by the ExecutionScheduler
-    /// at enqueue time and used by the execution driver for admission. The index is
-    /// retired when the last clone drops - normally when this env is consumed at the
-    /// end of execution; paths that re-enqueue the transaction (funds-withdraw retry)
-    /// clone the env and thereby keep the index alive.
-    pub causal_guard: Option<CausalIndexGuard>,
+    /// at enqueue time and used by the execution driver for admission. The driver
+    /// retires the index when the transaction finishes executing or is dropped as no
+    /// longer needed (see `execution_scheduler::causal_order`).
+    pub causal_index: Option<u64>,
+    /// Whether completing this transaction retires its causal index. False only for
+    /// the non-final transactions of a settlement batch, which share the batch's index;
+    /// the barrier, enqueued last, retires it.
+    pub retires_causal_index: bool,
 }
 
 impl Default for ExecutionEnv {
@@ -917,7 +919,8 @@ impl Default for ExecutionEnv {
             expected_effects_digest: None,
             funds_withdraw_status: FundsWithdrawStatus::MaybeSufficient,
             barrier_dependencies: Default::default(),
-            causal_guard: None,
+            causal_index: None,
+            retires_causal_index: true,
         }
     }
 }
@@ -950,8 +953,8 @@ impl ExecutionEnv {
         self
     }
 
-    pub fn with_causal_guard(mut self, causal_guard: CausalIndexGuard) -> Self {
-        self.causal_guard = Some(causal_guard);
+    pub fn with_causal_index(mut self, causal_index: u64) -> Self {
+        self.causal_index = Some(causal_index);
         self
     }
 }
