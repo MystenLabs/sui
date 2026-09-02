@@ -904,12 +904,10 @@ pub struct ExecutionEnv {
     /// The transaction's position in causal order, assigned by the ExecutionScheduler
     /// at enqueue time and used by the execution driver for admission. The driver
     /// retires the index when the transaction finishes executing or is dropped as no
-    /// longer needed (see `execution_scheduler::causal_order`).
+    /// longer needed. None at the driver means the transaction is admitted
+    /// unconditionally (settlement transactions - see
+    /// `execution_scheduler::causal_order`).
     pub causal_index: Option<u64>,
-    /// Whether completing this transaction retires its causal index. False only for
-    /// the non-final transactions of a settlement batch, which share the batch's index;
-    /// the barrier, enqueued last, retires it.
-    pub retires_causal_index: bool,
 }
 
 impl Default for ExecutionEnv {
@@ -920,7 +918,6 @@ impl Default for ExecutionEnv {
             funds_withdraw_status: FundsWithdrawStatus::MaybeSufficient,
             barrier_dependencies: Default::default(),
             causal_index: None,
-            retires_causal_index: true,
         }
     }
 }
