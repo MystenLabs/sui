@@ -1072,6 +1072,15 @@ async fn test_list_transactions_after_last_item_ends_at_window_bound() {
         Some(last_cursor),
         "the drain frame carries the window's cursor, not the request echo"
     );
+    let terminal_watermark = resp
+        .frames
+        .last()
+        .and_then(|frame| frame.watermark.as_ref())
+        .expect("empty-window terminal watermark");
+    assert_eq!(
+        terminal_watermark.checkpoint, None,
+        "empty-window terminal frame must not claim checkpoint coverage"
+    );
 }
 
 #[sim_test]
@@ -2659,7 +2668,15 @@ async fn test_list_checkpoints_query_options() {
     let response3 = list_checkpoints_result(&mut client, req).await;
     assert!(response3.checkpoints.is_empty());
     assert!(response3.end);
-    assert_eq!(response3.end_reason, Some(QueryEndReason::CursorBound));
+    assert_eq!(response3.end_reason, Some(QueryEndReason::CheckpointBound));
+    let terminal_watermark = response3
+        .watermarks
+        .last()
+        .expect("empty-window terminal watermark");
+    assert_eq!(
+        terminal_watermark.checkpoint, None,
+        "empty-window terminal watermark must not claim checkpoint coverage"
+    );
 
     let mut req = ListCheckpointsRequest::default();
     req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
@@ -2751,7 +2768,18 @@ async fn test_list_checkpoints_query_options() {
     let after_exact = list_checkpoints_result(&mut client, req).await;
     assert!(after_exact.checkpoints.is_empty());
     assert!(after_exact.end);
-    assert_eq!(after_exact.end_reason, Some(QueryEndReason::CursorBound));
+    assert_eq!(
+        after_exact.end_reason,
+        Some(QueryEndReason::CheckpointBound)
+    );
+    let terminal_watermark = after_exact
+        .watermarks
+        .last()
+        .expect("empty-window terminal watermark");
+    assert_eq!(
+        terminal_watermark.checkpoint, None,
+        "empty-window terminal watermark must not claim checkpoint coverage"
+    );
 }
 
 /// Unfiltered `list_checkpoints` on a pruned store: an open-ended low
