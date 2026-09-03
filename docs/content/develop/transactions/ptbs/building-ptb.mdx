@@ -66,12 +66,19 @@ const tx = new Transaction();
 Using this, you can then add transactions to the PTB:
 
 ```ts
-// Create a new coin with balance 100, based on the coins used as gas payment.
-// You can define any balance here.
-const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(100)]);
+// Send 100 MIST to the recipient's address balance. tx.balance() draws from the
+// sender's coin objects and address balance, so you do not select coins yourself.
+tx.moveCall({
+	target: '0x2::balance::send_funds',
+	typeArguments: ['0x2::sui::SUI'],
+	arguments: [tx.balance({ balance: 100n }), tx.pure.address('0xSomeSuiAddress')],
+});
+```
 
-// Transfer the split coin to a specific address.
-tx.transferObjects([coin], '0xSomeSuiAddress');
+A balance transfer creates no new objects for the recipient to manage. When the recipient needs a `Coin<T>` object instead, such as a payment a downstream Move call consumes, use `tx.coin()` with `transferObjects`:
+
+```ts
+tx.transferObjects([tx.coin({ balance: 100n })], '0xSomeSuiAddress');
 ```
 
 You can attach multiple transaction commands of the same type to a PTB. For example, to get a list of transfers, and iterate over them to transfer coins to each:
@@ -87,15 +94,9 @@ const transfers: Transfer[] = getTransfers();
 
 const tx = new Transaction();
 
-// First, split the gas coin into multiple coins:
-const coins = tx.splitCoins(
-	tx.gas,
-	transfers.map((transfer) => tx.pure.u64(transfer.amount)),
-);
-
-// Next, create a transfer transaction for each coin:
-transfers.forEach((transfer, index) => {
-	tx.transferObjects([coins[index]], transfer.to);
+// tx.coin() sources each amount for you, so there is no split step to manage.
+transfers.forEach((transfer) => {
+	tx.transferObjects([tx.coin({ balance: BigInt(transfer.amount) })], transfer.to);
 });
 ```
 
@@ -163,9 +164,11 @@ tx.transferObjects([mintMany[0], mintMany[1]], tx.pure.address(address));
 
 ## Use the gas coin
 
-With PTBs, you can use the gas payment coin to construct coins with a set balance using `splitCoins`. You can use `tx.gas` to access the gas coin in a PTB and it is valid as input for any arguments.
+For most transactions, reach for [`tx.coin()` and `tx.balance()`](https://sdk.mystenlabs.com/sui/transactions/coins-and-balances) rather than the gas coin. They are the recommended way to source tokens, and they draw from coin objects and address balances without you selecting either.
 
-`tx.gas` is available whichever way the transaction pays for gas. When you supply coin objects, the protocol smashes them into a single gas coin. When you pass an empty array to `setGasPayment([])` to draw gas from an [address balance](/onchain-finance/asset-custody/address-balances/using-address-balances), the protocol materializes a synthetic gas coin from the sender's or sponsor's balance. `tx.gas` refers to that coin in either case, so building against it does not force client-side coin or balance resolution and stays compatible with [offline building](#building-offline).
+`tx.gas` still matters when you want the gas coin specifically, and it is valid as input for any argument.
+
+`tx.gas` is available whichever way the transaction pays for gas. When you supply coin objects, the protocol smashes them into a single gas coin. When you pass an empty array to `setGasPayment([])` to draw gas from an [address balance](/onchain-finance/asset-custody/address-balances/using-address-balances), the protocol materializes a synthetic gas coin from the sender's or sponsor's balance. `tx.gas` refers to that coin in either case, so building against it does not force client-side coin or balance resolution. That matters for [offline building](#building-offline), where an unresolved `tx.coin()` or `tx.balance()` intent would need a balance lookup.
 
 You can borrow the gas coin by reference freely: add to it with `mergeCoins`, split from it with `splitCoins`, or pass it to a Move function with `moveCall`. Consuming it by value is restricted to 2 commands:
 
