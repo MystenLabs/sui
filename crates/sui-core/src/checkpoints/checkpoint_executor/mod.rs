@@ -672,9 +672,6 @@ impl CheckpointExecutor {
     ) -> CheckpointExecutionState {
         let sequence_number = ckpt_state.data.checkpoint.sequence_number;
 
-        self.commit_post_processing_index_batches(&ckpt_state.data.tx_digests)
-            .await;
-
         let _scope = mysten_metrics::monitored_scope("CheckpointExecutor::finalize_checkpoint");
 
         if self.state.is_fullnode(&self.epoch_store) {
@@ -705,32 +702,6 @@ impl CheckpointExecutor {
         finish_stage!(pipeline_handle, ProcessCheckpointData);
 
         ckpt_state
-    }
-
-    // Collect index batches from post-processing and commit atomically.
-    // This must happen AFTER all transactions have completed execution and BEFORE
-    // insert_finalized_transactions (so that index data is available when
-    // transactions_executed_in_checkpoint_notify fires).
-    async fn commit_post_processing_index_batches(&self, tx_digests: &[TransactionDigest]) {
-        let mut raw_batches = Vec::new();
-        let mut cache_updates = Vec::new();
-        for tx_digest in tx_digests {
-            if let Some((raw_batch, cu)) = self.state.await_post_processing(tx_digest).await {
-                raw_batches.push(raw_batch);
-                cache_updates.push(cu);
-            }
-        }
-        if !raw_batches.is_empty()
-            && let Some(indexes) = &self.state.indexes
-        {
-            let mut db_batch = indexes.new_db_batch();
-            db_batch
-                .concat(raw_batches)
-                .expect("failed to build index batch");
-            indexes
-                .commit_index_batch(db_batch, cache_updates)
-                .expect("failed to commit index batch");
-        }
     }
 
     fn checkpoint_data_enabled(&self) -> bool {

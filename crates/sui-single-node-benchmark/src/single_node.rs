@@ -40,7 +40,6 @@ pub struct SingleValidator {
 impl SingleValidator {
     pub(crate) async fn new(genesis_objects: &[Object], component: Component) -> Self {
         let validator = TestAuthorityBuilder::new()
-            .disable_indexer()
             .with_starting_objects(genesis_objects)
             // This is needed to properly run checkpoint executor.
             .insert_genesis_checkpoint()

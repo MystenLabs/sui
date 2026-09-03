@@ -35,19 +35,3 @@ pub fn get_balance(
 
     Ok(u64_balance)
 }
-
-/// Get all balances and corresponding currency types for a given owner address
-/// (which can be a wallet or an object)
-pub fn get_all_balances_for_owner(
-    owner: SuiAddress,
-    runtime_object_resolver: &dyn RuntimeObjectResolver,
-    index_store: &crate::jsonrpc_index::IndexStore,
-) -> SuiResult<Vec<(TypeTag, u64)>> {
-    let currency_types = index_store.get_address_balance_coin_types_iter(owner);
-    let mut balances = Vec::new();
-    for currency_type in currency_types {
-        let balance = get_balance(owner, runtime_object_resolver, currency_type.clone())?;
-        balances.push((currency_type, balance));
-    }
-    Ok(balances)
-}

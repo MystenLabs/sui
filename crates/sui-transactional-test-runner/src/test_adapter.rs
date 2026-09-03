@@ -2855,8 +2855,7 @@ async fn create_validator_fullnode(
             let mut builder = TestAuthorityBuilder::new()
                 .with_starting_objects(&objects)
                 .with_shared_network_config(&network_config)
-                .insert_genesis_checkpoint()
-                .skip_genesis_owner_index();
+                .insert_genesis_checkpoint();
             if let Some(keypair) = &keypair {
                 builder = builder.with_keypair(keypair);
             }

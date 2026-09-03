@@ -115,33 +115,4 @@ async fn test_observer_uses_verify_checkpoint_path() {
         "Observer should have locally built every checkpoint containing submitted transactions, missing {:?}",
         missing_local_checkpoints,
     );
-
-    // Verify the legacy IndexStore post-processing pipeline works.
-    // commit_post_processing_index_batches collects per-transaction index data
-    // (built during execution) and commits it at checkpoint boundaries. If this
-    // works, submitted transactions will have a sequence number in the index.
-    let index_store = observer_state
-        .indexes
-        .as_ref()
-        .expect("observer should have an IndexStore");
-    let missing_indexed_txs = tx_digests
-        .iter()
-        .copied()
-        .filter(|digest| {
-            index_store
-                .get_transaction_seq(digest)
-                .expect("db error")
-                .is_none()
-        })
-        .collect::<Vec<_>>();
-
-    info!(
-        "Observer IndexStore indexed {} submitted transactions",
-        tx_digests.len() - missing_indexed_txs.len(),
-    );
-    assert!(
-        missing_indexed_txs.is_empty(),
-        "Observer IndexStore should have indexed every submitted transaction, missing {:?}",
-        missing_indexed_txs,
-    );
 }

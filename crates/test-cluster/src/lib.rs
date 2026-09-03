@@ -1374,7 +1374,6 @@ impl TestClusterBuilder {
             perform_db_checkpoints_at_epoch_end: true,
             checkpoint_path: None,
             object_store_config: None,
-            perform_index_db_checkpoints_at_epoch_end: None,
             prune_and_compact_before_upload: None,
         };
         self
@@ -1385,7 +1384,6 @@ impl TestClusterBuilder {
             perform_db_checkpoints_at_epoch_end: true,
             checkpoint_path: None,
             object_store_config: None,
-            perform_index_db_checkpoints_at_epoch_end: None,
             prune_and_compact_before_upload: Some(true),
         };
         self
