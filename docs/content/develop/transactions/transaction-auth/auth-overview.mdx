@@ -62,7 +62,7 @@ answer: >-
   between them.
 ---
 
-Transaction authentication on Sui involves three core concepts: cryptographic keys that you control, addresses that identify accounts onchain, and signatures that prove ownership. Sui implements these concepts using widely accepted wallet specifications and multiple signature schemes.
+Transaction authentication on Sui involves 3 core concepts: cryptographic keys that you control, addresses that identify accounts onchain, and signatures that prove ownership. Sui implements these concepts using widely accepted wallet specifications and multiple signature schemes.
 
 ## Keys and addresses
 
@@ -128,7 +128,7 @@ When a user submits a signed transaction, a serialized signature and serialized 
 
 ### Signature structure
 
-A Sui signature consists of three components concatenated together:
+A Sui signature consists of 3 components concatenated together:
 
 - `flag`: A 1-byte representation corresponding to the signature scheme.
 
@@ -183,7 +183,7 @@ For more information on advanced signature schemes:
 
 - **zkLogin**: See [zkLogin](/sui-stack/zklogin-integration) for details on zero-knowledge login signatures. The TypeScript SDK provides `ZkLoginSigner` (`@mysten/sui/zklogin`), which wraps an ephemeral signer and automatically produces zkLogin signatures. Its `getKeyScheme()` returns `'ZkLogin'` to distinguish it from other signing schemes.
 
-- **Passkey**: See [SIP-8](https://github.com/sui-foundation/sips/blob/main/sips/sip-9.md) for passkey implementation details.
+- **Passkey**: See [SIP-9](https://github.com/sui-foundation/sips/blob/main/sips/sip-9.md) for passkey implementation details.
 
 - **Multisig**: See [Multisig](/develop/transactions/transaction-auth/multisig) for multi-signature transactions.
 
@@ -205,7 +205,7 @@ To counter potential rogue key attacks on BLS12381 aggregated signatures, proof 
 
 A single authority signature on a piece of data is represented by `AuthoritySignInfo`. This struct records the `epoch` the signature was produced in, the `authority` that signed, and the BLS signature itself. Verification fails if the `epoch` does not match the committee that checks the signature, because committee membership and stake can change between epochs.
 
-When enough authorities sign the same data, Sui aggregates their individual signatures into one `AuthorityStrongQuorumSignInfo`. This struct contains three fields:
+When enough authorities sign the same data, Sui aggregates their individual signatures into one `AuthorityStrongQuorumSignInfo`. This struct contains 3 fields:
 
 - `epoch`: The epoch in which Sui collected the signatures. Verification checks this value against the committee for that epoch.
 
@@ -338,10 +338,10 @@ txb.setSender(sender);
 txb.setGasPrice(5);
 txb.setGasBudget(100);
 const bytes = await txb.build();
-const serializedSignature = (await keypair.signTransaction(bytes)).signature;
+const serializedSignature = (await kp_rand_0.signTransaction(bytes)).signature;
 
 // verify the signature locally
-expect(await keypair.getPublicKey().verifyTransaction(bytes, serializedSignature)).toEqual(true);
+const isValid = await kp_rand_0.getPublicKey().verifyTransaction(bytes, serializedSignature);
 
 // define sui client for the desired network.
 const client = new SuiGrpcClient({
@@ -362,6 +362,12 @@ console.log(res);
 <TabItem value="rust" label="Rust">
 
 The full code example below can be found under [crates/sui-sdk](https://github.com/MystenLabs/sui/blob/main/crates/sui-sdk/examples/sign_tx_guide.rs).
+
+:::caution
+
+This example uses the `sui-sdk` crate, whose JSON-RPC client is deprecated. Sui Foundation disabled JSON-RPC on Mainnet full nodes, so the submission step at the end of this tab does not work against Mainnet. The key derivation and signing steps are unaffected. For new Rust code, use the [`sui-rust-sdk`](https://github.com/MystenLabs/sui-rust-sdk) crate over gRPC.
+
+:::
 
 There are various ways to instantiate a `SuiKeyPair` and to derive its public key and Sui address using the Sui Rust SDK.
 
