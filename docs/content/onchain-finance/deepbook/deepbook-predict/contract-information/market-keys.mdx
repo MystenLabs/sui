@@ -43,7 +43,7 @@ answer: >-
   half-open region (lower, higher]. Tick 0 is the negative-infinity sentinel and
   tick 1073741823 is the positive-infinity sentinel. A minted position is a
   packed u256 order ID that is unique only within one expiry market.
-last_verified: 2026-09-02
+last_verified: 2026-09-03
 verified_against: predict-testnet-8-21
 ---
 
@@ -212,7 +212,9 @@ Follow these steps before you submit a mint:
 1. Snap each finite tick to the admission grid, or set it to the market's `reference_tick`.
 1. Replace an open lower bound with `0` and an open higher bound with `1073741823`.
 1. Confirm `lower_tick < higher_tick` and that the pair is not `(0, 1073741823]`.
-1. Round the quantity to a whole lot of `10_000` base units, which is 0.01 USD of payout.
+1. Round the quantity to a whole lot of `10_000` base units, which is 0.01 USD of payout, then check the premium against the minimum below.
+
+The lot is the granularity, not a tradable minimum. Every mint must also produce a premium of at least `1_000_000` base units, which is 1 DUSDC, or it aborts with `strike_exposure_config::EPremiumBelowMinimum`. Premium is `quantity * entry_probability` and entry probability is capped at `0.99`, so the smallest admissible quantity never falls below about `1.02` DUSDC of payout, and it rises steeply as the strike moves away from the money. A far out-of-the-money strike fails earlier still, on the entry-probability band. See [Mint admission errors](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#mint-admission-errors) for both codes and the measured floors.
 
 Using a 0.01 USD fine grid, the same numeric strike passes or fails depending on the cadence:
 
@@ -235,7 +237,7 @@ The layout is dense in the low bits:
 | `higher_tick` | bit 40 | 30 bits | Higher boundary tick, where `1073741823` is positive infinity. |
 | `sequence` | bits 0 to 39 | 40 bits | Expiry-local monotonic counter. |
 
-Total width is 132 bits, and any bit set at or above 132 aborts with `order::EInvalidOrderId`. Quantity must be nonzero, a whole multiple of `10_000`, and at most `4_294_967_295` lots.
+Total width is 132 bits, and any bit set at or above 132 aborts with `order::EInvalidOrderId`. Quantity must be nonzero, a whole multiple of `10_000`, and at most `4_294_967_295` lots. Those are encoding bounds only. Mint admission holds a higher effective floor, because the premium has to clear 1 DUSDC; see [Build a valid range](#build-a-valid-key).
 
 Treat the ID as an opaque handle. Pass it back unchanged to redeem, claim, or query a position, and read range facts from the order events rather than by unpacking bits yourself.
 
@@ -373,4 +375,8 @@ Grid admission and exposure bookkeeping are validated by `strike_exposure`:
 | `5` | `EMintQuantityBelowMin` | The sized or budgeted quantity is below `min_quantity`. |
 | `6` | `EInvalidInventoryImpactScale` | The market's inventory-impact scale is zero at construction. |
 
-Error numbers repeat across modules, so resolve an abort against the module named in the abort location rather than against the number alone. For the mint and redeem calls these ticks feed, see [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict). For cadence configuration and market creation, see [Registry](/onchain-finance/deepbook/deepbook-predict/contract-information/registry).
+A third module gates a mint on strike and size policy rather than on shape. `strike_exposure_config` holds the entry-probability band and the `min_premium` floor, and its two trader-facing codes, `EEntryProbabilityOutOfBounds` and `EPremiumBelowMinimum`, are the ordinary failure modes of a first mint. That table lives with the mint call, in [Mint admission errors](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#mint-admission-errors).
+
+Error numbers repeat across modules, so the number alone identifies nothing: resolve an abort against the module named in the abort location. Code `3` is `EInvalidQuantity` in `order`, `EReferenceTickAlreadySet` in `strike_exposure`, `EPremiumBelowMinimum` in `strike_exposure_config`, and `EMintProbabilityAboveMax` in `expiry_market`. A reader who looks up `3` in the wrong table gets a plausible and wrong answer every time.
+
+For the mint and redeem calls these ticks feed, see [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict). For cadence configuration and market creation, see [Registry](/onchain-finance/deepbook/deepbook-predict/contract-information/registry).

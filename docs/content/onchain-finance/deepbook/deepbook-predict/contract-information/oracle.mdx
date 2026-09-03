@@ -14,7 +14,7 @@ keywords:
   - oracle read
   - pricer
   - oracle freshness
-last_verified: 2026-09-02
+last_verified: 2026-09-03
 verified_against: predict-testnet-8-21
 goal:
   description: >-
@@ -390,7 +390,7 @@ Loading a pricer first checks all three feed objects against the registry's curr
 
 ### Freshness windows
 
-Freshness is measured against the wall clock, not against how recently a value changed. The deployed configuration, verified 2026-09-02, sets these windows on `ProtocolConfig`:
+Freshness is measured against the wall clock, not against how recently a value changed. The deployed configuration, verified 2026-09-03, sets these windows on `ProtocolConfig`:
 
 | Setting | Value | Meaning |
 | --- | --- | --- |
@@ -401,7 +401,12 @@ Freshness is measured against the wall clock, not against how recently a value c
 
 Block Scholes staleness is fatal to live pricing: a spot or forward outside its window aborts with `EBlockScholesPriceStale`, and an SVI observation outside its window aborts with `EBlockScholesSVIStale`. A stale Pyth spot is not fatal while `use_pyth_spot_for_forward` is on. A missing, non-normalizable, or stale Pyth spot is ignored, and pricing uses the Block Scholes forward directly, which is also what happens when the setting is off.
 
-These four values are mutable protocol state with no public getter. Read them from the `PricingConfigUpdated` event or from the indexed configuration on the Predict server rather than assuming the values above still hold.
+These four values are mutable protocol state with no public getter, so read them rather than assuming the table above still holds. One route works: read the `ProtocolConfig` shared object directly. All four fields come back in a single GraphQL object query against `0x7ef1ac99c2f0a77e7aa2602b5ea7bff68750cff0d80f09bdf827bfb345128f33`, which is the `protocolConfig` object listed on [Contract information](/onchain-finance/deepbook/deepbook-predict/contract-information).
+
+Two routes that look plausible return nothing:
+
+- The Predict server's `GET /config` carries `trading_paused`, `protocol_config_id`, `max_lp_pool_value`, and `max_lp_pool_value_is_unbounded`, and none of the pricing values. `GET /events/pricing-config-updated` returns `404`, because the resource is absent from the `GET /events` allowlist even though a `pricing_config_updated` pipeline appears in `/status`.
+- `PricingConfigUpdated` and `EwmaConfigUpdated` are declared in the deployed package but are emitted only when an admin changes a value, and neither has ever been emitted on this deployment. An event query for either type returns an empty list, so polling events tells you nothing and leaves you holding the stale assumption instead. Their absence does mean the values above are unchanged since deployment.
 
 ### The same-transaction write guard
 

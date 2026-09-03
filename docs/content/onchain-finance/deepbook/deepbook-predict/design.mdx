@@ -14,7 +14,7 @@ keywords:
   - plp
   - tick grid
   - prediction market
-last_verified: 2026-09-02
+last_verified: 2026-09-03
 verified_against: predict-testnet-8-21
 goal:
   description: >-
@@ -73,7 +73,9 @@ Every function an integrator calls is a `public fun` invoked from a [programmabl
 
 Predict defines no account object of its own. It uses the shared `AccountWrapper` from the `account` package, which embeds an `Account` holding coin balances, the root for app data, and optional referral attribution. That `Account` is a field inside the wrapper, not a separate object.
 
-Both the wrapper and the account address derive from the owner address through the `AccountRegistry`, so an application can compute the wrapper ID offchain before the account exists. `account_registry::new` creates the wrapper permissionlessly with the transaction sender as owner, and `account::share` publishes it in the same transaction. A second creation for the same owner aborts.
+Both the wrapper and the account address derive from the owner address through the `AccountRegistry`, so an application can compute either offchain before the account exists. `account_registry::new` creates the wrapper permissionlessly with the transaction sender as owner, and `account::share` publishes it in the same transaction. A second creation for the same owner aborts.
+
+The two derived addresses are not interchangeable, and each surface takes exactly one of them. Every Move call takes the shared `AccountWrapper` object, so the wrapper ID is the onchain handle. The canonical account ID is the identity everything else keys on: app data hangs off it, event payloads carry it as `account_id`, and the public read services accept it and nothing else. `client.predict.wrapperIdFor(owner)` derives the first, and `SessionsContract.deriveAccountId(owner)` on the `@mysten/deepbook-v3/sessions` subpath derives the second.
 
 Predict attaches its own state to that account under the `PredictApp` namespace: a table of open positions keyed by the pair of expiry market ID and order ID, plus the sticky builder code the account trades under. Positions are not standalone objects, so read them from the account or from the public read APIs.
 
@@ -115,13 +117,15 @@ A position is a range, carried as the tick pair `lower_tick` and `higher_tick`, 
 
 The protocol rejects the fully open range from `0` to `1073741823`, because it would pay in every outcome. A finite boundary must also land on the market's coarser admission grid, with one exception: each market records a reference tick taken from the exact Pyth spot at its reference timestamp, and the protocol admits that tick even when it falls off the admission grid. Anyone can record it with `expiry_market::set_reference_tick`, which takes no capability, and until a market has one, a quote against the reference strike fails. A repeat call with the same tick succeeds and emits nothing, so the call is safe to retry.
 
-Minting returns one packed `u256` order ID that encodes the quantity in lots, both ticks, and a market-local sequence number. Treat it as an opaque handle. Quantity moves in whole lots of `10000` base units, which is 0.01 DUSDC. An order ID is unique only inside one market, so identify a position by the pair of market ID and order ID. Closing part of a position retires its order ID and issues a replacement for the remaining quantity, while the original mint's root ID stays stable across those replacements.
+Minting returns one packed `u256` order ID that encodes the quantity in lots, both ticks, and a market-local sequence number. Treat it as an opaque handle. Quantity moves in whole lots of `10000` base units, which is 0.01 DUSDC, and that lot size is the granularity of a quantity rather than a tradable minimum. The premium floor under [Pricing and settlement](#pricing-and-risk) sets the real minimum, and it is always more than a hundred lots. An order ID is unique only inside one market, so identify a position by the pair of market ID and order ID. Closing part of a position retires its order ID and issues a replacement for the remaining quantity, while the original mint's root ID stays stable across those replacements.
 
 ## Pricing and settlement {#pricing-and-risk}
 
 Pricing is transaction-local. `expiry_market::load_live_pricer` takes the protocol configuration, the propbook registry, and the three oracle objects, then returns a pricer bound to that one market. The pricer has no `store` ability, so every transaction that quotes, mints, redeems live, or values a market builds a fresh one.
 
 The pricer resolves a forward, then reads each range's probability off the SVI curve as the difference between its two strike boundaries. While `use_pyth_spot_for_forward` is set, which is the shipped default, a fresh usable Pyth spot anchors the forward and the Block Scholes basis scales it. A missing, stale, or unusable Pyth spot falls back to the Block Scholes forward for that expiry. A position's live value is its quantity multiplied by its range probability, and a winning position settles at its full quantity. Mint admission holds the quoted entry probability inside a per-market band and requires a minimum premium, so a quote at the extreme edge of the distribution fails rather than rounding. Live pricing aborts once a market's expiry has passed.
+
+That premium floor is what actually bounds trade size. `strike_exposure_config::assert_mint_admission` rejects any mint whose premium falls below 1 DUSDC, and the premium is the quantity multiplied by the quoted entry probability. The admissible quantity is therefore the reciprocal of the quoted probability, and `max_entry_probability` caps that probability at 0.99, so about 1.02 contracts is the smallest quantity any strike can ever take and every other strike needs more. A quote near a coin flip needs roughly 2 contracts, and a far strike quoting near the bottom of the band needs tens. Size a position by the product rather than by the lot grid.
 
 Settlement is one permissionless transition, `expiry_market::try_settle`, and repeat calls are harmless. It first looks for the exact Pyth spot at the market's expiry timestamp. If Pyth remains unavailable 30 seconds after expiry, the same call can use the exact Block Scholes minute-boundary spot instead. Both lookups are exact matches, with no nearest, rounded, or interpolated fallback. The transition records the terminal price and the exact remaining payout liability together, and `MarketSettled` reports which source won. When neither source is usable, the call returns `false` and the market stays unsettled. Settled redemption and `plp::rebalance_expiry_cash` read only the recorded state, so they take no oracle argument at all. Flush valuation is not in that group: `plp::value_expiry` takes the `OracleRegistry`, the `PythFeed`, the `BlockScholesValueStore`, and the `BlockScholesSVIStore`, and builds a live pricer from them internally, so a flush transaction assembled without those arguments cannot be constructed.
 
@@ -177,7 +181,7 @@ Because supplies fill before withdrawals, DUSDC supplied in a flush can pay that
 Split reads by freshness and purpose:
 
 1. Build quotes, balances, positions, pool state, and market state with the Predict client in [`@mysten/deepbook-v3`](https://www.npmjs.com/package/@mysten/deepbook-v3). Every read runs against the Sui node core API through simulation and object reads, and the event decoders parse a transaction result with no network call at all, so these reads need no indexer.
-1. Render history, portfolios, and oracle observation series from the public read services at `predict-server-v4.testnet.mystenlabs.com`, `propbook-server-v4.testnet.mystenlabs.com`, and `account-server-v4.testnet.mystenlabs.com`. Check a service's `/status` response before you treat its recent data as complete.
+1. Render history, portfolios, and oracle observation series from the public read services at `predict-server-v4.testnet.mystenlabs.com`, `propbook-server-v4.testnet.mystenlabs.com`, and `account-server-v4.testnet.mystenlabs.com`. Key every account-scoped and position-scoped path on the canonical account ID, because a wrapper ID there returns `200` with an empty array rather than an error. Check a service's `/status` response before you treat its recent data as complete.
 1. Subscribe to Sui checkpoints or protocol events when an interface needs a live tape of oracle updates and trades.
 
 Preflight is a property of the SDK layer, not of the Move layer, and the two quote surfaces differ:

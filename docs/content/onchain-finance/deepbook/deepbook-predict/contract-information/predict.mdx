@@ -15,6 +15,9 @@ keywords:
   - pricer
   - mint quote
   - order events
+  - strike_exposure_config
+  - EPremiumBelowMinimum
+  - min_premium
 goal:
   description: >-
     Reader can learn the ExpiryMarket shared object, the pricing and quoting
@@ -37,6 +40,7 @@ questions:
   - How do I mint a DeepBook Predict position onchain?
   - Why does a DeepBook Predict transaction abort with EWrongPricer?
   - How does a DeepBook Predict market settle?
+  - What is the minimum trade size on DeepBook Predict?
 answer: >-
   DeepBook Predict trading lives in the deepbook_predict::expiry_market module.
   One shared ExpiryMarket object holds each expiry's cash, exposure index, and
@@ -44,7 +48,7 @@ answer: >-
   the trade with quote_mint, then call mint_exact_quantity, mint_exact_amount,
   redeem_live, or redeem_settled with an account Auth. Settlement is the
   permissionless try_settle.
-last_verified: 2026-09-02
+last_verified: 2026-09-03
 verified_against: predict-testnet-8-21
 ---
 
@@ -513,7 +517,7 @@ The SDK's `client.predict.read.markets`, `read.market`, and `read.pricer` cover 
 
 ## Error codes {#error-codes}
 
-`expiry_market` declares ten abort codes. Resolve an abort against the module named in the abort location, because codes repeat across modules:
+`expiry_market` declares ten abort codes:
 
 | **Code** | **Constant** | **Cause** |
 |---|---|---|
@@ -528,7 +532,24 @@ The SDK's `client.predict.read.markets`, `read.market`, and `read.pricer` cover 
 | `8` | `ERedeemProceedsBelowMin` | The net credit fell below the `min_proceeds` floor. |
 | `9` | `EMintCostCapRequired` | `mint_exact_amount` was called with `max_cost` set to zero. |
 
-Aborts from other modules reach these calls too. A pricer load can abort inside `pricing` when an oracle object does not match the registry binding or when a contributing observation was written in the same transaction. A gate can abort inside `protocol_config` with `ETradingPaused`, `EValuationInProgress`, `EPackageVersionDisabled`, or `EProtocolFrozen`. An account borrow can abort inside `account` with `EInvalidOwner` or `EBalanceTooLow`.
+Aborts from other modules reach these calls too. A mint can abort inside `strike_exposure_config` on entry-probability or premium policy, covered in the next section. A pricer load can abort inside `pricing` when an oracle object does not match the registry binding or when a contributing observation was written in the same transaction. A gate can abort inside `protocol_config` with `ETradingPaused`, `EValuationInProgress`, `EPackageVersionDisabled`, or `EProtocolFrozen`. An account borrow can abort inside `account` with `EInvalidOwner` or `EBalanceTooLow`.
+
+### Mint admission errors {#mint-admission-errors}
+
+The two ordinary failure modes of a first mint are not in the table above. Both live in `deepbook_predict::strike_exposure_config`, the module that holds each market's snapshot of entry-probability and fee policy and runs `assert_mint_admission` before any state moves:
+
+| **Code** | **Constant** | **Cause** |
+|---|---|---|
+| `0` | `EEntryProbabilityOutOfBounds` | The quoted entry probability falls outside the market's band, from `min_entry_probability` to `max_entry_probability` inclusive. |
+| `1` | `EInvalidEntryProbabilityBound` | An admin update would leave the minimum at or above the maximum. Traders do not reach this. |
+| `2` | `EInvalidFeeProbability` | A probability above `1.0` reached the Bernoulli fee curve. |
+| `3` | `EPremiumBelowMinimum` | The premium is below the `min_premium` floor of `1_000_000` base units, which is 1 DUSDC. |
+
+`EPremiumBelowMinimum` is the size floor, and it is the one an integrator meets first. Premium is `quantity * entry_probability`, and `max_entry_probability` is `0.99` on this deployment, so the smallest admissible quantity never falls below about `1.02` DUSDC of payout, and it rises as the strike moves away from the money. Verified 2026-09-03 by bisection on a live 1d market: a quantity of `1.59` aborts, and `1.60` succeeds at a premium of `1.002283`. On a live 1h market at 900 seconds to expiry, with an entry probability of `0.077`, the smallest admissible quantity was `100`.
+
+`EEntryProbabilityOutOfBounds` is the band. A strike far enough out of the money prices below `min_entry_probability` and is rejected before the premium is computed. Verified 2026-09-03 at a forward of about `77,751`: strikes of `277,300`, `577,300`, and `2,077,300` all abort with this code.
+
+Because error numbers repeat across modules, the number alone identifies nothing. Read the module out of the abort location before you look the number up. Code `3` is `EPremiumBelowMinimum` in `strike_exposure_config`, `EMintProbabilityAboveMax` in `expiry_market`, `EReferenceTickAlreadySet` in `strike_exposure`, and `EInvalidQuantity` in `order`. See [Strikes and Ticks](/onchain-finance/deepbook/deepbook-predict/contract-information/market-keys#error-codes) for the `order` and `strike_exposure` tables.
 
 ## Order events {#events}
 

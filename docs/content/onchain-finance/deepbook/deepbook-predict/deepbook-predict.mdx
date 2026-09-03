@@ -14,7 +14,7 @@ keywords:
   - plp
   - deepbook
   - sui
-last_verified: 2026-09-02
+last_verified: 2026-09-03
 verified_against: predict-testnet-8-21
 goal:
   description: >-
@@ -109,6 +109,8 @@ Each owner has exactly one Predict account: a shared account wrapper holding bal
 
 `client.predict.tx.deposit(owner, amount, { create: true })` composes creation, deposit, and sharing into one transaction, which is the fastest first run. Use that form only once per owner, because creating a second account for the same owner aborts, and pass the signing address as `owner`, because account creation derives the wrapper from the transaction sender.
 
+The wrapper ID is the handle every onchain call takes, and it is not the ID the public read services key on. Those key on the canonical account ID, which is a second address derived from the same owner. [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#account-and-portfolio-data) covers how to get it.
+
 :::info
 
 Every transaction on this page asks the owner to sign. An application that would rather not prompt a wallet for each trade can use a delegated session key instead. A session key carries authority over everything the account holds, so decide its scope and lifetime before you ship it, not after. See [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions).
@@ -148,6 +150,8 @@ Omitting `maxCost` and `maxProbability` sends `U64_MAX` for each, which leaves t
 
 A directional position is a one-sided range: `side: 'up'` pays when settlement lands above the strike, and `side: 'down'` pays when settlement lands at or below it. `quantity` is the maximum payout in DUSDC, and it must be a whole lot of 0.01 DUSDC.
 
+The lot size is the granularity of a quantity, not a size you can trade. Every mint has to pay a premium of at least 1 DUSDC, and the premium is `quantity` multiplied by the quoted `entryProbability`. Size a mint by that product rather than by the lot grid: a quantity of 1 is below the floor on every live market and aborts in `strike_exposure_config` with code `3`, `EPremiumBelowMinimum`. A strike quoting near a coin flip needs roughly 2 contracts, a far strike quoting at a low probability needs proportionally more, and no strike ever clears the floor below about 1.02 contracts, so quote first and pick a quantity whose premium reaches 1 DUSDC.
+
 The mint returns an order ID. Read it from the transaction result with `client.predict.decode.mint(result).orderId` and persist it, because redeeming or claiming a position needs the market and order ID together, and closing part of a position replaces the ID with a new one. For range positions, live redemption, settled claims, and the liquidity provider flow, see the [end-to-end Testnet tutorial](/onchain-finance/deepbook/deepbook-predict/tutorial).
 
 ### Verify on Testnet {#verify-on-testnet}
@@ -159,7 +163,8 @@ The samples above pass compile checks, but nothing runs them against Testnet. Co
 3. Confirm the public read service is current: `curl 'https://predict-server-v4.testnet.mystenlabs.com/status'` reports `status` as `OK`.
 4. Confirm at least one live market exists: `curl 'https://predict-server-v4.testnet.mystenlabs.com/markets?active=true&limit=5'`.
 5. Run the account step, then confirm the derived wrapper resolves with `sui client object WRAPPER_ID`.
-6. Run the quote and mint step with a small `quantity`, then confirm the effects report a success status and an `OrderMinted` event.
+6. Run the quote step, then set `quantity` so that `quantity` multiplied by the quote's `entryProbability` clears 1 DUSDC with margin. A quantity of 3 against a near-the-money strike is a safe first try, and a quantity of 1 aborts on every market.
+7. Run the mint step, then confirm the effects report a success status and an `OrderMinted` event. Its `account_id` field is the ID the read services key on.
 
 ## Key features
 

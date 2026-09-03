@@ -17,7 +17,7 @@ keywords:
   - plp
   - pool vault
   - liquidity provider
-last_verified: 2026-09-02
+last_verified: 2026-09-03
 verified_against: predict-testnet-8-21
 goal:
   description: >-
@@ -105,6 +105,8 @@ Two typed errors cover almost every failure you handle in application code:
 - `PredictInputError`: Client-side validation rejected the call before it built anything. Common causes are an unknown underlying, a strike off the tick or admission grid, a quantity that is not a whole lot, an amount carrying more decimals than the coin allows, and a range whose `lower` is not below `upper`.
 - `PredictMoveError`: A simulation hit a Move abort. It carries `module`, the exact `code`, and `abortName`, the `E`-prefixed constant name. `abortName` is `null` over JSON-RPC, because only gRPC and GraphQL surface the clever-error constant name.
 
+Resolve `module` before you look up `code`. Error numbers restart at `0` in every module, so the same number means something different depending on where it came from. [Find the page for a Move abort](/onchain-finance/deepbook/deepbook-predict/contract-information#abort-module-map) maps each module to the reference page carrying its table.
+
 Both SDK quote methods dry-run the identical transaction their matching builder produces, against the real account and the real fee path, so they raise the same errors the write would, insufficient balance included. Treat a successful SDK quote as a preflight. The Move `expiry_market::quote_mint` is a different thing with a similar name: it prices only, and it checks no account, no slippage cap, and no exposure capacity.
 
 ## Understand the oracle
@@ -179,7 +181,9 @@ Each owner has exactly one Predict account: a shared `AccountWrapper` object hol
 
 <ImportContent source="examples/deepbook-predict/src/create-manager.ts" mode="code" tag="create-manager" />
 
-The wrapper address derives from the account registry root, so you do not need a transaction result to know it. `client.predict.wrapperIdFor(owner)` computes it offchain with no chain read, and that ID is what the account server paths key on. After execution, `decode.createManager(result)` reads the same `wrapperId` out of the events alongside `accountId`, `owner`, and `selfOwned`.
+The wrapper address derives from the account registry root, so you do not need a transaction result to know it. `client.predict.wrapperIdFor(owner)` computes it offchain with no chain read, and that ID is the argument every Move call takes. After execution, `decode.createManager(result)` reads the same `wrapperId` out of the events alongside `accountId`, `owner`, and `selfOwned`.
+
+One owner derives two addresses from that registry, and they are not interchangeable. The wrapper is the shared object every Move call takes. The canonical account is the identity that app data hangs off, that events report as `account_id`, and that the read services key on. `client.predict` derives only the wrapper, through `wrapperIdFor`. Three routes give you the account ID: `new SessionsContract(getSessionsConfig('testnet')).deriveAccountId(owner)` on the `@mysten/deepbook-v3/sessions` subpath, the `accountId` field on `decode.createManager(result)`, or the `account_id` field on any order event. [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#enumerate) covers both derivations and the dynamic field that hangs off the account.
 
 Creating a second account for the same owner aborts. To create and fund in a single transaction, `tx.deposit(owner, amountUsdc, { create: true })` composes the creation, the deposit, and the share. That form runs no pre-check, so it aborts when the account already exists, and `owner` must be the signing address because the registry derives the wrapper from the transaction sender.
 
@@ -292,14 +296,29 @@ Judge vendor freshness from each observation's source timestamp and landing time
 
 ### Read account and position state
 
-Account API paths key on the shared account wrapper object ID, not on the wallet owner address. `client.predict.wrapperIdFor(owner)` derives it.
+Account and position paths key on the canonical account ID, not on the shared `AccountWrapper` object ID and not on the wallet owner address. Derive it with `deriveAccountId`, or read it off any order event's `account_id` field.
 
 ```bash
-$ ACCOUNT_WRAPPER_ID=0x...
-$ curl "https://account-server-v4.testnet.mystenlabs.com/accounts/${ACCOUNT_WRAPPER_ID}/portfolio"
-$ curl "https://account-server-v4.testnet.mystenlabs.com/accounts/${ACCOUNT_WRAPPER_ID}/balances"
-$ curl "https://predict-server-v4.testnet.mystenlabs.com/accounts/${ACCOUNT_WRAPPER_ID}/positions?status=open&limit=100"
+$ ACCOUNT_ID=0x...
+$ curl "https://account-server-v4.testnet.mystenlabs.com/accounts/${ACCOUNT_ID}/portfolio"
+$ curl "https://account-server-v4.testnet.mystenlabs.com/accounts/${ACCOUNT_ID}/balances"
+$ curl "https://account-server-v4.testnet.mystenlabs.com/accounts/${ACCOUNT_ID}/activity"
+$ curl "https://predict-server-v4.testnet.mystenlabs.com/accounts/${ACCOUNT_ID}/positions?status=open&limit=100"
 ```
+
+:::caution
+
+Passing a wrapper ID here fails silently. The services answer `200` with an empty array rather than rejecting the ID, so a wrong ID is indistinguishable from an account holding nothing. Check any empty result against an account you know holds positions before you build on it.
+
+:::
+
+Three more paths round out the indexed views:
+
+- `GET /apps` on the account service lists the app authorizations recorded on the account registry.
+- `GET /vaults/:pool_vault_id/state` on the Predict service returns the pool's `current` block, carrying `idle_balance_after`, `total_supply`, `pool_value`, and `active_market_nav`, alongside `latest_flush`.
+- `GET /config` on the Predict service returns `trading_paused`, `protocol_config_id`, `max_lp_pool_value`, and `max_lp_pool_value_is_unbounded`.
+
+Take every path from the tables on these pages rather than guessing at one. The plausible variants `/vault`, `/pool`, `/protocol-config`, and `/accounts/:account_id/apps` all return `404`.
 
 An open position whose market state includes a settlement is claimable. Claimability comes from the position and the market together rather than from a separate position status.
 
@@ -308,11 +327,13 @@ Four conventions apply across all three services:
 - **Numbers arrive as strings:** Postgres `NUMERIC` values serialize as JSON strings. Parse monetary, quantity, probability, price, rate, and large identifier fields with decimal or bigint tooling rather than `parseFloat`.
 - **Timestamps are milliseconds:** Onchain and event timestamps use Unix milliseconds unless an endpoint documents seconds. Raw event pages window on `from_ms`, inclusive, and `to_ms`, exclusive, while named history endpoints use `start_time` and `end_time` in Unix seconds.
 - **Order IDs are market-scoped:** Packed order IDs are decimal `u256` strings and are unique only inside one expiry market, so identify a position by `expiry_market_id` and `order_id` together.
-- **Raw events page oldest-first:** `GET /events` lists the allowlisted event resources and their filter profiles. Page one resource with `GET /events/RESOURCE`, then follow the opaque `page.next_cursor` with every filter unchanged until `page.has_next_page` is false. Unknown identifiers return `null` components or empty arrays rather than a 404.
+- **Raw events page oldest-first:** `GET /events` lists the allowlisted event resources and their filter profiles. Page one resource with `GET /events/RESOURCE`, then follow the opaque `page.next_cursor` with every filter unchanged until `page.has_next_page` is false. Unknown identifiers return `null` components or empty arrays rather than a 404. The listing also carries a few resources this deployment never emits, left over from contract features that were removed: `liquidated-order-redeemed`, `deep-staked`, `deep-unstaked`, and `trading-loss-rebate-claimed`. Requesting one returns `503` rather than an empty page, so treat the four event modules in [Contract information](/onchain-finance/deepbook/deepbook-predict/contract-information#live-onchain-events) as the list of what the contracts actually emit.
 
 ## Deposit and mint a directional position
 
 A directional position pays `$1` per contract when settlement lands inside its range, and nothing otherwise. `quantity` is therefore the maximum payout in USD, and it must be a whole `$0.01` lot.
+
+The lot size is the granularity of a quantity, not a size you can trade. `strike_exposure_config::assert_mint_admission` rejects any mint whose premium falls below 1 DUSDC with code `3`, `EPremiumBelowMinimum`, and the premium is `quantity` multiplied by the quoted `entryProbability`. Because `max_entry_probability` caps that probability at 0.99, no market accepts a quantity below about 1.02, and the floor climbs as the strike moves out of the money: measured live on a 1 day market, a quantity of 1.59 aborted and 1.60 filled at a premium of 1.002283, while a 1 hour market quoting 0.077 with 900 seconds left took a quantity of 100. Size by the product, not by the grid, and quote before you pick a quantity.
 
 Quote before you mint. `read.quoteMint(owner, descriptor, { quantity })` dry-runs the identical transaction `tx.mint` builds, against the real account and the real fee path, so it doubles as a price preview and a preflight, and its fee numbers are exact rather than estimated:
 
@@ -406,7 +427,15 @@ Settlement emits `MarketSettled` carrying the `settlement_price` and a `settleme
 
 The SDK does not build this call. `tx.claimSettled` builds the owner-authorized `redeem_settled` instead. Build the permissionless variant yourself as a `moveCall` against the Predict package, passing the `ExpiryMarket`, the `AccountRegistry`, the owner's `AccountWrapper`, the `ProtocolConfig`, the order ID, the accumulator root, and the clock. The `predict`, `account`, and `propbook` packages declare no `entry fun` at all, so every integrator call is a `public fun` invoked from a [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks), and several of them return values you must consume in the same block.
 
-To find positions worth closing, `read.positions(owner)` walks the account's dynamic fields and returns `marketId` and `orderId` pairs, and `GET /accounts/ACCOUNT_WRAPPER_ID/positions?status=open` returns the same set from the index. Make any automated redeemer idempotent: the event stream delivers at least once, and another caller can close the same position between your check and your submission.
+To find positions worth closing, `read.positions(owner)` walks the account's dynamic fields and returns `marketId` and `orderId` pairs, and `GET /accounts/ACCOUNT_ID/positions?status=open` returns the same set from the index when it is keyed on the canonical account ID.
+
+:::caution
+
+Key that path on the wrapper ID instead and the service answers `200` with an empty array. A redeemer that trusts the response reads the empty array as nothing to close, skips every open position, and reports success while doing no work. Derive the ID with `deriveAccountId`, take it from an event's `account_id`, or cross-check the count against `read.positions(owner)` before you act on an empty page.
+
+:::
+
+Make any automated redeemer idempotent: the event stream delivers at least once, and another caller can close the same position between your check and your submission.
 
 The protocol pays the caller no fee, rebate, or share of the payout, so no economic incentive exists for an unrelated party to run this. Treat it as infrastructure you run for your own users, or that an owner runs for themselves, and budget the gas as your own operating cost.
 
@@ -477,7 +506,8 @@ The write paths above type-check but this document does not execute them. To con
 1. Call `read.markets()`. Confirm at least one market returns with `mintPaused` false, a non-null `referencePrice`, and at least 30 seconds left before its expiry.
 1. Create the account, then confirm `client.predict.wrapperIdFor(owner)` resolves with `sui client object WRAPPER_ID`.
 1. Deposit DUSDC, then confirm `read.balance(owner)` reports the deposit.
-1. Call `read.quoteMint`, then mint with `maxCost` derived from the quote's `cost`. Confirm an `OrderMinted` event and record the `orderId`.
+1. Call `read.quoteMint` with a quantity whose premium clears 1 DUSDC, which means `quantity` multiplied by `entryProbability` above 1. Mint with `maxCost` derived from the quote's `cost`. Confirm an `OrderMinted` event, and record both the `orderId` and the event's `account_id`.
+1. Read the indexed positions with `GET /accounts/ACCOUNT_ID/positions?status=open` using that `account_id`. Confirm the count matches `read.positions(owner)`, which proves you are keying on the right ID rather than reading an empty `200`.
 1. Mint a range position on two admission-grid bounds. Confirm a second `OrderMinted` event whose `lowerTick` and `higherTick` are both finite.
 1. Quote and close part of the directional position. Confirm a `LiveOrderRedeemed` event and record `replacementOrderId`.
 1. After an expiry passes, build the `expiry_market::try_settle` `moveCall` described in [Settlement](#settlement), send it, and confirm a `MarketSettled` event. Claim with `tx.claimSettled` and confirm a `SettledOrderRedeemed` event.

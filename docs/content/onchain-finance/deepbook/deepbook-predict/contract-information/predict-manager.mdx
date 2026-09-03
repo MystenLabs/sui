@@ -49,7 +49,7 @@ answer: >-
   same transaction, or with AccountContract from the deepbook-v3 account
   subpath. Access is gated by a single-use Auth hot potato, and Predict keeps
   positions in a PredictData slot attached to the Account.
-last_verified: 2026-09-02
+last_verified: 2026-09-03
 verified_against: predict-testnet-8-21
 ---
 
@@ -400,7 +400,7 @@ public fun builder_code_id(account: &Account): Option<ID>
 
 Both return the empty answer rather than aborting when the account has no Predict slot yet, so `false` and `none` do not distinguish an unused account from a closed position.
 
-`has_position` answers one exact question and needs the market ID and order ID up front, so it cannot enumerate a portfolio. To list what an account holds, read the dynamic fields of the `positions` table, where each field key is a BCS-serialized `PositionKey`. The SDK's `client.predict.read.positions(owner)` does this and returns `{ marketId, orderId }` pairs, and `client.predict.read.hasPosition(owner, marketId, orderId)` wraps the single read.
+`has_position` answers one exact question and needs the market ID and order ID up front, so it cannot enumerate a portfolio. To list what an account holds, read the dynamic fields of the `positions` table, where each field key is a BCS-serialized `PositionKey`. The SDK's `client.predict.read.positions(owner)` does this and returns `{ marketId, orderId }` pairs, and `client.predict.read.hasPosition(owner, marketId, orderId)` wraps the single read. The offchain read services answer the same question over HTTP, but their account and position paths key on the canonical account ID rather than the wrapper ID; see [The account SDK subpath](#account-sdk).
 
 To value a position, pass its order ID to the market: `expiry_market::live_order_value` with a market-bound pricer while the market is live, or `expiry_market::settled_order_payout` once it has settled. See [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#read-accessors) for both.
 
@@ -512,7 +512,9 @@ Its methods each return a function you add to a `Transaction`, so they compose i
 
 `createAccountAndDeposit` is the one that actually implements the create-and-fund workflow in a single block, and it cannot be decomposed into `createAccount` plus `depositFunds`. An object input can only name an object that already existed when the block started, so a wrapper created inside the block is reachable only through the result handle `new` returns, and sharing it ends by-value use of that handle. That is why `share` comes last.
 
-Only the wrapper ID derives from this class. The canonical account identity is a second, different derived object, keyed by `AccountKey(owner)` rather than `AccountWrapperKey(owner)`, and its derivation lives on `SessionsContract.deriveAccountId` in the `/sessions` subpath. Pass the wrapper ID to Predict calls, and expect the account ID in the `account_id` field of events.
+Only the wrapper ID derives from this class. The canonical account identity is a second, different derived object, keyed by `AccountKey(owner)` rather than `AccountWrapperKey(owner)`, and its derivation lives on `SessionsContract.deriveAccountId` in the `/sessions` subpath. Pass the wrapper ID to Predict calls, and expect the account ID in the `account_id` field of events. A live `OrderMinted` carries the account ID, not the wrapper ID.
+
+Which ID an offchain read service wants is the same split, and getting it wrong is quiet. The account and position paths key on the canonical account ID. A wrapper ID passed there returns HTTP `200` with an empty array rather than an error, so a wrong key is indistinguishable from an empty portfolio until you compare the two: verified 2026-09-03 for a real trader, the wrapper ID returned zero balances and zero positions while the account ID returned two balance rows and five open positions. Derive the key with `deriveAccountId`, documented in [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#enumerate), where the same wrapper-against-account trap applies to session grants. The wrapper ID stays correct for every onchain call that takes the shared `AccountWrapper` object.
 
 :::warning
 

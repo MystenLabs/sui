@@ -15,7 +15,7 @@ keywords:
   - propbook oracle
   - cadence
   - Testnet
-last_verified: 2026-09-02
+last_verified: 2026-09-03
 verified_against: predict-testnet-8-21
 goal:
   description: >-
@@ -83,7 +83,7 @@ Predict is six published packages rather than one. Move call targets, event type
 | `deepbookCoreAccount` | `0xcc9cf1029127e7bda6da4c2ab90164d7bef751783ff13c21c2bb804cec69ebec` | DeepBook core account app type |
 | `sessions` | `0xb74170443d6d2d37cbe95c7e530dd4a1605ef714ff4f9e88e27a7ac1455451db` | Session support |
 
-The `deepbookCoreAccount` app type is `0xcc9cf1029127e7bda6da4c2ab90164d7bef751783ff13c21c2bb804cec69ebec::account_data::DeepbookCoreAccountApp`. It is recorded in the manifest but not authorized in this deployment.
+The `deepbookCoreAccount` app type is `0xcc9cf1029127e7bda6da4c2ab90164d7bef751783ff13c21c2bb804cec69ebec::account_data::DeepbookCoreAccountApp`. App authorization is live registry state, not deployment configuration: the manifest's `externalAuthorizations` entry records whether the authorization was in place when the deployment ran, and an admin grants or revokes it in a separate transaction afterward. In this deployment the app type is authorized on both the DeepBook registry `0x7c256edbda983a2cd6f946655f4bf3f00a41043993781f8674a7046e8c0e11d1` and the account registry `0x5682c73d657de1546374e632369a25c82744c8a20e9b4f47e6558e3d4bde88d3`, alongside `PredictApp` and `SessionsApp`. Read the current state from the registry with `account_registry::is_app_authorized<App>` rather than from the manifest field. [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#spot-wrappers) covers what that authorization gates.
 
 ### Shared objects
 
@@ -127,9 +127,12 @@ Predict mixes two scales, and confusing them is the fastest way to misprice a tr
 | DEEP coin decimals | 6 | DEEP amounts |
 | Position quantity decimals | 6 | Position quantities |
 | Position lot size | `10000` | Position quantities, which must be whole multiples |
+| Minimum premium | `1000000` | The premium of every mint, in DUSDC base units |
 | Timestamp unit | Unix milliseconds | Onchain timestamps, expiries, and event windows |
 
-A probability of `500000000` is 0.5. A price of `110000000000000` is 110,000.00. An amount of `1000000` is 1 DUSDC. A position quantity of `10000` is the smallest tradable size, 0.01 contracts.
+A probability of `500000000` is 0.5. A price of `110000000000000` is 110,000.00. An amount of `1000000` is 1 DUSDC. A position quantity of `10000` is one lot, 0.01 contracts.
+
+The lot size is the granularity of a quantity, not a tradable minimum. `strike_exposure_config::assert_mint_admission` rejects a mint whose premium falls below `1000000` base units, which is 1 DUSDC, with abort code `3`, `EPremiumBelowMinimum`. The premium is the quantity multiplied by the quoted entry probability, and `max_entry_probability` caps that probability at `990000000`, so the smallest quantity any market accepts is about 1.02 contracts, and the floor rises as the strike moves further out of the money. Size a mint by the rule that predicts admission: `quantity` multiplied by the quoted `entryProbability` must reach 1 DUSDC. A quantity of 1 is below the floor on every live market.
 
 Read every quantity that arrives as a JSON string with decimal or bigint tooling. Postgres `NUMERIC` columns serialize as strings, and `parseFloat` silently loses precision on them.
 
@@ -197,9 +200,15 @@ Discover markets first, then read one market by ID:
 | `GET /markets?active=true&limit=50` | Future unsettled market-creation records, ordered by expiry |
 | `GET /markets/:expiry_market_id/state` | Creation record plus reference tick, mint-pause state, and settlement when present |
 | `GET /markets/:expiry_market_id/open-interest` | Open interest for one market |
-| `GET /accounts/:account_wrapper_id/positions?status=open&limit=100` | Positions held by one account |
+| `GET /accounts/:account_id/positions?status=open&limit=100` | Positions held by one account |
+| `GET /vaults/:pool_vault_id/state` | Pool vault state: a `current` block with `idle_balance_after`, `total_supply`, `pool_value`, and `active_market_nav`, plus `latest_flush` |
+| `GET /config` | Indexed protocol configuration: `trading_paused`, `protocol_config_id`, `max_lp_pool_value`, and `max_lp_pool_value_is_unbounded` |
 | `GET /events` | Allowlisted event resources and their filter profiles |
 | `GET /events/:resource?limit=100` | One raw event resource, paged oldest-first |
+
+The positions path keys on the canonical account ID rather than the `AccountWrapper` ID, the same as the account service paths. [Account and portfolio data](#account-and-portfolio-data) covers the two ways to get that ID and what a wrapper ID returns instead.
+
+The `GET /events` listing includes `liquidated-order-redeemed`, `deep-staked`, `deep-unstaked`, and `trading-loss-rebate-claimed`, which correspond to contract features that no longer exist. This deployment never emits them and requesting one returns `503`. The event modules below are what the packages actually emit.
 
 Market discovery returns the creation record for each live market. The following sample is trimmed to the market's identity and cadence terms; the live response also carries the source event's checkpoint and position fields and the market's fee-curve parameters:
 
@@ -248,15 +257,30 @@ Judge vendor freshness from each observation's source timestamp and landing time
 
 ### Account and portfolio data
 
-Account paths key on the shared account wrapper object ID, not on the owner address:
+Account and position paths key on the canonical account ID, not on the shared `AccountWrapper` object ID and not on the owner address. An owner has two derived addresses, and only one of them answers here:
 
 | Endpoint | Use |
 | --- | --- |
 | `GET /status` | Indexer freshness for the account pipelines |
-| `GET /accounts/:account_wrapper_id/portfolio` | Portfolio summary for one account |
-| `GET /accounts/:account_wrapper_id/balances` | Custodied balances for one account |
+| `GET /accounts/:account_id/portfolio` | Portfolio summary for one account |
+| `GET /accounts/:account_id/balances` | Custodied balances for one account |
+| `GET /accounts/:account_id/activity` | Account activity history |
+| `GET /apps` | App authorizations recorded on the account registry |
 
-The SDK derives the wrapper ID from an owner address with `client.predict.wrapperIdFor(owner)`. That address is deterministic, so you can compute it before the account exists.
+Two routes give you that ID:
+
+- **Derive it from the owner address:** `new SessionsContract(getSessionsConfig('testnet')).deriveAccountId(owner)`, from the `@mysten/deepbook-v3/sessions` subpath, computes it offchain with no chain read. `client.predict` exposes only `wrapperIdFor`, which returns the wrapper, so the Predict client alone cannot produce this ID.
+- **Read it off an event:** every Predict order event carries the account ID in its `account_id` field, and `decode.createManager(result)` returns it as `accountId`.
+
+:::caution
+
+A wrapper ID passed where an account ID belongs fails silently. The services answer `200` with an empty array rather than an error, so a portfolio renders as empty and an automated redeemer reads it as nothing to close. Confirm the ID against an account you know holds positions before you trust an empty response.
+
+:::
+
+The wrapper ID stays correct onchain. Every Move call that takes the shared `AccountWrapper` object takes it, and `client.predict.wrapperIdFor(owner)` derives it. Only the read service paths key on the account ID. [Accounts and Custody](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager) describes the two derived objects, and [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#enumerate) walks through deriving each one.
+
+Take every path from the tables on this page rather than guessing at one. The plausible variants `/vault`, `/pool`, `/protocol-config`, and `/accounts/:account_id/apps` all return `404`.
 
 ### Freshness and pagination
 
@@ -404,6 +428,23 @@ Every module below lives on the [`predict-testnet-8-21`](https://github.com/Myst
 | Account custody and authorization | [`packages/account/sources/account.move`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/account/sources/account.move) |
 | Oracle registry and bindings | [`packages/propbook/sources/registry.move`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/propbook/sources/registry.move) |
 | Pyth and Block Scholes feeds | [`packages/propbook/sources/feeds`](https://github.com/MystenLabs/deepbookv3/tree/predict-testnet-8-21/packages/propbook/sources/feeds) |
+
+### Find the page for a Move abort {#abort-module-map}
+
+A Move abort names the module it came from and a number. Error numbers restart at `0` in every module, so a code looked up in the wrong table reads as an unrelated failure. Resolve the module first, then read that page's error table:
+
+| Module | Reference page |
+| --- | --- |
+| `expiry_market`, `strike_exposure_config` | [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict) |
+| `order`, `strike_exposure` | [Strikes and Ticks](/onchain-finance/deepbook/deepbook-predict/contract-information/market-keys) |
+| `plp`, `lp_book`, `pool_accounting`, `expiry_cash` | [Vault](/onchain-finance/deepbook/deepbook-predict/contract-information/vault) |
+| `pricing` and the propbook modules | [Oracle](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle) |
+| `registry`, `market_manager` | [Registry](/onchain-finance/deepbook/deepbook-predict/contract-information/registry) |
+| `account`, `account_registry`, `predict_account` | [Accounts and Custody](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager) |
+| `sessions` | [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions) |
+| `protocol_config`, whose gates run ahead of every call | [Registry](/onchain-finance/deepbook/deepbook-predict/contract-information/registry) |
+
+`PredictMoveError` from the TypeScript SDK carries `module` and `code` for exactly this lookup, plus `abortName` when the client speaks gRPC or GraphQL. A first mint most often aborts in `strike_exposure_config`, whose code `3` is `EPremiumBelowMinimum`.
 
 import DocCardList from '@theme/DocCardList';
 
