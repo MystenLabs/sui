@@ -23,16 +23,6 @@ setup = 'big-worker-stack'
 filter = 'package(sui-indexer-alt-e2e-tests)'
 setup = 'big-worker-stack'
 
-[test-groups]
-# Each sui-fork shell test spawns a whole localnet with PostgreSQL, so run them one at a time
-# rather than nine at once. Other packages' tests keep running in parallel around them.
-sui-fork-e2e = { max-threads = 1 }
-
-# Overrides in the default profile apply to every profile, so this holds for CI too.
-[[profile.default.overrides]]
-filter = 'package(sui-fork-e2e-tests)'
-test-group = 'sui-fork-e2e'
-
 [profile.ci]
 # Print output for failing tests only when they fail.
 failure-output = "immediate"
