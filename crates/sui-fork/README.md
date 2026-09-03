@@ -188,9 +188,12 @@ builds it from the manifest by fetching the exact seeded object versions.
 End-to-end shell tests live in `crates/sui-fork-e2e-tests/tests/shell_tests`. Each `.sh` script
 forks a localnet through the `sui-fork` binary, drives the fork with `sui client`, and has its
 combined output snapshotted next to it, so the scripts double as worked examples of the CLI flow.
-The harness starts the localnet with an indexer, a consistent store, and GraphQL, which needs the
-PostgreSQL binaries (`initdb`, `postgres`, `pg_ctl`) on `PATH`, and it builds `sui` and `sui-fork`
-itself.
+The harness builds `sui` and `sui-fork` itself and starts one localnet per script with
+`sui start --force-regenesis --with-graphql --with-faucet` on ephemeral ports, which needs the
+PostgreSQL binaries (`initdb`, `postgres`, `pg_ctl`, `pg_isready`) on `PATH`. Each script then
+waits for the faucet, creates its client config, and funds it with `sui client`. The scripts run
+one at a time, because each localnet is a validator, a fullnode, PostgreSQL, an indexer, a
+consistent store, GraphQL, and a faucet.
 
 ```bash
 cargo nextest run -p sui-fork-e2e-tests --test shell_tests

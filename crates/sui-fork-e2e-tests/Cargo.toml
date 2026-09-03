@@ -15,27 +15,14 @@ harness = false
 
 [dependencies]
 anyhow.workspace = true
-prometheus.workspace = true
-reqwest = { workspace = true, features = ["json"] }
 serde_json.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }
-url.workspace = true
 
-sui-futures.workspace = true
-sui-indexer-alt.workspace = true
-sui-indexer-alt-consistent-store.workspace = true
-sui-indexer-alt-framework = { workspace = true, features = ["postgres"] }
-sui-indexer-alt-graphql.workspace = true
-sui-indexer-alt-reader.workspace = true
-sui-pg-db.workspace = true
-sui-types.workspace = true
-test-cluster.workspace = true
+sui-config.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true
 fs_extra.workspace = true
 move-command-line-common.workspace = true
 regex.workspace = true
-
-sui-config.workspace = true

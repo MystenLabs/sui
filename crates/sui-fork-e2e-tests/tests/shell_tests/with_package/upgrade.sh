@@ -6,6 +6,7 @@
 # incompatible change is rejected.
 set -euo pipefail
 source ./lib.sh
+localnet_setup
 
 sender=$(on_localnet active-address)
 fork_start --address "$sender"

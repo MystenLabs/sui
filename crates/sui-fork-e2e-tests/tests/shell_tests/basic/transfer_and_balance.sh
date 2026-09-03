@@ -6,6 +6,7 @@
 # while the localnet is untouched.
 set -euo pipefail
 source ./lib.sh
+localnet_setup
 
 sender=$(on_localnet active-address)
 recipient=$(other_address "$sender")

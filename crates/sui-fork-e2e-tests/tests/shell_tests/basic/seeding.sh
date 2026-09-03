@@ -6,6 +6,7 @@
 # whole address (--address) list for the same account, and what each writes to the seed manifest.
 set -euo pipefail
 source ./lib.sh
+localnet_setup
 
 address=$(on_localnet active-address)
 localnet_coins=$(gas_count on_localnet)

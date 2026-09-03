@@ -6,6 +6,7 @@
 # the fork serves that history, executes against it, and ignores what the localnet does next.
 set -euo pipefail
 source ./lib.sh
+localnet_setup
 
 # counter_value <where> <counter id>: the `value` field of a Counter, decoded from the last eight
 # bytes of its BCS. The JSON rendering is not used because the fork cannot resolve the layout of a

@@ -6,6 +6,7 @@
 # estimation, and for a client command against a stopped fork.
 set -euo pipefail
 source ./lib.sh
+localnet_setup
 
 echo "=== start at a checkpoint the localnet does not have ==="
 if sui-fork start --network "$GRAPHQL_URL" --rpc-addr "$FORK_RPC_ADDR" \

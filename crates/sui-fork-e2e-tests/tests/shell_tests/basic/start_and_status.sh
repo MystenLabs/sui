@@ -5,6 +5,7 @@
 # Fork the localnet at its latest checkpoint and check what `start --json` and `status` report.
 set -euo pipefail
 source ./lib.sh
+localnet_setup
 
 fork_start
 fork_cmd status > status.json

@@ -5,6 +5,7 @@
 # Seal checkpoints and move the clock on a fork with `advance-checkpoint` and `advance-clock`.
 set -euo pipefail
 source ./lib.sh
+localnet_setup
 
 fork_start
 before_checkpoint=$(fork_status_field checkpoint_sequence_number)
