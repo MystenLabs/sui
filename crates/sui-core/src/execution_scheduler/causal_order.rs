@@ -27,7 +27,8 @@
 //! higher index (its blocked waiters would pin the concurrency limit while the
 //! causal-next lane can never reach it). Hence the funds-withdraw retry keeps its
 //! original index, and settlement transactions - which materialize long after their
-//! waiters enqueue - are index-less and admitted unconditionally instead.
+//! waiters enqueue - are index-less: never blocked by admission, though they occupy
+//! a concurrency slot when one is free.
 
 use std::{collections::BTreeSet, sync::Arc};
 
@@ -160,6 +161,24 @@ impl CausalAdmission {
             admission: self.clone(),
             is_next,
             retire_on_drop: Some(index),
+        })
+    }
+
+    /// Takes a concurrency slot if one is free, without any causal-index conditions.
+    /// For settlement transactions: they must never be blocked by admission
+    /// (transactions may be parked waiting on the very versions they write), but they
+    /// respect the concurrency limit when there is room. The returned slot releases on
+    /// drop and retires nothing.
+    pub fn try_take_slot(self: &Arc<Self>) -> Option<InFlightSlot> {
+        let mut inner = self.inner.lock();
+        if inner.in_flight >= self.concurrency_limit {
+            return None;
+        }
+        inner.in_flight += 1;
+        Some(InFlightSlot {
+            admission: self.clone(),
+            is_next: false,
+            retire_on_drop: None,
         })
     }
 
