@@ -158,137 +158,48 @@ Seal provides the encryption layer. When a creator publishes a post, the fronten
 
 This combination means Walrus handles storage and availability, Seal handles key management and access control, and the Move contract defines the access policy.
 
-## Prerequisites
-
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
-- [x] [Install the latest version of Sui](/getting-started/onboarding/sui-install).
 
-- [x] [Configure the Sui client](/getting-started/onboarding/configure-sui-client).
+- [x] An existing [React](https://react.dev/) frontend and a backend you can run scripts from.
 
-- [x] [Create a Sui address](/getting-started/onboarding/get-address).
+- [x] [Install the Sui CLI](/getting-started/onboarding/sui-install) and [fund an address with Testnet SUI](/getting-started/onboarding/get-coins).
 
-- [x] [Get SUI Testnet tokens](/getting-started/onboarding/get-coins).
+- [x] [Node.js](https://nodejs.org/) 18 or later with [pnpm](https://pnpm.io/installation).
 
-- [x] Download and install an IDE. The following are recommended, as they offer Move extensions:
-
-    - [VSCode](https://code.visualstudio.com/), corresponding [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move)
-
-    - [Emacs](https://www.gnu.org/software/emacs/), corresponding [Move extension](https://github.com/amnn/move-mode)
-
-    - [Vim](https://www.vim.org/download.php), corresponding [Move extension](https://github.com/yanganto/move.vim)
-
-    - [Zed](https://zed.dev/), corresponding [Move extension](https://github.com/Tzal3x/move-zed-extension)
-
-        Alternatively, you can use the [Move web IDE](https://www.playmove.dev/), which does not require a download. It does not support all functions necessary for this guide, however.
-
-- [x] [Download and install Git](https://git-scm.com/downloads).
-
-- [x] [Node.js](https://nodejs.org/) 18 or later, with [pnpm](https://pnpm.io/installation) installed
-
-- [x] A Sui wallet ([Slush Wallet](https://slush.app/) or another compatible wallet) or
-
-- [x] [Enoki](https://portal.enoki.mystenlabs.com/) zkLogin
+- [x] An [Enoki](https://portal.enoki.mystenlabs.com/) project for zkLogin, or [Slush Wallet](https://slush.app/).
 
 </TabItem>
 </Tabs>
 
-## Setup
+For the underlying primitives, see [Data Storage Using Walrus](/sui-stack/walrus/sui-stack-walrus) and [Encryption with Seal](/sui-stack/seal/sui-stack-seal).
 
-Follow these steps to set up the example locally.
+## Reference app
 
-##### Step 1: Clone the repo
+A complete implementation lives in [`onlyfins-example-app`](https://github.com/MystenLabs/onlyfins-example-app), split into a `frontend`, a `backend` sponsor service, and the `move/posts` package.
 
-```bash
-$ git clone https://github.com/MystenLabs/onlyfins-example-app.git
-$ cd onlyfins-example-app/frontend
-```
-
-##### Step 2: Install frontend dependencies
+Publish the Move package and record the package ID, which both the frontend and backend need:
 
 ```bash
-$ pnpm install
-```
-
-##### Step 3: Configure the network
-
-```bash
-$ sui client switch --env testnet
-```
-
-##### Step 4: Publish the Move package
-
-```bash
-$ cd move/posts
-$ sui move build
 $ sui client publish --gas-budget 200000000
 ```
 
-Record the package ID from the publish output. You need it in the next step.
+The frontend reads it from `POSTS_PACKAGE_ID` in `src/constants.ts`. The backend reads it from `PACKAGE_ID` in `.env`, alongside the author key pairs that publish demo content:
 
-```bash
-│ Published Objects:                                                                               │
-│  ┌──                                                                                             │
-│  │ PackageID: 0x29af8b7725a4cd3ba29f7c836433ea115ade7460bc5c610d9e7580d10cd991de          <---- Package ID       │
-│  │ Version: 1                                                                                    │
-│  │ Digest: 9joVfPViTuK6zfyxfFq23dxJcTXfgaBDKMXgVLAraWxv                                          │
-│  │ Modules: posts                                                                                │
-│  └──                       
-```
-
-##### Step 5: Update the package ID
-
-Open `frontend/src/constants.ts` and replace the `POSTS_PACKAGE_ID` value with the package ID from the previous step.
-
-##### Step 6: Set up the backend
-
-```bash
-$ cd ../../../backend/
-$ cp .env.example .env
-```
-
-Edit `.env` and fill in the author private keys and the package ID:
-
-```bash title='.env'
+```bash title='backend/.env'
 AUTHOR_1_PRIVATE_KEY=YOUR_ED25519_PRIVATE_KEY
-AUTHOR_2_PRIVATE_KEY=YOUR_ED25519_PRIVATE_KEY
-AUTHOR_3_PRIVATE_KEY=YOUR_ED25519_PRIVATE_KEY
-PACKAGE_ID=PACKAGE_ID_FROM_STEP_4
+PACKAGE_ID=YOUR_PACKAGE_ID
 ```
 
-To get your private key, use the command:
+Export a private key with `sui keytool export --key-identity YOUR_WALLET_ADDRESS` and copy the `exportedPrivateKey` value, which starts with `suiprivkey1`.
 
-```bash
-$ sui keytool export --key-identity YOUR_WALLET_ADDRESS
-```
+## How the pieces fit together
 
-Then copy the value `exportedPrivateKey`. It should start with `suiprivkey1...`
+3 decisions carry over to any app that combines these primitives:
 
-##### Step 7: Encrypt and upload images
-
-The backend has 2 scripts that prepare demo content. Run them in order. The first script creates encrypted image files in `backend/encrypted/` and outputs JSON mapping files:
-
-```bash
-$ pnpm install
-$ pnpm encrypt-images
-```
-
-Upload the encrypted and unencrypted images to Walrus, then populate the blob IDs in the generated JSON files. The second script publishes the posts onchain using the configured author key pairs:
-
-```bash
-$ pnpm create-posts
-```
-
-## Run the example
-
-Start the frontend:
-
-```bash
-$ cd frontend
-$ pnpm dev
-```
-
-Open `http://localhost:5173` in a browser. You see a feed of posts, some with locked images behind a paywall overlay. Sign in with Google through Enoki, then click **Unlock Image** on a locked post. The frontend requests a `ViewerToken`, decrypts the image through Seal, and displays it.
+- **Encrypt before uploading.** Walrus blobs are publicly addressable by blob ID. Anything you upload unencrypted is readable by anyone who learns the ID, so access control has to live in the encryption, not in the storage.
+- **Let the contract authorize decryption.** Seal key servers dry-run `seal_approve_access` before releasing a key. Access control is therefore Move code, and changing who can decrypt means changing onchain state rather than reconfiguring a server.
+- **Sponsor gas if users authenticate with zkLogin.** A user who signed in with Google has no SUI. The backend co-signs transactions so the wallet never needs a funded balance. See [Sponsored Transactions](/develop/transaction-payment/sponsor-txn).
 
 ## Key code highlights
 

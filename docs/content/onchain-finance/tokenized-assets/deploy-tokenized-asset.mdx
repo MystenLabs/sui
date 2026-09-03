@@ -55,17 +55,17 @@ This guide covers how to publish the [asset tokenization](/onchain-finance/token
 </TabItem>
 </Tabs>
  
-## Clone the repository
- 
-Clone the `asset-tokenization` repository and navigate to the `setup` directory:
- 
+## Get the framework
+
+Asset tokenization ships as a template you fork rather than a package you install, because the `template` package is rewritten per asset through WASM bytecode manipulation. Start from the reference repository:
+
 ```sh
 $ git clone https://github.com/MystenLabs/asset-tokenization.git
 $ cd asset-tokenization
 ```
- 
-Copy the `.env.template` file to `.env` and install dependencies:
- 
+
+The `setup` directory holds the deployment scripts and the environment file the rest of this guide populates:
+
 ```sh
 $ cp setup/.env.template setup/.env
 $ cd setup && npm install
