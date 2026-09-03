@@ -1,23 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(deprecated)]
-
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use futures::future;
-use jsonrpsee::core::client::ClientT;
-use jsonrpsee::rpc_params;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::ident_str;
 use rand::rngs::OsRng;
 use sui_config::node::RunWithRange;
-use sui_json_rpc_types::{EventFilter, TransactionFilter};
-use sui_json_rpc_types::{
-    EventPage, SuiEvent, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions,
-};
+use sui_json_rpc_types::TransactionFilter;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
@@ -621,93 +613,6 @@ async fn do_test_full_node_sync_flood() {
         .await;
 }
 
-// Test fullnode has event read jsonrpc endpoints working
-#[sim_test]
-async fn test_full_node_event_read_api_ok() {
-    let mut test_cluster = TestClusterBuilder::new()
-        .with_fullnode_rpc_port(50000)
-        .enable_fullnode_events()
-        .build()
-        .await;
-
-    let context = &mut test_cluster.wallet;
-    let node = &test_cluster.fullnode_handle.sui_node;
-    let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
-
-    let (package_id, gas_id_1, _) = publish_nfts_package(context).await;
-
-    let (transferred_object, _, _, digest, _) = transfer_coin(context).await.unwrap();
-
-    let txes = node
-        .state()
-        .get_transactions_for_tests(
-            Some(TransactionFilter::InputObject(transferred_object)),
-            None,
-            None,
-            false,
-        )
-        .await
-        .unwrap();
-
-    if gas_id_1 == transferred_object {
-        assert_eq!(txes.len(), 2);
-        assert!(txes[0] == digest || txes[1] == digest);
-    } else {
-        assert_eq!(txes.len(), 1);
-        assert_eq!(txes[0], digest);
-    }
-
-    // This is a poor substitute for the post processing taking some time
-    sleep(Duration::from_millis(1000)).await;
-
-    let (_sender, _object_id, digest2) = create_nft(context, package_id).await;
-
-    // Add a delay to ensure event processing is done after transaction commits.
-    sleep(Duration::from_secs(5)).await;
-
-    // query by move event struct name
-    let params = rpc_params![digest2];
-    let events: Vec<SuiEvent> = jsonrpc_client
-        .request("sui_getEvents", params)
-        .await
-        .unwrap();
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].id.tx_digest, digest2);
-}
-
-#[sim_test]
-async fn test_full_node_event_query_by_module_ok() {
-    let mut test_cluster = TestClusterBuilder::new()
-        .enable_fullnode_events()
-        .build()
-        .await;
-
-    let context = &mut test_cluster.wallet;
-    let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
-
-    let (package_id, _, _) = publish_nfts_package(context).await;
-
-    // This is a poor substitute for the post processing taking some time
-    sleep(Duration::from_millis(1000)).await;
-
-    let (_sender, _object_id, digest2) = create_nft(context, package_id).await;
-
-    // Add a delay to ensure event processing is done after transaction commits.
-    sleep(Duration::from_secs(5)).await;
-
-    // query by move event module
-    let params = rpc_params![EventFilter::MoveEventModule {
-        package: package_id,
-        module: ident_str!("testnet_nft").into()
-    }];
-    let page: EventPage = jsonrpc_client
-        .request("suix_queryEvents", params)
-        .await
-        .unwrap();
-    assert_eq!(page.data.len(), 1);
-    assert_eq!(page.data[0].id.tx_digest, digest2);
-}
-
 #[sim_test]
 async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
@@ -822,125 +727,14 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
         .import(None, SuiKeyPair::Ed25519(get_key_pair().1))
         .await?;
 
-    let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
+    let mut grpc_client = test_cluster.fullnode_handle.grpc_client.clone();
 
     let txn_count = 4;
     let txns = batch_make_transfer_transactions(context, txn_count).await;
     for txn in txns {
-        let tx_digest = txn.digest();
-        let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
-        let params = rpc_params![
-            tx_bytes,
-            signatures,
-            SuiTransactionBlockResponseOptions::new(),
-            ExecuteTransactionRequestType::WaitForLocalExecution
-        ];
-        let response: SuiTransactionBlockResponse = jsonrpc_client
-            .request("sui_executeTransactionBlock", params)
-            .await
-            .unwrap();
-
-        let SuiTransactionBlockResponse {
-            digest,
-            confirmed_local_execution,
-            ..
-        } = response;
-        assert_eq!(digest, *tx_digest);
-        assert!(confirmed_local_execution.unwrap());
+        let executed = grpc_client.execute_transaction(&txn).await.unwrap();
+        assert_eq!(executed.effects.transaction_digest(), txn.digest());
     }
-    Ok(())
-}
-
-#[sim_test]
-async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let context = &mut test_cluster.wallet;
-    let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
-
-    let txn_count = 4;
-    let mut txns = batch_make_transfer_transactions(context, txn_count).await;
-    assert!(
-        txns.len() >= txn_count,
-        "Expect at least {} txns. Do we generate enough gas objects during genesis?",
-        txn_count,
-    );
-
-    let txn = txns.swap_remove(0);
-    let tx_digest = txn.digest();
-
-    // Test request with ExecuteTransactionRequestType::WaitForLocalExecution
-    let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
-    let params = rpc_params![
-        tx_bytes,
-        signatures,
-        SuiTransactionBlockResponseOptions::new(),
-        ExecuteTransactionRequestType::WaitForLocalExecution
-    ];
-    let response: SuiTransactionBlockResponse = jsonrpc_client
-        .request("sui_executeTransactionBlock", params)
-        .await
-        .unwrap();
-
-    let SuiTransactionBlockResponse {
-        digest,
-        confirmed_local_execution,
-        ..
-    } = response;
-    assert_eq!(&digest, tx_digest);
-    assert!(confirmed_local_execution.unwrap());
-
-    let _response: SuiTransactionBlockResponse = jsonrpc_client
-        .request("sui_getTransactionBlock", rpc_params![*tx_digest])
-        .await
-        .unwrap();
-
-    // Test request with ExecuteTransactionRequestType::WaitForEffectsCert
-    // Use the same txn which should return local finalized effects
-    let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
-    let params = rpc_params![
-        tx_bytes,
-        signatures,
-        SuiTransactionBlockResponseOptions::new().with_effects(),
-        ExecuteTransactionRequestType::WaitForEffectsCert
-    ];
-    let response: SuiTransactionBlockResponse = jsonrpc_client
-        .request("sui_executeTransactionBlock", params)
-        .await
-        .unwrap();
-
-    let SuiTransactionBlockResponse {
-        effects,
-        confirmed_local_execution,
-        ..
-    } = response;
-    assert_eq!(effects.unwrap().transaction_digest(), tx_digest);
-    assert!(confirmed_local_execution.unwrap());
-
-    // Test request with ExecuteTransactionRequestType::WaitForEffectsCert
-    // Use a different txn to avoid the case where the txn effects are already cached locally
-    let txn = txns.swap_remove(0);
-    let tx_digest = txn.digest();
-
-    let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
-    let params = rpc_params![
-        tx_bytes,
-        signatures,
-        SuiTransactionBlockResponseOptions::new().with_effects(),
-        ExecuteTransactionRequestType::WaitForEffectsCert
-    ];
-    let response: SuiTransactionBlockResponse = jsonrpc_client
-        .request("sui_executeTransactionBlock", params)
-        .await
-        .unwrap();
-
-    let SuiTransactionBlockResponse {
-        effects,
-        confirmed_local_execution,
-        ..
-    } = response;
-    assert_eq!(effects.unwrap().transaction_digest(), tx_digest);
-    assert!(!confirmed_local_execution.unwrap());
-
     Ok(())
 }
 

@@ -56,7 +56,6 @@ fn test_protocol_overrides_2() {
 mod sim_only_tests {
 
     use super::*;
-    use fastcrypto::encoding::Base64;
     use move_binary_format::CompiledModule;
     use move_core_types::ident_str;
     use mysten_common::register_debug_fatal_handler;
@@ -68,7 +67,6 @@ mod sim_only_tests {
     use std::{fs, io, path::Path};
     use sui_core::authority::framework_injection;
     use sui_framework::BuiltInFramework;
-    use sui_json_rpc_api::WriteApiClient;
     use sui_macros::*;
     use sui_move_build::{BuildConfig, CompiledPackage};
     use sui_protocol_config::Chain;
@@ -597,7 +595,6 @@ mod sim_only_tests {
     }
 
     async fn dev_inspect_call(cluster: &TestCluster, call: ProgrammableMoveCall) -> u64 {
-        let client = cluster.rpc_client();
         let sender = cluster.get_address_0();
 
         let pt = {
@@ -607,13 +604,14 @@ mod sim_only_tests {
         };
         let txn = TransactionKind::programmable(pt);
 
-        let response = client
+        let response = cluster
+            .fullnode_handle
+            .sui_node
+            .state()
             .dev_inspect_transaction_block(
-                sender,
-                Base64::from_bytes(&bcs::to_bytes(&txn).unwrap()),
-                /* gas_price */ None,
-                /* epoch_id */ None,
-                /* additional_args */ None,
+                sender, txn, /* gas_price */ None, /* gas_budget */ None,
+                /* gas_sponsor */ None, /* gas_objects */ None,
+                /* show_raw_txn_data_and_effects */ None, /* skip_checks */ None,
             )
             .await
             .unwrap();

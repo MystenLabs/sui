@@ -10,10 +10,8 @@ use sui_json_rpc_types::{
     MoveFunctionArgType, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
     SuiMoveNormalizedStruct,
 };
-use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::ObjectID;
 
-#[open_rpc(namespace = "sui", tag = "Move Utils")]
 #[rpc(server, client, namespace = "sui")]
 pub trait MoveUtils {
     /// Return the argument types of a Move function,

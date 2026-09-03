@@ -9,12 +9,10 @@ use sui_json_rpc_types::{
     DevInspectArgs, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
-use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::SuiAddress;
 use sui_types::sui_serde::BigInt;
 use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 
-#[open_rpc(namespace = "sui", tag = "Write API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait WriteApi {
     /// Execute the transaction and wait for results if desired.
@@ -30,13 +28,13 @@ pub trait WriteApi {
     #[method(name = "executeTransactionBlock")]
     async fn execute_transaction_block(
         &self,
-        /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
+        // BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
         tx_bytes: Base64,
-        /// A list of signatures (`flag || signature || pubkey` bytes, as base-64 encoded string). Signature is committed to the intent message of the transaction data, as base-64 encoded string.
+        // A list of signatures (`flag || signature || pubkey` bytes, as base-64 encoded string). Signature is committed to the intent message of the transaction data, as base-64 encoded string.
         signatures: Vec<Base64>,
-        /// options for specifying the content to be returned
+        // options for specifying the content to be returned
         options: Option<SuiTransactionBlockResponseOptions>,
-        /// The request type, derived from `SuiTransactionBlockResponseOptions` if None
+        // The request type, derived from `SuiTransactionBlockResponseOptions` if None
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionBlockResponse>;
 
@@ -47,13 +45,13 @@ pub trait WriteApi {
     async fn dev_inspect_transaction_block(
         &self,
         sender_address: SuiAddress,
-        /// BCS encoded TransactionKind(as opposed to TransactionData, which include gasBudget and gasPrice)
+        // BCS encoded TransactionKind(as opposed to TransactionData, which include gasBudget and gasPrice)
         tx_bytes: Base64,
-        /// Gas is not charged, but gas usage is still calculated. Default to use reference gas price
+        // Gas is not charged, but gas usage is still calculated. Default to use reference gas price
         gas_price: Option<BigInt<u64>>,
-        /// The epoch to perform the call. Will be set from the system state object if not provided
+        // The epoch to perform the call. Will be set from the system state object if not provided
         epoch: Option<BigInt<u64>>,
-        /// Additional arguments including gas_budget, gas_objects, gas_sponsor and skip_checks.
+        // Additional arguments including gas_budget, gas_objects, gas_sponsor and skip_checks.
         additional_args: Option<DevInspectArgs>,
     ) -> RpcResult<DevInspectResults>;
 
