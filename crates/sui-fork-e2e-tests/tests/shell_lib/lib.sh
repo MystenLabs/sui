@@ -7,17 +7,11 @@
 # waits for the localnet the harness spawned and creates the funded client config.
 #
 # The helpers stay compatible with the bash 3.2 that macOS ships, so there are no associative
-# arrays, no mapfile, and no timeout(1). They are also written around these traps:
-#
-# - Under pipefail, `producer | head -1` kills the producer with SIGPIPE and aborts the script, so
-#   a stream is cut with `awk ... exit` or jq's first() instead.
-# - `local x=$(cmd)` masks the exit status of cmd, so declarations and assignments are separate.
-# - `set -e` never fires on a backgrounded command, so fork_start detects an early exit of
-#   `sui-fork start` by polling `kill -0`.
-# - `sui-fork start` prints its summary before its RPC server binds, so readiness is a `status`
-#   call that succeeds rather than a line in the log.
-# - `--gas` and `--args` on `sui client` take one or more values, so only a following `--flag`
-#   terminates them.
+# arrays, no mapfile, and no timeout(1). Two traps to keep in mind in a script: under pipefail,
+# `producer | head -1` kills the producer with SIGPIPE and aborts the script, so a stream is cut
+# with `awk ... exit` or jq's first() instead; and `local x=$(cmd)` masks the exit status of cmd,
+# so declarations and assignments are separate. Also, `--gas` and `--args` on `sui client` take
+# one or more values, so only a following `--flag` terminates them.
 
 : "${LOCALNET_CONFIG:?LOCALNET_CONFIG must be a scratch path for the localnet client.yaml}"
 : "${FORK_CONFIG:?FORK_CONFIG must be a scratch path for the fork client.yaml}"
@@ -29,9 +23,8 @@
 
 # Keep foreground sui and sui-fork commands silent, so only deliberate output reaches the snapshot.
 export RUST_LOG="${RUST_LOG:-error}"
-: "${LOCALNET_TIMEOUT:=120}"
-: "${FORK_START_TIMEOUT:=120}"
-: "${GRAPHQL_TIMEOUT:=120}"
+# Seconds to wait for the localnet, for a fork, or for GraphQL to index a transaction.
+: "${WAIT_TIMEOUT:=120}"
 : "${FORK_LOG:=fork.log}"
 
 FORK_PID=""
@@ -54,28 +47,35 @@ assert_ne() {
 assert_gt() {
   if [ "$1" -gt "$2" ]; then ok "$3"; else fail "$3 ($1 is not greater than $2)"; fi
 }
-assert_nonempty() {
-  if [ -n "$1" ]; then ok "$2"; else fail "$2 (empty)"; fi
-}
 # assert_grep <pattern> <file> <label>: the file is only printed when the pattern is missing.
 assert_grep() {
   if grep -q -- "$1" "$2"; then ok "$3"; else fail "$3 (no '$1' in $2)"; cat "$2"; fi
 }
 
-# ----------------------------------------------------------------------------------- redaction
-
-# Replace object ids and base58 digests with markers.
-redact_ids() {
+# scrub: replace object ids, base58 digests, "YYYY-MM-DD HH:MM:SS UTC" timestamps, and then every
+# remaining number with markers.
+scrub() {
   sed -E \
     -e 's/0x[0-9a-fA-F]{64}/<ID>/g' \
-    -e 's/(^|[^0-9A-Za-z])[1-9A-HJ-NP-Za-km-z]{43,44}($|[^0-9A-Za-z])/\1<DIGEST>\2/g'
-}
-
-# Replace ids, digests, "YYYY-MM-DD HH:MM:SS UTC" timestamps, and then every remaining number.
-scrub() {
-  redact_ids | sed -E \
+    -e 's/(^|[^0-9A-Za-z])[1-9A-HJ-NP-Za-km-z]{43,44}($|[^0-9A-Za-z])/\1<DIGEST>\2/g' \
     -e 's/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} UTC/<TS>/g' \
     -e 's/[0-9]+/<N>/g'
+}
+
+# retry_until <seconds> <cmd...>: rerun the command once a second until it succeeds. Gives up
+# after the deadline, or at once when the command returns 3, which a probe uses to report that
+# what it waits for has already died. The last attempt's output is left in retry.log.
+retry_until() {
+  local deadline=$(( $(date +%s) + $1 ))
+  shift
+  local status=0
+  until "$@" > retry.log 2>&1; do
+    status=$?
+    if [ "$status" -eq 3 ] || [ "$(date +%s)" -ge "$deadline" ]; then
+      return "$status"
+    fi
+    sleep 1
+  done
 }
 
 # -------------------------------------------------------------------------------- CLI wrappers
@@ -86,9 +86,6 @@ on_fork() { sui client --client.config "$FORK_CONFIG" "$@"; }
 # fork_cmd <subcommand> [flags]: a sui-fork client command against the running fork, as JSON.
 fork_cmd() { sui-fork --json "$@" --rpc-addr "$FORK_RPC"; }
 fork_status_field() { fork_cmd status | jq -r ".$1"; }
-
-# The JSON block that `start --json` printed, taken from the fork log.
-fork_start_json() { sed -n '/^{$/,/^}$/p' "$FORK_LOG"; }
 
 # run_json <out.json> <cmd...>: run a command with --json, stdout to the file and stderr next to
 # it, printing both only when the command fails.
@@ -102,10 +99,58 @@ run_json() {
   fi
 }
 
+# graphql <query>: POST a query to the localnet GraphQL endpoint and print the raw response.
+graphql() {
+  curl -sS -X POST -H 'Content-Type: application/json' \
+    --data "$(jq -cn --arg q "$1" '{query: $q}')" "$GRAPHQL_URL"
+}
+
+# ------------------------------------------------------------------------------------ localnet
+
+# localnet_setup: wait for the localnet the harness spawned, then create LOCALNET_CONFIG with a
+# funded active address and a second, unfunded one for scripts that need a transfer recipient.
+#
+# `sui start` prints nothing when it is ready, so readiness is the first `faucet` call that
+# succeeds. `-y` creates the config and its keystore on that first call, and `--url` is required
+# because the CLI otherwise assumes the default faucet port. Fork seeding reads the coins through
+# GraphQL, so this returns only once GraphQL has indexed the transfer that delivered them.
+localnet_setup() {
+  if ! retry_until "$WAIT_TIMEOUT" on_localnet -y faucet --url "$FAUCET_URL"; then
+    echo "timed out after ${WAIT_TIMEOUT}s waiting for the localnet faucet:" >&2
+    cat retry.log >&2
+    return 1
+  fi
+  on_localnet new-env --alias localnet --rpc "$LOCALNET_RPC_URL" > /dev/null
+  on_localnet switch --env localnet > /dev/null
+  on_localnet new-address ed25519 > /dev/null
+  wait_for_graphql_tx "$(object_field on_localnet "$(gas_coin on_localnet)" .prevTx)" > /dev/null
+}
+
+# graphql_tx_checkpoint <digest>: the checkpoint GraphQL has the transaction in, failing while it
+# has none.
+graphql_tx_checkpoint() {
+  graphql "{ transaction(digest: \"$1\") { effects { checkpoint { sequenceNumber } } } }" \
+    | jq -er '.data.transaction.effects.checkpoint.sequenceNumber'
+}
+
+# wait_for_graphql_tx <digest>: wait until GraphQL has indexed the transaction, then print the
+# checkpoint that finalised it.
+wait_for_graphql_tx() {
+  if ! retry_until "$WAIT_TIMEOUT" graphql_tx_checkpoint "$1"; then
+    echo "timed out waiting for GraphQL to index transaction $1" >&2
+    return 1
+  fi
+  graphql_tx_checkpoint "$1"
+}
+
 # ------------------------------------------------------------------------------ fork lifecycle
 
 # _fork_spawn [--json] [start flags]: background `sui-fork start` on FORK_RPC_ADDR with its data
 # under FORK_DIR (default FORK_DATA_DIR), then wait until its RPC server answers.
+#
+# `set -e` never fires on a backgrounded command, and `sui-fork start` prints its summary before
+# its RPC server binds, so readiness is a `status` call that succeeds, and an early exit is what
+# the probe reports rather than the shell.
 _fork_spawn() {
   local json_flag=""
   if [ "${1:-}" = "--json" ]; then
@@ -126,24 +171,25 @@ _fork_spawn() {
   FORK_PID=$!
   trap fork_stop EXIT
 
-  local waited=0
-  until sui-fork status --rpc-addr "$FORK_RPC" > /dev/null 2>&1; do
-    if ! kill -0 "$FORK_PID" 2> /dev/null; then
+  local status=0
+  retry_until "$WAIT_TIMEOUT" _fork_ready || status=$?
+  if [ "$status" -ne 0 ]; then
+    if [ "$status" -eq 3 ]; then
       echo "sui-fork exited before its RPC server came up:" >&2
-      cat "$FORK_LOG" >&2
-      FORK_PID=""
-      return 1
+    else
+      echo "timed out after ${WAIT_TIMEOUT}s waiting for sui-fork to start:" >&2
     fi
-    if [ "$waited" -ge $((FORK_START_TIMEOUT * 5)) ]; then
-      echo "timed out after ${FORK_START_TIMEOUT}s waiting for sui-fork to start:" >&2
-      cat "$FORK_LOG" >&2
-      fork_stop
-      return 1
-    fi
-    sleep 0.2
-    waited=$((waited + 1))
-  done
+    cat "$FORK_LOG" >&2
+    fork_stop
+    return 1
+  fi
   export FORK_PID FORK_RPC FORK_URL
+}
+
+# _fork_ready: whether the fork answers, or 3 once it has exited.
+_fork_ready() {
+  kill -0 "$FORK_PID" 2> /dev/null || return 3
+  sui-fork status --rpc-addr "$FORK_RPC"
 }
 
 # fork_start [start flags]: start a fork with `--json` and export FORK_RPC, FORK_URL, and
@@ -200,106 +246,6 @@ fork_env() {
   fi
 }
 
-# ------------------------------------------------------------------------------------- GraphQL
-
-# graphql <query>: POST a query to the localnet GraphQL endpoint and print the raw response.
-graphql() {
-  curl -sS -X POST -H 'Content-Type: application/json' \
-    --data "$(jq -cn --arg q "$1" '{query: $q}')" "$GRAPHQL_URL"
-}
-
-latest_localnet_checkpoint() {
-  graphql '{ checkpoint { sequenceNumber } }' | jq -r '.data.checkpoint.sequenceNumber // empty'
-}
-
-# wait_for_graphql <checkpoint>: wait until GraphQL has indexed the checkpoint.
-wait_for_graphql() {
-  local target=$1
-  local waited=0
-  local latest=""
-  while :; do
-    latest=$(latest_localnet_checkpoint 2> /dev/null || true)
-    if [ -n "$latest" ] && [ "$latest" -ge "$target" ]; then
-      return 0
-    fi
-    if [ "$waited" -ge $((GRAPHQL_TIMEOUT * 2)) ]; then
-      echo "timed out waiting for GraphQL to reach checkpoint $target (latest '$latest')" >&2
-      return 1
-    fi
-    sleep 0.5
-    waited=$((waited + 1))
-  done
-}
-
-# wait_for_graphql_tx <digest>: wait until GraphQL has indexed the transaction, then print the
-# checkpoint that finalised it.
-wait_for_graphql_tx() {
-  local digest=$1
-  local waited=0
-  local checkpoint=""
-  while :; do
-    checkpoint=$(graphql "{ transaction(digest: \"$digest\") { effects { checkpoint { sequenceNumber } } } }" \
-      | jq -r '.data.transaction.effects.checkpoint.sequenceNumber // empty' 2> /dev/null || true)
-    if [ -n "$checkpoint" ]; then
-      echo "$checkpoint"
-      return 0
-    fi
-    if [ "$waited" -ge $((GRAPHQL_TIMEOUT * 2)) ]; then
-      echo "timed out waiting for GraphQL to index transaction $digest" >&2
-      return 1
-    fi
-    sleep 0.5
-    waited=$((waited + 1))
-  done
-}
-
-# ------------------------------------------------------------------------------------ localnet
-
-# localnet_setup: wait for the localnet the harness spawned, then create LOCALNET_CONFIG with a
-# funded active address and a second, unfunded one for scripts that need a transfer recipient.
-#
-# `sui start` prints nothing when it is ready, so readiness is the first `faucet` call that
-# succeeds. `-y` creates the config and its keystore on that first call, and `--url` is required
-# because the CLI otherwise assumes the default faucet port. Returns once GraphQL lists the coins,
-# so a fork taken straight afterwards seeds them.
-localnet_setup() {
-  local waited=0
-  until on_localnet -y faucet --url "$FAUCET_URL" > faucet.log 2>&1; do
-    if [ "$waited" -ge "$LOCALNET_TIMEOUT" ]; then
-      echo "timed out after ${LOCALNET_TIMEOUT}s waiting for the localnet faucet:" >&2
-      cat faucet.log >&2
-      return 1
-    fi
-    sleep 1
-    waited=$((waited + 1))
-  done
-  on_localnet new-env --alias localnet --rpc "$LOCALNET_RPC_URL" > /dev/null
-  on_localnet switch --env localnet > /dev/null
-  on_localnet new-address ed25519 > /dev/null
-  wait_for_localnet_objects "$(on_localnet active-address)"
-}
-
-# wait_for_localnet_objects <address>: wait until GraphQL lists objects for the address at its
-# latest checkpoint, through the checkpoint-scoped query that `--address` seeding uses.
-wait_for_localnet_objects() {
-  local address=$1
-  local waited=0
-  local count=""
-  while :; do
-    count=$(graphql "{ checkpoint { query { address(address: \"$address\") { objects { nodes { address } } } } } }" \
-      | jq -r '.data.checkpoint.query.address.objects.nodes | length' 2> /dev/null || true)
-    if [ -n "$count" ] && [ "$count" -gt 0 ]; then
-      return 0
-    fi
-    if [ "$waited" -ge $((GRAPHQL_TIMEOUT * 2)) ]; then
-      echo "timed out waiting for GraphQL to list the objects of $address" >&2
-      return 1
-    fi
-    sleep 0.5
-    waited=$((waited + 1))
-  done
-}
-
 # ---------------------------------------------------------------- sui client --json helpers
 
 # Where a helper takes <where>, pass on_localnet or on_fork.
@@ -324,9 +270,6 @@ gas_total() {
 
 # object_field <where> <object id> <jq expression>
 object_field() { "$1" object "$2" --json | jq -r "$3"; }
-# object_bcs_field <where> <object id> <jq expression>: the same over `object --bcs`, whose
-# `.data.Move.contents` holds the raw BCS bytes.
-object_bcs_field() { "$1" object "$2" --bcs --json | jq -r "$3"; }
 
 tx_digest_of() { jq -r '.digest' "$1"; }
 tx_status_of() { jq -r '.effects.status.status' "$1"; }
@@ -337,12 +280,6 @@ published_package_id() {
 created_object_id() {
   jq -r --arg t "$2" \
     'first(.objectChanges[] | select(.type == "created" and (.objectType | endswith($t)))) | .objectId' \
-    "$1"
-}
-# mutated_object_id <tx.json> <type suffix>
-mutated_object_id() {
-  jq -r --arg t "$2" \
-    'first(.objectChanges[] | select(.type == "mutated" and (.objectType | endswith($t)))) | .objectId' \
     "$1"
 }
 

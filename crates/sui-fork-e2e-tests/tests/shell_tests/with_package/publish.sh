@@ -8,6 +8,10 @@ set -euo pipefail
 source ./lib.sh
 localnet_setup
 
+assert_nonempty() {
+  if [ -n "$1" ]; then ok "$2"; else fail "$2 (empty)"; fi
+}
+
 sender=$(on_localnet active-address)
 fork_start --address "$sender"
 fork_env

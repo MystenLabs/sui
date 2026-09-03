@@ -12,6 +12,10 @@ set -euo pipefail
 source ./lib.sh
 localnet_setup
 
+# object_bcs_field <where> <object id> <jq expression>: like object_field, over `object --bcs`,
+# whose `.data.Move.contents` holds the raw BCS bytes.
+object_bcs_field() { "$1" object "$2" --bcs --json | jq -r "$3"; }
+
 # counter_value <where> <counter id>: the `value` field of a Counter, decoded from the last eight
 # bytes of its BCS. The JSON rendering is not used because the fork cannot resolve the layout of a
 # package it only fetched on demand (see the known gaps in crates/sui-fork/design/storage.md), so
