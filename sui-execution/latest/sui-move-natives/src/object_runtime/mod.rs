@@ -47,7 +47,7 @@ use sui_types::{
     metrics::ExecutionMetrics,
     move_package::MovePackage,
     object::{MoveObject, Owner},
-    storage::{ObjectFundsSufficiency, RuntimeObjectResolver},
+    storage::{ObjectFundsResolver, ObjectFundsSufficiency, RuntimeObjectResolver},
 };
 use tracing::error;
 
@@ -138,6 +138,7 @@ pub(crate) struct ObjectRuntimeState {
 #[derive(Tid)]
 pub struct ObjectRuntime<'a> {
     child_object_store: ChildObjectStore<'a>,
+    object_funds_resolver: &'a dyn ObjectFundsResolver,
     // inventories for test scenario
     pub(crate) test_inventories: TestInventories,
     // the internal state
@@ -186,6 +187,7 @@ impl ObjectFundsAvailable {
 impl<'a> ObjectRuntime<'a> {
     pub fn new(
         object_resolver: &'a dyn RuntimeObjectResolver,
+        object_funds_resolver: &'a dyn ObjectFundsResolver,
         input_objects: BTreeMap<ObjectID, InputObject>,
         is_metered: bool,
         protocol_config: &'a ProtocolConfig,
@@ -221,6 +223,7 @@ impl<'a> ObjectRuntime<'a> {
                 metrics.clone(),
                 epoch_id,
             ),
+            object_funds_resolver,
             test_inventories: TestInventories::new(),
             state: ObjectRuntimeState {
                 input_objects: input_object_owners,
@@ -259,7 +262,7 @@ impl<'a> ObjectRuntime<'a> {
             .or_insert_with(ObjectFundsAvailable::init);
         if entry.needs_store_read(amount) {
             let settled_available = match self
-                .child_object_store
+                .object_funds_resolver
                 .object_available_balance(owner, type_)
             {
                 Ok(balance) => balance,
@@ -493,6 +496,8 @@ impl<'a> ObjectRuntime<'a> {
         std::mem::take(&mut self.state.events)
     }
 
+    // TODO: Eventually we may want to allow larger types for accumulators,
+    // and the errors will need to be native error instead of partial VM error.
     pub fn emit_accumulator_event(
         &mut self,
         accumulator_id: ObjectID,

@@ -6,6 +6,7 @@ use std::{
     sync::Arc,
 };
 
+use mysten_common::assert_reachable;
 use parking_lot::RwLock;
 use sui_types::{
     accumulator_root::{AccumulatorObjId, UnsettledObjectFundsRead},
@@ -80,25 +81,25 @@ impl UnsettledObjectWithdrawals {
     /// Record a new unsettled withdraw for an account at a given accumulator version.
     /// This updates the unsettled withdraws map, and is called after a transaction successfully executed
     /// that withdraws funds from an object balance account.
-    pub(crate) fn record_unsettled_withdraws<'a>(
+    pub(crate) fn record_unsettled_withdraws(
         &self,
-        withdraws: impl Iterator<Item = (&'a AccumulatorObjId, &'a u128)>,
+        withdraws: impl IntoIterator<Item = (AccumulatorObjId, u128)>,
         accumulator_version: SequenceNumber,
     ) {
         let mut inner = self.inner.write();
         for (account, amount) in withdraws {
             let entry = inner
                 .unsettled_withdraws
-                .entry(*account)
+                .entry(account)
                 .or_default()
                 .entry(accumulator_version)
                 .or_default();
-            *entry = entry.checked_add(*amount).unwrap();
+            *entry = entry.checked_add(amount).unwrap();
             inner
                 .unsettled_accounts
                 .entry(accumulator_version)
                 .or_default()
-                .insert(*account);
+                .insert(account);
         }
         self.update_unsettled_metrics(&inner);
     }
@@ -110,15 +111,15 @@ impl UnsettledObjectWithdrawals {
         accumulator_running_max_withdraws: &BTreeMap<AccumulatorObjId, u128>,
         accumulator_version: SequenceNumber,
         chain_identifier: ChainIdentifier,
-    ) -> bool {
+    ) {
         if accumulator_running_max_withdraws.is_empty() {
-            return false;
+            return;
         }
         let address_funds_reservations: BTreeSet<_> = tx_data
             .process_funds_withdrawals_for_execution(chain_identifier)
             .into_keys()
             .collect();
-        let updates: BTreeMap<_, _> = effects
+        let updates: Vec<_> = effects
             .accumulator_events()
             .into_iter()
             .filter(|event| !address_funds_reservations.contains(&event.accumulator_obj))
@@ -131,7 +132,7 @@ impl UnsettledObjectWithdrawals {
             })
             .collect();
         if updates.is_empty() {
-            return false;
+            return;
         }
         debug_assert!(
             updates.iter().all(|(obj_id, net)| {
@@ -144,8 +145,12 @@ impl UnsettledObjectWithdrawals {
             updates,
             accumulator_running_max_withdraws,
         );
-        self.record_unsettled_withdraws(updates.iter(), accumulator_version);
-        true
+        self.record_unsettled_withdraws(updates, accumulator_version);
+        assert_reachable!("record unsettled object withdraws from in-execution check");
+        self.metrics
+            .in_execution_check_result
+            .with_label_values(&["sufficient"])
+            .inc();
     }
 
     fn update_unsettled_metrics(&self, inner: &Inner) {
