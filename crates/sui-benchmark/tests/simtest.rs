@@ -2175,13 +2175,15 @@ mod test {
             assert!(metrics_sum.success_count > 150);
             assert!(metrics_sum.permanent_failure_count > 50);
         }
-        // Congestion-induced cancellations vary seed-to-seed in a narrow band that
-        // can dip just below 100 (observed ~98-121 over a 200-seed sweep), making a
-        // `> 100` bar flake ~3% of the time. A `> 50` bar still asserts that
-        // shared-object congestion control actually kicked in, with comfortable
-        // margin below the observed floor.
+        // Congestion-induced cancellations vary seed-to-seed. The band was ~98-121
+        // over a 200-seed sweep with fixed execution concurrency; with the execution
+        // driver's concurrency limit randomized in test configurations (1..=8),
+        // low-concurrency draws reduce cluster throughput and with it the
+        // cancellation count (observed low 40s). A `> 20` bar still asserts that
+        // shared-object congestion control actually kicked in, with margin below
+        // the observed floor.
         assert!(
-            metrics_sum.cancellation_count > 50,
+            metrics_sum.cancellation_count > 20,
             "cancellation_count too low: {}",
             metrics_sum.cancellation_count
         );
