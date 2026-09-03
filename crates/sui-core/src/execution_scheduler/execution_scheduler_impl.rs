@@ -317,28 +317,21 @@ impl ExecutionScheduler {
                         .transaction_manager_transaction_queue_age_s
                         .observe(enqueue_time.elapsed().as_secs_f64());
                     debug!(?tx_digest, "Input objects available");
-                    // TODO: Eventually we could fold execution_driver into the scheduler.
-                    self.send_transaction_for_execution(
-                        &cert,
-                        execution_env,
-                        enqueue_time,
-                    );
                 }
             _ = self.transaction_cache_read.notify_read_executed_effects_digests(
                 "ExecutionScheduler::notify_read_executed_effects_digests",
                 &digests,
             ) => {
                 debug!(?tx_digest, "Transaction already executed");
-                // Deliver indexed transactions anyway so the driver retires the
-                // causal index; try_execute_immediately no-ops on an executed
-                // transaction. (With enqueue deduplication this arm should be
-                // unreachable - execution only happens via the driver, and no
-                // duplicate copy exists - but it is kept as a safety net.)
-                if execution_env.causal_index.is_some() {
-                    self.send_transaction_for_execution(&cert, execution_env, enqueue_time);
-                }
             }
         };
+
+        // Send even if the transaction was already executed: the driver must retire
+        // its causal index, and try_execute_immediately no-ops on an executed
+        // transaction. Such unnecessary sends should only happen briefly after a
+        // restart - in steady state, duplicate enqueues are removed by deduplication.
+        // TODO: Eventually we could fold execution_driver into the scheduler.
+        self.send_transaction_for_execution(&cert, execution_env, enqueue_time);
     }
 
     pub fn send_transaction_for_execution(
