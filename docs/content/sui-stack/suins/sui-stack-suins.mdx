@@ -239,23 +239,37 @@ Pass the `SuiNS` [shared object](/develop/objects/object-ownership/shared) as an
 
 For offchain resolution in a TypeScript or JavaScript app, you have 2 options:
 
-- **`@mysten/sui` convenience methods:** The `SuiClient` provides `resolveNameServiceAddress` and `resolveNameServiceNames` methods for basic lookups.
-- **`@mysten/suins` SDK extension:** The SuiNS SDK adds higher-level methods like `getNameRecord` to any `SuiClient` through the `$extend` pattern. Use this when you need name record details beyond the target address (expiration, metadata, avatar).
+- **`@mysten/sui` client methods:** Every Sui client provides `resolveNameServiceAddress` for name-to-address lookup and `defaultNameServiceName` for the reverse.
+- **`@mysten/suins` SDK extension:** The SuiNS SDK adds higher-level methods like `getNameRecord` to any Sui client through the `$extend` pattern. Use this when you need name record details beyond the target address (expiration, metadata, avatar).
 
 ### Lookup with `@mysten/sui`
 
 
-{/* TODO: Import code from MystenLabs/sui-typescript — show resolveNameServiceAddress example */}
-{/* Description: Basic name-to-address resolution using SuiClient.resolveNameServiceAddress */}
+Resolve a name to the address it targets:
 
-{/* TODO: Import code from MystenLabs/sui-typescript — show resolveNameServiceNames example */}
-{/* Description: Reverse lookup (address to default name) using SuiClient.resolveNameServiceNames */}
+```ts
+const { address } = await client.resolveNameServiceAddress({
+	name: 'example.sui',
+});
+```
+
+For the reverse direction, `defaultNameServiceName` returns the single default name configured for an address:
+
+```ts
+const name = await client.defaultNameServiceName({ address: '0xabc...' });
+```
+
+:::info
+
+The legacy `resolveNameServiceNames` method returned every name assigned to an address. It has no direct replacement. `defaultNameServiceName` returns only the configured default. If you need the full list, use an application indexer.
+
+:::
 
 For [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc), pass a name to the [`address`](/references/sui-api/sui-graphql/beta/reference/operations/queries/address) query for lookup, and read [`defaultNameRecord`](/references/sui-api/sui-graphql/beta/reference/types/objects/address) on the `Address` type for reverse lookup. To fetch a full name record, including expiration and metadata, use the [`nameRecord`](/references/sui-api/sui-graphql/beta/reference/operations/queries/name-record) query.
 
 ### Lookup with the SuiNS SDK extension
 
-The `@mysten/suins` package provides the `suins()` extension function. Attach it to any `SuiClient` through `$extend` to add SuiNS methods. The extension uses `ClientWithCoreApi` and `PackageInfo` internally, and automatically loads the correct constants for Mainnet and Testnet:
+The `@mysten/suins` package provides the `suins()` extension function. Attach it to any Sui client through `$extend` to add SuiNS methods. The extension uses `ClientWithCoreApi` and `PackageInfo` internally, and automatically loads the correct constants for Mainnet and Testnet:
 
 <ImportContent source="src/suins-client.ts" mode="code" org="MystenLabs" repo="suins-contracts" tag="suins-extension-example" language="ts" />
 
@@ -331,7 +345,7 @@ For offchain verification (for example, in a backend service), combine the SuiNS
 
 ### Reverse lookup verification
 
-When you display a name for an address in your UI, use reverse lookup (`resolveNameServiceNames`) rather than scanning all names that point to that address. The reverse lookup returns only the name that the address owner has explicitly set as their default through a signed transaction. This guarantees that the address owner consented to being identified by that name ([SuiNS developer reference](https://docs.suins.io/developer)).
+When you display a name for an address in your UI, use reverse lookup (`defaultNameServiceName`) rather than scanning all names that point to that address. The reverse lookup returns only the name that the address owner has explicitly set as their default through a signed transaction. This guarantees that the address owner consented to being identified by that name ([SuiNS developer reference](https://docs.suins.io/developer)).
 
 ## Indexing
 
@@ -416,8 +430,12 @@ The `MessagingClientProvider` in Sui Messenger composes `SuiStackMessagingClient
 ```tsx
 import { SealClient } from '@mysten/seal';
 import { SuiStackMessagingClient, WalrusStorageAdapter } from '@mysten/messaging';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 
-const extendedClient = new SuiClient({ url: 'https://fullnode.testnet.sui.io:443' })
+const extendedClient = new SuiGrpcClient({
+  network: 'testnet',
+  baseUrl: 'https://fullnode.testnet.sui.io:443',
+})
   .$extend(
     SealClient.asClientExtension({
       serverConfigs: SEAL_SERVERS.map((id) => ({ objectId: id, weight: 1 })),
@@ -436,7 +454,7 @@ const extendedClient = new SuiClient({ url: 'https://fullnode.testnet.sui.io:443
   );
 ```
 
-This pattern (composing Seal, Walrus, and Messaging onto a single `SuiClient` through `$extend`) is the standard way to build a multi-service Sui Stack app. Each extension adds its methods to the client without affecting the others. `useUserSubname` then resolves the wallet's subname independently and the UI renders it next to messages and channel entries, replacing raw addresses throughout the app.
+This pattern (composing Seal, Walrus, and Messaging onto a single Sui client through `$extend`) is the standard way to build a multi-service Sui Stack app. Each extension adds its methods to the client without affecting the others. `useUserSubname` then resolves the wallet's subname independently and the UI renders it next to messages and channel entries, replacing raw addresses throughout the app.
 
 For name registration, see [suins.io](https://suins.io/). For the full developer reference including the SuiNS SDK and transaction patterns, see [docs.suins.io](https://docs.suins.io/developer).
 
@@ -447,7 +465,7 @@ For name registration, see [suins.io](https://suins.io/). For the full developer
 | Name not found (`null` or `ENameNotFound`) | Name not registered, or expired and released | Check the name at [suins.io](https://suins.io/); renew if expired |
 | Target address not set (`ENameNotPointingToAddress`) | Name exists but holder has not set a target address | Holder must call set-target-address in the SuiNS portal |
 | Name expired (`ENameExpired`) | Storage epoch passed; name still in registry but resolves as expired | Holder must renew at [suins.io](https://suins.io/) |
-| Wrong network | Mainnet name queried on Testnet client or reverse | Match `SuiClient` URL to the network where the name is registered |
+| Wrong network | Mainnet name queried on Testnet client or reverse | Match the client `baseUrl` to the network where the name is registered |
 | Enoki subname creation fails (domain not `LIVE`) | Domain linked but not published in Enoki Portal | Publish the domain in the Enoki Portal before calling the API |
 | Subname not resolving after creation | Enoki subname is asynchronous; status is `PENDING` | Poll `GET /v1/subnames` until status is `ACTIVE` |
 | Domain expired, subnames stop resolving | SuiNS domain past expiry or grace period | Renew domain at [suins.io](https://suins.io/) before the 30-day grace period ends |
@@ -458,7 +476,7 @@ For name registration, see [suins.io](https://suins.io/). For the full developer
 
 **Target address not set.** `target_address` returns `None` even though the name exists. The holder has not set a target address. In your UI, treat `None` as unresolvable and prompt the user to set a target address in the SuiNS portal.
 
-**Wrong network.** `resolveNameServiceAddress` returns `null` on Mainnet for a name registered on Testnet, or the reverse. Confirm that the `SuiClient` URL matches the network where the name is registered.
+**Wrong network.** `resolveNameServiceAddress` returns `null` on Mainnet for a name registered on Testnet, or the reverse. Confirm that the client `baseUrl` matches the network where the name is registered.
 
 **Enoki subname creation fails.** The API returns an error if the domain is not in `LIVE` status. Publish the domain in the Enoki Portal before calling the creation endpoint. If using a public API key with zkLogin, each user can only have 1 subname per domain. A second creation attempt returns an error.
 

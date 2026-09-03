@@ -25,6 +25,12 @@ answer: >-
   ability to compose multiple operations in a single transaction.
 ---
 
+:::caution
+
+The examples on this page use `SuinsClient`, which `@mysten/suins` 2.0 replaced with the [`suins()` client extension](/sui-stack/suins/developer/sdk). The `SuinsTransaction` commands themselves are unchanged, but the client you pass them is constructed differently. See [Migrating @mysten/suins](https://sdk.mystenlabs.com/sui/migrations/sui-2.0/suins).
+
+:::
+
 `SuinsTransaction` is the client you use similar to `Transaction`, and helps in building a transaction.
 You need to instantiate it once in every programmable transaction block (PTB) that you are building.
 
