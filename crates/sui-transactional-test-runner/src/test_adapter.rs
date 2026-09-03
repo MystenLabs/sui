@@ -68,9 +68,6 @@ use sui_protocol_config::{
     Chain, ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
     ProtocolVersion,
 };
-use sui_storage::{
-    key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
-};
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::KeyPairWrapper;
 use sui_types::accumulator_root::AccumulatorValue;
@@ -2870,17 +2867,9 @@ async fn create_val_fullnode_executor(
     let (validator, fullnode) =
         create_validator_fullnode(protocol_config, objects, reference_gas_price).await;
 
-    let metrics = KeyValueStoreMetrics::new_for_tests();
-    let kv_store = Arc::new(TransactionKeyValueStore::new(
-        "rocksdb",
-        metrics,
-        validator.clone(),
-    ));
-
     ValidatorWithFullnode {
         validator,
         fullnode,
-        kv_store,
         pending_effects: Vec::new(),
         next_checkpoint_seq: 1, // 0 is genesis
     }

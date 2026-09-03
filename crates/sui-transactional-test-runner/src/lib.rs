@@ -37,7 +37,6 @@ mod testing_imports {
     pub use sui_core::authority::shared_object_version_manager::AssignedVersions;
     pub use sui_json_rpc_types::EventFilter;
     pub use sui_json_rpc_types::{DevInspectResults, DryRunTransactionBlockResponse};
-    pub use sui_storage::key_value_store::TransactionKeyValueStore;
     pub use sui_types::base_types::ObjectID;
     pub use sui_types::base_types::SuiAddress;
     pub use sui_types::base_types::VersionNumber;
@@ -82,7 +81,6 @@ pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 pub struct ValidatorWithFullnode {
     pub validator: Arc<AuthorityState>,
     pub fullnode: Arc<AuthorityState>,
-    pub kv_store: Arc<TransactionKeyValueStore>,
     pending_effects: Vec<TransactionEffects>,
     next_checkpoint_seq: u64,
 }
@@ -239,14 +237,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
     ) -> SuiResult<Vec<Event>> {
         Ok(self
             .validator
-            .query_events(
-                &self.kv_store,
-                EventFilter::Transaction(*tx_digest),
-                None,
-                limit,
-                false,
-            )
-            .await
+            .query_events(EventFilter::Transaction(*tx_digest), None, limit, false)
             .unwrap_or_default()
             .into_iter()
             .map(|sui_event| sui_event.into())

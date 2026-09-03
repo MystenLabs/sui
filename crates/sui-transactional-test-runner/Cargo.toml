@@ -57,7 +57,6 @@ sui-types.workspace = true
 sui-json-rpc-types.workspace = true
 sui-json-rpc-api.workspace = true
 sui-framework-snapshot.workspace = true
-sui-storage.workspace = true
 typed-store.workspace = true
 
 [[bin]]

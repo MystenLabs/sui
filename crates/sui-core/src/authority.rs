@@ -24,7 +24,6 @@ use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::transaction_deny_config_manager::TransactionDenyConfigManager;
 use crate::transaction_outputs::TransactionOutputs;
 use arc_swap::{ArcSwap, ArcSwapOption, Guard};
-use async_trait::async_trait;
 use authority_per_epoch_store::CertLockGuard;
 use dashmap::DashMap;
 use fastcrypto::encoding::Base58;
@@ -125,8 +124,6 @@ use sui_json_rpc_types::{
 };
 use sui_macros::{fail_point, fail_point_arg, fail_point_async, fail_point_if};
 use sui_rpc_store::Store as RpcStore;
-use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
-use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::authenticator_state::get_authenticator_state;
 use sui_types::balance::Balance;
@@ -147,10 +144,10 @@ use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::inner_temporary_store::{InnerTemporaryStore, ObjectMap, TxCoins, WrittenObjects};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
-    CertifiedCheckpointSummary, CheckpointCommitment, CheckpointContents, CheckpointContentsDigest,
-    CheckpointDigest, CheckpointRequest, CheckpointRequestV2, CheckpointResponse,
-    CheckpointResponseV2, CheckpointSequenceNumber, CheckpointSummary, CheckpointSummaryResponse,
-    CheckpointTimestamp, ECMHLiveObjectSetDigest, VerifiedCheckpoint,
+    CheckpointCommitment, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
+    CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
+    CheckpointSequenceNumber, CheckpointSummary, CheckpointSummaryResponse, CheckpointTimestamp,
+    ECMHLiveObjectSetDigest, VerifiedCheckpoint,
 };
 use sui_types::messages_grpc::{
     LayoutGenerationOption, ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse,
@@ -4650,14 +4647,19 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub async fn get_executed_transaction_and_effects(
+    pub fn get_executed_transaction_and_effects(
         &self,
         digest: TransactionDigest,
-        kv_store: Arc<TransactionKeyValueStore>,
     ) -> SuiResult<(Transaction, TransactionEffects)> {
-        let transaction = kv_store.get_tx(digest).await?;
-        let effects = kv_store.get_fx_by_tx_digest(digest).await?;
-        Ok((transaction, effects))
+        let transaction = self
+            .get_transaction_cache_reader()
+            .get_transaction_block(&digest)
+            .ok_or(SuiErrorKind::TransactionNotFound { digest })?;
+        let effects = self
+            .get_transaction_cache_reader()
+            .get_executed_effects(&digest)
+            .ok_or(SuiErrorKind::TransactionNotFound { digest })?;
+        Ok(((*transaction).clone().into_inner(), effects))
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -4706,27 +4708,9 @@ impl AuthorityState {
         }
     }
 
-    pub async fn get_transactions_for_tests(
-        self: &Arc<Self>,
-        filter: Option<TransactionFilter>,
-        cursor: Option<TransactionDigest>,
-        limit: Option<usize>,
-        reverse: bool,
-    ) -> SuiResult<Vec<TransactionDigest>> {
-        let metrics = KeyValueStoreMetrics::new_for_tests();
-        let kv_store = Arc::new(TransactionKeyValueStore::new(
-            "rocksdb",
-            metrics,
-            self.clone(),
-        ));
-        self.get_transactions(&kv_store, filter, cursor, limit, reverse)
-            .await
-    }
-
     #[instrument(level = "trace", skip_all)]
-    pub async fn get_transactions(
+    pub fn get_transactions(
         &self,
-        kv_store: &Arc<TransactionKeyValueStore>,
         filter: Option<TransactionFilter>,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<TransactionDigest>,
@@ -4734,7 +4718,8 @@ impl AuthorityState {
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
         if let Some(TransactionFilter::Checkpoint(sequence_number)) = filter {
-            let checkpoint_contents = kv_store.get_checkpoint_contents(sequence_number).await?;
+            let checkpoint_contents =
+                self.get_checkpoint_contents_by_sequence_number(sequence_number)?;
             let iter = checkpoint_contents.iter().map(|c| c.transaction);
             if reverse {
                 let iter = iter
@@ -4907,9 +4892,8 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub async fn query_events(
+    pub fn query_events(
         &self,
-        kv_store: &Arc<TransactionKeyValueStore>,
         query: EventFilter,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<EventID>,
@@ -4995,9 +4979,9 @@ impl AuthorityState {
             .into_iter()
             .collect::<Vec<_>>();
 
-        let events = kv_store
-            .multi_get_events_by_tx_digests(&transaction_digests)
-            .await?;
+        let events = self
+            .get_transaction_cache_reader()
+            .multi_get_events(&transaction_digests);
 
         let events_map: HashMap<_, _> = transaction_digests
             .iter()
@@ -6265,137 +6249,6 @@ impl AuthorityState {
         self.get_reconfig_api()
             .clear_state_end_of_epoch(&self.execution_lock_for_reconfiguration().await);
         Ok(())
-    }
-}
-
-#[async_trait]
-impl TransactionKeyValueStoreTrait for AuthorityState {
-    #[instrument(skip(self))]
-    async fn multi_get(
-        &self,
-        transactions: &[TransactionDigest],
-        effects: &[TransactionDigest],
-    ) -> SuiResult<(Vec<Option<Transaction>>, Vec<Option<TransactionEffects>>)> {
-        let txns = if !transactions.is_empty() {
-            self.get_transaction_cache_reader()
-                .multi_get_transaction_blocks(transactions)
-                .into_iter()
-                .map(|t| t.map(|t| (*t).clone().into_inner()))
-                .collect()
-        } else {
-            vec![]
-        };
-
-        let fx = if !effects.is_empty() {
-            self.get_transaction_cache_reader()
-                .multi_get_executed_effects(effects)
-        } else {
-            vec![]
-        };
-
-        Ok((txns, fx))
-    }
-
-    #[instrument(skip(self))]
-    async fn multi_get_checkpoints(
-        &self,
-        checkpoint_summaries: &[CheckpointSequenceNumber],
-        checkpoint_contents: &[CheckpointSequenceNumber],
-        checkpoint_summaries_by_digest: &[CheckpointDigest],
-    ) -> SuiResult<(
-        Vec<Option<CertifiedCheckpointSummary>>,
-        Vec<Option<CheckpointContents>>,
-        Vec<Option<CertifiedCheckpointSummary>>,
-    )> {
-        // TODO: use multi-get methods if it ever becomes important (unlikely)
-        let mut summaries = Vec::with_capacity(checkpoint_summaries.len());
-        let store = self.get_checkpoint_store();
-        for seq in checkpoint_summaries {
-            let checkpoint = store
-                .get_checkpoint_by_sequence_number(*seq)?
-                .map(|c| c.into_inner());
-
-            summaries.push(checkpoint);
-        }
-
-        let mut contents = Vec::with_capacity(checkpoint_contents.len());
-        for seq in checkpoint_contents {
-            let checkpoint = store
-                .get_checkpoint_by_sequence_number(*seq)?
-                .and_then(|summary| {
-                    store
-                        .get_checkpoint_contents(&summary.content_digest)
-                        .expect("db read cannot fail")
-                });
-            contents.push(checkpoint);
-        }
-
-        let mut summaries_by_digest = Vec::with_capacity(checkpoint_summaries_by_digest.len());
-        for digest in checkpoint_summaries_by_digest {
-            let checkpoint = store
-                .get_checkpoint_by_digest(digest)?
-                .map(|c| c.into_inner());
-            summaries_by_digest.push(checkpoint);
-        }
-        Ok((summaries, contents, summaries_by_digest))
-    }
-
-    #[instrument(skip(self))]
-    async fn deprecated_get_transaction_checkpoint(
-        &self,
-        digest: TransactionDigest,
-    ) -> SuiResult<Option<CheckpointSequenceNumber>> {
-        Ok(self
-            .get_checkpoint_cache()
-            .deprecated_get_transaction_checkpoint(&digest)
-            .map(|(_epoch, checkpoint)| checkpoint))
-    }
-
-    #[instrument(skip(self))]
-    async fn get_object(
-        &self,
-        object_id: ObjectID,
-        version: VersionNumber,
-    ) -> SuiResult<Option<Object>> {
-        Ok(self
-            .get_object_cache_reader()
-            .get_object_by_key(&object_id, version))
-    }
-
-    #[instrument(skip_all)]
-    async fn multi_get_objects(&self, object_keys: &[ObjectKey]) -> SuiResult<Vec<Option<Object>>> {
-        Ok(self
-            .get_object_cache_reader()
-            .multi_get_objects_by_key(object_keys))
-    }
-
-    #[instrument(skip(self))]
-    async fn multi_get_transaction_checkpoint(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>> {
-        let res = self
-            .get_checkpoint_cache()
-            .deprecated_multi_get_transaction_checkpoint(digests);
-
-        Ok(res
-            .into_iter()
-            .map(|maybe| maybe.map(|(_epoch, checkpoint)| checkpoint))
-            .collect())
-    }
-
-    #[instrument(skip(self))]
-    async fn multi_get_events_by_tx_digests(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-        if digests.is_empty() {
-            return Ok(vec![]);
-        }
-
-        Ok(self
-            .get_transaction_cache_reader()
-            .multi_get_events(digests))
     }
 }
 

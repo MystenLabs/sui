@@ -2682,15 +2682,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "base64-url"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c5b0a88aa36e9f095ee2e2b13fb8c5e4313e022783aedacc123328c0084916d"
-dependencies = [
- "base64 0.21.7",
-]
-
-[[package]]
 name = "base64ct"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16730,24 +16721,18 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "axum 0.8.3",
  "backoff",
- "base64-url",
  "bcs",
  "byteorder",
  "bytes",
  "chrono",
- "clap",
  "eyre",
  "fastcrypto",
  "futures",
- "hyper",
- "hyper-rustls",
  "indicatif",
  "integer-encoding",
  "itertools 0.13.0",
  "lru 0.18.2",
- "moka",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
@@ -16756,7 +16741,6 @@ dependencies = [
  "mysten-metrics",
  "num_enum 0.6.1",
  "object_store 0.13.0",
- "once_cell",
  "parking_lot 0.12.3",
  "percent-encoding",
  "prometheus",
@@ -16765,15 +16749,11 @@ dependencies = [
  "serde",
  "serde_json",
  "sui-config",
- "sui-json-rpc-types",
  "sui-macros",
  "sui-protocol-config",
  "sui-rpc",
  "sui-simulator",
- "sui-test-transaction-builder",
  "sui-types",
- "tap",
- "telemetry-subscribers",
  "tempfile",
  "tokio",
  "tracing",
@@ -17054,7 +17034,6 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-protocol-config",
  "sui-rpc-api",
- "sui-storage",
  "sui-swarm-config",
  "sui-types",
  "telemetry-subscribers",
