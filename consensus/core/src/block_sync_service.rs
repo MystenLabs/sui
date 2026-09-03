@@ -101,9 +101,8 @@ impl BlockSyncService {
         for block in &block_refs {
             if !self.context.committee.is_valid_index(block.author) {
                 return Err(ConsensusError::InvalidAuthorityIndex {
-                    loc: format!("requested block {}", block),
                     index: block.author,
-                    max: self.context.committee.size() - 1,
+                    max: self.context.committee.size(),
                 });
             }
             if block.round == GENESIS_ROUND {
@@ -325,9 +324,8 @@ impl BlockSyncService {
         for authority in &authorities {
             if !self.context.committee.is_valid_index(*authority) {
                 return Err(ConsensusError::InvalidAuthorityIndex {
-                    loc: format!("latest block request from peer {}", peer),
                     index: *authority,
-                    max: self.context.committee.size() - 1,
+                    max: self.context.committee.size(),
                 });
             }
         }

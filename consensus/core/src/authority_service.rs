@@ -106,9 +106,8 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
                     bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedBlock)?;
                 if !self.context.committee.is_valid_index(block_ref.author) {
                     return Err(ConsensusError::InvalidAuthorityIndex {
-                        loc: format!("excluded ancestor {}", block_ref),
                         index: block_ref.author,
-                        max: self.context.committee.size() - 1,
+                        max: self.context.committee.size(),
                     });
                 }
                 if block_ref.round >= block.round() {
