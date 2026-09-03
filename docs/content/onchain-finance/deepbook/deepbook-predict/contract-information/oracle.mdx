@@ -425,8 +425,8 @@ A match aborts with `pricing::EOracleWrittenInThisTransaction`, error code `15`.
 | `2` | `ENonPositiveVariance` | Total variance is not positive |
 | `3` | `EInvalidRange` | The strike pair is inverted or otherwise invalid |
 | `4` | `EBlockScholesPriceStale` | Block Scholes spot or forward outside the price freshness window |
-| `5` | `EBlockScholesInputsInvalid` | Block Scholes inputs fail normalization |
-| `6` | `EPythSpotInvalid` | The Pyth spot is not a usable positive normalized value |
+| `5` | `EBlockScholesInputsInvalid` | An input falls outside the pricing-safe envelope described below the table |
+| `6` | `EPythSpotInvalid` | On the re-anchor branch only, the normalized Pyth spot exceeds `u64::MAX / 100` |
 | `7` | `EWrongPythFeed` | The `PythFeed` is not the canonical binding |
 | `8` | `EWrongBlockScholesValueStore` | The value store is not the canonical binding |
 | `9` | `ELivePricingExpired` | The clock has reached or passed the market's expiry |
@@ -434,9 +434,23 @@ A match aborts with `pricing::EOracleWrittenInThisTransaction`, error code `15`.
 | `11` | `EWrongBlockScholesSVIStore` | The SVI store is not the canonical binding |
 | `12` | `EBlockScholesPriceUnavailable` | No Block Scholes price observation exists |
 | `13` | `EBlockScholesSVIUnavailable` | No Block Scholes SVI observation exists |
-| `14` | `EBlockScholesMinVarianceInvalid` | Sigma below the `1000000` minimum |
+| `14` | `EBlockScholesMinVarianceInvalid` | The smallest total variance the surface admits, `min_variance_increment + a`, is not positive |
 | `15` | `EOracleWrittenInThisTransaction` | A contributing observation was written by this transaction |
-| `16` | `EBlockScholesInputTooWide` | An input exceeds the SVI input ceiling or the basis envelope factor of `100` |
+| `16` | `EBlockScholesInputTooWide` | A stored `u128` provider value exceeds `u64::MAX` when it is narrowed to pricing width |
+
+Three of those codes are narrower than their names suggest, and confusing them sends you looking at the wrong input.
+
+`EBlockScholesInputsInvalid` is the one pricing-safe envelope check, and it covers every bound at once:
+
+- Spot and forward are both strictly positive.
+- The forward is at most `u64::MAX / 100`, and at most 100 times the spot. That factor of `100` is the basis envelope.
+- The SVI magnitudes `a`, `b`, and `m` are each at most `100e9`.
+- The SVI `rho` magnitude is at most `1e9`.
+- Sigma is between `1e6` and `100e9` inclusive. A sigma below the minimum raises this code, not code `14`.
+
+`EBlockScholesInputTooWide` is not an economic bound at all. It fires in the narrowing step, when a `u128` value the provider stored does not fit in the `u64` width Predict prices in. `EBlockScholesMinVarianceInvalid` fires only when the sum of the minimum variance increment and `a` is not positive, which is a shape problem in the surface rather than a bound on any one parameter.
+
+`EPythSpotInvalid` is narrower still. It fires only on the forward re-anchor branch, and only when the normalized spot exceeds `u64::MAX / 100`. A missing, non-normalizable, or stale Pyth spot never reaches the assert: it is silently ignored and pricing falls back to the Block Scholes forward. A zero spot passes the assert too.
 
 ## Reference ticks and settlement
 
@@ -452,7 +466,7 @@ Two market functions read oracles outside of live pricing, and both are permissi
 	noComments
 />
 
-`set_reference_tick` reads the exact Pyth observation at the market's `reference_tick_source_timestamp_ms`, which market creation set to the expiry minus one cadence period. With no observation at that exact timestamp the call aborts with `expiry_market::EReferenceTickObservationMissing`. The reference tick is the one finite boundary a market admits off its admission grid, and it can be set once: a second, different value aborts with `strike_exposure::EReferenceTickAlreadySet`. A successful call emits `ReferenceTickSet`.
+`set_reference_tick` reads the exact Pyth observation at the market's `reference_tick_source_timestamp_ms`, which market creation set to the expiry minus one cadence period. With no observation at that exact timestamp the call aborts with `expiry_market::EReferenceTickObservationMissing`. The reference tick is the one finite boundary a market admits off its admission grid, and it can be set once: a second, different value aborts with `strike_exposure::EReferenceTickAlreadySet`. A repeat call that resolves to the same tick succeeds and returns that tick, but emits nothing, because `ReferenceTickSet` fires only when the tick is newly recorded. Treat the event as the record of the first successful seeding, not as a receipt for every call.
 
 `try_settle` is idempotent and returns a boolean rather than aborting on the common failure. It returns `false` before the expiry, and it returns `true` when the market is now settled or was already settled. Settlement resolves in two stages:
 

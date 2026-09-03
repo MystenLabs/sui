@@ -201,7 +201,7 @@ Discover markets first, then read one market by ID:
 | `GET /events` | Allowlisted event resources and their filter profiles |
 | `GET /events/:resource?limit=100` | One raw event resource, paged oldest-first |
 
-Market discovery returns the creation record for each live market:
+Market discovery returns the creation record for each live market. The following sample is trimmed to the market's identity and cadence terms; the live response also carries the source event's checkpoint and position fields and the market's fee-curve parameters:
 
 ```bash
 $ curl 'https://predict-server-v4.testnet.mystenlabs.com/markets?active=true&limit=1'
@@ -218,12 +218,18 @@ $ curl 'https://predict-server-v4.testnet.mystenlabs.com/markets?active=true&lim
     "admission_tick_size": "1000000000",
     "max_expiry_allocation": "50000000000",
     "initial_expiry_cash": "10000000000",
+    "base_fee": "100000000",
+    "min_fee": "22000000",
+    "min_entry_probability": "10000000",
+    "max_entry_probability": "990000000",
     "kind": "market_created"
   }
 ]
 ```
 
 Use `expiry_market_id` for market-scoped reads, `pool_vault_id` for vault reads, and `propbook_underlying_id` to join a market to its oracle objects.
+
+Identifiers in the sample responses on these pages are illustrative. The market above was a 1 minute market that has long since settled, so its ID resolves to nothing useful. Read live IDs from the endpoint or from the chain.
 
 ### Oracle data
 
@@ -314,7 +320,7 @@ Structure your code so these unknowns do not become assumptions:
 
 The read APIs index events after the fact. When a client needs lower latency than that, stream events directly from a full node and keep the read APIs for historical pagination and aggregates.
 
-Predict emits its events from three modules under the Predict package:
+Predict emits its events from four modules under the Predict package: `config_events` for lifecycle and configuration, `order_events` for trading, `vault_events` for the pool and its queues, and `builder_code_events` for builder attribution. The following table lists the ones an integrator subscribes to most often, not every event each module declares:
 
 | Event type | Emitted when |
 | --- | --- |
@@ -325,7 +331,14 @@ Predict emits its events from three modules under the Predict package:
 | `order_events::OrderMinted` | A position is opened |
 | `order_events::LiveOrderRedeemed` | A live position is closed or reduced before expiry |
 | `order_events::SettledOrderRedeemed` | A settled position is claimed |
+| `vault_events::SupplyRequested` | A liquidity supply request is queued |
+| `vault_events::SupplyFilled` | A queued supply fills at the flush mark and mints PLP |
+| `vault_events::WithdrawFilled` | A queued withdrawal fills at the flush mark and burns PLP |
+| `vault_events::RequestCancelled` | A queued request is cancelled by its owner or refunded by the flush |
 | `vault_events::FlushExecuted` | The liquidity queue is flushed at one NAV |
+| `builder_code_events::BuilderCodeCreated` | A derived `BuilderCode` is created |
+| `builder_code_events::BuilderCodeSet` | An account changes its sticky builder code attribution |
+| `builder_code_events::BuilderFeesClaimed` | A builder code owner claims accumulated builder fees |
 
 ### Stream events over gRPC
 

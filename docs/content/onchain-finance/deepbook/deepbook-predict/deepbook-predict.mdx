@@ -45,12 +45,12 @@ answer: >-
   where every position pays a fixed amount when the settlement price lands inside
   a chosen strike range. The @mysten/deepbook-v3 package ships a /predict subpath
   that creates an account, discovers live markets, quotes a position, and mints it
-  with a cost cap.
+  under a cost cap and a fill price cap.
 ---
 
 DeepBook Predict is an expiry-based prediction market protocol on Sui. Each market covers one underlying and one expiry timestamp, and every position is a range contract: it pays a fixed amount when the settlement price lands inside a chosen strike range, and nothing otherwise. Liquidity providers supply DUSDC to a shared pool, receive `PLP` shares, and take the other side of every trade.
 
-Predict runs on Sui Testnet only. There is no Mainnet deployment. These pages describe the `predict-testnet-8-21` deployment, built from the [`predict-testnet-8-21` branch](https://github.com/MystenLabs/deepbookv3/tree/predict-testnet-8-21/packages/predict) of the DeepBookV3 repository. Version 2.1.3 of the [`@mysten/deepbook-v3`](https://www.npmjs.com/package/@mysten/deepbook-v3) package ships a `/predict` subpath that builds every transaction and answers every read, so trading needs no indexer.
+Predict runs on Sui Testnet only. There is no Mainnet deployment. These pages describe the `predict-testnet-8-21` deployment, built from the [`predict-testnet-8-21` branch](https://github.com/MystenLabs/deepbookv3/tree/predict-testnet-8-21/packages/predict) of the DeepBookV3 repository. Version 2.1.3 or later of the [`@mysten/deepbook-v3`](https://www.npmjs.com/package/@mysten/deepbook-v3) package ships a `/predict` subpath that builds every transaction and answers every read, so trading needs no indexer.
 
 :::caution
 
@@ -60,7 +60,7 @@ DeepBook Predict smart contracts might change before any Mainnet deployment. Tre
 
 ## Quickstart: mint a position
 
-The following steps install the DeepBook TypeScript SDK, create and fund a Predict account, discover a live market, quote a position, and mint it with a cost cap. The samples live in the `examples/deepbook-predict` package, which type-checks with `npm run build` (`tsc --noEmit`) against `@mysten/deepbook-v3` version 2.1.3 or later and `@mysten/sui` version 2.28.0 or later. They pass compile checks but do not run against Testnet during the docs build, so work through [Verify on Testnet](#verify-on-testnet) before you rely on them.
+The following steps install the DeepBook TypeScript SDK, create and fund a Predict account, discover a live market, quote a position, and mint it under a cost cap and a fill price cap. The samples live in the `examples/deepbook-predict` package, which type-checks with `npm run build` (`tsc --noEmit`) against `@mysten/deepbook-v3` version 2.1.3 or later and `@mysten/sui` version 2.28.0 or later. They pass compile checks but do not run against Testnet during the docs build, so work through [Verify on Testnet](#verify-on-testnet) before you rely on them.
 
 ### 1. Install the SDK
 
@@ -109,19 +109,42 @@ Each owner has exactly one Predict account: a shared account wrapper holding bal
 
 `client.predict.tx.deposit(owner, amount, { create: true })` composes creation, deposit, and sharing into one transaction, which is the fastest first run. Use that form only once per owner, because creating a second account for the same owner aborts, and pass the signing address as `owner`, because account creation derives the wrapper from the transaction sender.
 
+:::info
+
+Every transaction on this page asks the owner to sign. An application that would rather not prompt a wallet for each trade can use a delegated session key instead. A session key carries authority over everything the account holds, so decide its scope and lifetime before you ship it, not after. See [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions).
+
+:::
+
 ### 5. Discover a live market
 
 Predict creates markets on a fixed cadence, one object per underlying and expiry. Testnet runs BTC markets on the 1 minute, 5 minute, 1 hour, 1 day, and 1 week cadences. `client.predict.read.markets()` returns the active ones with their expiry, tick size, admission tick size, mint pause flag, and reference price.
 
 <ImportContent source="examples/deepbook-predict/src/markets.ts" mode="code" tag="markets" />
 
-Pick a market that is not mint paused and whose expiry leaves you time to trade. A numeric strike must land on that market's `admissionTickSize` grid. The market's own reference price is the one finite strike the protocol admits off that grid, and the descriptor spells it `strike: 'reference'`. A market reports a `null` reference price until it records its reference tick, so skip markets that have not recorded one.
+Pick a market that is not mint paused and whose expiry leaves you time to trade. The sample's `tradeableMarket` helper filters on both, and its `minTtlMs` default of 30 seconds is the reason it exists: on the 1 minute cadence a quote taken in the closing seconds is stale before the mint lands, and the cost cap then aborts the trade. Raise that floor for a flow that waits on a human.
 
-### 6. Quote, then mint with a cost cap
+A numeric strike must land on that market's `admissionTickSize` grid, which the sample's `admissibleStrike` helper rounds onto. The market's own reference price is the one finite strike the protocol admits off that grid, and the descriptor spells it `strike: 'reference'`. A market reports a `null` reference price until it records its reference tick. The sample skips those markets, but you do not have to wait for a keeper: `expiry_market::set_reference_tick` is permissionless, so you can seed the tick yourself.
 
-Quote first. `client.predict.read.quoteMint` simulates the exact transaction the mint builder produces, so it doubles as a preflight check and returns the all-in account debit as `cost`. Pass that number with a small buffer as `maxCost` on the mint. Omitting `maxCost` sends an uncapped ceiling, which leaves the fill price unbounded.
+A brand-new market also opens with zero working cash and rejects a mint until pool capital funds it. `plp::rebalance_expiry_cash` moves that cash from the pool's idle balance, and anyone can call it. A mint that aborts on a freshly created market with everything else in order is usually a market nobody has funded yet.
+
+### 6. Quote, then mint under both caps
+
+Quote first. `client.predict.read.quoteMint` dry-runs the identical transaction the mint builder produces, against the real account and the real fee path, so it doubles as a preflight check and raises the same typed errors the mint would, insufficient balance included. It returns the all-in account debit as `cost` and the fill price as `entryProbability`.
+
+The mint takes two independent caps, and they bound different things:
+
+- `maxCost` bounds the all-in account debit, in DUSDC. Derive it from the quote's `cost` with a small buffer, rounded to at most 6 decimals.
+- `maxProbability` bounds the fill price, between 0 and 1 per 1 DUSDC of payout. Derive it from the quote's `entryProbability` with a small buffer.
+
+Both are optional. The following sample passes both.
 
 <ImportContent source="examples/deepbook-predict/src/mint.ts" mode="code" tag="mint-binary" />
+
+:::caution
+
+Omitting `maxCost` and `maxProbability` sends `U64_MAX` for each, which leaves the mint genuinely uncapped against a price move between the quote and execution. `tx.mint` mints an exact payout quantity, so the premium alone cannot exceed `quantity`, but fees are charged on top of it and only `maxCost` bounds the total debit. `tx.mintAmount` is the riskier default: there fees are charged on top of `spend`, and `maxCost` is the only bound on the whole withdrawal. Quote first, then pass both caps.
+
+:::
 
 A directional position is a one-sided range: `side: 'up'` pays when settlement lands above the strike, and `side: 'down'` pays when settlement lands at or below it. `quantity` is the maximum payout in DUSDC, and it must be a whole lot of 0.01 DUSDC.
 
@@ -142,7 +165,7 @@ The samples above pass compile checks, but nothing runs them against Testnet. Co
 
 DeepBook Predict provides the following capabilities:
 
-- **Per-expiry markets:** Each market settles once, at one timestamp, against one price feed, on a cadence that runs from 1 minute to 1 week.
+- **Per-expiry markets:** Each market settles once, at one timestamp, from one of two sources: the exact Pyth price at the expiry timestamp, or, when that is unavailable 30 seconds after expiry, the exact Block Scholes minute-boundary spot. Cadences run from 1 minute to 1 week.
 - **Range positions:** Every position pays its full quantity when settlement lands inside its strike range and nothing otherwise. Directional positions are ranges with one open end.
 - **Oracle pricing from external feeds:** Pyth Lazer spot, plus Block Scholes forward and SVI data, drive every quote from shared objects in a separate `propbook` package.
 - **Shared account custody:** One shared account per owner holds DUSDC balances, open positions, and builder code attribution, at an address derived from the owner address.

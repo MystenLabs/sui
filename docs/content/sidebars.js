@@ -525,6 +525,7 @@ export default {
               items: [
                 'onchain-finance/deepbook/deepbook-predict/contract-information/predict',
                 'onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager',
+                'onchain-finance/deepbook/deepbook-predict/contract-information/sessions',
                 'onchain-finance/deepbook/deepbook-predict/contract-information/market-keys',
                 'onchain-finance/deepbook/deepbook-predict/contract-information/oracle',
                 'onchain-finance/deepbook/deepbook-predict/contract-information/vault',

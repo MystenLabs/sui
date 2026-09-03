@@ -82,7 +82,12 @@ Account mutation runs on an `Auth` value that `load_account_mut` consumes, and t
 - **Owner authorization:** The account owner, or an owning object, generates it. Minting, live redemption, settled exits, liquidity requests and cancellations, and builder code configuration all use it.
 - **Predict app authorization:** Predict generates it internally through the account registry so a keeper can sweep settled positions into an account without the owner signing. Deauthorizing the `PredictApp` type disables that automation while owner-authorized exits keep working.
 
-Payouts, liquidity fills, refunds, and referral shares reach an account through the balance accumulator at its receive address. The account absorbs them into stored custody on its next capital operation, so a balance read settles pending deliveries first.
+Two delivery paths credit an account, and they surface as different events:
+
+- **Straight into stored balance:** Settled payouts and live-close proceeds call `account::deposit<DUSDC>` on the account itself and emit `Deposited`. The funds are spendable as soon as the transaction lands, and no follow-up call is needed.
+- **Through the balance accumulator:** Builder fees, referral shares, and liquidity queue fills and refunds go to the account's receive address instead. They stay outside stored balance until the permissionless `account::settle<T>` folds them in and emits `FundsSettled`.
+
+Reading a balance settles nothing. `account::balance<T>` takes an immutable `&Account`, so it cannot mutate anything: it reports stored balance plus the unsettled accumulator balance, which covers both paths without moving either. `account::settle<T>` is the mutating call, it takes the wrapper rather than the account, and anyone can make it.
 
 ## Oracle feeds {#oracle-feeds}
 
@@ -108,7 +113,7 @@ A position is a range, carried as the tick pair `lower_tick` and `higher_tick`, 
 - Tick `1073741823`, the largest 30-bit value, is the positive infinity sentinel, so an upside position runs from the strike tick to `1073741823`.
 - Finite strikes occupy every tick in between, from `1` to `1073741822`.
 
-The protocol rejects the fully open range from `0` to `1073741823`, because it would pay in every outcome. A finite boundary must also land on the market's coarser admission grid, with one exception: each market records a reference tick taken from the exact Pyth spot at its reference timestamp, and the protocol admits that tick even when it falls off the admission grid. Anyone can record it with `expiry_market::set_reference_tick`, and until a market has one, a quote against the reference strike fails.
+The protocol rejects the fully open range from `0` to `1073741823`, because it would pay in every outcome. A finite boundary must also land on the market's coarser admission grid, with one exception: each market records a reference tick taken from the exact Pyth spot at its reference timestamp, and the protocol admits that tick even when it falls off the admission grid. Anyone can record it with `expiry_market::set_reference_tick`, which takes no capability, and until a market has one, a quote against the reference strike fails. A repeat call with the same tick succeeds and emits nothing, so the call is safe to retry.
 
 Minting returns one packed `u256` order ID that encodes the quantity in lots, both ticks, and a market-local sequence number. Treat it as an opaque handle. Quantity moves in whole lots of `10000` base units, which is 0.01 DUSDC. An order ID is unique only inside one market, so identify a position by the pair of market ID and order ID. Closing part of a position retires its order ID and issues a replacement for the remaining quantity, while the original mint's root ID stays stable across those replacements.
 
@@ -118,7 +123,7 @@ Pricing is transaction-local. `expiry_market::load_live_pricer` takes the protoc
 
 The pricer resolves a forward, then reads each range's probability off the SVI curve as the difference between its two strike boundaries. While `use_pyth_spot_for_forward` is set, which is the shipped default, a fresh usable Pyth spot anchors the forward and the Block Scholes basis scales it. A missing, stale, or unusable Pyth spot falls back to the Block Scholes forward for that expiry. A position's live value is its quantity multiplied by its range probability, and a winning position settles at its full quantity. Mint admission holds the quoted entry probability inside a per-market band and requires a minimum premium, so a quote at the extreme edge of the distribution fails rather than rounding. Live pricing aborts once a market's expiry has passed.
 
-Settlement is one permissionless transition, `expiry_market::try_settle`, and repeat calls are harmless. It first looks for the exact Pyth spot at the market's expiry timestamp. If Pyth remains unavailable 30 seconds after expiry, the same call can use the exact Block Scholes minute-boundary spot instead. Both lookups are exact matches, with no nearest, rounded, or interpolated fallback. The transition records the terminal price and the exact remaining payout liability together, and `MarketSettled` reports which source won. When neither source is usable, the call returns `false` and the market stays unsettled. Settled redemption, cash rebalancing, and flush valuation read only the recorded state, so they touch no oracle.
+Settlement is one permissionless transition, `expiry_market::try_settle`, and repeat calls are harmless. It first looks for the exact Pyth spot at the market's expiry timestamp. If Pyth remains unavailable 30 seconds after expiry, the same call can use the exact Block Scholes minute-boundary spot instead. Both lookups are exact matches, with no nearest, rounded, or interpolated fallback. The transition records the terminal price and the exact remaining payout liability together, and `MarketSettled` reports which source won. When neither source is usable, the call returns `false` and the market stays unsettled. Settled redemption and `plp::rebalance_expiry_cash` read only the recorded state, so they take no oracle argument at all. Flush valuation is not in that group: `plp::value_expiry` takes the `OracleRegistry`, the `PythFeed`, the `BlockScholesValueStore`, and the `BlockScholesSVIStore`, and builds a live pricer from them internally, so a flush transaction assembled without those arguments cannot be constructed.
 
 Predict enforces solvency per expiry rather than through a protocol-wide exposure ratio. Every cash movement re-asserts that a market's `ExpiryCash` balance covers its payout liability plus its isolated inventory-impact escrow, and only the surplus above that line is cash the pool can sweep. Monetary math rounds in the protocol's favor, so an expiry can always pay its winners. At the pool level, `max_lp_pool_value` caps how much liquidity the pool accepts.
 
@@ -127,12 +132,12 @@ Predict enforces solvency per expiry rather than through a protocol-wide exposur
 A quote reports every charge separately, and a mint debits the premium plus the trading fee net of any subsidy, plus the builder fee, the congestion surcharge, and the inventory-impact charge. A live close withholds the same charges from the payout, and a settled winner collects its full quantity. The components are:
 
 - **Trading fee:** A rate proportional to the standard deviation of the contract's Bernoulli outcome, so it peaks where the quoted probability is nearest to a coin flip and falls toward the tails, with a per-unit floor underneath it. A linear ramp lifts that rate inside a configured window before expiry.
-- **Fee incentive subsidy:** A reduction in the trading fee, funded from the market's sponsored incentive balance. Anyone can top that balance up.
+- **Fee incentive subsidy:** A reduction in the trading fee, funded from the market's sponsored incentive balance. Anyone can top that balance up. It is `fee_incentive_subsidy` onchain and `subsidy` in the SDK quote and receipt.
 - **Builder fee:** An optional add-on for accounts that carry a builder code, computed from the trading fee and capped by a per-quantity rate. It routes to the builder code's address rather than into the pool.
-- **Congestion surcharge:** A flat per-unit charge that fires only when the transaction's gas price is a high outlier against the market's own smoothed estimate. Admin can disable it, and it ships disabled.
+- **Congestion surcharge:** A flat per-unit charge that fires only when the transaction's gas price is a high outlier against the market's own smoothed estimate. It is `penalty_fee` onchain and `penalty` in the SDK quote and receipt, so a `penalty` line in a quote is this charge. Admin can disable it, and it ships disabled on this deployment.
 - **Inventory-impact charge:** A charge sized by the change a trade makes to the book's payout profile, held in the market's isolated escrow and rebated when a trade closes that exposure. Its rate ships at zero, which makes the mechanism inert.
 
-A referral share is not another charge. On a referred mint it redistributes protocol proceeds to the referring account after the trader's total is already fixed.
+A referral share is not another charge. Its basis is the trading fee net of the incentive subsidy, plus the congestion surcharge, and the protocol computes it only after `all_in_cost` is fixed, then splits it out of the payment the trader has already made. It is carved out of fees the trader paid anyway, it never adds a debit, and it never changes `cost`. The SDK reports it as `fees.referral`. The Move `MintQuote` carries no referral field, because the split happens after the quote.
 
 ## Pool liquidity and PLP {#vault-and-plp}
 
@@ -147,14 +152,16 @@ Supply and withdrawal are asynchronous, so nobody mints or burns PLP against a l
 A periodic flush values the whole pool once and fills eligible queue heads at that single frozen mark. It runs as exactly three stages inside one transaction:
 
 1. `start_pool_valuation` engages the valuation lock and snapshots the active market set into a hot potato.
-1. `value_expiry` runs once per snapshotted market. It rebalances that market's cash with the pool, then folds the market's value into a running total: a live market contributes its exact net asset value, and a settled market contributes zero.
-1. `finish_flush` proves the flush valued every snapshotted market exactly once, computes the pool's net asset value as idle DUSDC plus the total it accumulated, drains the queues at that one mark, and releases the lock.
+1. `value_expiry` runs once per snapshotted market, taking the propbook `OracleRegistry` and the three feed objects so it can build that market's live pricer. It rebalances the market's cash with the pool, then folds the market's value into a running total: a live market contributes its exact net asset value, and a settled market contributes zero.
+1. `finish_flush` proves the flush valued every snapshotted market exactly once, computes the pool's net asset value, drains the queues at that one mark, and releases the lock.
+
+Pool value is not simply idle plus markets. `lp_pool_value` starts from idle DUSDC plus accumulated market net asset value, then subtracts two held-out terms: an exclusion term covering the protocol's share of profit that PLP holders cannot redeem, and the pending protocol profit that has been materialized but not yet drained into the reserve. The result floors at zero rather than underflowing.
 
 ```mermaid
 flowchart TD
   CAP["MarketLifecycleCap"] --> START["start_pool_valuation: lock and snapshot active markets"]
   START --> VAL["value_expiry per market: rebalance cash, fold exact NAV"]
-  VAL --> FIN["finish_flush: pool NAV = idle + sum of market NAV"]
+  VAL --> FIN["finish_flush: pool NAV = idle + market NAV, less exclusion and pending protocol profit"]
   FIN --> SUP["supplies first: mint PLP, join escrow into idle"]
   FIN --> WD["withdrawals next: burn PLP, pay from idle, in queue order"]
 ```
@@ -173,4 +180,9 @@ Split reads by freshness and purpose:
 1. Render history, portfolios, and oracle observation series from the public read services at `predict-server-v4.testnet.mystenlabs.com`, `propbook-server-v4.testnet.mystenlabs.com`, and `account-server-v4.testnet.mystenlabs.com`. Check a service's `/status` response before you treat its recent data as complete.
 1. Subscribe to Sui checkpoints or protocol events when an interface needs a live tape of oracle updates and trades.
 
-Quotes are the one read that doubles as a preflight check, because a quote simulates the exact transaction its matching builder produces and raises the same errors the mint or redemption would. For endpoint paths, package IDs, and object IDs, see [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information).
+Preflight is a property of the SDK layer, not of the Move layer, and the two quote surfaces differ:
+
+- **In the SDK:** `read.quoteMint` and `read.quoteRedeem` each dry-run the identical transaction their matching builder produces, against the real account and the real fee path, so they raise the same typed errors the write would, insufficient balance included. A successful SDK quote is a preflight.
+- **Onchain:** `expiry_market::quote_mint` prices only. It applies the live-mint and admission gates, and it checks no account, no slippage cap, and no exposure capacity, so a successful Move quote says nothing about whether the mint would land.
+
+For endpoint paths, package IDs, and object IDs, see [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information).

@@ -1,8 +1,10 @@
 ---
-title: Market Keys
+title: Strikes and Ticks
+sidebar_label: Strikes and Ticks
 description: >-
   Learn how DeepBook Predict addresses a position with absolute strike ticks, a
-  half-open tick pair, sentinel ticks, and a packed order ID.
+  half-open tick pair, sentinel ticks, a packed order ID, and the order and
+  strike_exposure abort codes a failing mint hits.
 keywords:
   - deepbook predict strike tick
   - absolute tick grid
@@ -12,6 +14,7 @@ keywords:
   - range position
   - order id
   - expiry market
+  - einvalidadmissiontick
 goal:
   description: >-
     Reader can learn how DeepBook Predict addresses a position with absolute
@@ -264,7 +267,7 @@ The root order ID is the original mint's ID, carried forward unchanged across pa
 public fun has_position(account: &Account, expiry_market_id: ID, order_id: u256): bool
 ```
 
-For the account model, the shared `AccountWrapper`, and the `Auth` hot potato that opens it, see [Predict Manager](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager).
+For the account model, the shared `AccountWrapper`, and the `Auth` hot potato that opens it, see [Accounts and Custody](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager).
 
 ## Find a market {#market-key}
 
@@ -311,7 +314,7 @@ The registry stores those IDs in a `Table` keyed by `market_manager::MarketKey`,
 
 ## Ticks in the TypeScript SDK {#sdk}
 
-`@mysten/deepbook-v3` version 2.1.3 ships a `/predict` subpath that does the tick arithmetic for you. Describe a position with a `MarketDescriptor` in USD, and the SDK resolves the market, converts each strike, and admission-checks each finite boundary before it builds the transaction.
+`@mysten/deepbook-v3` version 2.1.3 or later ships a `/predict` subpath that does the tick arithmetic for you. Describe a position with a `MarketDescriptor` in USD, and the SDK resolves the market, converts each strike, and admission-checks each finite boundary before it builds the transaction.
 
 The descriptor has two arms:
 
@@ -326,7 +329,7 @@ Each arm maps onto the same tick pair the chain takes:
 | `{ side: 'down', strike: K }` | `0` | `K / tickSize` |
 | `{ side: 'range', lower: L, upper: H }` | `L / tickSize` | `H / tickSize` |
 
-`POS_INF_TICK` is exported as a `bigint` equal to `1073741823n`. `strike: 'reference'` is available on the binary arm only, and it throws when the keeper has not seeded the market yet.
+`POS_INF_TICK` is exported as a `bigint` equal to `1073741823n`. `strike: 'reference'` is available on the binary arm only, and it throws while the market has no reference tick recorded. Recording one is permissionless, so a caller blocked this way can unblock themselves by calling `set_reference_tick` rather than waiting for someone else.
 
 `read.markets()` returns `tickSize`, `admissionTickSize`, and `referencePrice` as USD decimals, so snap a target price with plain arithmetic:
 

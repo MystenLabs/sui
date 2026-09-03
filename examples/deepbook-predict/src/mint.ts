@@ -6,15 +6,18 @@ import type { MarketDescriptor, MintQuote } from '@mysten/deepbook-v3/predict';
 import type { Transaction } from '@mysten/sui/transactions';
 import { client } from './client.js';
 import { UNDERLYING } from './config.js';
-import { admissibleStrike, nearestOpenMarket } from './markets.js';
+import { admissibleStrike, tradeableMarket } from './markets.js';
 
 // Quote, then mint with a cap derived from the quote.
 //
 // Both caps are optional, and omitting them is not a safe default: the SDK sends
 // U64_MAX for a missing `maxCost` or `maxProbability`, which leaves the mint
-// genuinely uncapped. If the price moves between the quote and execution, an
-// uncapped mint can debit the account's entire balance. Always pass at least
-// `maxCost`.
+// genuinely uncapped against any price move between the quote and execution.
+// This builder mints an exact payout quantity, so the premium alone cannot exceed
+// `quantity`; fees are charged on top, and `maxCost` is what bounds the total
+// debit. `tx.mintAmount` is the one that can reach the whole balance, because
+// there fees are charged on top of `spend` and `maxCost` is the only bound on the
+// full withdrawal. Always pass at least `maxCost`.
 export async function mintDirectional(params: {
 	owner: string;
 	side: 'up' | 'down';
@@ -24,7 +27,7 @@ export async function mintDirectional(params: {
 	targetStrikeUsd?: number;
 }): Promise<{ tx: Transaction; quote: MintQuote; descriptor: MarketDescriptor }> {
 	const { owner, side, quantity, targetStrikeUsd } = params;
-	const market = await nearestOpenMarket();
+	const market = await tradeableMarket();
 
 	const descriptor: MarketDescriptor = {
 		underlying: UNDERLYING,

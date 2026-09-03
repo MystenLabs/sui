@@ -6,7 +6,7 @@ import type { MarketDescriptor, MintQuote } from '@mysten/deepbook-v3/predict';
 import type { Transaction } from '@mysten/sui/transactions';
 import { client } from './client.js';
 import { UNDERLYING } from './config.js';
-import { admissibleStrike, nearestOpenMarket } from './markets.js';
+import { admissibleStrike, tradeableMarket } from './markets.js';
 
 // A range position pays out when settlement lands inside `(lower, upper]`, which
 // is left-open and right-closed. Both bounds are finite numeric strikes, so both
@@ -21,7 +21,7 @@ export async function mintRange(params: {
 	halfWidthUsd: number;
 }): Promise<{ tx: Transaction; quote: MintQuote; lower: number; upper: number }> {
 	const { owner, quantity, halfWidthUsd } = params;
-	const market = await nearestOpenMarket();
+	const market = await tradeableMarket();
 
 	const anchor = market.referencePrice;
 	if (anchor === null) {
@@ -49,11 +49,16 @@ export async function mintRange(params: {
 	// Range positions quote and mint through the same builders as binary ones.
 	const quote = await client.predict.read.quoteMint(owner, descriptor, { quantity });
 
-	// Cap the all-in debit. Omitting `maxCost` sends U64_MAX, leaving the mint
-	// uncapped against any price move between the quote and execution.
+	// Cap both dimensions. Omitting either sends U64_MAX for it, and a cost cap
+	// alone still lets the fill price move: pass `maxProbability` as well.
 	const maxCost = Math.ceil(quote.cost * 1.01 * 1e6) / 1e6;
+	const maxProbability = Math.min(1, Number((quote.entryProbability * 1.02).toFixed(6)));
 
-	const tx = await client.predict.tx.mint(owner, descriptor, { quantity, maxCost });
+	const tx = await client.predict.tx.mint(owner, descriptor, {
+		quantity,
+		maxCost,
+		maxProbability,
+	});
 
 	return { tx, quote, lower, upper };
 }

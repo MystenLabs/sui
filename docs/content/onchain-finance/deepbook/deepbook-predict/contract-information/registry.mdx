@@ -49,7 +49,7 @@ answer: >-
 
 `Registry` and `ProtocolConfig` are created together when the Predict package is published, and the single `AdminCap` is transferred to the publisher at that moment. The object ID for this deployment is on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#shared-objects).
 
-Most application integrations call only the read functions here. The rest are operator and governance surfaces. None of them is an `entry fun`: every function on this page is a `public fun` invoked as a `moveCall`, and the capability-minting and creation functions return values that a later command in the same transaction must consume.
+Most application integrations call only the read functions here. The rest are operator and governance surfaces. None of them is an `entry fun`: every function on this page is a `public fun` invoked as a `moveCall`. The capability-minting functions and `generate_lifecycle_proof` return values that a later command in the same transaction must consume, because Sui rejects an unused return value only when its type lacks `drop`. The two creation functions each return an `ID`, which has `drop`, so a transaction can leave it unused.
 
 ## Registry state
 
@@ -263,7 +263,7 @@ A new market starts with zero cash and cannot mint until the permissionless `plp
 
 ## Builder codes
 
-Builder-code creation is the one permissionless function in the registry:
+Builder-code creation is the only permissionless function in the registry that changes state. The reads on this page, `expiry_market_id`, `cadence_config`, and `cadence_configs`, are permissionless too, but they mutate nothing:
 
 <ImportContent
 	source="packages/predict/sources/registry/registry.move"

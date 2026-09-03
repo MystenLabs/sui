@@ -24,6 +24,12 @@ markers. The tags map to these pages:
 
 - `config`, `client`, `create-manager`, `markets`, `mint-binary`: DeepBook Predict landing quickstart.
 - `config`, `client`, `create-manager`, `markets`, `mint-binary`, `mint-range`, `redeem`, `supply`, `withdraw`: Testnet workflow tutorial.
+- `sessions-authorize`, `sessions-list`, `sessions-trade`, `sessions-revoke`: Sessions contract reference.
+
+The `sessions-*` files import from `@mysten/deepbook-v3/sessions`, a separate
+subpath from `/predict`. They build owner-signed grant transactions and
+session-signed trades, and like everything else here they only return the
+transaction.
 
 No package ID, object ID, or coin type is hardcoded here. They all come from
 `@mysten/deepbook-v3/predict`, which carries the record for the deployment its

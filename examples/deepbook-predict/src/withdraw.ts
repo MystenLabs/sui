@@ -11,8 +11,14 @@ import { client } from './client.js';
 // the minimum DUSDC out to zero, so there is no per-request floor to set.
 export async function queueWithdrawAll(owner: string): Promise<Transaction> {
 	const shares = await client.predict.read.plpBalance(owner);
-	if (shares === 0n) {
-		throw new Error(`${owner} holds no PLP shares.`);
+	// The chain rejects a request below one whole PLP, which is 1_000_000 raw at
+	// six decimals. Check it here rather than letting a dust holder take a Move
+	// abort out of a helper whose job is exiting the whole position.
+	const MIN_WITHDRAW_RAW = 1_000_000n;
+	if (shares < MIN_WITHDRAW_RAW) {
+		throw new Error(
+			`${owner} holds ${shares} raw PLP shares; the minimum withdrawal request is ${MIN_WITHDRAW_RAW}.`,
+		);
 	}
 	return client.predict.tx.withdrawPlp(owner, shares);
 }

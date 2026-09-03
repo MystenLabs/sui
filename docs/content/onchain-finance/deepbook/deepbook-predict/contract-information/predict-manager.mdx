@@ -1,9 +1,11 @@
 ---
-title: Predict Manager
+title: Accounts and Custody
+sidebar_label: Accounts and Custody
 description: >-
-  Reference for the DeepBook Predict account layer: the shared AccountWrapper,
-  the embedded Account, the Auth hot potato, deposits and withdrawals, and the
-  per-account Predict data slot that holds positions.
+  Reference for the DeepBook Predict account and custody layer: the shared
+  AccountWrapper, the embedded Account, the Auth hot potato, deposits and
+  withdrawals, the account SDK subpath, and the per-account Predict data slot
+  that holds positions.
 keywords:
   - account wrapper
   - accountwrapper
@@ -15,11 +17,13 @@ keywords:
   - predict data
   - position key
   - builder code
+  - predict manager
+  - accountcontract
 goal:
   description: >-
     Reader can learn how a DeepBook Predict account is created, how Auth gates
-    access to it, how deposits and withdrawals work, and where Predict stores
-    positions
+    access to it, how deposits and withdrawals work, which SDK subpath drives
+    them, and where Predict stores positions
   requires:
     - has_frontmatter:
         - title
@@ -36,25 +40,27 @@ questions:
   - What replaced PredictManager in DeepBook Predict?
   - How do I create a DeepBook Predict account and get its object ID?
   - What is the Auth hot potato in the DeepBook account package?
+  - Which SDK subpath drives DeepBook Predict account creation and custody?
   - Where does DeepBook Predict store my open positions?
 answer: >-
   DeepBook Predict has no PredictManager. Each trader owns one shared
   AccountWrapper from the account package, holding an embedded Account.
   Create it with account_registry::new and share the returned wrapper in the
-  same transaction. Access is gated by a single-use Auth hot potato, and
-  Predict keeps positions in a PredictData slot attached to the Account.
+  same transaction, or with AccountContract from the deepbook-v3 account
+  subpath. Access is gated by a single-use Auth hot potato, and Predict keeps
+  positions in a PredictData slot attached to the Account.
 last_verified: 2026-09-02
 verified_against: predict-testnet-8-21
 ---
 
 DeepBook Predict has no `PredictManager` and no `predict_manager` module. Custody and identity moved into a standalone `account` package, where each trader owns one shared `AccountWrapper` holding an embedded `Account`. Predict attaches its own per-account data to that `Account` rather than storing positions itself.
 
-The page title and the SDK's `createManager()` method both survive from older DeepBook balance-manager vocabulary, and both name the account wrapper described here. The SDK's own name for the object is account wrapper.
+Readers arriving from the old Predict Manager title are in the right place. That title and the SDK's `createManager()` method both survive from older DeepBook balance-manager vocabulary, and both name the account wrapper described here. The SDK's own name for the object is account wrapper.
 
 Two modules own this surface, both under `packages/account/sources/` rather than under the Predict package:
 
-- **[`account::account`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/account/sources/account.move):** the `AccountWrapper` object, the embedded `Account`, the `Auth` type, and the custody functions.
-- **[`account::account_registry`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/account/sources/account_registry.move):** account creation, address derivation, and the app authorization allowlist.
+- **`account::account`:** the `AccountWrapper` object, the embedded `Account`, the `Auth` type, and the custody functions, at [account.move](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/account/sources/account.move).
+- **`account::account_registry`:** account creation, address derivation, and the app authorization allowlist, at [account_registry.move](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/account/sources/account_registry.move).
 
 Predict's own per-account slot lives in [`deepbook_predict::predict_account`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/predict/sources/predict_account.move).
 
@@ -476,30 +482,67 @@ public fun unset_builder_code(wrapper: &mut AccountWrapper, auth: Auth, ctx: &mu
 
 `deposit` and `withdraw` take a `&mut Account`, which only `load_account_mut` produces, so reaching them still costs an `Auth`. `authorize_app` and `deauthorize_app` need the `AccountAdminCap`, and `generate_auth_as_app` needs a `Permit<App>`, so none of the three is an integrator call.
 
+## The account SDK subpath {#account-sdk}
+
+The account primitive is shared rather than Predict-specific, so `@mysten/deepbook-v3` publishes it on its own subpath, `@mysten/deepbook-v3/account`, separate from `/predict`. Reach for it when you drive custody without the Predict facade, or when you compose account commands into a block of your own.
+
+Two things come out of that subpath before any builder does:
+
+- **`getAccountConfig(network)`:** returns the deployed `accountPackageId` and `accountRegistry` for a network, so you never transcribe them. It throws for a network with no recorded deployment rather than handing back placeholder IDs, and Testnet is the only network it answers for today.
+- **`AccountContract`:** the class every builder hangs off. Construct it with that config, or with your own `{ accountPackageId, accountRegistry }` if you run your own deployment of the account package.
+
+```ts
+import { AccountContract, getAccountConfig } from '@mysten/deepbook-v3/account';
+
+const account = new AccountContract(getAccountConfig('testnet'));
+```
+
+Its methods each return a function you add to a `Transaction`, so they compose into one block:
+
+| **Method** | **Builds** |
+|---|---|
+| `deriveAccountWrapperId(owner)` | No commands. Computes the wrapper's object ID offchain. |
+| `generateAuth()` | `account::generate_auth` for the transaction sender. |
+| `createAccount()` | `account_registry::new` then `account::share`. |
+| `createAccountAndDeposit({ coin, coinType })` | `new`, `generate_auth`, `deposit_funds`, then `share` last. |
+| `depositFunds({ wrapperId, coin, coinType })` | `generate_auth` then `deposit_funds`. |
+| `withdrawFunds({ wrapperId, amount, coinType })` | `generate_auth` then `withdraw_funds`, returning the `Coin<T>`. |
+| `loadAccount({ wrapperId })` | `account::load_account`, the read-side handle. |
+| `balance({ owner, coinType })` | `load_account` chained into `balance<T>`, for a simulated read. |
+
+`createAccountAndDeposit` is the one that actually implements the create-and-fund workflow in a single block, and it cannot be decomposed into `createAccount` plus `depositFunds`. An object input can only name an object that already existed when the block started, so a wrapper created inside the block is reachable only through the result handle `new` returns, and sharing it ends by-value use of that handle. That is why `share` comes last.
+
+Only the wrapper ID derives from this class. The canonical account identity is a second, different derived object, keyed by `AccountKey(owner)` rather than `AccountWrapperKey(owner)`, and its derivation lives on `SessionsContract.deriveAccountId` in the `/sessions` subpath. Pass the wrapper ID to Predict calls, and expect the account ID in the `account_id` field of events.
+
+:::warning
+
+The package root exports a different type named `Account`. `import { Account } from '@mysten/deepbook-v3'` gives you `@deepbook/core::account::Account`, the per-pool trading account, whose layout is unrelated to the account primitive's custody account. Parsing an account-primitive object with it yields nonsense rather than an error, because BCS decoding does not check which struct the bytes came from. Import `Account` from `@mysten/deepbook-v3/account` for anything on this page.
+
+:::
+
+The generated bindings sit on the same subpath for callers building their own move calls: `accountMoveCalls`, `accountRegistryMoveCalls`, `accountEvents`, and the `Account` and `AccountWrapper` BCS structs.
+
 ## End-to-end workflow {#end-to-end-workflow}
 
-A first trade fits in one programmable transaction block, because the account's shared object ID is derivable before the account exists.
+Creating an account, funding it, and trading can be composed in one programmable transaction block, because the wrapper's object ID is derivable before the account exists. Two layers reach that, and they are not interchangeable.
 
-Compose the block in this order:
+The facade builders under `client.predict.tx.*` do not compose. Each one returns its own fresh `Transaction` carrying just that builder's commands, so you cannot chain two of them into one block. What the facade does offer is two prebuilt compositions:
 
-1. Call `account_registry::new` with the shared `AccountRegistry`.
-1. Call `account::share` on the returned wrapper.
-1. Split the deposit amount off a DUSDC coin with `tx.splitCoins`.
-1. Call `account::generate_auth`, then `account::deposit_funds` with the split coin, the wrapper, the accumulator root, and the clock.
-1. Call `expiry_market::load_live_pricer` with the market, the protocol config, and the four Propbook objects.
-1. Call `account::generate_auth` again for the mint, since the first `Auth` is spent.
-1. Call `expiry_market::mint_exact_quantity` with the market, the wrapper, the new `Auth`, the pricer, the tick pair, and the caps.
+- **`client.predict.tx.deposit(owner, amount, { create: true })`:** creates the wrapper, deposits through the fresh handle, and shares last, in one block. The `owner` must be the signer, because `account_registry::new` derives from the transaction sender, and the call aborts if the account already exists.
+- **`client.predict.tx.mint(owner, descriptor, opts)`:** a standalone transaction containing `load_live_pricer`, `generate_auth`, and `mint_exact_quantity`, and nothing else. There is no create, share, split, or deposit in it.
 
-Steps 5 through 7 need the market's object ID, which you resolve from the registry by underlying and expiry. Read a quote first so the `max_cost` cap reflects the current all-in cost.
+The example below is the second of those. It reads a quote, derives a `maxCost` cap from it, and returns an unsigned mint transaction:
 
 <details>
-<summary>Deposit and mint in a single transaction</summary>
+<summary>Quote and mint with the SDK</summary>
 
 <ImportContent source="examples/deepbook-predict/src/mint.ts" mode="code" tag="mint-binary" />
 
 </details>
 
-The [Testnet tutorial](/onchain-finance/deepbook/deepbook-predict/tutorial) walks the same flow with quotes, ranges, redemption, and settlement.
+Composing create, fund, and trade into a single block of your own is generated-bindings work rather than facade work. Build it from the `AccountContract` methods above and the `loadLivePricer` escape hatch the `/predict` subpath exports, adding commands to one `Transaction` in this order: `account_registry::new`, `account::generate_auth`, `account::deposit_funds`, `account::share`, `expiry_market::load_live_pricer`, a second `account::generate_auth` because the first is spent, and `expiry_market::mint_exact_quantity`. Share the wrapper after the deposit, not before: an object input can only name an object that already existed when the block started, so a wrapper created inside the block is reachable only through the result handle from `new`.
+
+The [Testnet tutorial](/onchain-finance/deepbook/deepbook-predict/tutorial) walks the whole flow with quotes, ranges, redemption, and settlement.
 
 ## Events {#events}
 
