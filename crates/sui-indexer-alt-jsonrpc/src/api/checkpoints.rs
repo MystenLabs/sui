@@ -5,8 +5,6 @@ use anyhow::Context as _;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use sui_json_rpc_types::Checkpoint;
-use sui_open_rpc::Module;
-use sui_open_rpc_macros::open_rpc;
 use sui_types::sui_serde::BigInt;
 
 use crate::api::rpc_module::RpcModule;
@@ -15,14 +13,13 @@ use crate::error::InternalContext;
 use crate::error::RpcError;
 use crate::error::invalid_params;
 
-#[open_rpc(namespace = "sui", tag = "Checkpoints API")]
 #[rpc(server, namespace = "sui")]
 trait CheckpointsApi {
     /// Return a checkpoint by its sequence number
     #[method(name = "getCheckpoint")]
     async fn get_checkpoint(
         &self,
-        /// Checkpoint sequence number.
+        // Checkpoint sequence number.
         seq: BigInt<u64>,
     ) -> RpcResult<Checkpoint>;
 }
@@ -46,10 +43,6 @@ impl CheckpointsApiServer for Checkpoints {
 }
 
 impl RpcModule for Checkpoints {
-    fn schema(&self) -> Module {
-        CheckpointsApiOpenRpc::module_doc()
-    }
-
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
         self.into_rpc()
     }

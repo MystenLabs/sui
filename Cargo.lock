@@ -15316,8 +15316,6 @@ dependencies = [
  "sui-json",
  "sui-json-rpc-types",
  "sui-name-service",
- "sui-open-rpc",
- "sui-open-rpc-macros",
  "sui-package-resolver",
  "sui-pg-db",
  "sui-protocol-config",
