@@ -1563,7 +1563,10 @@ mod test {
 
         // With load stopped, the observer (when present) must be able to reach the
         // network's latest checkpoint via block streaming, in any scenario.
-        wait_for_observer_catch_up(&test_cluster, Duration::from_secs(120)).await;
+        // Generous: with the execution driver's concurrency limit randomized in test
+        // configurations (as low as 1), a slow-drawing observer can legitimately take
+        // well over two minutes to replay a heavy workload.
+        wait_for_observer_catch_up(&test_cluster, Duration::from_secs(300)).await;
     }
 
     // A checkpoint fork (vs the transaction fork below): one validator participates in consensus
