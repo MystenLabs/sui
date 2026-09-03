@@ -99,7 +99,7 @@ transfer::public_transfer(c, @0x0B);
 
 Because there is no difference in the result of the object transfer, the same owned-object query works whether the 32-byte ID is an address or an object ID. Where the legacy `suix_getOwnedObjects` JSON-RPC method inferred which one you meant, the GraphQL `ObjectFilter` lets you state it with `ownerKind`.
 
-Objects owned by the address `0xADD`, which returns `b`:
+Objects that the address `0xADD` owns, which returns `b`:
 
 ```graphql
 query {
@@ -114,7 +114,7 @@ query {
 }
 ```
 
-Objects owned by the object with object ID `0x0B`, which returns `c`:
+Objects that the object with object ID `0x0B` owns, which returns `c`:
 
 ```graphql
 query {
@@ -135,7 +135,7 @@ Sui Foundation disabled JSON-RPC on Mainnet full nodes. If your application stil
 
 An object must receive another object before it can use it. To receive the object, use a `Receiving(o: ObjectRef)` argument type in a [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks). This argument takes an object reference containing the object's `ObjectID`, `Version`, and `Digest`, similar to address-owned object arguments. However, `Receiving` PTB arguments are not passed as an owned value or mutable reference within the transaction.
 
-The core receiving interface in Move is defined in the [`transfer`](/references/framework/sui_sui/transfer) module in the Sui framework:
+The [`transfer`](/references/framework/sui_sui/transfer) module in the Sui framework defines the core receiving interface in Move:
 
 ```move
 module sui::transfer;

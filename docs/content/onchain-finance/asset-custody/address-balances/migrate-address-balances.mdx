@@ -75,7 +75,7 @@ Balance query responses now include address balance information alongside coin o
 
 Sui Foundation disabled JSON-RPC on Mainnet full nodes. This section describes the legacy response shape so you can recognize it in code you are migrating. For new code, use the gRPC or GraphQL fields that follow.
 
-The `suix_getBalance` and `suix_getAllBalances` methods returned a `fundsInAddressBalance` field, and the `totalBalance` field combined coin objects and address balance funds:
+The legacy `suix_getBalance` and `suix_getAllBalances` response carries a `fundsInAddressBalance` field, and its `totalBalance` field combines coin objects and address balance funds:
 
 ```json
 {
@@ -87,7 +87,7 @@ The `suix_getBalance` and `suix_getAllBalances` methods returned a `fundsInAddre
 }
 ```
 
-Getting only the coin-based balance meant subtracting `fundsInAddressBalance` from `totalBalance`. The gRPC and GraphQL responses return the two amounts as separate fields, so no arithmetic is needed.
+Getting only the coin-based balance means subtracting `fundsInAddressBalance` from `totalBalance`. The gRPC and GraphQL responses return the two amounts as separate fields, so you do not need that arithmetic.
 
 ### gRPC
 
