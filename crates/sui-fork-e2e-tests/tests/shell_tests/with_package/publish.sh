@@ -6,6 +6,7 @@
 # the fork but not on the localnet it was forked from.
 set -euo pipefail
 source ./lib.sh
+localnet_setup
 
 sender=$(on_localnet active-address)
 fork_start --address "$sender"

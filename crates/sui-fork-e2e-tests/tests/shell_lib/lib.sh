@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Shared helpers for the sui-fork shell tests. The harness copies this file into the sandbox root,
-# and every script starts with `set -euo pipefail` followed by `source ./lib.sh`.
+# and every script starts with `set -euo pipefail`, `source ./lib.sh`, and `localnet_setup`, which
+# waits for the localnet the harness spawned and creates the funded client config.
 #
 # The helpers stay compatible with the bash 3.2 that macOS ships, so there are no associative
 # arrays, no mapfile, and no timeout(1). They are also written around these traps:
@@ -18,14 +19,17 @@
 # - `--gas` and `--args` on `sui client` take one or more values, so only a following `--flag`
 #   terminates them.
 
-: "${LOCALNET_CONFIG:?LOCALNET_CONFIG must point at the localnet client.yaml}"
+: "${LOCALNET_CONFIG:?LOCALNET_CONFIG must be a scratch path for the localnet client.yaml}"
 : "${FORK_CONFIG:?FORK_CONFIG must be a scratch path for the fork client.yaml}"
+: "${LOCALNET_RPC_URL:?LOCALNET_RPC_URL must be the localnet fullnode RPC URL}"
 : "${GRAPHQL_URL:?GRAPHQL_URL must be the localnet GraphQL endpoint}"
+: "${FAUCET_URL:?FAUCET_URL must be the localnet faucet gas endpoint}"
 : "${FORK_DATA_DIR:?FORK_DATA_DIR must be an empty scratch directory}"
 : "${FORK_RPC_ADDR:?FORK_RPC_ADDR must be a free host:port for the fork RPC server}"
 
 # Keep foreground sui and sui-fork commands silent, so only deliberate output reaches the snapshot.
 export RUST_LOG="${RUST_LOG:-error}"
+: "${LOCALNET_TIMEOUT:=120}"
 : "${FORK_START_TIMEOUT:=120}"
 : "${GRAPHQL_TIMEOUT:=120}"
 : "${FORK_LOG:=fork.log}"
@@ -242,6 +246,53 @@ wait_for_graphql_tx() {
     fi
     if [ "$waited" -ge $((GRAPHQL_TIMEOUT * 2)) ]; then
       echo "timed out waiting for GraphQL to index transaction $digest" >&2
+      return 1
+    fi
+    sleep 0.5
+    waited=$((waited + 1))
+  done
+}
+
+# ------------------------------------------------------------------------------------ localnet
+
+# localnet_setup: wait for the localnet the harness spawned, then create LOCALNET_CONFIG with a
+# funded active address and a second, unfunded one for scripts that need a transfer recipient.
+#
+# `sui start` prints nothing when it is ready, so readiness is the first `faucet` call that
+# succeeds. `-y` creates the config and its keystore on that first call, and `--url` is required
+# because the CLI otherwise assumes the default faucet port. Returns once GraphQL lists the coins,
+# so a fork taken straight afterwards seeds them.
+localnet_setup() {
+  local waited=0
+  until on_localnet -y faucet --url "$FAUCET_URL" > faucet.log 2>&1; do
+    if [ "$waited" -ge "$LOCALNET_TIMEOUT" ]; then
+      echo "timed out after ${LOCALNET_TIMEOUT}s waiting for the localnet faucet:" >&2
+      cat faucet.log >&2
+      return 1
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  on_localnet new-env --alias localnet --rpc "$LOCALNET_RPC_URL" > /dev/null
+  on_localnet switch --env localnet > /dev/null
+  on_localnet new-address ed25519 > /dev/null
+  wait_for_localnet_objects "$(on_localnet active-address)"
+}
+
+# wait_for_localnet_objects <address>: wait until GraphQL lists objects for the address at its
+# latest checkpoint, through the checkpoint-scoped query that `--address` seeding uses.
+wait_for_localnet_objects() {
+  local address=$1
+  local waited=0
+  local count=""
+  while :; do
+    count=$(graphql "{ checkpoint { query { address(address: \"$address\") { objects { nodes { address } } } } } }" \
+      | jq -r '.data.checkpoint.query.address.objects.nodes | length' 2> /dev/null || true)
+    if [ -n "$count" ] && [ "$count" -gt 0 ]; then
+      return 0
+    fi
+    if [ "$waited" -ge $((GRAPHQL_TIMEOUT * 2)) ]; then
+      echo "timed out waiting for GraphQL to list the objects of $address" >&2
       return 1
     fi
     sleep 0.5

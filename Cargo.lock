@@ -14854,23 +14854,11 @@ dependencies = [
  "datatest-stable",
  "fs_extra",
  "move-command-line-common",
- "prometheus",
  "regex",
- "reqwest",
  "serde_json",
  "sui-config",
- "sui-futures",
- "sui-indexer-alt",
- "sui-indexer-alt-consistent-store",
- "sui-indexer-alt-framework",
- "sui-indexer-alt-graphql",
- "sui-indexer-alt-reader",
- "sui-pg-db",
- "sui-types",
  "tempfile",
- "test-cluster",
  "tokio",
- "url",
 ]
 
 [[package]]

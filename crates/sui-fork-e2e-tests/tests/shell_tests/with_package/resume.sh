@@ -6,6 +6,7 @@
 # resumes with its state, and that restarting with other seeds or another checkpoint is refused.
 set -euo pipefail
 source ./lib.sh
+localnet_setup
 
 sender=$(on_localnet active-address)
 fork_start --address "$sender"

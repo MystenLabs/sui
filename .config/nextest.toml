@@ -23,6 +23,16 @@ setup = 'big-worker-stack'
 filter = 'package(sui-indexer-alt-e2e-tests)'
 setup = 'big-worker-stack'
 
+[test-groups]
+# Each sui-fork shell test spawns a whole localnet with PostgreSQL, so run them one at a time
+# rather than nine at once. Other packages' tests keep running in parallel around them.
+sui-fork-e2e = { max-threads = 1 }
+
+# Overrides in the default profile apply to every profile, so this holds for CI too.
+[[profile.default.overrides]]
+filter = 'package(sui-fork-e2e-tests)'
+test-group = 'sui-fork-e2e'
+
 [profile.ci]
 # Print output for failing tests only when they fail.
 failure-output = "immediate"
@@ -37,9 +47,9 @@ slow-timeout = { period = "60s", terminate-after = 5 }
 
 [[profile.ci.overrides]]
 filter = 'package(sui-fork-e2e-tests)'
-# Every shell test stands up a localnet, PostgreSQL, an indexer, a consistent store, GraphQL,
-# and a fork, and the first test of a run may also link the sui-fork binary, so allow ten
-# minutes rather than five.
+# Every shell test spawns `sui start` (validator, fullnode, temporary PostgreSQL, indexer,
+# consistent store, GraphQL, faucet) and then a fork, and the first test of a run may also link
+# the sui and sui-fork binaries, so allow ten minutes rather than five.
 slow-timeout = { period = "120s", terminate-after = 5 }
 
 [profile.simtestnightly]
