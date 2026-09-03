@@ -35,7 +35,6 @@ mod testing_imports {
     pub use sui_core::authority::authority_per_epoch_store::CertLockGuard;
     pub use sui_core::authority::authority_test_utils::submit_and_execute_with_error;
     pub use sui_core::authority::shared_object_version_manager::AssignedVersions;
-    pub use sui_json_rpc_types::EventFilter;
     pub use sui_json_rpc_types::{DevInspectResults, DryRunTransactionBlockResponse};
     pub use sui_types::base_types::ObjectID;
     pub use sui_types::base_types::SuiAddress;
@@ -237,10 +236,11 @@ impl TransactionalAdapter for ValidatorWithFullnode {
     ) -> SuiResult<Vec<Event>> {
         Ok(self
             .validator
-            .query_events(EventFilter::Transaction(*tx_digest), None, limit, false)
+            .get_transaction_events(tx_digest)
+            .map(|events| events.data)
             .unwrap_or_default()
             .into_iter()
-            .map(|sui_event| sui_event.into())
+            .take(limit)
             .collect())
     }
 

@@ -94,19 +94,6 @@ pub struct NodeConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fullnode_sync_mode: Option<FullNodeSyncMode>,
 
-    #[serde(default = "default_enable_index_processing")]
-    pub enable_index_processing: bool,
-
-    /// When true, post-processing (JSON-RPC indexing and event emission) runs
-    /// synchronously on the execution path instead of being spawned to a
-    /// background thread. This is the legacy behavior and can be used as a
-    /// rollback mechanism or for testing.
-    #[serde(default)]
-    pub sync_post_process_one_tx: bool,
-
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub remove_deprecated_tables: bool,
-
     #[serde(default)]
     pub grpc_load_shed: Option<bool>,
 
@@ -875,10 +862,6 @@ fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
     AuthorityStorePruningConfig::default()
 }
 
-pub fn default_enable_index_processing() -> bool {
-    true
-}
-
 fn default_grpc_address() -> Multiaddr {
     "/ip4/0.0.0.0/tcp/8080".parse().unwrap()
 }
@@ -1164,9 +1147,6 @@ pub struct ExpensiveSafetyCheckConfig {
     /// Disable state consistency check even when we are running in debug mode.
     #[serde(default)]
     force_disable_state_consistency_check: bool,
-
-    #[serde(default)]
-    enable_secondary_index_checks: bool,
     // TODO: Add more expensive checks here
 }
 
@@ -1178,14 +1158,6 @@ impl ExpensiveSafetyCheckConfig {
             force_disable_epoch_sui_conservation_check: false,
             enable_state_consistency_check: true,
             force_disable_state_consistency_check: false,
-            enable_secondary_index_checks: false, // Disable by default for now
-        }
-    }
-
-    pub fn new_enable_all_with_secondary_index_checks() -> Self {
-        Self {
-            enable_secondary_index_checks: true,
-            ..Self::new_enable_all()
         }
     }
 
@@ -1196,7 +1168,6 @@ impl ExpensiveSafetyCheckConfig {
             force_disable_epoch_sui_conservation_check: true,
             enable_state_consistency_check: false,
             force_disable_state_consistency_check: true,
-            enable_secondary_index_checks: false,
         }
     }
 
@@ -1220,10 +1191,6 @@ impl ExpensiveSafetyCheckConfig {
 
     pub fn enable_deep_per_tx_sui_conservation_check(&self) -> bool {
         self.enable_deep_per_tx_sui_conservation_check || cfg!(debug_assertions)
-    }
-
-    pub fn enable_secondary_index_checks(&self) -> bool {
-        self.enable_secondary_index_checks
     }
 }
 
@@ -1296,8 +1263,6 @@ pub struct AuthorityStorePruningConfig {
     pub killswitch_tombstone_pruning: bool,
     #[serde(default = "default_smoothing", skip_serializing_if = "is_true")]
     pub smooth: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub num_epochs_to_retain_for_indexes: Option<u64>,
 }
 
 fn default_num_latest_epoch_dbs_to_retain() -> usize {
@@ -1338,7 +1303,6 @@ impl Default for AuthorityStorePruningConfig {
             num_epochs_to_retain_for_checkpoints: if cfg!(msim) { Some(2) } else { None },
             killswitch_tombstone_pruning: false,
             smooth: true,
-            num_epochs_to_retain_for_indexes: None,
         }
     }
 }
@@ -1388,8 +1352,6 @@ pub struct DBCheckpointConfig {
     pub checkpoint_path: Option<PathBuf>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object_store_config: Option<ObjectStoreConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub perform_index_db_checkpoints_at_epoch_end: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prune_and_compact_before_upload: Option<bool>,
 }

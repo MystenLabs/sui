@@ -18,14 +18,12 @@ use crate::execution_cache::writeback_cache::WritebackCache;
 use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement;
 use crate::gasless_rate_limiter::ConsensusGaslessCounter;
-use crate::jsonrpc_index::CoinIndexKey2;
 use crate::traffic_controller::TrafficController;
 use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::transaction_deny_config_manager::TransactionDenyConfigManager;
 use crate::transaction_outputs::TransactionOutputs;
 use arc_swap::{ArcSwap, ArcSwapOption, Guard};
 use authority_per_epoch_store::CertLockGuard;
-use dashmap::DashMap;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::hash::MultisetHash;
@@ -43,7 +41,6 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use shared_object_version_manager::AssignedVersions;
 use shared_object_version_manager::Schedulable;
@@ -72,19 +69,15 @@ use sui_execution::Executor;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::base_types::SystemObjectVersions;
-use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::execution_params::FundsWithdrawStatus;
 use sui_types::execution_params::get_early_execution_error;
-use sui_types::inner_temporary_store::PackageStoreWithFallback;
-use sui_types::layout_resolver::LayoutResolver;
 use sui_types::layout_resolver::into_struct_layout;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::node_role::NodeRole;
-use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::storage::InputKey;
 use sui_types::storage::OverlayBackingPackageStore;
 use sui_types::storage::RuntimeObjectResolver;
@@ -108,40 +101,31 @@ use self::authority_store_pruner::{AuthorityStorePruningMetrics, PrunerWatermark
 pub use authority_store::{AuthorityStore, ResolverWrapper};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 
-use crate::jsonrpc_index::IndexStore;
-use crate::jsonrpc_index::{
-    CoinInfo, IndexStoreCacheUpdates, IndexStoreCacheUpdatesWithLocks, ObjectIndexChanges,
-};
 use mysten_common::debug_fatal;
 use shared_crypto::intent::{Intent, IntentScope};
 use sui_config::genesis::Genesis;
 use sui_config::node::{DBCheckpointConfig, ExpensiveSafetyCheckConfig};
 use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent, SuiMoveValue,
-    SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEffects,
-    SuiTransactionBlockEvents, TransactionFilter,
+    DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockData,
+    SuiTransactionBlockEvents,
 };
 use sui_macros::{fail_point, fail_point_arg, fail_point_async, fail_point_if};
 use sui_rpc_store::Store as RpcStore;
-use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::authenticator_state::get_authenticator_state;
-use sui_types::balance::Balance;
-use sui_types::coin_reservation::{self, CoinReservationResolverTrait};
+use sui_types::coin_reservation::CoinReservationResolverTrait;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{AuthoritySignInfo, Signer};
 use sui_types::deny_list_v1::check_coin_deny_list_v1;
 use sui_types::digests::ChainIdentifier;
-use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
 use sui_types::effects::{
     InputConsensusObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
 use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
-use sui_types::event::EventID;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
-use sui_types::inner_temporary_store::{InnerTemporaryStore, ObjectMap, TxCoins, WrittenObjects};
+use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CheckpointCommitment, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
@@ -176,7 +160,6 @@ use sui_types::{
 };
 use sui_types::{TypeTag, is_system_package};
 use typed_store::TypedStoreError;
-use typed_store::rocks::StagedBatch;
 
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
@@ -199,7 +182,6 @@ use crate::metrics::RateTracker;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::overload_monitor::{AuthorityOverloadInfo, overload_monitor_accept_tx};
 use crate::stake_aggregator::StakeAggregator;
-use crate::subscription_handler::SubscriptionHandler;
 use crate::transaction_input_loader::TransactionInputLoader;
 
 #[cfg(msim)]
@@ -319,11 +301,6 @@ pub struct AuthorityMetrics {
     pub(crate) transaction_overload_sources: IntCounterVec,
 
     /// Post processing metrics
-    post_processing_total_events_emitted: IntCounter,
-    post_processing_total_tx_indexed: IntCounter,
-    post_processing_total_tx_had_event_processed: IntCounter,
-    post_processing_total_failures: IntCounter,
-
     /// Consensus commit and transaction handler metrics
     pub consensus_handler_processed: IntCounterVec,
     pub consensus_handler_processed_user_transactions: IntCounterVec,
@@ -626,30 +603,6 @@ impl AuthorityMetrics {
                 "consensus_handler_duplicate_tx_count",
                 "Number of times each transaction appears in its first consensus commit",
                 POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            post_processing_total_events_emitted: register_int_counter_with_registry!(
-                "post_processing_total_events_emitted",
-                "Total number of events emitted in post processing",
-                registry,
-            )
-            .unwrap(),
-            post_processing_total_tx_indexed: register_int_counter_with_registry!(
-                "post_processing_total_tx_indexed",
-                "Total number of txes indexed in post processing",
-                registry,
-            )
-            .unwrap(),
-            post_processing_total_tx_had_event_processed: register_int_counter_with_registry!(
-                "post_processing_total_tx_had_event_processed",
-                "Total number of txes finished event processing in post processing",
-                registry,
-            )
-            .unwrap(),
-            post_processing_total_failures: register_int_counter_with_registry!(
-                "post_processing_total_failures",
-                "Total number of failure in post processing",
                 registry,
             )
             .unwrap(),
@@ -986,8 +939,6 @@ impl ForkRecoveryState {
     }
 }
 
-pub type PostProcessingOutput = (StagedBatch, IndexStoreCacheUpdates);
-
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
@@ -1008,9 +959,6 @@ pub struct AuthorityState {
     /// from previous epoch that are executed but did not make into checkpoint.
     execution_lock: RwLock<EpochId>,
 
-    pub indexes: Option<Arc<IndexStore>>,
-
-    pub subscription_handler: Arc<SubscriptionHandler>,
     pub checkpoint_store: Arc<CheckpointStore>,
 
     committee_store: Arc<CommitteeStore>,
@@ -1042,7 +990,7 @@ pub struct AuthorityState {
     /// Consumed by gasless tx rate limiter.
     pub(crate) consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
 
-    /// Traffic controller for Sui core servers (json-rpc, validator service)
+    /// Traffic controller for the validator service.
     pub traffic_controller: Option<Arc<TrafficController>>,
 
     /// Fork recovery state for handling equivocation after forks
@@ -1054,16 +1002,6 @@ pub struct AuthorityState {
     pub(crate) object_funds_checker: ArcSwapOption<ObjectFundsChecker>,
     object_funds_checker_metrics: Arc<ObjectFundsCheckerMetrics>,
     pub(crate) unsettled_object_withdrawals: Arc<UnsettledObjectWithdrawals>,
-
-    /// Tracks transactions whose post-processing (indexing/events) is still in flight.
-    /// CheckpointExecutor removes entries and collects the index batches before committing
-    /// them atomically at checkpoint boundaries.
-    pending_post_processing:
-        Arc<DashMap<TransactionDigest, oneshot::Receiver<PostProcessingOutput>>>,
-
-    /// Limits the number of concurrent post-processing tasks to avoid overwhelming
-    /// the blocking thread pool. Defaults to the number of available CPUs.
-    post_processing_semaphore: Arc<tokio::sync::Semaphore>,
 
     /// Created once per process, then re-attached to each new `AuthorityPerEpochStore`
     /// at reconfiguration.
@@ -1712,7 +1650,6 @@ impl AuthorityState {
         let (effects, execution_error_opt) = self
             .try_execute_immediately(executable, execution_env, &epoch_store)
             .unwrap();
-        self.flush_post_processing(executable.digest()).await;
         let signed_effects = self.sign_effects(effects, &epoch_store).unwrap();
         (signed_effects, execution_error_opt)
     }
@@ -2205,14 +2142,6 @@ impl AuthorityState {
                 &tracking_store.into_read_objects(),
             );
 
-        // index certificate
-        let _ = self
-            .post_process_one_tx(certificate, &effects, &inner_temp_store, epoch_store)
-            .tap_err(|e| {
-                self.metrics.post_processing_total_failures.inc();
-                error!(?tx_digest, "tx post processing failed: {e}");
-            });
-
         self.update_metrics(certificate, &inner_temp_store, &effects);
 
         let transaction_outputs = TransactionOutputs::build_transaction_outputs(
@@ -2579,58 +2508,6 @@ impl AuthorityState {
             .is_tx_already_executed(digest)
     }
 
-    #[instrument(level = "debug", skip_all, err(level = "debug"))]
-    fn index_tx(
-        sequence: u64,
-        backing_package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
-        object_store: &Arc<dyn ObjectStore + Send + Sync>,
-        indexes: &IndexStore,
-        digest: &TransactionDigest,
-        // TODO: index_tx really just need the transaction data here.
-        cert: &VerifiedExecutableTransaction,
-        effects: &TransactionEffects,
-        events: &TransactionEvents,
-        timestamp_ms: u64,
-        tx_coins: Option<TxCoins>,
-        written: &WrittenObjects,
-        inner_temporary_store: &InnerTemporaryStore,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-        acquire_locks: bool,
-    ) -> SuiResult<(StagedBatch, IndexStoreCacheUpdatesWithLocks)> {
-        let changes = Self::process_object_index(backing_package_store, object_store, effects, written, inner_temporary_store, epoch_store)
-            .tap_err(|e| warn!(tx_digest=?digest, "Failed to process object index, index_tx is skipped: {e}"))?;
-
-        indexes.index_tx(
-            sequence,
-            cert.data().intent_message().value.sender(),
-            cert.data()
-                .intent_message()
-                .value
-                .input_objects()?
-                .iter()
-                .map(|o| o.object_id()),
-            effects
-                .all_changed_objects()
-                .into_iter()
-                .map(|(obj_ref, owner, _kind)| (obj_ref, owner)),
-            cert.data()
-                .intent_message()
-                .value
-                .move_calls()
-                .into_iter()
-                .map(|(_cmd_idx, package, module, function)| {
-                    (*package, module.to_owned(), function.to_owned())
-                }),
-            events,
-            changes,
-            digest,
-            timestamp_ms,
-            tx_coins,
-            effects.accumulator_events(),
-            acquire_locks,
-        )
-    }
-
     #[cfg(msim)]
     fn simulate_fork_during_execution(
         &self,
@@ -2712,476 +2589,6 @@ impl AuthorityState {
                 }
             }
         }
-    }
-
-    fn process_object_index(
-        backing_package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
-        object_store: &Arc<dyn ObjectStore + Send + Sync>,
-        effects: &TransactionEffects,
-        written: &WrittenObjects,
-        inner_temporary_store: &InnerTemporaryStore,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<ObjectIndexChanges> {
-        let mut layout_resolver = epoch_store.executor().type_layout_resolver(
-            epoch_store.protocol_config(),
-            Box::new(PackageStoreWithFallback::new(
-                inner_temporary_store,
-                backing_package_store,
-            )),
-        );
-
-        let modified_at_version = effects
-            .modified_at_versions()
-            .into_iter()
-            .collect::<HashMap<_, _>>();
-
-        let tx_digest = effects.transaction_digest();
-        let mut deleted_owners = vec![];
-        let mut deleted_dynamic_fields = vec![];
-        for (id, _, _) in effects.deleted().into_iter().chain(effects.wrapped()) {
-            let old_version = modified_at_version.get(&id).unwrap();
-            // When we process the index, the latest object hasn't been written yet so
-            // the old object must be present.
-            match Self::get_owner_at_version(object_store, &id, *old_version).unwrap_or_else(
-                |e| panic!("tx_digest={:?}, error processing object owner index, cannot find owner for object {:?} at version {:?}. Err: {:?}", tx_digest, id, old_version, e),
-            ) {
-                Owner::AddressOwner(addr)
-                | Owner::ConsensusAddressOwner { owner: addr, .. } => deleted_owners.push((addr, id)),
-                Owner::ObjectOwner(object_id) => {
-                    deleted_dynamic_fields.push((ObjectID::from(object_id), id))
-                }
-                _ => {}
-            }
-        }
-
-        let mut new_owners = vec![];
-        let mut new_dynamic_fields = vec![];
-
-        for (oref, owner, kind) in effects.all_changed_objects() {
-            let id = &oref.0;
-            // For mutated objects, retrieve old owner and delete old index if there is a owner change.
-            if let WriteKind::Mutate = kind {
-                let Some(old_version) = modified_at_version.get(id) else {
-                    panic!(
-                        "tx_digest={:?}, error processing object owner index, cannot find modified at version for mutated object [{id}].",
-                        tx_digest
-                    );
-                };
-                // When we process the index, the latest object hasn't been written yet so
-                // the old object must be present.
-                let Some(old_object) = object_store.get_object_by_key(id, *old_version) else {
-                    panic!(
-                        "tx_digest={:?}, error processing object owner index, cannot find owner for object {:?} at version {:?}",
-                        tx_digest, id, old_version
-                    );
-                };
-                if old_object.owner != owner {
-                    match old_object.owner {
-                        Owner::AddressOwner(addr)
-                        | Owner::ConsensusAddressOwner { owner: addr, .. } => {
-                            deleted_owners.push((addr, *id));
-                        }
-                        Owner::ObjectOwner(object_id) => {
-                            deleted_dynamic_fields.push((ObjectID::from(object_id), *id))
-                        }
-                        _ => {}
-                    }
-                }
-            }
-
-            match owner {
-                Owner::AddressOwner(addr) | Owner::ConsensusAddressOwner { owner: addr, .. } => {
-                    // TODO: We can remove the object fetching after we added ObjectType to TransactionEffects
-                    let new_object = written.get(id).unwrap_or_else(
-                        || panic!("tx_digest={:?}, error processing object owner index, written does not contain object {:?}", tx_digest, id)
-                    );
-                    assert_eq!(
-                        new_object.version(),
-                        oref.1,
-                        "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}",
-                        tx_digest,
-                        id,
-                        new_object.version(),
-                        oref.1
-                    );
-
-                    let type_ = new_object
-                        .type_()
-                        .map(|type_| ObjectType::Struct(type_.clone()))
-                        .unwrap_or(ObjectType::Package);
-
-                    new_owners.push((
-                        (addr, *id),
-                        ObjectInfo {
-                            object_id: *id,
-                            version: oref.1,
-                            digest: oref.2,
-                            type_,
-                            owner,
-                            previous_transaction: *effects.transaction_digest(),
-                        },
-                    ));
-                }
-                Owner::ObjectOwner(owner) => {
-                    let new_object = written.get(id).unwrap_or_else(
-                        || panic!("tx_digest={:?}, error processing object owner index, written does not contain object {:?}", tx_digest, id)
-                    );
-                    assert_eq!(
-                        new_object.version(),
-                        oref.1,
-                        "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}",
-                        tx_digest,
-                        id,
-                        new_object.version(),
-                        oref.1
-                    );
-
-                    let Some(df_info) = Self::try_create_dynamic_field_info(
-                        object_store,
-                        new_object,
-                        written,
-                        layout_resolver.as_mut(),
-                    )
-                    .unwrap_or_else(|e| {
-                        error!(
-                            "try_create_dynamic_field_info should not fail, {}, new_object={:?}",
-                            e, new_object
-                        );
-                        None
-                    }) else {
-                        // Skip indexing for non dynamic field objects.
-                        continue;
-                    };
-                    new_dynamic_fields.push(((ObjectID::from(owner), *id), df_info))
-                }
-                _ => {}
-            }
-        }
-
-        Ok(ObjectIndexChanges {
-            deleted_owners,
-            deleted_dynamic_fields,
-            new_owners,
-            new_dynamic_fields,
-        })
-    }
-
-    fn try_create_dynamic_field_info(
-        object_store: &Arc<dyn ObjectStore + Send + Sync>,
-        o: &Object,
-        written: &WrittenObjects,
-        resolver: &mut dyn LayoutResolver,
-    ) -> SuiResult<Option<DynamicFieldInfo>> {
-        // Skip if not a move object
-        let Some(move_object) = o.data.try_as_move().cloned() else {
-            return Ok(None);
-        };
-
-        // We only index dynamic field objects
-        if !move_object.type_().is_dynamic_field() {
-            return Ok(None);
-        }
-
-        let layout = resolver
-            .get_annotated_layout(&move_object.type_().clone().into())?
-            .into_layout();
-
-        let field =
-            DFV::FieldVisitor::deserialize(move_object.contents(), &layout).map_err(|e| {
-                SuiErrorKind::ObjectDeserializationError {
-                    error: e.to_string(),
-                }
-            })?;
-
-        let type_ = field.kind;
-        let name_type: TypeTag = field.name_layout.into();
-        let bcs_name = field.name_bytes.to_owned();
-
-        let name_value = BoundedVisitor::deserialize_value(field.name_bytes, field.name_layout)
-            .map_err(|e| {
-                warn!("{e}");
-                SuiErrorKind::ObjectDeserializationError {
-                    error: e.to_string(),
-                }
-            })?;
-
-        let name = DynamicFieldName {
-            type_: name_type,
-            value: SuiMoveValue::from(name_value).to_json_value(),
-        };
-
-        let value_metadata = field.value_metadata().map_err(|e| {
-            warn!("{e}");
-            SuiErrorKind::ObjectDeserializationError {
-                error: e.to_string(),
-            }
-        })?;
-
-        Ok(Some(match value_metadata {
-            DFV::ValueMetadata::DynamicField(object_type) => DynamicFieldInfo {
-                name,
-                bcs_name,
-                type_,
-                object_type: object_type.to_canonical_string(/* with_prefix */ true),
-                object_id: o.id(),
-                version: o.version(),
-                digest: o.digest(),
-            },
-
-            DFV::ValueMetadata::DynamicObjectField(object_id) => {
-                // Find the actual object from storage using the object id obtained from the wrapper.
-
-                // Try to find the object in the written objects first.
-                let (version, digest, object_type) = if let Some(object) = written.get(&object_id) {
-                    let version = object.version();
-                    let digest = object.digest();
-                    let object_type = object.data.type_().unwrap().clone();
-                    (version, digest, object_type)
-                } else {
-                    // If not found, try to find it in the database.
-                    let object = object_store
-                        .get_object_by_key(&object_id, o.version())
-                        .ok_or_else(|| UserInputError::ObjectNotFound {
-                            object_id,
-                            version: Some(o.version()),
-                        })?;
-                    let version = object.version();
-                    let digest = object.digest();
-                    let object_type = object.data.type_().unwrap().clone();
-                    (version, digest, object_type)
-                };
-
-                DynamicFieldInfo {
-                    name,
-                    bcs_name,
-                    type_,
-                    object_type: object_type.to_string(),
-                    object_id,
-                    version,
-                    digest,
-                }
-            }
-        }))
-    }
-
-    #[instrument(level = "trace", skip_all, err(level = "debug"))]
-    fn post_process_one_tx(
-        &self,
-        certificate: &VerifiedExecutableTransaction,
-        effects: &TransactionEffects,
-        inner_temporary_store: &InnerTemporaryStore,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
-        let Some(indexes) = &self.indexes else {
-            return Ok(());
-        };
-
-        let tx_digest = *certificate.digest();
-
-        // Allocate sequence number on the calling thread to preserve execution order.
-        let sequence = indexes.allocate_sequence_number();
-
-        if self.config.sync_post_process_one_tx {
-            // Synchronous mode: run post-processing inline on the calling thread
-            // and commit the index batch immediately with locks held.
-            // Used as a rollback mechanism and for testing correctness against async mode.
-            // TODO: delete this branch once async mode has shipped
-            let result = Self::post_process_one_tx_impl(
-                sequence,
-                indexes,
-                &self.subscription_handler,
-                &self.metrics,
-                self.name,
-                self.get_backing_package_store(),
-                self.get_object_store(),
-                certificate,
-                effects,
-                inner_temporary_store,
-                epoch_store,
-                true, // acquire_locks
-            );
-
-            match result {
-                Ok((raw_batch, cache_updates_with_locks)) => {
-                    let mut db_batch = indexes.new_db_batch();
-                    db_batch
-                        .concat(vec![raw_batch])
-                        .expect("failed to absorb raw index batch");
-                    // Destructure to keep _locks alive through commit_index_batch.
-                    let IndexStoreCacheUpdatesWithLocks { _locks, inner } =
-                        cache_updates_with_locks;
-                    indexes
-                        .commit_index_batch(db_batch, vec![inner])
-                        .expect("failed to commit index batch");
-                }
-                Err(e) => {
-                    self.metrics.post_processing_total_failures.inc();
-                    error!(?tx_digest, "tx post processing failed: {e}");
-                    return Err(e);
-                }
-            }
-
-            return Ok(());
-        }
-
-        let (done_tx, done_rx) = tokio::sync::oneshot::channel::<PostProcessingOutput>();
-        self.pending_post_processing.insert(tx_digest, done_rx);
-
-        let indexes = indexes.clone();
-        let subscription_handler = self.subscription_handler.clone();
-        let metrics = self.metrics.clone();
-        let name = self.name;
-        let backing_package_store = self.get_backing_package_store().clone();
-        let object_store = self.get_object_store().clone();
-        let semaphore = self.post_processing_semaphore.clone();
-
-        let certificate = certificate.clone();
-        let effects = effects.clone();
-        let inner_temporary_store = inner_temporary_store.clone();
-        let epoch_store = epoch_store.clone();
-
-        // spawn post processing on a blocking thread
-        tokio::spawn(async move {
-            let permit = {
-                let _scope = monitored_scope("Execution::post_process_one_tx::semaphore_acquire");
-                semaphore
-                    .acquire_owned()
-                    .await
-                    .expect("post-processing semaphore should not be closed")
-            };
-
-            let _ = tokio::task::spawn_blocking(move || {
-                let _permit = permit;
-
-                let result = Self::post_process_one_tx_impl(
-                    sequence,
-                    &indexes,
-                    &subscription_handler,
-                    &metrics,
-                    name,
-                    &backing_package_store,
-                    &object_store,
-                    &certificate,
-                    &effects,
-                    &inner_temporary_store,
-                    &epoch_store,
-                    false, // acquire_locks
-                );
-
-                match result {
-                    Ok((raw_batch, cache_updates_with_locks)) => {
-                        fail_point!("crash-after-post-process-one-tx");
-                        let output = (raw_batch, cache_updates_with_locks.into_inner());
-                        let _ = done_tx.send(output);
-                    }
-                    Err(e) => {
-                        metrics.post_processing_total_failures.inc();
-                        error!(?tx_digest, "tx post processing failed: {e}");
-                    }
-                }
-            })
-            .await;
-        });
-
-        Ok(())
-    }
-
-    fn post_process_one_tx_impl(
-        sequence: u64,
-        indexes: &Arc<IndexStore>,
-        subscription_handler: &Arc<SubscriptionHandler>,
-        metrics: &Arc<AuthorityMetrics>,
-        name: AuthorityName,
-        backing_package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
-        object_store: &Arc<dyn ObjectStore + Send + Sync>,
-        certificate: &VerifiedExecutableTransaction,
-        effects: &TransactionEffects,
-        inner_temporary_store: &InnerTemporaryStore,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-        acquire_locks: bool,
-    ) -> SuiResult<(StagedBatch, IndexStoreCacheUpdatesWithLocks)> {
-        let _scope = monitored_scope("Execution::post_process_one_tx");
-
-        let tx_digest = certificate.digest();
-        let timestamp_ms = Self::unixtime_now_ms();
-        let events = &inner_temporary_store.events;
-        let written = &inner_temporary_store.written;
-        let tx_coins = Self::fullnode_only_get_tx_coins_for_indexing(
-            name,
-            object_store,
-            effects,
-            inner_temporary_store,
-            epoch_store,
-        );
-
-        let (raw_batch, cache_updates) = Self::index_tx(
-            sequence,
-            backing_package_store,
-            object_store,
-            indexes,
-            tx_digest,
-            certificate,
-            effects,
-            events,
-            timestamp_ms,
-            tx_coins,
-            written,
-            inner_temporary_store,
-            epoch_store,
-            acquire_locks,
-        )
-        .tap_ok(|_| metrics.post_processing_total_tx_indexed.inc())
-        .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"))
-        .expect("Indexing tx should not fail");
-
-        let effects: SuiTransactionBlockEffects = effects.clone().try_into()?;
-        let events = Self::make_transaction_block_events(
-            backing_package_store,
-            events.clone(),
-            *tx_digest,
-            timestamp_ms,
-            epoch_store,
-            inner_temporary_store,
-        )?;
-        // Emit events
-        subscription_handler
-            .process_tx(certificate.data().transaction_data(), &effects, &events)
-            .tap_ok(|_| metrics.post_processing_total_tx_had_event_processed.inc())
-            .tap_err(|e| {
-                warn!(
-                    ?tx_digest,
-                    "Post processing - Couldn't process events for tx: {}", e
-                )
-            })?;
-
-        metrics
-            .post_processing_total_events_emitted
-            .inc_by(events.data.len() as u64);
-
-        Ok((raw_batch, cache_updates))
-    }
-
-    fn make_transaction_block_events(
-        backing_package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
-        transaction_events: TransactionEvents,
-        digest: TransactionDigest,
-        timestamp_ms: u64,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-        inner_temporary_store: &InnerTemporaryStore,
-    ) -> SuiResult<SuiTransactionBlockEvents> {
-        let mut layout_resolver = epoch_store.executor().type_layout_resolver(
-            epoch_store.protocol_config(),
-            Box::new(PackageStoreWithFallback::new(
-                inner_temporary_store,
-                backing_package_store,
-            )),
-        );
-        SuiTransactionBlockEvents::try_from(
-            transaction_events,
-            digest,
-            Some(timestamp_ms),
-            layout_resolver.as_mut(),
-        )
     }
 
     pub fn unixtime_now_ms() -> u64 {
@@ -3360,11 +2767,9 @@ impl AuthorityState {
         execution_cache_trait_pointers: ExecutionCacheTraitPointers,
         epoch_store: Arc<AuthorityPerEpochStore>,
         committee_store: Arc<CommitteeStore>,
-        indexes: Option<Arc<IndexStore>>,
         rpc_store: Option<RpcStore>,
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
-        genesis_objects: &[Object],
         db_checkpoint_config: &DBCheckpointConfig,
         config: NodeConfig,
         chain_identifier: ChainIdentifier,
@@ -3398,7 +2803,6 @@ impl AuthorityState {
             store.perpetual_tables.clone(),
             checkpoint_store.clone(),
             rpc_store,
-            indexes.clone(),
             config.authority_store_pruning_config.clone(),
             epoch_store.committee().authority_exists(&name),
             epoch_store.epoch_start_state().epoch_duration_ms(),
@@ -3464,8 +2868,6 @@ impl AuthorityState {
             input_loader,
             execution_cache_trait_pointers,
             coin_reservation_resolver,
-            indexes,
-            subscription_handler: Arc::new(SubscriptionHandler::new(prometheus_registry)),
             checkpoint_store,
             committee_store,
             execution_scheduler,
@@ -3490,8 +2892,6 @@ impl AuthorityState {
                 object_funds_checker_metrics.clone(),
             )),
             object_funds_checker_metrics,
-            pending_post_processing: Arc::new(DashMap::new()),
-            post_processing_semaphore: Arc::new(tokio::sync::Semaphore::new(num_cpus::get())),
             transaction_deny_config_manager,
         });
         state.init_object_funds_checker().await;
@@ -3503,11 +2903,6 @@ impl AuthorityState {
             rx_ready_certificates,
             rx_execution_shutdown,
         ));
-        // TODO: This doesn't belong to the constructor of AuthorityState.
-        state
-            .create_owner_index_if_empty(genesis_objects, &epoch_store)
-            .expect("Error indexing genesis objects.");
-
         if epoch_store
             .protocol_config()
             .enable_multi_epoch_transaction_expiration()
@@ -3591,36 +2986,6 @@ impl AuthorityState {
         &self.execution_cache_trait_pointers.object_store
     }
 
-    pub async fn await_post_processing(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> Option<PostProcessingOutput> {
-        if let Some((_, rx)) = self.pending_post_processing.remove(tx_digest) {
-            // Tx was executed and post-processing is in flight.
-            rx.await.ok()
-        } else {
-            // Tx was already persisted or post-processing already completed.
-            None
-        }
-    }
-
-    /// Await post-processing for a transaction and commit the index batch immediately.
-    /// Used in test helpers where there is no CheckpointExecutor to collect and commit
-    /// index batches at checkpoint boundaries.
-    pub async fn flush_post_processing(&self, tx_digest: &TransactionDigest) {
-        if let Some(indexes) = &self.indexes
-            && let Some((raw_batch, cache_updates)) = self.await_post_processing(tx_digest).await
-        {
-            let mut db_batch = indexes.new_db_batch();
-            db_batch
-                .concat(vec![raw_batch])
-                .expect("failed to build index batch");
-            indexes
-                .commit_index_batch(db_batch, vec![cache_updates])
-                .expect("failed to commit index batch");
-        }
-    }
-
     pub fn get_reconfig_api(&self) -> &Arc<dyn ExecutionCacheReconfigAPI> {
         &self.execution_cache_trait_pointers.reconfig_api
     }
@@ -3686,57 +3051,6 @@ impl AuthorityState {
 
     pub fn execution_scheduler(&self) -> &Arc<ExecutionScheduler> {
         &self.execution_scheduler
-    }
-
-    fn create_owner_index_if_empty(
-        &self,
-        genesis_objects: &[Object],
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
-        let Some(index_store) = &self.indexes else {
-            return Ok(());
-        };
-        if !index_store.is_empty() {
-            return Ok(());
-        }
-
-        let mut new_owners = vec![];
-        let mut new_dynamic_fields = vec![];
-        let mut layout_resolver = epoch_store.executor().type_layout_resolver(
-            epoch_store.protocol_config(),
-            Box::new(self.get_backing_package_store().as_ref()),
-        );
-        for o in genesis_objects.iter() {
-            match o.owner {
-                Owner::AddressOwner(addr) | Owner::ConsensusAddressOwner { owner: addr, .. } => {
-                    new_owners.push((
-                        (addr, o.id()),
-                        ObjectInfo::new(&o.compute_object_reference(), o),
-                    ))
-                }
-                Owner::ObjectOwner(object_id) => {
-                    let id = o.id();
-                    let Some(info) = Self::try_create_dynamic_field_info(
-                        self.get_object_store(),
-                        o,
-                        &BTreeMap::new(),
-                        layout_resolver.as_mut(),
-                    )?
-                    else {
-                        continue;
-                    };
-                    new_dynamic_fields.push(((ObjectID::from(object_id), id), info));
-                }
-                _ => {}
-            }
-        }
-
-        index_store.insert_genesis_objects(ObjectIndexChanges {
-            deleted_owners: vec![],
-            deleted_dynamic_fields: vec![],
-            new_owners,
-            new_dynamic_fields,
-        })
     }
 
     /// Attempts to acquire execution lock for an executable transaction.
@@ -3815,13 +3129,9 @@ impl AuthorityState {
                 .db_checkpoint_config
                 .perform_db_checkpoints_at_epoch_end
         {
-            let checkpoint_indexes = self
-                .db_checkpoint_config
-                .perform_index_db_checkpoints_at_epoch_end
-                .unwrap_or(false);
             let current_epoch = cur_epoch_store.epoch();
             let epoch_checkpoint_path = checkpoint_path.join(format!("epoch_{}", current_epoch));
-            self.checkpoint_all_dbs(&epoch_checkpoint_path, cur_epoch_store, checkpoint_indexes)?;
+            self.checkpoint_all_dbs(&epoch_checkpoint_path, cur_epoch_store)?;
         }
 
         self.get_reconfig_api()
@@ -4079,60 +3389,6 @@ impl AuthorityState {
             );
             self.expensive_check_is_consistent_state(state_hasher, cur_epoch_store);
         }
-
-        // Verify all checkpointed transactions are present in transactions_seq.
-        // This catches any post-processing gaps that could occur if async
-        // post-processing failed to complete before persistence.
-        if expensive_safety_check_config.enable_secondary_index_checks()
-            && let Some(indexes) = self.indexes.clone()
-        {
-            let epoch = cur_epoch_store.epoch();
-            // Only verify the current epoch's checkpoints. Previous epoch contents
-            // may have been pruned, and we only need to verify that this epoch's
-            // async post-processing completed correctly.
-            let first_checkpoint = if epoch == 0 {
-                0
-            } else {
-                self.checkpoint_store
-                    .get_epoch_last_checkpoint_seq_number(epoch - 1)
-                    .expect("Failed to get previous epoch's last checkpoint")
-                    .expect("Previous epoch's last checkpoint missing")
-                    + 1
-            };
-            let highest_executed = self
-                .checkpoint_store
-                .get_highest_executed_checkpoint_seq_number()
-                .expect("Failed to get highest executed checkpoint")
-                .expect("No executed checkpoints");
-
-            info!(
-                "Verifying checkpointed transactions are in transactions_seq \
-                 (checkpoints {first_checkpoint}..={highest_executed})"
-            );
-            for seq in first_checkpoint..=highest_executed {
-                let checkpoint = self
-                    .checkpoint_store
-                    .get_checkpoint_by_sequence_number(seq)
-                    .expect("Failed to get checkpoint")
-                    .expect("Checkpoint missing");
-                let contents = self
-                    .checkpoint_store
-                    .get_checkpoint_contents(&checkpoint.content_digest)
-                    .expect("Failed to get checkpoint contents")
-                    .expect("Checkpoint contents missing");
-                for digests in contents.iter() {
-                    let tx_digest = digests.transaction;
-                    assert!(
-                        indexes
-                            .get_transaction_seq(&tx_digest)
-                            .expect("Failed to read transactions_seq")
-                            .is_some(),
-                        "Transaction {tx_digest} from checkpoint {seq} missing from transactions_seq"
-                    );
-                }
-            }
-            info!("All checkpointed transactions verified in transactions_seq");
-        }
     }
 
     fn expensive_check_is_consistent_state(
@@ -4178,7 +3434,6 @@ impl AuthorityState {
         &self,
         checkpoint_path: &Path,
         cur_epoch_store: &AuthorityPerEpochStore,
-        checkpoint_indexes: bool,
     ) -> SuiResult {
         let _metrics_guard = self.metrics.db_checkpoint_latency.start_timer();
         let current_epoch = cur_epoch_store.epoch();
@@ -4211,10 +3466,6 @@ impl AuthorityState {
 
         self.committee_store
             .checkpoint_db(&checkpoint_path_tmp.join("epochs"))?;
-
-        if checkpoint_indexes && let Some(indexes) = self.indexes.as_ref() {
-            indexes.checkpoint_db(&checkpoint_path_tmp.join("indexes"))?;
-        }
 
         fs::rename(checkpoint_path_tmp, checkpoint_path)
             .map_err(|e| SuiErrorKind::FileIOError(e.to_string()))?;
@@ -4421,231 +3672,6 @@ impl AuthorityState {
         Ok(layout)
     }
 
-    /// Returns a fake ObjectRef representing an address balance, along with the balance value
-    /// and the previous transaction digest. The ObjectRef can be returned to JSON-RPC clients
-    /// that don't understand address balances.
-    #[instrument(level = "trace", skip_all)]
-    pub fn get_address_balance_coin_info(
-        &self,
-        owner: SuiAddress,
-        balance_type: TypeTag,
-    ) -> SuiResult<Option<(ObjectRef, u64, TransactionDigest)>> {
-        let accumulator_id = AccumulatorValue::get_field_id(owner, &balance_type)?;
-        let accumulator_obj = AccumulatorValue::load_object_by_id(
-            self.get_runtime_object_resolver().as_ref(),
-            None,
-            *accumulator_id.inner(),
-        )?;
-
-        let Some(accumulator_obj) = accumulator_obj else {
-            return Ok(None);
-        };
-
-        // Extract the currency type from balance_type (e.g., SUI from Balance<SUI>).
-        // get_balance expects the currency type, not the balance type.
-        let currency_type =
-            Balance::maybe_get_balance_type_param(&balance_type).unwrap_or(balance_type);
-
-        let balance = crate::accumulators::balances::get_balance(
-            owner,
-            self.get_runtime_object_resolver().as_ref(),
-            currency_type,
-        )?;
-
-        if balance == 0 {
-            return Ok(None);
-        };
-
-        let object_ref = coin_reservation::encode_object_ref(
-            accumulator_obj.id(),
-            accumulator_obj.version(),
-            self.load_epoch_store_one_call_per_task().epoch(),
-            balance,
-            self.get_chain_identifier(),
-        );
-
-        Ok(Some((
-            object_ref,
-            balance,
-            accumulator_obj.previous_transaction,
-        )))
-    }
-
-    /// Returns fake ObjectRefs for all address balances of an owner, keyed by coin type string.
-    /// Used by get_all_coins to include fake coins for each coin type.
-    #[instrument(level = "trace", skip_all)]
-    pub fn get_all_address_balance_coin_infos(
-        &self,
-        owner: SuiAddress,
-    ) -> SuiResult<std::collections::HashMap<String, (ObjectRef, u64, TransactionDigest)>> {
-        let indexes = self
-            .indexes
-            .as_ref()
-            .ok_or(SuiErrorKind::IndexStoreNotAvailable)?;
-
-        let mut result = std::collections::HashMap::new();
-        for currency_type in indexes.get_address_balance_coin_types_iter(owner) {
-            let balance_type = sui_types::balance::Balance::type_tag(currency_type.clone());
-            if let Some((obj_ref, balance, prev_tx)) =
-                self.get_address_balance_coin_info(owner, balance_type)?
-            {
-                // Use currency_type.to_string() to match the format in CoinIndexKey2
-                // (e.g., "0x2::sui::SUI", not "0x2::coin::Coin<0x2::sui::SUI>")
-                result.insert(currency_type.to_string(), (obj_ref, balance, prev_tx));
-            }
-        }
-        Ok(result)
-    }
-
-    fn get_owner_at_version(
-        object_store: &Arc<dyn ObjectStore + Send + Sync>,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-    ) -> SuiResult<Owner> {
-        object_store
-            .get_object_by_key(object_id, version)
-            .ok_or_else(|| {
-                SuiError::from(UserInputError::ObjectNotFound {
-                    object_id: *object_id,
-                    version: Some(version),
-                })
-            })
-            .map(|o| o.owner.clone())
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub fn get_owner_objects(
-        &self,
-        owner: SuiAddress,
-        // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<ObjectID>,
-        limit: usize,
-        filter: Option<SuiObjectDataFilter>,
-    ) -> SuiResult<Vec<ObjectInfo>> {
-        if let Some(indexes) = &self.indexes {
-            indexes.get_owner_objects(owner, cursor, limit, filter)
-        } else {
-            Err(SuiErrorKind::IndexStoreNotAvailable.into())
-        }
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub fn get_owned_coins_iterator_with_cursor(
-        &self,
-        owner: SuiAddress,
-        // If `Some`, the query will start from the next item after the specified cursor
-        cursor: (String, u64, ObjectID),
-        limit: usize,
-        one_coin_type_only: bool,
-    ) -> SuiResult<impl Iterator<Item = (CoinIndexKey2, CoinInfo)> + '_> {
-        if let Some(indexes) = &self.indexes {
-            indexes.get_owned_coins_iterator_with_cursor(owner, cursor, limit, one_coin_type_only)
-        } else {
-            Err(SuiErrorKind::IndexStoreNotAvailable.into())
-        }
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub fn get_owner_objects_iterator(
-        &self,
-        owner: SuiAddress,
-        // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<ObjectID>,
-        filter: Option<SuiObjectDataFilter>,
-    ) -> SuiResult<impl Iterator<Item = ObjectInfo> + '_> {
-        let cursor_u = cursor.unwrap_or(ObjectID::ZERO);
-        if let Some(indexes) = &self.indexes {
-            indexes.get_owner_objects_iterator(owner, cursor_u, filter)
-        } else {
-            Err(SuiErrorKind::IndexStoreNotAvailable.into())
-        }
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub fn get_move_objects<T>(&self, owner: SuiAddress, type_: MoveObjectType) -> SuiResult<Vec<T>>
-    where
-        T: DeserializeOwned,
-    {
-        let object_ids = self
-            .get_owner_objects_iterator(owner, None, None)?
-            .filter(|o| match &o.type_ {
-                ObjectType::Struct(s) => &type_ == s,
-                ObjectType::Package => false,
-            })
-            .map(|info| ObjectKey(info.object_id, info.version))
-            .collect::<Vec<_>>();
-        let mut move_objects = vec![];
-
-        let objects = self
-            .get_object_store()
-            .multi_get_objects_by_key(&object_ids);
-
-        for (o, id) in objects.into_iter().zip_debug_eq(object_ids) {
-            let object = o.ok_or_else(|| {
-                SuiError::from(UserInputError::ObjectNotFound {
-                    object_id: id.0,
-                    version: Some(id.1),
-                })
-            })?;
-            let move_object = object.data.try_as_move().ok_or_else(|| {
-                SuiError::from(UserInputError::MovePackageAsObject { object_id: id.0 })
-            })?;
-            move_objects.push(bcs::from_bytes(move_object.contents()).map_err(|e| {
-                SuiErrorKind::ObjectDeserializationError {
-                    error: format!("{e}"),
-                }
-            })?);
-        }
-        Ok(move_objects)
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub fn get_dynamic_fields(
-        &self,
-        owner: ObjectID,
-        // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<ObjectID>,
-        limit: usize,
-    ) -> SuiResult<Vec<(ObjectID, DynamicFieldInfo)>> {
-        Ok(self
-            .get_dynamic_fields_iterator(owner, cursor)?
-            .take(limit)
-            .collect::<Result<Vec<_>, _>>()?)
-    }
-
-    fn get_dynamic_fields_iterator(
-        &self,
-        owner: ObjectID,
-        // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<ObjectID>,
-    ) -> SuiResult<impl Iterator<Item = Result<(ObjectID, DynamicFieldInfo), TypedStoreError>> + '_>
-    {
-        if let Some(indexes) = &self.indexes {
-            indexes.get_dynamic_fields_iterator(owner, cursor)
-        } else {
-            Err(SuiErrorKind::IndexStoreNotAvailable.into())
-        }
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub fn get_dynamic_field_object_id(
-        &self,
-        owner: ObjectID,
-        name_type: TypeTag,
-        name_bcs_bytes: &[u8],
-    ) -> SuiResult<Option<ObjectID>> {
-        if let Some(indexes) = &self.indexes {
-            indexes.get_dynamic_field_object_id(owner, name_type, name_bcs_bytes)
-        } else {
-            Err(SuiErrorKind::IndexStoreNotAvailable.into())
-        }
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub fn get_total_transaction_blocks(&self) -> SuiResult<u64> {
-        Ok(self.get_indexes()?.next_sequence_number())
-    }
-
     #[instrument(level = "trace", skip_all)]
     pub fn get_executed_transaction_and_effects(
         &self,
@@ -4696,46 +3722,6 @@ impl AuthorityState {
     ) -> SuiResult<Vec<Object>> {
         sui_types::storage::get_transaction_output_objects(self.get_object_store(), effects)
             .map_err(Into::into)
-    }
-
-    fn get_indexes(&self) -> SuiResult<Arc<IndexStore>> {
-        match &self.indexes {
-            Some(i) => Ok(i.clone()),
-            None => Err(SuiErrorKind::UnsupportedFeatureError {
-                error: "extended object indexing is not enabled on this server".into(),
-            }
-            .into()),
-        }
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub fn get_transactions(
-        &self,
-        filter: Option<TransactionFilter>,
-        // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<TransactionDigest>,
-        limit: Option<usize>,
-        reverse: bool,
-    ) -> SuiResult<Vec<TransactionDigest>> {
-        if let Some(TransactionFilter::Checkpoint(sequence_number)) = filter {
-            let checkpoint_contents =
-                self.get_checkpoint_contents_by_sequence_number(sequence_number)?;
-            let iter = checkpoint_contents.iter().map(|c| c.transaction);
-            if reverse {
-                let iter = iter
-                    .rev()
-                    .skip_while(|d| cursor.is_some() && Some(*d) != cursor)
-                    .skip(usize::from(cursor.is_some()));
-                return Ok(iter.take(limit.unwrap_or(usize::MAX)).collect());
-            } else {
-                let iter = iter
-                    .skip_while(|d| cursor.is_some() && Some(*d) != cursor)
-                    .skip(usize::from(cursor.is_some()));
-                return Ok(iter.take(limit.unwrap_or(usize::MAX)).collect());
-            }
-        }
-        self.get_indexes()?
-            .get_transactions(filter, cursor, limit, reverse)
     }
 
     pub fn get_checkpoint_store(&self) -> &Arc<CheckpointStore> {
@@ -4889,146 +3875,6 @@ impl AuthorityState {
             }
             .into()),
         }
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub fn query_events(
-        &self,
-        query: EventFilter,
-        // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<EventID>,
-        limit: usize,
-        descending: bool,
-    ) -> SuiResult<Vec<SuiEvent>> {
-        let index_store = self.get_indexes()?;
-
-        //Get the tx_num from tx_digest
-        let (tx_num, event_num) = if let Some(cursor) = cursor.as_ref() {
-            let tx_seq = index_store.get_transaction_seq(&cursor.tx_digest)?.ok_or(
-                SuiErrorKind::TransactionNotFound {
-                    digest: cursor.tx_digest,
-                },
-            )?;
-            (tx_seq, cursor.event_seq as usize)
-        } else if descending {
-            (u64::MAX, usize::MAX)
-        } else {
-            (0, 0)
-        };
-
-        let limit = limit + 1;
-        let mut event_keys = match query {
-            EventFilter::All([]) => index_store.all_events(tx_num, event_num, limit, descending)?,
-            EventFilter::Transaction(digest) => {
-                index_store.events_by_transaction(&digest, tx_num, event_num, limit, descending)?
-            }
-            EventFilter::MoveModule { package, module } => {
-                let module_id = ModuleId::new(package.into(), module);
-                index_store.events_by_module_id(&module_id, tx_num, event_num, limit, descending)?
-            }
-            EventFilter::MoveEventType(struct_name) => index_store
-                .events_by_move_event_struct_name(
-                    &struct_name,
-                    tx_num,
-                    event_num,
-                    limit,
-                    descending,
-                )?,
-            EventFilter::Sender(sender) => {
-                index_store.events_by_sender(&sender, tx_num, event_num, limit, descending)?
-            }
-            EventFilter::TimeRange {
-                start_time,
-                end_time,
-            } => index_store
-                .event_iterator(start_time, end_time, tx_num, event_num, limit, descending)?,
-            EventFilter::MoveEventModule { package, module } => index_store
-                .events_by_move_event_module(
-                    &ModuleId::new(package.into(), module),
-                    tx_num,
-                    event_num,
-                    limit,
-                    descending,
-                )?,
-            // not using "_ =>" because we want to make sure we remember to add new variants here
-            EventFilter::Any(_) => {
-                return Err(SuiErrorKind::UserInputError {
-                    error: UserInputError::Unsupported(
-                        "'Any' queries are not supported by the fullnode.".to_string(),
-                    ),
-                }
-                .into());
-            }
-        };
-
-        // skip one event if exclusive cursor is provided,
-        // otherwise truncate to the original limit.
-        if cursor.is_some() {
-            if !event_keys.is_empty() {
-                event_keys.remove(0);
-            }
-        } else {
-            event_keys.truncate(limit - 1);
-        }
-
-        // get the unique set of digests from the event_keys
-        let transaction_digests = event_keys
-            .iter()
-            .map(|(_, digest, _, _)| *digest)
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-
-        let events = self
-            .get_transaction_cache_reader()
-            .multi_get_events(&transaction_digests);
-
-        let events_map: HashMap<_, _> = transaction_digests
-            .iter()
-            .zip_debug_eq(events.into_iter())
-            .collect();
-
-        let stored_events = event_keys
-            .into_iter()
-            .map(|k| {
-                (
-                    k,
-                    events_map
-                        .get(&k.1)
-                        .expect("fetched digest is missing")
-                        .clone()
-                        .and_then(|e| e.data.get(k.2).cloned()),
-                )
-            })
-            .map(
-                |((_event_digest, tx_digest, event_seq, timestamp), event)| {
-                    event
-                        .map(|e| (e, tx_digest, event_seq, timestamp))
-                        .ok_or_else(|| {
-                            SuiError::from(SuiErrorKind::TransactionEventsNotFound {
-                                digest: tx_digest,
-                            })
-                        })
-                },
-            )
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let epoch_store = self.load_epoch_store_one_call_per_task();
-        let backing_store = self.get_backing_package_store().as_ref();
-        let mut layout_resolver = epoch_store
-            .executor()
-            .type_layout_resolver(epoch_store.protocol_config(), Box::new(backing_store));
-        let mut events = vec![];
-        for (e, tx_digest, event_seq, timestamp) in stored_events.into_iter() {
-            events.push(SuiEvent::try_from(
-                e.clone(),
-                tx_digest,
-                event_seq as u64,
-                Some(timestamp),
-                layout_resolver.get_annotated_layout(&e.type_)?,
-            )?)
-        }
-        Ok(events)
     }
 
     pub fn insert_genesis_object(&self, object: Object) {
@@ -5210,58 +4056,6 @@ impl AuthorityState {
         Ok(VerifiedSignedTransactionEffects::new_unchecked(
             signed_effects,
         ))
-    }
-
-    // Returns coin objects for indexing for fullnode if indexing is enabled.
-    #[instrument(level = "trace", skip_all)]
-    fn fullnode_only_get_tx_coins_for_indexing(
-        name: AuthorityName,
-        object_store: &Arc<dyn ObjectStore + Send + Sync>,
-        effects: &TransactionEffects,
-        inner_temporary_store: &InnerTemporaryStore,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> Option<TxCoins> {
-        if epoch_store.committee().authority_exists(&name) {
-            return None;
-        }
-        let written_coin_objects = inner_temporary_store
-            .written
-            .iter()
-            .filter_map(|(k, v)| {
-                if v.is_coin() {
-                    Some((*k, v.clone()))
-                } else {
-                    None
-                }
-            })
-            .collect();
-        let mut input_coin_objects = inner_temporary_store
-            .input_objects
-            .iter()
-            .filter_map(|(k, v)| {
-                if v.is_coin() {
-                    Some((*k, v.clone()))
-                } else {
-                    None
-                }
-            })
-            .collect::<ObjectMap>();
-
-        // Check for receiving objects that were actually used and modified during execution. Their
-        // updated version will already showup in "written_coins" but their input isn't included in
-        // the set of input objects in a inner_temporary_store.
-        for (object_id, version) in effects.modified_at_versions() {
-            if inner_temporary_store
-                .loaded_runtime_objects
-                .contains_key(&object_id)
-                && let Some(object) = object_store.get_object_by_key(&object_id, version)
-                && object.is_coin()
-            {
-                input_coin_objects.insert(object_id, object);
-            }
-        }
-
-        Some((input_coin_objects, written_coin_objects))
     }
 
     pub fn get_objects(&self, objects: &[ObjectID]) -> Vec<Option<Object>> {

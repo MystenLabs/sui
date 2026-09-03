@@ -11,7 +11,6 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
-use sui_core::accumulators::balances::get_all_balances_for_owner;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
@@ -32,7 +31,7 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     supported_protocol_versions::SupportedProtocolVersions,
     transaction::{
-        Argument, CallArg, Command, FundsWithdrawalArg, GasData, ObjectArg, SharedObjectMutability,
+        Argument, Command, FundsWithdrawalArg, GasData, ObjectArg, SharedObjectMutability,
         Transaction, TransactionData, TransactionDataAPI, TransactionDataV1, TransactionExpiration,
         TransactionKind, VerifiedTransaction, WithdrawalTypeArg,
     },
@@ -2973,129 +2972,6 @@ async fn test_sponsored_address_balance_storage_oog() {
     );
 
     test_env.cluster.trigger_reconfiguration().await;
-}
-
-#[sim_test]
-async fn test_get_all_balances() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
-
-    let sender = test_env.get_sender(0);
-
-    publish_and_mint_trusted_coin(&mut test_env, sender).await;
-
-    let (_, gas) = test_env.get_sender_and_gas(0);
-    // send 1000 gas from the gas coins to ourselves
-    let tx = test_env
-        .tx_builder(sender)
-        .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(1000, sender)])
-        .build();
-
-    test_env.exec_tx_directly(tx).await.unwrap();
-
-    let recipient = SuiAddress::random_for_testing_only();
-    // send 1000 gas from the gas coins to the other recipient
-    let (_, gas) = test_env.get_sender_and_gas(0);
-    let tx = test_env
-        .tx_builder(sender)
-        .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(1001, recipient)])
-        .build();
-
-    test_env.exec_tx_directly(tx).await.unwrap();
-
-    test_env.cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let indexes = state.indexes.clone().unwrap();
-        let runtime_object_resolver = state.get_runtime_object_resolver().as_ref();
-
-        let balances =
-            get_all_balances_for_owner(sender, runtime_object_resolver, &indexes).unwrap();
-
-        assert_eq!(balances.len(), 2);
-        assert!(
-            balances
-                .iter()
-                .any(|(t, _)| t.to_canonical_string(true).contains("::sui::SUI"))
-        );
-        assert!(balances.iter().any(|(t, _)| {
-            t.to_canonical_string(true)
-                .contains("::trusted_coin::TRUSTED_COIN")
-        }));
-    });
-}
-
-// publishes trusted_coin, mints a coin with balance 1000000, transfers some to the sender's
-// address balance, and returns the updated gas object ref
-async fn publish_and_mint_trusted_coin(test_env: &mut TestEnv, sender: SuiAddress) {
-    let test_tx_builder = test_env.tx_builder(sender);
-
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.extend(["tests", "rpc", "data", "trusted_coin"]);
-    let coin_publish = test_tx_builder.publish_async(path).await.build();
-
-    let (_, effects) = test_env.exec_tx_directly(coin_publish).await.unwrap();
-
-    // Find the treasury cap object
-    let treasury_cap = {
-        let mut treasury_cap = None;
-        for (obj_ref, owner) in effects.created() {
-            if owner.is_address_owned() {
-                let object = test_env
-                    .cluster
-                    .fullnode_handle
-                    .sui_node
-                    .with_async(|node| async move { node.state().get_object(&obj_ref.0).unwrap() })
-                    .await;
-                if object.type_().unwrap().name().as_str() == "TreasuryCap" {
-                    treasury_cap = Some(obj_ref);
-                    break;
-                }
-            }
-        }
-        treasury_cap.expect("Treasury cap not found")
-    };
-
-    // extract the newly published package id.
-    let package_id = effects.published_packages().into_iter().next().unwrap();
-
-    // call my_coin::mint to mint a coin with balance 1000000
-    let test_tx_builder = test_env.tx_builder(sender);
-    let mint_tx = test_tx_builder
-        .move_call(
-            package_id,
-            "trusted_coin",
-            "mint",
-            vec![
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(treasury_cap)),
-                CallArg::Pure(bcs::to_bytes(&1000000u64).unwrap()),
-            ],
-        )
-        .build();
-    let (_, mint_effects) = test_env.exec_tx_directly(mint_tx).await.unwrap();
-
-    // the trusted coin is the only address-owned object created.
-    let trusted_coin_ref = mint_effects
-        .created()
-        .iter()
-        .find(|(_, owner)| owner.is_address_owned())
-        .unwrap()
-        .0;
-
-    let send_tx = test_env
-        .tx_builder(sender)
-        .transfer_funds_to_address_balance(
-            FundSource::Coin(trusted_coin_ref),
-            vec![(1000, sender)],
-            format!("{}::trusted_coin::TRUSTED_COIN", package_id)
-                .parse()
-                .unwrap(),
-        )
-        .build();
-    let (_, send_effects) = test_env.exec_tx_directly(send_tx).await.unwrap();
-    assert!(
-        send_effects.status().is_ok(),
-        "Transaction should succeed, got: {:?}",
-        send_effects.status()
-    );
 }
 
 #[sim_test]

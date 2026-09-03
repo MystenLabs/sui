@@ -15,8 +15,7 @@ use sui_config::node::{
     CheckpointExecutorConfig, ConsensusTransactionPoolConfig, DBCheckpointConfig,
     DEFAULT_GRPC_CONCURRENCY_LIMIT, ExecutionCacheConfig, ExecutionTimeObserverConfig,
     ExpensiveSafetyCheckConfig, FundsWithdrawSchedulerType, Genesis, KeyPairWithPath,
-    StateSnapshotConfig, default_enable_index_processing,
-    default_end_of_epoch_broadcast_channel_capacity,
+    StateSnapshotConfig, default_end_of_epoch_broadcast_channel_capacity,
 };
 use sui_config::node::{RunWithRange, TransactionDriverConfig, default_zklogin_oauth_providers};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
@@ -256,9 +255,6 @@ impl ValidatorConfigBuilder {
                 .unwrap(),
             consensus_config: Some(consensus_config),
             fullnode_sync_mode: None,
-            remove_deprecated_tables: false,
-            enable_index_processing: default_enable_index_processing(),
-            sync_post_process_one_tx: false,
             genesis: sui_config::node::Genesis::new(genesis),
             grpc_load_shed: None,
             grpc_concurrency_limit: Some(DEFAULT_GRPC_CONCURRENCY_LIMIT),
@@ -340,7 +336,6 @@ pub struct FullnodeConfigBuilder {
     run_with_range: Option<RunWithRange>,
     data_ingestion_dir: Option<PathBuf>,
     disable_pruning: bool,
-    sync_post_process_one_tx: bool,
     chain_override: Option<Chain>,
     transaction_driver_config: Option<TransactionDriverConfig>,
     rpc_config: Option<sui_config::RpcConfig>,
@@ -435,11 +430,6 @@ impl FullnodeConfigBuilder {
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
     ) -> Self {
         self.expensive_safety_check_config = Some(expensive_safety_check_config);
-        self
-    }
-
-    pub fn with_sync_post_process_one_tx(mut self, sync: bool) -> Self {
-        self.sync_post_process_one_tx = sync;
         self
     }
 
@@ -684,9 +674,6 @@ impl FullnodeConfigBuilder {
             json_rpc_address: self.json_rpc_address.unwrap_or(json_rpc_address),
             fullnode_sync_mode,
             consensus_config,
-            remove_deprecated_tables: false,
-            enable_index_processing: default_enable_index_processing(),
-            sync_post_process_one_tx: self.sync_post_process_one_tx,
             genesis: self.genesis.unwrap_or(sui_config::node::Genesis::new(
                 network_config.genesis.clone(),
             )),

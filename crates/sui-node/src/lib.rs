@@ -109,7 +109,6 @@ use sui_core::epoch::consensus_store_pruner::ConsensusStorePruner;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::global_state_hasher::GlobalStateHasher;
-use sui_core::jsonrpc_index::IndexStore;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::overload_monitor::overload_monitor;
 use sui_core::rpc_store_embed::EmbeddedRpcStore;
@@ -694,19 +693,12 @@ impl SuiNode {
             checkpoint_store.clone(),
         );
 
-        let index_store = if node_role.is_fullnode() && config.enable_index_processing {
-            info!("creating jsonrpc index store");
-            Some(Arc::new(IndexStore::new(
-                config.db_path().join("indexes"),
-                &prometheus_registry,
-                epoch_store
-                    .protocol_config()
-                    .max_move_identifier_len_as_option(),
-                config.remove_deprecated_tables,
-            )))
-        } else {
-            None
-        };
+        if node_role.is_fullnode() {
+            // Fullnodes upgraded from a version that still ran the legacy
+            // index backends may have their now-dead on-disk directories
+            // lying around; remove them so they stop wasting disk.
+            remove_legacy_index_stores(&config.db_path());
+        }
 
         let chain_identifier = epoch_store.get_chain_identifier();
 
@@ -718,10 +710,6 @@ impl SuiNode {
         let mut embedded_rpc_store =
             if node_role.is_fullnode() && config.rpc().is_some_and(|rpc| rpc.enable_indexing()) {
                 info!("creating embedded rpc-store");
-                // The embedded `sui-rpc-store` replaced the legacy `rpc-index`
-                // backend; remove its now-dead on-disk directory if a prior
-                // version left one behind.
-                remove_legacy_rpc_index_store(&config.db_path());
                 // The tip indexer pulls checkpoints from the node's local
                 // checkpoint / perpetual stores via a dedicated read handle.
                 let ingestion_source = RocksDbStore::new(
@@ -825,11 +813,9 @@ impl SuiNode {
             cache_traits.clone(),
             epoch_store.clone(),
             committee_store.clone(),
-            index_store.clone(),
             embedded_rpc_store.as_ref().map(|embedded| embedded.store()),
             checkpoint_store.clone(),
             &prometheus_registry,
-            genesis.objects(),
             &db_checkpoint_config,
             config.clone(),
             chain_identifier,
@@ -2837,28 +2823,30 @@ fn update_peer_addresses(
     }
 }
 
-/// Remove the on-disk directory of the legacy `rpc-index` backend.
+/// On-disk directories of index backends that no longer exist: `rpc-index`
+/// was the `RpcIndexStore` that the embedded `sui-rpc-store` replaced, and
+/// `indexes` was the `IndexStore` behind the removed JSON-RPC service.
+const LEGACY_INDEX_STORE_DIRS: [&str; 2] = ["rpc-index", "indexes"];
+
+/// Remove the on-disk directories of the legacy index backends.
 ///
-/// The embedded `sui-rpc-store` replaced the `RpcIndexStore` backend, which
-/// wrote to `<db_path>/rpc-index`; that data is now dead. Remove it on startup
-/// so a node upgraded from an older version does not leave it lingering and
-/// wasting disk. Best-effort: a node that never ran the legacy backend has
-/// nothing to remove, and a failure to remove stale data must not block
-/// startup.
-fn remove_legacy_rpc_index_store(db_path: &Path) {
-    let legacy_dir = db_path.join("rpc-index");
-    match std::fs::remove_dir_all(&legacy_dir) {
-        Ok(()) => info!(
-            "removed legacy rpc-index directory {}",
-            legacy_dir.display()
-        ),
-        // The common case: the node never ran the legacy backend, or it was
-        // already cleaned up on a prior startup.
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => warn!(
-            "failed to remove legacy rpc-index directory {}: {e:?}",
-            legacy_dir.display()
-        ),
+/// Their data is dead, so remove it on startup so a node upgraded from an
+/// older version does not leave it lingering and wasting disk. Best-effort: a
+/// node that never ran a legacy backend has nothing to remove, and a failure
+/// to remove stale data must not block startup.
+fn remove_legacy_index_stores(db_path: &Path) {
+    for dir in LEGACY_INDEX_STORE_DIRS {
+        let legacy_dir = db_path.join(dir);
+        match std::fs::remove_dir_all(&legacy_dir) {
+            Ok(()) => info!("removed legacy {dir} directory {}", legacy_dir.display()),
+            // The common case: the node never ran the legacy backend, or it
+            // was already cleaned up on a prior startup.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => warn!(
+                "failed to remove legacy {dir} directory {}: {e:?}",
+                legacy_dir.display()
+            ),
+        }
     }
 }
 
@@ -3152,29 +3140,33 @@ mod tests {
         );
     }
 
-    // A present legacy `rpc-index` directory is removed, while its siblings
-    // (notably the still-used jsonrpc `indexes` store) are left untouched, and a
+    // Present legacy `rpc-index` and `indexes` directories are removed, while
+    // their siblings (such as the perpetual `store`) are left untouched, and a
     // missing directory is a no-op.
     #[test]
-    fn removes_only_the_legacy_rpc_index_directory() {
+    fn removes_only_the_legacy_index_directories() {
         let db = tempfile::tempdir().unwrap();
-        let legacy = db.path().join("rpc-index");
-        let sibling = db.path().join("indexes");
-        std::fs::create_dir(&legacy).unwrap();
-        std::fs::create_dir(&sibling).unwrap();
-        std::fs::write(legacy.join("CURRENT"), b"stale").unwrap();
+        let rpc_index = db.path().join("rpc-index");
+        let indexes = db.path().join("indexes");
+        let sibling = db.path().join("store");
+        for dir in [&rpc_index, &indexes, &sibling] {
+            std::fs::create_dir(dir).unwrap();
+            std::fs::write(dir.join("CURRENT"), b"stale").unwrap();
+        }
 
-        remove_legacy_rpc_index_store(db.path());
+        remove_legacy_index_stores(db.path());
         assert!(
-            !legacy.exists(),
+            !rpc_index.exists(),
             "legacy rpc-index directory should be gone"
         );
+        assert!(!indexes.exists(), "legacy indexes directory should be gone");
         assert!(sibling.exists(), "sibling stores must be left untouched");
 
         // Idempotent: a second run (nothing to remove) does not error or touch
         // the siblings.
-        remove_legacy_rpc_index_store(db.path());
-        assert!(!legacy.exists());
+        remove_legacy_index_stores(db.path());
+        assert!(!rpc_index.exists());
+        assert!(!indexes.exists());
         assert!(sibling.exists());
     }
 

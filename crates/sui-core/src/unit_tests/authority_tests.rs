@@ -9,7 +9,6 @@ use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     file_format_common::BinaryConstants,
 };
-use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::StructTag;
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
@@ -20,13 +19,12 @@ use rand::{SeedableRng, prelude::StdRng};
 use serde_json::json;
 use std::collections::HashSet;
 use std::fs;
-use std::str::FromStr;
 use std::{convert::TryInto, env};
 use sui_test_transaction_builder::TestTransactionBuilder;
 
 use sui_json_rpc_types::{
-    SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockEffectsV1, SuiTypeTag,
+    SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffects,
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockEffectsV1, SuiTypeTag,
 };
 use sui_macros::{register_fail_point_arg, sim_test};
 use sui_move_build::BuildConfig;
@@ -40,6 +38,7 @@ use sui_types::error::UserInputError;
 use sui_types::execution::SharedInput;
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
+use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::messages_consensus::{
     AuthorityCapabilitiesV2, ConsensusDeterminedVersionAssignments,
 };
@@ -61,7 +60,6 @@ use sui_types::{
     transaction::PlainTransactionWithClaims,
 };
 use sui_types::{SUI_CLOCK_OBJECT_SHARED_VERSION, digests::Digest};
-use sui_types::{dynamic_field::DynamicFieldType, messages_consensus::ConsensusTransaction};
 
 use crate::authority::authority_store::ObjectLockStatus;
 use crate::authority::shared_object_congestion_tracker::SharedObjectCongestionTracker;
@@ -3260,179 +3258,6 @@ async fn test_clear_cache_reverts_unwrap_move_call() {
     // The gas is uncharged
     let gas = cache.get_object(&gas_object_id).unwrap();
     assert_eq!(gas.version(), wrap_effects.gas_object().unwrap().0.1);
-}
-
-#[tokio::test]
-async fn test_store_get_dynamic_object() {
-    let (_, fields) = create_and_retrieve_df_info(ident_str!("add_ofield")).await;
-    assert_eq!(fields.len(), 1);
-    assert_eq!(fields[0].type_, DynamicFieldType::DynamicObject);
-}
-
-#[tokio::test]
-async fn test_store_get_dynamic_field() {
-    let (_, fields) = create_and_retrieve_df_info(ident_str!("add_field")).await;
-
-    assert_eq!(fields.len(), 1);
-    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
-    assert_eq!(json!(true), fields[0].name.value);
-    assert_eq!(TypeTag::Bool, fields[0].name.type_)
-}
-
-async fn create_and_retrieve_df_info(function: &IdentStr) -> (SuiAddress, Vec<DynamicFieldInfo>) {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas_object_id = ObjectID::random();
-    let (authority_state, object_basics) =
-        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
-
-    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
-    let create_outer_effects = create_move_object(
-        &object_basics.0,
-        &authority_state,
-        &gas_object_id,
-        &sender,
-        &sender_key,
-    )
-    .await
-    .unwrap();
-
-    assert!(
-        create_outer_effects.status().is_ok(),
-        "{:?}",
-        create_outer_effects
-    );
-    assert_eq!(create_outer_effects.created().len(), 1);
-
-    let create_inner_effects = create_move_object(
-        &object_basics.0,
-        &authority_state,
-        &gas_object_id,
-        &sender,
-        &sender_key,
-    )
-    .await
-    .unwrap();
-
-    assert!(create_inner_effects.status().is_ok());
-    assert_eq!(create_inner_effects.created().len(), 1);
-
-    let outer_v0 = create_outer_effects.created()[0].0;
-    let inner_v0 = create_inner_effects.created()[0].0;
-
-    let add_txn = to_sender_signed_transaction(
-        TransactionData::new_move_call(
-            sender,
-            object_basics.0,
-            ident_str!("object_basics").to_owned(),
-            function.to_owned(),
-            vec![],
-            create_inner_effects.gas_object().unwrap().0,
-            vec![
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(outer_v0)),
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(inner_v0)),
-            ],
-            TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
-            rgp,
-        )
-        .unwrap(),
-        &sender_key,
-    );
-
-    let add_executable = create_executable_transaction(&authority_state, add_txn).unwrap();
-
-    let (add_result, _) = authority_state
-        .try_execute_executable_for_test(&add_executable, ExecutionEnv::new())
-        .await;
-    let add_effects = add_result.into_message();
-
-    assert!(add_effects.status().is_ok(), "{:?}", add_effects.status());
-    assert_eq!(add_effects.created().len(), 1);
-
-    (
-        sender,
-        authority_state
-            .get_dynamic_fields(outer_v0.0, None, usize::MAX)
-            .unwrap()
-            .into_iter()
-            .map(|x| x.1)
-            .collect(),
-    )
-}
-
-#[tokio::test]
-async fn test_dynamic_field_struct_name_parsing() {
-    let (_, fields) = create_and_retrieve_df_info(ident_str!("add_field_with_struct_name")).await;
-
-    assert_eq!(fields.len(), 1);
-    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
-    assert_eq!(json!({"name_str": "Test Name"}), fields[0].name.value);
-    assert_eq!(
-        TypeTag::from_str("0x0::object_basics::Name").unwrap(),
-        fields[0].name.type_
-    )
-}
-
-#[tokio::test]
-async fn test_dynamic_field_bytearray_name_parsing() {
-    let (_, fields) =
-        create_and_retrieve_df_info(ident_str!("add_field_with_bytearray_name")).await;
-
-    assert_eq!(fields.len(), 1);
-    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
-    assert_eq!(
-        TypeTag::from_str("vector<u8>").unwrap(),
-        fields[0].name.type_
-    );
-    assert_eq!(json!("Test Name".as_bytes()), fields[0].name.value);
-}
-
-#[tokio::test]
-async fn test_dynamic_field_address_name_parsing() {
-    let (sender, fields) =
-        create_and_retrieve_df_info(ident_str!("add_field_with_address_name")).await;
-
-    assert_eq!(fields.len(), 1);
-    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
-    assert_eq!(TypeTag::from_str("address").unwrap(), fields[0].name.type_);
-    assert_eq!(json!(sender), fields[0].name.value);
-}
-
-#[tokio::test]
-async fn test_dynamic_object_field_struct_name_parsing() {
-    let (_, fields) = create_and_retrieve_df_info(ident_str!("add_ofield_with_struct_name")).await;
-
-    assert_eq!(fields.len(), 1);
-    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicObject));
-    assert_eq!(json!({"name_str": "Test Name"}), fields[0].name.value);
-    assert_eq!(
-        TypeTag::from_str("0x0::object_basics::Name").unwrap(),
-        fields[0].name.type_
-    )
-}
-
-#[tokio::test]
-async fn test_dynamic_object_field_bytearray_name_parsing() {
-    let (_, fields) =
-        create_and_retrieve_df_info(ident_str!("add_ofield_with_bytearray_name")).await;
-
-    assert_eq!(fields.len(), 1);
-    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicObject));
-    assert_eq!(
-        TypeTag::from_str("vector<u8>").unwrap(),
-        fields[0].name.type_
-    );
-    assert_eq!(json!("Test Name".as_bytes()), fields[0].name.value);
-}
-
-#[tokio::test]
-async fn test_dynamic_object_field_address_name_parsing() {
-    let (sender, fields) =
-        create_and_retrieve_df_info(ident_str!("add_ofield_with_address_name")).await;
-
-    assert_eq!(fields.len(), 1);
-    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicObject));
-    assert_eq!(TypeTag::from_str("address").unwrap(), fields[0].name.type_);
-    assert_eq!(json!(sender), fields[0].name.value);
 }
 
 #[tokio::test]
