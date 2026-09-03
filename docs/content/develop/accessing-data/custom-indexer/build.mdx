@@ -1,19 +1,19 @@
 ---
-title: Integrate a Custom Indexer
+title: Build a Custom Indexer
 description: >-
-  Add a custom indexer to an existing Rust service using the
-  `sui-indexer-alt-framework` module. Implement the `Processor` and `Handler`
-  traits, register a pipeline, and point the indexer at a checkpoint source.
+  Build a custom indexer using the `sui-indexer-alt-framework` module. The
+  example indexer demonstrates a sequential pipeline that extracts transaction
+  digests from Sui checkpoints and stores them in a local PostgreSQL database,
+  the default example storage backend.
 keywords:
   - indexer
   - custom indexer
   - indexer framework
   - indexer pipeline
-  - indexer integration
 goal:
   description: >-
-    Reader can add a custom indexer to an existing service using the
-    `sui-indexer-alt-framework` module.
+    Reader can build a custom indexer using the `sui-indexer-alt-framework`
+    module.
   requires:
     - has_frontmatter:
         - title
@@ -46,113 +46,285 @@ builder_paths:
     step: Build a custom indexer
     stage: Ship
 questions:
-  - How do I add a custom Sui indexer to my service?
+  - How do I build a custom Sui indexer?
   - What is the sui-indexer-alt-framework?
-  - How do I implement the Processor and Handler traits?
   - Where can I find custom indexer examples?
-answer: >-
-  Add the `sui-indexer-alt-framework` crate to your Rust service, define a
-  struct for the rows you want to write, implement the `Processor` trait to
-  extract data from each checkpoint and the `Handler` trait to commit batches
-  to your store, then register the pipeline on an `IndexerCluster` and point it
-  at a checkpoint source.
+answer: Build a custom indexer using the `sui-indexer-alt-framework` module.
 ---
 
-The `sui-indexer-alt-framework` crate handles checkpoint ingestion, batching, watermarks, and crash recovery, so your service only implements 2 traits: `Processor` extracts the data you care about from each checkpoint, and `Handler` writes it to your store.
+Build a custom indexer using the `sui-indexer-alt-framework` module.
 
-The steps below cover the Sui-specific work of adding that pipeline to a service you already have. For the conceptual background, read [Custom Indexing Framework](/develop/accessing-data/custom-indexer/custom-indexers) and [Indexer Pipeline Architecture](/develop/accessing-data/custom-indexer/pipeline-architecture) first.
+This guide provides a practical example for building a custom indexer. If you are adding an indexer to a Rust service you already have, see [Integrate a Custom Indexer](/develop/accessing-data/custom-indexer/integrate) instead, which skips the project and database setup. Refer to [Custom Indexing Framework](/develop/accessing-data/custom-indexer/custom-indexers) and [Indexer Pipeline Architecture](/develop/accessing-data/custom-indexer/pipeline-architecture) for a conceptual overview of the indexer framework.
+
+To build a complete custom indexer, use the `sui-indexer-alt-framework`. The steps that follow demonstrate how to create a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL database. PostgreSQL is the default example backend, not a requirement of the framework. You can find the [source code for the framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-framework) in the Sui repo on GitHub.
+
+:::tip
+
+While this example uses PostgreSQL with [Diesel](https://diesel.rs/guides/getting-started) (a popular Rust ORM and query builder) for minimalism and out-of-the-box support, the `sui-indexer-alt-framework` is designed for flexible storage. You can use different databases (such as [MongoDB](https://www.mongodb.com/), [CouchDB](https://couchdb.apache.org/), or similar) or utilize other database clients if you prefer not to use Diesel. To achieve this, implement the framework's `Store` and `Connection` traits and define your database write logic directly within your `Handler::commit()` method.
+
+:::
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
 
-- [x] An existing Rust service, with [Rust and Cargo](https://rustup.rs/) installed.
+- [x] [Rust and Cargo](https://rustup.rs/)
+- [x] [PostgreSQL](https://www.postgresql.org/download/)
+- [x] [Diesel CLI](https://diesel.rs/guides/getting-started#installing-diesel-cli)
 
-- [x] A store to write to. The examples use [PostgreSQL](https://www.postgresql.org/download/) with [Diesel](https://diesel.rs/guides/getting-started), which the framework supports out of the box.
+<details className="nudge-details">
 
-- [x] To write somewhere other than PostgreSQL, implement the framework's `Store` and `Connection` traits. See [Bring Your Own Store](/develop/accessing-data/custom-indexer/bring-your-own-store).
+<summary>
+
+Check installation
+
+</summary>
+
+If you're unsure whether your system has the necessary software properly installed, you can verify installation with the following commands.
+
+```sh
+$ psql --version
+$ diesel --version
+```
+
+</details>
 
 </TabItem>
 </Tabs>
 
-To follow a complete runnable project instead of building by hand, clone the example:
+The following steps show how to create an indexer that:
+
+- Connects to Sui checkpoint sources: Uses the durable Requester Pays GCS bucket for production backfill, then fullnode gRPC polling and streaming for steady-state ingestion. The public-good HTTPS checkpoint store is for recent-data testing only.
+- Processes checkpoints: Streams checkpoint data continuously.
+- Extracts transaction data: Pulls transaction digests from each checkpoint.
+- Stores in local PostgreSQL: Commits data to a local PostgreSQL database as the default example storage layer. For other storage systems, implement the framework's `Store` and `Connection` traits.
+- Implements sequential pipeline: Uses in-order processing with batching for optimal consistency and performance.
+
+In the end, you have a working indexer that demonstrates all core framework concepts and can serve as a foundation for more complex custom indexers.
+
+:::info
+
+Sui provides checkpoint data through multiple sources:
+
+- **GCS buckets (production backfill and recovery):** `gs://mysten-testnet-checkpoints-use4` for Testnet or `gs://mysten-mainnet-checkpoints-use4` for Mainnet. These buckets have full checkpoint retention and are Requester Pays enabled, so configure GCS credentials and a billing project before using them.
+- **Fullnode gRPC (production steady state):** Use a production-grade endpoint from an [RPC provider](/develop/accessing-data/rpc-providers) for polling and streaming after the historical backfill reaches the network tip.
+- **Public-good fullnode gRPC (testing only):** `https://fullnode.testnet.sui.io:443`, `https://fullnode.mainnet.sui.io:443`, and `https://fullnode.devnet.sui.io:443`. Do not use these endpoints for production ingestion.
+- **Public HTTPS checkpoint stores (testing only, most recent 30 days):** `https://checkpoints.testnet.sui.io` for Testnet or `https://checkpoints.mainnet.sui.io` for Mainnet. Do not use these public-good endpoints for production ingestion.
+
+:::
+
+##step Project setup
+
+First, open your console to the directory you want to store your indexer project. Use the `cargo new` command to create a new Rust project and then navigate to its directory.
 
 ```sh
-$ git clone https://github.com/MystenLabs/sui.git
-$ cd sui/examples/rust/basic-sui-indexer
+$ cargo new simple-sui-indexer
+$ cd simple-sui-indexer
 ```
 
-That project contains the `Cargo.toml`, Diesel migrations, and every source file this guide imports code from. Its README covers database creation and migration setup. The [framework source](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-framework) lives in the same repo.
+##step Configure dependencies
 
-## Add the framework dependency
-
-Add the following to your `Cargo.toml`:
+Replace your `Cargo.toml` code with the following configuration and save.
 
 <ImportContent source="examples/rust/basic-sui-indexer/Cargo.toml" mode="code" />
 
-Each dependency serves a distinct purpose:
+The manifest now includes the following dependencies:
 
 - `sui-indexer-alt-framework`: Core framework providing pipeline infrastructure.
 - `diesel/diesel-async`: Type-safe database ORM with asynchronous support.
-- `tokio`: Async runtime the framework requires.
+- `tokio`: Async runtime required by the framework.
 - `clap`: Command-line argument parsing for configuration.
-- `anyhow`: Error handling, and async-trait for trait implementations.
-- `dotenvy`: Reads the `.env` file that holds your PostgreSQL URL.
+- `anyhow`: Error handling and async-trait for trait implementations.
+- `dotenvy`: Ingest `.env` file that stores your PostgreSQL URL.
 
-If your service already pulls in `tokio`, `clap`, or `anyhow`, reconcile the versions rather than adding duplicates.
+##step Create database
 
-## Prepare the destination table
+Before configuring migrations, create and verify your local PostgreSQL database:
 
-Your pipeline needs somewhere to write. The example indexer stores transaction digests in a `transaction_digests` table, created through a Diesel migration:
+```sh
+$ createdb sui_indexer
+```
+
+Get your connection details:
+
+```sh
+$ psql sui_indexer -c "\conninfo"
+```
+
+If successful, your console should display a message similar to the following:
+
+```sh
+You are connected to database "sui_indexer" as user "username" via socket in "/tmp" at port "5432".
+```
+
+If you receive a `createdb` error similar to
+
+```sh
+createdb: error: connection to server on socket "/tmp/.s.PGSQL.5432" failed: FATAL:  role "username" does not exist
+```
+
+This means you need to create the user (replace `username` with the name provided in your error message).
+
+```sh
+$ sudo -u postgres createuser --superuser username
+```
+
+Enter the password for your pgAdmin account when prompted, then try the `createdb` command again.
+
+You can now set a variable to your database URL as it's used in following commands. Make sure to change `username` to your actual username.
+
+```sh
+$ PSQL_URL=postgres://username@localhost:5432/sui_indexer
+```
+
+You can now test your connection with the following command:
+
+```sh
+$ psql $PSQL_URL -c "SELECT 'Connected';"
+```
+
+If successful, your console or terminal should respond with a message similar to the following:
+
+```sh
+?column?
+-----------
+ Connected
+(1 row)
+```
+
+##step Database setup
+
+Before you start coding, make sure you set up a local PostgreSQL database from the previous step. This is required for the indexer to store the extracted transaction data.
+
+The following database setup steps have you:
+
+1. Create a database table to store the data.
+1. Use Diesel to manage the process.
+1. Generate Rust code that maps to the database table.
+
+###substep Configure Diesel
+
+First, create a `diesel.toml` file (within the same folder as `cargo.toml`) to configure database migrations.
+
+```sh
+$ touch diesel.toml
+```
+
+Update and save the file with the following code:
+
+<ImportContent source="examples/rust/basic-sui-indexer/diesel.toml" mode="code" />
+
+###substep Create database table using Diesel migrations
+
+Diesel migrations are a way of creating and managing database tables using SQL files. Each migration has two files:
+
+- `up.sql`: Creates and changes the table.
+- `down.sql`: Removes and undoes the changes.
+
+Use the `diesel setup` command to create the necessary directory structure, passing your database URL with the `--database-url` argument.
+
+```sh
+$ diesel setup --database-url $PSQL_URL
+```
+
+Use the `diesel migration` command at the root of your project to then generate the migration files.
+
+```sh
+$ diesel migration generate transaction_digests
+```
+
+You should now have a `migrations` folder in your project. There should be a subdirectory in this folder with the name format `YYYY-MM-DD-HHMMSS_transaction_digests`. This folder should contain the `up.sql` and `down.sql` files.
+
+Open `up.sql` and replace its contents with the following code (using the actual folder name):
 
 <ImportContent source="examples/rust/basic-sui-indexer/migrations/YYYY-MM-DD-HHMMSS_transaction_digests/up.sql" mode="code" />
 
 :::tip
 
-This example uses the `TEXT` data type for `tx_digest`, but a production indexer should use `BYTEA`.
+This example uses the `TEXT` data type for `tx_digest`, but best practice for a production indexer is to use the `BYTEA` data type.
 
-`TEXT` keeps the digest readable and directly usable with external tools. Digests are `Base58` encoded, and because PostgreSQL cannot natively display `BYTEA` data in that format, storing it as `TEXT` lets you copy a digest from a query and paste it into an explorer like [SuiScan](https://suiscan.xyz/testnet/home).
+The `TEXT` type is used to make the transaction digest easily readable and directly usable with external tools. Digests are `Base58` encoded, and because PostgreSQL cannot natively display `BYTEA` data in this format, storing it as `TEXT` allows you to copy the digest from a query and paste it into an explorer like [SuiScan](https://suiscan.xyz/testnet/home).
 
-`BYTEA` stores the raw byte representation, which is more compact and significantly faster to compare than a string. Refer to [Binary data performance in PostgreSQL](https://www.cybertec-postgresql.com/en/binary-data-performance-in-postgresql/) on the CYBERTEC website for more information.
+For a production environment, however, `BYTEA` is strongly recommended. It offers superior storage and query efficiency by storing the raw byte representation, which is more compact and significantly faster for comparisons than a string. Refer to [Binary data performance in PostgreSQL](https://www.cybertec-postgresql.com/en/binary-data-performance-in-postgresql/) on the CYBERTEC website for more information.
 
 :::
 
-Generate the matching Rust schema with `diesel print-schema --database-url $DATABASE_URL > src/schema.rs`. The example project's schema looks like this:
+Save `up.sql`, then open `down.sql` to edit. Replace the contents of the file with the following code and save it:
+
+<ImportContent source="examples/rust/basic-sui-indexer/migrations/YYYY-MM-DD-HHMMSS_transaction_digests/down.sql" mode="code" />
+
+###substep Apply migration and generate Rust schema
+
+From the root of your project, use the `diesel migration` command to create tables.
+
+```sh
+$ diesel migration run --database-url $PSQL_URL
+```
+
+Then use the `diesel print-schema` command to generate the `schema.rs` file from the actual database.
+
+```sh
+$ diesel print-schema --database-url $PSQL_URL > src/schema.rs
+```
+
+Your `src/schema.rs` file should now look like the following:
 
 <ImportContent source="examples/rust/basic-sui-indexer/src/schema.rs" mode="code" />
 
-## Define your row type
+After running the previous commands, your project is set up for the next steps:
 
-Define a struct that represents 1 record in your destination table:
+- PostgreSQL now has a `transaction_digests` table with the defined columns.
+
+- `src/schema.rs` contains automatically generated Rust code that represents this table structure.
+
+- You can now write type-safe Rust code that talks to this specific table.
+
+The Diesel's migration system evolves the database schema over time in a structured and version-controlled way. For a complete walkthrough, see the official Diesel [Getting Started guide](https://diesel.rs/guides/getting-started).
+
+##step Create data structure
+
+To simplify writes to Diesel, you can define a struct that represents a record on the `transaction_digests` table.
 
 <ImportContent source="examples/rust/basic-sui-indexer/src/models.rs" mode="code" />
 
-3 annotations matter here:
+Key annotations:
 
-- `FieldCount`: The framework requires this for memory optimization and batch efficiency. It caps batch size so a single SQL statement stays within the PostgreSQL bind parameter limit.
-- `diesel(table_name = transaction_digests)`: Maps the struct to the table whose schema you generated.
-- `Insertable`: Lets Diesel insert the struct into the database.
+- `FieldCount`: Required by `sui-indexer-alt-framework` for memory optimization and batch processing efficiency. It is used to limit the max size of a batch so that we don't exceed the postgres limit on the number of bind parameters a single SQL statement can have.
+- `diesel(table_name = transaction_digests)`: Maps this Rust struct to the `transaction_digests` table, whose schema is generated in a previous step.
+- `Insertable`: Allows this struct to be inserted into the database using Diesel.
 
-## Implement the `Processor` trait
+##step Define the `Handler` struct in `handler.rs`
 
-`Processor` defines how your indexer extracts and transforms data from each checkpoint. Whatever it returns flows to `Handler::commit`.
+Create a `handlers.rs` file in your `src` directory.
 
-Declare a concrete struct to hang both trait implementations on:
+```sh
+$ touch ./src/handlers.rs
+```
+
+Open the file and define a concrete struct to implement the `Processor` and `Handler` traits:
 
 <ImportContent source="examples/rust/basic-sui-indexer/src/handlers.rs" mode="code" struct="TransactionDigestHandler" />
 
-Import the dependencies the trait needs:
+Save the file but keep it open as the next steps add to its code.
+
+##step Implement the `Processor`
+
+The `Processor` trait defines how to extract and transform data from checkpoints. The resulting data is then passed to `Handler::commit`.
+
+Add the necessary dependencies at the top of the file.
 
 <ImportContent source="examples/rust/basic-sui-indexer/src/handlers.rs" mode="code" tag="processordeps" />
 
-Then implement the trait:
+After the `TransactionDigestHandler` struct, add the `Processor` code:
 
 <ImportContent source="examples/rust/basic-sui-indexer/src/handlers.rs" mode="code" tag="processor" />
 
-3 members carry the configuration:
+Key concepts:
 
-- `NAME`: Unique identifier for this processor, used in monitoring and logging.
-- `type Value`: The data that flows through the pipeline, which keeps the pipeline type safe.
-- `process()`: The core logic that turns checkpoint data into your row type.
+- `NAME`: Unique identifier for this processor used in monitoring and logging.
+- `type Value`: Defines what data flows through the pipeline, which ensures type safety.
+- `process()`: Core logic that transforms checkpoint data into your custom data structure.
+
+Save the `handlers.rs` file.
 
 <details>
 
@@ -166,35 +338,37 @@ Processor trait definition
 
 </details>
 
-## Implement the `Handler` trait
+##step Implement the `Handler`
 
-`Handler` defines how your indexer commits data to your store. Append its dependencies to the imports you added previously:
+The `Handler` trait defines how to commit data to the database. Append the `Handler` dependencies to bottom of the dependency list you created in the previous step.
 
 <ImportContent source="examples/rust/basic-sui-indexer/src/handlers.rs" mode="code" tag="handlerdeps" />
 
-Then implement the trait:
+Add the logic for `Handler` after the `Processor` code. The complete code is available at the end of this step.
 
 <ImportContent source="examples/rust/basic-sui-indexer/src/handlers.rs" mode="code" tag="handler" />
 
-Sequential batching moves through 3 stages:
+How sequential batching works:
 
 1. `process()` returns values for each checkpoint.
-1. `batch()` accumulates values across multiple checkpoints.
-1. `commit()` writes the batch once the framework reaches its limits (`H::MAX_BATCH_CHECKPOINTS`).
+1. `batch()` accumulates values from multiple checkpoints.
+1. `commit()` writes the batch when framework reaches limits (`H::MAX_BATCH_CHECKPOINTS`).
 
 <ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/sequential/collector.rs" mode="code" tag="batch" />
 
 :::tip
 
-Override the default batch limits by implementing constants in your `Handler`.
+You can override the default batch limits by implementing constants in your `Handler`.
 
 :::
+
+The `handlers.rs` file is now complete. Save the file.
 
 <details>
 
 <summary>
 
-Complete `handlers.rs` file
+Complete `handler.rs` file
 
 </summary>
 
@@ -214,40 +388,65 @@ Handler trait definition
 
 </details>
 
-## Register the pipeline
+##step Create `.env` file
 
-Build an `IndexerCluster` and register your pipeline on it. The example project does this in `main.rs`, but the same calls work anywhere in your service that owns an async runtime:
+The main function you create in the next step needs the value you stored to the shell variable `$PSQL_URL`. To make it available, create a `.env` file with that data.
+
+<Tabs>
+<TabItem label="Bash/zsh" value="bash">
+
+```sh
+echo "DATABASE_URL=$PSQL_URL" > .env
+```
+
+</TabItem>
+<TabItem label="fish" value="fish">
+
+```sh
+echo "DATABASE_URL=$PSQL_URL" > .env
+```
+
+</TabItem>
+<TabItem label="PowerShell" value="powershell">
+
+```sh
+"DATABASE_URL=$env:PSQL_URL" | Out-File -Encoding UTF8 .env
+```
+
+</TabItem>
+</Tabs>
+
+After running the command for your environment, make sure the `.env` file exists at your project root with the correct data.
+
+##step Create main function
+
+Now, to tie everything together in the main function, open your `main.rs` file. Replace the default code with the following and save the file:
 
 <ImportContent source="examples/rust/basic-sui-indexer/src/main.rs" mode="code" />
 
-The key components:
+Key components explained:
 
-- `embed_migrations!`: Bundles your migration files into the binary so the indexer updates the database schema on startup.
-- `Args::parse()`: Supplies command-line configuration such as `--first-checkpoint` and `--remote-store-url`.
-- `IndexerCluster::builder()`: Sets up database connections, checkpoint streaming, and monitoring.
-- `sequential_pipeline()`: Registers a sequential pipeline that processes checkpoints in order with batching.
-- `SequentialConfig::default()`: Uses framework defaults for batch sizes and checkpoint lag.
+- `embed_migrations!`: Includes your migration files in the binary so the indexer automatically updates the database schema on startup.
+- `Args::parse()`: Provides command-line configuration like `--first-checkpoint`, `--remote-store-url`, and so on.
+- `IndexerCluster::builder()`: Sets up the framework infrastructure (database connections, checkpoint streaming, monitoring).
+- `sequential_pipeline()`: Registers a sequential pipeline that processes checkpoints in order with smart batching.
+- `SequentialConfig::default()`: Uses framework defaults for batch sizes and checkpoint lag (how many checkpoints to batch together).
 - `cluster.run()`: Starts processing checkpoints and blocks until completion.
 
-The example reads `DATABASE_URL` from the environment and passes it to `with_database_url`. The builder takes the URL as an argument, so your service can source it however it already handles configuration.
+Your indexer is now complete. The next steps walk you through running the indexer and checking its functionality.
 
-## Choose a checkpoint source
+##step Run your indexer
 
-Sui serves checkpoint data from several sources, and production indexers use different ones for backfill and steady state. See [Checkpoint Data Sources](/develop/accessing-data/custom-indexer/indexer-data-integration#checkpoint-data-sources) for the full comparison.
+Use the `cargo run` command to run your indexer against Testnet. Production operation has separate backfill and steady-state phases. See [Checkpoint Data Sources](/develop/accessing-data/custom-indexer/indexer-data-integration#checkpoint-data-sources) for details on each source.
 
-- **GCS buckets (production backfill and recovery):** `gs://mysten-testnet-checkpoints-use4` for Testnet or `gs://mysten-mainnet-checkpoints-use4` for Mainnet. These buckets have full checkpoint retention and are Requester Pays enabled, so configure GCS credentials and a billing project before using them.
-- **Fullnode gRPC (production steady state):** Use a production-grade endpoint from an [RPC provider](/develop/accessing-data/rpc-providers) for polling and streaming after the historical backfill reaches the network tip.
-- **Public-good fullnode gRPC (testing only):** `https://fullnode.testnet.sui.io:443`, `https://fullnode.mainnet.sui.io:443`, and `https://fullnode.devnet.sui.io:443`. Do not use these endpoints for production ingestion.
-- **Public HTTPS checkpoint stores (testing only, most recent 30 days):** `https://checkpoints.testnet.sui.io` for Testnet or `https://checkpoints.mainnet.sui.io` for Mainnet. Do not use these public-good endpoints for production ingestion.
-
-Before reading from a Requester Pays GCS bucket, configure credentials and a billing project, then pass the billing project in the `x-goog-user-project` header:
+Before using a Requester Pays GCS bucket, configure credentials and a billing project. Pass the billing project in the `x-goog-user-project` header:
 
 ```sh
 $ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/gcp-credentials.json
 $ export GOOGLE_CLOUD_PROJECT=your-billing-project
 ```
 
-**Phase 1, backfill from the full-retention GCS checkpoint bucket:**
+**Phase 1: backfill from the full-retention GCS checkpoint bucket:**
 
 ```sh
 $ cargo run -- \
@@ -255,9 +454,9 @@ $ cargo run -- \
     --remote-store-header "x-goog-user-project:${GOOGLE_CLOUD_PROJECT}"
 ```
 
-After the indexer reaches the network tip, stop it and restart it against fullnode gRPC. Existing pipelines resume from their committed watermarks, so no data is lost across the switch.
+After the indexer reaches the network tip, stop it and restart it with fullnode gRPC. Existing pipelines resume from their committed watermarks. For production, obtain a production-grade fullnode gRPC endpoint from an RPC provider:
 
-**Phase 2, fullnode gRPC polling and streaming for steady state:**
+**Phase 2: use fullnode gRPC polling and streaming for steady state:**
 
 ```sh
 $ export FULLNODE_GRPC_URL=https://your-rpc-provider.example:443
@@ -267,7 +466,9 @@ $ cargo run -- \
     --streaming-url "$FULLNODE_GRPC_URL"
 ```
 
-For testing only, you can point at the public HTTPS checkpoint store instead:
+For testing only, you can instead use the public-good Testnet endpoint `https://fullnode.testnet.sui.io:443`. The public-good Mainnet, Testnet, and Devnet fullnode endpoints are not intended for production use.
+
+**Testing only: public HTTPS checkpoint store (most recent 30 days):**
 
 ```sh
 $ cargo run -- \
@@ -275,23 +476,38 @@ $ cargo run -- \
     --first-checkpoint RECENT_CHECKPOINT
 ```
 
-The public HTTPS checkpoint stores retain only the most recent 30 days of checkpoints. When you use one with a fresh database, set `--first-checkpoint` to a checkpoint still inside the retained range. Otherwise the indexer starts at checkpoint 0 and retries missing checkpoints indefinitely. For production backfills, use `--remote-store-gcs`. See [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays) and [Running a Remote Store](/operators/data-management/remote-store-setup) for more information.
+The public HTTPS checkpoint stores (`https://checkpoints.testnet.sui.io` and `https://checkpoints.mainnet.sui.io`) retain only the most recent 30 days of checkpoints. Use them only for testing. When using one with a fresh database, set `--first-checkpoint` to a checkpoint that is still within the retained range; otherwise, the indexer starts at checkpoint 0 and retries missing checkpoints indefinitely. For production backfills, use `--remote-store-gcs` with `mysten-testnet-checkpoints-use4` for Testnet or `mysten-mainnet-checkpoints-use4` for Mainnet. See [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays) and [Running a Remote Store](/operators/data-management/remote-store-setup) for more information.
 
 :::info
 
-Allow incoming network requests if your operating system prompts for them when the indexer starts.
+Allow incoming network requests if your operating system requests it for the `basic-sui-indexer` application.
 
 :::
 
-## Verify the pipeline
+If successful, your console informs you that the indexer is running.
 
-Connect to your database and confirm rows are landing:
+##step Verify results
 
-```sql
-SELECT COUNT(*) FROM transaction_digests;
-SELECT * FROM transaction_digests LIMIT 5;
+Open a new terminal or console and connect to your database to check the results:
+
+```bash
+$ psql sui_indexer
 ```
 
-To confirm the data is accurate, copy any transaction digest from your database and look it up on [SuiScan](https://suiscan.xyz/testnet/home).
+After connecting, run a few queries to verify your indexer is working:
 
-The shape stays the same for any custom indexer: define your row type, implement `Processor` and `Handler`, register the pipeline, and let the framework handle ingestion and recovery.
+Check how many transaction digests are indexed:
+
+```sql
+$ SELECT COUNT(*) FROM transaction_digests;
+```
+
+View sample records:
+
+```sql
+$ SELECT * FROM transaction_digests LIMIT 5;
+```
+
+To confirm your data is accurate, copy any transaction digest from your database and verify it on SuiScan: [https://suiscan.xyz/testnet/home](https://suiscan.xyz/testnet/home)
+
+The key concepts covered here apply to any custom indexer: define your data structure, implement the `Processor` and `Handler` traits, and let the framework handle the infrastructure.
