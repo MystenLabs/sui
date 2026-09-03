@@ -11,6 +11,9 @@ set -euo pipefail
 source ./lib.sh
 localnet_setup
 
+# The JSON block that `start --json` printed, taken from the fork log.
+fork_start_json() { sed -n '/^{$/,/^}$/p' "$FORK_LOG"; }
+
 fork_start
 fork_cmd status > status.json
 
