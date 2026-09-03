@@ -5,12 +5,10 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 
 use sui_json_rpc_types::{DelegatedStake, SuiCommittee, ValidatorApys};
-use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::sui_serde::BigInt;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
-#[open_rpc(namespace = "suix", tag = "Governance Read API")]
 #[rpc(server, client, namespace = "suix")]
 pub trait GovernanceReadApi {
     /// Return one or more [DelegatedStake]. If a Stake was withdrawn its status will be Unstaked.
@@ -28,7 +26,7 @@ pub trait GovernanceReadApi {
     #[method(name = "getCommitteeInfo")]
     async fn get_committee_info(
         &self,
-        /// The epoch of interest. If None, default to the latest epoch
+        // The epoch of interest. If None, default to the latest epoch
         epoch: Option<BigInt<u64>>,
     ) -> RpcResult<SuiCommittee>;
 

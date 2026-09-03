@@ -47,8 +47,6 @@ use sui_types::node_role::NodeRole;
 
 use sui_core::global_state_hasher::GlobalStateHashMetrics;
 use sui_core::storage::RestReadStore;
-use sui_json_rpc::bridge_api::BridgeReadApi;
-use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
 use sui_rpc_api::ServerVersion;
 use sui_rpc_api::subscription::SubscriptionService;
@@ -123,14 +121,6 @@ use sui_core::{
     authority::{AuthorityState, AuthorityStore},
     authority_client::NetworkAuthorityClient,
 };
-use sui_json_rpc::JsonRpcServerBuilder;
-use sui_json_rpc::coin_api::CoinReadApi;
-use sui_json_rpc::governance_api::GovernanceReadApi;
-use sui_json_rpc::indexer_api::IndexerApi;
-use sui_json_rpc::move_utils::MoveUtils;
-use sui_json_rpc::read_api::ReadApi;
-use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
-use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_macros::fail_point;
 use sui_macros::{fail_point_arg, fail_point_async, replay_log};
 use sui_network::api::ValidatorServer;
@@ -138,13 +128,8 @@ use sui_network::discovery;
 use sui_network::endpoint_manager::EndpointManager;
 use sui_network::state_sync;
 use sui_network::validator::server::ServerBuilder;
-use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_snapshot::uploader::StateSnapshotUploader;
-use sui_storage::{
-    http_key_value_store::HttpKVStore,
-    key_value_store::{FallbackTransactionKVStore, TransactionKeyValueStore},
-    key_value_store_metrics::KeyValueStoreMetrics,
-};
 use sui_types::base_types::{AuthorityName, EpochId};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
@@ -259,7 +244,7 @@ pub struct SuiNode {
     config: NodeConfig,
     validator_components: Mutex<Option<ValidatorComponents>>,
 
-    /// The http servers responsible for serving RPC traffic (gRPC and JSON-RPC)
+    /// The http servers responsible for serving RPC traffic.
     #[allow(unused)]
     http_servers: HttpServers,
 
@@ -2852,128 +2837,6 @@ fn update_peer_addresses(
     }
 }
 
-fn build_kv_store(
-    state: &Arc<AuthorityState>,
-    config: &NodeConfig,
-    registry: &Registry,
-) -> Result<Arc<TransactionKeyValueStore>> {
-    let metrics = KeyValueStoreMetrics::new(registry);
-    let db_store = TransactionKeyValueStore::new("rocksdb", metrics.clone(), state.clone());
-
-    let base_url = &config.transaction_kv_store_read_config.base_url;
-
-    if base_url.is_empty() {
-        info!("no http kv store url provided, using local db only");
-        return Ok(Arc::new(db_store));
-    }
-
-    let base_url: url::Url = base_url.parse().tap_err(|e| {
-        error!(
-            "failed to parse config.transaction_kv_store_config.base_url ({:?}) as url: {}",
-            base_url, e
-        )
-    })?;
-
-    let network_str = match state.get_chain_identifier().chain() {
-        Chain::Mainnet => "/mainnet",
-        _ => {
-            info!("using local db only for kv store");
-            return Ok(Arc::new(db_store));
-        }
-    };
-
-    let base_url = base_url.join(network_str)?.to_string();
-    let http_store = HttpKVStore::new_kv(
-        &base_url,
-        config.transaction_kv_store_read_config.cache_size,
-        metrics.clone(),
-    )?;
-    info!("using local key-value store with fallback to http key-value store");
-    Ok(Arc::new(FallbackTransactionKVStore::new_kv(
-        db_store,
-        http_store,
-        metrics,
-        "json_rpc_fallback",
-    )))
-}
-
-async fn build_json_rpc_router(
-    state: &Arc<AuthorityState>,
-    transaction_orchestrator: &Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>>,
-    config: &NodeConfig,
-    prometheus_registry: &Registry,
-) -> Result<axum::Router> {
-    let traffic_controller = state.traffic_controller.clone();
-    let mut server = JsonRpcServerBuilder::new(
-        env!("CARGO_PKG_VERSION"),
-        prometheus_registry,
-        traffic_controller,
-        config.policy_config.clone(),
-    );
-
-    let kv_store = build_kv_store(state, config, prometheus_registry)?;
-
-    let metrics = Arc::new(JsonRpcMetrics::new(prometheus_registry));
-    server.register_module(ReadApi::new(
-        state.clone(),
-        kv_store.clone(),
-        metrics.clone(),
-    ))?;
-    server.register_module(CoinReadApi::new(
-        state.clone(),
-        kv_store.clone(),
-        metrics.clone(),
-    ))?;
-
-    // if run_with_range is enabled we want to prevent any transactions
-    // run_with_range = None is normal operating conditions
-    if config.run_with_range.is_none() {
-        server.register_module(TransactionBuilderApi::new(state.clone()))?;
-    }
-    server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
-    server.register_module(BridgeReadApi::new(state.clone(), metrics.clone()))?;
-
-    if let Some(transaction_orchestrator) = transaction_orchestrator {
-        server.register_module(TransactionExecutionApi::new(
-            state.clone(),
-            transaction_orchestrator.clone(),
-            metrics.clone(),
-        ))?;
-    }
-
-    let name_service_config = if let (
-        Some(package_address),
-        Some(registry_id),
-        Some(reverse_registry_id),
-    ) = (
-        config.name_service_package_address,
-        config.name_service_registry_id,
-        config.name_service_reverse_registry_id,
-    ) {
-        sui_name_service::NameServiceConfig::new(package_address, registry_id, reverse_registry_id)
-    } else {
-        match state.get_chain_identifier().chain() {
-            Chain::Mainnet => sui_name_service::NameServiceConfig::mainnet(),
-            Chain::Testnet => sui_name_service::NameServiceConfig::testnet(),
-            Chain::Unknown => sui_name_service::NameServiceConfig::default(),
-        }
-    };
-
-    server.register_module(IndexerApi::new(
-        state.clone(),
-        ReadApi::new(state.clone(), kv_store.clone(), metrics.clone()),
-        kv_store,
-        name_service_config,
-        metrics,
-        config.indexer_max_subscriptions,
-    ))?;
-    server.register_module(MoveUtils::new(state.clone()))?;
-
-    let server_type = config.jsonrpc_server_type();
-
-    Ok(server.to_router(server_type).await?)
-}
-
 /// Remove the on-disk directory of the legacy `rpc-index` backend.
 ///
 /// The embedded `sui-rpc-store` replaced the `RpcIndexStore` backend, which
@@ -3018,25 +2881,6 @@ async fn build_http_servers(
     }
 
     info!("starting rpc service with config: {:?}", config.rpc);
-
-    let mut router = axum::Router::new();
-
-    // The JSON-RPC service can be disabled independently of the gRPC/REST
-    // service and of JSON-RPC indexing, so that a node can keep indexing
-    // without exposing the JSON-RPC endpoints.
-    if config.json_rpc_enabled() {
-        router = router.merge(
-            build_json_rpc_router(
-                &state,
-                transaction_orchestrator,
-                config,
-                prometheus_registry,
-            )
-            .await?,
-        );
-    } else {
-        info!("json-rpc service is disabled");
-    }
 
     // When the embedded rpc-store is active, gate checkpoint delivery on the
     // index so a client that waits for a checkpoint can immediately read its
@@ -3114,7 +2958,7 @@ async fn build_http_servers(
                 .expose_headers(tower_http::cors::Any),
         );
 
-    router = router.merge(rpc_router).layer(layers);
+    let router = rpc_router.layer(layers);
 
     // On top of sui-http's hardened defaults (bounded concurrent streams;
     // transport keepalives stay disabled by default), bound connection

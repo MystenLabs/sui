@@ -858,15 +858,15 @@ async fn safe_mode_reconfig_test() {
         .await;
 
     let system_state = test_cluster
-        .sui_client()
-        .governance_api()
-        .get_latest_sui_system_state()
-        .await
+        .fullnode_handle
+        .sui_node
+        .state()
+        .get_sui_system_state_object_for_testing()
         .unwrap();
 
     // On startup, we should be at V1.
-    assert_eq!(system_state.system_state_version, 1);
-    assert_eq!(system_state.epoch, 0);
+    assert_eq!(system_state.system_state_version(), 1);
+    assert_eq!(system_state.epoch(), 0);
 
     // Wait for regular epoch change to happen once. Migration from V1 to V2 should happen here.
     let system_state = test_cluster.wait_for_epoch(Some(1)).await;
