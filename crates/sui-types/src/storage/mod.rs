@@ -207,13 +207,6 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>>;
 
-    fn object_available_balance(&self, _owner: SuiAddress, _type_: &TypeTag) -> SuiResult<u128> {
-        // TODO: It is dangerous to return u128::MAX as a default implementation.
-        // We will properly introduce a trait for this so that it is not too crazy to not have
-        // a default implementation.
-        Ok(u128::MAX)
-    }
-
     /// `receiving_object_id` must have an `AddressOwner` ownership equal to `owner`.
     /// `get_object_received_at_version` must be the exact version at which the object will be received,
     /// and it cannot have been previously received at that version. NB: An object not existing at
@@ -256,6 +249,11 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
             None
         }
     }
+}
+
+/// Resolves the balance available for object-funds withdrawals during execution.
+pub trait ObjectFundsResolver {
+    fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128>;
 }
 
 pub struct DenyListResult {

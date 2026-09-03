@@ -2117,8 +2117,7 @@ impl AuthorityState {
                     if let Some(accumulator_version) =
                         execution_env.assigned_versions.accumulator_version()
                     {
-                        let recorded = self
-                            .unsettled_object_withdrawals
+                        self.unsettled_object_withdrawals
                             .record_object_funds_withdraws(
                                 certificate.transaction_data(),
                                 &effects,
@@ -2126,15 +2125,6 @@ impl AuthorityState {
                                 accumulator_version,
                                 self.chain_identifier,
                             );
-                        if recorded {
-                            assert_reachable!(
-                                "record unsettled object withdraws from in-execution check"
-                            );
-                            self.object_funds_checker_metrics
-                                .in_execution_check_result
-                                .with_label_values(&["sufficient"])
-                                .inc();
-                        }
                     }
                 }
                 ExecutionStatus::Failure(failure) => {
@@ -3593,10 +3583,9 @@ impl AuthorityState {
     async fn init_object_funds_checker(&self) {
         let epoch_store = self.epoch_store.load();
         // TODO: Once we enable object funds checking during execution, we will no longer need to initialize the object funds checker here.
-        let protocol_config = epoch_store.protocol_config();
-        let needs_checker = protocol_config.enable_object_funds_withdraw()
-            && self.node_role(&epoch_store).runs_consensus();
-        if needs_checker {
+        if self.node_role(&epoch_store).runs_consensus()
+            && epoch_store.protocol_config().enable_object_funds_withdraw()
+        {
             if self.object_funds_checker.load().is_none() {
                 let inner = self.get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).map(|o| {
                     Arc::new(ObjectFundsCheckerDEPRECATED::new(
