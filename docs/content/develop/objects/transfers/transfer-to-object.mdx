@@ -97,46 +97,37 @@ transfer::public_transfer(c, @0x0B);
 
 ## Querying objects owned by an object
 
-Because there is no difference in the result of the object transfer, the same owned-object queries work whether the 32-byte ID is an address or an object ID. Where the legacy `suix_getOwnedObjects` JSON-RPC method inferred which one you meant, GraphQL and gRPC let you state it: pass `ownerKind` to disambiguate.
+Because there is no difference in the result of the object transfer, the same owned-object query works whether the 32-byte ID is an address or an object ID. Where the legacy `suix_getOwnedObjects` JSON-RPC method inferred which one you meant, the GraphQL `ObjectFilter` lets you state it with `ownerKind`.
 
-<Tabs groupId="transport">
-<TabItem value="graphql" label="GraphQL">
+Objects owned by the address `0xADD`, which returns `b`:
 
 ```graphql
-# Objects owned by the address 0xADD. Returns `b`.
 query {
   objects(filter: { owner: "0xADD", ownerKind: ADDRESS }) {
     nodes {
       address
-      contents { type { repr } }
+      asMoveObject {
+        contents { type { repr } }
+      }
     }
   }
 }
+```
 
-# Objects owned by the object with object ID 0x0B. Returns `c`.
+Objects owned by the object with object ID `0x0B`, which returns `c`:
+
+```graphql
 query {
   objects(filter: { owner: "0x0B", ownerKind: OBJECT }) {
     nodes {
       address
-      contents { type { repr } }
+      asMoveObject {
+        contents { type { repr } }
+      }
     }
   }
 }
 ```
-
-</TabItem>
-<TabItem value="grpc" label="gRPC (TypeScript SDK)">
-
-```ts
-// Objects owned by the address 0xADD. Returns `b`.
-const owned = await client.listOwnedObjects({ owner: '0xADD' });
-
-// Objects owned by the object with object ID 0x0B. Returns `c`.
-const received = await client.listOwnedObjects({ owner: '0x0B' });
-```
-
-</TabItem>
-</Tabs>
 
 Sui Foundation disabled JSON-RPC on Mainnet full nodes. If your application still calls `suix_getOwnedObjects`, see the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration).
 

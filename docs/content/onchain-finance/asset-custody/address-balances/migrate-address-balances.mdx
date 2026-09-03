@@ -114,7 +114,7 @@ The `balance` and `balances` fields on address types now include `addressBalance
 
 ## Changes to balance computation from checkpoint data
 
-It is recommended that you use the balance changes provided by JSON RPC or gRPC.
+Use the balance changes that gRPC or GraphQL provide rather than computing them yourself.
 
 If you compute balance changes from checkpoint data, you must now process accumulator events from `TransactionEffects` in addition to coin object diffs.
 
