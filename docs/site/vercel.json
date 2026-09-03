@@ -3434,6 +3434,26 @@
       "source": "/getting-started/examples/defi-trading-zklogin/",
       "destination": "/sui-stack/zklogin-integration/defi-trading-zklogin",
       "permanent": true
+    },
+    {
+      "source": "/guides/developer/first-app/first-move-package",
+      "destination": "/getting-started/onboarding/hello-world",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/first-app",
+      "destination": "/getting-started/onboarding/hello-world",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/first-app/:path*",
+      "destination": "/getting-started/onboarding/hello-world",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/sui-move-concepts/testing",
+      "destination": "/develop/testing-debugging/testing",
+      "permanent": true
     }
   ],
   "rewrites": [
