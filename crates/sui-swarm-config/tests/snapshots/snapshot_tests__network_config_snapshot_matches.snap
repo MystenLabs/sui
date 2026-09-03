@@ -23,8 +23,6 @@ validator_configs:
       db-pruner-period-secs: ~
       max-pending-transactions: ~
       parameters: ~
-    enable-index-processing: true
-    sync-post-process-one-tx: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -51,7 +49,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-secondary-index-checks: false
     transaction-deny-config:
       object-deny-list: []
       package-deny-list: []
@@ -207,8 +204,6 @@ validator_configs:
       db-pruner-period-secs: ~
       max-pending-transactions: ~
       parameters: ~
-    enable-index-processing: true
-    sync-post-process-one-tx: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -235,7 +230,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-secondary-index-checks: false
     transaction-deny-config:
       object-deny-list: []
       package-deny-list: []
@@ -391,8 +385,6 @@ validator_configs:
       db-pruner-period-secs: ~
       max-pending-transactions: ~
       parameters: ~
-    enable-index-processing: true
-    sync-post-process-one-tx: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -419,7 +411,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-secondary-index-checks: false
     transaction-deny-config:
       object-deny-list: []
       package-deny-list: []
@@ -575,8 +566,6 @@ validator_configs:
       db-pruner-period-secs: ~
       max-pending-transactions: ~
       parameters: ~
-    enable-index-processing: true
-    sync-post-process-one-tx: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -603,7 +592,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-secondary-index-checks: false
     transaction-deny-config:
       object-deny-list: []
       package-deny-list: []
@@ -759,8 +747,6 @@ validator_configs:
       db-pruner-period-secs: ~
       max-pending-transactions: ~
       parameters: ~
-    enable-index-processing: true
-    sync-post-process-one-tx: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -787,7 +773,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-secondary-index-checks: false
     transaction-deny-config:
       object-deny-list: []
       package-deny-list: []
@@ -943,8 +928,6 @@ validator_configs:
       db-pruner-period-secs: ~
       max-pending-transactions: ~
       parameters: ~
-    enable-index-processing: true
-    sync-post-process-one-tx: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -971,7 +954,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-secondary-index-checks: false
     transaction-deny-config:
       object-deny-list: []
       package-deny-list: []
@@ -1127,8 +1109,6 @@ validator_configs:
       db-pruner-period-secs: ~
       max-pending-transactions: ~
       parameters: ~
-    enable-index-processing: true
-    sync-post-process-one-tx: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -1155,7 +1135,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-secondary-index-checks: false
     transaction-deny-config:
       object-deny-list: []
       package-deny-list: []

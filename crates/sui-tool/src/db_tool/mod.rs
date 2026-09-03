@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use self::db_dump::{StoreName, dump_table, list_tables, table_summary};
-use self::index_search::{SearchRange, search_index};
 use crate::db_tool::db_dump::{compact, print_table_metadata, prune_checkpoints, prune_objects};
 use anyhow::{anyhow, bail};
 use clap::Parser;
@@ -20,15 +19,12 @@ use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointSequenceNumber}
 use typed_store::rocks::MetricConf;
 use typed_store::rocks::safe_drop_db;
 pub mod db_dump;
-mod index_search;
 
 #[derive(Parser)]
 #[command(rename_all = "kebab-case")]
 pub enum DbToolCommand {
     ListTables,
     Dump(Options),
-    IndexSearchKeyRange(IndexSearchKeyRangeOptions),
-    IndexSearchCount(IndexSearchCountOptions),
     TableSummary(Options),
     ListDBMetadata(Options),
     PrintLastConsensusIndex,
@@ -43,28 +39,6 @@ pub enum DbToolCommand {
     PruneObjects,
     PruneCheckpoints,
     SetCheckpointWatermark(SetCheckpointWatermarkOptions),
-}
-
-#[derive(Parser)]
-#[command(rename_all = "kebab-case")]
-pub struct IndexSearchKeyRangeOptions {
-    #[arg(long = "table-name", short = 't')]
-    table_name: String,
-    #[arg(long = "start", short = 's')]
-    start: String,
-    #[arg(long = "end", short = 'e')]
-    end_key: String,
-}
-
-#[derive(Parser)]
-#[command(rename_all = "kebab-case")]
-pub struct IndexSearchCountOptions {
-    #[arg(long = "table-name", short = 't')]
-    table_name: String,
-    #[arg(long = "start", short = 's')]
-    start: String,
-    #[arg(long = "count", short = 'c')]
-    count: u64,
 }
 
 #[derive(Parser)]
@@ -209,30 +183,6 @@ pub async fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> an
         DbToolCommand::Compact => compact(db_path),
         DbToolCommand::PruneObjects => prune_objects(db_path).await,
         DbToolCommand::PruneCheckpoints => prune_checkpoints(db_path).await,
-        DbToolCommand::IndexSearchKeyRange(rg) => {
-            let res = search_index(
-                db_path,
-                rg.table_name,
-                rg.start,
-                SearchRange::ExclusiveLastKey(rg.end_key),
-            )?;
-            for (k, v) in res {
-                println!("{}: {}", k, v);
-            }
-            Ok(())
-        }
-        DbToolCommand::IndexSearchCount(sc) => {
-            let res = search_index(
-                db_path,
-                sc.table_name,
-                sc.start,
-                SearchRange::Count(sc.count),
-            )?;
-            for (k, v) in res {
-                println!("{}: {}", k, v);
-            }
-            Ok(())
-        }
         DbToolCommand::SetCheckpointWatermark(d) => set_checkpoint_watermark(&db_path, d),
     }
 }
