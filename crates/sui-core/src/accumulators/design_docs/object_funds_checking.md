@@ -11,8 +11,8 @@
 > paths).
 
 This document covers the **post-execution** sufficiency check for object-owned virtual balance
-withdrawals — the work done by `ObjectFundsCheckerDEPRECATED` (in
-`crates/sui-core/src/accumulators/object_funds_checker/`) after PTB execution finishes a
+withdrawals — the work done by `LegacyObjectFundsChecker` (in
+`sui-execution/src/legacy_object_funds.rs`) after PTB execution finishes a
 transaction that withdrew from object-owned accumulator accounts.
 
 For the on-chain data layout, see [`data_model.md`](./data_model.md). For how withdrawals are
@@ -163,7 +163,7 @@ One subtlety worth noting: a balance read at a historical version is only meanin
 version is still readable. This is guaranteed by the pipeline, not by a separate retention
 mechanism. Versions ahead of the checkpoint executor are still held in memory; versions at or
 behind the executor are persisted and only become prune-eligible once the executor advances past
-them. A transaction whose `ObjectFundsCheckerDEPRECATED` is still running has, by definition, not yet been
+them. A transaction whose `LegacyObjectFundsChecker` is still running has, by definition, not yet been
 executed — so the checkpoint containing it has not been finalized, and the executor sits at or
 before it. Every version the checker can be asked about is therefore either in memory or still on
 disk, and safe to read.
@@ -175,7 +175,7 @@ scheduler: if storage has already advanced past version V, why not simply declar
 stale and move on?
 
 The answer is that object-funds checking runs at a different point in the pipeline and therefore
-has a different responsibility. By the time `ObjectFundsCheckerDEPRECATED` runs:
+has a different responsibility. By the time `LegacyObjectFundsChecker` runs:
 
 - the transaction has already executed once,
 - it has already produced concrete accumulator events and a running-max withdrawal,
@@ -205,7 +205,7 @@ they each see in storage is identical. Without additional tracking, the checker 
 both withdrawals against the full balance, potentially allowing more to be withdrawn than the
 account holds.
 
-The `ObjectFundsCheckerDEPRECATED` solves this with a structure called `unsettled_withdraws`:
+The `LegacyObjectFundsChecker` solves this with a structure called `unsettled_withdraws`:
 
 ```rust
 unsettled_withdraws: BTreeMap<AccumulatorObjId, BTreeMap<SequenceNumber, u128>>
@@ -336,7 +336,7 @@ produced by this validator or downloaded via the checkpoint executor (see
 
 ## 5. Assigned version requirement
 
-`ObjectFundsCheckerDEPRECATED` validates a post-execution object withdrawal against the transaction's
+`LegacyObjectFundsChecker` validates a post-execution object withdrawal against the transaction's
 assigned accumulator version. That version tells it which historical balance snapshot to read
 and which `unsettled_withdraws` bucket to charge.
 
@@ -347,7 +347,7 @@ no well-defined historical balance to validate against.
 
 ## 6. Epoch boundaries
 
-The `ObjectFundsCheckerDEPRECATED` is replaced at epoch boundaries the same way the address-funds
+The executor selects `LegacyObjectFundsChecker` at epoch boundaries the same way the address-funds
 scheduler is — see [`address_funds_scheduling.md`](./address_funds_scheduling.md) §7. The
 `watch` channel sender on the old checker is dropped, ending any in-flight watcher tasks
 (their `within_alive_epoch` guard breaks them out of waiting cleanly). Pending object funds

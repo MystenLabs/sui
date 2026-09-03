@@ -13,8 +13,10 @@ workspace = true
 [dependencies]
 mysten-common.workspace = true
 mysten-metrics.workspace = true
+prometheus.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 
 move-binary-format.workspace = true

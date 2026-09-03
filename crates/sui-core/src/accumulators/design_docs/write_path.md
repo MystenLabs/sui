@@ -357,4 +357,4 @@ historical-version validation.
 | `AccumulatorSettlementTxBuilder` | settlement constructor | `accumulators/mod.rs` | early-settlement scheduler; checkpoint builder |
 | `build_accumulator_barrier_tx` | settlement constructor | `accumulators/mod.rs` | early-settlement scheduler; checkpoint builder |
 | `FundsSettlement { next_accumulator_version, funds_changes }` | scheduler input | `funds_withdraw_scheduler/address_funds/mod.rs` | address-funds scheduler |
-| `settle_accumulator_version` | watch-channel update | `accumulators/object_funds_checker/mod.rs` | invoked from `process_certificate` on barrier execution |
+| `settle_accumulator_version` | watch-channel update | `sui-execution/src/legacy_object_funds.rs` | invoked from `process_certificate` on barrier execution |

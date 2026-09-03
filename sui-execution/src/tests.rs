@@ -42,6 +42,10 @@ fn test_encapsulation() {
     // implementations and do not need to be dominated by `sui-execution`.
     exec_crates.remove("mysten-common");
     exec_crates.remove("mysten-metrics");
+    // Generic async-runtime and metrics crates used by compatibility policy are not versioned
+    // execution implementations.
+    exec_crates.remove("prometheus");
+    exec_crates.remove("tokio");
     exec_crates.remove("tracing");
 
     // Capture problematic paths from roots to execution crates
