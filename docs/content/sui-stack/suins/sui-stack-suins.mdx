@@ -422,12 +422,8 @@ The `MessagingClientProvider` in Sui Messenger composes `SuiStackMessagingClient
 ```tsx
 import { SealClient } from '@mysten/seal';
 import { SuiStackMessagingClient, WalrusStorageAdapter } from '@mysten/messaging';
-import { SuiGrpcClient } from '@mysten/sui/grpc';
 
-const extendedClient = new SuiGrpcClient({
-  network: 'testnet',
-  baseUrl: 'https://fullnode.testnet.sui.io:443',
-})
+const extendedClient = new SuiClient({ url: 'https://fullnode.testnet.sui.io:443' })
   .$extend(
     SealClient.asClientExtension({
       serverConfigs: SEAL_SERVERS.map((id) => ({ objectId: id, weight: 1 })),
@@ -445,6 +441,8 @@ const extendedClient = new SuiGrpcClient({
     }),
   );
 ```
+
+This example targets `@mysten/messaging` 0.3.0, which depends on `@mysten/sui` 1.x and its `SuiClient`. Do not mix it with the `SuiGrpcClient` from `@mysten/sui` 2.x. Check the versions your app resolves before combining these packages.
 
 This pattern (composing Seal, Walrus, and Messaging onto a single Sui client through `$extend`) is the standard way to build a multi-service Sui Stack app. Each extension adds its methods to the client without affecting the others. `useUserSubname` then resolves the wallet's subname independently and the UI renders it next to messages and channel entries, replacing raw addresses throughout the app.
 
@@ -468,7 +466,7 @@ For name registration, see [suins.io](https://suins.io/). For the full developer
 
 **Target address not set.** `target_address` returns `None` even though the name exists. The holder has not set a target address. In your UI, treat `None` as unresolvable and prompt the user to set a target address in the SuiNS portal.
 
-**Wrong network.** `resolveNameServiceAddress` returns `null` on Mainnet for a name registered on Testnet, or the reverse. Confirm that the client `baseUrl` matches the network where the name is registered.
+**Wrong network.** `resolveNameServiceAddress` resolves with `address` set to `null` on Mainnet for a name registered on Testnet, or the reverse. Confirm that the client `baseUrl` matches the network where the name is registered.
 
 **Enoki subname creation fails.** The API returns an error if the domain is not in `LIVE` status. Publish the domain in the Enoki Portal before calling the creation endpoint. If using a public API key with zkLogin, each user can only have 1 subname per domain. A second creation attempt returns an error.
 
