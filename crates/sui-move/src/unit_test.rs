@@ -28,12 +28,14 @@ use sui_package_alt::{SuiFlavor, find_environment};
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
+    TypeTag,
     base_types::{SuiAddress, TxContext},
     digests::TransactionDigest,
     gas::{SuiGasStatus, SuiGasStatusAPI},
     gas_model::{tables::GasStatus, units_types::Gas},
     in_memory_storage::InMemoryStorage,
     metrics::ExecutionMetrics,
+    storage::ObjectFundsResolver,
 };
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
@@ -175,7 +177,20 @@ impl SuiVMTestSetup {
 /// protocol config be threaded into the native context extensions.
 pub struct SuiExtensionsBuilder<'a> {
     store: InMemoryTestStore,
+    object_funds_resolver: UnlimitedObjectFundsResolver,
     protocol_config: &'a ProtocolConfig,
+}
+
+struct UnlimitedObjectFundsResolver;
+
+impl ObjectFundsResolver for UnlimitedObjectFundsResolver {
+    fn object_available_balance(
+        &self,
+        _owner: SuiAddress,
+        _type_: &TypeTag,
+    ) -> sui_types::error::SuiResult<u128> {
+        Ok(u128::MAX)
+    }
 }
 
 impl VMTestSetup for SuiVMTestSetup {
@@ -213,6 +228,7 @@ impl VMTestSetup for SuiVMTestSetup {
     fn new_extensions_builder(&self) -> SuiExtensionsBuilder<'_> {
         SuiExtensionsBuilder {
             store: InMemoryTestStore(RefCell::new(InMemoryStorage::default())),
+            object_funds_resolver: UnlimitedObjectFundsResolver,
             protocol_config: &self.protocol_config,
         }
     }
@@ -229,6 +245,7 @@ impl VMTestSetup for SuiVMTestSetup {
         let protocol_config = builder.protocol_config;
         ext.add(ObjectRuntime::new(
             &builder.store,
+            &builder.object_funds_resolver,
             BTreeMap::new(),
             false,
             protocol_config,

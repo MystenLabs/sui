@@ -337,8 +337,12 @@ impl ObjectFundsCheckerDEPRECATED {
                 return false;
             }
         }
-        self.unsettled
-            .record_unsettled_withdraws(unsettled_withdraw_updates.iter(), accumulator_version);
+        self.unsettled.record_unsettled_withdraws(
+            unsettled_withdraw_updates
+                .iter()
+                .map(|(&account, &amount)| (account, amount)),
+            accumulator_version,
+        );
         true
     }
 
