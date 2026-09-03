@@ -207,6 +207,7 @@ export default {
             'develop/accessing-data/custom-indexer/custom-indexers',
             'develop/accessing-data/custom-indexer/pipeline-architecture',
             'develop/accessing-data/custom-indexer/build',
+            'develop/accessing-data/custom-indexer/integrate',
             'develop/accessing-data/custom-indexer/bring-your-own-store',
             'develop/accessing-data/custom-indexer/indexer-data-integration',
             'develop/accessing-data/custom-indexer/indexer-runtime-perf',
