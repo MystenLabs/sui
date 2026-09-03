@@ -272,9 +272,6 @@ impl ValidatorConfigBuilder {
             db_checkpoint_config: Default::default(),
             // By default, expensive checks will be enabled in debug build, but not in release build.
             expensive_safety_check_config: ExpensiveSafetyCheckConfig::default(),
-            name_service_package_address: None,
-            name_service_registry_id: None,
-            name_service_reverse_registry_id: None,
             transaction_deny_config: Default::default(),
             peer_deny_sync_config: self.peer_deny_sync_config.unwrap_or_default(),
             dev_inspect_disabled: false,
@@ -282,9 +279,6 @@ impl ValidatorConfigBuilder {
             state_debug_dump_config: Default::default(),
             state_archive_read_config: vec![],
             state_snapshot_write_config: StateSnapshotConfig::default(),
-            indexer_max_subscriptions: Default::default(),
-            transaction_kv_store_read_config: Default::default(),
-            transaction_kv_store_write_config: None,
             rpc: Some(sui_rpc_api::Config {
                 ..Default::default()
             }),
@@ -296,8 +290,6 @@ impl ValidatorConfigBuilder {
             authority_overload_config: self.authority_overload_config.unwrap_or_default(),
             execution_cache: self.execution_cache_config.unwrap_or_default(),
             run_with_range: None,
-            jsonrpc_server_type: None,
-            disable_json_rpc: false,
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
             state_accumulator_v2: self.global_state_hash_v2,
@@ -346,11 +338,8 @@ pub struct FullnodeConfigBuilder {
     p2p_listen_address: Option<SocketAddr>,
     network_key_pair: Option<KeyPairWithPath>,
     run_with_range: Option<RunWithRange>,
-    policy_config: Option<PolicyConfig>,
-    fw_config: Option<RemoteFirewallConfig>,
     data_ingestion_dir: Option<PathBuf>,
     disable_pruning: bool,
-    disable_json_rpc: bool,
     sync_post_process_one_tx: bool,
     chain_override: Option<Chain>,
     transaction_driver_config: Option<TransactionDriverConfig>,
@@ -441,11 +430,6 @@ impl FullnodeConfigBuilder {
         self
     }
 
-    pub fn with_disable_json_rpc(mut self, disable_json_rpc: bool) -> Self {
-        self.disable_json_rpc = disable_json_rpc;
-        self
-    }
-
     pub fn with_expensive_safety_check_config(
         mut self,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
@@ -511,16 +495,6 @@ impl FullnodeConfigBuilder {
         if let Some(run_with_range) = run_with_range {
             self.run_with_range = Some(run_with_range);
         }
-        self
-    }
-
-    pub fn with_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
-        self.policy_config = config;
-        self
-    }
-
-    pub fn with_fw_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
-        self.fw_config = config;
         self
     }
 
@@ -729,9 +703,6 @@ impl FullnodeConfigBuilder {
             expensive_safety_check_config: self
                 .expensive_safety_check_config
                 .unwrap_or_else(ExpensiveSafetyCheckConfig::new_enable_all),
-            name_service_package_address: None,
-            name_service_registry_id: None,
-            name_service_reverse_registry_id: None,
             transaction_deny_config: Default::default(),
             peer_deny_sync_config: Default::default(),
             dev_inspect_disabled: false,
@@ -739,9 +710,6 @@ impl FullnodeConfigBuilder {
             state_debug_dump_config: Default::default(),
             state_archive_read_config: vec![],
             state_snapshot_write_config: StateSnapshotConfig::default(),
-            indexer_max_subscriptions: Default::default(),
-            transaction_kv_store_read_config: Default::default(),
-            transaction_kv_store_write_config: Default::default(),
             rpc: self.rpc_config.or_else(|| {
                 Some(sui_rpc_api::Config {
                     enable_indexing: Some(true),
@@ -753,10 +721,10 @@ impl FullnodeConfigBuilder {
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             authority_overload_config: Default::default(),
             run_with_range: self.run_with_range,
-            jsonrpc_server_type: None,
-            disable_json_rpc: self.disable_json_rpc,
-            policy_config: self.policy_config,
-            firewall_config: self.fw_config,
+            // Fullnodes have no traffic controller: the only consumer was the
+            // (removed) JSON-RPC service.
+            policy_config: None,
+            firewall_config: None,
             execution_cache: ExecutionCacheConfig::default(),
             state_accumulator_v2: true,
             funds_withdraw_scheduler_type: FundsWithdrawSchedulerType::default(),

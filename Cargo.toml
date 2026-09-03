@@ -139,9 +139,7 @@ members = [
     "crates/sui-indexer-alt-schema",
     "crates/sui-inverted-index",
     "crates/sui-json",
-    "crates/sui-json-rpc",
     "crates/sui-json-rpc-api",
-    "crates/sui-json-rpc-tests",
     "crates/sui-json-rpc-types",
     "crates/sui-keys",
     "crates/sui-kv-rpc",
@@ -156,8 +154,6 @@ members = [
     "crates/sui-name-service",
     "crates/sui-network",
     "crates/sui-node",
-    "crates/sui-open-rpc",
-    "crates/sui-open-rpc-macros",
     "crates/sui-oracle",
     "crates/sui-package-alt",
     "crates/sui-package-dump",
@@ -596,7 +592,6 @@ winnow = "0.7"
 wiremock = "0.6"
 x509-parser = { version = "0.17.0", features = ["verify"] }
 zstd = "0.13.2"
-versions = "4.1.0"
 shlex = "1.3.0"
 starlark = "0.13.0"
 
@@ -705,7 +700,6 @@ sui-indexer-alt-reader = { path = "crates/sui-indexer-alt-reader" }
 sui-indexer-alt-schema = { path = "crates/sui-indexer-alt-schema" }
 sui-indexer-alt-object-store = { path = "crates/sui-indexer-alt-object-store" }
 sui-json = { path = "crates/sui-json" }
-sui-json-rpc = { path = "crates/sui-json-rpc" }
 sui-json-rpc-api = { path = "crates/sui-json-rpc-api" }
 sui-json-rpc-types = { path = "crates/sui-json-rpc-types" }
 sui-keys = { path = "crates/sui-keys" }
@@ -722,8 +716,6 @@ sui-move-lsp = { path = "crates/sui-move-lsp" }
 sui-name-service = { path = "crates/sui-name-service" }
 sui-network = { path = "crates/sui-network" }
 sui-node = { path = "crates/sui-node" }
-sui-open-rpc = { path = "crates/sui-open-rpc" }
-sui-open-rpc-macros = { path = "crates/sui-open-rpc-macros" }
 sui-package-dump = { path = "crates/sui-package-dump" }
 sui-package-alt = { path = "crates/sui-package-alt" }
 sui-package-management = { path = "crates/sui-package-management" }

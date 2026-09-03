@@ -4,12 +4,8 @@
 
 export RUST_BACKTRACE=1
 
-READY=0
-while [ $READY -eq 0 ]
+until curl -sf "${FULLNODE_RPC_ADDRESS}/health" -o /dev/null
 do
-    READY=`curl --location --request POST $FULLNODE_RPC_ADDRESS \
-    --header 'Content-Type: application/json' \
-    --data-raw '{ "jsonrpc":"2.0", "method":"rpc.discover","id":1}' | grep result | wc -l`
     sleep 10
 done
 

@@ -35,7 +35,6 @@ mod testing_imports {
     pub use sui_core::authority::authority_per_epoch_store::CertLockGuard;
     pub use sui_core::authority::authority_test_utils::submit_and_execute_with_error;
     pub use sui_core::authority::shared_object_version_manager::AssignedVersions;
-    pub use sui_json_rpc::authority_state::StateRead;
     pub use sui_json_rpc_types::EventFilter;
     pub use sui_json_rpc_types::{DevInspectResults, DryRunTransactionBlockResponse};
     pub use sui_storage::key_value_store::TransactionKeyValueStore;
@@ -295,7 +294,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
     async fn get_active_validator_addresses(&self) -> SuiResult<Vec<SuiAddress>> {
         Ok(self
             .fullnode
-            .get_system_state()
+            .get_sui_system_state_object_for_testing()
             .map_err(|e| {
                 SuiErrorKind::SuiSystemStateReadError(format!(
                     "Failed to get system state from fullnode: {}",

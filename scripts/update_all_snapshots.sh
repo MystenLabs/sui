@@ -50,7 +50,7 @@ UPDATE=1 cargo nextest run -p sui-framework --test build-system-packages
 "${INSTA[@]}" \
     -p sui-protocol-config \
     -p sui-swarm-config \
-    -p sui-open-rpc \
+    \
     -p sui-types
 "${INSTA[@]}" -p sui-core -- snapshot_tests
 "${INSTA[@]}" -p sui-indexer-alt-graphql -- test_schema_sdl_export

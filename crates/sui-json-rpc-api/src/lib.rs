@@ -3,37 +3,28 @@
 
 use anyhow::anyhow;
 pub use bridge::BridgeReadApiClient;
-pub use bridge::BridgeReadApiOpenRpc;
 pub use bridge::BridgeReadApiServer;
 pub use coin::CoinReadApiClient;
-pub use coin::CoinReadApiOpenRpc;
 pub use coin::CoinReadApiServer;
 pub use extended::ExtendedApiClient;
-pub use extended::ExtendedApiOpenRpc;
 pub use extended::ExtendedApiServer;
 pub use governance::GovernanceReadApiClient;
-pub use governance::GovernanceReadApiOpenRpc;
 pub use governance::GovernanceReadApiServer;
 pub use indexer::IndexerApiClient;
-pub use indexer::IndexerApiOpenRpc;
 pub use indexer::IndexerApiServer;
 pub use move_utils::MoveUtilsClient;
-pub use move_utils::MoveUtilsOpenRpc;
 pub use move_utils::MoveUtilsServer;
 use once_cell::sync::Lazy;
 use prometheus::Histogram;
 use prometheus::register_histogram_with_registry;
 use prometheus::{IntCounter, register_int_counter_with_registry};
 pub use read::ReadApiClient;
-pub use read::ReadApiOpenRpc;
 pub use read::ReadApiServer;
 use tap::TapFallible;
 use tracing::warn;
 pub use transaction_builder::TransactionBuilderClient;
-pub use transaction_builder::TransactionBuilderOpenRpc;
 pub use transaction_builder::TransactionBuilderServer;
 pub use write::WriteApiClient;
-pub use write::WriteApiOpenRpc;
 pub use write::WriteApiServer;
 
 mod bridge;

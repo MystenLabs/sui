@@ -16,7 +16,6 @@ consensus-config.workspace = true
 fastcrypto-zkp.workspace = true
 futures.workspace = true
 tracing.workspace = true
-jsonrpsee.workspace = true
 tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 tonic.workspace = true
 rand.workspace = true

@@ -19,7 +19,6 @@ indexmap.workspace = true
 insta.workspace = true
 itertools.workspace = true
 nonempty.workspace = true
-jsonrpsee.workspace = true
 test-cluster.workspace = true
 rand.workspace = true
 tokio.workspace = true
@@ -46,8 +45,6 @@ mysten-network.workspace = true
 sui-core.workspace = true
 sui-framework-snapshot.workspace = true
 sui-framework.workspace = true
-sui-json-rpc.workspace = true
-sui-json-rpc-api.workspace = true
 sui-node = { workspace = true, features = ["testing"] }
 sui-macros.workspace = true
 sui-network.workspace = true

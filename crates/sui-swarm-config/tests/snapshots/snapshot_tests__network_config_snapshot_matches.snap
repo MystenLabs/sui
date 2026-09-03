@@ -25,7 +25,6 @@ validator_configs:
       parameters: ~
     enable-index-processing: true
     sync-post-process-one-tx: false
-    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -75,10 +74,6 @@ validator_configs:
     state-snapshot-write-config:
       concurrency: 0
       archive-interval-epochs: 0
-    indexer-max-subscriptions: ~
-    transaction-kv-store-read-config:
-      base-url: "https://transactions.sui.io/"
-      cache-size: 100000
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
@@ -211,7 +206,6 @@ validator_configs:
       parameters: ~
     enable-index-processing: true
     sync-post-process-one-tx: false
-    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -261,10 +255,6 @@ validator_configs:
     state-snapshot-write-config:
       concurrency: 0
       archive-interval-epochs: 0
-    indexer-max-subscriptions: ~
-    transaction-kv-store-read-config:
-      base-url: "https://transactions.sui.io/"
-      cache-size: 100000
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
@@ -397,7 +387,6 @@ validator_configs:
       parameters: ~
     enable-index-processing: true
     sync-post-process-one-tx: false
-    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -447,10 +436,6 @@ validator_configs:
     state-snapshot-write-config:
       concurrency: 0
       archive-interval-epochs: 0
-    indexer-max-subscriptions: ~
-    transaction-kv-store-read-config:
-      base-url: "https://transactions.sui.io/"
-      cache-size: 100000
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
@@ -583,7 +568,6 @@ validator_configs:
       parameters: ~
     enable-index-processing: true
     sync-post-process-one-tx: false
-    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -633,10 +617,6 @@ validator_configs:
     state-snapshot-write-config:
       concurrency: 0
       archive-interval-epochs: 0
-    indexer-max-subscriptions: ~
-    transaction-kv-store-read-config:
-      base-url: "https://transactions.sui.io/"
-      cache-size: 100000
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
@@ -769,7 +749,6 @@ validator_configs:
       parameters: ~
     enable-index-processing: true
     sync-post-process-one-tx: false
-    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -819,10 +798,6 @@ validator_configs:
     state-snapshot-write-config:
       concurrency: 0
       archive-interval-epochs: 0
-    indexer-max-subscriptions: ~
-    transaction-kv-store-read-config:
-      base-url: "https://transactions.sui.io/"
-      cache-size: 100000
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
@@ -955,7 +930,6 @@ validator_configs:
       parameters: ~
     enable-index-processing: true
     sync-post-process-one-tx: false
-    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -1005,10 +979,6 @@ validator_configs:
     state-snapshot-write-config:
       concurrency: 0
       archive-interval-epochs: 0
-    indexer-max-subscriptions: ~
-    transaction-kv-store-read-config:
-      base-url: "https://transactions.sui.io/"
-      cache-size: 100000
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
@@ -1141,7 +1111,6 @@ validator_configs:
       parameters: ~
     enable-index-processing: true
     sync-post-process-one-tx: false
-    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -1191,10 +1160,6 @@ validator_configs:
     state-snapshot-write-config:
       concurrency: 0
       archive-interval-epochs: 0
-    indexer-max-subscriptions: ~
-    transaction-kv-store-read-config:
-      base-url: "https://transactions.sui.io/"
-      cache-size: 100000
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
