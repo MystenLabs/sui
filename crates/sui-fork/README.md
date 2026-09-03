@@ -94,7 +94,7 @@ You can now use Sui CLI commands such as `sui client ptb`,
 `sui client publish`, `sui client upgrade`, or other read/write commands against the forked network.
 
 > [!NOTE]
-> Use `--forking-mode` on transaction commands when you need to impersonate a
+> Use `--skip-signing` on transaction commands when you need to impersonate a
 > sender on the local fork. Note that this is not available yet for `sui client ptb`, only for regular write commands.
 
 #### 5. Control checkpoint and time progression
@@ -111,13 +111,18 @@ sui-fork status
 
 ## Impersonating Senders
 
-The Sui CLI supports `--forking-mode` on transaction commands such as
-`sui client upgrade`. This flag is only intended for local forked networks. It
-submits the transaction with an empty signature list, which tells the forked
-network to execute the transaction as the declared sender without requiring that
-sender's private key.
+The Sui CLI supports `--skip-signing` on transaction commands such as
+`sui client upgrade`, together with `--sender` to name the account to act as.
+This flag is only intended for local forked networks. It submits the transaction
+with an empty signature list, which tells the forked network to execute the
+transaction as the declared sender without requiring that sender's private key.
 
 Transactions with non-empty signatures still use normal signature verification.
+
+A fork reports the chain identifier of the network it was forked from, so the
+Sui CLI and Move package management treat it as that network: a package
+published on the network can be upgraded on the fork from its existing
+`Published.toml` record.
 
 ## Forked Network vs Sui CLI Local Network
 

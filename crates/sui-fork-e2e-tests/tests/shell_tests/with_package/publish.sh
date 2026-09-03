@@ -16,8 +16,8 @@ sender=$(on_localnet active-address)
 fork_start --address "$sender"
 fork_env
 
-assert_ne "$(on_fork chain-identifier --format=hex)" "$(on_localnet chain-identifier --format=hex)" \
-  "the fork derives its own chain identifier from the fork checkpoint"
+assert_eq "$(on_fork chain-identifier --format=hex)" "$(on_localnet chain-identifier --format=hex)" \
+  "the fork reports the localnet's chain identifier"
 add_env_to_toml counter fork on_fork
 
 gas=$(gas_coin on_fork)

@@ -3,7 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Publish a package on the localnet, fork with the publisher's objects, and upgrade the package on
-# the fork with the UpgradeCap that the localnet publish created.
+# the fork with the UpgradeCap that the localnet publish created. The fork reports the localnet's
+# chain identifier, so the CLI resolves the `fork` env to the package's `localnet` environment and
+# finds its publication record without any change to Published.toml.
 set -euo pipefail
 source ./lib.sh
 localnet_setup
@@ -24,17 +26,12 @@ fork_start --checkpoint "$fork_point" --address "$sender"
 fork_env
 assert_eq "$(object_field on_fork "$cap" .owner.AddressOwner)" "$sender" \
   "the UpgradeCap from the localnet publish is seeded on the fork"
-# The publication record is keyed by environment and chain id, and the fork has a chain id of
-# its own, so the localnet record is repeated for the fork env with the fork's chain id.
-add_env_to_toml counter fork on_fork
-sed -e 's/^\[published\.localnet/[published.fork/' \
-  -e "s/^chain-id = .*/chain-id = \"$(on_fork chain-identifier --format=hex)\"/" \
-  counter/Published.toml > fork_record.toml
-cat fork_record.toml >> counter/Published.toml
 echo 'module counter::v2; public fun two(): u64 { 2 }' > counter/sources/v2.move
 gas=$(gas_coin on_fork)
 run_json upgrade.json on_fork upgrade counter --gas "$gas" --gas-budget 100000000
 assert_eq "$(tx_status_of upgrade.json)" success "the localnet package upgraded on the fork"
+assert_grep 'building for `localnet` instead' upgrade.json.err \
+  "the CLI resolved the fork env to the localnet environment by chain id"
 package_v2=$(published_package_id upgrade.json)
 assert_ne "$package_v2" "$package_v1" "the upgrade produced a new package id"
 assert_eq "$(mutated_object_id upgrade.json "::package::UpgradeCap")" "$cap" \
