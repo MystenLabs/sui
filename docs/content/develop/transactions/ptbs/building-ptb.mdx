@@ -66,11 +66,11 @@ const tx = new Transaction();
 Using this, you can then add transactions to the PTB:
 
 ```ts
-// Create a coin with a balance of 100 MIST. The SDK sources the funds from
-// the sender's address balance, falling back to coin objects.
-const coin = tx.coin({ balance: 100n });
+// Create a new coin with balance 100, based on the coins used as gas payment.
+// You can define any balance here.
+const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(100)]);
 
-// Transfer the coin to a specific address.
+// Transfer the split coin to a specific address.
 tx.transferObjects([coin], '0xSomeSuiAddress');
 ```
 
@@ -87,10 +87,15 @@ const transfers: Transfer[] = getTransfers();
 
 const tx = new Transaction();
 
-// Create a transfer for each recipient. Each tx.coin() call adds its own
-// coin to the transaction.
-transfers.forEach((transfer) => {
-	tx.transferObjects([tx.coin({ balance: BigInt(transfer.amount) })], transfer.to);
+// First, split the gas coin into multiple coins:
+const coins = tx.splitCoins(
+	tx.gas,
+	transfers.map((transfer) => tx.pure.u64(transfer.amount)),
+);
+
+// Next, create a transfer transaction for each coin:
+transfers.forEach((transfer, index) => {
+	tx.transferObjects([coins[index]], transfer.to);
 });
 ```
 
@@ -158,15 +163,18 @@ tx.transferObjects([mintMany[0], mintMany[1]], tx.pure.address(address));
 
 ## Use the gas coin
 
-With PTBs, you can use the gas payment coin to construct coins with a set balance using `splitCoins`. You can use `tx.gas` to access the gas coin in a PTB and it is valid as input for any arguments. With the exception of `transferObjects`, `tx.gas` must be used by reference. This means you can also add to the gas coin with `mergeCoins` or borrow it for Move functions with `moveCall`.
+With PTBs, you can use the gas payment coin to construct coins with a set balance using `splitCoins`. You can use `tx.gas` to access the gas coin in a PTB and it is valid as input for any arguments.
 
-:::info
+`tx.gas` is available whichever way the transaction pays for gas. When you supply coin objects, the protocol smashes them into a single gas coin. When you pass an empty array to `setGasPayment([])` to draw gas from an [address balance](/onchain-finance/asset-custody/address-balances/using-address-balances), the protocol materializes a synthetic gas coin from the sender's or sponsor's balance. `tx.gas` refers to that coin in either case, so building against it does not force client-side coin or balance resolution and stays compatible with [offline building](#building-offline).
 
-`tx.gas` works only when the transaction pays gas from coin objects. If gas comes from an [address balance](/onchain-finance/asset-custody/address-balances/using-address-balances) through `setGasPayment([])`, `tx.gas` is unavailable. Prefer `tx.coin()`, which works in both cases.
+You can borrow the gas coin by reference freely: add to it with `mergeCoins`, split from it with `splitCoins`, or pass it to a Move function with `moveCall`. Consuming it by value is restricted to 2 commands:
 
-:::
+- `transferObjects`, to send the whole remaining balance to another address.
+- `sui::coin::send_funds`, to deposit it into an address balance.
 
-You can transfer the gas coin using `transferObjects` in the event that you want to transfer all of your coin balance to another address. You can also transfer other coins in your wallet using their `Object ID`. For example,
+Any other by-value use fails with `InvalidGasCoinUsage`.
+
+You can also split from and transfer other coins in your wallet using their object ID. For example,
 
 ```ts
 const otherCoin = tx.object('0xCoinObjectId');
