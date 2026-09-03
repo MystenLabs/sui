@@ -17,12 +17,12 @@ export default function JsonRpc() {
             Legacy API scheduled for removal
           </p>
           <p>
-            JSON-RPC was disabled on Sui Foundation Mainnet full nodes the week
-            of July&nbsp;27,&nbsp;2026. Full decommission, including code
-            removal, is planned for mid-October&nbsp;2026, after which this
-            reference is archived. This page is kept for identifying legacy
-            methods during migration. Do not build new integrations against it.
-            Use <a href="/develop/accessing-data/grpc">gRPC</a> or{" "}
+            Sui Foundation disabled JSON-RPC on Mainnet full nodes the week of
+            July&nbsp;27,&nbsp;2026, and plans full decommission, including code
+            removal, for mid-October&nbsp;2026, when this reference moves to the
+            archive. Use this page to identify the legacy methods your
+            application still calls, not to build new integrations. Call{" "}
+            <a href="/develop/accessing-data/grpc">gRPC</a> or{" "}
             <a href="/develop/accessing-data/graphql/graphql-rpc">
               GraphQL RPC
             </a>{" "}
