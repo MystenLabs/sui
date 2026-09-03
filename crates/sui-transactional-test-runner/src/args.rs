@@ -20,11 +20,14 @@ use move_core_types::u256::U256;
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::tasks::{RunCommand, SyntaxChoice};
 use sui_protocol_config::Chain;
+use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::balance::Balance;
 use sui_types::base_types::{SequenceNumber, SuiAddress};
+use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
 use sui_types::move_package::UpgradePolicy;
 use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::storage::ReadStore;
 use sui_types::transaction::{
     Argument, CallArg, FundsWithdrawalArg, ObjectArg, SharedObjectMutability,
 };
@@ -465,6 +468,7 @@ pub enum SuiExtraValueArgs {
     Owned(FakeID, Option<SequenceNumber>),
     Shared(SharedObjectMutability, FakeID, Option<SequenceNumber>),
     Withdraw(u64, ParsedType),
+    CoinReservation(u64, ParsedType),
 }
 
 #[derive(Clone)]
@@ -477,6 +481,7 @@ pub enum SuiValue {
     Owned(FakeID, Option<SequenceNumber>),
     Shared(SharedObjectMutability, FakeID, Option<SequenceNumber>),
     Withdraw(u64, move_core_types::language_storage::TypeTag),
+    CoinReservation(u64, move_core_types::language_storage::TypeTag),
 }
 
 impl SuiExtraValueArgs {
@@ -548,26 +553,41 @@ impl SuiExtraValueArgs {
     fn parse_withdraw_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
         parser: &mut MoveCLParser<'a, ValueToken, I>,
     ) -> anyhow::Result<Self> {
-        let contents = parser.advance(ValueToken::Ident)?;
-        ensure!(contents == "withdraw");
+        let (amount, parsed_type) = Self::parse_typed_amount(parser, "withdraw")?;
+        Ok(SuiExtraValueArgs::Withdraw(amount, parsed_type))
+    }
 
-        // Format: withdraw<Type>(amount)
+    fn parse_coin_reservation_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
+        parser: &mut MoveCLParser<'a, ValueToken, I>,
+    ) -> anyhow::Result<Self> {
+        let (amount, parsed_type) = Self::parse_typed_amount(parser, "coin_reservation")?;
+        Ok(SuiExtraValueArgs::CoinReservation(amount, parsed_type))
+    }
+
+    /// Parses `<ident_name><Type>(amount)`.
+    fn parse_typed_amount<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
+        parser: &mut MoveCLParser<'a, ValueToken, I>,
+        ident_name: &str,
+    ) -> anyhow::Result<(u64, ParsedType)> {
+        let contents = parser.advance(ValueToken::Ident)?;
+        ensure!(contents == ident_name);
+
         let type_args = parser.parse_type_args()?;
         let [parsed_type]: [ParsedType; 1] =
             type_args.try_into().map_err(|type_args: Vec<_>| {
                 anyhow::anyhow!(
-                    "withdraw expects exactly one type argument, got {}",
+                    "{} expects exactly one type argument, got {}",
+                    ident_name,
                     type_args.len()
                 )
             })?;
 
-        // Now parse (amount)
         parser.advance(ValueToken::LParen)?;
         let amount_str = parser.advance(ValueToken::Number)?;
         let (amount, _) = parse_u64(amount_str)?;
         parser.advance(ValueToken::RParen)?;
 
-        Ok(SuiExtraValueArgs::Withdraw(amount, parsed_type))
+        Ok((amount, parsed_type))
     }
 
     fn parse_receiving_or_object_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
@@ -619,6 +639,9 @@ impl SuiValue {
             SuiValue::Withdraw(_, _) => {
                 panic!("unexpected nested Sui withdraw reservation in args")
             }
+            SuiValue::CoinReservation(_, _) => {
+                panic!("unexpected nested Sui coin reservation in args")
+            }
         }
     }
 
@@ -633,6 +656,9 @@ impl SuiValue {
             SuiValue::Shared(_, _, _) => panic!("unexpected nested Sui shared object in args"),
             SuiValue::Withdraw(_, _) => {
                 panic!("unexpected nested Sui withdraw reservation in args")
+            }
+            SuiValue::CoinReservation(_, _) => {
+                panic!("unexpected nested Sui coin reservation in args")
             }
         }
     }
@@ -733,7 +759,11 @@ impl SuiValue {
         }
     }
 
-    pub(crate) fn into_call_arg(self, test_adapter: &SuiTestAdapter) -> anyhow::Result<CallArg> {
+    pub(crate) fn into_call_arg(
+        self,
+        test_adapter: &SuiTestAdapter,
+        sender: SuiAddress,
+    ) -> anyhow::Result<CallArg> {
         Ok(match self {
             SuiValue::Object(fake_id, version) => {
                 CallArg::Object(Self::object_arg(fake_id, version, test_adapter)?)
@@ -773,6 +803,15 @@ impl SuiValue {
                     amount, inner_type,
                 ))
             }
+            SuiValue::CoinReservation(amount, type_tag) => {
+                let accumulator_obj_id = *AccumulatorValue::get_field_id(sender, &type_tag)
+                    .map_err(|e| anyhow::anyhow!("Failed to compute accumulator object ID: {e}"))?
+                    .inner();
+                let epoch = test_adapter.get_latest_epoch_id().unwrap_or(0);
+                let object_ref = ParsedObjectRefWithdrawal::new(accumulator_obj_id, epoch, amount)
+                    .encode(SequenceNumber::new(), test_adapter.get_chain_identifier());
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref))
+            }
         })
     }
 
@@ -780,6 +819,7 @@ impl SuiValue {
         self,
         builder: &mut ProgrammableTransactionBuilder,
         test_adapter: &SuiTestAdapter,
+        sender: SuiAddress,
     ) -> anyhow::Result<Argument> {
         match self {
             SuiValue::ObjVec(vec) => builder.make_obj_vec(
@@ -788,7 +828,7 @@ impl SuiValue {
                     .collect::<Result<Vec<ObjectArg>, _>>()?,
             ),
             value => {
-                let call_arg = value.into_call_arg(test_adapter)?;
+                let call_arg = value.into_call_arg(test_adapter, sender)?;
                 builder.input(call_arg)
             }
         }
@@ -812,6 +852,9 @@ impl ParsableValue for SuiExtraValueArgs {
                 Some(Self::parse_non_exlucsive_write_value(parser))
             }
             (ValueToken::Ident, "withdraw") => Some(Self::parse_withdraw_value(parser)),
+            (ValueToken::Ident, "coin_reservation") => {
+                Some(Self::parse_coin_reservation_value(parser))
+            }
             _ => None,
         }
     }
@@ -853,6 +896,10 @@ impl ParsableValue for SuiExtraValueArgs {
             SuiExtraValueArgs::Withdraw(amount, parsed_type) => {
                 let type_tag = parsed_type.into_type_tag(mapping)?;
                 Ok(SuiValue::Withdraw(amount, type_tag))
+            }
+            SuiExtraValueArgs::CoinReservation(amount, parsed_type) => {
+                let type_tag = parsed_type.into_type_tag(mapping)?;
+                Ok(SuiValue::CoinReservation(amount, type_tag))
             }
         }
     }
