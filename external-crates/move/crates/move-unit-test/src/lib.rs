@@ -137,6 +137,10 @@ pub enum TraceType {
     Full,
     InstructionOnly,
     FunctionOnly,
+    #[value(hide = true)]
+    PreEffectsOnly,
+    #[value(hide = true)]
+    PostEffectsOnly,
 }
 
 fn format_module_id(

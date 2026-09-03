@@ -7,6 +7,12 @@ test -t 1 --trace function-only
 test -t 1 --trace
 > diff -qr traces saved_traces
 
+test -t 1 --trace pre-effects-only
+> diff -qr traces saved_pre_effects_only_traces
+
+test -t 1 --trace post-effects-only
+> diff -qr traces saved_post_effects_only_traces
+
 coverage lcov
 > wc -l lcov.info
 
