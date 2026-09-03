@@ -5,7 +5,7 @@
 
 
 // This comment belongs to init.
-//# init --addresses A=0x42 B=0x43
+//# init --edition 2024 --addresses A=0x42 B=0x43 C=0x44 D=0x45
 
 //# publish
 // This comment belongs to the publish task and should not appear in snapshot output.
@@ -17,7 +17,7 @@ module A::M {
     }
 }
 
-// This comment after the module must not be standalone snapshot output.
+// This comment after the published module is preserved in snapshot output.
 
 //# publish
 // This comment belongs to the publish task and should not appear in snapshot output.
@@ -27,7 +27,19 @@ module B::N {
     public fun noop() {}
 }
 
-// This comment after the module must not be standalone snapshot output.
+// This comment after the published module is preserved in snapshot output.
+
+//# publish
+module C::Functions;
+fun foo() {}
+
+// This comment after a semicolon-header function module is preserved in snapshot output.
+
+//# publish
+module D::Constants;
+const A: u64 = 10;
+
+// This comment after a semicolon-header constant module is preserved in snapshot output.
 
 // This comment belongs to the first run task.
 //# run A::M::answer

@@ -3,6 +3,8 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 8 tasks
 
+// All of these should abort
+
 task 1, lines 14-20:
 //# run
 Error: Function execution failed with VMError: {

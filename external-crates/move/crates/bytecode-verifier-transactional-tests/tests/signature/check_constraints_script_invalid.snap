@@ -3,6 +3,9 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 9 tasks
 
+// tests various invalid constraints in script arguments
+// all tests should give a constraint violation, even without type arguments passed in to 'run'
+
 task 1, lines 17-24:
 //# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {

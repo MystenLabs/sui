@@ -8,11 +8,13 @@ processed 12 tasks
 init:
 P1: object(0,0), P2: object(0,1)
 
-task 1, lines 8-53:
+task 1, lines 8-51:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 7432800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+// Create object A at version 2
 
 task 2, lines 55-57:
 //# programmable --sender P1 --inputs @P1

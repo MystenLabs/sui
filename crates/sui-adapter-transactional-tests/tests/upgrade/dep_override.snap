@@ -21,11 +21,13 @@ created: object(2,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6817200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 3, lines 30-41:
+task 3, lines 30-38:
 //# upgrade --package Test_DepDepV2 --upgrade-capability 1,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6817200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+// 2 versions of the direct dependency
 
 task 4, lines 44-49:
 //# publish --upgradeable --dependencies Test_DepDepV1 --sender A
@@ -33,23 +35,29 @@ created: object(4,0), object(4,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6558800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5, lines 51-59:
+task 5, lines 51-56:
 //# upgrade --package Test_DepV1 --upgrade-capability 4,1 --dependencies Test_DepDepV2 --sender A
 created: object(5,0)
 mutated: object(0,0), object(4,1)
 gas summary: computation_cost: 1000000, storage_cost: 6558800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 6, lines 62-69:
+// 3 versions of the root package
+
+task 6, lines 62-67:
 //# publish --upgradeable --dependencies Test_DepV1 Test_DepDepV1 --sender A
 created: object(6,0), object(6,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 7037600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7, lines 71-78:
+// override direct dependency
+
+task 7, lines 71-76:
 //# upgrade --package Test_V1 --upgrade-capability 6,1 --dependencies Test_DepV2 Test_DepDepV2 --sender A
 created: object(7,0)
 mutated: object(0,0), object(6,1)
 gas summary: computation_cost: 1000000, storage_cost: 7037600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+// override indirect dependency
 
 task 8, lines 80-85:
 //# upgrade --package Test_V2 --upgrade-capability 6,1 --dependencies Test_DepV1 Test_DepDepV3 --sender A
@@ -161,15 +169,19 @@ Contents: Test_DepDepV1::DepDepM1::Obj {
 
 // missing direct dependency (should fail)
 
-task 19, lines 117-123:
+task 19, lines 117-121:
 //# upgrade --package Test_V3 --upgrade-capability 6,1 --dependencies Test_DepDepV1 --sender A
 Error: Transaction Effects Status: Publish/Upgrade Error, Missing dependency. A dependency of a published or upgraded package has not been assigned an on-chain address.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeMissingDependency, source: None, command: Some(1) } }
 
-task 20, lines 125-131:
+// missing indirect dependency (should fail)
+
+task 20, lines 125-129:
 //# upgrade --package Test_V3 --upgrade-capability 6,1 --dependencies Test_DepV2 --sender A
 Error: Transaction Effects Status: Publish/Upgrade Error, Missing dependency. A dependency of a published or upgraded package has not been assigned an on-chain address.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeMissingDependency, source: None, command: Some(1) } }
+
+// downgrade indirect dependency (should fail)
 
 task 21, lines 133-137:
 //# upgrade --package Test_V3 --upgrade-capability 6,1 --dependencies Test_DepV2 Test_DepDepV1 --sender A
