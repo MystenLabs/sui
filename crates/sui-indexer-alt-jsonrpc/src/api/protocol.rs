@@ -16,8 +16,6 @@ use sui_indexer_alt_schema::schema::kv_feature_flags;
 use sui_indexer_alt_schema::schema::kv_protocol_configs;
 use sui_json_rpc_types::ProtocolConfigResponse;
 use sui_json_rpc_types::SuiProtocolConfigValue;
-use sui_open_rpc::Module;
-use sui_open_rpc_macros::open_rpc;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::sui_serde::BigInt;
 
@@ -26,7 +24,6 @@ use crate::context::Context;
 use crate::error::RpcError;
 use crate::error::invalid_params;
 
-#[open_rpc(namespace = "sui", tag = "Protocol API")]
 #[rpc(server, namespace = "sui")]
 trait ProtocolApi {
     /// Return the protocol config table for the given version number. If the version number is not
@@ -34,7 +31,7 @@ trait ProtocolApi {
     #[method(name = "getProtocolConfig")]
     async fn get_protocol_config(
         &self,
-        /// An optional protocol version specifier. If omitted, the protocol config for the latest indexed epoch will be returned.
+        // An optional protocol version specifier. If omitted, the protocol config for the latest indexed epoch will be returned.
         version: Option<BigInt<u64>>,
     ) -> RpcResult<ProtocolConfigResponse>;
 }
@@ -58,10 +55,6 @@ impl ProtocolApiServer for Protocol {
 }
 
 impl RpcModule for Protocol {
-    fn schema(&self) -> Module {
-        ProtocolApiOpenRpc::module_doc()
-    }
-
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
         self.into_rpc()
     }

@@ -25,8 +25,6 @@ use sui_json_rpc_types::Stake;
 use sui_json_rpc_types::StakeStatus;
 use sui_json_rpc_types::ValidatorApy;
 use sui_json_rpc_types::ValidatorApys;
-use sui_open_rpc::Module;
-use sui_open_rpc_macros::open_rpc;
 use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 use sui_types::TypeTag;
@@ -58,7 +56,6 @@ use crate::error::rpc_bail;
 /// Number of most recent epochs to load from `kv_epoch_starts` when computing validator APYs.
 const APY_EPOCH_WINDOW: i64 = 31;
 
-#[open_rpc(namespace = "suix", tag = "Governance API")]
 #[rpc(server, namespace = "suix")]
 trait GovernanceApi {
     /// Return the reference gas price for the network as of the latest epoch.
@@ -179,10 +176,6 @@ impl GovernanceApiServer for Governance {
 }
 
 impl RpcModule for Governance {
-    fn schema(&self) -> Module {
-        GovernanceApiOpenRpc::module_doc()
-    }
-
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
         self.into_rpc()
     }
