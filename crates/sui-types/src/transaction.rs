@@ -1953,10 +1953,12 @@ impl TransactionKind {
     /// Whether this is any accumulator settlement transaction (a settlement chunk or
     /// the barrier); every one declares the accumulator root object as a shared input.
     pub fn is_accumulator_settle_tx(&self) -> bool {
-        matches!(self, TransactionKind::ProgrammableSystemTransaction(_))
-            && self
-                .shared_input_objects()
+        if let TransactionKind::ProgrammableSystemTransaction(pt) = self {
+            pt.shared_input_objects()
                 .any(|obj| obj.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+        } else {
+            false
+        }
     }
 
     /// If this is an accumulator barrier settlement transaction, returns its
