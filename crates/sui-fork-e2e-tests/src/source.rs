@@ -40,8 +40,13 @@ use crate::script::spawn_in_group;
 /// Epoch length of the source network, long enough that no test straddles an epoch change.
 const EPOCH_DURATION_MS: u64 = 60 * 60 * 1_000;
 
-/// Longest wait for `sui start` to exit after SIGINT before its process group is killed.
-const STOP_GRACE: Duration = Duration::from_secs(20);
+/// Longest wait for `sui start` to exit after SIGINT before its process group is killed. A minute,
+/// because a group kill cannot reach the PostgreSQL that `sui start` runs in a session of its own,
+/// and with a dozen localnets shutting down at once on one machine twenty seconds proved too short.
+const STOP_GRACE: Duration = Duration::from_secs(60);
+
+/// Time between the SIGINTs sent to `sui start` while it is still running.
+const INTERRUPT_INTERVAL: Duration = Duration::from_secs(2);
 
 /// Interval between checks for the child's exit.
 const POLL: Duration = Duration::from_millis(200);
@@ -149,14 +154,22 @@ impl SourceNetwork {
             ));
         }
 
-        signal_process(self.child.id(), "INT");
+        // `sui start` listens for SIGINT only between the validator health checks of its main
+        // loop, and a signal that lands during a check is lost, so the interrupt is repeated until
+        // the child exits. Once it is shutting down, the extra signals are ignored.
         let deadline = Instant::now() + STOP_GRACE;
+        let mut next_interrupt = Instant::now();
         let status = loop {
             if let Some(status) = self.try_wait()? {
                 break Some(status);
             }
-            if Instant::now() >= deadline {
+            let now = Instant::now();
+            if now >= deadline {
                 break None;
+            }
+            if now >= next_interrupt {
+                signal_process(self.child.id(), "INT");
+                next_interrupt = now + INTERRUPT_INTERVAL;
             }
             tokio::time::sleep(POLL).await;
         };
