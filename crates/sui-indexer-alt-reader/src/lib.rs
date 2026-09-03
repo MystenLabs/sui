@@ -3,6 +3,7 @@
 
 pub mod alpha_ledger_grpc_reader;
 pub mod checkpoints;
+mod client_pool;
 pub mod consistent_reader;
 pub mod cp_sequence_numbers;
 pub mod displays;

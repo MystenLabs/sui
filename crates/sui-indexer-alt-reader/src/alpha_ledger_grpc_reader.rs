@@ -10,19 +10,18 @@ use bytes::Bytes;
 use futures::Stream;
 use futures::StreamExt;
 use prometheus::Registry;
-use sui_rpc::Client;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use tonic::transport::Uri;
 use tracing::warn;
 
+use crate::client_pool::ClientPool;
 use crate::ledger_grpc_reader::LedgerGrpcArgs;
-use crate::metrics::GrpcMetricsLayer;
 
-/// A reader backed by the gRPC LedgerService's streaming list APIs.
+/// A reader backed by the gRPC LedgerService's streaming list APIs, over a pool of connections.
 #[derive(Clone)]
 pub struct AlphaLedgerGrpcReader {
-    client: Client,
+    pool: ClientPool,
     timeout: Option<Duration>,
 }
 
@@ -62,18 +61,16 @@ impl AlphaLedgerGrpcReader {
         registry: &Registry,
     ) -> anyhow::Result<Self> {
         let timeout = args.statement_timeout();
-        let mut client = Client::new(uri)?
-            .with_max_decoding_message_size(args.ledger_grpc_max_decoding_message_size)
-            .request_layer(GrpcMetricsLayer::new(
-                prefix.unwrap_or("ledger_grpc"),
-                registry,
-            ));
+        let pool = ClientPool::new(
+            uri,
+            args.ledger_grpc_pool_size,
+            args.ledger_grpc_max_decoding_message_size,
+            timeout,
+            prefix,
+            registry,
+        )?;
 
-        if let Some(timeout) = timeout {
-            client = client.with_response_headers_timeout(timeout);
-        }
-
-        Ok(Self { client, timeout })
+        Ok(Self { pool, timeout })
     }
 
     pub async fn list_transactions(
@@ -81,8 +78,8 @@ impl AlphaLedgerGrpcReader {
         request: proto::ListTransactionsRequest,
     ) -> anyhow::Result<StreamPage<ExecutedTransaction>> {
         let stream = self
-            .client
-            .clone()
+            .pool
+            .client()
             .ledger_client()
             .list_transactions(self.request(request))
             .await
@@ -97,8 +94,8 @@ impl AlphaLedgerGrpcReader {
         request: proto::ListEventsRequest,
     ) -> anyhow::Result<StreamPage<proto::Event>> {
         let stream = self
-            .client
-            .clone()
+            .pool
+            .client()
             .ledger_client()
             .list_events(self.request(request))
             .await
@@ -113,8 +110,8 @@ impl AlphaLedgerGrpcReader {
         request: proto::ListCheckpointsRequest,
     ) -> anyhow::Result<StreamPage<proto::Checkpoint>> {
         let stream = self
-            .client
-            .clone()
+            .pool
+            .client()
             .ledger_client()
             .list_checkpoints(self.request(request))
             .await

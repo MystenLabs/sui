@@ -11,7 +11,6 @@ use async_graphql::dataloader::Loader;
 use futures::future::try_join_all;
 use prometheus::Registry;
 use prost_types::FieldMask;
-use sui_rpc::Client;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::proto_to_timestamp_ms;
 use sui_rpc::proto::sui::rpc::v2 as grpc;
@@ -22,7 +21,7 @@ use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 use tonic::transport::Uri;
 
-use crate::metrics::GrpcMetricsLayer;
+use crate::client_pool::ClientPool;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct LedgerGrpcArgs {
@@ -33,6 +32,12 @@ pub struct LedgerGrpcArgs {
     /// Maximum gRPC decoding message size for Ledger service responses, in bytes.
     #[arg(long, default_value_t = 32 * 1024 * 1024)]
     pub ledger_grpc_max_decoding_message_size: usize,
+
+    /// Number of independent gRPC connections each ledger reader opens, spread round-robin across
+    /// list calls. One connection caps backfill throughput at what a single HTTP/2 connection can
+    /// sustain, so a small pool lets one replica drive several in parallel.
+    #[arg(long, default_value_t = 4)]
+    pub ledger_grpc_pool_size: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -52,7 +57,7 @@ pub struct CheckpointedTransaction {
 /// as fullnode, but is backed by Bigtable for serving historical data.
 #[derive(Clone)]
 pub struct LedgerGrpcReader {
-    client: Client,
+    pool: ClientPool,
     timeout: Option<Duration>,
     max_batch_get_transactions: usize,
     max_batch_get_objects: usize,
@@ -130,6 +135,7 @@ impl LedgerGrpcArgs {
             ledger_grpc_statement_timeout_ms: statement_timeout_ms,
             ledger_grpc_max_decoding_message_size: max_decoding_message_size
                 .unwrap_or(defaults.ledger_grpc_max_decoding_message_size),
+            ledger_grpc_pool_size: defaults.ledger_grpc_pool_size,
         }
     }
 
@@ -165,19 +171,17 @@ impl LedgerGrpcReader {
         max_batch_get_objects: usize,
     ) -> anyhow::Result<Self> {
         let timeout = args.statement_timeout();
-        let mut client = Client::new(uri)?
-            .with_max_decoding_message_size(args.ledger_grpc_max_decoding_message_size)
-            .request_layer(GrpcMetricsLayer::new(
-                prefix.unwrap_or("ledger_grpc"),
-                registry,
-            ));
-
-        if let Some(timeout) = timeout {
-            client = client.with_response_headers_timeout(timeout);
-        }
+        let pool = ClientPool::new(
+            uri,
+            args.ledger_grpc_pool_size,
+            args.ledger_grpc_max_decoding_message_size,
+            timeout,
+            prefix,
+            registry,
+        )?;
 
         Ok(Self {
-            client,
+            pool,
             timeout,
             max_batch_get_transactions,
             max_batch_get_objects,
@@ -247,8 +251,8 @@ impl LedgerGrpcReader {
         &self,
         request: grpc::GetCheckpointRequest,
     ) -> Result<grpc::GetCheckpointResponse, tonic::Status> {
-        self.client
-            .clone()
+        self.pool
+            .client()
             .ledger_client()
             .get_checkpoint(self.request(request))
             .await
@@ -259,8 +263,8 @@ impl LedgerGrpcReader {
         &self,
         request: grpc::BatchGetTransactionsRequest,
     ) -> Result<grpc::BatchGetTransactionsResponse, tonic::Status> {
-        self.client
-            .clone()
+        self.pool
+            .client()
             .ledger_client()
             .batch_get_transactions(self.request(request))
             .await
@@ -271,8 +275,8 @@ impl LedgerGrpcReader {
         &self,
         request: grpc::BatchGetObjectsRequest,
     ) -> Result<grpc::BatchGetObjectsResponse, tonic::Status> {
-        self.client
-            .clone()
+        self.pool
+            .client()
             .ledger_client()
             .batch_get_objects(self.request(request))
             .await
@@ -283,8 +287,8 @@ impl LedgerGrpcReader {
         &self,
         request: grpc::GetTransactionRequest,
     ) -> Result<grpc::GetTransactionResponse, tonic::Status> {
-        self.client
-            .clone()
+        self.pool
+            .client()
             .ledger_client()
             .get_transaction(self.request(request))
             .await
@@ -332,6 +336,7 @@ impl Default for LedgerGrpcArgs {
         Self {
             ledger_grpc_statement_timeout_ms: None,
             ledger_grpc_max_decoding_message_size: 32 * 1024 * 1024,
+            ledger_grpc_pool_size: 4,
         }
     }
 }
