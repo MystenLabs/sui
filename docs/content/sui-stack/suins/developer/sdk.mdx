@@ -112,12 +112,13 @@ const suinsClient = new SuinsClient({
     }
 });
 ```
-</TabItem>
 
 :::caution
 
-This example uses `SuinsClient`, which `@mysten/suins` 2.0 replaced with the `suins()` extension shown in the other tab. The 2.0 equivalent passes a `PackageInfo` object as `suins({ packageInfo })`, but the mapping from these `packageIds` fields to `PackageInfo` is not documented yet. The constants themselves are still the current Mainnet values. See [Migrating @mysten/suins](https://sdk.mystenlabs.com/sui/migrations/sui-2.0/suins).
+This example uses `SuinsClient`. `@mysten/suins` 2.0 still exports it, but the `suins()` extension shown in the other tab is the preferred pattern. The extension takes a `PackageInfo` object as `suins({ packageInfo })`, and the mapping from these `packageIds` fields to `PackageInfo` is not documented yet. The constants themselves are still the current Mainnet values. See [Migrating @mysten/suins](https://sdk.mystenlabs.com/sui/migrations/sui-2.0/suins).
 
 :::
+
+</TabItem>
 
 </Tabs>
