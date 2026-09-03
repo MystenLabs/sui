@@ -28,9 +28,10 @@
 //! it is done - so it always runs to completion, C advances, and the next
 //! transaction inherits the same guarantee: progress is assured no matter how many
 //! admitted transactions are parked. Settlement transactions carry no index and are
-//! admitted unconditionally: they can never block (they are built from their batch's
-//! already-available effects), and running them is what unblocks their waiters. Any
-//! transaction admitted unconditionally must be unable to block.
+//! never blocked by admission (they can never block in execution - they are built
+//! from their batch's already-available effects - and running them is what unblocks
+//! their waiters), though they occupy a concurrency slot when one is free. Any
+//! transaction bypassing admission must be unable to block.
 //!
 //! Execution occupies at most K+1 threads of the shared tokio blocking pool (whose
 //! exhaustion by other subsystems would halt much of the node regardless). Parked
@@ -98,10 +99,10 @@ async fn pop(
 ) -> (PendingCertificate, Option<InFlightSlot>) {
     loop {
         match waiting.peek().map(|Reverse(head)| head.index()) {
-            // Settlement transactions are admitted unconditionally: they never block
-            // (they are built from their batch's already-available effects), and
-            // running them is what unblocks transactions waiting on the accumulator
-            // versions they write.
+            // Settlement transactions bypass causal admission (they carry no index,
+            // and transactions may be parked waiting on the accumulator versions they
+            // write, so they must never be blocked) - but they respect the
+            // concurrency limit when there is room, taking a slot if one is free.
             Some(None) => {
                 let cert = waiting.pop().unwrap().0.0;
                 debug_assert!(
@@ -111,7 +112,7 @@ async fn pop(
                         .is_accumulator_settle_tx(),
                     "only settlement transactions may bypass causal admission"
                 );
-                return (cert, None);
+                return (cert, causal_admission.try_take_slot());
             }
             Some(Some(index)) => {
                 if let Some(slot) = causal_admission.try_admit(index) {
