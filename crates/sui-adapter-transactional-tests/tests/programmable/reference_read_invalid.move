@@ -47,4 +47,6 @@ module test::m {
 //> 0: test::m::new_obj(Input(0));
 //> 1: test::m::borrow_value(Result(0));
 //> 2: test::m::take(Result(0));
+// without this call to `check`, the test would pass since the reference
+// `Result(1)` would be automatically released
 //> 3: test::m::check(Result(1), Input(0));

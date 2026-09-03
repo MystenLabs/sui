@@ -3,6 +3,7 @@
 
 // A generated `Read` releases its reference immediately, so reading one reference more times than
 // `max_ptb_live_references` in a single command stays under the limit.
+// This should be updated if the limit ever changes.
 
 //# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
 

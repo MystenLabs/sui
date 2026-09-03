@@ -25,11 +25,13 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 // Referent moved while a reference into it is still read later
 
-task 3, lines 46-50:
+task 3, lines 46-52:
 //# programmable --sender A --inputs 112u64
 //> 0: test::m::new_obj(Input(0));
 //> 1: test::m::borrow_value(Result(0));
 //> 2: test::m::take(Result(0));
+// without this call to `check`, the test would pass since the reference
+// `Result(1)` would be automatically released
 //> 3: test::m::check(Result(1), Input(0));
 Error: Transaction Effects Status: Invalid command argument at 0. Cannot move a borrowed value. The value's type does resulted in this argument usage being inferred as a move. This is likely due to the type not having the `copy` ability; although in rare cases, it could also be this is the last usage of a value without the `drop` ability.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: CannotMoveBorrowedValue }, source: None, command: Some(2) } }

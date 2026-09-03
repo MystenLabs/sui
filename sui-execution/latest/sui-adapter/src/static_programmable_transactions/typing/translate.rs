@@ -1137,7 +1137,10 @@ pub(crate) fn withdrawal_inner_type(ty: &Type) -> Option<&Type> {
 //**************************************************************************************************
 
 mod scope_references {
-    use crate::{sp, static_programmable_transactions::typing::ast as T};
+    use crate::{
+        sp,
+        static_programmable_transactions::typing::ast::{self as T, Type},
+    };
     use std::collections::BTreeSet;
     use sui_protocol_config::ProtocolConfig;
 
@@ -1185,18 +1188,23 @@ mod scope_references {
         }
     }
 
-    fn argument(context: &mut Context, sp!(_, (arg_, ty)): &mut T::Argument) {
+    fn argument(context: &mut Context, arg: &mut T::Argument) {
+        if context.protocol_config.fix_ptb_generated_reads() {
+            argument_v2(context, arg)
+        } else {
+            argument_v1(context, arg)
+        }
+    }
+
+    fn argument_v2(context: &mut Context, sp!(_, (arg_, ty)): &mut T::Argument) {
+        use T::Argument__ as TArg;
         let usage = match arg_ {
-            T::Argument__::Borrow(_, _) => return,
-            // `Read` has the referenced value's type, while its usage location has a reference
-            // type.
-            T::Argument__::Read(u) if context.protocol_config.fix_ptb_generated_reads() => u,
-            T::Argument__::Use(u) | T::Argument__::Read(u) | T::Argument__::Freeze(u) => {
-                if !ty.is_reference() {
-                    return;
-                }
-                u
-            }
+            // `Read` has the referenced value's type, while its usage location has a reference type
+            TArg::Read(u) => u,
+            TArg::Use(_) | TArg::Freeze(_) if !ty.is_reference() => return,
+            TArg::Use(u) | TArg::Freeze(u) => u,
+            // Cannot borrow a reference
+            TArg::Borrow(_, _) => return,
         };
         match usage {
             T::Usage::Move(T::Location::Result(i, j)) => {
@@ -1207,6 +1215,35 @@ mod scope_references {
                 location: T::Location::Result(i, j),
                 ..
             } => {
+                // we are at the last usage of a reference result if it was not yet added to the set
+                let last_usage = context.used.insert((*i, *j));
+                if last_usage {
+                    // if it was the last usage, we need to change the Copy to a Move
+                    let loc = T::Location::Result(*i, *j);
+                    *usage = T::Usage::Move(loc);
+                }
+            }
+            _ => (),
+        }
+    }
+
+    fn argument_v1(context: &mut Context, sp!(_, (arg_, ty)): &mut T::Argument) {
+        let usage = match arg_ {
+            T::Argument__::Use(u) | T::Argument__::Read(u) | T::Argument__::Freeze(u) => u,
+            T::Argument__::Borrow(_, _) => return,
+        };
+        match (&usage, ty) {
+            (T::Usage::Move(T::Location::Result(i, j)), Type::Reference(_, _)) => {
+                debug_assert!(false, "No reference should be moved at this point");
+                context.used.insert((*i, *j));
+            }
+            (
+                T::Usage::Copy {
+                    location: T::Location::Result(i, j),
+                    ..
+                },
+                Type::Reference(_, _),
+            ) => {
                 // we are at the last usage of a reference result if it was not yet added to the set
                 let last_usage = context.used.insert((*i, *j));
                 if last_usage {
