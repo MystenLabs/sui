@@ -12,13 +12,6 @@ set -euo pipefail
 source ./lib.sh
 localnet_setup
 
-# mutated_object_id <tx.json> <type suffix>
-mutated_object_id() {
-  jq -r --arg t "$2" \
-    'first(.objectChanges[] | select(.type == "mutated" and (.objectType | endswith($t)))) | .objectId' \
-    "$1"
-}
-
 sender=$(on_localnet active-address)
 fork_start --address "$sender"
 fork_env

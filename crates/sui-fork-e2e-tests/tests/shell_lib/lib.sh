@@ -282,11 +282,19 @@ created_object_id() {
     'first(.objectChanges[] | select(.type == "created" and (.objectType | endswith($t)))) | .objectId' \
     "$1"
 }
+# mutated_object_id <tx.json> <type suffix>
+mutated_object_id() {
+  jq -r --arg t "$2" \
+    'first(.objectChanges[] | select(.type == "mutated" and (.objectType | endswith($t)))) | .objectId' \
+    "$1"
+}
 
-# add_env_to_toml <package dir> <env alias> <where>: append an [environments] entry with the chain
-# identifier of that network, which `sui client publish` needs to find the environment.
+# add_env_to_toml <package dir> <env alias> <where>: add an [environments] entry with the chain
+# identifier of that network, which `sui client publish` needs to find the environment. The table
+# header is written once, at the end of the manifest, so later entries land in the same table.
 add_env_to_toml() {
-  printf '\n[environments]\n%s = "%s"\n' "$2" "$("$3" chain-identifier --format=hex)" >> "$1/Move.toml"
+  grep -q '^\[environments\]' "$1/Move.toml" || printf '\n[environments]\n' >> "$1/Move.toml"
+  printf '%s = "%s"\n' "$2" "$("$3" chain-identifier --format=hex)" >> "$1/Move.toml"
 }
 
 # extract_published <Published.toml>: only the environment header and the version, because every
