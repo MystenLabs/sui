@@ -3,46 +3,31 @@
 
 //! Causal-order bookkeeping for execution scheduling.
 //!
-//! Every unit the ExecutionScheduler enqueues (a transaction, or a key that later
-//! materializes into transactions) is assigned a *causal index*: a position in the
-//! order in which units were enqueued from consensus handler / checkpoint executor.
-//! Enqueue order is causal: anything a transaction can wait for during execution is
-//! produced by a unit with a lower index. The execution driver uses these indices to
-//! admit transactions in a way that makes blocking on not-yet-available values
-//! deadlock-free (see the design comment in `execution_driver.rs`).
+//! Every unit the ExecutionScheduler enqueues is assigned a *causal index* - its
+//! position in enqueue order. Both sources (consensus handler, checkpoint executor)
+//! enqueue in causal order, so anything a transaction can wait for during execution
+//! is produced by a unit with a lower index. The execution driver admits
+//! transactions by index (see `execution_driver.rs`) and retires them - on completing
+//! execution, or on dropping a stale transaction. (One exception: a funds-withdraw
+//! whose scheduling is skipped retires at the scheduler, as it never reaches the
+//! driver.)
 //!
-//! Index lifecycle. Indices are assigned at enqueue time via [`CausalAdmission::dedup_and_assign`]
-//! and travel as plain data in the unit's `ExecutionEnv`. Every assigned index is
-//! *retired* (marked done) by the execution driver - the sole execution and retirement
-//! point - when its transaction finishes executing or is dropped as no longer needed.
-//! This relies on every indexed unit reaching the driver: enqueued transactions are
-//! deduplicated (below), and every transaction committed in an epoch executes before
-//! the epoch closes, so no indexed unit is ever abandoned upstream. Settlement
-//! transactions carry no index at all: the driver admits them unconditionally (they
-//! can never block, and running them is what unblocks transactions waiting on the
-//! accumulator versions they write), so there is nothing to admit against or retire.
+//! Enqueues are deduplicated by accumulator root version: all transactions of a
+//! version are enqueued together, so a unit at or below the enqueue watermark was
+//! already enqueued in full by the other source. [`CausalAdmission::dedup_and_assign`]
+//! filters, indexes, and bumps the watermark for a whole batch under one lock,
+//! serializing version admission across the two sources; combined with every
+//! committed transaction executing before its epoch closes, this guarantees every
+//! assigned index reaches the driver. Units without a version (pre-accumulator
+//! epochs replayed from checkpoints, the end-of-epoch transaction) bypass
+//! deduplication; execution cannot block on undeclared dependencies in such epochs,
+//! and any future blocking feature must be gated on accumulator-versioned epochs.
 //!
-//! Deduplication. `dedup_and_assign` processes a whole enqueue batch atomically:
-//! units whose assigned accumulator root version is at or below the enqueue watermark
-//! are dropped, survivors are indexed in batch order, and the watermark rises to the
-//! batch's highest version. This is sound because all transactions of a root version
-//! are enqueued together (one consensus chunk, or whole groups within a checkpoint),
-//! so a version at or below the watermark was already enqueued in full by whichever
-//! source got there first. Performing the whole batch under one lock serializes
-//! version admission across the consensus and checkpoint paths: a rejected unit's
-//! transactions are guaranteed to already hold lower indices. Units with no
-//! accumulator version bypass deduplication - that only
-//! occurs when replaying epochs that predate accumulators (checkpoint path only, which
-//! never self-duplicates) plus the end-of-epoch transaction; execution cannot block on
-//! undeclared dependencies in such epochs, so any future blocking feature must be
-//! gated on accumulator-versioned epochs.
-//!
-//! One rule must hold for assignment: a unit that other, already-indexed units may
-//! wait on must never be re-assigned a *new, higher* index (transactions blocked
-//! waiting on it would pin the concurrency limit while the causal-next lane can never
-//! reach it). This is why the funds-withdraw retry re-submits with the transaction's
-//! original index, and why settlement transactions - which materialize long after
-//! their waiters enqueue - are admitted unconditionally rather than indexed late.
+//! A unit that already-indexed units may wait on must never be re-assigned a new,
+//! higher index (its blocked waiters would pin the concurrency limit while the
+//! causal-next lane can never reach it). Hence the funds-withdraw retry keeps its
+//! original index, and settlement transactions - which materialize long after their
+//! waiters enqueue - are index-less and admitted unconditionally instead.
 
 use std::{collections::BTreeSet, sync::Arc};
 

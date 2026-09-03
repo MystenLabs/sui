@@ -5,84 +5,38 @@
 //! runs them on blocking threads, admitting them in an order that makes it safe for
 //! execution to block waiting on values produced by other transactions.
 //!
-//! ## The problem
-//!
-//! Execution can park its thread mid-transaction to wait for a value that another
+//! Execution can park its thread mid-transaction waiting for a value another
 //! transaction's execution will produce (the blocking primitives in
-//! `mysten_common::sync`). Declared input objects never cause this - the scheduler only
-//! sends us a transaction after its declared inputs are available. Blocking happens
-//! only for *undeclared* dependencies: system objects such as the clock (written by the
-//! consensus commit prologue) and the accumulator root (written by settlement
-//! transactions).
+//! `mysten_common::sync`). Declared inputs never cause this - the scheduler sends a
+//! transaction only once they are available; blocking happens only for *undeclared*
+//! dependencies on system objects (the clock, the accumulator root). With bounded
+//! concurrency this could deadlock: every slot parked on a value whose writer was
+//! never admitted.
 //!
-//! Blocking makes naive scheduling deadlock-prone: if every execution slot is occupied
-//! by transactions parked waiting for a value, and the transaction that would write
-//! that value has not been admitted yet, nothing ever finishes.
-//!
-//! ## Causal order
-//!
-//! The scheduler assigns every enqueued unit a *causal index* - its position in the
-//! order units were enqueued from the consensus handler or checkpoint executor (see
-//! `execution_scheduler::causal_order`). Both sources enqueue in causal order, so
-//! anything a transaction can wait for - declared or undeclared - is produced by a unit
-//! with a *lower* index. Keys that materialize into transactions later (randomness
-//! updates) take their index at key-enqueue time, so this stays true for them as well;
-//! settlement transactions are the exception and carry no index at all (below).
-//!
-//! Let C be the watermark: the highest index such that every index at or below it is
-//! *done* (finished executing, or dropped here as no longer needed). The driver is the
-//! sole point where transactions execute and where causal indices are retired; enqueue
-//! deduplication guarantees every assigned index reaches it (see
-//! `execution_scheduler::causal_order`).
-//!
-//! ## The admission rule
-//!
-//! A transaction with causal index `i` is admitted for execution when:
+//! Admission prevents this using the causal index assigned to each unit in enqueue
+//! order (see `execution_scheduler::causal_order`); enqueue order is causal, so
+//! anything a transaction can wait for is produced by a unit with a *lower* index.
+//! Let C be the watermark below which every index is done (executed, or dropped as
+//! stale). A transaction with index `i` is admitted when
 //!
 //! ```text
 //!     in_flight < K  OR  i == C + 1
 //! ```
 //!
-//! where `in_flight` counts admitted-but-unfinished transactions (including parked
-//! ones) and K is the concurrency limit. The second branch admits at most one
-//! transaction over the limit at a time; when it finishes, C advances and the new
-//! C+1 transaction may again be admitted over the limit, while the capacity branch
-//! stays closed until in-flight drops below K.
+//! with at most one over-limit (causal-next) admission outstanding at a time,
+//! bounding in-flight at K+1. The C+1 transaction can never block - everything below
+//! it is done - so it always runs to completion, C advances, and the next
+//! transaction inherits the same guarantee: progress is assured no matter how many
+//! admitted transactions are parked. Settlement transactions carry no index and are
+//! admitted unconditionally: they can never block (they are built from their batch's
+//! already-available effects), and running them is what unblocks their waiters. Any
+//! transaction admitted unconditionally must be unable to block.
 //!
-//! Settlement transactions carry no index and are admitted unconditionally: they can
-//! never block (they are constructed from their batch's already-available effects),
-//! and running them immediately is what unblocks transactions waiting on the
-//! accumulator versions they write. Any transaction admitted unconditionally must be
-//! unable to block - that is what keeps unconditional admission safe.
-//!
-//! ## Why this cannot deadlock
-//!
-//! The transaction with index C+1 can always run to completion: everything below it is
-//! done, so every value it could wait for - declared or undeclared - already exists.
-//! It is admitted even when the concurrency limit is exhausted by parked transactions.
-//! When it finishes, C advances and the next transaction gains the same guarantee. So
-//! the system always makes progress, one transaction at a time in the worst case, no
-//! matter how many admitted transactions are parked.
-//!
-//! Execution runs on tokio's shared blocking pool and occupies at most K+1 of its
-//! threads (in-flight is bounded by the admission rule). We assume the shared pool is
-//! not permanently exhausted by other subsystems: its other users run terminating
-//! work, and exhausting it would halt much of the node regardless of execution.
-//!
-//! Transactions parked on an undeclared dependency do not park forever for the same
-//! reason: the writer they wait for has a lower index, so the watermark reaches it and
-//! it executes.
-//!
-//! ## Throughput
-//!
-//! Admission takes waiting transactions in causal-index order, so execution slots
-//! always go to the nearest available work first; how far execution may run ahead of a
-//! parked or not-yet-materialized unit is deliberately unbounded (the far
-//! transactions are committed work that must execute anyway). Parked transactions do
-//! hold their concurrency slot; if occupancy by parked transactions ever shows up as
-//! a throughput problem, the escalation path is to release the slot when execution
-//! parks (the blocking primitives once carried a release hook for this - see
-//! mysten-common's deleted `sync::execution_permit`).
+//! Execution occupies at most K+1 threads of the shared tokio blocking pool (whose
+//! exhaustion by other subsystems would halt much of the node regardless). Parked
+//! transactions hold their concurrency slot; if that ever limits throughput, the
+//! escalation path is releasing the slot on park - see the deleted
+//! `mysten_common::sync::execution_permit` for the prior mechanism.
 
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
