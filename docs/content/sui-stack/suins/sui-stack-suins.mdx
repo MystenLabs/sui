@@ -245,19 +245,11 @@ For offchain resolution in a TypeScript or JavaScript app, you have 2 options:
 ### Lookup with `@mysten/sui`
 
 
-Resolve a name to the address it targets:
+{/* TODO: Import code from MystenLabs/sui-typescript — show resolveNameServiceAddress example */}
+{/* Description: Basic name-to-address resolution using client.resolveNameServiceAddress */}
 
-```ts
-const { address } = await client.resolveNameServiceAddress({
-	name: 'example.sui',
-});
-```
-
-For the reverse direction, `defaultNameServiceName` returns the single default name configured for an address:
-
-```ts
-const name = await client.defaultNameServiceName({ address: '0xabc...' });
-```
+{/* TODO: Import code from MystenLabs/sui-typescript — show defaultNameServiceName example */}
+{/* Description: Reverse lookup (address to default name) using client.defaultNameServiceName */}
 
 :::info
 
