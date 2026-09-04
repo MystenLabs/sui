@@ -39,10 +39,11 @@ use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::{assert_reachable, fatal};
 use parking_lot::Mutex;
 use prometheus::{
-    Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
-    register_histogram_vec_with_registry, register_histogram_with_registry,
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
+    Gauge, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    register_gauge_with_registry, register_histogram_vec_with_registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry,
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -318,6 +319,7 @@ pub struct AuthorityMetrics {
     pub(crate) staggered_submission_excess_copies: Histogram,
     pub(crate) staggered_submission_signal_activated: IntGauge,
     pub(crate) staggered_submission_signal_transitions: IntCounterVec,
+    pub(crate) staggered_submission_duplication_ratio: Gauge,
 
     pub(crate) authority_overload_status: IntGauge,
     pub(crate) authority_load_shedding_percentage: IntGauge,
@@ -652,6 +654,12 @@ impl AuthorityMetrics {
                 "staggered_submission_signal_transitions",
                 "Number of duplication-signal transitions, labeled by the state entered",
                 &["state"],
+                registry,
+            )
+            .unwrap(),
+            staggered_submission_duplication_ratio: register_gauge_with_registry!(
+                "staggered_submission_duplication_ratio",
+                "Amplification measured by the duplication signal: excess duplicate copies as a percentage of unique user transactions over the signal window, compared against the activate/deactivate thresholds",
                 registry,
             )
             .unwrap(),

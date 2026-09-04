@@ -1804,11 +1804,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .epoch_store
             .protocol_config()
             .staggered_submission_signal();
-        if let Some(activated) = self.epoch_store.staggered_submission().record_commit(
-            excess_copies,
-            unique_user_txns,
-            apply,
-        ) {
+        let (transition, duplication_ratio) = self
+            .epoch_store
+            .staggered_submission()
+            .record_commit(excess_copies, unique_user_txns, apply);
+        self.metrics
+            .staggered_submission_duplication_ratio
+            .set(duplication_ratio);
+        if let Some(activated) = transition {
             let state = if activated {
                 "activated"
             } else {

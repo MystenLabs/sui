@@ -131,7 +131,10 @@ impl StaggeredSubmission {
     /// sequenced. The hysteresis state machine always runs on the signal's own activated
     /// state, so transitions stay observable regardless of enablement; only when
     /// `apply` is set does a transition also flip staggering itself. Returns the new
-    /// signal state on a transition, `None` otherwise.
+    /// signal state on a transition (`None` otherwise), together with the window's
+    /// duplication ratio — excess copies as a percentage of unique user transactions,
+    /// the value the thresholds were compared against (zero while the window holds no
+    /// user transactions; can exceed 100 when duplication dominates).
     ///
     /// Activation suppresses the very duplication it measures, so under a sustained attack
     /// the mode oscillates with a mostly-activated duty cycle: once the activating evidence
@@ -142,7 +145,7 @@ impl StaggeredSubmission {
         excess_copies: u64,
         unique_user_txns: u64,
         apply: bool,
-    ) -> Option<bool> {
+    ) -> (Option<bool>, f64) {
         let mut signal = self.signal.lock();
         signal.window.push_back((excess_copies, unique_user_txns));
         while signal.window.len() > SIGNAL_WINDOW_COMMITS {
@@ -154,6 +157,11 @@ impl StaggeredSubmission {
             .fold((0u64, 0u64), |(excess, total), (e, t)| {
                 (excess + e, total + t)
             });
+        let duplication_ratio = if total == 0 {
+            0.0
+        } else {
+            excess as f64 * 100.0 / total as f64
+        };
 
         let transition = if !signal.activated {
             (excess >= SIGNAL_MIN_EXCESS_COPIES
@@ -172,7 +180,7 @@ impl StaggeredSubmission {
                 self.set_active(activated);
             }
         }
-        transition
+        (transition, duplication_ratio)
     }
 
     #[cfg(test)]
@@ -419,9 +427,22 @@ mod tests {
         // at <= 3% — the 5%/3% gap is the anti-flicker hysteresis.
 
         #[test]
+        fn duplication_ratio_tracks_the_window() {
+            let staggered = StaggeredSubmission::new();
+            assert_eq!(staggered.record_commit(10, 100, true).1, 10.0);
+            assert_eq!(staggered.record_commit(0, 100, true).1, 5.0);
+            // A full window of quiet commits evicts the spike entirely.
+            let mut ratio = f64::NAN;
+            for _ in 0..SIGNAL_WINDOW_COMMITS {
+                ratio = staggered.record_commit(0, 100, true).1;
+            }
+            assert_eq!(ratio, 0.0);
+        }
+
+        #[test]
         fn activates_on_burst_over_ratio_and_floor() {
             let staggered = StaggeredSubmission::new();
-            assert_eq!(staggered.record_commit(100, 200, true), Some(true));
+            assert_eq!(staggered.record_commit(100, 200, true).0, Some(true));
             assert!(staggered.is_active());
         }
 
@@ -430,7 +451,7 @@ mod tests {
             let staggered = StaggeredSubmission::new();
             // 4% per commit: the absolute floor is passed but the ratio never is.
             for _ in 0..30 {
-                assert_eq!(staggered.record_commit(4, 100, true), None);
+                assert_eq!(staggered.record_commit(4, 100, true).0, None);
             }
             assert!(!staggered.is_active());
         }
@@ -441,30 +462,30 @@ mod tests {
             // 10% ratio, but only one excess copy per commit: the floor holds activating
             // back until 20 of them have accumulated in the enter window.
             for _ in 0..19 {
-                assert_eq!(staggered.record_commit(1, 10, true), None);
+                assert_eq!(staggered.record_commit(1, 10, true).0, None);
                 assert!(!staggered.is_active());
             }
-            assert_eq!(staggered.record_commit(1, 10, true), Some(true));
+            assert_eq!(staggered.record_commit(1, 10, true).0, Some(true));
         }
 
         #[test]
         fn old_spikes_slide_out_of_window() {
             let staggered = StaggeredSubmission::new();
             // 10 excess copies at 10%: below the floor on its own.
-            assert_eq!(staggered.record_commit(10, 100, true), None);
+            assert_eq!(staggered.record_commit(10, 100, true).0, None);
             // A full window of quiet commits pushes the spike out, so an identical
             // second spike cannot combine with it to reach the floor.
             for _ in 0..SIGNAL_WINDOW_COMMITS {
-                assert_eq!(staggered.record_commit(0, 100, true), None);
+                assert_eq!(staggered.record_commit(0, 100, true).0, None);
             }
-            assert_eq!(staggered.record_commit(10, 100, true), None);
+            assert_eq!(staggered.record_commit(10, 100, true).0, None);
             assert!(!staggered.is_active());
         }
 
         #[test]
         fn deactivates_once_quiet_traffic_dilutes_the_spike() {
             let staggered = StaggeredSubmission::new();
-            assert_eq!(staggered.record_commit(100, 200, true), Some(true));
+            assert_eq!(staggered.record_commit(100, 200, true).0, Some(true));
             // Quiet traffic dilutes the activating spike's window ratio; the mode holds
             // until the ratio crosses the deactivate threshold, and deactivates within
             // one window at the latest (eviction of the spike).
@@ -475,7 +496,7 @@ mod tests {
                     quiet_commits <= SIGNAL_WINDOW_COMMITS,
                     "never deactivated within a full window"
                 );
-                match staggered.record_commit(0, 100, true) {
+                match staggered.record_commit(0, 100, true).0 {
                     None => assert!(staggered.is_active()),
                     Some(activated) => {
                         assert!(!activated);
@@ -489,21 +510,21 @@ mod tests {
         #[test]
         fn threshold_gap_holds_mode_between_deactivate_and_activate() {
             let staggered = StaggeredSubmission::new();
-            assert_eq!(staggered.record_commit(100, 200, true), Some(true));
+            assert_eq!(staggered.record_commit(100, 200, true).0, Some(true));
             // 4% duplication sits inside the 3%..5% gap: activated stays activated, even long
             // after the activating spike has left the window...
             for _ in 0..2 * SIGNAL_WINDOW_COMMITS {
-                assert_eq!(staggered.record_commit(4, 100, true), None);
+                assert_eq!(staggered.record_commit(4, 100, true).0, None);
                 assert!(staggered.is_active());
             }
             // ...and once deactivated by a 2% trickle, 4% does not re-activate.
             let mut transitions = Vec::new();
             for _ in 0..SIGNAL_WINDOW_COMMITS {
-                transitions.extend(staggered.record_commit(2, 100, true));
+                transitions.extend(staggered.record_commit(2, 100, true).0);
             }
             assert_eq!(transitions, vec![false]);
             for _ in 0..2 * SIGNAL_WINDOW_COMMITS {
-                assert_eq!(staggered.record_commit(4, 100, true), None);
+                assert_eq!(staggered.record_commit(4, 100, true).0, None);
                 assert!(!staggered.is_active());
             }
         }
@@ -512,14 +533,14 @@ mod tests {
         fn dry_run_tracks_transitions_without_flipping_staggering() {
             let staggered = StaggeredSubmission::new();
             // Transitions are reported even when not applied...
-            assert_eq!(staggered.record_commit(100, 200, false), Some(true));
+            assert_eq!(staggered.record_commit(100, 200, false).0, Some(true));
             // ...but staggering itself stays untouched.
             assert!(!staggered.is_active());
             // Quiet traffic eventually reports the deactivate transition too, still
             // without touching staggering.
             let mut transitions = Vec::new();
             for _ in 0..SIGNAL_WINDOW_COMMITS {
-                transitions.extend(staggered.record_commit(0, 100, false));
+                transitions.extend(staggered.record_commit(0, 100, false).0);
                 assert!(!staggered.is_active());
             }
             assert_eq!(transitions, vec![false]);
@@ -532,7 +553,7 @@ mod tests {
             // The signal's own state machine starts deactivated, so quiet commits produce
             // no transition and manual activating is left in place.
             for _ in 0..50 {
-                assert_eq!(staggered.record_commit(0, 100, true), None);
+                assert_eq!(staggered.record_commit(0, 100, true).0, None);
             }
             assert!(staggered.is_active());
         }
