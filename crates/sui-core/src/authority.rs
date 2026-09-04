@@ -315,6 +315,9 @@ pub struct AuthorityMetrics {
     pub(crate) skipped_consensus_txns: IntCounter,
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
     pub(crate) consensus_handler_duplicate_tx_count: Histogram,
+    pub(crate) staggered_submission_excess_copies: Histogram,
+    pub(crate) staggered_submission_signal_activated: IntGauge,
+    pub(crate) staggered_submission_signal_transitions: IntCounterVec,
 
     pub(crate) authority_overload_status: IntGauge,
     pub(crate) authority_load_shedding_percentage: IntGauge,
@@ -629,6 +632,26 @@ impl AuthorityMetrics {
                 "consensus_handler_duplicate_tx_count",
                 "Number of times each transaction appears in its first consensus commit",
                 POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            staggered_submission_excess_copies: register_histogram_with_registry!(
+                "staggered_submission_excess_copies",
+                "Per-commit duplicate copies beyond allowance of transactions without allowed proposers, feeding the staggered-submission activation signal",
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            staggered_submission_signal_activated: register_int_gauge_with_registry!(
+                "staggered_submission_signal_activated",
+                "Whether the duplication signal is currently activated (1) or not (0); staggering itself only follows when the staggered_submission_signal protocol flag is enabled",
+                registry,
+            )
+            .unwrap(),
+            staggered_submission_signal_transitions: register_int_counter_vec_with_registry!(
+                "staggered_submission_signal_transitions",
+                "Number of duplication-signal transitions, labeled by the state entered",
+                &["state"],
                 registry,
             )
             .unwrap(),
