@@ -124,6 +124,7 @@ use crate::execution_cache::cache_types::CacheResult;
 use crate::fallback_fetch::do_fallback_lookup;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::signature_verifier::*;
+use crate::staggered_submission::StaggeredSubmission;
 use crate::stake_aggregator::{GenericMultiStakeAggregator, StakeAggregator};
 use sui_types::execution::ExecutionTimeObservationChunkKey;
 
@@ -424,6 +425,15 @@ pub struct AuthorityPerEpochStore {
 
     /// A cache which tracks recently finalized transactions.
     pub(crate) finalized_transactions_cache: FinalizedTransactionsCache,
+
+    /// Delays consensus submission of transactions without allowed proposers when
+    /// duplication is detected on the network. Shared by both submission paths (the
+    /// consensus adapter and the consensus transaction pool); per-epoch so the mode
+    /// resets across epoch boundaries along with the committee and ranks. Constructed
+    /// inactive: whatever drives activation (the commit-derived duplication signal,
+    /// once wired) must re-arm it after each reconfiguration — activation does not
+    /// survive an epoch change.
+    staggered_submission: StaggeredSubmission,
 
     /// The node's role for this epoch, derived from committee membership and
     /// the configured sync mode. Computed once at construction.
@@ -1061,6 +1071,7 @@ impl AuthorityPerEpochStore {
             tx_reject_reason_cache,
             submitted_transaction_cache,
             finalized_transactions_cache,
+            staggered_submission: StaggeredSubmission::new(),
             node_role: NodeRole::from_committee(&committee, &name, fullnode_sync_mode),
         });
 
@@ -1324,6 +1335,10 @@ impl AuthorityPerEpochStore {
     /// This validator's index in the current epoch's committee, if it is a member.
     pub fn own_committee_index(&self) -> Option<u32> {
         self.own_committee_index
+    }
+
+    pub fn staggered_submission(&self) -> &StaggeredSubmission {
+        &self.staggered_submission
     }
 
     /// Checks that the validator at committee index `proposer` is allowed to propose `tx` in
