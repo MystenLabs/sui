@@ -390,7 +390,7 @@ const MAINNET_USDB: &str =
 //              Add package_arena_size_in_bytes.
 // Version 137: Lower the per-bit cost of bulletproofs range proof verification, and raise the
 //              bound on batch size * range bits from 512 to 1024.
-//              Enable allowances on devnet.
+//              Enable allowances.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4708,9 +4708,7 @@ impl ProtocolConfig {
                     cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(621);
                     cfg.max_bulletproofs_total_bits = Some(1024);
 
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.enable_allowances = true;
-                    }
+                    cfg.feature_flags.enable_allowances = true;
                 }
                 // Use this template when making changes:
                 //

@@ -1149,6 +1149,20 @@ fun test_app_spend_on_plain_allowance_rejected() {
 }
 
 #[test]
+#[expected_failure(abort_code = sui::allowance::EWrongApp)]
+fun test_rotate_spender_on_plain_allowance_rejected() {
+    test!(FUNDER, |scenario, _clock| {
+        new_allowance().lifetime_cap(1000).create<Balance<TEST>>(scenario.ctx());
+
+        // Only an app-bound allowance can rotate; plain ones rotate through aliases.
+        scenario.next_tx(SPENDER);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        alw.rotate_spender(allowance::settings_permit(internal::permit<APP>()), SPENDER2);
+        ts::return_shared(alw);
+    });
+}
+
+#[test]
 fun test_funder_revokes() {
     test!(FUNDER, |scenario, _clock| {
         new_allowance().lifetime_cap(1000).create<Balance<TEST>>(scenario.ctx());
