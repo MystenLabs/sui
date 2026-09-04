@@ -9,10 +9,16 @@ edition = "2024"
 [lints]
 workspace = true
 
+[package.metadata.cargo-machete]
+ignored = ["h2"]
+
 [dependencies]
 anemo.workspace = true
 anemo-tower.workspace = true
 governor.workspace = true
+# Keep the tonic/hyper transport on h2 0.4.19 or newer. h2 0.4.16 can
+# spuriously close highly concurrent connections with ENHANCE_YOUR_CALM.
+h2.workspace = true
 serde.workspace = true
 serde_yaml.workspace = true
 tonic.workspace = true
