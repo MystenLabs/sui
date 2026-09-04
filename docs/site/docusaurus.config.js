@@ -516,6 +516,7 @@ const config = {
               { type: "doc", docId: "references/framework", label: "Move Framework" },
               { type: "doc", docId: "references/object-display-syntax", label: "Object Display V2 Syntax" },
               { type: "doc", docId: "references/release-notes", label: "Release Notes" },
+              { type: "doc", docId: "developer-updates", label: "Developer Updates" },
               { type: "doc", docId: "references/sui-glossary", label: "Glossary" },
             ],
           },
