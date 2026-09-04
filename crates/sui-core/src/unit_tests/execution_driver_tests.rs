@@ -19,6 +19,7 @@ use crate::test_utils::{make_transfer_object_move_transaction, make_transfer_obj
 use crate::unit_test_utils::{
     init_local_authorities, init_local_authorities_with_overload_thresholds,
 };
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_protocol_config::ProtocolConfig;
 
 use sui_types::error::SuiErrorKind;
@@ -483,16 +484,29 @@ async fn test_execution_with_dependencies() {
         ));
     }
 
-    // Enqueue executables out of dependency order for executions.
-    for (executable, env) in executables_with_env.iter().rev() {
+    // Enqueue executables in causal (dependency) order. This is a contract of the
+    // execution scheduler: enqueue order defines the causal index used for execution
+    // admission, and every dependency must point at an earlier-enqueued unit (see
+    // `execution_scheduler::causal_order`). Production sources (consensus handler,
+    // checkpoint executor) enqueue in this order by construction. Here the causal
+    // order is the order the certs were originally executed in: the two setup certs,
+    // then each iteration's owned cert followed by its shared cert (the chains
+    // cross-link through reused gas objects, so neither chain may be enqueued ahead
+    // of the other wholesale).
+    let mut owned_iter = executed_owned_certs.iter();
+    for executable in owned_iter.by_ref().take(2) {
         authorities[3].execution_scheduler().enqueue(
-            vec![(executable.clone(), env.clone())],
+            vec![(executable.clone().into(), ExecutionEnv::new())],
             &authorities[3].epoch_store_for_testing(),
         );
     }
-    for executable in executed_owned_certs.iter().rev() {
+    for (owned, (shared, env)) in owned_iter.zip_debug_eq(executables_with_env.iter()) {
         authorities[3].execution_scheduler().enqueue(
-            vec![(executable.clone().into(), ExecutionEnv::new())],
+            vec![(owned.clone().into(), ExecutionEnv::new())],
+            &authorities[3].epoch_store_for_testing(),
+        );
+        authorities[3].execution_scheduler().enqueue(
+            vec![(shared.clone(), env.clone())],
             &authorities[3].epoch_store_for_testing(),
         );
     }

@@ -7,19 +7,10 @@
 //! for a value produced elsewhere without being async (e.g. execution threads blocking
 //! until an object version is committed). It is a thin wrapper over the [`oneshot`]
 //! crate that adds a [`Receiver::blocking_recv`] tailored to Sui's execution model:
-//!
-//! * The wait always begins with a non-blocking `try_recv`, so a value that is already
-//!   available is returned without any side effects.
-//! * If it must block, it first [releases the thread's execution permit] so other
-//!   execution can proceed (see that module for the deadlock rationale).
-//! * Under msim, parking the OS thread would hang the single-threaded simulator, so it
-//!   instead polls in a loop, yielding the simulated thread quantum between checks. This
-//!   would busy-wait on a real system, but the simulator only wakes the thread at a
-//!   controlled rate, and only blocking-pool threads may wait this way.
-//!
-//! [releases the thread's execution permit]: crate::sync::execution_permit::release_execution_permit
-
-use crate::sync::execution_permit::release_execution_permit;
+//! under msim, parking the OS thread would hang the single-threaded simulator, so it
+//! instead polls in a loop, yielding the simulated thread quantum between checks. This
+//! would busy-wait on a real system, but the simulator only wakes the thread at a
+//! controlled rate, and only blocking-pool threads may wait this way.
 
 /// Create a new oneshot channel.
 pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
@@ -64,18 +55,6 @@ impl<T> Receiver<T> {
     /// a blocking-pool thread (e.g. inside `spawn_blocking`); it yields the thread's
     /// quantum between readiness checks.
     pub fn blocking_recv(self) -> Result<T, RecvError> {
-        // Fast path: never release the execution permit if a value is already available.
-        match self.0.try_recv() {
-            Ok(value) => return Ok(value),
-            Err(oneshot::TryRecvError::Disconnected) => return Err(RecvError),
-            Err(oneshot::TryRecvError::Empty) => {}
-        }
-
-        // We are about to block; give up our execution permit (if any) so that other
-        // execution can make progress. Blocking while holding it risks deadlock under
-        // limited execution concurrency.
-        release_execution_permit();
-
         #[cfg(msim)]
         loop {
             match self.0.try_recv() {
@@ -102,18 +81,8 @@ impl<T> Receiver<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sync::execution_permit::set_execution_permit;
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, Ordering};
     #[cfg(not(msim))]
     use std::time::Duration;
-
-    struct DropFlag(Arc<AtomicBool>);
-    impl Drop for DropFlag {
-        fn drop(&mut self) {
-            self.0.store(true, Ordering::SeqCst);
-        }
-    }
 
     #[test]
     fn send_then_recv() {
@@ -162,38 +131,5 @@ mod tests {
         assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
         tx.send(5).unwrap();
         assert_eq!(rx.try_recv(), Ok(5));
-    }
-
-    #[test]
-    fn keeps_permit_when_value_ready() {
-        let (tx, rx) = channel::<u8>();
-        tx.send(9).unwrap();
-        let released = Arc::new(AtomicBool::new(false));
-        let _guard = set_execution_permit(Box::new(DropFlag(released.clone())));
-        assert_eq!(rx.blocking_recv(), Ok(9));
-        assert!(
-            !released.load(Ordering::SeqCst),
-            "permit must be kept when the value is already available"
-        );
-    }
-
-    #[cfg(not(msim))]
-    #[test]
-    fn releases_permit_when_blocking() {
-        let (tx, rx) = channel::<u8>();
-        let released = Arc::new(AtomicBool::new(false));
-        let released_recv = released.clone();
-        let handle = std::thread::spawn(move || {
-            let _guard = set_execution_permit(Box::new(DropFlag(released_recv)));
-            rx.blocking_recv()
-        });
-        // The receiver is now blocked; it should already have released its permit.
-        std::thread::sleep(Duration::from_millis(50));
-        assert!(
-            released.load(Ordering::SeqCst),
-            "permit must be released while blocked"
-        );
-        tx.send(3).unwrap();
-        assert_eq!(handle.join().unwrap(), Ok(3));
     }
 }

@@ -901,6 +901,13 @@ pub struct ExecutionEnv {
     /// Transactions that must finish before this transaction can be executed.
     /// Used to schedule barrier transactions after non-exclusive writes.
     pub barrier_dependencies: Vec<TransactionDigest>,
+    /// The transaction's position in causal order, assigned by the ExecutionScheduler
+    /// at enqueue time and used by the execution driver for admission. The driver
+    /// retires the index when the transaction finishes executing or is dropped as no
+    /// longer needed. None at the driver means the transaction is admitted
+    /// unconditionally (settlement transactions - see
+    /// `execution_scheduler::causal_order`).
+    pub(crate) causal_index: Option<u64>,
 }
 
 impl Default for ExecutionEnv {
@@ -910,6 +917,7 @@ impl Default for ExecutionEnv {
             expected_effects_digest: None,
             funds_withdraw_status: FundsWithdrawStatus::MaybeSufficient,
             barrier_dependencies: Default::default(),
+            causal_index: None,
         }
     }
 }
@@ -3501,10 +3509,12 @@ impl AuthorityState {
 
         // Start a task to execute ready certificates.
         let authority_state = Arc::downgrade(&state);
+        let causal_admission = state.execution_scheduler.causal_admission().clone();
         spawn_monitored_task!(execution_process(
             authority_state,
             rx_ready_certificates,
             rx_execution_shutdown,
+            causal_admission,
         ));
         // TODO: This doesn't belong to the constructor of AuthorityState.
         state
