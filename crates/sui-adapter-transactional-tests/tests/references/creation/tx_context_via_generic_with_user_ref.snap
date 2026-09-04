@@ -1,0 +1,73 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-20:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7197200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 22-28:
+//# programmable --sender A --inputs 1 7
+// VALID: the generic `&mut T` slot is injected, the `&mut u64` survives a later `&mut TxContext` use
+//> 0: test::m::ctx_then_ref<sui::tx_context::TxContext>(Input(0));
+//> 1: test::m::new();
+//> 2: test::m::write(Result(0), Input(1));
+//> 3: test::m::check(Input(0), Input(1));
+//> 4: test::m::delete(Result(1));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 30-36:
+//# programmable --sender A --inputs 1 7
+// VALID: the injected generic slot last
+//> 0: test::m::ref_then_ctx<sui::tx_context::TxContext>(Input(0));
+//> 1: test::m::new();
+//> 2: test::m::write(Result(0), Input(1));
+//> 3: test::m::check(Input(0), Input(1));
+//> 4: test::m::delete(Result(1));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 38-44:
+//# programmable --sender A --inputs 1 7
+// VALID: an immutable generic slot last
+//> 0: test::m::ref_then_imm_ctx<sui::tx_context::TxContext>(Input(0));
+//> 1: test::m::new();
+//> 2: test::m::write(Result(0), Input(1));
+//> 3: test::m::check(Input(0), Input(1));
+//> 4: test::m::delete(Result(1));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 46-49:
+//# programmable --sender A --inputs 1 7
+// INVALID: two injected `&mut TxContext` through one generic, rejected like the non-generic case
+//> 0: test::m::two_mut_then_ref<sui::tx_context::TxContext>(Input(0));
+//> 1: test::m::write(Result(0), Input(1));
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidTxContext }, source: Some("TxContext can be taken by mutable reference at most once"), command: Some(0) } }
+
+task 6, lines 51-54:
+//# programmable --sender A --inputs 1 7
+// INVALID: injected `&mut TxContext` next to an injected `&TxContext` through one generic
+//> 0: test::m::mut_imm_then_ref<sui::tx_context::TxContext>(Input(0));
+//> 1: test::m::write(Result(0), Input(1));
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext }, source: Some("&mut TxContext cannot be used alongside other TxContext parameters"), command: Some(0) } }
+
+task 7, lines 56-62:
+//# programmable --sender A --inputs 1 7
+// VALID: two injected `&TxContext` through one generic, the user reference still usable
+//> 0: test::m::two_imm_then_ref<sui::tx_context::TxContext>(Input(0));
+//> 1: test::m::new();
+//> 2: test::m::write(Result(0), Input(1));
+//> 3: test::m::check(Input(0), Input(1));
+//> 4: test::m::delete(Result(1));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
