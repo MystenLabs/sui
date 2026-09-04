@@ -5,7 +5,7 @@ withdrawals: the `reserve_object_funds_for_withdrawal` native consulted by
 `funds_accumulator::withdraw_from_object` while the transaction is running inside the executor.
 It is gated by the `check_object_funds_withdraw_in_execution` protocol flag and supersedes the
 post-execution checker described in [`object_funds_checking.md`](./object_funds_checking.md)
-(now `ObjectFundsCheckerDEPRECATED`); the plan is to enable the flag everywhere.
+(now `LegacyObjectFundsChecker` in `sui-execution`); the plan is to enable the flag everywhere.
 
 For the on-chain data layout, see [`data_model.md`](./data_model.md). For how withdrawals are
 declared, executed, and settled, see [`write_path.md`](./write_path.md).

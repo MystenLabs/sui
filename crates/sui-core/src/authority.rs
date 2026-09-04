@@ -4,8 +4,8 @@
 
 use crate::accumulators::coin_reservations::CachingCoinReservationResolver;
 use crate::accumulators::funds_read::AccountFundsRead;
-use crate::accumulators::object_funds_checker::ObjectFundsCheckerDEPRECATED;
 use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
+use crate::accumulators::object_funds_checker::should_commit_object_funds_withdraws;
 use crate::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
 use crate::accumulators::unsettled_object_withdrawals::UnsettledObjectWithdrawals;
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
@@ -70,6 +70,7 @@ use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_execution::Executor;
+use sui_execution::legacy_object_funds::LegacyObjectFundsChecker;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::accumulator_root::UnsettledObjectFundsRead;
@@ -1056,7 +1057,7 @@ pub struct AuthorityState {
     /// Notification channel for reconfiguration
     notify_epoch: tokio::sync::watch::Sender<EpochId>,
 
-    pub(crate) object_funds_checker: ArcSwapOption<ObjectFundsCheckerDEPRECATED>,
+    pub(crate) object_funds_checker: ArcSwapOption<LegacyObjectFundsChecker>,
     object_funds_checker_metrics: Arc<ObjectFundsCheckerMetrics>,
     pub(crate) unsettled_object_withdrawals: Arc<UnsettledObjectWithdrawals>,
 
@@ -2093,21 +2094,19 @@ impl AuthorityState {
                 tx_digest,
             );
 
-        if !protocol_config.check_object_funds_withdraw_in_execution() {
-            // TODO: Move the object funds checker to the executor so that it can eventually be
-            // removed from the active code path.
-            let object_funds_checker = self.object_funds_checker.load();
-            if let Some(object_funds_checker) = object_funds_checker.as_ref()
-                && !object_funds_checker.should_commit_object_funds_withdraws(
-                    certificate,
-                    &effects,
-                    &inner_temp_store.accumulator_running_max_withdraws,
-                    &execution_env,
-                    self.get_account_funds_read(),
-                    &self.execution_scheduler,
-                    epoch_store,
-                )
-            {
+        let object_funds_checker = self.object_funds_checker.load();
+        if let Some(object_funds_checker) = object_funds_checker.as_ref() {
+            if !should_commit_object_funds_withdraws(
+                object_funds_checker,
+                certificate,
+                &effects,
+                &inner_temp_store.accumulator_running_max_withdraws,
+                &execution_env,
+                self.get_account_funds_read(),
+                &self.unsettled_object_withdrawals,
+                &self.execution_scheduler,
+                epoch_store,
+            ) {
                 assert_reachable!("retry object withdraw later");
                 return ExecutionOutput::RetryLater;
             }
@@ -3582,19 +3581,22 @@ impl AuthorityState {
 
     async fn init_object_funds_checker(&self) {
         let epoch_store = self.epoch_store.load();
-        // TODO: Once we enable object funds checking during execution, we will no longer need to initialize the object funds checker here.
         if self.node_role(&epoch_store).runs_consensus()
             && epoch_store.protocol_config().enable_object_funds_withdraw()
         {
-            if self.object_funds_checker.load().is_none() {
-                let inner = self.get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).map(|o| {
-                    Arc::new(ObjectFundsCheckerDEPRECATED::new(
-                        o.version(),
-                        self.unsettled_object_withdrawals.clone(),
-                        self.object_funds_checker_metrics.clone(),
-                    ))
-                });
-                self.object_funds_checker.store(inner);
+            let requested_checker =
+                self.get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                    .and_then(|object| {
+                        epoch_store.executor().legacy_object_funds_checker(
+                            epoch_store.protocol_config(),
+                            object.version(),
+                            self.object_funds_checker_metrics.clone(),
+                        )
+                    });
+            if requested_checker.is_none() {
+                self.object_funds_checker.store(None);
+            } else if self.object_funds_checker.load().is_none() {
+                self.object_funds_checker.store(requested_checker);
             }
         } else {
             self.object_funds_checker.store(None);

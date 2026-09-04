@@ -63,6 +63,20 @@ impl<'m> Verifier<'m> {
 }
 
 impl executor::Executor for Executor {
+    fn legacy_object_funds_checker(
+        &self,
+        protocol_config: &ProtocolConfig,
+        starting_accumulator_version: sui_types::base_types::SequenceNumber,
+        metrics: Arc<crate::legacy_object_funds::ObjectFundsCheckerMetrics>,
+    ) -> Option<Arc<crate::legacy_object_funds::LegacyObjectFundsChecker>> {
+        (!protocol_config.check_object_funds_withdraw_in_execution()).then(|| {
+            Arc::new(crate::legacy_object_funds::LegacyObjectFundsChecker::new(
+                starting_accumulator_version,
+                metrics,
+            ))
+        })
+    }
+
     fn execute_transaction_to_effects(
         &self,
         store: &dyn BackingStore,

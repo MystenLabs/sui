@@ -24,8 +24,19 @@ use sui_types::{
     transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
 };
 
+use crate::legacy_object_funds::{LegacyObjectFundsChecker, ObjectFundsCheckerMetrics};
+
 /// Abstracts over access to the VM across versions of the execution layer.
 pub trait Executor {
+    /// Creates the compatibility checker required by executors predating in-execution object-funds
+    /// validation. A future executor can return `None`, leaving no legacy policy in `sui-core`.
+    fn legacy_object_funds_checker(
+        &self,
+        protocol_config: &ProtocolConfig,
+        starting_accumulator_version: sui_types::base_types::SequenceNumber,
+        metrics: Arc<ObjectFundsCheckerMetrics>,
+    ) -> Option<Arc<LegacyObjectFundsChecker>>;
+
     fn execute_transaction_to_effects(
         &self,
         store: &dyn BackingStore,

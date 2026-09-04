@@ -12,6 +12,7 @@ pub use executor::Executor;
 pub use verifier::Verifier;
 
 pub mod executor;
+pub mod legacy_object_funds;
 pub mod verifier;
 
 mod latest;
