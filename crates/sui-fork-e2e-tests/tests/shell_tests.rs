@@ -47,9 +47,9 @@ use regex::Regex;
 use sui_fork_e2e_tests::Binaries;
 use sui_fork_e2e_tests::ScriptOutput;
 use sui_fork_e2e_tests::SourceNetwork;
-use sui_fork_e2e_tests::forward_termination_signals;
 use sui_fork_e2e_tests::free_loopback_port;
 use sui_fork_e2e_tests::run_script;
+use sui_fork_e2e_tests::run_until_terminated;
 
 const TEST_DIR: &str = "tests/shell_tests";
 const TEST_PATTERN: &str = r"\.sh$";
@@ -80,7 +80,13 @@ struct Redactions {
 /// of the same name.
 #[tokio::main]
 async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
-    tokio::spawn(forward_termination_signals());
+    match run_until_terminated(run_shell_test(path)).await {
+        Ok(result) => result,
+        Err(signal) => Err(anyhow!("test interrupted by {signal}").into()),
+    }
+}
+
+async fn run_shell_test(path: &Path) -> datatest_stable::Result<()> {
     let binaries = Binaries::build()?;
     let source = SourceNetwork::start(&binaries.sui)?;
 

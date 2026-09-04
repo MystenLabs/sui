@@ -15,7 +15,7 @@ pub mod source;
 
 pub use binaries::Binaries;
 pub use script::ScriptOutput;
-pub use script::forward_termination_signals;
 pub use script::run_script;
+pub use script::run_until_terminated;
 pub use source::SourceNetwork;
 pub use source::free_loopback_port;

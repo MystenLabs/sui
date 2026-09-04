@@ -13,12 +13,16 @@
 //! from the harness's own, [`forward_termination_signals`] relays Ctrl-C and nextest's SIGTERM
 //! into them.
 
+use std::fmt;
+use std::future::Future;
 use std::io::Read;
 use std::process::Child;
 use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Stdio;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicU8;
+use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
@@ -32,9 +36,22 @@ const KILL_GRACE: Duration = Duration::from_secs(5);
 /// Poll interval while waiting for `bash` to exit or for a signalled group to disappear.
 const POLL: Duration = Duration::from_millis(50);
 
+const NO_TERMINATION_SIGNAL: u8 = 0;
+
 /// Process groups spawned by this process and not yet released, so a termination signal can reach
 /// them. Later entries depend on earlier ones: a script talks to the network started before it.
 static RUNNING_GROUPS: Mutex<Vec<u32>> = Mutex::new(Vec::new());
+
+/// The first termination signal this process received. A subsequent test in the same process must
+/// stop immediately rather than start another source network after the signal has been handled.
+static RECEIVED_TERMINATION_SIGNAL: AtomicU8 = AtomicU8::new(NO_TERMINATION_SIGNAL);
+
+/// Signal that requested termination of the test process.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TerminationSignal {
+    Interrupt,
+    Terminate,
+}
 
 /// Captured result of one script run.
 pub struct ScriptOutput {
@@ -43,6 +60,60 @@ pub struct ScriptOutput {
     pub stderr: Vec<u8>,
     /// Whether the harness killed the script because it exceeded its deadline.
     pub timed_out: bool,
+}
+
+impl TerminationSignal {
+    fn code(self) -> u8 {
+        match self {
+            Self::Interrupt => 1,
+            Self::Terminate => 2,
+        }
+    }
+
+    fn from_code(code: u8) -> Option<Self> {
+        match code {
+            1 => Some(Self::Interrupt),
+            2 => Some(Self::Terminate),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for TerminationSignal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Interrupt => f.write_str("SIGINT"),
+            Self::Terminate => f.write_str("SIGTERM"),
+        }
+    }
+}
+
+/// Run `operation` until it completes or the process receives SIGINT or SIGTERM.
+///
+/// A signal stops the registered process groups and drops `operation` before returning. Tests in
+/// the same process also stop without polling `operation` after the first signal.
+pub async fn run_until_terminated<F>(
+    operation: F,
+) -> std::result::Result<F::Output, TerminationSignal>
+where
+    F: Future,
+{
+    if let Some(signal) = received_termination_signal() {
+        return Err(signal);
+    }
+
+    let mut termination = tokio::spawn(forward_termination_signals());
+    tokio::pin!(operation);
+    tokio::select! {
+        biased;
+        signal = &mut termination => {
+            Err(signal.expect("termination signal task panicked"))
+        }
+        output = &mut operation => {
+            termination.abort();
+            Ok(output)
+        }
+    }
 }
 
 /// Run `command` in a new process group and collect its output within `timeout`.
@@ -88,29 +159,44 @@ pub fn run_script(mut command: Command, timeout: Duration) -> Result<ScriptOutpu
     })
 }
 
-/// Relay SIGINT and SIGTERM to every running process group, then exit.
+/// Relay SIGINT and SIGTERM to every running process group and return the received signal.
 ///
-/// Spawn the future on the test's runtime before starting the network. Without it, a Ctrl-C at
-/// the terminal or a nextest timeout ends the harness process and leaves `sui start`, `bash`, and
-/// the fork running, because they live in process groups the signal never reaches. Groups go in
-/// reverse order so that a script dies before the network it talks to.
-pub async fn forward_termination_signals() {
+/// Run this future alongside the test operation. When it returns, drop the operation before
+/// exiting so its destructors remove the temporary directories. Groups go in reverse order so
+/// that a script dies before the network it talks to.
+async fn forward_termination_signals() -> TerminationSignal {
     #[cfg(unix)]
     {
         use tokio::signal::unix::SignalKind;
         use tokio::signal::unix::signal;
 
+        if let Some(signal) = received_termination_signal() {
+            terminate_running_groups();
+            return signal;
+        }
+
         let mut interrupt = signal(SignalKind::interrupt()).expect("SIGINT handler");
         let mut terminate = signal(SignalKind::terminate()).expect("SIGTERM handler");
-        let code = tokio::select! {
-            _ = interrupt.recv() => 130,
-            _ = terminate.recv() => 143,
+        let signal = tokio::select! {
+            _ = interrupt.recv() => TerminationSignal::Interrupt,
+            _ = terminate.recv() => TerminationSignal::Terminate,
         };
-        for group in RUNNING_GROUPS.lock().unwrap().drain(..).rev() {
-            terminate_group(group);
-        }
-        std::process::exit(code);
+        let signal = match RECEIVED_TERMINATION_SIGNAL.compare_exchange(
+            NO_TERMINATION_SIGNAL,
+            signal.code(),
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => signal,
+            Err(code) => {
+                TerminationSignal::from_code(code).expect("stored termination signal is valid")
+            }
+        };
+        terminate_running_groups();
+        signal
     }
+    #[cfg(not(unix))]
+    std::future::pending().await
 }
 
 /// Spawn `command` as the leader of a new process group and register the group for
@@ -138,6 +224,16 @@ pub(crate) fn release_group(group: u32) {
 /// Signal one process by id and return whether it received the signal.
 pub(crate) fn signal_process(pid: u32, signal: &str) -> bool {
     kill(&pid.to_string(), signal)
+}
+
+fn received_termination_signal() -> Option<TerminationSignal> {
+    TerminationSignal::from_code(RECEIVED_TERMINATION_SIGNAL.load(Ordering::Acquire))
+}
+
+fn terminate_running_groups() {
+    for group in RUNNING_GROUPS.lock().unwrap().drain(..).rev() {
+        terminate_group(group);
+    }
 }
 
 fn spawn_reader<R: Read + Send + 'static>(mut reader: R) -> thread::JoinHandle<Result<Vec<u8>>> {
@@ -181,4 +277,121 @@ fn kill(target: &str, signal: &str) -> bool {
         .stderr(Stdio::null())
         .status()
         .is_ok_and(|status| status.success())
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use std::future::pending;
+    use std::path::Path;
+    use std::process::Child;
+    use std::process::Command;
+    use std::time::Duration;
+    use std::time::Instant;
+
+    use anyhow::Context;
+    use anyhow::Result;
+    use anyhow::bail;
+    use anyhow::ensure;
+
+    use super::TerminationSignal;
+    use super::run_until_terminated;
+    use super::signal_process;
+
+    const HELPER_ROOT_ENV: &str = "SUI_FORK_E2E_TERMINATION_HELPER_ROOT";
+    const HELPER_TEST: &str = "script::tests::termination_signal_drops_temporary_directories";
+    const HELPER_TIMEOUT: Duration = Duration::from_secs(10);
+
+    fn run_termination_helper(root: &Path) -> Result<()> {
+        tokio::runtime::Runtime::new()?.block_on(async {
+            let operation = async {
+                let _directory = tempfile::tempdir_in(root)?;
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                std::fs::write(root.join("ready"), [])?;
+                pending::<()>().await;
+                Ok::<(), anyhow::Error>(())
+            };
+            let received = run_until_terminated(operation)
+                .await
+                .expect_err("operation completed without a signal");
+            ensure!(
+                received == TerminationSignal::Terminate,
+                "received {received}"
+            );
+            let repeated = tokio::time::timeout(
+                Duration::from_secs(1),
+                run_until_terminated(pending::<()>()),
+            )
+            .await
+            .context("a subsequent test did not stop")?
+            .expect_err("subsequent operation started");
+            ensure!(repeated == received, "received {repeated}");
+            Ok(())
+        })
+    }
+
+    fn wait_for_ready(path: &Path, child: &mut Child) -> Result<()> {
+        let deadline = Instant::now() + HELPER_TIMEOUT;
+        while !path.exists() {
+            if let Some(status) = child.try_wait()? {
+                bail!("termination helper exited before it was ready with {status}");
+            }
+            if Instant::now() >= deadline {
+                child.kill()?;
+                child.wait()?;
+                bail!("termination helper was not ready within {HELPER_TIMEOUT:?}");
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        Ok(())
+    }
+
+    fn wait_for_exit(child: &mut Child) -> Result<std::process::ExitStatus> {
+        let deadline = Instant::now() + HELPER_TIMEOUT;
+        loop {
+            if let Some(status) = child.try_wait()? {
+                return Ok(status);
+            }
+            if Instant::now() >= deadline {
+                child.kill()?;
+                child.wait()?;
+                bail!("termination helper did not exit within {HELPER_TIMEOUT:?}");
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    fn termination_signal_drops_temporary_directories() -> Result<()> {
+        if let Some(root) = std::env::var_os(HELPER_ROOT_ENV) {
+            return run_termination_helper(Path::new(&root));
+        }
+
+        let root = tempfile::tempdir()?;
+        let mut child = Command::new(std::env::current_exe()?)
+            .args(["--exact", HELPER_TEST, "--nocapture"])
+            .env(HELPER_ROOT_ENV, root.path())
+            .spawn()
+            .context("failed to spawn termination helper")?;
+        wait_for_ready(&root.path().join("ready"), &mut child)?;
+        let child_directory = std::fs::read_dir(root.path())?
+            .filter_map(|entry| entry.ok())
+            .find(|entry| entry.path().is_dir())
+            .context("termination helper did not create its temporary directory")?
+            .path();
+
+        if !signal_process(child.id(), "TERM") {
+            child.kill()?;
+            child.wait()?;
+            bail!("failed to send SIGTERM to the termination helper");
+        }
+        let status = wait_for_exit(&mut child)?;
+
+        ensure!(
+            !child_directory.exists(),
+            "temporary directory survived termination: {}",
+            child_directory.display()
+        );
+        ensure!(status.success(), "termination helper failed with {status}");
+        Ok(())
+    }
 }
