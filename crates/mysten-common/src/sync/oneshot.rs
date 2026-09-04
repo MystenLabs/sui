@@ -60,7 +60,10 @@ impl<T> Receiver<T> {
             match self.0.try_recv() {
                 Ok(value) => return Ok(value),
                 Err(oneshot::TryRecvError::Disconnected) => return Err(RecvError),
-                Err(oneshot::TryRecvError::Empty) => msim::task::yield_blocking(),
+                Err(oneshot::TryRecvError::Empty) => {
+                    crate::assert_reachable!("blocking_recv parks its thread to wait");
+                    msim::task::yield_blocking()
+                }
             }
         }
 
