@@ -10,8 +10,8 @@
 //! signals the whole group before joining the pipe readers, so a script that forgets to stop its
 //! fork can neither hang nor leak the test. The source network's `sui start`, which spawns a
 //! PostgreSQL of its own, is placed in a group the same way. Because those groups are separate
-//! from the harness's own, [`forward_termination_signals`] relays Ctrl-C and nextest's SIGTERM
-//! into them.
+//! from the harness's own, [`run_until_terminated`] relays Ctrl-C and nextest's SIGTERM into
+//! them.
 
 use std::fmt;
 use std::future::Future;
@@ -199,8 +199,8 @@ async fn forward_termination_signals() -> TerminationSignal {
     std::future::pending().await
 }
 
-/// Spawn `command` as the leader of a new process group and register the group for
-/// [`forward_termination_signals`], until [`release_group`] is called with the child's id.
+/// Spawn `command` as the leader of a new process group and register it for signal handling by
+/// [`run_until_terminated`], until [`release_group`] is called with the child's id.
 pub(crate) fn spawn_in_group(command: &mut Command) -> Result<Child> {
     #[cfg(unix)]
     {
@@ -360,7 +360,9 @@ mod tests {
         }
     }
 
+    // Real subprocesses and OS signals bypass msim, and the helper needs a real Tokio runtime.
     #[test]
+    #[cfg_attr(msim, ignore)]
     fn termination_signal_drops_temporary_directories() -> Result<()> {
         if let Some(root) = std::env::var_os(HELPER_ROOT_ENV) {
             return run_termination_helper(Path::new(&root));
