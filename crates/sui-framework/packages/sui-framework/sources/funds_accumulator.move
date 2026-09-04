@@ -36,6 +36,11 @@ const EObjectFundsWithdrawNotEnabled: vector<u8> = b"Object funds withdraw is no
 #[allow(unused_const)]
 const EAccumulatorTypeTooLarge: u64 = 4;
 
+/// Attempted to withdraw more funds than are currently available to an object.
+#[error(code = 5)]
+#[allow(unused_const)]
+const EObjectFundsInsufficient: vector<u8> = b"Object has insufficient funds";
+
 /// Allows for withdrawing funds from a given address. The `Withdrawal` can be created in PTBs for
 /// the transaction sender, or dynamically from an object via `withdraw_from_object`.
 /// The redemption of the funds must be initiated from the module that defines `T`.

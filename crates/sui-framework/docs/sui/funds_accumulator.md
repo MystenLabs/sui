@@ -136,6 +136,17 @@ The accumulator type is too large to be used with the funds accumulator.
 
 
 
+<a name="sui_funds_accumulator_EObjectFundsInsufficient"></a>
+
+Attempted to withdraw more funds than are currently available to an object.
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_EObjectFundsInsufficient">EObjectFundsInsufficient</a>: vector&lt;u8&gt; = b"Object <b>has</b> insufficient funds";
+</code></pre>
+
+
+
 <a name="sui_funds_accumulator_withdrawal_owner"></a>
 
 ## Function `withdrawal_owner`

@@ -23,7 +23,7 @@ pub const RESOLVED_WITHDRAWAL_STRUCT: (&AccountAddress, &IdentStr, &IdentStr) = 
 );
 pub const WITHDRAWAL_OWNER_FUNC_NAME: &IdentStr = ident_str!("withdrawal_owner");
 pub const WITHDRAWAL_SPLIT_FUNC_NAME: &IdentStr = ident_str!("withdrawal_split");
-pub const E_OBJECT_FUNDS_INSUFFICIENT: u64 = 2;
+pub const E_OBJECT_FUNDS_INSUFFICIENT: u64 = 5;
 
 pub fn is_object_funds_insufficient_abort(
     status: &crate::execution_status::ExecutionFailureStatus,
