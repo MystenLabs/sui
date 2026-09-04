@@ -47,11 +47,17 @@ use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
 pub(crate) mod invariants;
 use invariants::InvariantChecker;
 
+/// Declared allowance ids per `(funder, funds type)` key.
+type AllowanceIds = BTreeMap<(SuiAddress, TypeTag), Vec<ObjectID>>;
+
 #[derive(Default)]
 struct PostExecutionCheckInputs {
     /// Per-`(address, type)` funds-accumulator reservation budget authorized by this transaction.
     /// Shared by gasless execution validation and the post-execution invariant checks.
     input_reservations: BTreeMap<(SuiAddress, TypeTag), u64>,
+    /// The allowance ids declared per `WithdrawFrom::SenderAllowance` reservation key. Consumed by
+    /// `check_ownership_invariants` to authorize Splits at non-signer keys.
+    allowance_ids: AllowanceIds,
     /// For the advance-epoch transaction, `(epoch_fees minted, epoch_rebates burned)`; `None`
     /// for every other transaction. Needed by the expensive SUI conservation check.
     advance_epoch_gas_summary: Option<(u64, u64)>,
@@ -65,13 +71,15 @@ struct PostExecutionCheckInputs {
 impl PostExecutionCheckInputs {
     fn new(transaction: (&TransactionKind, &GasData, SuiAddress), enable_gasless: bool) -> Self {
         let (transaction_kind, gas_data, transaction_signer) = transaction;
+        let (input_reservations, allowance_ids) = compute_input_reservations(
+            transaction_kind,
+            gas_data,
+            transaction_signer,
+            enable_gasless,
+        );
         Self {
-            input_reservations: compute_input_reservations(
-                transaction_kind,
-                gas_data,
-                transaction_signer,
-                enable_gasless,
-            ),
+            input_reservations,
+            allowance_ids,
             advance_epoch_gas_summary: transaction_kind.get_advance_epoch_tx_gas_summary(),
             is_genesis: matches!(transaction_kind, TransactionKind::Genesis(_)),
             declared_packages: declared_packages(transaction_kind),
@@ -1177,9 +1185,11 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
 }
 
 /// Compute the per-`(address, type)` funds-accumulator reservation budget authorized by the
-/// transaction. Today every funds accumulator is a `Balance<T>`, but the `(address, TypeTag)`
-/// keying lets this generalize as more accumulator types are added. Sources:
-/// - PTB `FundsWithdrawalArg`s for any supported accumulator type (sender or sponsor as owner).
+/// transaction, and the allowance ids declared per key. Today every funds accumulator is a
+/// `Balance<T>`, but the `(address, TypeTag)` keying lets this generalize as more accumulator
+/// types are added. Budget sources:
+/// - PTB `FundsWithdrawalArg`s for any supported accumulator type (sender, sponsor, or
+///   allowance funder as owner).
 /// - Gas paid entirely from address balance (credits `(gas_owner, Balance<SUI>)`).
 /// - Gas-data entries with coin-reservation digests (also credit `(gas_owner, Balance<SUI>)`).
 fn compute_input_reservations(
@@ -1187,24 +1197,33 @@ fn compute_input_reservations(
     gas_data: &GasData,
     transaction_signer: SuiAddress,
     enable_gasless: bool,
-) -> BTreeMap<(SuiAddress, TypeTag), u64> {
+) -> (BTreeMap<(SuiAddress, TypeTag), u64>, AllowanceIds) {
     use sui_types::balance::Balance;
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::{Reservation, WithdrawFrom, is_gas_paid_from_address_balance};
 
     let is_gasless = enable_gasless && is_gasless_transaction(gas_data, transaction_kind);
     let mut reservations: BTreeMap<(SuiAddress, TypeTag), u64> = BTreeMap::new();
+    let mut allowance_ids = AllowanceIds::new();
     let sui_balance_type = Balance::type_tag(GAS::type_tag());
 
     for arg in transaction_kind.get_funds_withdrawals() {
+        let ty = arg.type_arg.to_type_tag();
         let owner = match arg.withdraw_from {
             WithdrawFrom::Sender => transaction_signer,
             WithdrawFrom::Sponsor => gas_data.owner,
+            // The funder will differ from the signer/sponsor, but permission
+            // is verified at signing
+            WithdrawFrom::SenderAllowance { funder, allowance } => {
+                allowance_ids
+                    .entry((funder, ty.clone()))
+                    .or_default()
+                    .push(allowance);
+                funder
+            }
         };
         let Reservation::MaxAmountU64(reservation) = arg.reservation;
-        let entry = reservations
-            .entry((owner, arg.type_arg.to_type_tag()))
-            .or_insert(0);
+        let entry = reservations.entry((owner, ty)).or_insert(0);
         *entry = entry.saturating_add(reservation);
     }
 
@@ -1226,7 +1245,7 @@ fn compute_input_reservations(
         }
     }
 
-    reservations
+    (reservations, allowance_ids)
 }
 
 /// What each `Publish`/`Upgrade` command declares about the package it writes, in command order.
