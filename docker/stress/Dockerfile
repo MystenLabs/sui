@@ -1,4 +1,4 @@
-FROM rust:1.96.1-bullseye AS builder
+FROM rust:1.96.1-bookworm AS builder
 RUN apt-get update \
  && apt-get install -y --no-install-recommends cmake clang libpq5 libpq-dev \
  && rm -rf /var/lib/apt/lists/*
@@ -27,7 +27,7 @@ RUN cargo build --locked --profile ${PROFILE} --bin stress
 # ~1.2 GB compressed image (vs sui-node's ~114 MB). The oversized export
 # made BuildKit's `#28 exporting to client directory` step prone to gRPC
 # transport hangs under PVC/network contention.
-FROM debian:bullseye-slim AS runtime
+FROM debian:bookworm-slim AS runtime
 # Runtime needs:
 #   - sui-network-aux mounts its own entry.sh and runs `aws s3 cp` to fetch
 #     genesis + keystore, with a `curl` fallback.
