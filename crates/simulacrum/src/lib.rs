@@ -42,6 +42,7 @@ use sui_types::storage::{
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::transaction::EndOfEpochTransactionKind;
 use sui_types::{
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
     base_types::{EpochId, SuiAddress},
     committee::Committee,
     effects::TransactionEffects,
@@ -372,6 +373,15 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
                 .0
                 .status()
                 .unwrap();
+
+            let committed_accumulator_versions = settlement_effects
+                .iter()
+                .flat_map(TransactionEffectsAPI::object_changes)
+                .filter(|change| change.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                .filter_map(|change| change.input_version)
+                .collect();
+            self.epoch_state
+                .commit_accumulator_versions(committed_accumulator_versions);
         }
 
         let committee = CommitteeWithKeys::new(&self.keystore, self.epoch_state.committee());
