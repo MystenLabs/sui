@@ -78,15 +78,13 @@ public fun append(string: &mut String, other: String) {
 /// Insert the `other` string at the `at` index of `string`.
 public fun insert(s: &mut String, at: u64, o: String) {
     assert!(at <= s.length(), EInvalidIndex);
-    o.into_bytes().destroy!(|e| s.bytes.insert(e, at));
+    s.bytes.splice(at, at, o.into_bytes()).destroy_empty();
 }
 
 /// Copy the slice of the `string` from `i` to `j` into a new `String`.
 public fun substring(string: &String, i: u64, j: u64): String {
     assert!(i <= j && j <= string.length(), EInvalidIndex);
-    let mut bytes = vector[];
-    i.range_do!(j, |i| bytes.push_back(string.bytes[i]));
-    String { bytes }
+    String { bytes: string.bytes.slice(i, j) }
 }
 
 /// Get the inner bytes of the `string` as a reference

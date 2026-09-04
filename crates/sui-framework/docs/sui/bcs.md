@@ -599,7 +599,13 @@ Peel a vector of <code>u8</code> (eg string) from serialized bytes.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_vec_u8">peel_vec_u8</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>): vector&lt;u8&gt; {
-    <a href="../sui/bcs.md#sui_bcs">bcs</a>.<a href="../sui/bcs.md#sui_bcs_peel_vec">peel_vec</a>!(|<a href="../sui/bcs.md#sui_bcs">bcs</a>| <a href="../sui/bcs.md#sui_bcs">bcs</a>.<a href="../sui/bcs.md#sui_bcs_peel_u8">peel_u8</a>())
+    <b>let</b> n = <a href="../sui/bcs.md#sui_bcs">bcs</a>.<a href="../sui/bcs.md#sui_bcs_peel_vec_length">peel_vec_length</a>();
+    <b>let</b> len = <a href="../sui/bcs.md#sui_bcs">bcs</a>.bytes.length();
+    <b>assert</b>!(len &gt;= n, <a href="../sui/bcs.md#sui_bcs_EOutOfRange">EOutOfRange</a>);
+    // bytes are stored reversed: one bulk tail extraction, then restore stream order
+    <b>let</b> <b>mut</b> out = <a href="../sui/bcs.md#sui_bcs">bcs</a>.bytes.drain(len - n, len);
+    out.reverse();
+    out
 }
 </code></pre>
 

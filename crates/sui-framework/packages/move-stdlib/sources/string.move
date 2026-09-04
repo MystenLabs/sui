@@ -79,12 +79,8 @@ public fun append_utf8(s: &mut String, bytes: vector<u8>) {
 public fun insert(s: &mut String, at: u64, o: String) {
     let bytes = &s.bytes;
     assert!(at <= bytes.length() && internal_is_char_boundary(bytes, at), EInvalidIndex);
-    let l = s.length();
-    let mut front = s.substring(0, at);
-    let end = s.substring(at, l);
-    front.append(o);
-    front.append(end);
-    *s = front;
+    let String { bytes: other } = o;
+    s.bytes.splice(at, at, other).destroy_empty();
 }
 
 /// Returns a sub-string using the given byte indices, where `i` is the first
