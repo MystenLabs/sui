@@ -40,7 +40,11 @@ release. They are ordered by date, newest first.
 `docs/site/scripts/convert-developer-updates.cjs` reads this directory and
 writes `docs/content/developer-updates.mdx`. The site build runs it through the
 `prebuild` and `prestart` scripts in `docs/site/package.json`, so you do not run
-anything by hand. Commit the regenerated `.mdx` with your post.
+anything by hand.
+
+That generated page is not in version control. Your post here is the only copy,
+so edit it here and never edit `developer-updates.mdx` directly. Any change to
+the generated page is overwritten on the next build.
 
 To preview locally:
 
