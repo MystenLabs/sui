@@ -1,0 +1,62 @@
+---
+source: crates/sui-fork-e2e-tests/tests/shell_tests.rs
+---
+----- script -----
+#!/usr/bin/env bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Publish a package and its dependency on the localnet, then call the dependent package on a fork.
+# Execution must fetch both packages and the shared input object from the source checkpoint.
+set -euo pipefail
+source ./lib.sh
+localnet_setup
+
+# counter_value <where> <counter id>: decode the little-endian u64 at the end of Counter's BCS.
+counter_value() {
+  "$1" object "$2" --bcs --json \
+    | jq -r '.data.Move.contents[-8:] as $b | reduce range(0; 8) as $i (0; . + $b[$i] * pow(2; 8 * $i))'
+}
+
+echo "=== localnet: publish a package and its dependency ==="
+add_env_to_toml counter localnet on_localnet
+add_env_to_toml counter_app localnet on_localnet
+run_json dependency_publish.json on_localnet publish counter --gas-budget 100000000
+dependency_package=$(published_package_id dependency_publish.json)
+run_json create.json on_localnet call --package "$dependency_package" --module counter \
+  --function create --gas-budget 50000000
+counter=$(created_object_id create.json "::counter::Counter")
+run_json app_publish.json on_localnet publish counter_app --gas-budget 100000000
+app_package=$(published_package_id app_publish.json)
+fork_point=$(wait_for_graphql_tx "$(tx_digest_of app_publish.json)")
+gas=$(gas_coin on_localnet)
+assert_eq "$(counter_value on_localnet "$counter")" 0 \
+  "the dependency's counter starts at zero on the localnet"
+
+echo "=== fork: call the dependent package through a PTB ==="
+fork_start --checkpoint "$fork_point" --object "$gas"
+fork_env
+run_json call.json on_fork ptb \
+  --move-call "$app_package::counter_app::increment_twice" "@$counter" \
+  --gas-coin "@$gas" --gas-budget 50000000
+assert_eq "$(tx_status_of call.json)" success \
+  "the dependent package executed on the fork"
+assert_eq "$(counter_value on_fork "$counter")" 2 \
+  "the fork executed both calls into the dependency"
+assert_eq "$(counter_value on_localnet "$counter")" 0 \
+  "the localnet counter is unchanged"
+
+exit "$FAILED"
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+=== localnet: publish a package and its dependency ===
+ok: the dependency's counter starts at zero on the localnet
+=== fork: call the dependent package through a PTB ===
+ok: the dependent package executed on the fork
+ok: the fork executed both calls into the dependency
+ok: the localnet counter is unchanged
+
+----- stderr -----
