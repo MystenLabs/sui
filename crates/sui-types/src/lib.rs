@@ -29,6 +29,7 @@ pub mod accumulator_event;
 pub mod accumulator_metadata;
 pub mod accumulator_root;
 pub mod address_alias;
+pub mod allowance;
 pub mod authenticator_state;
 pub mod balance;
 pub mod balance_change;

@@ -13,6 +13,7 @@ use sui_types::type_input::StructInput;
 use sui_types::type_input::TypeInput;
 
 use crate::api::scalars::big_int::BigInt;
+use crate::api::types::address::Address;
 use crate::api::types::move_type::MoveType;
 use crate::scope::Scope;
 
@@ -28,6 +29,12 @@ pub struct BalanceWithdraw {
 
     /// The account to withdraw funds from.
     pub withdraw_from: Option<WithdrawFrom>,
+
+    /// The account whose funds are withdrawn, if `withdrawFrom` is `SENDER_ALLOWANCE`.
+    pub funder: Option<Address>,
+
+    /// The allowance authorizing the withdrawal, if `withdrawFrom` is `SENDER_ALLOWANCE`. Use `asTransactionObject` to see it as this transaction referenced it.
+    pub allowance: Option<Address>,
 }
 
 /// Reservation details for a withdrawal.
@@ -48,6 +55,8 @@ pub enum WithdrawFrom {
     Sender,
     /// The funds are withdrawn from the sponsor's account.
     Sponsor,
+    /// The funds are withdrawn from the account of an allowance's funder, under an allowance granted to the transaction sender. See `BalanceWithdraw.funder` and `BalanceWithdraw.allowance`.
+    SenderAllowance,
 }
 
 impl BalanceWithdraw {
@@ -66,10 +75,18 @@ impl BalanceWithdraw {
             }
         });
 
-        let withdraw_from = Some(match withdraw_from {
-            NativeWithdrawFrom::Sender => WithdrawFrom::Sender,
-            NativeWithdrawFrom::Sponsor => WithdrawFrom::Sponsor,
-        });
+        let (withdraw_from, funder, allowance) = match withdraw_from {
+            NativeWithdrawFrom::Sender => (WithdrawFrom::Sender, None, None),
+            NativeWithdrawFrom::Sponsor => (WithdrawFrom::Sponsor, None, None),
+            NativeWithdrawFrom::SenderAllowance { funder, allowance } => (
+                WithdrawFrom::SenderAllowance,
+                Some(Address::with_address(scope.without_root_bound(), funder)),
+                Some(Address::with_address(
+                    scope.without_root_bound(),
+                    allowance.into(),
+                )),
+            ),
+        };
 
         let type_ = {
             let NativeWithdrawalTypeArg::Balance(t) = type_arg;
@@ -88,7 +105,9 @@ impl BalanceWithdraw {
         Self {
             reservation,
             type_,
-            withdraw_from,
+            withdraw_from: Some(withdraw_from),
+            funder,
+            allowance,
         }
     }
 }
@@ -98,6 +117,8 @@ mod tests {
     use super::*;
 
     use async_graphql::ScalarType;
+    use sui_types::base_types::ObjectID;
+    use sui_types::base_types::SuiAddress as NativeSuiAddress;
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::FundsWithdrawalArg;
     use sui_types::transaction::Reservation as NativeReservation;
@@ -128,6 +149,8 @@ mod tests {
             Some("42".to_string())
         );
         assert!(matches!(withdraw.withdraw_from, Some(WithdrawFrom::Sender)));
+        assert!(withdraw.funder.is_none());
+        assert!(withdraw.allowance.is_none());
 
         let type_tag = withdraw
             .type_
@@ -136,5 +159,25 @@ mod tests {
             .unwrap();
 
         assert_eq!(type_tag, expected_type_tag);
+    }
+
+    #[test]
+    fn test_from_native_allowance() {
+        let funder = NativeSuiAddress::random_for_testing_only();
+        let allowance = ObjectID::random();
+        let withdrawal =
+            FundsWithdrawalArg::balance_from_allowance(42, GAS::type_tag(), funder, allowance);
+
+        let withdraw = BalanceWithdraw::from_native(withdrawal, Scope::for_tests());
+
+        assert!(matches!(
+            withdraw.withdraw_from,
+            Some(WithdrawFrom::SenderAllowance)
+        ));
+        assert_eq!(withdraw.funder.map(|a| a.address), Some(funder));
+        assert_eq!(
+            withdraw.allowance.map(|a| a.address),
+            Some(allowance.into())
+        );
     }
 }
