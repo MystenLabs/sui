@@ -579,6 +579,21 @@ impl ExecutionScheduler {
             })
             .collect();
 
+        // Resolve non-digest transaction keys. The consensus path enqueues keyed
+        // transactions (e.g. randomness updates) before their digest is known, and the
+        // usual resolver (RandomnessRoundReceiver) is best-effort per node - the
+        // signature may never arrive. The keyed copy owns its version group's causal
+        // index and dedup drops later enqueues of the group as duplicates, so a
+        // digest-carrying enqueue must resolve the key or the transaction is lost.
+        for (cert, _) in &certs {
+            let key = cert.key();
+            if !matches!(key, TransactionKey::Digest(_))
+                && epoch_store.insert_tx_key(key, *cert.digest()).is_err()
+            {
+                debug!("epoch ended while resolving transaction key");
+            }
+        }
+
         // Certificates are filtered before index assignment, so dropped ones never
         // hold an index.
         let digests: Vec<_> = certs.iter().map(|(cert, _)| *cert.digest()).collect();
