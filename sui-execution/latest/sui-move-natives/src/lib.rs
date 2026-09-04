@@ -869,10 +869,10 @@ impl NativesCostTable {
 pub fn make_stdlib_gas_params_for_protocol_config(
     protocol_config: &ProtocolConfig,
 ) -> GasParameters {
-    macro_rules! get_gas_cost_or_default {
-        ($name: ident) => {{
+    macro_rules! get_gas_cost_since {
+        ($name: ident, $since: expr) => {{
             debug_assert!(
-                protocol_config.version.as_u64() < 53 || protocol_config.$name().is_some()
+                protocol_config.version.as_u64() < $since || protocol_config.$name().is_some()
             );
             protocol_config.$name().map(Into::into).unwrap_or(0.into())
         }};
@@ -880,65 +880,71 @@ pub fn make_stdlib_gas_params_for_protocol_config(
     GasParameters::new(
         MSN::bcs::GasParameters {
             to_bytes: MSN::bcs::ToBytesGasParameters {
-                per_byte_serialized: get_gas_cost_or_default!(
-                    bcs_per_byte_serialized_cost_as_option
+                per_byte_serialized: get_gas_cost_since!(
+                    bcs_per_byte_serialized_cost_as_option,
+                    53
                 ),
-                legacy_min_output_size: get_gas_cost_or_default!(
-                    bcs_legacy_min_output_size_cost_as_option
+                legacy_min_output_size: get_gas_cost_since!(
+                    bcs_legacy_min_output_size_cost_as_option,
+                    53
                 ),
-                failure: get_gas_cost_or_default!(bcs_failure_cost_as_option),
+                failure: get_gas_cost_since!(bcs_failure_cost_as_option, 53),
             },
         },
         MSN::debug::GasParameters {
             print: MSN::debug::PrintGasParameters {
-                base_cost: get_gas_cost_or_default!(debug_print_base_cost_as_option),
+                base_cost: get_gas_cost_since!(debug_print_base_cost_as_option, 53),
             },
             print_stack_trace: MSN::debug::PrintStackTraceGasParameters {
-                base_cost: get_gas_cost_or_default!(debug_print_stack_trace_base_cost_as_option),
+                base_cost: get_gas_cost_since!(debug_print_stack_trace_base_cost_as_option, 53),
             },
         },
         MSN::hash::GasParameters {
             sha2_256: MSN::hash::Sha2_256GasParameters {
-                base: get_gas_cost_or_default!(hash_sha2_256_base_cost_as_option),
-                per_byte: get_gas_cost_or_default!(hash_sha2_256_per_byte_cost_as_option),
-                legacy_min_input_len: get_gas_cost_or_default!(
-                    hash_sha2_256_legacy_min_input_len_cost_as_option
+                base: get_gas_cost_since!(hash_sha2_256_base_cost_as_option, 53),
+                per_byte: get_gas_cost_since!(hash_sha2_256_per_byte_cost_as_option, 53),
+                legacy_min_input_len: get_gas_cost_since!(
+                    hash_sha2_256_legacy_min_input_len_cost_as_option,
+                    53
                 ),
             },
             sha3_256: MSN::hash::Sha3_256GasParameters {
-                base: get_gas_cost_or_default!(hash_sha3_256_base_cost_as_option),
-                per_byte: get_gas_cost_or_default!(hash_sha3_256_per_byte_cost_as_option),
-                legacy_min_input_len: get_gas_cost_or_default!(
-                    hash_sha3_256_legacy_min_input_len_cost_as_option
+                base: get_gas_cost_since!(hash_sha3_256_base_cost_as_option, 53),
+                per_byte: get_gas_cost_since!(hash_sha3_256_per_byte_cost_as_option, 53),
+                legacy_min_input_len: get_gas_cost_since!(
+                    hash_sha3_256_legacy_min_input_len_cost_as_option,
+                    53
                 ),
             },
         },
         MSN::string::GasParameters {
             check_utf8: MSN::string::CheckUtf8GasParameters {
-                base: get_gas_cost_or_default!(string_check_utf8_base_cost_as_option),
-                per_byte: get_gas_cost_or_default!(string_check_utf8_per_byte_cost_as_option),
+                base: get_gas_cost_since!(string_check_utf8_base_cost_as_option, 53),
+                per_byte: get_gas_cost_since!(string_check_utf8_per_byte_cost_as_option, 53),
             },
             is_char_boundary: MSN::string::IsCharBoundaryGasParameters {
-                base: get_gas_cost_or_default!(string_is_char_boundary_base_cost_as_option),
+                base: get_gas_cost_since!(string_is_char_boundary_base_cost_as_option, 53),
             },
             sub_string: MSN::string::SubStringGasParameters {
-                base: get_gas_cost_or_default!(string_sub_string_base_cost_as_option),
-                per_byte: get_gas_cost_or_default!(string_sub_string_per_byte_cost_as_option),
+                base: get_gas_cost_since!(string_sub_string_base_cost_as_option, 53),
+                per_byte: get_gas_cost_since!(string_sub_string_per_byte_cost_as_option, 53),
             },
             index_of: MSN::string::IndexOfGasParameters {
-                base: get_gas_cost_or_default!(string_index_of_base_cost_as_option),
-                per_byte_pattern: get_gas_cost_or_default!(
-                    string_index_of_per_byte_pattern_cost_as_option
+                base: get_gas_cost_since!(string_index_of_base_cost_as_option, 53),
+                per_byte_pattern: get_gas_cost_since!(
+                    string_index_of_per_byte_pattern_cost_as_option,
+                    53
                 ),
-                per_byte_searched: get_gas_cost_or_default!(
-                    string_index_of_per_byte_searched_cost_as_option
+                per_byte_searched: get_gas_cost_since!(
+                    string_index_of_per_byte_searched_cost_as_option,
+                    53
                 ),
             },
         },
         MSN::type_name::GasParameters {
             get: MSN::type_name::GetGasParameters {
-                base: get_gas_cost_or_default!(type_name_get_base_cost_as_option),
-                per_byte: get_gas_cost_or_default!(type_name_get_per_byte_cost_as_option),
+                base: get_gas_cost_since!(type_name_get_base_cost_as_option, 53),
+                per_byte: get_gas_cost_since!(type_name_get_per_byte_cost_as_option, 53),
             },
             id: MSN::type_name::IdGasParameters::new(
                 protocol_config.type_name_id_base_cost_as_option(),
@@ -946,28 +952,48 @@ pub fn make_stdlib_gas_params_for_protocol_config(
         },
         MSN::vector::GasParameters {
             empty: MSN::vector::EmptyGasParameters {
-                base: get_gas_cost_or_default!(vector_empty_base_cost_as_option),
+                base: get_gas_cost_since!(vector_empty_base_cost_as_option, 53),
             },
             length: MSN::vector::LengthGasParameters {
-                base: get_gas_cost_or_default!(vector_length_base_cost_as_option),
+                base: get_gas_cost_since!(vector_length_base_cost_as_option, 53),
             },
             push_back: MSN::vector::PushBackGasParameters {
-                base: get_gas_cost_or_default!(vector_push_back_base_cost_as_option),
-                legacy_per_abstract_memory_unit: get_gas_cost_or_default!(
-                    vector_push_back_legacy_per_abstract_memory_unit_cost_as_option
+                base: get_gas_cost_since!(vector_push_back_base_cost_as_option, 53),
+                legacy_per_abstract_memory_unit: get_gas_cost_since!(
+                    vector_push_back_legacy_per_abstract_memory_unit_cost_as_option,
+                    53
                 ),
             },
             borrow: MSN::vector::BorrowGasParameters {
-                base: get_gas_cost_or_default!(vector_borrow_base_cost_as_option),
+                base: get_gas_cost_since!(vector_borrow_base_cost_as_option, 53),
             },
             pop_back: MSN::vector::PopBackGasParameters {
-                base: get_gas_cost_or_default!(vector_pop_back_base_cost_as_option),
+                base: get_gas_cost_since!(vector_pop_back_base_cost_as_option, 53),
             },
             destroy_empty: MSN::vector::DestroyEmptyGasParameters {
-                base: get_gas_cost_or_default!(vector_destroy_empty_base_cost_as_option),
+                base: get_gas_cost_since!(vector_destroy_empty_base_cost_as_option, 53),
             },
             swap: MSN::vector::SwapGasParameters {
-                base: get_gas_cost_or_default!(vector_swap_base_cost_as_option),
+                base: get_gas_cost_since!(vector_swap_base_cost_as_option, 53),
+            },
+            append: MSN::vector::AppendGasParameters {
+                base: get_gas_cost_since!(vector_append_base_cost_as_option, 137),
+                per_elem: get_gas_cost_since!(vector_append_per_elem_cost_as_option, 137),
+            },
+            truncate: MSN::vector::TruncateGasParameters {
+                base: get_gas_cost_since!(vector_truncate_base_cost_as_option, 137),
+                per_elem: get_gas_cost_since!(vector_truncate_per_elem_cost_as_option, 137),
+            },
+            drain: MSN::vector::DrainGasParameters {
+                base: get_gas_cost_since!(vector_drain_base_cost_as_option, 137),
+                per_elem: get_gas_cost_since!(vector_drain_per_elem_cost_as_option, 137),
+            },
+            slice: MSN::vector::SliceGasParameters {
+                base: get_gas_cost_since!(vector_slice_base_cost_as_option, 137),
+            },
+            splice: MSN::vector::SpliceGasParameters {
+                base: get_gas_cost_since!(vector_splice_base_cost_as_option, 137),
+                per_elem: get_gas_cost_since!(vector_splice_per_elem_cost_as_option, 137),
             },
         },
     )
