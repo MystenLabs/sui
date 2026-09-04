@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["chunk","histogram","label_matcher","metric_metadata","read_request"],"struct":["BucketSpan","Chunk","ChunkedReadResponse","ChunkedSeries","Exemplar","Histogram","Label","LabelMatcher","Labels","MetricMetadata","Query","QueryResult","ReadHints","ReadRequest","ReadResponse","Sample","TimeSeries","WriteRequest"]};

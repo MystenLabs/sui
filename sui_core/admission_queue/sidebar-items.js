@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PopAction"],"struct":["AdmissionQueueContext","AdmissionQueueHandle","AdmissionQueueManager","AdmissionQueueMetrics","InsertOutcome","PriorityAdmissionQueue","QueueEntry"],"trait":["AdmissionQueueEntry"]};

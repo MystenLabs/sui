@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_impl","exists_impl","exists_with_type_impl","read_impl","remove_impl"],"struct":["ScratchAddCostParams","ScratchExistsCostParams","ScratchExistsWithTypeCostParams","ScratchReadCostParams","ScratchRemoveCostParams","ScratchRuntime"]};

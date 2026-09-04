@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Genesis","GenesisCeremonyParameters","GenesisChainParameters","TokenAllocation","TokenDistributionSchedule","TokenDistributionScheduleBuilder","UnsignedGenesis"]};

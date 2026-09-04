@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["INTENT_PREFIX_LENGTH"],"enum":["AppId","HashingIntentScope","IntentScope","IntentVersion"],"struct":["Intent","IntentMessage","PersonalMessage"],"trait":["SecureIntent"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["server"],"struct":["BenchmarkClient","BenchmarkServer"],"trait":["Benchmark"]};

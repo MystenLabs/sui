@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["METRICS_HOST_PORT"],"fn":["start_basic_prometheus_server","start_prometheus_server"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["genesis_digest","initial_protocol_version","star"]};
