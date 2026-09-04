@@ -148,6 +148,7 @@ impl CausalAdmission {
         let mut inner = self.inner.lock();
         debug_assert!(index > inner.watermark, "admitting an already-done index");
         let is_next = if inner.in_flight < self.concurrency_limit {
+            assert_reachable!("admitted under the concurrency limit");
             false
         } else if index == inner.watermark + 1 && !inner.next_admitted {
             inner.next_admitted = true;
