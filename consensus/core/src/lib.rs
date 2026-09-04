@@ -13,6 +13,7 @@ mod block_verifier;
 mod commit;
 mod commit_consumer;
 mod commit_finalizer;
+mod commit_finalizer_v3;
 mod commit_observer;
 mod commit_syncer;
 mod commit_vote_monitor;
