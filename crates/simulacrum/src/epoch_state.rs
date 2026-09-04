@@ -206,7 +206,10 @@ impl EpochState {
                 tx_digest,
                 &mut None,
             );
-        if effects.status().is_ok()
+        if self
+            .protocol_config
+            .check_object_funds_withdraw_in_execution()
+            && effects.status().is_ok()
             && let Some(accumulator_version) =
                 system_object_versions.get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
         {
@@ -220,6 +223,14 @@ impl EpochState {
                 );
         }
         Ok((inner_temp_store, gas_status, effects, result))
+    }
+
+    pub(crate) fn commit_accumulator_versions(
+        &self,
+        committed_accumulator_versions: Vec<SequenceNumber>,
+    ) {
+        self.unsettled_object_withdrawals
+            .commit_accumulator_versions(committed_accumulator_versions);
     }
 
     pub(crate) fn simulate_transaction<S: SimulatorStore + Send + Sync>(
