@@ -1,0 +1,75 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-11:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4134400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 13-21:
+//# programmable --inputs 1 2 9
+// VALID: write through `borrow_mut`, remove after the reference is dead
+//> 0: sui::table::new<u64, u64>();
+//> 1: sui::table::add<u64, u64>(Result(0), Input(0), Input(1));
+//> 2: sui::table::borrow_mut<u64, u64>(Result(0), Input(0));
+//> 3: test::m::write(Result(2), Input(2));
+//> 4: sui::table::remove<u64, u64>(Result(0), Input(0));
+//> 5: test::m::check_val(Result(4), Input(2));
+//> 6: sui::table::destroy_empty<u64, u64>(Result(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 23-30:
+//# programmable --inputs 1 2 9
+// INVALID: InvalidReferenceArgument at arg 0 of command 3, remove while a reference is live
+//> 0: sui::table::new<u64, u64>();
+//> 1: sui::table::add<u64, u64>(Result(0), Input(0), Input(1));
+//> 2: sui::table::borrow_mut<u64, u64>(Result(0), Input(0));
+//> 3: sui::table::remove<u64, u64>(Result(0), Input(0));
+//> 4: test::m::write(Result(2), Input(2));
+//> 5: sui::table::destroy_empty<u64, u64>(Result(0));
+Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: None, command: Some(3) } }
+
+task 4, lines 32-39:
+//# programmable --inputs 1 2 3
+// INVALID: InvalidReferenceArgument at arg 0 of command 3, add while an immutable reference is live
+//> 0: sui::table::new<u64, u64>();
+//> 1: sui::table::add<u64, u64>(Result(0), Input(0), Input(1));
+//> 2: sui::table::borrow<u64, u64>(Result(0), Input(0));
+//> 3: sui::table::add<u64, u64>(Result(0), Input(2), Input(1));
+//> 4: test::m::check(Result(2), Input(1));
+//> 5: sui::table::drop<u64, u64>(Result(0));
+Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: None, command: Some(3) } }
+
+task 5, lines 41-49:
+//# programmable --inputs 1 2
+// VALID: two immutable references, then the table dropped once they are dead
+//> 0: sui::table::new<u64, u64>();
+//> 1: sui::table::add<u64, u64>(Result(0), Input(0), Input(1));
+//> 2: sui::table::borrow<u64, u64>(Result(0), Input(0));
+//> 3: sui::table::borrow<u64, u64>(Result(0), Input(0));
+//> 4: test::m::check(Result(2), Input(1));
+//> 5: test::m::check(Result(3), Input(1));
+//> 6: sui::table::drop<u64, u64>(Result(0));
+created: object(5,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2454800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 51-57:
+//# programmable --inputs 1 2
+// INVALID: CannotMoveBorrowedValue at arg 0 of command 3, the table consumed while borrowed
+//> 0: sui::table::new<u64, u64>();
+//> 1: sui::table::add<u64, u64>(Result(0), Input(0), Input(1));
+//> 2: sui::table::borrow<u64, u64>(Result(0), Input(0));
+//> 3: sui::table::drop<u64, u64>(Result(0));
+//> 4: test::m::check(Result(2), Input(1));
+Error: Transaction Effects Status: Invalid command argument at 0. Cannot move a borrowed value. The value's type does resulted in this argument usage being inferred as a move. This is likely due to the type not having the `copy` ability; although in rare cases, it could also be this is the last usage of a value without the `drop` ability.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: CannotMoveBorrowedValue }, source: None, command: Some(3) } }

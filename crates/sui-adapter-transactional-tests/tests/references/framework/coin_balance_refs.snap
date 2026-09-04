@@ -1,0 +1,79 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-10:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 3648000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 12-19:
+//# programmable --sender A --inputs 1000 100 @B
+// INVALID: InvalidReferenceArgument at arg 0 of command 3, join while a `&Balance` is live
+//> 0: SplitCoins(Gas, [Input(0), Input(1)]);
+//> 1: sui::coin::balance<sui::sui::SUI>(NestedResult(0,0));
+//> 2: sui::coin::value<sui::sui::SUI>(NestedResult(0,0));
+//> 3: sui::coin::join<sui::sui::SUI>(NestedResult(0,0), NestedResult(0,1));
+//> 4: test::m::use_imm<sui::balance::Balance<sui::sui::SUI>>(Result(1));
+//> 5: TransferObjects([NestedResult(0,0)], Input(2));
+Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: None, command: Some(3) } }
+
+task 3, lines 21-27:
+//# programmable --sender A --inputs 1000 100 @B
+// INVALID: CannotWriteToExtendedReference at arg 0 of command 2, SplitCoins while a `&mut Balance` is live
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::balance_mut<sui::sui::SUI>(Result(0));
+//> 2: SplitCoins(Result(0), [Input(1)]);
+//> 3: test::m::use_mut<sui::balance::Balance<sui::sui::SUI>>(Result(1));
+//> 4: TransferObjects([Result(0), Result(2)], Input(2));
+Error: Transaction Effects Status: Invalid command argument at 0. Cannot write to an argument location that is still borrowed, and where that borrow is an extension of that reference. This is likely due to this argument being used in a Move call that returns a reference, and that reference is used in a later command.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: CannotWriteToExtendedReference }, source: None, command: Some(2) } }
+
+task 4, lines 29-36:
+//# programmable --sender A --inputs 1000 100 @B
+// VALID: balance operations through the reference, then the coin split once the reference is dead
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::balance_mut<sui::sui::SUI>(Result(0));
+//> 2: sui::balance::split<sui::sui::SUI>(Result(1), Input(1));
+//> 3: sui::balance::join<sui::sui::SUI>(Result(1), Result(2));
+//> 4: SplitCoins(Result(0), [Input(1)]);
+//> 5: TransferObjects([Result(0), Result(4)], Input(2));
+created: object(4,0), object(4,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 38:
+//# view-object 4,0
+Owner: Account Address ( B )
+Version: 4
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 900u64,
+    },
+}
+
+task 6, line 40:
+//# view-object 4,1
+Owner: Account Address ( B )
+Version: 4
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,1),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}

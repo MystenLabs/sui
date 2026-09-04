@@ -1,0 +1,37 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-33:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 9857200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 35-44:
+//# programmable --inputs 0 1 2
+// VALID: the variant field reference is dead before the enum is rewritten as the other variant and unpacked again
+//> 0: test::m::make_one(Input(0));
+//> 1: test::m::unpack_one_mut(Result(0));
+//> 2: test::m::write(Result(1), Input(1));
+//> 3: test::m::check_one(Result(0), Input(1));
+//> 4: test::m::set_two(Result(0), Input(1), Input(0));
+//> 5: test::m::unpack_two_mut(Result(0));
+//> 6: test::m::write(NestedResult(5, 0), Input(2));
+//> 7: test::m::check_two(Result(0), Input(2), Input(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 46-51:
+//# programmable --inputs 7 8 0
+// INVALID: InvalidReferenceArgument at arg 0 of command 2, the enum is rewritten while an immutable variant field reference is live
+//> 0: test::m::make_two(Input(0), Input(1));
+//> 1: test::m::unpack_two(Result(0));
+//> 2: test::m::set_one(Result(0), Input(2));
+//> 3: test::m::check(NestedResult(1, 1), Input(1));
+Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: None, command: Some(2) } }
