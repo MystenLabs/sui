@@ -75,6 +75,10 @@ pub fn check_coin_deny_list_v1(
     check_deny_list_v1_impl(deny_list, addresses_by_coin_type, object_store)
 }
 
+/// Every address here costs a deny-list lookup at signing. Today the set is the sender plus one
+/// funder per withdrawal, at most 10 withdrawals. Raising that limit must revisit this bound.
+const MAX_DENY_LIST_ADDRESSES: usize = 11;
+
 /// Generates a map of (coin_type -> addresses) to be checked for deny-list.
 /// Includes the sender's input objects, and the withdrawals from address balances (which may
 /// have funding sources other than the sender).
@@ -100,6 +104,17 @@ pub(crate) fn addresses_by_coin_type_for_denylist_check(
     debug_assert!(
         addresses_by_coin_type.values().all(|a| !a.is_empty()),
         "every set contains at least the sender"
+    );
+    // If this triggers, it means the max withdrawals limit was changed
+    // and we need to decide if we want to add a non-debug limit for deny-list owner checks.
+    debug_assert!(
+        addresses_by_coin_type
+            .values()
+            .flatten()
+            .collect::<BTreeSet<_>>()
+            .len()
+            <= MAX_DENY_LIST_ADDRESSES,
+        "deny-list address set exceeds its bound"
     );
     addresses_by_coin_type
 }
@@ -134,8 +149,6 @@ fn check_deny_list_v1_impl(
     let addresses: BTreeSet<SuiAddress> =
         addresses_by_coin_type.values().flatten().copied().collect();
 
-    // TODO: Add a limit of addresses? Our current boundary is 10 (due to max withdrawals)
-    // but might be worth making this explicit.
     let denied_anywhere: BTreeSet<SuiAddress> = addresses
         .into_iter()
         .filter(|address| denied_count(&deny_list, *address, object_store) > 0)
