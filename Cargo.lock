@@ -3704,11 +3704,13 @@ checksum = "cc14f565cf027a105f7a44ccf9e5b424348421a1d8952a8fc9d499d313107789"
 name = "consensus-config"
 version = "0.1.0"
 dependencies = [
+ "bcs",
  "fastcrypto",
  "insta",
  "mysten-network",
  "rand 0.8.5",
  "serde",
+ "serde_json",
  "shared-crypto",
 ]
 
