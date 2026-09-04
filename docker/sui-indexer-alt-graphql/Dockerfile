@@ -36,8 +36,11 @@ RUN if [ -n "$FEATURES" ]; then \
 # debian:bullseye-slim
 FROM debian@sha256:fdd75562fdcde1039c2480a1ea1cd2cf03b18b6e4cb551cabb03bde66ade8a5d AS runtime
 ARG PROFILE
-# Use jemalloc as memory allocator
-RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates curl
+# Use jemalloc as memory allocator. binutils (objdump) is needed by jeprof (bundled in
+# libjemalloc-dev) to symbolize heap profiles when enableProfiling is on; installed
+# unconditionally alongside it since profiling is an env-var toggle at deploy time, not a
+# separate build, so there's no rebuild-time signal to gate this on.
+RUN apt-get update && apt-get install -y libjemalloc-dev binutils ca-certificates curl
 ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
 WORKDIR "$WORKDIR/sui"
 COPY --from=builder /sui/target/${PROFILE}/sui-indexer-alt-graphql /usr/local/bin
