@@ -125,10 +125,12 @@ where
 
                 // Convert to action using the same flow as JSON-RPC watcher
                 if let Some(mut action) = bridge_event.try_into_bridge_action() {
-                    metrics.last_observed_actions_seq_num.with_label_values(&[
-                        action.chain_id().to_string().as_str(),
-                        action.action_type().to_string().as_str(),
-                    ]);
+                    let chain_id = action.chain_id().to_string();
+                    let action_type = action.action_type().to_string();
+                    metrics
+                        .last_observed_actions_seq_num
+                        .with_label_values(&[&chain_id, &action_type])
+                        .set(action.seq_number() as i64);
 
                     action = action.update_to_token_transfer();
                     actions.push(action);
@@ -213,10 +215,12 @@ where
 
                 match bridge_event.try_into_bridge_action(log.tx_hash, log.log_index_in_tx) {
                     Ok(Some(action)) => {
-                        metrics.last_observed_actions_seq_num.with_label_values(&[
-                            action.chain_id().to_string().as_str(),
-                            action.action_type().to_string().as_str(),
-                        ]);
+                        let chain_id = action.chain_id().to_string();
+                        let action_type = action.action_type().to_string();
+                        metrics
+                            .last_observed_actions_seq_num
+                            .with_label_values(&[&chain_id, &action_type])
+                            .set(action.seq_number() as i64);
                         actions.push(action)
                     }
                     Ok(None) => {}
@@ -293,7 +297,7 @@ mod tests {
             eth_events_rx,
             store.clone(),
             eth_monitor_tx,
-            metrics,
+            metrics.clone(),
         )
         .run_with_grpc(executor)
         .await;
@@ -318,6 +322,16 @@ mod tests {
         assert_eq!(
             executor_requested_action_rx.recv().await.unwrap(),
             bridge_action.digest()
+        );
+        let chain_id = bridge_action.chain_id().to_string();
+        let action_type = bridge_action.action_type().to_string();
+        assert_eq!(
+            metrics
+                .last_observed_actions_seq_num
+                .get_metric_with_label_values(&[&chain_id, &action_type])
+                .unwrap()
+                .get(),
+            bridge_action.seq_number() as i64,
         );
         let start = std::time::Instant::now();
         loop {
@@ -362,7 +376,7 @@ mod tests {
             eth_events_rx,
             store.clone(),
             eth_monitor_tx,
-            metrics,
+            metrics.clone(),
         )
         .run_with_grpc(executor)
         .await;
@@ -387,6 +401,16 @@ mod tests {
         assert_eq!(
             executor_requested_action_rx.recv().await.unwrap(),
             bridge_action.digest()
+        );
+        let chain_id = bridge_action.chain_id().to_string();
+        let action_type = bridge_action.action_type().to_string();
+        assert_eq!(
+            metrics
+                .last_observed_actions_seq_num
+                .get_metric_with_label_values(&[&chain_id, &action_type])
+                .unwrap()
+                .get(),
+            bridge_action.seq_number() as i64,
         );
         loop {
             let actions = store.get_all_pending_actions();
