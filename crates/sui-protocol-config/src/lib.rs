@@ -390,8 +390,8 @@ const MAINNET_USDB: &str =
 //              Add package_arena_size_in_bytes.
 // Version 137: Lower the per-bit cost of bulletproofs range proof verification, and raise the
 //              bound on batch size * range bits from 512 to 1024.
-//              Add the staggered_submission_signal feature flag (not yet enabled anywhere;
-//              requires allowed_proposers when enabled).
+//              Enable allowed_proposers everywhere, and add and enable the
+//              staggered_submission_signal feature flag (requires allowed_proposers).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4716,6 +4716,9 @@ impl ProtocolConfig {
                 137 => {
                     cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(621);
                     cfg.max_bulletproofs_total_bits = Some(1024);
+
+                    cfg.feature_flags.allowed_proposers = true;
+                    cfg.feature_flags.staggered_submission_signal = true;
                 }
                 // Use this template when making changes:
                 //
