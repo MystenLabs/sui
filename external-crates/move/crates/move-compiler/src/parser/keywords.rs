@@ -33,8 +33,17 @@ pub const KEYWORDS: &[&str] = &[
     "for",
 ];
 
-pub const CONTEXTUAL_KEYWORDS: &[&str] = &["address", "mut", "phantom", "Self", "entry", "macro"];
+pub const CONTEXTUAL_KEYWORDS: &[&str] = &[
+    crate::shared::builtin_types::ADDRESS,
+    "mut",
+    "phantom",
+    "Self",
+    "entry",
+    "macro",
+];
 
-pub const PRIMITIVE_TYPES: &[&str] = &["u8", "u16", "u32", "u64", "u128", "u256", "bool", "vector"];
+/// All primitive type names. Signed integers are included regardless of edition so the parser
+/// always recognizes them as keywords.
+pub use crate::shared::builtin_types::PRIMITIVE_TYPES;
 
 pub const BUILTINS: &[&str] = &["assert", "freeze"];

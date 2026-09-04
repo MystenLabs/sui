@@ -284,6 +284,19 @@ pub(crate) fn move_value_from_value_(v_: Value_) -> MoveValue {
         V::U256(u) => MV::U256(u),
         V::Bool(b) => MV::Bool(b),
         V::Vector(_, vs) => MV::Vector(vs.into_iter().map(move_value_from_value).collect()),
+        V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) | V::I256(_) => {
+            unreachable!("ICE signed integer value reached constant lowering")
+        }
+    }
+}
+
+/// Whether a value is or contains a signed integer.
+pub(crate) fn value_is_signed(v_: &Value_) -> bool {
+    use Value_ as V;
+    match v_ {
+        V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) | V::I256(_) => true,
+        V::Vector(_, vs) => vs.iter().any(|v| value_is_signed(&v.value)),
+        _ => false,
     }
 }
 

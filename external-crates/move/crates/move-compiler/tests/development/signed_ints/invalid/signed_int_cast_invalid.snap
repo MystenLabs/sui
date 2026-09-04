@@ -1,0 +1,46 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[EC04003]: built-in operation not supported
+  ┌─ tests/development/signed_ints/invalid/signed_int_cast_invalid.move:5:19
+  │
+5 │         let _y = (x as bool);
+  │                   ^    ---- Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
+  │                   │     
+  │                   Invalid argument to 'as'
+
+error[EC04003]: built-in operation not supported
+   ┌─ tests/development/signed_ints/invalid/signed_int_cast_invalid.move:11:19
+   │
+10 │         let x = true;
+   │                 ---- Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
+11 │         let _y = (x as i8);
+   │                   ^ Invalid argument to 'as'
+
+error[EC04003]: built-in operation not supported
+   ┌─ tests/development/signed_ints/invalid/signed_int_cast_invalid.move:17:19
+   │
+17 │         let _y = (x as address);
+   │                   ^    ------- Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
+   │                   │     
+   │                   Invalid argument to 'as'
+
+error[EC04003]: built-in operation not supported
+   ┌─ tests/development/signed_ints/invalid/signed_int_cast_invalid.move:23:19
+   │
+22 │         let x = @0x42;
+   │                 ----- Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
+23 │         let _y = (x as i64);
+   │                   ^ Invalid argument to 'as'
+
+error[EC04003]: built-in operation not supported
+   ┌─ tests/development/signed_ints/invalid/signed_int_cast_invalid.move:29:19
+   │
+29 │         let _y = (x as vector<u8>);
+   │                   ^    ---------- Found: 'vector<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
+   │                   │     
+   │                   Invalid argument to 'as'
