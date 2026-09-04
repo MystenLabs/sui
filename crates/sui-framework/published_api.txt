@@ -6109,6 +6109,18 @@ take
 flatten
 	public fun
 	0x1::vector
+truncate
+	public fun
+	0x1::vector
+drain
+	public fun
+	0x1::vector
+slice
+	public fun
+	0x1::vector
+splice
+	public fun
+	0x1::vector
 empty
 	public fun
 	0x1::vector

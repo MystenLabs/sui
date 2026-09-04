@@ -74,7 +74,8 @@ public fun reverse<Element>(v: &mut vector<Element>) {
 
 /// Pushes all of the elements of the `other` vector into the `lhs` vector.
 public fun append<Element>(lhs: &mut vector<Element>, other: vector<Element>) {
-    other.do!(|e| lhs.push_back(e));
+    let len = lhs.length();
+    lhs.splice(len, len, other).destroy_empty();
 }
 
 /// Return `true` if the vector `v` has no elements and `false` otherwise.
@@ -109,16 +110,14 @@ public fun index_of<Element>(v: &vector<Element>, e: &Element): (bool, u64) {
 /// Remove the `i`th element of the vector `v`, shifting all subsequent elements.
 /// This is O(n) and preserves ordering of elements in the vector.
 /// Aborts if `i` is out of bounds.
-public fun remove<Element>(v: &mut vector<Element>, mut i: u64): Element {
-    let mut len = v.length();
+public fun remove<Element>(v: &mut vector<Element>, i: u64): Element {
     // i out of bounds; abort
-    if (i >= len) abort EINDEX_OUT_OF_BOUNDS;
+    if (i >= v.length()) abort EINDEX_OUT_OF_BOUNDS;
 
-    len = len - 1;
-    while (i < len) {
-        v.swap(i, { i = i + 1; i });
-    };
-    v.pop_back()
+    let mut removed = v.drain(i, i + 1);
+    let e = removed.pop_back();
+    removed.destroy_empty();
+    e
 }
 
 /// Insert `e` at position `i` in the vector `v`.
@@ -126,16 +125,11 @@ public fun remove<Element>(v: &mut vector<Element>, mut i: u64): Element {
 /// If `i == v.length()`, this adds `e` to the end of the vector.
 /// This is O(n) and preserves ordering of elements in the vector.
 /// Aborts if `i > v.length()`
-public fun insert<Element>(v: &mut vector<Element>, e: Element, mut i: u64) {
-    let len = v.length();
+public fun insert<Element>(v: &mut vector<Element>, e: Element, i: u64) {
     // i too big abort
-    if (i > len) abort EINDEX_OUT_OF_BOUNDS;
+    if (i > v.length()) abort EINDEX_OUT_OF_BOUNDS;
 
-    v.push_back(e);
-    while (i < len) {
-        v.swap(i, len);
-        i = i + 1
-    }
+    v.splice(i, i, vector[e]).destroy_empty();
 }
 
 /// Swap the `i`th element of the vector `v` with the last element and then pop the vector.
@@ -153,18 +147,16 @@ public fun swap_remove<Element>(v: &mut vector<Element>, i: u64): Element {
 public fun skip<T: drop>(mut v: vector<T>, n: u64): vector<T> {
     let len = v.length();
     if (n >= len) return vector[];
-    let mut r = tabulate!(len - n, |_| v.pop_back());
-    r.reverse();
-    r
+    let _dropped = v.drain(0, n);
+    v
 }
 
 /// Take the first `n` elements of the vector `v` and drop the rest.
 /// Aborts if `n` is greater than the length of `v`.
 public fun take<T: drop>(mut v: vector<T>, n: u64): vector<T> {
     assert!(n <= v.length());
-    if (n == v.length()) return v;
-    v.reverse();
-    tabulate!(n, |_| v.pop_back())
+    v.truncate(n);
+    v
 }
 
 // === Macros ===
@@ -287,6 +279,31 @@ public fun flatten<T>(v: vector<vector<T>>): vector<T> {
     v.do!(|u| r.append(u));
     r
 }
+
+/// Retains the first `n` elements of `v`. If `n >= v.length()` the vector is left
+/// unchanged.
+public native fun truncate<T: drop>(v: &mut vector<T>, n: u64);
+
+/// Removes `v[i..j)` and returns it, preserving the order of the remaining elements.
+/// Aborts if `i > j` or `j > v.length()`.
+public fun drain<Element>(v: &mut vector<Element>, i: u64, j: u64): vector<Element> {
+    v.splice(i, j, vector[])
+}
+
+/// Copies `v[i..j)` into a new vector; `v` is untouched.
+/// Aborts if `i > j` or `j > v.length()`.
+public native fun slice<Element: copy>(v: &vector<Element>, i: u64, j: u64): vector<Element>;
+
+/// The general form of the bulk operations: removes `v[i..j)`, inserts all elements of
+/// `other` at position `i`, and returns the removed elements. The vector grows or shrinks
+/// by `other.length() - (j - i)`.
+/// Aborts if `i > j` or `j > v.length()`.
+public native fun splice<Element>(
+    v: &mut vector<Element>,
+    i: u64,
+    j: u64,
+    other: vector<Element>,
+): vector<Element>;
 
 /// Whether any element in the vector `v` satisfies the predicate `f`.
 /// If the vector is empty, returns `false`.
@@ -511,25 +528,22 @@ public macro fun is_sorted_by<$T>($v: &vector<$T>, $le: |&$T, &$T| -> bool): boo
 /// that satisfy the predicate `p`. If all elements satisfy the predicate, returns an
 /// empty vector.
 public macro fun take_while<$T: drop>($v: vector<$T>, $p: |&$T| -> bool): vector<$T> {
-    let v = $v;
-    'take: {
-        let mut r = vector[];
-        v.do!(|e| if ($p(&e)) r.push_back(e) else return 'take r);
-        r
-    }
+    let mut v = $v;
+    let mut i = 0;
+    let len = v.length();
+    while (i < len && $p(&v[i])) i = i + 1;
+    v.truncate(i);
+    v
 }
 
 /// Take all elements of the vector `v` except the first `n` elements that satisfy
 /// the predicate `p` and drop the rest, where `n <= v.length()`.
 public macro fun skip_while<$T: drop>($v: vector<$T>, $p: |&$T| -> bool): vector<$T> {
     let mut v = $v;
-    v.reverse();
-    let mut i = v.length();
-    while (i > 0) {
-        i = i - 1;
-        if ($p(&v[i])) v.pop_back() else break;
-    };
-    v.reverse();
+    let mut i = 0;
+    let len = v.length();
+    while (i < len && $p(&v[i])) i = i + 1;
+    let _dropped = v.drain(0, i);
     v
 }
 

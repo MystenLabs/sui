@@ -364,12 +364,8 @@ must be at a valid utf8 char boundary.
 <pre><code><b>public</b> <b>fun</b> <a href="../std/string.md#std_string_insert">insert</a>(s: &<b>mut</b> <a href="../std/string.md#std_string_String">String</a>, at: <a href="../std/u64.md#std_u64">u64</a>, o: <a href="../std/string.md#std_string_String">String</a>) {
     <b>let</b> <a href="../std/string.md#std_string_bytes">bytes</a> = &s.<a href="../std/string.md#std_string_bytes">bytes</a>;
     <b>assert</b>!(at &lt;= <a href="../std/string.md#std_string_bytes">bytes</a>.<a href="../std/string.md#std_string_length">length</a>() && <a href="../std/string.md#std_string_internal_is_char_boundary">internal_is_char_boundary</a>(<a href="../std/string.md#std_string_bytes">bytes</a>, at), <a href="../std/string.md#std_string_EInvalidIndex">EInvalidIndex</a>);
-    <b>let</b> l = s.<a href="../std/string.md#std_string_length">length</a>();
-    <b>let</b> <b>mut</b> front = s.<a href="../std/string.md#std_string_substring">substring</a>(0, at);
-    <b>let</b> end = s.<a href="../std/string.md#std_string_substring">substring</a>(at, l);
-    front.<a href="../std/string.md#std_string_append">append</a>(o);
-    front.<a href="../std/string.md#std_string_append">append</a>(end);
-    *s = front;
+    <b>let</b> <a href="../std/string.md#std_string_String">String</a> { <a href="../std/string.md#std_string_bytes">bytes</a>: other } = o;
+    s.<a href="../std/string.md#std_string_bytes">bytes</a>.splice(at, at, other).destroy_empty();
 }
 </code></pre>
 

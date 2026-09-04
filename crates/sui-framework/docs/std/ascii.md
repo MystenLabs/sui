@@ -347,7 +347,7 @@ Insert the <code>other</code> string at the <code>at</code> index of <code><a hr
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_insert">insert</a>(s: &<b>mut</b> <a href="../std/ascii.md#std_ascii_String">String</a>, at: <a href="../std/u64.md#std_u64">u64</a>, o: <a href="../std/ascii.md#std_ascii_String">String</a>) {
     <b>assert</b>!(at &lt;= s.<a href="../std/ascii.md#std_ascii_length">length</a>(), <a href="../std/ascii.md#std_ascii_EInvalidIndex">EInvalidIndex</a>);
-    o.<a href="../std/ascii.md#std_ascii_into_bytes">into_bytes</a>().destroy!(|e| s.bytes.<a href="../std/ascii.md#std_ascii_insert">insert</a>(e, at));
+    s.bytes.splice(at, at, o.<a href="../std/ascii.md#std_ascii_into_bytes">into_bytes</a>()).destroy_empty();
 }
 </code></pre>
 
@@ -373,9 +373,7 @@ Copy the slice of the <code><a href="../std/string.md#std_string">string</a></co
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_substring">substring</a>(<a href="../std/string.md#std_string">string</a>: &<a href="../std/ascii.md#std_ascii_String">String</a>, i: <a href="../std/u64.md#std_u64">u64</a>, j: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/ascii.md#std_ascii_String">String</a> {
     <b>assert</b>!(i &lt;= j && j &lt;= <a href="../std/string.md#std_string">string</a>.<a href="../std/ascii.md#std_ascii_length">length</a>(), <a href="../std/ascii.md#std_ascii_EInvalidIndex">EInvalidIndex</a>);
-    <b>let</b> <b>mut</b> bytes = <a href="../std/vector.md#std_vector">vector</a>[];
-    i.range_do!(j, |i| bytes.push_back(<a href="../std/string.md#std_string">string</a>.bytes[i]));
-    <a href="../std/ascii.md#std_ascii_String">String</a> { bytes }
+    <a href="../std/ascii.md#std_ascii_String">String</a> { bytes: <a href="../std/string.md#std_string">string</a>.bytes.slice(i, j) }
 }
 </code></pre>
 
