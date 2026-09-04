@@ -111,7 +111,7 @@ impl EffectsContents {
 
         Some(
             content
-                .effects()
+                .effects_arc()
                 .map(|effects| match effects.status() {
                     NativeExecutionStatus::Success => ExecutionStatus::Success,
                     NativeExecutionStatus::Failure(_) => ExecutionStatus::Failure,
@@ -126,8 +126,8 @@ impl EffectsContents {
 
         Some(
             content
-                .effects()
-                .map(|effects| match effects {
+                .effects_arc()
+                .map(|effects| match &*effects {
                     NativeTransactionEffects::V1(_) => 1i32,
                     NativeTransactionEffects::V2(_) => 2,
                 })
@@ -141,7 +141,7 @@ impl EffectsContents {
 
         Some(
             content
-                .effects()
+                .effects_arc()
                 .map(|effects| UInt53::from(effects.lamport_version().value()))
                 .map_err(RpcError::from),
         )
@@ -152,7 +152,7 @@ impl EffectsContents {
         let content = self.contents.as_ref()?;
 
         let result = async {
-            let effects = content.effects()?;
+            let effects = content.effects_arc()?;
             let status = effects.status();
 
             // Extract programmable transaction if available
@@ -190,7 +190,7 @@ impl EffectsContents {
 
         Some(
             content
-                .effects()
+                .effects_arc()
                 .map(|effects| Epoch::with_id(self.scope.clone(), effects.executed_epoch()))
                 .map_err(RpcError::from),
         )
@@ -332,7 +332,7 @@ impl EffectsContents {
                 let limits = pagination.limits("TransactionEffects", "objectChanges");
                 let page = Page::from_params(limits, first, after, last, before)?;
 
-                let object_changes = content.effects()?.object_changes();
+                let object_changes = content.effects_arc()?.object_changes();
                 page.paginate_indices(object_changes.len(), |i| {
                     Ok(ObjectChange {
                         scope: self.scope.clone(),
@@ -350,8 +350,8 @@ impl EffectsContents {
 
         Some(
             content
-                .effects()
-                .map(|effects| GasEffects::from_effects(self.scope.clone(), &effects))
+                .effects_arc()
+                .map(|effects| GasEffects::from_effects(self.scope.clone(), effects.as_ref()))
                 .map_err(RpcError::from),
         )
     }
@@ -373,8 +373,9 @@ impl EffectsContents {
                 let limits = pagination.limits("TransactionEffects", "unchangedConsensusObjects");
                 let page = Page::from_params(limits, first, after, last, before)?;
 
-                let epoch = content.effects()?.executed_epoch();
-                let unchanged_consensus_objects = content.effects()?.unchanged_consensus_objects();
+                let effects = content.effects_arc()?;
+                let epoch = effects.executed_epoch();
+                let unchanged_consensus_objects = effects.unchanged_consensus_objects();
                 page.paginate_indices(unchanged_consensus_objects.len(), |i| {
                     Ok(UnchangedConsensusObject::from_native(
                         self.scope.clone(),
@@ -404,7 +405,7 @@ impl EffectsContents {
                 let limits = pagination.limits("TransactionEffects", "dependencies");
                 let page = Page::from_params(limits, first, after, last, before)?;
 
-                let effects = content.effects()?;
+                let effects = content.effects_arc()?;
                 let dependencies = effects.dependencies();
                 page.paginate_indices(dependencies.len(), |i| {
                     Ok(Transaction::with_digest(

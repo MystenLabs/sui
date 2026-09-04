@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -37,9 +38,9 @@ pub struct LedgerGrpcArgs {
 
 #[derive(Debug, Clone)]
 pub struct CheckpointedTransaction {
-    pub effects: Box<TransactionEffects>,
+    pub effects: Arc<TransactionEffects>,
     pub events: Option<Vec<Event>>,
-    pub transaction_data: Box<TransactionData>,
+    pub transaction_data: Arc<TransactionData>,
     pub signatures: Vec<GenericSignature>,
     pub timestamp_ms: Option<u64>,
     pub cp_sequence_number: Option<u64>,
@@ -316,9 +317,9 @@ impl TryFrom<&grpc::ExecutedTransaction> for CheckpointedTransaction {
             .with_context(|| format!("Failed to parse timestamp {:?}", executed.timestamp))?;
 
         Ok(Self {
-            effects: Box::new(full_tx.effects),
+            effects: Arc::new(full_tx.effects),
             events: full_tx.events.map(|events| events.data),
-            transaction_data: Box::new(full_tx.transaction),
+            transaction_data: Arc::new(full_tx.transaction),
             signatures: full_tx.signatures,
             timestamp_ms,
             cp_sequence_number: executed.checkpoint,

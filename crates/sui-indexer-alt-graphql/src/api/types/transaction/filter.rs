@@ -212,10 +212,10 @@ impl TransactionFilter {
     // Adapted from TransactionFilter::matches in PR #25717 (scan APIs). When #25717 merges,
     // we will unify them.
     pub(crate) fn matches(&self, transaction: &TransactionContents) -> bool {
-        let Ok(data) = transaction.data() else {
+        let Ok(data) = transaction.data_arc() else {
             return false;
         };
-        let Ok(effects) = transaction.effects() else {
+        let Ok(effects) = transaction.effects_arc() else {
             return false;
         };
 
