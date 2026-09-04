@@ -4,7 +4,7 @@
 
 use criterion::{Criterion, criterion_group, criterion_main, measurement::Measurement};
 use language_benchmarks::measurement::wall_time_measurement;
-use language_benchmarks::move_vm::{bench, bench_pinned_pkg_call};
+use language_benchmarks::move_vm::{bench, bench_hoisted, bench_pinned_pkg_call};
 
 //
 // MoveVM benchmarks
@@ -40,6 +40,18 @@ fn transfers<M: Measurement + 'static>(c: &mut Criterion<M>) {
 
 fn vector<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "vector.move");
+}
+
+/// Bulk vector operations study (append/drain/truncate/slice/splice + rewritten std fns).
+/// Uses the hoisted harness so VM construction stays out of the measurement.
+fn vector_ops<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench_hoisted(c, "vector_ops.move");
+}
+
+/// Companion benches: take_while/skip_while/flatten, std::string and std::ascii ops,
+/// and the sui::bcs peel pattern.
+fn vector_ops_extra<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench_hoisted(c, "vector_ops_extra.move");
 }
 
 fn structs<M: Measurement + 'static>(c: &mut Criterion<M>) {
@@ -116,6 +128,8 @@ criterion_group!(
         natives,
         transfers,
         vector,
+        vector_ops,
+        vector_ops_extra,
         structs,
         references,
         generics,
