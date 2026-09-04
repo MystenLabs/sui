@@ -2044,6 +2044,7 @@ mod test {
         let address_balance_enabled = protocol_config.enable_address_balance_gas_payments();
         let address_aliases_enabled = protocol_config.address_aliases();
         let auth_events_enabled = protocol_config.enable_authenticated_event_streams();
+        let allowed_proposers_enabled = protocol_config.allowed_proposers();
 
         let metrics = Arc::new(Mutex::new(
             sui_benchmark::workloads::composite::CompositionMetrics::new(),
@@ -2077,7 +2078,8 @@ mod test {
         .with_probability(AddressBalanceOverdraw::NAME, 0.3)
         .with_probability(AccumulatorBalanceRead::NAME, 0.3)
         .with_probability(AuthenticatedEventEmit::NAME, 0.1)
-        .with_probability(CoinReservationWithdraw::NAME, 0.3);
+        .with_probability(CoinReservationWithdraw::NAME, 0.3)
+        .with_probability(RestrictProposers::NAME, 0.2);
 
         let test_cluster_for_scan = test_cluster.clone();
         test_simulated_load_with_test_config(
@@ -2147,6 +2149,23 @@ mod test {
             "cancellation_count too low: {}",
             metrics_sum.cancellation_count
         );
+
+        if allowed_proposers_enabled {
+            let mut restricted_successes = 0u64;
+            for (op_set, stats) in metrics.iter_stats() {
+                if op_set.contains(RestrictProposers::NAME) {
+                    restricted_successes += stats.success_count;
+                }
+            }
+            info!(
+                "proposer-restricted transaction successes: {}",
+                restricted_successes
+            );
+            assert!(
+                restricted_successes > 0,
+                "expected at least one proposer-restricted transaction to commit"
+            );
+        }
 
         if address_aliases_enabled {
             let alias_add_stats = metrics

@@ -21,6 +21,7 @@ strum.workspace = true
 strum_macros.workspace = true
 tracing.workspace = true
 clap.workspace = true
+nonempty.workspace = true
 prometheus.workspace = true
 rand.workspace = true
 indicatif.workspace = true
