@@ -294,7 +294,7 @@ impl Default for SubscriptionConfig {
             per_subscriber_max_output_nodes_per_second: 1_000_000,
             // About a minute at the average checkpoint rate.
             max_start_checkpoints_ahead_of_tip: 300,
-            max_subscribers: 1024,
+            max_subscribers: 512,
         }
     }
 }
