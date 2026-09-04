@@ -182,6 +182,38 @@ mod test {
         test_simulated_load(test_cluster, 15).await;
     }
 
+    /// Runs the large-transaction workload in isolation and asserts it generates load.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_large_transaction() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(4, 10_000, 1).await;
+        let mut simulated_load_config = SimulatedLoadConfig::default();
+        simulated_load_config.remote_env = false;
+        simulated_load_config.large_transaction_weight = 1;
+        simulated_load_config.large_transaction_size_bytes = 10_000;
+        simulated_load_config.shared_counter_weight = 0;
+        simulated_load_config.transfer_object_weight = 0;
+        simulated_load_config.delegation_weight = 0;
+        simulated_load_config.batch_payment_weight = 0;
+        simulated_load_config.shared_deletion_weight = 0;
+        simulated_load_config.randomness_weight = 0;
+        simulated_load_config.randomized_transaction_weight = 0;
+        simulated_load_config.slow_weight = 0;
+        simulated_load_config.composite_weight = 0;
+        info!("Simulated load config: {:?}", simulated_load_config);
+
+        test_simulated_load_with_test_config(
+            test_cluster,
+            30,
+            simulated_load_config,
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false,
+        )
+        .await;
+    }
+
     /// Tests conflicting transfer workload which creates contention by submitting
     /// conflicting transactions as soft bundles. The soft bundle ensures deterministic
     /// ordering: first transaction succeeds, subsequent ones fail with ObjectLockConflict.
@@ -1143,6 +1175,8 @@ mod test {
         remote_env: bool,
         num_transfer_accounts: u64,
         shared_counter_weight: u32,
+        large_transaction_weight: u32,
+        large_transaction_size_bytes: u64,
         slow_weight: u32,
         transfer_object_weight: u32,
         delegation_weight: u32,
@@ -1169,6 +1203,8 @@ mod test {
             Self {
                 remote_env: true,
                 shared_counter_weight: 1,
+                large_transaction_weight: 0,
+                large_transaction_size_bytes: 100_000,
                 slow_weight: 1,
                 transfer_object_weight: 1,
                 num_transfer_accounts: 2,
@@ -1392,6 +1428,7 @@ mod test {
 
         let weights = WorkloadWeights {
             shared_counter: config.shared_counter_weight,
+            large_transaction: config.large_transaction_weight,
             transfer_object: config.transfer_object_weight,
             delegation: config.delegation_weight,
             batch_payment: config.batch_payment_weight,
@@ -1411,6 +1448,7 @@ mod test {
             num_workers,
             num_transfer_accounts: config.num_transfer_accounts,
             weights,
+            large_transaction_size_bytes: config.large_transaction_size_bytes,
             adversarial_cfg,
             expected_failure_cfg: config.expected_failure_config,
             batch_payment_size,

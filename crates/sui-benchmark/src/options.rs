@@ -171,6 +171,13 @@ pub enum RunSpec {
         // relative weight of adversarial transactions in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         adversarial: Vec<u32>,
+        // relative weight of large transactions (payload-only transactions of a configurable
+        // size, for block-size benchmarking)
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        large_transaction: Vec<u32>,
+        // payload bytes attached to each large transaction (capped by max_tx_size).
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [100_000])]
+        large_transaction_size_bytes: Vec<u64>,
         // relative weight of shared deletion transactions in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         shared_deletion: Vec<u32>,
