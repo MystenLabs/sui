@@ -390,6 +390,7 @@ const MAINNET_USDB: &str =
 //              Add package_arena_size_in_bytes.
 // Version 137: Lower the per-bit cost of bulletproofs range proof verification, and raise the
 //              bound on batch size * range bits from 512 to 1024.
+//              Enable fix_ptb_generated_reads.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1248,6 +1249,10 @@ struct FeatureFlags {
     // If true enable unified linkage
     #[serde(skip_serializing_if = "is_false")]
     enable_unified_linkage: bool,
+
+    // Fixes last-use scoping and live-reference metering for generated `Read` PTB arguments.
+    #[serde(skip_serializing_if = "is_false")]
+    fix_ptb_generated_reads: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4696,6 +4701,8 @@ impl ProtocolConfig {
                 137 => {
                     cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(621);
                     cfg.max_bulletproofs_total_bits = Some(1024);
+
+                    cfg.feature_flags.fix_ptb_generated_reads = true;
                 }
                 // Use this template when making changes:
                 //
