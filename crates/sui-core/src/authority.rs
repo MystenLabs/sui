@@ -1180,11 +1180,11 @@ impl AuthorityState {
             self.coin_reservation_resolver.as_ref(),
         )?;
 
-        let funds_withdraw_types = declared_withdrawals
+        let funds_withdrawals = declared_withdrawals
             .values()
-            .filter_map(|(_, type_tag, _)| {
+            .filter_map(|(_, type_tag, funder)| {
                 Balance::maybe_get_balance_type_param(type_tag)
-                    .map(|ty| ty.to_canonical_string(false))
+                    .map(|ty| (*funder, ty.to_canonical_string(false)))
             })
             .collect::<BTreeSet<_>>();
 
@@ -1193,7 +1193,7 @@ impl AuthorityState {
                 tx_data.sender(),
                 checked_input_objects,
                 receiving_objects,
-                funds_withdraw_types.clone(),
+                funds_withdrawals.clone(),
                 &self.get_object_store(),
             )?;
         }
@@ -1203,7 +1203,7 @@ impl AuthorityState {
                 tx_data.sender(),
                 checked_input_objects,
                 receiving_objects,
-                funds_withdraw_types.clone(),
+                funds_withdrawals,
                 &self.get_object_store(),
             )?;
         }
