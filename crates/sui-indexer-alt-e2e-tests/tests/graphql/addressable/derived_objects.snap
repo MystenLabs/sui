@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 9 tasks
+processed 10 tasks
 
 init:
 A: object(0,0)
@@ -267,5 +267,95 @@ Response: {
         }
       ]
     }
+  }
+}
+
+task 9, lines 108-126:
+//# run-graphql --cursors bcs(8u64)
+Response: {
+  "data": {
+    "multiGetDerivedObjects": [
+      {
+        "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+        "contents": {
+          "json": {
+            "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+            "key": "7",
+            "value": "70"
+          }
+        }
+      },
+      {
+        "address": "0xcb5ef49d6e3de9b6baa6b8dd88b116024106cc26e6ceb6a9771ce4ec026c0557",
+        "contents": {
+          "json": {
+            "id": "0xcb5ef49d6e3de9b6baa6b8dd88b116024106cc26e6ceb6a9771ce4ec026c0557",
+            "key": "8",
+            "value": "70"
+          }
+        }
+      },
+      {
+        "address": "0x21d444cbd778121f8940c73e0bca4c9167c99a06379fdc19381bd4481eb6871e",
+        "contents": {
+          "json": {
+            "id": "0x21d444cbd778121f8940c73e0bca4c9167c99a06379fdc19381bd4481eb6871e",
+            "key": "9",
+            "value": "70"
+          }
+        }
+      },
+      null,
+      {
+        "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+        "contents": {
+          "json": {
+            "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+            "key": "7",
+            "value": "70"
+          }
+        }
+      },
+      {
+        "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+        "contents": {
+          "json": {
+            "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+            "key": "7",
+            "value": "70"
+          }
+        }
+      },
+      {
+        "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+        "contents": {
+          "json": {
+            "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+            "key": "7",
+            "value": "7"
+          }
+        }
+      },
+      {
+        "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+        "contents": {
+          "json": {
+            "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+            "key": "7",
+            "value": "7"
+          }
+        }
+      },
+      {
+        "address": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+        "contents": {
+          "json": {
+            "id": "0x31acd206f9b83d85cfa7c81828a1b402f3cfab683fd6c890bec035f53a9f1251",
+            "key": "7",
+            "value": "7"
+          }
+        }
+      }
+    ]
   }
 }

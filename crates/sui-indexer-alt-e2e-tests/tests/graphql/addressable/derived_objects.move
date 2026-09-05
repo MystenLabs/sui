@@ -104,3 +104,23 @@ fragment Child on MoveObject {
   address
   contents { json }
 }
+
+//# run-graphql --cursors bcs(8u64)
+{ # Fetch derived objects directly from their parent/name keys
+  multiGetDerivedObjects(keys: [
+    { parent: "@{obj_2_0}", name: { literal: "7u64" } },
+    { parent: "@{obj_2_0}", name: { type: "u64", bcs: "@{cursor_0}" } },
+    { parent: "@{obj_2_0}", name: { literal: "9u64" } },
+    { parent: "@{obj_2_0}", name: { literal: "10u64" } },
+    { parent: "@{obj_2_0}", name: { literal: "7u64" } },
+    { parent: "@{obj_2_0}", name: { literal: "7u64" } },
+    { parent: "@{obj_2_0}", name: { literal: "7u64" }, atCheckpoint: 1 },
+    { parent: "@{obj_2_0}", name: { literal: "7u64" }, version: 4 },
+    { parent: "@{obj_2_0}", name: { literal: "7u64" }, rootVersion: 4 },
+  ]) { ...Child }
+}
+
+fragment Child on MoveObject {
+  address
+  contents { json }
+}
