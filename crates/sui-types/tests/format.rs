@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::traits::ToFromBytes;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
 use move_core_types::account_address::AccountAddress;
@@ -146,6 +147,14 @@ fn get_registry() -> Result<Registry> {
     tracer
         .trace_value(&mut samples, &generic_sig_multi)
         .unwrap();
+
+    // Traces PublicKey::MLDSA65 so the snapshot pins its BCS variant index.
+    let kp_mldsa = SuiKeyPair::MLDSA65(
+        fastcrypto_pq::mldsa65::MLDSA65KeyPair::from_bytes(&[2u8; 32]).unwrap(),
+    );
+    let mldsa_committee =
+        MultiSigPublicKey::new(vec![kp_mldsa.public(), kp1.public()], vec![1, 1], 2).unwrap();
+    tracer.trace_value(&mut samples, &mldsa_committee).unwrap();
 
     tracer.trace_value(&mut samples, &sig1).unwrap();
     tracer.trace_value(&mut samples, &sig2).unwrap();

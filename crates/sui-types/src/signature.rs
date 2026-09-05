@@ -116,6 +116,10 @@ impl GenericSignature {
         matches!(self, GenericSignature::PasskeyAuthenticator(_))
     }
 
+    pub fn is_mldsa65(&self) -> bool {
+        matches!(self, GenericSignature::Signature(s) if s.scheme() == SignatureScheme::MLDSA65)
+    }
+
     pub fn is_upgraded_multisig(&self) -> bool {
         matches!(self, GenericSignature::MultiSig(_))
     }
@@ -249,7 +253,8 @@ impl ToFromBytes for GenericSignature {
             Ok(x) => match x {
                 SignatureScheme::ED25519
                 | SignatureScheme::Secp256k1
-                | SignatureScheme::Secp256r1 => Ok(GenericSignature::Signature(
+                | SignatureScheme::Secp256r1
+                | SignatureScheme::MLDSA65 => Ok(GenericSignature::Signature(
                     Signature::from_bytes(bytes).map_err(|_| FastCryptoError::InvalidSignature)?,
                 )),
                 SignatureScheme::MultiSig => match MultiSig::from_bytes(bytes) {

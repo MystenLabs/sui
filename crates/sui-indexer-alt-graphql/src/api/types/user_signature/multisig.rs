@@ -142,7 +142,10 @@ impl From<&sui_types::multisig::MultiSigPublicKey> for MultisigCommittee {
                 pk.pubkeys()
                     .iter()
                     .map(|(public_key, weight)| MultisigMember {
-                        public_key: Some(MultisigMemberPublicKey::from(public_key)),
+                        // ML-DSA-65 members have no GraphQL type yet; render
+                        // them as null rather than reaching the `From` arm.
+                        public_key: (!matches!(public_key, PublicKey::MLDSA65(_)))
+                            .then(|| MultisigMemberPublicKey::from(public_key)),
                         weight: Some(*weight),
                     })
                     .collect(),
@@ -177,6 +180,11 @@ impl From<&PublicKey> for MultisigMemberPublicKey {
                         })
                         .unwrap_or_default(),
                 )
+            }
+            PublicKey::MLDSA65(_) => {
+                // Filtered out at the only call site (`MultisigCommittee::from`)
+                // until GraphQL supports the member type.
+                unreachable!("ML-DSA-65 multisig members are filtered before conversion")
             }
         }
     }

@@ -407,6 +407,10 @@ impl From<SuiPublicKey> for PublicKey {
                 hex_bytes: Hex::from_bytes(&k.0),
                 curve_type: CurveType::Secp256r1,
             },
+            SuiPublicKey::MLDSA65(k) => PublicKey {
+                hex_bytes: Hex::from_bytes(&k.0),
+                curve_type: CurveType::MLDSA65, // not part of the Rosetta spec, added for completeness.
+            },
         }
     }
 }
@@ -428,6 +432,7 @@ pub enum CurveType {
     Edwards25519,
     Secp256r1,
     ZkLogin,
+    MLDSA65,
 }
 
 impl From<CurveType> for SignatureScheme {
@@ -437,6 +442,7 @@ impl From<CurveType> for SignatureScheme {
             CurveType::Edwards25519 => SignatureScheme::ED25519,
             CurveType::Secp256r1 => SignatureScheme::Secp256r1,
             CurveType::ZkLogin => SignatureScheme::ZkLoginAuthenticator,
+            CurveType::MLDSA65 => SignatureScheme::MLDSA65,
         }
     }
 }
