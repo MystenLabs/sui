@@ -17,6 +17,7 @@ use rand::rngs::OsRng;
 use simulacrum::Simulacrum;
 use simulacrum::SimulatorStore;
 use simulacrum::store::in_mem_store::KeyStore;
+use sui_futures::service::Service;
 use sui_rpc_api::RpcService;
 use sui_rpc_api::ServerVersion;
 use sui_rpc_api::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
@@ -44,6 +45,7 @@ use crate::store::ForkStore;
 struct ServerHarness {
     server_task: tokio::task::JoinHandle<()>,
     grpc_endpoint: String,
+    _indexer_service: Service,
     // Held to keep the RPC store alive for the lifetime of the server.
     // Held to keep the metadata and RPC store directory alive for the server lifetime.
     _temp: tempfile::TempDir,
@@ -64,7 +66,7 @@ impl ServerHarness {
         let genesis_contents = config.genesis.checkpoint_contents().clone();
         let forked_at_checkpoint = genesis_checkpoint.data().sequence_number;
         let chain_identifier = (*genesis_checkpoint.digest()).into();
-        let services = ServiceManager::open(
+        let mut services = ServiceManager::open(
             temp.path(),
             "localnet".to_owned(),
             forked_at_checkpoint,
@@ -104,11 +106,12 @@ impl ServerHarness {
         // Service-backed on purpose: subscribers are published to by the
         // indexer's broadcast pipeline, so a service-less context would
         // exercise a publication path production never takes.
-        let context = Arc::new(
-            Context::new(sim, services, checkpoint_sender, &registry)
-                .await
-                .expect("service-backed context should initialize"),
-        );
+        let simulacrum = Arc::new(tokio::sync::RwLock::new(sim));
+        let indexer_service = services
+            .start_indexer(simulacrum.clone(), checkpoint_sender, &registry)
+            .await
+            .expect("indexer service should start");
+        let context = Arc::new(Context::new(simulacrum, services));
 
         let reader: Arc<dyn RpcStateReader> = Arc::new(store);
         let mut service = RpcService::new(reader);
@@ -140,6 +143,7 @@ impl ServerHarness {
                 return Ok(Self {
                     server_task,
                     grpc_endpoint,
+                    _indexer_service: indexer_service,
                     _temp: temp,
                     _gql_server: gql_server,
                 });

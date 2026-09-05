@@ -161,7 +161,7 @@ async fn cmd_start(args: StartArgs, json_output: bool, version: &'static str) ->
             .with_context(|| format!("failed to get latest checkpoint for {}", network_name))?,
     };
 
-    let (context, subscription_handle) =
+    let (context, subscription_handle, indexer_service) =
         crate::startup::initialize(node, checkpoint, version, data_dir, seed_input).await?;
     let current_checkpoint = {
         let sim = context.simulacrum().read().await;
@@ -195,6 +195,7 @@ async fn cmd_start(args: StartArgs, json_output: bool, version: &'static str) ->
     let handle = tokio::spawn(crate::startup::run(
         context,
         subscription_handle,
+        indexer_service,
         rpc_addr,
         version,
     ));

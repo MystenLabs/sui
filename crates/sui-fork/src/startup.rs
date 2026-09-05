@@ -11,10 +11,12 @@ use anyhow::Result;
 use anyhow::anyhow;
 use prometheus::Registry;
 use rand::rngs::OsRng;
+use tokio::sync::RwLock;
 use tracing::info;
 
 use simulacrum::Simulacrum;
 use simulacrum::store::in_mem_store::KeyStore;
+use sui_futures::service::Service;
 use sui_protocol_config::Chain;
 use sui_protocol_config::ProtocolVersion;
 use sui_rpc_api::RpcService;
@@ -104,8 +106,8 @@ pub(crate) fn resolve_start_checkpoint_from_local(
 
 /// Initialize a forked network by fetching the fork checkpoint from the remote endpoint when
 /// needed, applying seed metadata, and starting a local Simulacrum instance from the highest
-/// checkpoint already persisted locally. Also builds the checkpoint subscription broker, whose
-/// returned handle must be passed to [`run`] so the gRPC server exposes the streaming RPC.
+/// checkpoint already persisted locally. Also builds the checkpoint subscription broker and
+/// embedded indexer service, which must both be passed to [`run`].
 ///
 /// `data_dir` is the root folder where the fork state is persisted. If `None`, a default path is
 /// used. See the `[MetadataStore]` docs for details.
@@ -115,7 +117,7 @@ pub async fn initialize(
     version: &str,
     data_dir: Option<PathBuf>,
     seed_input: SeedInput,
-) -> Result<(Context, SubscriptionServiceHandle)> {
+) -> Result<(Context, SubscriptionServiceHandle, Service)> {
     // 1. Prepare metadata and GraphQL, then open the RPC store before constructing ForkStore.
     let gql = GraphQLClient::new(node.clone(), version)?;
     let chain_identifier = gql.chain();
@@ -129,7 +131,7 @@ pub async fn initialize(
         .get_checkpoint(Some(forked_at_checkpoint))?
         .ok_or_else(|| anyhow!("checkpoint {} not found", forked_at_checkpoint))?;
     let rpc_chain_identifier = fork_chain_identifier(chain_identifier, &checkpoint);
-    let services = ServiceManager::open(
+    let mut services = ServiceManager::open(
         local.root(),
         network_name.clone(),
         forked_at_checkpoint,
@@ -192,16 +194,19 @@ pub async fn initialize(
         rng,
     );
 
-    // 8. Build the checkpoint subscription broker. The sender is owned by
-    //    `Context` (producers push here on `advance_checkpoint`); the handle
-    //    is wired into `RpcService` in `run` so subscribers can register.
+    // 8. Build the checkpoint subscription broker. The indexer's broadcast pipeline owns the
+    //    sender, and `RpcService` receives the handle in `run` so subscribers can register.
     let registry = Registry::new();
     let (checkpoint_sender, subscription_handle) =
         SubscriptionService::build(&registry, None, None, None, None);
 
-    let context = Context::new(simulacrum, services, checkpoint_sender, &registry).await?;
+    let simulacrum = Arc::new(RwLock::new(simulacrum));
+    let indexer_service = services
+        .start_indexer(simulacrum.clone(), checkpoint_sender, &registry)
+        .await?;
+    let context = Context::new(simulacrum, services);
 
-    Ok((context, subscription_handle))
+    Ok((context, subscription_handle, indexer_service))
 }
 
 fn fork_chain_identifier(chain: Chain, checkpoint: &VerifiedCheckpoint) -> ChainIdentifier {
@@ -227,6 +232,7 @@ pub(crate) fn resume_base_checkpoint(store: &ForkStore) -> Result<VerifiedCheckp
 pub async fn run(
     context: Context,
     subscription_handle: SubscriptionServiceHandle,
+    mut indexer_service: Service,
     rpc_addr: SocketAddr,
     version: &'static str,
 ) -> Result<()> {
@@ -264,7 +270,7 @@ pub async fn run(
             }
             return Err(anyhow!("rpc server task exited unexpectedly"));
         }
-        stopped = context.indexer_stopped() => {
+        stopped = indexer_service.join() => {
             // Without this watchdog an indexer failure would only surface as
             // a 30s publication timeout on the next executed transaction.
             return match stopped {
