@@ -13,7 +13,7 @@ use crate::{
 use fastcrypto::{error::FastCryptoError, traits::ToFromBytes};
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::{JWK, OIDCProvider};
-use fastcrypto_zkp::bn254::zk_login_api::{ZkLoginCircuitMode, ZkLoginEnv};
+use fastcrypto_zkp::bn254::zk_login_api::{CircuitVersion, ZkLoginEnv};
 use fastcrypto_zkp::bn254::{zk_login::ZkLoginInputs, zk_login_api::verify_zk_login};
 use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::ops::Deref;
 use std::sync::Arc;
 #[cfg(test)]
 #[path = "unit_tests/zk_login_authenticator_test.rs"]
@@ -37,6 +38,18 @@ pub struct ZkLoginAuthenticator {
     pub bytes: OnceCell<Vec<u8>>,
 }
 
+/// A zkLogin V2 authenticator. Its payload matches [`ZkLoginAuthenticator`], while its signature
+/// scheme flag selects the V2 circuit during verification.
+#[derive(Debug, Clone, JsonSchema, Serialize, Deserialize)]
+#[serde(transparent)]
+#[schemars(transparent)]
+pub struct ZkLoginAuthenticatorV2 {
+    inner: ZkLoginAuthenticator,
+    #[serde(skip)]
+    #[schemars(skip)]
+    bytes: OnceCell<Vec<u8>>,
+}
+
 /// A helper struct that contains the necessary fields to calculate caching key.
 /// If the verify_zk_login() api changes, additional fields must be added here
 /// so the cache is not skipped.
@@ -45,7 +58,7 @@ struct ZkLoginCachingParams {
     inputs: ZkLoginInputs,
     max_epoch: EpochId,
     extended_pk_bytes: Vec<u8>,
-    zklogin_circuit_mode: u64,
+    circuit_version: u8,
 }
 
 impl ZkLoginCachingParams {
@@ -57,35 +70,26 @@ impl ZkLoginCachingParams {
     }
 }
 
-/// Map the protocol config circuit mode flag to the fastcrypto circuit mode:
-/// 0 = v1 circuit only, 1 = v2 circuit with fallback to v1 (migration mode), 2 = v2 circuit only.
-/// The flag comes from protocol config, so any other value is a config bug.
-pub fn zklogin_circuit_mode_from_flag(flag: u64) -> ZkLoginCircuitMode {
-    match flag {
-        0 => ZkLoginCircuitMode::V1Only,
-        1 => ZkLoginCircuitMode::Both,
-        2 => ZkLoginCircuitMode::V2Only,
-        _ => panic!("invalid zklogin circuit mode flag: {flag}"),
-    }
-}
-
 impl ZkLoginAuthenticator {
     /// The caching key for zklogin signature, it is the hash of bcs bytes of
-    /// ZkLoginInputs || max_epoch || flagged_pk_bytes || zklogin_circuit_mode. If any of these
+    /// ZkLoginInputs || max_epoch || flagged_pk_bytes || circuit_version. If any of these
     /// fields change, zklogin signature is re-verified without using the caching result.
-    fn get_caching_params(&self, zklogin_circuit_mode: u64) -> ZkLoginCachingParams {
+    fn get_caching_params(&self, circuit_version: CircuitVersion) -> ZkLoginCachingParams {
         let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];
         extended_pk_bytes.extend(self.user_signature.public_key_bytes());
         ZkLoginCachingParams {
             inputs: self.inputs.clone(),
             max_epoch: self.max_epoch,
             extended_pk_bytes,
-            zklogin_circuit_mode,
+            circuit_version: match circuit_version {
+                CircuitVersion::V1 => SignatureScheme::ZkLoginAuthenticator.flag(),
+                CircuitVersion::V2 => SignatureScheme::ZkLoginAuthenticatorV2.flag(),
+            },
         }
     }
 
-    pub fn hash_inputs(&self, zklogin_circuit_mode: u64) -> ZKLoginInputsDigest {
-        self.get_caching_params(zklogin_circuit_mode).digest()
+    pub fn hash_inputs(&self, circuit_version: CircuitVersion) -> ZKLoginInputsDigest {
+        self.get_caching_params(circuit_version).digest()
     }
 
     /// Create a new [struct ZkLoginAuthenticator] with necessary fields.
@@ -118,6 +122,81 @@ impl ZkLoginAuthenticator {
     }
     pub fn zk_login_inputs_mut_for_testing(&mut self) -> &mut ZkLoginInputs {
         &mut self.inputs
+    }
+
+    fn verify_claims_with_version<T>(
+        &self,
+        intent_msg: &IntentMessage<T>,
+        author: SuiAddress,
+        aux_verify_data: &VerifyParams,
+        zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
+        signature_scheme: SignatureScheme,
+        circuit_version: CircuitVersion,
+    ) -> SuiResult
+    where
+        T: Serialize,
+    {
+        if !aux_verify_data.supported_providers.is_empty()
+            && !aux_verify_data.supported_providers.contains(
+                &OIDCProvider::from_iss(self.inputs.get_iss()).map_err(|_| {
+                    SuiErrorKind::InvalidSignature {
+                        error: "Unknown provider".to_string(),
+                    }
+                })?,
+            )
+        {
+            return Err(SuiErrorKind::InvalidSignature {
+                error: format!("OIDC provider not supported: {}", self.inputs.get_iss()),
+            }
+            .into());
+        }
+
+        self.user_signature
+            .verify_secure(intent_msg, author, signature_scheme)?;
+
+        let caching_params = self.get_caching_params(circuit_version);
+        let inputs_digest = caching_params.digest();
+        if zklogin_inputs_cache.is_cached(&inputs_digest) {
+            return Ok(());
+        }
+
+        verify_zklogin_inputs_wrapper(
+            caching_params,
+            &aux_verify_data.oidc_provider_jwks,
+            &aux_verify_data.zk_login_env,
+            circuit_version,
+        )
+        .map_err(|e| -> SuiError {
+            SuiErrorKind::InvalidSignature {
+                error: e.to_string(),
+            }
+            .into()
+        })?;
+        zklogin_inputs_cache.cache_digest(inputs_digest);
+        Ok(())
+    }
+}
+
+impl Deref for ZkLoginAuthenticatorV2 {
+    type Target = ZkLoginAuthenticator;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl From<ZkLoginAuthenticator> for ZkLoginAuthenticatorV2 {
+    fn from(inner: ZkLoginAuthenticator) -> Self {
+        Self {
+            inner,
+            bytes: OnceCell::new(),
+        }
+    }
+}
+
+impl ZkLoginAuthenticatorV2 {
+    pub fn get_pk(&self) -> SuiResult<PublicKey> {
+        PublicKey::from_zklogin_v2_inputs(&self.inputs)
     }
 }
 
@@ -185,64 +264,61 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
     where
         T: Serialize,
     {
-        // Always evaluate the unpadded address derivation.
-        if author != SuiAddress::try_from_unpadded(&self.inputs)? {
-            // If the verify_legacy_zklogin_address flag is set, also evaluate the padded address derivation.
-            if !aux_verify_data.verify_legacy_zklogin_address
-                || author != SuiAddress::try_from_padded(&self.inputs)?
-            {
-                return Err(SuiErrorKind::InvalidAddress.into());
-            }
+        if author != SuiAddress::try_from_unpadded(&self.inputs)?
+            && (!aux_verify_data.verify_legacy_zklogin_address
+                || author != SuiAddress::try_from_padded(&self.inputs)?)
+        {
+            return Err(SuiErrorKind::InvalidAddress.into());
         }
 
-        // Only when supported_providers list is not empty, we check if the provider is supported. Otherwise,
-        // we just use the JWK map to check if its supported.
-        if !aux_verify_data.supported_providers.is_empty()
-            && !aux_verify_data.supported_providers.contains(
-                &OIDCProvider::from_iss(self.inputs.get_iss()).map_err(|_| {
-                    SuiErrorKind::InvalidSignature {
-                        error: "Unknown provider".to_string(),
-                    }
-                })?,
-            )
-        {
-            return Err(SuiErrorKind::InvalidSignature {
-                error: format!("OIDC provider not supported: {}", self.inputs.get_iss()),
+        self.verify_claims_with_version(
+            intent_msg,
+            author,
+            aux_verify_data,
+            zklogin_inputs_cache,
+            SignatureScheme::ZkLoginAuthenticator,
+            CircuitVersion::V1,
+        )
+    }
+}
+
+impl AuthenticatorTrait for ZkLoginAuthenticatorV2 {
+    fn verify_user_authenticator_epoch(
+        &self,
+        epoch: EpochId,
+        max_epoch_upper_bound_delta: Option<u64>,
+    ) -> SuiResult {
+        self.inner
+            .verify_user_authenticator_epoch(epoch, max_epoch_upper_bound_delta)
+    }
+
+    fn verify_claims<T>(
+        &self,
+        intent_msg: &IntentMessage<T>,
+        author: SuiAddress,
+        aux_verify_data: &VerifyParams,
+        zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
+    ) -> SuiResult
+    where
+        T: Serialize,
+    {
+        if aux_verify_data.zklogin_circuit_mode != 1 {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
+                error: "zkLogin V2 authenticator is not enabled".to_string(),
             }
             .into());
         }
-
-        // Verify the ephemeral signature over the intent message of the transaction data.
-        self.user_signature.verify_secure(
+        if author != SuiAddress::try_from_zklogin_v2(&self.inputs)? {
+            return Err(SuiErrorKind::InvalidAddress.into());
+        }
+        self.inner.verify_claims_with_version(
             intent_msg,
             author,
-            SignatureScheme::ZkLoginAuthenticator,
-        )?;
-
-        let zklogin_circuit_mode = aux_verify_data.zklogin_circuit_mode;
-        let caching_params = self.get_caching_params(zklogin_circuit_mode);
-        let inputs_digest = caching_params.digest();
-        if zklogin_inputs_cache.is_cached(&inputs_digest) {
-            // If the zklogin inputs hits the cache, we don't need to verify the zklogin
-            // again that contains the heavy computation.
-            Ok(())
-        } else {
-            // if it is not cached, we verify the full zklogin inputs.
-            verify_zklogin_inputs_wrapper(
-                caching_params,
-                &aux_verify_data.oidc_provider_jwks,
-                &aux_verify_data.zk_login_env,
-            )
-            .map_err(|e| -> SuiError {
-                SuiErrorKind::InvalidSignature {
-                    error: e.to_string(),
-                }
-                .into()
-            })?;
-            // If it's verified ok, we cache the digest.
-            zklogin_inputs_cache.cache_digest(inputs_digest);
-            Ok(())
-        }
+            aux_verify_data,
+            zklogin_inputs_cache,
+            SignatureScheme::ZkLoginAuthenticatorV2,
+            CircuitVersion::V2,
+        )
     }
 }
 
@@ -250,6 +326,7 @@ fn verify_zklogin_inputs_wrapper(
     params: ZkLoginCachingParams,
     all_jwk: &imbl::HashMap<JwkId, JWK>,
     env: &ZkLoginEnv,
+    circuit_version: CircuitVersion,
 ) -> SuiResult<()> {
     verify_zk_login(
         &params.inputs,
@@ -257,7 +334,7 @@ fn verify_zklogin_inputs_wrapper(
         &params.extended_pk_bytes,
         all_jwk,
         env,
-        zklogin_circuit_mode_from_flag(params.zklogin_circuit_mode),
+        circuit_version,
     )
     .map_err(|e| {
         SuiErrorKind::InvalidSignature {
@@ -269,16 +346,37 @@ fn verify_zklogin_inputs_wrapper(
 
 impl ToFromBytes for ZkLoginAuthenticator {
     fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
-        // The first byte matches the flag of MultiSig.
-        if bytes.first().ok_or(FastCryptoError::InvalidInput)?
-            != &SignatureScheme::ZkLoginAuthenticator.flag()
-        {
+        Self::from_bytes_with_scheme(bytes, SignatureScheme::ZkLoginAuthenticator)
+    }
+}
+
+impl ToFromBytes for ZkLoginAuthenticatorV2 {
+    fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
+        ZkLoginAuthenticator::from_bytes_with_scheme(bytes, SignatureScheme::ZkLoginAuthenticatorV2)
+            .map(Into::into)
+    }
+}
+
+impl ZkLoginAuthenticator {
+    fn from_bytes_with_scheme(
+        bytes: &[u8],
+        scheme: SignatureScheme,
+    ) -> Result<Self, FastCryptoError> {
+        if bytes.first().ok_or(FastCryptoError::InvalidInput)? != &scheme.flag() {
             return Err(FastCryptoError::InvalidInput);
         }
-        let mut zk_login: ZkLoginAuthenticator =
+        let mut authenticator: Self =
             bcs::from_bytes(&bytes[1..]).map_err(|_| FastCryptoError::InvalidSignature)?;
-        zk_login.inputs.init()?;
-        Ok(zk_login)
+        authenticator.inputs.init()?;
+        Ok(authenticator)
+    }
+
+    fn to_bytes_with_scheme(&self, scheme: SignatureScheme) -> Vec<u8> {
+        let payload = bcs::to_bytes(self).expect("BCS serialization should not fail");
+        let mut bytes = Vec::with_capacity(1 + payload.len());
+        bytes.push(scheme.flag());
+        bytes.extend_from_slice(&payload);
+        bytes
     }
 }
 
@@ -286,13 +384,35 @@ impl AsRef<[u8]> for ZkLoginAuthenticator {
     fn as_ref(&self) -> &[u8] {
         self.bytes
             .get_or_try_init::<_, eyre::Report>(|| {
-                let as_bytes = bcs::to_bytes(self).expect("BCS serialization should not fail");
-                let mut bytes = Vec::with_capacity(1 + as_bytes.len());
-                bytes.push(SignatureScheme::ZkLoginAuthenticator.flag());
-                bytes.extend_from_slice(as_bytes.as_slice());
-                Ok(bytes)
+                Ok(self.to_bytes_with_scheme(SignatureScheme::ZkLoginAuthenticator))
             })
             .expect("OnceCell invariant violated")
+    }
+}
+
+impl AsRef<[u8]> for ZkLoginAuthenticatorV2 {
+    fn as_ref(&self) -> &[u8] {
+        self.bytes
+            .get_or_try_init::<_, eyre::Report>(|| {
+                Ok(self
+                    .inner
+                    .to_bytes_with_scheme(SignatureScheme::ZkLoginAuthenticatorV2))
+            })
+            .expect("OnceCell invariant violated")
+    }
+}
+
+impl PartialEq for ZkLoginAuthenticatorV2 {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref() == other.as_ref()
+    }
+}
+
+impl Eq for ZkLoginAuthenticatorV2 {}
+
+impl Hash for ZkLoginAuthenticatorV2 {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_ref().hash(state);
     }
 }
 

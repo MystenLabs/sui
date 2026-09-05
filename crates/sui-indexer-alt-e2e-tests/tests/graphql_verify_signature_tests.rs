@@ -25,8 +25,8 @@ use sui_indexer_alt_graphql::config::ZkLoginConfig;
 use sui_indexer_alt_graphql::config::ZkLoginEnv;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::Signature;
 use sui_types::crypto::SuiKeyPair;
+use sui_types::crypto::{PublicKey, Signature};
 use sui_types::multisig::MultiSig;
 use sui_types::multisig::MultiSigPublicKey;
 use sui_types::signature::GenericSignature;
@@ -327,6 +327,59 @@ async fn test_zklogin_personal_message() {
       "success": true
     }
     "###);
+}
+
+#[tokio::test]
+async fn test_zklogin_v2_personal_message_unsupported() {
+    let cluster = FullCluster::new().await.unwrap();
+    let (keypair, _, inputs) =
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_v2_test_vectors.json")[0];
+    let public_key = PublicKey::from_zklogin_v2_inputs(inputs).unwrap();
+    let personal = b"Hello from ZkLogin V2!".to_vec();
+    let intent_message = IntentMessage::new(
+        Intent::personal_message(),
+        PersonalMessage {
+            message: personal.clone(),
+        },
+    );
+
+    for multisig in [false, true] {
+        let multisig_pk =
+            multisig.then(|| MultiSigPublicKey::new(vec![public_key.clone()], vec![1], 1).unwrap());
+        let author = multisig_pk
+            .as_ref()
+            .map(SuiAddress::from)
+            .unwrap_or_else(|| (&public_key).into());
+        let authenticator = GenericSignature::ZkLoginAuthenticatorV2(
+            ZkLoginAuthenticator::new(
+                inputs.clone(),
+                10,
+                Signature::new_secure(&intent_message, keypair),
+            )
+            .into(),
+        );
+        let signature = if let Some(multisig_pk) = multisig_pk {
+            GenericSignature::MultiSig(MultiSig::combine(vec![authenticator], multisig_pk).unwrap())
+        } else {
+            authenticator
+        };
+
+        let error = cluster
+            .verify(
+                personal.clone(),
+                signature.as_ref().to_owned(),
+                SCOPE_PERSONAL_MESSAGE,
+                author,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("zkLogin V2 is not supported by this API"),
+            "multisig={multisig}: {error:?}"
+        );
+    }
 }
 
 // --- Passkey ---

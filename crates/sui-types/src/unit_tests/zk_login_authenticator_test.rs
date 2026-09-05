@@ -4,22 +4,31 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use crate::crypto::{PublicKey, SignatureScheme, ZkLoginPublicIdentifier};
+use crate::crypto::{PublicKey, Signature, SignatureScheme, SuiKeyPair, ZkLoginPublicIdentifier};
 
-use crate::signature::VerifyParams;
+use crate::signature::{AuthenticatorTrait, VerifyParams};
 use crate::signature_verification::VerifiedDigestCache;
-use crate::utils::{SHORT_ADDRESS_SEED, load_test_vectors};
+use crate::utils::{
+    PINNED_PROOF_ADDRESS_SEED, PINNED_V1_PROOF_JSON, SHORT_ADDRESS_SEED, load_test_vectors,
+    pinned_jwks,
+};
 use crate::utils::{get_zklogin_user_address, make_zklogin_tx, sign_zklogin_personal_msg};
 use crate::{
-    base_types::SuiAddress, signature::GenericSignature, zk_login_util::DEFAULT_JWK_BYTES,
+    base_types::SuiAddress,
+    error::SuiErrorKind,
+    signature::GenericSignature,
+    zk_login_authenticator::{ZkLoginAuthenticator, ZkLoginAuthenticatorV2},
+    zk_login_util::DEFAULT_JWK_BYTES,
 };
 use fastcrypto::encoding::Base64;
-use fastcrypto::traits::ToFromBytes;
+use fastcrypto::traits::{KeyPair, ToFromBytes};
 
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId, OIDCProvider, ZkLoginInputs, parse_jwks};
-use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
+use fastcrypto_zkp::bn254::zk_login_api::{CircuitVersion, ZkLoginEnv};
 use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
 use imbl::hashmap::HashMap as ImHashMap;
+use rand::SeedableRng;
+use rand::rngs::StdRng;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 
 #[test]
@@ -34,6 +43,236 @@ fn test_serde_zk_login_signature() {
 
     let addr: SuiAddress = (&authenticator).try_into().unwrap();
     assert_eq!(addr, user_address);
+}
+
+#[test]
+fn test_serde_zk_login_v2_signature() {
+    let (keypair, v1_public_key, inputs) =
+        load_test_vectors("./src/unit_tests/zklogin_v2_test_vectors.json")
+            .into_iter()
+            .next()
+            .unwrap();
+    let intent_message = IntentMessage::new(
+        Intent::personal_message(),
+        PersonalMessage {
+            message: b"zkLogin V2 serialization".to_vec(),
+        },
+    );
+    let v2_public_key = PublicKey::from_zklogin_v2_inputs(&inputs).unwrap();
+    let authenticator = ZkLoginAuthenticator::new(
+        inputs,
+        10,
+        crate::crypto::Signature::new_secure(&intent_message, &keypair),
+    );
+    let v1_signature = GenericSignature::ZkLoginAuthenticator(authenticator.clone());
+    let signature = GenericSignature::ZkLoginAuthenticatorV2(authenticator.into());
+
+    assert_eq!(
+        signature.as_ref()[0],
+        SignatureScheme::ZkLoginAuthenticatorV2.flag()
+    );
+    assert_eq!(
+        GenericSignature::from_bytes(signature.as_ref()).unwrap(),
+        signature
+    );
+    assert_eq!(
+        SuiAddress::try_from(&signature).unwrap(),
+        (&v2_public_key).into()
+    );
+    assert_ne!(
+        SuiAddress::try_from(&signature).unwrap(),
+        (&v1_public_key).into()
+    );
+    assert_eq!(&signature.as_ref()[1..], &v1_signature.as_ref()[1..]);
+    assert!(ZkLoginAuthenticator::from_bytes(signature.as_ref()).is_err());
+    assert!(ZkLoginAuthenticatorV2::from_bytes(v1_signature.as_ref()).is_err());
+}
+
+#[test]
+fn test_zklogin_v2_rejects_unpadded_address() {
+    let (keypair, _, inputs) = load_test_vectors("./src/unit_tests/zklogin_v2_test_vectors.json")
+        .into_iter()
+        .next()
+        .unwrap();
+    let inputs =
+        ZkLoginInputs::from_json(&serde_json::to_string(&inputs).unwrap(), SHORT_ADDRESS_SEED)
+            .unwrap();
+    let padded_address = SuiAddress::try_from_zklogin_v2(&inputs).unwrap();
+    let unpadded_address = SuiAddress::try_from_unpadded(&inputs).unwrap();
+    assert_ne!(padded_address, unpadded_address);
+
+    let intent_message = IntentMessage::new(
+        Intent::personal_message(),
+        PersonalMessage {
+            message: b"zkLogin V2 padded address".to_vec(),
+        },
+    );
+    let signature = GenericSignature::ZkLoginAuthenticatorV2(
+        ZkLoginAuthenticator::new(inputs, 10, Signature::new_secure(&intent_message, &keypair))
+            .into(),
+    );
+    assert_eq!(SuiAddress::try_from(&signature).unwrap(), padded_address);
+
+    let verify_params = VerifyParams::new(
+        pinned_jwks(),
+        vec![],
+        ZkLoginEnv::Test,
+        1,
+        true,
+        true,
+        true,
+        Some(30),
+        true,
+        true,
+    );
+    let error = signature
+        .verify_authenticator(
+            &intent_message,
+            unpadded_address,
+            0,
+            &verify_params,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )
+        .unwrap_err();
+    assert!(matches!(error.as_inner(), SuiErrorKind::InvalidAddress));
+}
+
+#[test]
+fn test_zklogin_v1_v2_cache_and_verifier_isolation() {
+    let intent_message = IntentMessage::new(
+        Intent::personal_message(),
+        PersonalMessage {
+            message: b"zkLogin circuit isolation".to_vec(),
+        },
+    );
+    let verify_params = VerifyParams::new(
+        pinned_jwks(),
+        vec![],
+        ZkLoginEnv::Test,
+        1,
+        true,
+        true,
+        true,
+        Some(30),
+        true,
+        true,
+    );
+
+    let verify = |authenticator: ZkLoginAuthenticator,
+                  author: SuiAddress,
+                  valid_version: CircuitVersion| {
+        let cache = Arc::new(VerifiedDigestCache::new_empty());
+        let mut wrong_epoch_authenticator = authenticator.clone();
+        *wrong_epoch_authenticator.max_epoch_mut_for_testing() = 9;
+        let wrong_epoch = match valid_version {
+            CircuitVersion::V1 => GenericSignature::ZkLoginAuthenticator(wrong_epoch_authenticator),
+            CircuitVersion::V2 => {
+                GenericSignature::ZkLoginAuthenticatorV2(wrong_epoch_authenticator.into())
+            }
+        };
+        let v1 = GenericSignature::ZkLoginAuthenticator(authenticator.clone());
+        let v2 = GenericSignature::ZkLoginAuthenticatorV2(authenticator.into());
+        let (valid, wrong_version) = match valid_version {
+            CircuitVersion::V1 => (v1, v2),
+            CircuitVersion::V2 => (v2, v1),
+        };
+
+        let result =
+            valid.verify_authenticator(&intent_message, author, 0, &verify_params, cache.clone());
+        assert!(result.is_ok(), "{valid_version:?}: {result:?}");
+
+        let result = wrong_epoch.verify_authenticator(
+            &intent_message,
+            author,
+            0,
+            &verify_params,
+            cache.clone(),
+        );
+        assert!(
+            result.is_err(),
+            "{valid_version:?} proof accepted with the wrong max_epoch"
+        );
+
+        let result =
+            wrong_version.verify_authenticator(&intent_message, author, 0, &verify_params, cache);
+        assert!(
+            result.is_err(),
+            "{valid_version:?} proof accepted by other circuit"
+        );
+    };
+
+    let v1_inputs =
+        ZkLoginInputs::from_json(PINNED_V1_PROOF_JSON, PINNED_PROOF_ADDRESS_SEED).unwrap();
+    let v1_author = SuiAddress::from(&PublicKey::from_zklogin_inputs(&v1_inputs).unwrap());
+    let v1_keypair = SuiKeyPair::Ed25519(fastcrypto::ed25519::Ed25519KeyPair::generate(
+        &mut StdRng::from_seed([0; 32]),
+    ));
+    verify(
+        ZkLoginAuthenticator::new(
+            v1_inputs,
+            10,
+            Signature::new_secure(&intent_message, &v1_keypair),
+        ),
+        v1_author,
+        CircuitVersion::V1,
+    );
+
+    let (v2_keypair, _, v2_inputs) =
+        load_test_vectors("./src/unit_tests/zklogin_v2_test_vectors.json")
+            .into_iter()
+            .next()
+            .unwrap();
+    let v2_author = SuiAddress::try_from_zklogin_v2(&v2_inputs).unwrap();
+    verify(
+        ZkLoginAuthenticator::new(
+            v2_inputs,
+            10,
+            Signature::new_secure(&intent_message, &v2_keypair),
+        ),
+        v2_author,
+        CircuitVersion::V2,
+    );
+}
+
+#[test]
+fn test_zklogin_v1_v2_epoch_validation() {
+    let (keypair, _, inputs) = load_test_vectors("./src/unit_tests/zklogin_v2_test_vectors.json")
+        .into_iter()
+        .next()
+        .unwrap();
+    let intent_message = IntentMessage::new(
+        Intent::personal_message(),
+        PersonalMessage {
+            message: b"zkLogin epoch validation".to_vec(),
+        },
+    );
+    let authenticator =
+        ZkLoginAuthenticator::new(inputs, 10, Signature::new_secure(&intent_message, &keypair));
+
+    for signature in [
+        GenericSignature::ZkLoginAuthenticator(authenticator.clone()),
+        GenericSignature::ZkLoginAuthenticatorV2(authenticator.into()),
+    ] {
+        assert!(
+            signature
+                .verify_user_authenticator_epoch(10, Some(0))
+                .is_ok()
+        );
+        assert!(
+            signature
+                .verify_user_authenticator_epoch(11, None)
+                .unwrap_err()
+                .to_string()
+                .contains("ZKLogin expired at epoch 10")
+        );
+        assert!(
+            signature
+                .verify_user_authenticator_epoch(0, Some(9))
+                .unwrap_err()
+                .to_string()
+                .contains("ZKLogin max epoch too large 10")
+        );
+    }
 }
 
 #[test]

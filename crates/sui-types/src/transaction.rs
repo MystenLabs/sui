@@ -4144,11 +4144,20 @@ impl SenderSignedData {
     fn check_user_signature_protocol_compatibility(&self, config: &ProtocolConfig) -> SuiResult {
         for sig in &self.inner().tx_signatures {
             match sig {
-                GenericSignature::MultiSig(_) => {
+                GenericSignature::MultiSig(multisig) => {
                     if !config.upgraded_multisig_supported() {
                         return Err(SuiErrorKind::UserInputError {
                             error: UserInputError::Unsupported(
                                 "upgraded multisig format not enabled on this network".to_string(),
+                            ),
+                        }
+                        .into());
+                    }
+                    if config.zklogin_circuit_mode() != 1 && multisig.has_zklogin_v2_sigs()? {
+                        return Err(SuiErrorKind::UserInputError {
+                            error: UserInputError::Unsupported(
+                                "zkLogin V2 authenticator is not enabled on this network"
+                                    .to_string(),
                             ),
                         }
                         .into());
@@ -4159,6 +4168,17 @@ impl SenderSignedData {
                         return Err(SuiErrorKind::UserInputError {
                             error: UserInputError::Unsupported(
                                 "zklogin is not enabled on this network".to_string(),
+                            ),
+                        }
+                        .into());
+                    }
+                }
+                GenericSignature::ZkLoginAuthenticatorV2(_) => {
+                    if !config.zklogin_auth() || config.zklogin_circuit_mode() != 1 {
+                        return Err(SuiErrorKind::UserInputError {
+                            error: UserInputError::Unsupported(
+                                "zkLogin V2 authenticator is not enabled on this network"
+                                    .to_string(),
                             ),
                         }
                         .into());

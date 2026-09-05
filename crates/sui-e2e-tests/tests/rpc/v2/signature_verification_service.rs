@@ -16,10 +16,11 @@ use sui_rpc::proto::sui::rpc::v2::{ActiveJwk, Jwk, JwkId};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectDigest, ObjectID, SuiAddress};
 use sui_types::crypto::{PublicKey, Signature, SuiKeyPair};
+use sui_types::multisig::{MultiSig, MultiSigPublicKey};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 use sui_types::utils::{
-    PINNED_PROOF_ADDRESS_SEED, PINNED_V1_PROOF_JSON, PINNED_V2_PROOF_JSON, pinned_jwks,
+    PINNED_PROOF_ADDRESS_SEED, PINNED_V1_PROOF_JSON, load_test_vectors, pinned_jwks,
 };
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 use test_cluster::TestClusterBuilder;
@@ -149,8 +150,8 @@ async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
     assert_eq!(response.is_valid, Some(false));
     assert!(response.reason.is_some());
 
-    // Verify zklogin signatures carrying the pinned v1 and v2 circuit proofs, with the
-    // matching test-issuer JWKs supplied in the request. In circuit mode 1 both proofs verify.
+    // Verify a zkLogin signature carrying the pinned V1 proof, with the matching
+    // test-issuer JWK supplied in the request.
     let jwks: Vec<ActiveJwk> = pinned_jwks()
         .into_iter()
         .map(|(id, jwk)| {
@@ -174,66 +175,116 @@ async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
         })
         .collect();
 
-    for proof_json in [PINNED_V1_PROOF_JSON, PINNED_V2_PROOF_JSON] {
-        // Both pinned proofs use ephemeral key seed [0; 32] and max_epoch 10.
-        let inputs = ZkLoginInputs::from_json(proof_json, PINNED_PROOF_ADDRESS_SEED)?;
-        let eph_kp = SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])));
-        let zklogin_addr = SuiAddress::from(&PublicKey::from_zklogin_inputs(&inputs)?);
+    let inputs = ZkLoginInputs::from_json(PINNED_V1_PROOF_JSON, PINNED_PROOF_ADDRESS_SEED)?;
+    let eph_kp = SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])));
+    let zklogin_addr = SuiAddress::from(&PublicKey::from_zklogin_inputs(&inputs)?);
 
-        let gas_ref = (ObjectID::random(), 1.into(), ObjectDigest::random());
+    let gas_ref = (ObjectID::random(), 1.into(), ObjectDigest::random());
+    let tx_data = TransactionData::new_transfer_sui(
+        SuiAddress::ZERO,
+        zklogin_addr,
+        Some(1),
+        gas_ref,
+        5_000_000,
+        1000,
+    );
+    let msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
+    let eph_sig = Signature::new_secure(&msg, &eph_kp);
+    let generic_sig =
+        GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(inputs, 10, eph_sig));
+
+    let message = {
+        let mut bcs = Bcs::from(bcs::to_bytes(&tx_data)?);
+        bcs.name = Some("TransactionData".to_string());
+        bcs
+    };
+    let signature = {
+        let mut signature = UserSignature::default();
+        signature.bcs = Some(Bcs::from(generic_sig.as_ref().to_owned()));
+        signature
+    };
+
+    let response = client
+        .verify_signature({
+            let mut request = VerifySignatureRequest::default();
+            request.message = Some(message);
+            request.signature = Some(signature.clone());
+            request.address = Some(zklogin_addr.to_string());
+            request.jwks = jwks.clone();
+            request
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.reason, None);
+    assert_eq!(response.is_valid, Some(true));
+
+    // The same signature over a different message must not verify.
+    let response = client
+        .verify_signature({
+            let mut request = VerifySignatureRequest::default();
+            request.message = Some(Bcs::from(bcs::to_bytes("some personal message")?));
+            request.signature = Some(signature);
+            request.jwks = jwks.clone();
+            request
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.is_valid, Some(false));
+    assert!(response.reason.is_some());
+
+    // The SDK-backed gRPC representation does not support the V2 scheme yet.
+    let (eph_kp, _, inputs) =
+        load_test_vectors("../sui-types/src/unit_tests/zklogin_v2_test_vectors.json")
+            .into_iter()
+            .next()
+            .unwrap();
+    let zklogin_pk = PublicKey::from_zklogin_v2_inputs(&inputs)?;
+    for multisig in [false, true] {
+        let multisig_pk =
+            multisig.then(|| MultiSigPublicKey::new(vec![zklogin_pk.clone()], vec![1], 1).unwrap());
+        let sender = multisig_pk
+            .as_ref()
+            .map(SuiAddress::from)
+            .unwrap_or_else(|| SuiAddress::from(&zklogin_pk));
         let tx_data = TransactionData::new_transfer_sui(
             SuiAddress::ZERO,
-            zklogin_addr,
+            sender,
             Some(1),
-            gas_ref,
+            (ObjectID::random(), 1.into(), ObjectDigest::random()),
             5_000_000,
             1000,
         );
-        let msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
-        let eph_sig = Signature::new_secure(&msg, &eph_kp);
-        let generic_sig =
-            GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(inputs, 10, eph_sig));
-
-        let message = {
-            let mut bcs = Bcs::from(bcs::to_bytes(&tx_data)?);
-            bcs.name = Some("TransactionData".to_string());
-            bcs
+        let intent_message = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
+        let authenticator = GenericSignature::ZkLoginAuthenticatorV2(
+            ZkLoginAuthenticator::new(
+                inputs.clone(),
+                10,
+                Signature::new_secure(&intent_message, &eph_kp),
+            )
+            .into(),
+        );
+        let signature = if let Some(multisig_pk) = multisig_pk {
+            GenericSignature::MultiSig(MultiSig::combine(vec![authenticator], multisig_pk)?)
+        } else {
+            authenticator
         };
-        let signature = {
-            let mut signature = UserSignature::default();
-            signature.bcs = Some(Bcs::from(generic_sig.as_ref().to_owned()));
-            signature
-        };
 
-        let response = client
+        let error = client
             .verify_signature({
                 let mut request = VerifySignatureRequest::default();
-                request.message = Some(message);
-                request.signature = Some(signature.clone());
-                request.address = Some(zklogin_addr.to_string());
-                request.jwks = jwks.clone();
+                request.message = Some(Bcs::from(bcs::to_bytes(&tx_data)?));
+                request.signature = Some({
+                    let mut proto = UserSignature::default();
+                    proto.bcs = Some(Bcs::from(signature.as_ref().to_owned()));
+                    proto
+                });
                 request
             })
             .await
-            .unwrap()
-            .into_inner();
-        assert_eq!(response.reason, None);
-        assert_eq!(response.is_valid, Some(true));
-
-        // The same signature over a different message must not verify.
-        let response = client
-            .verify_signature({
-                let mut request = VerifySignatureRequest::default();
-                request.message = Some(Bcs::from(bcs::to_bytes("some personal message")?));
-                request.signature = Some(signature);
-                request.jwks = jwks.clone();
-                request
-            })
-            .await
-            .unwrap()
-            .into_inner();
-        assert_eq!(response.is_valid, Some(false));
-        assert!(response.reason.is_some());
+            .unwrap_err();
+        assert_eq!(error.code(), tonic::Code::InvalidArgument);
     }
 
     Ok(())

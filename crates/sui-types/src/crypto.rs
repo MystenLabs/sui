@@ -267,6 +267,7 @@ pub enum PublicKey {
     Secp256r1(Secp256r1PublicKeyAsBytes),
     ZkLogin(ZkLoginPublicIdentifier),
     Passkey(Secp256r1PublicKeyAsBytes),
+    ZkLoginV2(ZkLoginPublicIdentifier),
 }
 
 /// A wrapper struct to retrofit in [enum PublicKey] for zkLogin.
@@ -337,6 +338,7 @@ impl AsRef<[u8]> for PublicKey {
             PublicKey::Secp256r1(pk) => &pk.0,
             PublicKey::ZkLogin(z) => &z.0,
             PublicKey::Passkey(pk) => &pk.0,
+            PublicKey::ZkLoginV2(z) => &z.0,
         }
     }
 }
@@ -416,11 +418,19 @@ impl PublicKey {
             PublicKey::Secp256r1(_) => Secp256r1SuiSignature::SCHEME,
             PublicKey::ZkLogin(_) => SignatureScheme::ZkLoginAuthenticator,
             PublicKey::Passkey(_) => SignatureScheme::PasskeyAuthenticator,
+            PublicKey::ZkLoginV2(_) => SignatureScheme::ZkLoginAuthenticatorV2,
         }
     }
 
     pub fn from_zklogin_inputs(inputs: &ZkLoginInputs) -> SuiResult<Self> {
         Ok(PublicKey::ZkLogin(ZkLoginPublicIdentifier::new(
+            inputs.get_iss(),
+            inputs.get_address_seed(),
+        )?))
+    }
+
+    pub fn from_zklogin_v2_inputs(inputs: &ZkLoginInputs) -> SuiResult<Self> {
+        Ok(PublicKey::ZkLoginV2(ZkLoginPublicIdentifier::new(
             inputs.get_iss(),
             inputs.get_address_seed(),
         )?))
@@ -1047,7 +1057,7 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
 
         let (sig, pk) = &self.get_verification_inputs()?;
         match scheme {
-            SignatureScheme::ZkLoginAuthenticator => {} // Pass this check because zk login does not derive address from pubkey.
+            SignatureScheme::ZkLoginAuthenticator | SignatureScheme::ZkLoginAuthenticatorV2 => {} // zkLogin addresses are not derived from the ephemeral public key.
             _ => {
                 let address = SuiAddress::from(pk);
                 if author != address {
@@ -1719,6 +1729,7 @@ pub enum SignatureScheme {
     MultiSig,
     ZkLoginAuthenticator,
     PasskeyAuthenticator,
+    ZkLoginAuthenticatorV2,
 }
 
 impl SignatureScheme {
@@ -1731,6 +1742,7 @@ impl SignatureScheme {
             SignatureScheme::BLS12381 => 0x04, // This is currently not supported for user Sui Address.
             SignatureScheme::ZkLoginAuthenticator => 0x05,
             SignatureScheme::PasskeyAuthenticator => 0x06,
+            SignatureScheme::ZkLoginAuthenticatorV2 => 0x07,
         }
     }
 
@@ -1750,6 +1762,7 @@ impl SignatureScheme {
             0x04 => Ok(SignatureScheme::BLS12381),
             0x05 => Ok(SignatureScheme::ZkLoginAuthenticator),
             0x06 => Ok(SignatureScheme::PasskeyAuthenticator),
+            0x07 => Ok(SignatureScheme::ZkLoginAuthenticatorV2),
             _ => Err(SuiErrorKind::KeyConversionError("Invalid key scheme".to_string()).into()),
         }
     }

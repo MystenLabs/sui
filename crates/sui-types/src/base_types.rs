@@ -889,6 +889,11 @@ impl SuiAddress {
         Ok((&PublicKey::from_zklogin_inputs(inputs)?).into())
     }
 
+    /// Derive a zkLogin V2 address using the V2 signature scheme and padded address seed.
+    pub fn try_from_zklogin_v2(inputs: &ZkLoginInputs) -> SuiResult<Self> {
+        Ok((&PublicKey::from_zklogin_v2_inputs(inputs)?).into())
+    }
+
     /// Define as iss_bytes_len || iss_bytes || unpadded_32_byte_address_seed.
     pub fn try_from_unpadded(inputs: &ZkLoginInputs) -> SuiResult<Self> {
         let mut hasher = DefaultHash::default();
@@ -1021,6 +1026,9 @@ impl TryFrom<&GenericSignature> for SuiAddress {
             }
             GenericSignature::ZkLoginAuthenticator(zklogin) => {
                 SuiAddress::try_from_unpadded(&zklogin.inputs)
+            }
+            GenericSignature::ZkLoginAuthenticatorV2(zklogin) => {
+                SuiAddress::try_from_zklogin_v2(&zklogin.inputs)
             }
             GenericSignature::PasskeyAuthenticator(s) => Ok(SuiAddress::from(&s.get_pk()?)),
         }

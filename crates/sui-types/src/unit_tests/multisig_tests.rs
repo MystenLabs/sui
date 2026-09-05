@@ -9,12 +9,12 @@ use crate::{
         ZkLoginPublicIdentifier, get_key_pair, get_key_pair_from_rng,
     },
     multisig::{MAX_SIGNER_IN_MULTISIG, MultiSig, as_indices},
-    multisig_legacy::bitmap_to_u16,
+    multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy, bitmap_to_u16},
     signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
     signature_verification::VerifiedDigestCache,
     utils::{
-        DEFAULT_ADDRESS_SEED, SHORT_ADDRESS_SEED, keys, load_test_vectors, make_transaction_data,
-        make_zklogin_tx,
+        DEFAULT_ADDRESS_SEED, PINNED_PROOF_ADDRESS_SEED, PINNED_V1_PROOF_JSON, SHORT_ADDRESS_SEED,
+        keys, load_test_vectors, make_transaction_data, make_zklogin_tx, pinned_jwks,
     },
     zk_login_authenticator::ZkLoginAuthenticator,
     zk_login_util::DEFAULT_JWK_BYTES,
@@ -22,7 +22,7 @@ use crate::{
 use fastcrypto::{
     ed25519::Ed25519KeyPair,
     encoding::{Base64, Encoding},
-    traits::ToFromBytes,
+    traits::{KeyPair, ToFromBytes},
 };
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId, OIDCProvider, ZkLoginInputs, parse_jwks};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
@@ -60,6 +60,129 @@ fn test_combine_sigs() {
     // Cannot create malformed MultiSig.
     assert!(MultiSig::combine(vec![], multisig_pk.clone()).is_err());
     assert!(MultiSig::combine(vec![sig1.clone(), sig1], multisig_pk).is_err());
+}
+
+#[test]
+fn zklogin_v1_and_v2_in_multisig() {
+    let v1_inputs =
+        ZkLoginInputs::from_json(PINNED_V1_PROOF_JSON, PINNED_PROOF_ADDRESS_SEED).unwrap();
+    let (_, _, v2_inputs) = load_test_vectors("./src/unit_tests/zklogin_v2_test_vectors.json")
+        .into_iter()
+        .next()
+        .unwrap();
+    let verify = |inputs: &ZkLoginInputs,
+                  signature_v2: bool,
+                  public_key_v2: bool,
+                  v2_enabled: u64,
+                  legacy: bool| {
+        let zklogin_pk = if public_key_v2 {
+            PublicKey::from_zklogin_v2_inputs(inputs)
+        } else {
+            PublicKey::from_zklogin_inputs(inputs)
+        }
+        .unwrap();
+        let intent_msg = IntentMessage::new(
+            Intent::personal_message(),
+            PersonalMessage {
+                message: b"zklogin v2 multisig test".to_vec(),
+            },
+        );
+        let eph_kp = SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])));
+        let eph_sig = Signature::new_secure(&intent_msg, &eph_kp);
+        let authenticator = ZkLoginAuthenticator::new(inputs.clone(), 10, eph_sig);
+        let authenticator = if signature_v2 {
+            GenericSignature::ZkLoginAuthenticatorV2(authenticator.into())
+        } else {
+            GenericSignature::ZkLoginAuthenticator(authenticator)
+        };
+        let multisig = if legacy {
+            let multisig_pk = MultiSigPublicKeyLegacy::new(vec![zklogin_pk], vec![1], 1).unwrap();
+            GenericSignature::MultiSigLegacy(MultiSigLegacy::combine(
+                vec![authenticator],
+                multisig_pk,
+            )?)
+        } else {
+            let multisig_pk = MultiSigPublicKey::new(vec![zklogin_pk], vec![1], 1).unwrap();
+            GenericSignature::MultiSig(MultiSig::combine(vec![authenticator], multisig_pk)?)
+        };
+        let multisig_address = SuiAddress::try_from(&multisig).unwrap();
+        let verify_params = VerifyParams::new(
+            pinned_jwks(),
+            vec![],
+            ZkLoginEnv::Test,
+            v2_enabled,
+            true,
+            true,
+            true,
+            Some(30),
+            true,
+            true,
+        );
+        multisig.verify_claims(
+            &intent_msg,
+            multisig_address,
+            &verify_params,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )
+    };
+
+    for legacy in [false, true] {
+        assert!(verify(&v1_inputs, false, false, 0, legacy).is_ok());
+        assert!(verify(&v1_inputs, false, false, 1, legacy).is_ok());
+    }
+
+    assert!(verify(&v2_inputs, true, true, 0, false).is_err());
+    let result = verify(&v2_inputs, true, true, 1, false);
+    assert!(result.is_ok(), "{result:?}");
+
+    assert!(verify(&v2_inputs, true, false, 1, false).is_err());
+    assert!(verify(&v1_inputs, false, true, 1, false).is_err());
+
+    let intent_msg = IntentMessage::new(
+        Intent::personal_message(),
+        PersonalMessage {
+            message: b"zklogin v2 multisig mismatch".to_vec(),
+        },
+    );
+    let eph_kp = SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])));
+    let v1_authenticator = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
+        v1_inputs.clone(),
+        10,
+        Signature::new_secure(&intent_msg, &eph_kp),
+    ));
+    let v2_multisig_pk = MultiSigPublicKey::new(
+        vec![PublicKey::from_zklogin_v2_inputs(&v1_inputs).unwrap()],
+        vec![1],
+        1,
+    )
+    .unwrap();
+    let malicious_multisig = MultiSig::insecure_new(
+        vec![v1_authenticator.to_compressed().unwrap()],
+        1,
+        v2_multisig_pk.clone(),
+    );
+    let verify_params = VerifyParams::new(
+        pinned_jwks(),
+        vec![],
+        ZkLoginEnv::Test,
+        1,
+        true,
+        true,
+        true,
+        Some(30),
+        false,
+        true,
+    );
+    assert!(
+        malicious_multisig
+            .verify_claims(
+                &intent_msg,
+                (&v2_multisig_pk).into(),
+                &verify_params,
+                Arc::new(VerifiedDigestCache::new_empty()),
+            )
+            .is_err()
+    );
 }
 #[test]
 fn test_serde_roundtrip() {

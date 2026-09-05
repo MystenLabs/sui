@@ -1209,6 +1209,11 @@ impl TryFrom<crate::crypto::PublicKey> for MultisigMemberPublicKey {
                 Self::Secp256r1(Secp256r1PublicKey::new(bytes_representation.0))
             }
             crate::crypto::PublicKey::ZkLogin(z) => Self::ZkLogin(z.try_into()?),
+            crate::crypto::PublicKey::ZkLoginV2(_) => {
+                return Err(SdkTypeConversionError(
+                    "sui-sdk-types does not support zkLogin V2 multisig members".to_string(),
+                ));
+            }
             crate::crypto::PublicKey::Passkey(p) => {
                 Self::Passkey(PasskeyPublicKey::new(Secp256r1PublicKey::new(p.0)))
             }
@@ -1285,6 +1290,7 @@ impl From<crate::crypto::SignatureScheme> for SignatureScheme {
             crate::crypto::SignatureScheme::MultiSig => Self::Multisig,
             crate::crypto::SignatureScheme::ZkLoginAuthenticator => Self::ZkLogin,
             crate::crypto::SignatureScheme::PasskeyAuthenticator => Self::Passkey,
+            crate::crypto::SignatureScheme::ZkLoginAuthenticatorV2 => Self::ZkLogin,
         }
     }
 }

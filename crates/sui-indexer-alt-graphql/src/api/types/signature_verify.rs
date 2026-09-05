@@ -19,6 +19,7 @@ use sui_types::authenticator_state::ActiveJwk;
 use sui_types::authenticator_state::AuthenticatorStateInner;
 use sui_types::crypto::ToFromBytes;
 use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::multisig::MultiSig;
 use sui_types::signature::GenericSignature;
 use sui_types::signature::VerifyParams;
 use sui_types::signature_verification::VerifiedDigestCache;
@@ -145,6 +146,24 @@ pub(crate) async fn verify_signature(
 
     let sig = GenericSignature::from_bytes(&signature)
         .map_err(|_| bad_user_input(Error::BadSignature))?;
+
+    let has_zklogin_v2 = match &sig {
+        GenericSignature::ZkLoginAuthenticatorV2(_) => Ok(true),
+        GenericSignature::MultiSig(multisig) => multisig.has_zklogin_v2_sigs(),
+        GenericSignature::MultiSigLegacy(multisig) => {
+            let multisig = MultiSig::try_from(multisig.clone())
+                .map_err(|_| bad_user_input(Error::BadSignature))?;
+            multisig.has_zklogin_v2_sigs()
+        }
+        _ => Ok(false),
+    }
+    .map_err(|_| bad_user_input(Error::BadSignature))?;
+
+    if has_zklogin_v2 {
+        return Err(bad_user_input(Error::VerificationFailed(
+            "zkLogin V2 is not supported by this API".to_string(),
+        )));
+    }
 
     let epoch = Epoch::fetch(ctx, scope.clone(), None)
         .await

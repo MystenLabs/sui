@@ -167,7 +167,7 @@ impl From<&PublicKey> for MultisigMemberPublicKey {
             PublicKey::Passkey(_) => MultisigMemberPublicKey::Passkey(PasskeyPublicKey {
                 bytes: Some(Base64(pk.as_ref().to_vec())),
             }),
-            PublicKey::ZkLogin(z) => {
+            PublicKey::ZkLogin(z) | PublicKey::ZkLoginV2(z) => {
                 // Convert through sui_sdk_types for clean field extraction.
                 MultisigMemberPublicKey::ZkLogin(
                     sui_sdk_types::ZkLoginPublicIdentifier::try_from(z.to_owned())

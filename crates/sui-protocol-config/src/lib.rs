@@ -362,7 +362,7 @@ const MAINNET_USDB: &str =
 // Version 130: Record unsettled object-funds withdraws using per-account net amounts
 //              from transaction effects instead of running-max withdraw amounts.
 //              Add the `sui::scratch` per-transaction ephemeral store and its native costs.
-//              Enable zklogin v2 verify (with v1 fallback) for devnet only.
+//              Enable the zkLogin V2 authenticator for devnet only.
 //              Add an epoch close deadline failsafe for deferred transactions.
 // Version 131: Enable sharing transaction deny configs between validators via consensus.
 //              Enable tx_context_restrictions_verifier: reject system-package
@@ -540,8 +540,7 @@ struct FeatureFlags {
     // Enable zklogin auth
     #[serde(skip_serializing_if = "is_false")]
     zklogin_auth: bool,
-    // zkLogin circuit verify mode: 0 = accept v1 circuit proofs only, 1 = try the v2
-    // circuit first and fall back to v1 (migration phase), 2 = accept v2 circuit proofs only.
+    // Enable the zkLogin V2 authenticator: 0 = disabled, 1 = enabled.
     #[serde(skip_serializing_if = "is_zero")]
     zklogin_circuit_mode: u64,
     // How we order transactions coming out of consensus before sending to execution.
@@ -2269,8 +2268,7 @@ impl ProtocolConfig {
         &self.feature_flags.zklogin_supported_providers
     }
 
-    /// zkLogin circuit verify mode: 0 = v1 circuit only, 1 = v2 circuit with
-    /// fallback to v1, 2 = v2 circuit only.
+    /// Whether the zkLogin V2 authenticator is enabled: 0 = disabled, 1 = enabled.
     pub fn zklogin_circuit_mode(&self) -> u64 {
         self.feature_flags.zklogin_circuit_mode
     }
@@ -4632,7 +4630,6 @@ impl ProtocolConfig {
                     cfg.scratch_exists_with_type_type_cost = Some(1);
                     let max_commands = cfg.max_programmable_tx_commands() as u64;
                     cfg.max_scratch_pad_size = Some(16 * max_commands);
-                    // Verify with the v2 then v1 for devnet.
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.zklogin_circuit_mode = 1;
                     }

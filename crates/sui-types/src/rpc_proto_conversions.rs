@@ -1692,6 +1692,7 @@ impl From<crate::crypto::SignatureScheme> for SignatureScheme {
             S::MultiSig => Self::Multisig,
             S::ZkLoginAuthenticator => Self::Zklogin,
             S::PasskeyAuthenticator => Self::Passkey,
+            S::ZkLoginAuthenticatorV2 => Self::Zklogin,
         }
     }
 }
@@ -1749,7 +1750,7 @@ impl From<&crate::crypto::PublicKey> for MultisigMemberPublicKey {
             | crate::crypto::PublicKey::Passkey(_) => {
                 message.public_key = Some(value.as_ref().to_vec().into());
             }
-            crate::crypto::PublicKey::ZkLogin(z) => {
+            crate::crypto::PublicKey::ZkLogin(z) | crate::crypto::PublicKey::ZkLoginV2(z) => {
                 message.zklogin = Some(z.into());
             }
         }
@@ -1910,6 +1911,7 @@ impl Merge<&crate::signature::GenericSignature> for UserSignature {
                 }
                 SignatureScheme::Zklogin
             }
+            crate::signature::GenericSignature::ZkLoginAuthenticatorV2(_) => return,
             crate::signature::GenericSignature::PasskeyAuthenticator(p) => {
                 if mask.contains(Self::PASSKEY_FIELD) {
                     self.signature = Some(Signature::Passkey(p.into()));

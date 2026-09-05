@@ -89,7 +89,7 @@ impl AuthenticatorTrait for MultiSig {
     ) -> Result<(), SuiError> {
         // If there is any zkLogin signatures, filter and check epoch for each.
         // TODO: call this on all sigs to avoid future lapses
-        self.get_zklogin_sigs()?.iter().try_for_each(|s| {
+        self.get_zklogin_authenticators()?.iter().try_for_each(|s| {
             s.verify_user_authenticator_epoch(epoch_id, max_epoch_upper_bound_delta)
         })
     }
@@ -113,7 +113,7 @@ impl AuthenticatorTrait for MultiSig {
         // Additional validation on zkLogin public identifier struct if flag is enabled.
         if verify_params.validate_zklogin_public_identifier {
             for (pk, _weight) in &self.multisig_pk.pk_map {
-                if let PublicKey::ZkLogin(zklogin_pk) = pk {
+                if let PublicKey::ZkLogin(zklogin_pk) | PublicKey::ZkLoginV2(zklogin_pk) = pk {
                     zklogin_pk
                         .validate()
                         .map_err(|e| SuiErrorKind::InvalidSignature {
@@ -235,11 +235,27 @@ impl AuthenticatorTrait for MultiSig {
                     )
                 }
                 CompressedSignature::ZkLogin(z) => {
-                    if verify_params.additional_multisig_checks
-                        && !matches!(
-                            subsig_pubkey.scheme(),
+                    let authenticator = GenericSignature::from_bytes(&z.0).map_err(|_| {
+                        SuiErrorKind::InvalidSignature {
+                            error: "Invalid zklogin authenticator bytes".to_string(),
+                        }
+                    })?;
+                    if !authenticator.is_zklogin() {
+                        unreachable!("zkLogin compressed signature has a zkLogin flag");
+                    }
+                    let authenticator_scheme = match &authenticator {
+                        GenericSignature::ZkLoginAuthenticator(_) => {
                             SignatureScheme::ZkLoginAuthenticator
-                        )
+                        }
+                        GenericSignature::ZkLoginAuthenticatorV2(_) => {
+                            SignatureScheme::ZkLoginAuthenticatorV2
+                        }
+                        _ => unreachable!("zkLogin compressed signature has a zkLogin flag"),
+                    };
+                    if authenticator_scheme != subsig_pubkey.scheme()
+                        && (verify_params.additional_multisig_checks
+                            || authenticator_scheme == SignatureScheme::ZkLoginAuthenticatorV2
+                            || subsig_pubkey.scheme() == SignatureScheme::ZkLoginAuthenticatorV2)
                     {
                         return Err(SuiErrorKind::InvalidSignature {
                             error: format!(
@@ -247,13 +263,9 @@ impl AuthenticatorTrait for MultiSig {
                                 subsig_pubkey.encode_base64(),
                                 SuiAddress::from(subsig_pubkey)
                             ),
-                        }.into());
-                    }
-                    let authenticator = ZkLoginAuthenticator::from_bytes(&z.0).map_err(|_| {
-                        SuiErrorKind::InvalidSignature {
-                            error: "Invalid zklogin authenticator bytes".to_string(),
                         }
-                    })?;
+                        .into());
+                    }
                     authenticator
                         .verify_claims(
                             value,
@@ -413,23 +425,34 @@ impl MultiSig {
     }
 
     pub fn get_zklogin_sigs(&self) -> Result<Vec<ZkLoginAuthenticator>, SuiError> {
-        let authenticator_as_bytes: Vec<_> = self
-            .sigs
+        Ok(self
+            .get_zklogin_authenticators()?
+            .into_iter()
+            .filter_map(|s| match s {
+                GenericSignature::ZkLoginAuthenticator(authenticator) => Some(authenticator),
+                _ => None,
+            })
+            .collect())
+    }
+
+    fn get_zklogin_authenticators(&self) -> Result<Vec<GenericSignature>, SuiError> {
+        self.sigs
             .iter()
             .filter_map(|s| match s {
                 CompressedSignature::ZkLogin(z) => Some(z),
                 _ => None,
             })
-            .collect();
-        authenticator_as_bytes
-            .iter()
             .map(|z| {
-                ZkLoginAuthenticator::from_bytes(&z.0).map_err(|_| {
+                let authenticator = GenericSignature::from_bytes(&z.0).map_err(|_| {
                     SuiErrorKind::InvalidSignature {
                         error: "Invalid zklogin authenticator bytes".to_string(),
                     }
-                    .into()
-                })
+                })?;
+                match authenticator {
+                    GenericSignature::ZkLoginAuthenticator(_)
+                    | GenericSignature::ZkLoginAuthenticatorV2(_) => Ok(authenticator),
+                    _ => unreachable!("zkLogin compressed signature has a zkLogin flag"),
+                }
             })
             .collect()
     }
@@ -448,6 +471,13 @@ impl MultiSig {
         self.sigs
             .iter()
             .any(|s| matches!(s, CompressedSignature::ZkLogin(_)))
+    }
+
+    pub fn has_zklogin_v2_sigs(&self) -> Result<bool, SuiError> {
+        Ok(self
+            .get_zklogin_authenticators()?
+            .iter()
+            .any(|s| matches!(s, GenericSignature::ZkLoginAuthenticatorV2(_))))
     }
 }
 

@@ -54,6 +54,7 @@ impl UserSignature {
                     native: z.clone(),
                 }))
             }
+            GenericSignature::ZkLoginAuthenticatorV2(_) => None,
             GenericSignature::PasskeyAuthenticator(p) => {
                 Some(SignatureScheme::Passkey(PasskeySignature {
                     native: p.clone(),

@@ -64,6 +64,7 @@ pub fn derive_key_pair_from_path(
         SignatureScheme::BLS12381
         | SignatureScheme::MultiSig
         | SignatureScheme::ZkLoginAuthenticator
+        | SignatureScheme::ZkLoginAuthenticatorV2
         | SignatureScheme::PasskeyAuthenticator => Err(SuiErrorKind::UnsupportedFeatureError {
             error: format!("key derivation not supported {:?}", key_scheme),
         }
@@ -178,6 +179,7 @@ pub fn validate_path(
         SignatureScheme::BLS12381
         | SignatureScheme::MultiSig
         | SignatureScheme::ZkLoginAuthenticator
+        | SignatureScheme::ZkLoginAuthenticatorV2
         | SignatureScheme::PasskeyAuthenticator => Err(SuiErrorKind::UnsupportedFeatureError {
             error: format!("key derivation not supported {:?}", key_scheme),
         }
