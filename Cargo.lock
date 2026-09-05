@@ -14812,6 +14812,7 @@ version = "1.80.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "axum 0.8.3",
  "bcs",
  "bin-version",
  "chrono",

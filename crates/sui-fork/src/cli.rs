@@ -146,6 +146,10 @@ async fn cmd_start(args: StartArgs, json_output: bool, version: &'static str) ->
         addresses: addresses.into_iter().collect(),
         object_ids: object_ids.into_iter().collect(),
     };
+    let listener = crate::startup::bind(rpc_addr).await?;
+    let rpc_addr = listener
+        .local_addr()
+        .context("failed to read the fork RPC server's bound address")?;
     let network_name = node.network_name();
 
     let resolved_start = crate::startup::resolve_start_checkpoint_from_local(
@@ -192,11 +196,11 @@ async fn cmd_start(args: StartArgs, json_output: bool, version: &'static str) ->
         );
     }
 
-    let handle = tokio::spawn(crate::startup::run(
+    let handle = tokio::spawn(crate::startup::run_with_listener(
         context,
         subscription_handle,
         indexer_service,
-        rpc_addr,
+        listener,
         version,
     ));
     handle.await??;
