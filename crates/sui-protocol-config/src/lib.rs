@@ -391,6 +391,7 @@ const MAINNET_USDB: &str =
 // Version 137: Lower the per-bit cost of bulletproofs range proof verification, and raise the
 //              bound on batch size * range bits from 512 to 1024.
 //              Enable allowances.
+//              Enable check_object_funds_withdraw_in_execution on devnet and charge for reads.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1255,6 +1256,9 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     #[skip_protocol_config_accessor]
     enable_allowances: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    check_object_funds_withdraw_in_execution: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1787,6 +1791,12 @@ pub struct ProtocolConfig {
     event_emit_tag_size_derivation_cost_per_byte: Option<u64>,
     event_emit_output_cost_per_byte: Option<u64>,
     event_emit_auth_stream_cost: Option<u64>,
+
+    // `funds_accumulator` module
+    // Base cost for reserving object funds for withdrawal.
+    reserve_object_funds_for_withdrawal_cost_base: Option<u64>,
+    // Cost of loading an object's settled balance on the first withdrawal for an owner and type.
+    reserve_object_funds_for_withdrawal_cold_read_cost: Option<u64>,
 
     //  `object` module
     // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -2719,6 +2729,10 @@ impl ProtocolConfig {
             event_emit_tag_size_derivation_cost_per_byte: Some(5),
             event_emit_output_cost_per_byte: Some(10),
             event_emit_auth_stream_cost: None,
+
+            // `funds_accumulator` module: introduced in protocol version 137.
+            reserve_object_funds_for_withdrawal_cost_base: None,
+            reserve_object_funds_for_withdrawal_cold_read_cost: None,
 
             //  `object` module
             // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -4709,6 +4723,13 @@ impl ProtocolConfig {
                     cfg.max_bulletproofs_total_bits = Some(1024);
 
                     cfg.feature_flags.enable_allowances = true;
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
+                    }
+                    cfg.reserve_object_funds_for_withdrawal_cost_base = Some(52);
+                    // Equivalent to the fixed portion of a dynamic-field lookup (52 + 52) plus
+                    // loading the 80-byte accumulator field contents at one gas unit per byte.
+                    cfg.reserve_object_funds_for_withdrawal_cold_read_cost = Some(184);
                 }
                 // Use this template when making changes:
                 //

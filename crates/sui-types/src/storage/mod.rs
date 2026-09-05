@@ -187,6 +187,15 @@ pub enum ObjectChange {
 pub trait StorageView: Storage + ParentSync + RuntimeObjectResolver {}
 impl<T: Storage + ParentSync + RuntimeObjectResolver> StorageView for T {}
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[must_use]
+pub enum ObjectFundsSufficiency {
+    Sufficient,
+    Insufficient,
+    Overflow,
+    LoadError(String),
+}
+
 /// An abstraction of the (possibly distributed) store for objects. This
 /// API only allows for the retrieval of objects, not any state changes
 pub trait RuntimeObjectResolver: BackingPackageStore {
@@ -240,6 +249,11 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
             None
         }
     }
+}
+
+/// Resolves the balance available for object-funds withdrawals during execution.
+pub trait ObjectFundsResolver {
+    fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128>;
 }
 
 pub struct DenyListResult {
