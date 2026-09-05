@@ -1,22 +1,28 @@
 ---
 title: Predict
 description: >-
-  Learn about the Predict shared object, public trading functions, liquidity
-  functions, configuration reads, and emitted events.
+  Reference for the expiry_market module: the ExpiryMarket shared object,
+  pricer loading, mint quotes, minting, live and settled redemption,
+  permissionless settlement, read accessors, error codes, and order events.
 keywords:
-  - predict object
+  - expiry market
   - deepbook predict
-  - mint
-  - redeem
-  - mint range
-  - redeem range
-  - supply
-  - withdraw
-  - plp
+  - mint_exact_quantity
+  - mint_exact_amount
+  - redeem_live
+  - redeem_settled
+  - try_settle
+  - pricer
+  - mint quote
+  - order events
+  - strike_exposure_config
+  - EPremiumBelowMinimum
+  - min_premium
 goal:
   description: >-
-    Reader can learn about the Predict shared object, public trading functions,
-    liquidity functions, configuration reads
+    Reader can learn the ExpiryMarket shared object, the pricing and quoting
+    calls, the mint and redeem functions, settlement, and the emitted order
+    events
   requires:
     - has_frontmatter:
         - title
@@ -30,265 +36,613 @@ goal:
     - has_answer: true
       label: Needs answer summary for AI citation
 questions:
-  - What is Predict in Sui?
-  - How does predict work on Sui?
-  - How do I configure predict?
+  - What is an ExpiryMarket in DeepBook Predict?
+  - How do I mint a DeepBook Predict position onchain?
+  - Why does a DeepBook Predict transaction abort with EWrongPricer?
+  - How does a DeepBook Predict market settle?
+  - What is the minimum trade size on DeepBook Predict?
 answer: >-
-  The `Predict` shared object is the main protocol entry point. It coordinates
-  user actions across manager balances, oracle state, pricing config, risk
-  config, and vault accounting.
+  DeepBook Predict trading lives in the deepbook_predict::expiry_market module.
+  One shared ExpiryMarket object holds each expiry's cash, exposure index, and
+  pause flag. You load a transaction-local Pricer with load_live_pricer, size
+  the trade with quote_mint, then call mint_exact_quantity, mint_exact_amount,
+  redeem_live, or redeem_settled with an account Auth. Settlement is the
+  permissionless try_settle.
+last_verified: 2026-09-03
+verified_against: predict-testnet-8-21
 ---
 
-The `Predict` shared object is the main protocol entry point. It coordinates user actions across manager balances, oracle state, pricing config, risk config, and vault accounting.
+Trading on DeepBook Predict runs through the `deepbook_predict::expiry_market` module. One shared `ExpiryMarket` object exists per underlying and expiry, and it owns that expiry's DUSDC custody, strike exposure index, congestion estimator, and mint pause flag. Every call on this page is a `public fun` that you invoke from a programmable transaction block with a `moveCall`. Several of them take values only another command in the same block can produce, a transaction-local `Pricer` and a single-use account `Auth`, so plan the whole flow as one block.
 
-## API
+The module lives at [`packages/predict/sources/expiry_market.move`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/predict/sources/expiry_market.move) on the `predict-testnet-8-21` branch. For the deployed package and object IDs, see [Contract information](/onchain-finance/deepbook/deepbook-predict/contract-information).
 
-Following are the public functions that applications use most often.
+:::caution
+
+DeepBook Predict runs on Sui Testnet only. There is no Mainnet deployment. The smart contracts might change, so treat the package IDs, object layouts, and function signatures on this page as Testnet integration targets pinned to the `predict-testnet-8-21` branch.
+
+:::
+
+## The ExpiryMarket shared object {#expiry-market}
+
+`ExpiryMarket` has the `key` ability and is shared when the registry creates it, so any transaction can name it as an input. Authorization comes from the arguments a function demands, not from object ownership.
+
+| **Field** | **Type** | **Description** |
+|---|---|---|
+| `id` | `UID` | Object ID of the shared market. |
+| `propbook_underlying_id` | `u32` | Propbook underlying this market prices against. The market stores no oracle object IDs. |
+| `expiry` | `u64` | Settlement timestamp in Unix milliseconds. |
+| `cash` | `ExpiryCash` | DUSDC custody plus the isolated inventory-impact reserve. |
+| `fee_incentive_balance` | `Balance<DUSDC>` | Sponsor-funded DUSDC available to subsidize taker fees on this expiry. |
+| `strike_exposure` | `StrikeExposure` | Exposure lifecycle state across this expiry's strike ticks. |
+| `ewma` | `EwmaState` | Smoothed gas-price statistics behind the congestion surcharge. |
+| `mint_paused` | `bool` | When true, new mints abort. Every other flow stays available. |
+
+The field order in the table is declaration order, which is also the BCS order of the object.
 
 <details>
-<summary>Create a `PredictManager`</summary>
-
-The `create_manager()` function creates a new shared `PredictManager` for the caller and returns its object ID.
+<summary>`ExpiryMarket` source</summary>
 
 <ImportContent
-	source="packages/predict/sources/predict.move"
+	source="packages/predict/sources/expiry_market.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="create_manager"
+	branch="predict-testnet-8-21"
+	struct="ExpiryMarket"
+/>
+
+</details>
+
+## Load a pricer {#load-a-pricer}
+
+Every priced flow takes a `Pricer`, a snapshot of the oracle surface for one market. Build it with `load_live_pricer`, which reads the current canonical Propbook feeds for the market's underlying:
+
+```move
+public fun load_live_pricer(
+    market: &ExpiryMarket,
+    config: &ProtocolConfig,
+    propbook_registry: &OracleRegistry,
+    pyth: &PythFeed,
+    bs_values: &BlockScholesValueStore,
+    bs_svi: &BlockScholesSVIStore,
+    clock: &Clock,
+    ctx: &TxContext,
+): Pricer
+```
+
+Three properties govern how you use the result:
+
+- **`Pricer` has `copy` and `drop` but no `store`.** It cannot be saved in an object or carried between transactions, so every transaction that prices anything must call `load_live_pricer` first. Because it has `drop`, a block that ends up not using the value is still valid.
+- **A pricer is bound to one market.** It records `market.id()`, and any priced call that receives a pricer built for a different market aborts with `EWrongPricer`.
+- **The load validates the oracle objects.** Four Propbook objects go in and three of them are validated: the `PythFeed`, the `BlockScholesValueStore`, and the `BlockScholesSVIStore` are each checked against the underlying's current canonical binding, and a mismatch aborts inside `pricing`. The `OracleRegistry` is not checked, because it is the authority the other three are checked against. The load also rejects an observation written earlier in the same transaction.
+
+See [Oracle](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle) for how to discover the `PythFeed`, `BlockScholesValueStore`, and `BlockScholesSVIStore` object IDs for an underlying.
+
+<details>
+<summary>`load_live_pricer` source</summary>
+
+<ImportContent
+	source="packages/predict/sources/expiry_market.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	fun="load_live_pricer"
 	noComments
 />
 
 </details>
 
-<details>
-<summary>Preview binary position amounts</summary>
+## Quote a mint {#quote-a-mint}
 
-The `get_trade_amounts()` function returns the mint cost and redeem payout for a binary position at the requested quantity.
+Two Move functions price a prospective mint without changing market state. Both apply the live-mint and admission gates, so a quote that succeeds tells you the trade is admissible at the current oracle state. Neither is a full preflight, and the section below is careful about which layer each claim belongs to:
+
+```move
+public fun quote_mint(
+    market: &ExpiryMarket,
+    config: &ProtocolConfig,
+    pricer: &Pricer,
+    lower_tick: u64,
+    higher_tick: u64,
+    max_premium: u64,
+    min_quantity: u64,
+    exact_quantity: bool,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): MintQuote
+
+public fun quote_mint_for_account(
+    market: &ExpiryMarket,
+    wrapper: &AccountWrapper,
+    config: &ProtocolConfig,
+    pricer: &Pricer,
+    lower_tick: u64,
+    higher_tick: u64,
+    max_premium: u64,
+    min_quantity: u64,
+    exact_quantity: bool,
+    root: &AccumulatorRoot,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): MintQuote
+```
+
+The difference is whose terms the quote reflects. `quote_mint` prices an anonymous taker with no builder code. `quote_mint_for_account` reads the account's sticky builder code so the quoted builder fee matches what that account pays, and in budget mode it caps `max_premium` by the account's available DUSDC, including funds delivered through the accumulator but not yet settled.
+
+Set `exact_quantity` to `true` to price a fixed size, in which case `min_quantity` carries the requested quantity. Set it to `false` to size a lot-rounded fill under the `max_premium` budget. The congestion surcharge each quote reports uses the pre-update congestion estimate, which is the same estimate a mint in the same state charges.
+
+Both Move functions price and stop there. Neither checks the `max_cost` or `max_probability` slippage caps, because neither takes them, and neither checks whether the expiry has the cash to back the resulting payout liability. `quote_mint` in particular knows nothing about an account: it has no `AccountWrapper` argument, so it cannot see a balance, a builder code, or a referrer.
+
+The SDK's `client.predict.read.quoteMint` is a different thing at a different layer. It dry-runs the identical transaction `client.predict.tx.mint` builds, against the real account and the real fee path, so it does double as preflight and raises the same typed errors the mint would, insufficient balance included. When a page says a quote is a preflight, it means that dry run, not the Move functions above.
+
+<details>
+<summary>Quote source</summary>
 
 <ImportContent
-	source="packages/predict/sources/predict.move"
+	source="packages/predict/sources/expiry_market.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="get_trade_amounts"
+	branch="predict-testnet-8-21"
+	fun="quote_mint,quote_mint_for_account"
 	noComments
 />
 
 </details>
 
-<details>
-<summary>Mint a binary position</summary>
+### The MintQuote struct {#mint-quote}
 
-The `mint()` function buys a binary position using an enabled quote asset deposited in the caller's `PredictManager`.
+`MintQuote` has `copy` and `drop`, and it reports amounts in DUSDC base units except for `entry_probability`, which uses the 1e9 fixed-point scale. Read it through the nine getters, each of which takes `&MintQuote` and returns `u64`:
+
+| **Getter** | **Meaning** |
+|---|---|
+| `quantity` | Sized position quantity, which is also the maximum payout. |
+| `entry_probability` | Quoted per-contract range probability before fees, scaled by 1e9. |
+| `premium` | Net premium, the contract's entry value. |
+| `trading_fee` | Trading fee before the sponsor subsidy. |
+| `fee_incentive_subsidy` | Sponsor-funded portion of the trading fee the trader does not pay. The SDK calls the same amount `subsidy`. |
+| `builder_fee` | Builder add-on, zero when the account carries no builder code. |
+| `penalty_fee` | Congestion surcharge. The SDK calls the same amount `penalty`, in both the quote and the decoded receipt. |
+| `inventory_impact_charge` | Isolated risk escrow charge, separate from every ordinary fee. |
+| `all_in_cost` | Total DUSDC withdrawal from the account. |
+
+`all_in_cost` is `premium + (trading_fee - fee_incentive_subsidy) + builder_fee + penalty_fee + inventory_impact_charge`. Pass that value, not `premium`, as the `max_cost` cap on the mint. See the [Design](/onchain-finance/deepbook/deepbook-predict/design) page for how each fee component is computed.
+
+The congestion surcharge is one mechanism with two names, `penalty_fee` onchain and `penalty` in the SDK. It is zero unless the transaction's gas price is a high statistical outlier against the market's smoothed gas statistics, and the EWMA penalty ships disabled on this deployment, so it reads zero in practice. The sponsor subsidy is the same pairing: `fee_incentive_subsidy` onchain, `subsidy` in the SDK.
+
+<details>
+<summary>`MintQuote` and its getters</summary>
 
 <ImportContent
-	source="packages/predict/sources/predict.move"
+	source="packages/predict/sources/expiry_market.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="mint"
+	branch="predict-testnet-8-21"
+	struct="MintQuote"
+/>
+
+<ImportContent
+	source="packages/predict/sources/expiry_market.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	fun="quantity,entry_probability,premium,trading_fee,fee_incentive_subsidy,builder_fee,penalty_fee,inventory_impact_charge,all_in_cost"
 	noComments
 />
 
 </details>
 
-<details>
-<summary>Redeem a binary position</summary>
+### The referral split {#referral-split}
 
-The `redeem()` function sells a binary position and deposits the payout back into the owner's `PredictManager`.
+The Move `MintQuote` has no referral field. That is not an omission: the split is computed after `all_in_cost` is already fixed, so there is nothing about it a quote could report. The chain computes it as:
+
+```text
+referral_fee_basis = trading_fee - fee_incentive_subsidy + penalty_fee
+referral_fee       = referral_fee_basis * referral_fee_rate / 1e9
+```
+
+The result is then split out of the DUSDC payment the trader has already made. It is carved out of fees already paid, is never an extra debit, and never changes `all_in_cost`, so a trader with a referrer and a trader without one pay exactly the same total for the same trade. The amount is zero unless the account was created with `new_with_referrer`.
+
+The SDK's `MintQuote.fees.referral` does report it, because that value comes from dry-running the mint and reading the `OrderMinted` event rather than from the Move quote. It is there for visibility and is deliberately not added into the SDK's `cost`.
+
+## Mint a position {#mint-a-position}
+
+Two functions open a position. Both take the strike range as the tick pair `(lower_tick, higher_tick]`, both consume an account `Auth`, and both return the minted order ID as a `u256`. A `u256` has `drop`, so the transaction is free to ignore that return value; recover the ID from the `OrderMinted` event instead when you do not chain another command onto it:
+
+```move
+public fun mint_exact_quantity(
+    market: &mut ExpiryMarket,
+    wrapper: &mut AccountWrapper,
+    auth: Auth,
+    config: &ProtocolConfig,
+    pricer: &Pricer,
+    lower_tick: u64,
+    higher_tick: u64,
+    quantity: u64,
+    max_cost: u64,
+    max_probability: u64,
+    root: &AccumulatorRoot,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): u256
+
+public fun mint_exact_amount(
+    market: &mut ExpiryMarket,
+    wrapper: &mut AccountWrapper,
+    auth: Auth,
+    config: &ProtocolConfig,
+    pricer: &Pricer,
+    lower_tick: u64,
+    higher_tick: u64,
+    max_premium: u64,
+    min_quantity: u64,
+    max_cost: u64,
+    root: &AccumulatorRoot,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): u256
+```
+
+`mint_exact_quantity` fixes the size. `max_cost` caps the all-in DUSDC withdrawal and `max_probability` caps the quoted per-contract probability before fees, and you can pass `std::u64::max_value!()` for either to leave it uncapped.
+
+`mint_exact_amount` fixes the premium budget instead. The market first caps `max_premium` by the account's available DUSDC, computes the largest lot-rounded quantity whose premium fits, and aborts when that quantity falls below `min_quantity`. Fees, the builder add-on, and the congestion surcharge are charged on top of the budget, so `max_cost` is the only bound on the total withdrawal. `max_cost` is required here: zero aborts with `EMintCostCapRequired`, and no value disables it. This variant has no `max_probability` argument, because `min_quantity` against a fixed budget already bounds the price paid per contract.
+
+Both calls run the same gates before anything moves. The running package version must be at or above the protocol version watermark, no pool valuation can be in progress, the pricer must be bound to this market, global trading must be enabled, this market's `mint_paused` flag must be false, and the expiry must hold enough cash to back the post-mint payout liability.
+
+Positions are addressed by absolute integer ticks, with `0` as the open lower end and `1073741823` as the open higher end. A directional trade is a one-sided range: down is `(0, K]` and up is `(K, 1073741823]`. See [Strikes and Ticks](/onchain-finance/deepbook/deepbook-predict/contract-information/market-keys) for the tick coordinate system and the sentinel values.
+
+<details>
+<summary>Mint source</summary>
 
 <ImportContent
-	source="packages/predict/sources/predict.move"
+	source="packages/predict/sources/expiry_market.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="redeem"
+	branch="predict-testnet-8-21"
+	fun="mint_exact_quantity,mint_exact_amount"
 	noComments
 />
 
 </details>
 
-<details>
-<summary>Redeem a settled binary position permissionlessly</summary>
+The TypeScript SDK wraps both calls, resolves the market from an underlying and expiry, and converts raw strikes to ticks for you. `client.predict.tx.mint` builds `mint_exact_quantity` and `client.predict.tx.mintAmount` builds `mint_exact_amount`. Omitting the SDK's `maxCost` or `maxProbability` options sends `u64::MAX`, which is genuinely uncapped, so read a quote first and set a cap.
 
-The `redeem_permissionless()` function lets anyone redeem a settled position into the owner's `PredictManager`.
+<details>
+<summary>Quote and mint with the SDK</summary>
+
+<ImportContent source="examples/deepbook-predict/src/mint.ts" mode="code" tag="mint-binary" />
+
+</details>
+
+## Redeem a position {#redeem-a-position}
+
+Three functions close a position. Which one applies depends on whether the market has settled:
+
+```move
+public fun redeem_live(
+    market: &mut ExpiryMarket,
+    wrapper: &mut AccountWrapper,
+    auth: Auth,
+    config: &ProtocolConfig,
+    pricer: &Pricer,
+    order_id: u256,
+    close_quantity: u64,
+    min_probability: u64,
+    min_proceeds: u64,
+    root: &AccumulatorRoot,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Option<u256>
+
+public fun redeem_settled(
+    market: &mut ExpiryMarket,
+    wrapper: &mut AccountWrapper,
+    auth: Auth,
+    config: &ProtocolConfig,
+    order_id: u256,
+    root: &AccumulatorRoot,
+    clock: &Clock,
+    ctx: &mut TxContext,
+)
+
+public fun redeem_settled_permissionless(
+    market: &mut ExpiryMarket,
+    account_registry: &AccountRegistry,
+    wrapper: &mut AccountWrapper,
+    config: &ProtocolConfig,
+    order_id: u256,
+    root: &AccumulatorRoot,
+    clock: &Clock,
+    ctx: &mut TxContext,
+)
+```
+
+`redeem_live` closes an unsettled position at the current range probability, in full or in part. A partial close removes the closed slice and returns a replacement order ID in the `Option<u256>`, and a full close returns `none`. `Option<u256>` has `drop`, so the transaction can ignore the return value; the replacement ID is also on the `LiveOrderRedeemed` event as `replacement_order_id`. `min_probability` floors the quoted per-contract probability and `min_proceeds` floors the net DUSDC credited after the trading fee, the builder fee, and the congestion surcharge, with inventory-impact rebate included. Pass `0` to disable either floor. A live redeem in the same `clock.timestamp_ms()` as the mint aborts with `EMintRedeemSameTimestamp`, which blocks an atomic mint, oracle update, and redeem inside one transaction.
+
+`redeem_settled` closes a settled position for its terminal payout. A settled close is always full, so the function takes no quantity, and it runs no live pricing, so it takes no pricer. Payout is the full quantity when the settlement price lies inside `(lower_tick, higher_tick]` and zero otherwise.
+
+`redeem_settled_permissionless` performs the same settled close without an account `Auth`. Instead of receiving authority from the caller, it mints Predict app-auth from the `AccountRegistry`, which is why it takes the registry as an argument and why anyone can run it on any holder's behalf. The proceeds always land in the position holder's account. An admin can turn the path off with `deauthorize_app<PredictApp>` on the account registry, and owners keep the `redeem_settled` path either way. Treat that switch as a pause rather than a revocation: it removes Predict's row from the registry allowlist and clears no stored state, so positions, balances, and the app-data slot survive untouched and a later `authorize_app<PredictApp>` brings the permissionless path straight back.
+
+<details>
+<summary>Redeem source</summary>
 
 <ImportContent
-	source="packages/predict/sources/predict.move"
+	source="packages/predict/sources/expiry_market.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="redeem_permissionless"
+	branch="predict-testnet-8-21"
+	fun="redeem_live,redeem_settled,redeem_settled_permissionless"
 	noComments
 />
 
 </details>
 
-<details>
-<summary>Preview range amounts</summary>
+The SDK exposes `client.predict.tx.redeem` for the live close and `client.predict.tx.claimSettled` for the settled one. Both facade builders pin `min_probability` and `min_proceeds` to `0`, so neither surfaces a close-side floor.
 
-The `get_range_trade_amounts()` function returns the mint cost and redeem payout for a vertical range at the requested quantity.
+Two routes reach the floors. The `@mysten/deepbook-v3/sessions` subpath's `redeemLive` wrapper takes `minProbability` and `minProceeds` directly and defaults each to `0`, which is the shortest path for a session-signed close. See [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions). Otherwise build the `moveCall` against `redeem_live` yourself with the signature above.
+
+<details>
+<summary>Close and claim with the SDK</summary>
+
+<ImportContent source="examples/deepbook-predict/src/redeem.ts" mode="code" tag="redeem" />
+
+</details>
+
+## Settle a market {#settle-a-market}
+
+`try_settle` is the single transition from live to settled:
+
+```move
+public fun try_settle(
+    market: &mut ExpiryMarket,
+    config: &ProtocolConfig,
+    propbook_registry: &OracleRegistry,
+    pyth: &PythFeed,
+    bs_values: &BlockScholesValueStore,
+    clock: &Clock,
+): bool
+```
+
+Four properties matter when you compose it:
+
+- **It is permissionless and idempotent.** No capability and no `Auth`. Calling it on an already settled market returns `true` without changing anything.
+- **It returns `bool`, not an abort.** `true` means the market is now or was already settled, and `false` means settlement could not be recorded yet. `bool` has `drop`, so a transaction that composes `try_settle` ahead of another command can ignore the value rather than routing it anywhere.
+- **It takes no SVI store.** Settlement reads an exact spot, not a volatility surface, so the argument list is the oracle registry, the Pyth feed, and the Block Scholes value store.
+- **Exact Pyth first, Block Scholes after a grace period.** The call returns `false` before expiry. At or after expiry it tries the exact Pyth spot at the expiry timestamp. If Pyth is unavailable it returns `false` until 30 seconds past expiry, then tries the exact Block Scholes minute-boundary spot. If neither exact source is usable, the market stays unsettled and the call can be retried.
+
+Settlement emits `MarketSettled` from `config_events`, carrying the settlement price and a `settlement_source` byte where `0` is Pyth and `1` is Block Scholes. It also releases the residual inventory-impact escrow, because no live close can follow.
+
+Settled redeems, pool rebalancing, and pool valuation only read the current phase rather than driving the transition, so compose `try_settle` ahead of them in the same transaction whenever settlement might be due.
+
+<details>
+<summary>`try_settle` source</summary>
 
 <ImportContent
-	source="packages/predict/sources/predict.move"
+	source="packages/predict/sources/expiry_market.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="get_range_trade_amounts"
+	branch="predict-testnet-8-21"
+	fun="try_settle"
 	noComments
 />
 
 </details>
 
-<details>
-<summary>Mint a vertical range</summary>
+## Reference ticks and pause control {#keeper-and-admin}
 
-The `mint_range()` function buys a bounded range position. The range is keyed by oracle ID, expiry, lower strike, and higher strike.
+Two further functions change market state, and they differ sharply in what they require:
+
+| **Function** | **Gate** | **Effect** |
+|---|---|---|
+| `set_reference_tick` | Permissionless, version-gated, and blocked while a pool valuation is in progress. | Sets this expiry's reference fine-grid tick from the exact Propbook Pyth observation at `reference_tick_source_timestamp_ms`, floored to the market's `tick_size`. Returns the tick as a `u64`. |
+| `set_mint_paused` | Requires `&AdminCap` and is version-gated. | Sets or clears `mint_paused`. A `PauseCap` holder can force the pause on one-way through the registry, which is not version-gated and cannot unpause. |
+
+`set_reference_tick` seeds a new market's anchor strike, and it is permissionless: it takes no capability and no `Auth`. A keeper normally calls it for each new window, but any caller can, so a trader blocked by a market with no reference price can unblock themselves rather than wait. It takes the oracle registry and the Pyth feed only, needing no Block Scholes objects and no pricer. The source observation must already be in the feed at the exact source timestamp, otherwise the call aborts with `EReferenceTickObservationMissing`. Until a market has a reference tick, `reference_tick` returns `none` and strike helpers that resolve against the reference cannot run.
+
+The call always returns the resolved tick as a `u64`, but it emits `ReferenceTickSet` only when that tick is newly recorded. A repeat call resolving to the same tick succeeds silently.
+
+<details>
+<summary>Keeper and admin source</summary>
 
 <ImportContent
-	source="packages/predict/sources/predict.move"
+	source="packages/predict/sources/expiry_market.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="mint_range"
+	branch="predict-testnet-8-21"
+	fun="set_reference_tick,set_mint_paused"
 	noComments
 />
 
 </details>
 
-<details>
-<summary>Redeem a vertical range</summary>
+## Read accessors {#read-accessors}
 
-The `redeem_range()` function sells a range position and deposits the payout into the owner's `PredictManager`.
+Every accessor below is permissionless and non-mutating, so a `devInspect` or simulated transaction reads them without gas. Grouped by what they tell you:
+
+| **Group** | **Accessors** |
+|---|---|
+| Identity and phase | `id`, `propbook_underlying_id`, `expiry`, `is_settled`, `settlement_price`, `try_settlement_price`, `mint_paused` |
+| Strike grid | `tick_size`, `admission_tick_size`, `reference_tick`, `reference_tick_source_timestamp_ms` |
+| Cash and exposure | `cash_balance`, `inventory_impact_reserve`, `fee_incentive_balance`, `payout_liability`, `required_cash` |
+| Frozen policy | `backing_buffer_lambda`, `expiry_fee_window_ms`, `expiry_fee_max_multiplier`, `inventory_impact_max_rate`, `inventory_impact_scale` |
+
+Three of the accessors behave differently from the rest:
+
+- **`settlement_price` aborts on an unsettled market** with `std::option::EOPTION_NOT_SET`, because it unwraps an empty option rather than running a phase check. Use `try_settlement_price`, which returns `Option<u64>`, when you do not already know the phase.
+- **`reference_tick` returns `Option<u64>`** and is `none` until someone calls the permissionless `set_reference_tick`.
+- **`inventory_impact_scale` is the cadence allocation cap** that the registry froze into the market at creation, not a separately configured value.
+
+Three more accessors need a market-bound `Pricer` or a settled market, because they mark positions rather than read stored fields:
+
+```move
+public fun current_nav(market: &ExpiryMarket, pricer: &Pricer): u64
+public fun live_order_value(market: &ExpiryMarket, pricer: &Pricer, order_id: u256): u64
+public fun settled_order_payout(market: &ExpiryMarket, order_id: u256): u64
+```
+
+`current_nav` is free expiry cash minus the marked liability of the exposure book, floored at zero. `live_order_value` is one order's full-close range value before fees. `settled_order_payout` is one order's terminal payout and aborts with `EMarketNotSettled` before settlement. None of the three proves that the caller holds `order_id`.
+
+<details>
+<summary>Read accessor source</summary>
 
 <ImportContent
-	source="packages/predict/sources/predict.move"
+	source="packages/predict/sources/expiry_market.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="redeem_range"
+	branch="predict-testnet-8-21"
+	fun="id,expiry,is_settled,try_settlement_price,cash_balance,required_cash,payout_liability,tick_size,admission_tick_size,reference_tick,mint_paused"
+	noComments
+/>
+
+<ImportContent
+	source="packages/predict/sources/expiry_market.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	fun="current_nav,live_order_value,settled_order_payout"
 	noComments
 />
 
 </details>
 
-<details>
-<summary>Supply vault liquidity</summary>
+The SDK's `client.predict.read.markets`, `read.market`, and `read.pricer` cover the same ground over simulated transactions, with raw values converted to decimals. See the [Testnet tutorial](/onchain-finance/deepbook/deepbook-predict/tutorial) for the read path end to end.
 
-The `supply()` function deposits an accepted quote asset into the vault and returns `PLP` shares.
+## Error codes {#error-codes}
+
+`expiry_market` declares ten abort codes:
+
+| **Code** | **Constant** | **Cause** |
+|---|---|---|
+| `0` | `EMintPaused` | This market's `mint_paused` flag is true. Other flows remain open. |
+| `1` | `EMarketNotSettled` | A settled-only flow ran on an unsettled market, including `redeem_settled` and `settled_order_payout`. |
+| `2` | `EMintCostAboveMax` | The quoted `all_in_cost` exceeds the `max_cost` you passed. |
+| `3` | `EMintProbabilityAboveMax` | The quoted entry probability exceeds the `max_probability` you passed. |
+| `4` | `EWrongPricer` | The pricer was built for a different market. Load one against this market in the same transaction. |
+| `5` | `EReferenceTickObservationMissing` | No exact Pyth observation exists at the market's `reference_tick_source_timestamp_ms`. |
+| `6` | `EMintRedeemSameTimestamp` | A live redeem ran in the same onchain millisecond the position was opened. |
+| `7` | `ERedeemProbabilityBelowMin` | The quoted range probability fell below the `min_probability` floor. |
+| `8` | `ERedeemProceedsBelowMin` | The net credit fell below the `min_proceeds` floor. |
+| `9` | `EMintCostCapRequired` | `mint_exact_amount` was called with `max_cost` set to zero. |
+
+Aborts from other modules reach these calls too. A mint can abort inside `strike_exposure_config` on entry-probability or premium policy, covered in the next section. A pricer load can abort inside `pricing` when an oracle object does not match the registry binding or when a contributing observation was written in the same transaction. A gate can abort inside `protocol_config` with `ETradingPaused`, `EValuationInProgress`, `EPackageVersionDisabled`, or `EProtocolFrozen`. An account borrow can abort inside `account` with `EInvalidOwner` or `EBalanceTooLow`.
+
+### Mint admission errors {#mint-admission-errors}
+
+The two ordinary failure modes of a first mint are not in the table above. Both live in `deepbook_predict::strike_exposure_config`, the module that holds each market's snapshot of entry-probability and fee policy and runs `assert_mint_admission` before any state moves:
+
+| **Code** | **Constant** | **Cause** |
+|---|---|---|
+| `0` | `EEntryProbabilityOutOfBounds` | The quoted entry probability falls outside the market's band, from `min_entry_probability` to `max_entry_probability` inclusive. |
+| `1` | `EInvalidEntryProbabilityBound` | An admin update would leave the minimum at or above the maximum. Traders do not reach this. |
+| `2` | `EInvalidFeeProbability` | A probability above `1.0` reached the Bernoulli fee curve. |
+| `3` | `EPremiumBelowMinimum` | The premium is below the `min_premium` floor of `1_000_000` base units, which is 1 DUSDC. |
+
+`EPremiumBelowMinimum` is the size floor, and it is the one an integrator meets first. Premium is `quantity * entry_probability`, and `max_entry_probability` is `0.99` on this deployment, so the smallest admissible quantity never falls below about `1.02` DUSDC of payout, and it rises as the strike moves away from the money. Verified 2026-09-03 by bisection on a live 1d market: a quantity of `1.59` aborts, and `1.60` succeeds at a premium of `1.002283`. On a live 1h market at 900 seconds to expiry, with an entry probability of `0.077`, the smallest admissible quantity was `100`.
+
+`EEntryProbabilityOutOfBounds` is the band. A strike far enough out of the money prices below `min_entry_probability` and is rejected before the premium is computed. Verified 2026-09-03 at a forward of about `77,751`: strikes of `277,300`, `577,300`, and `2,077,300` all abort with this code.
+
+Because error numbers repeat across modules, the number alone identifies nothing. Read the module out of the abort location before you look the number up. Code `3` is `EPremiumBelowMinimum` in `strike_exposure_config`, `EMintProbabilityAboveMax` in `expiry_market`, `EReferenceTickAlreadySet` in `strike_exposure`, and `EInvalidQuantity` in `order`. See [Strikes and Ticks](/onchain-finance/deepbook/deepbook-predict/contract-information/market-keys#error-codes) for the `order` and `strike_exposure` tables.
+
+## Order events {#events}
+
+Order-domain events live in `deepbook_predict::order_events` and all three carry `copy`, `drop`, and `store`. The field order below is declaration order, which is the order BCS decoding depends on. Do not reorder it.
+
+### OrderMinted {#order-minted}
+
+Emitted once per successful mint, from either mint function:
+
+| **#** | **Field** | **Type** |
+|---|---|---|
+| 1 | `expiry_market_id` | `ID` |
+| 2 | `account_id` | `ID` |
+| 3 | `order_id` | `u256` |
+| 4 | `position_root_id` | `u256` |
+| 5 | `owner` | `address` |
+| 6 | `lower_tick` | `u64` |
+| 7 | `higher_tick` | `u64` |
+| 8 | `entry_probability` | `u64` |
+| 9 | `quantity` | `u64` |
+| 10 | `premium` | `u64` |
+| 11 | `trading_fee` | `u64` |
+| 12 | `fee_incentive_subsidy` | `u64` |
+| 13 | `builder_fee` | `u64` |
+| 14 | `penalty_fee` | `u64` |
+| 15 | `referral_fee` | `u64` |
+| 16 | `inventory_impact_charge` | `u64` |
+| 17 | `builder_code_id` | `Option<ID>` |
+| 18 | `referrer_account_id` | `Option<ID>` |
+| 19 | `onchain_timestamp_ms` | `u64` |
+| 20 | `pyth_spot_source_timestamp_ms` | `u64` |
+| 21 | `block_scholes_spot_source_timestamp_ms` | `u64` |
+| 22 | `block_scholes_forward_source_timestamp_ms` | `u64` |
+| 23 | `block_scholes_svi_source_timestamp_ms` | `u64` |
+
+`referral_fee` appears here but not in the Move `MintQuote`, because it is computed after `all_in_cost` is fixed and carved out of the payment the trader already made. See [The referral split](#referral-split). `penalty_fee` is the congestion surcharge the SDK calls `penalty`, and `fee_incentive_subsidy` is what the SDK calls `subsidy`. The four source-timestamp fields are each pricing input's own economic clock, the timestamp its freshness was validated against.
+
+### LiveOrderRedeemed {#live-order-redeemed}
+
+Emitted once per `redeem_live`, whether the close is partial or full:
+
+| **#** | **Field** | **Type** |
+|---|---|---|
+| 1 | `expiry_market_id` | `ID` |
+| 2 | `account_id` | `ID` |
+| 3 | `order_id` | `u256` |
+| 4 | `position_root_id` | `u256` |
+| 5 | `owner` | `address` |
+| 6 | `quantity_closed` | `u64` |
+| 7 | `remaining_quantity` | `u64` |
+| 8 | `replacement_order_id` | `Option<u256>` |
+| 9 | `redeem_amount` | `u64` |
+| 10 | `trading_fee` | `u64` |
+| 11 | `builder_fee` | `u64` |
+| 12 | `penalty_fee` | `u64` |
+| 13 | `inventory_impact_rebate` | `u64` |
+| 14 | `builder_code_id` | `Option<ID>` |
+| 15 | `onchain_timestamp_ms` | `u64` |
+| 16 | `pyth_spot_source_timestamp_ms` | `u64` |
+| 17 | `block_scholes_spot_source_timestamp_ms` | `u64` |
+| 18 | `block_scholes_forward_source_timestamp_ms` | `u64` |
+| 19 | `block_scholes_svi_source_timestamp_ms` | `u64` |
+
+`replacement_order_id` is set on a partial close and absent on a full one. `position_root_id` stays constant across replacements, so join on it to follow one economic position through partial closes.
+
+### SettledOrderRedeemed {#settled-order-redeemed}
+
+Emitted by both `redeem_settled` and `redeem_settled_permissionless`:
+
+| **#** | **Field** | **Type** |
+|---|---|---|
+| 1 | `expiry_market_id` | `ID` |
+| 2 | `account_id` | `ID` |
+| 3 | `order_id` | `u256` |
+| 4 | `position_root_id` | `u256` |
+| 5 | `owner` | `address` |
+| 6 | `payout_amount` | `u64` |
+| 7 | `onchain_timestamp_ms` | `u64` |
+
+The event carries the payout but not the settlement price. Read that from the `MarketSettled` event or from `settlement_price` on the market.
+
+<details>
+<summary>Order event source</summary>
 
 <ImportContent
-	source="packages/predict/sources/predict.move"
+	source="packages/predict/sources/events/order_events.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="supply"
-	noComments
+	branch="predict-testnet-8-21"
+	struct="OrderMinted,LiveOrderRedeemed,SettledOrderRedeemed"
 />
 
 </details>
 
-<details>
-<summary>Withdraw vault liquidity</summary>
-
-The `withdraw()` function burns `PLP` shares and returns the selected quote asset when the requested amount is available after max payout coverage.
-
-<ImportContent
-	source="packages/predict/sources/predict.move"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="withdraw"
-	noComments
-/>
-
-</details>
-
-<details>
-<summary>Compact settled oracle exposure</summary>
-
-The `compact_settled_oracle()` function lets an authorized oracle operator compact settled strike-matrix exposure into constant-size settled state.
-
-<ImportContent
-	source="packages/predict/sources/predict.move"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="compact_settled_oracle"
-	noComments
-/>
-
-</details>
-
-<details>
-<summary>Read protocol configuration</summary>
-
-These read functions expose trading pause state, accepted quote assets, pricing parameters, risk limits, ask bounds, and currently available withdrawal amount.
-
-<ImportContent
-	source="packages/predict/sources/predict.move"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="ask_bounds,trading_paused,accepted_quotes,base_spread,min_spread,utilization_multiplier,max_total_exposure_pct,available_withdrawal"
-	noComments
-/>
-
-</details>
-
-## Events
-
-<details>
-<summary>Trading events</summary>
-
-<ImportContent
-	source="packages/predict/sources/predict.move"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	struct="PositionMinted,PositionRedeemed,RangeMinted,RangeRedeemed"
-/>
-
-</details>
-
-<details>
-<summary>Liquidity events</summary>
-
-<ImportContent
-	source="packages/predict/sources/predict.move"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	struct="Supplied,Withdrawn"
-/>
-
-</details>
-
-<details>
-<summary>Configuration events</summary>
-
-<ImportContent
-	source="packages/predict/sources/predict.move"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	struct="TradingPauseUpdated,PricingConfigUpdated,OracleAskBoundsSet,OracleAskBoundsCleared,RiskConfigUpdated,QuoteAssetEnabled,QuoteAssetDisabled"
-/>
-
-</details>
+Market lifecycle events such as `MarketCreated`, `ReferenceTickSet`, `MarketSettled`, and `ExpiryMarketMintPausedUpdated` live in `deepbook_predict::config_events`. See [Registry](/onchain-finance/deepbook/deepbook-predict/contract-information/registry) for those, and [Vault](/onchain-finance/deepbook/deepbook-predict/contract-information/vault) for the pool and liquidity events.

@@ -2,27 +2,29 @@
 title: DeepBook Predict Testnet Workflow
 sidebar_label: Testnet Workflow
 description: >-
-  End-to-end DeepBook Predict walkthrough on Sui Testnet: oracle context,
-  PredictManager setup, minting binary and vertical range positions, redemption
-  and settlement, and the liquidity provider vault flow.
+  End-to-end DeepBook Predict walkthrough on Sui Testnet: account wrapper setup,
+  board pricing, quoting and minting directional and two-sided range positions,
+  permissionless settlement and redemption, and the queued liquidity provider
+  flow.
 keywords:
   - deepbook predict tutorial
   - predict
-  - oraclesvi
-  - predictmanager
-  - binary position
-  - vertical range
+  - account wrapper
+  - tick range
+  - range position
+  - quote mint
   - settlement
   - plp
-  - vault
+  - pool vault
   - liquidity provider
-last_verified: 2025-04-16T00:00:00.000Z
-verified_against: predict-testnet-4-16
+last_verified: 2026-09-03
+verified_against: predict-testnet-8-21
 goal:
   description: >-
-    Reader can complete a full DeepBook Predict flow on Testnet: set up a
-    manager, mint binary and range positions, redeem after settlement, and
-    supply and withdraw vault liquidity.
+    Reader can complete a full DeepBook Predict flow on Testnet: create an
+    account wrapper, quote and mint directional and two-sided range positions,
+    close and claim after settlement, and queue vault supply and withdrawal
+    requests.
   requires:
     - has_frontmatter:
         - title
@@ -39,263 +41,476 @@ goal:
     - has_answer: true
       label: Needs answer summary for AI citation
 questions:
-  - How do I mint a vertical range position on DeepBook Predict?
-  - How does settlement and redemption work on DeepBook Predict?
-  - How do I supply liquidity to the DeepBook Predict vault?
-  - How do I read a live oracle from the Predict server?
+  - How do I mint a two-sided range position on DeepBook Predict?
+  - How do I quote a DeepBook Predict mint before I send it?
+  - How does settlement and permissionless redemption work on DeepBook Predict?
+  - How do I supply and withdraw DeepBook Predict vault liquidity?
 answer: >-
-  This tutorial walks through a full DeepBook Predict flow on Sui Testnet:
-  reading a live oracle, creating a PredictManager, minting binary and vertical
-  range positions, redeeming before and after settlement, and supplying and
-  withdrawing vault liquidity for PLP shares.
+  A full DeepBook Predict flow on Sui Testnet runs through the predict subpath
+  of the @mysten/deepbook-v3 SDK. You create a shared account wrapper, preview a
+  mint with read.quoteMint, mint a directional or two-sided range position under
+  a maxCost and maxProbability cap, close it live or claim it after the permissionless
+  expiry_market try_settle records a settlement price, and queue PLP supply and
+  withdrawal requests that fill at the next pool flush.
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-A complete DeepBook Predict flow on Sui Testnet covers reading a live oracle, minting binary and vertical range positions, redeeming before and after settlement, and running the liquidity provider vault flow. It continues from the [DeepBook Predict quickstart](/onchain-finance/deepbook/deepbook-predict#quickstart-mint-a-binary-position), which covers install, funding, and your first mint.
+A complete DeepBook Predict flow on Sui Testnet covers pricing a market board, creating an account, quoting and minting directional and two-sided range positions, closing before and after settlement, and running the queued liquidity provider flow. It continues from the [DeepBook Predict quickstart](/onchain-finance/deepbook/deepbook-predict), which covers install, funding, and a first mint.
 
-There is no dedicated Predict TypeScript SDK. You build every transaction with the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) against the protocol's Move entry points. The transaction samples live in the `examples/deepbook-predict` package, which CI type-checks with `tsc --noEmit` against `@mysten/sui` version 2.22.1. This document does not execute them against Testnet. The oracle-list response shape matches the live Testnet server. Run the [manual verification steps](#verify-on-testnet) before you rely on the write paths.
+Every transaction and every read on this page goes through the `/predict` subpath of `@mysten/deepbook-v3`. The SDK builds transactions and never signs them, and every read it exposes runs against the Sui client core API, so no indexer or server sits on the critical path. The samples live in the `examples/deepbook-predict` package, which type-checks with `npm run build` (`tsc --noEmit`). This document does not execute them against Testnet, so run the [manual verification steps](#verify-on-testnet) before you rely on the write paths.
 
 :::caution
 
-DeepBook Predict smart contracts might change before Mainnet deployment. Treat the current package IDs, object layouts, and entry points as Testnet integration targets. All package IDs and source references on these pages are pinned to the `predict-testnet-4-16` branch and change at Mainnet launch.
+DeepBook Predict runs on Sui Testnet only. There is no Mainnet deployment. Package IDs, object layouts, and function signatures on these pages are pinned to the `predict-testnet-8-21` branch of the deepbookv3 repository, and they can change before any Mainnet release.
 
 :::
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
-- [x] [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) installed (`npm install @mysten/sui`).
-- [x] A Testnet address funded with SUI for gas from a [Sui Testnet faucet](/getting-started/onboarding/get-coins). Hold at least 1 SUI as a working reserve, and see [How much SUI to hold](/onchain-finance/deepbook/deepbook-predict#how-much-sui-to-hold) for sizing gas budgets.
-- [x] DUSDC from the [Predict token request form](https://tally.so/r/Xx102L). DUSDC does not pay gas, so you need SUI as well.
-- [x] A `PredictManager`, created in the [quickstart](/onchain-finance/deepbook/deepbook-predict#4-create-a-predictmanager).
+- [x] Node.js 22 or later, with `@mysten/deepbook-v3` and its `@mysten/sui` peer dependency installed. See the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) for client setup.
+- [x] A Testnet address funded with SUI for gas from a [Sui Testnet faucet](/getting-started/onboarding/get-coins). Hold at least 1 SUI as a working reserve.
+- [x] DUSDC from the [DeepBook Predict Testnet token request form](https://tally.so/r/Xx102L). DUSDC never pays gas, so you need SUI as well.
+- [x] The deployment identifiers from [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information).
 </TabItem>
 </Tabs>
 
 ## Configuration and client
 
-Keep every Testnet-only ID in one configuration block. These values come from the [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information) page and change at Mainnet launch.
+Keep every Testnet-only identifier in one configuration block, and assert the deployment name at startup. A later SDK release can intentionally move Testnet to a newer deployment, so an unchecked upgrade silently repoints your application.
 
 <ImportContent source="examples/deepbook-predict/src/config.ts" mode="code" tag="config" />
 
-The samples reuse the `client` from the quickstart:
+`getDeployment('testnet')` returns the deployment name `predict-testnet-8-21`, the chain ID `4c78adac`, and the source commit the SDK generated its configuration from. `getUnits('testnet')` returns the unit constants for that deployment: a fixed-point scale of `1000000000` for probabilities, prices, and rates, 6 decimals for both the DUSDC quote coin and position quantities, and a position lot size of `10000` raw units, which is `$0.01` of payout.
+
+Register the Predict extension on any client that exposes the core API. The following example uses the [gRPC](/develop/accessing-data/grpc) client.
 
 <ImportContent source="examples/deepbook-predict/src/client.ts" mode="code" tag="client" />
 
+`predict({ network: 'testnet' })` lands the extension on `client.predict`, which exposes three groups. `tx` builds ready-to-sign transactions, `read` runs simulations and object reads, and `decode` parses receipts out of an executed transaction's events with no network call at all.
+
+`predict({ network: 'mainnet' })` returns a registration and throws nothing on its own. The throw arrives one step later, when `$extend` registers that value and the SDK resolves the network through `getConfig('mainnet')`, which has no Mainnet deployment to return. Written the way the sample above writes it, that means the client fails to construct.
+
+:::info
+
+Every write below asks the account owner to sign. An application that would rather not prompt a wallet for each trade can delegate to a session key instead. A session key carries authority over everything the account holds, including its whole DUSDC balance and every open position, so decide its scope and lifetime before you ship it. See [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions).
+
+:::
+
+### Errors the SDK raises
+
+Two typed errors cover almost every failure you handle in application code:
+
+- `PredictInputError`: Client-side validation rejected the call before it built anything. Common causes are an unknown underlying, a strike off the tick or admission grid, a quantity that is not a whole lot, an amount carrying more decimals than the coin allows, and a range whose `lower` is not below `upper`.
+- `PredictMoveError`: A simulation hit a Move abort. It carries `module`, the exact `code`, and `abortName`, the `E`-prefixed constant name. `abortName` is `null` over JSON-RPC, because only gRPC and GraphQL surface the clever-error constant name.
+
+Resolve `module` before you look up `code`. Error numbers restart at `0` in every module, so the same number means something different depending on where it came from. [Find the page for a Move abort](/onchain-finance/deepbook/deepbook-predict/contract-information#abort-module-map) maps each module to the reference page carrying its table.
+
+Both SDK quote methods dry-run the identical transaction their matching builder produces, against the real account and the real fee path, so they raise the same errors the write would, insufficient balance included. Treat a successful SDK quote as a preflight. The Move `expiry_market::quote_mint` is a different thing with a similar name: it prices only, and it checks no account, no slippage cap, and no exposure capacity.
+
 ## Understand the oracle
 
-Each market is an `OracleSVI` object for one underlying asset and one expiry. It holds spot, forward, SVI parameters, a lifecycle status, and, after expiry, a settlement price. Each oracle constrains strikes to a grid rather than free-form values: `min_strike` plus multiples of `tick_size`. You trade a binary position at one grid strike, or a vertical range between two grid strikes.
+Predict owns no oracle. Pricing inputs live in the separate `propbook` package as three shared objects per underlying: a `PythFeed` holding exact-timestamp spot observations, a `BlockScholesValueStore` holding spot and forward observations, and a `BlockScholesSVIStore` holding the SVI volatility surface. One underlying is live on Testnet, BTC, with propbook underlying ID `1`.
 
-An oracle moves through 4 lifecycle states:
+Every priced call rebuilds a transaction-local `Pricer` from those objects through `expiry_market::load_live_pricer`. `Pricer` has `copy` and `drop` but not `store`, so it never persists between transactions, and it binds to exactly one `ExpiryMarket`. The SDK resolves the oracle objects from the deployment configuration for every call it builds, so on those paths you pass no oracle object ID yourself. A call the SDK does not build takes them explicitly: `expiry_market::try_settle` is the one this page asks you to make, and it takes the `OracleRegistry`, the `PythFeed`, and the `BlockScholesValueStore`.
 
-- **Inactive:** exists but not yet activated.
-- **Active:** accepts live price and SVI updates. Minting requires this state.
-- **Pending settlement:** reached expiry, awaiting the first post-expiry price.
-- **Settled:** the first post-expiry price freezes the settlement price. No further live updates.
+Freshness bounds are protocol configuration, and pricing aborts on a stale input. This deployment's initial configuration requires the Pyth spot and the Block Scholes spot and forward within 10 seconds, and the Block Scholes SVI surface within 60 seconds. Read the live values from the `ProtocolConfig` shared object rather than assuming them, because the deployment manifest records only an initial snapshot.
 
-Minting requires a live (active) oracle. Redeeming works against a live or settled oracle.
+### Discover markets
 
-### Read a live oracle from the server
+`read.markets()` returns every active market. Each entry describes one `ExpiryMarket` shared object:
 
-Read the current oracle list from the public Predict server, then select an active oracle and a strike from its grid. The server returns `snake_case` fields and the strike grid rather than a single strike.
+| **Field** | **Meaning** |
+|-------|-------------|
+| `id` | The `ExpiryMarket` shared object ID |
+| `expiryMs` | Expiry as a Unix millisecond timestamp, typed `bigint` |
+| `tickSize` | Strike grid granularity in USD |
+| `admissionTickSize` | The coarser grid a numeric strike must land on |
+| `mintPaused` | Whether minting is paused for this market |
+| `referencePrice` | The window's anchor strike in USD, or `null` until the market records its reference tick |
 
-<ImportContent source="examples/deepbook-predict/src/oracle.ts" mode="code" tag="oracle" />
+<ImportContent source="examples/deepbook-predict/src/markets.ts" mode="code" tag="markets" />
 
-## Set up the `PredictManager`
+`read.market({ underlying, expiryMs })` returns the same fields plus `nav`, the market's current net asset value, and returns `null` when no market exists at that expiry.
 
-Each user creates one `PredictManager` and reuses it. See the [quickstart](/onchain-finance/deepbook/deepbook-predict#4-create-a-predictmanager) for `create_manager` and reading the new ID from effects. Because the manager is shared during creation, deposit into it and mint from it in later transactions.
+Testnet runs 5 enabled cadences for BTC: 1m, 5m, 1h, 1d, and 1w. A 1mo cadence is configured but disabled. A new 1m market is created every minute. `tickSize` is `$0.01` on every enabled cadence, while `admissionTickSize` is `$1` on the 1m, 5m, and 1h cadences and `$100` on the 1d and 1w cadences.
 
-The manager stores your deposited quote balance, binary position quantities keyed by `MarketKey`, and range quantities keyed by `RangeKey`. Read them with `predict_manager::balance`, `predict_manager::position`, and `predict_manager::range_position`. The manager does not store positions as separate objects.
+Two things make the soonest expiry a poor default, and the sample's `tradeableMarket(minTtlMs = 30_000)` handles the first:
 
-## Deposit and mint a binary position
+- **A market can be too close to expiry to trade.** On the 1 minute cadence the entry probability converges hard in the closing seconds, so a quote taken there is stale before the mint lands and the cost cap aborts the trade. Measured live on Testnet, one strike's entry probability moved from 0.499 to 0.007 in 45 seconds. Requiring a minimum time to expiry is what makes the quote-then-cap flow hold, and 30 seconds is a floor rather than a recommendation for a flow that waits on a human.
+- **A brand-new market opens with zero working cash.** It cannot be minted against until pool capital funds it, and `plp::rebalance_expiry_cash` is what moves that cash across. Anyone can call it. A mint that aborts on a market that looks otherwise healthy is usually one nobody has funded yet.
 
-A binary position pays out when settlement lands above the strike (an up position) or at or below it (a down position). Deposit DUSDC into the manager and mint one up position in a single transaction. Build the `MarketKey` with `market_key::up`.
+### Ticks, strikes, and position shape
+
+A position is a half-open range on an absolute integer tick grid, `(lower_tick, higher_tick]`. Direction is a special case of that range rather than a separate concept: a down position is `(0, K]` and an up position is `(K, 1073741823]`, where `0` is the negative-infinity sentinel tick and `1073741823` is the positive-infinity sentinel. The fully open range is rejected.
+
+The SDK hides the tick arithmetic behind a market descriptor with two arms:
+
+- **Directional:** `{ underlying, expiryMs, side: 'up' | 'down', strike }`, where `strike` is a USD number or the literal `'reference'`.
+- **Two-sided range:** `{ underlying, expiryMs, side: 'range', lower, upper }`, where both bounds are finite USD numbers and `lower` sits below `upper`.
+
+An optional `marketId` on either arm pins the exact `ExpiryMarket` and skips the registry lookup. The SDK validates the ID and rejects a pin whose expiry disagrees with the descriptor.
+
+A numeric strike must land on the market's `admissionTickSize` grid, not just the finer `tickSize` grid. The sample's `admissibleStrike` helper rounds a target onto that grid and trims the binary-float residue the multiply leaves behind, which matters because the SDK throws on a value carrying more than nine decimals.
+
+The market's `referencePrice` is the one finite off-grid boundary the chain admits, and `strike: 'reference'` selects it. That literal works on the directional arm only, and it throws while the market's reference price is still `null`. A keeper normally seeds each window, but `expiry_market::set_reference_tick` is permissionless, so you can seed it yourself instead of waiting. It reads the exact Pyth spot at the market's reference timestamp and derives the tick from it, and a repeat call with the same tick succeeds and emits nothing.
+
+### Price a whole board from one chain read
+
+`read.price({ underlying, expiryMs, strike })` returns `{ up, down }` as probabilities between 0 and 1 for a single strike. It takes no `side` and always returns both.
+
+`read.pricer({ underlying, expiryMs })` loads the pricer once and hands back a local calculator, so a board of dozens of strikes costs one chain read:
+
+| **Call** | **Returns** |
+|------|---------|
+| `pricer.up(strike)` | Probability that settlement lands above `strike` |
+| `pricer.down(strike)` | Probability that settlement lands at or below `strike` |
+| `pricer.range(lower, higher)` | Probability mass in `(lower, higher]`, floored at 0 |
+| `pricer.strikeAtProbability(p)` | The strike whose up probability is `p`, or `null` when no crossing exists within 64 percent of the forward |
+| `pricer.forward` | The forward price the surface anchors on |
+| `pricer.asOf` | Source timestamps for the Pyth spot and the Block Scholes spot, forward, and SVI observations |
+
+Every value here is a decimal float rather than chain fixed-point, and every calculation runs locally. Pass a `lower` of 0 or below for negative infinity and `Infinity` for an open upper bound. Check `asOf` before you render a board, because a pricer built from an observation that later goes stale still prices locally without complaint.
+
+## Set up the account
+
+Each owner has exactly one Predict account: a shared `AccountWrapper` object holding an `Account`. The wrapper holds your DUSDC balance, your PLP balance, and Predict's per-account data. A position is a packed order ID recorded against that account rather than an object in your wallet, so scanning owned objects never finds one.
+
+`client.predict.tx.createManager()` takes no arguments and returns a transaction that creates the wrapper and shares it. The method name carries legacy DeepBook balance-manager naming; the object it creates is an account wrapper.
+
+<ImportContent source="examples/deepbook-predict/src/create-manager.ts" mode="code" tag="create-manager" />
+
+The wrapper address derives from the account registry root, so you do not need a transaction result to know it. `client.predict.wrapperIdFor(owner)` computes it offchain with no chain read, and that ID is the argument every Move call takes. After execution, `decode.createManager(result)` reads the same `wrapperId` out of the events alongside `accountId`, `owner`, and `selfOwned`.
+
+One owner derives two addresses from that registry, and they are not interchangeable. The wrapper is the shared object every Move call takes. The canonical account is the identity that app data hangs off, that events report as `account_id`, and that the read services key on. `client.predict` derives only the wrapper, through `wrapperIdFor`. Three routes give you the account ID: `new SessionsContract(getSessionsConfig('testnet')).deriveAccountId(owner)` on the `@mysten/deepbook-v3/sessions` subpath, the `accountId` field on `decode.createManager(result)`, or the `account_id` field on any order event. [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#enumerate) covers both derivations and the dynamic field that hangs off the account.
+
+Creating a second account for the same owner aborts. To create and fund in a single transaction, `tx.deposit(owner, amountUsdc, { create: true })` composes the creation, the deposit, and the share. That form runs no pre-check, so it aborts when the account already exists, and `owner` must be the signing address because the registry derives the wrapper from the transaction sender.
+
+Three calls cover funding and reading the account:
+
+- **Deposit:** `tx.deposit(owner, amountUsdc)` sources DUSDC from your coin objects and your address balance.
+- **Withdraw:** `tx.withdraw(owner, amountUsdc)` sends DUSDC to the owner's address balance. Pass `{ toCoinObject: true }` to receive a coin object instead.
+- **Read the balance:** `read.balance(owner)` returns the account's DUSDC balance as a decimal number.
+
+## Read indexed state from the servers
+
+Three read-only JSON services index this deployment, each with permissive browser CORS. They are indexed views rather than transaction authorities, and they are not part of the audited manifest, so they can be replaced independently of the onchain packages. Submit every write through the SDK against Sui Testnet.
+
+| **Service** | **Base URL** | **Primary data** |
+|---------|----------|--------------|
+| Predict | `https://predict-server-v4.testnet.mystenlabs.com` | Markets, market state, positions, vault state, protocol events, indexed configuration |
+| Propbook | `https://propbook-server-v4.testnet.mystenlabs.com` | Oracle bindings, Pyth observations, and Block Scholes spot, forward, and SVI observations |
+| Account | `https://account-server-v4.testnet.mystenlabs.com` | Account custody state, balances, activity, portfolio, and app authorizations |
+
+### Check freshness first
+
+Every service exposes `/status`:
+
+```bash
+$ curl https://predict-server-v4.testnet.mystenlabs.com/status
+```
+
+The response reports the latest onchain checkpoint and one entry per indexed pipeline. The following sample keeps a single pipeline; the live response lists every one.
+
+```json
+{
+  "status": "OK",
+  "latest_onchain_checkpoint": 379058487,
+  "current_time_ms": 1788378834221,
+  "earliest_checkpoint": 379058489,
+  "max_lag_pipeline": "",
+  "pipelines": [
+    {
+      "pipeline": "market_created",
+      "indexed_checkpoint": 379058489,
+      "indexed_epoch": 1210,
+      "indexed_timestamp_ms": 1788378832590,
+      "checkpoint_lag": -2,
+      "time_lag_seconds": 1,
+      "latest_onchain_checkpoint": 379058487,
+      "is_backfill": false
+    }
+  ]
+}
+```
+
+Treat a non-`OK` status, or an unexpectedly old pipeline your feature depends on, as incomplete recent data rather than as an empty application state.
+
+### Discover markets and oracle observations
+
+The Predict service returns the same market set as `read.markets()`, from the index:
+
+```bash
+$ curl 'https://predict-server-v4.testnet.mystenlabs.com/markets?active=true&limit=50'
+```
+
+The response is an array of future, unsettled market-creation records ordered by expiry. Use `expiry_market_id` for market-scoped reads, `pool_vault_id` for vault reads, and `propbook_underlying_id` to join the market to propbook. The following sample keeps one record, trimmed to the market's identity and cadence terms; the live response also carries the source event's checkpoint and position fields and the market's fee-curve parameters.
+
+```json
+[
+  {
+    "expiry_market_id": "0x4c3f93d201c09bbd0523f6f698ad6bacee23760a4a884592c4df86511166f5f0",
+    "pool_vault_id": "0x2a31f592d8fd3d0781e2233770d02d67797890ac82c3d18796d7eb0997896602",
+    "propbook_underlying_id": 1,
+    "expiry": 1788378840000,
+    "tick_size": "10000000",
+    "admission_tick_size": "1000000000",
+    "max_expiry_allocation": "50000000000",
+    "initial_expiry_cash": "10000000000",
+    "base_fee": "100000000",
+    "min_fee": "22000000",
+    "min_entry_probability": "10000000",
+    "max_entry_probability": "990000000",
+    "kind": "market_created"
+  }
+]
+```
+
+Identifiers in the sample responses on these pages are illustrative. The market above was a 1 minute market that has long since settled, so its ID resolves to nothing useful. Take live IDs from the endpoint or from `read.markets()`.
+
+Market-scoped state and open interest key on the `expiry_market_id` from that response:
+
+```bash
+$ MARKET_ID=0x...
+$ curl "https://predict-server-v4.testnet.mystenlabs.com/markets/${MARKET_ID}/state"
+$ curl "https://predict-server-v4.testnet.mystenlabs.com/markets/${MARKET_ID}/open-interest"
+```
+
+Market state returns the creation record plus the latest reference tick, the mint-pause state, and the settlement once those components exist.
+
+Oracle observations key on the propbook object IDs. `GET /oracle-bindings` returns the mapping from `propbook_underlying_id` and oracle kind to object ID, and the deployment manifest carries the same IDs. The following commands read the three BTC feeds:
+
+```bash
+$ PYTH=0xea8fd4624002516b28b495051c838b2c9a34a4f22ae281d328e1bec47f54cd24
+$ VALUES=0x9b64cc860ac09e6dcd675fc579c1048792ddce51cc018f2ca16aeb4a1a5684a3
+$ SVI=0xd5bc586e99c8d595e0ba5e0a2ef2295e652db8934ffbeda630d60e207bedab8f
+
+$ curl "https://propbook-server-v4.testnet.mystenlabs.com/oracles/${PYTH}/pyth/latest"
+$ curl "https://propbook-server-v4.testnet.mystenlabs.com/oracles/${VALUES}/block-scholes/spot?limit=10"
+$ curl "https://propbook-server-v4.testnet.mystenlabs.com/oracles/${VALUES}/block-scholes/forward?limit=10"
+$ curl "https://propbook-server-v4.testnet.mystenlabs.com/oracles/${SVI}/block-scholes/svi?limit=10"
+```
+
+Judge vendor freshness from each observation's source timestamp and landing time from its checkpoint timestamp. Do not sort observations by source timestamp alone, because an older source observation can land later.
+
+### Read account and position state
+
+Account and position paths key on the canonical account ID, not on the shared `AccountWrapper` object ID and not on the wallet owner address. Derive it with `deriveAccountId`, or read it off any order event's `account_id` field.
+
+```bash
+$ ACCOUNT_ID=0x...
+$ curl "https://account-server-v4.testnet.mystenlabs.com/accounts/${ACCOUNT_ID}/portfolio"
+$ curl "https://account-server-v4.testnet.mystenlabs.com/accounts/${ACCOUNT_ID}/balances"
+$ curl "https://account-server-v4.testnet.mystenlabs.com/accounts/${ACCOUNT_ID}/activity"
+$ curl "https://predict-server-v4.testnet.mystenlabs.com/accounts/${ACCOUNT_ID}/positions?status=open&limit=100"
+```
+
+:::caution
+
+Passing a wrapper ID here fails silently. The services answer `200` with an empty array rather than rejecting the ID, so a wrong ID is indistinguishable from an account holding nothing. Check any empty result against an account you know holds positions before you build on it.
+
+:::
+
+Three more paths round out the indexed views:
+
+- `GET /apps` on the account service lists the app authorizations recorded on the account registry.
+- `GET /vaults/:pool_vault_id/state` on the Predict service returns the pool's `current` block, carrying `idle_balance_after`, `total_supply`, `pool_value`, and `active_market_nav`, alongside `latest_flush`.
+- `GET /config` on the Predict service returns `trading_paused`, `protocol_config_id`, `max_lp_pool_value`, and `max_lp_pool_value_is_unbounded`.
+
+Take every path from the tables on these pages rather than guessing at one. The plausible variants `/vault`, `/pool`, `/protocol-config`, and `/accounts/:account_id/apps` all return `404`.
+
+An open position whose market state includes a settlement is claimable. Claimability comes from the position and the market together rather than from a separate position status.
+
+Four conventions apply across all three services:
+
+- **Numbers arrive as strings:** Postgres `NUMERIC` values serialize as JSON strings. Parse monetary, quantity, probability, price, rate, and large identifier fields with decimal or bigint tooling rather than `parseFloat`.
+- **Timestamps are milliseconds:** Onchain and event timestamps use Unix milliseconds unless an endpoint documents seconds. Raw event pages window on `from_ms`, inclusive, and `to_ms`, exclusive, while named history endpoints use `start_time` and `end_time` in Unix seconds.
+- **Order IDs are market-scoped:** Packed order IDs are decimal `u256` strings and are unique only inside one expiry market, so identify a position by `expiry_market_id` and `order_id` together.
+- **Raw events page oldest-first:** `GET /events` lists the allowlisted event resources and their filter profiles. Page one resource with `GET /events/RESOURCE`, then follow the opaque `page.next_cursor` with every filter unchanged until `page.has_next_page` is false. Unknown identifiers return `null` components or empty arrays rather than a 404. The listing also carries a few resources this deployment never emits, left over from contract features that were removed: `liquidated-order-redeemed`, `deep-staked`, `deep-unstaked`, and `trading-loss-rebate-claimed`. Requesting one returns `503` rather than an empty page, so treat the four event modules in [Contract information](/onchain-finance/deepbook/deepbook-predict/contract-information#live-onchain-events) as the list of what the contracts actually emit.
+
+## Deposit and mint a directional position
+
+A directional position pays `$1` per contract when settlement lands inside its range, and nothing otherwise. `quantity` is therefore the maximum payout in USD, and it must be a whole `$0.01` lot.
+
+The lot size is the granularity of a quantity, not a size you can trade. `strike_exposure_config::assert_mint_admission` rejects any mint whose premium falls below 1 DUSDC with code `3`, `EPremiumBelowMinimum`, and the premium is `quantity` multiplied by the quoted `entryProbability`. Because `max_entry_probability` caps that probability at 0.99, no market accepts a quantity below about 1.02, and the floor climbs as the strike moves out of the money: measured live on a 1 day market, a quantity of 1.59 aborted and 1.60 filled at a premium of 1.002283, while a 1 hour market quoting 0.077 with 900 seconds left took a quantity of 100. Size by the product, not by the grid, and quote before you pick a quantity.
+
+Quote before you mint. `read.quoteMint(owner, descriptor, { quantity })` dry-runs the identical transaction `tx.mint` builds, against the real account and the real fee path, so it doubles as a price preview and a preflight, and its fee numbers are exact rather than estimated:
+
+| **Field** | **Meaning** |
+|-------|---------|
+| `entryProbability` | Fill probability between 0 and 1, per `$1` of payout, and what `maxProbability` caps |
+| `premium` | The premium alone, with no fees |
+| `fees` | Exact `trading`, `subsidy`, `builder`, `penalty`, `referral`, and `inventoryImpact` components |
+| `cost` | The all-in account debit, which is what `maxCost` caps |
+| `quantity` | The payout the quote priced |
+| `raw` | Exact `bigint` chain amounts for `premium`, `cost`, `quantity`, and `entryProbability` only |
+
+Two of the fee names differ from their onchain names. `penalty` is the congestion surcharge, `penalty_fee` onchain, and it ships disabled on this deployment. `subsidy` is the fee incentive subsidy, `fee_incentive_subsidy` onchain. [Design](/onchain-finance/deepbook/deepbook-predict/design#fee-components) explains what each component charges for.
+
+The fee breakdown is not in `raw`, which carries only the four fields above. Read the exact fee amounts from `decode.mint(result).raw` after execution instead.
+
+`fees.referral` is not an extra debit and never changes `cost`. Its basis is the trading fee net of the incentive subsidy, plus the congestion surcharge, and the protocol computes it only after the all-in cost is fixed, then splits it out of the payment you have already made. The Move `MintQuote` has no referral field at all for that reason. Pass `cost`, never `premium`, when you set a cap.
 
 <ImportContent source="examples/deepbook-predict/src/mint.ts" mode="code" tag="mint-binary" />
 
-For a down position, use `market_key::down` with the same oracle, expiry, and strike.
+:::caution
 
-### Preview mint cost
+Mint slippage caps default to uncapped. Omitting `maxCost` and `maxProbability` sends `U64_MAX` for each, which leaves the mint genuinely uncapped against a price move between the quote and execution. The two caps bound different things: `maxCost` bounds the all-in account debit, and `maxProbability` bounds the fill price. Always quote first and pass both. Round `maxCost` to at most 6 decimals, because a value carrying more decimals than the quote coin throws `PredictInputError` before the transaction is built.
 
-Before minting, preview the cost. The `predict::get_trade_amounts` read function returns `(mint_cost, redeem_payout)` per the requested quantity, priced from oracle fair value plus protocol spread. For rendering, the public server also exposes oracle state and resolved ask bounds through `GET /oracles/:oracle_id/state` and `GET /oracles/:oracle_id/ask-bounds`. Deposit at least the previewed `mint_cost` before you mint.
+`tx.mint` mints an exact payout quantity, so the premium alone cannot exceed `quantity`. Fees are charged on top of it, and `maxCost` is what bounds the total. `tx.mintAmount` is the genuinely open-ended one: see the warning below it.
 
-## Mint a vertical range position
+:::
 
-A vertical range pays out when settlement lands in the half-open band `(lower_strike, higher_strike]`. Build the key with `range_key::new`, which aborts if `lower_strike` is not less than `higher_strike`. This example assumes the manager already holds enough DUSDC.
+`decode.mint(result)` returns the receipt. Persist `orderId`. It is the only handle for closing or claiming the position, and nothing onchain enumerates an account's orders for you. The receipt also carries `lowerTick`, `higherTick`, `entryProbability`, `quantity`, `premium`, and the exact fee breakdown, plus a `raw` block giving the quantity, the premium, the entry probability, and every fee component as exact `bigint` chain amounts.
+
+To size by budget instead of by payout, `tx.mintAmount` takes `spend` as a premium budget, `minQuantity` as a payout floor, and the same `maxCost` ceiling. It takes no `maxProbability`.
+
+:::caution
+
+`maxCost` is optional on `tx.mintAmount`, and that is the more dangerous default of the two builders. Fees are charged on top of `spend`, so `maxCost` is the only bound on the whole withdrawal. Omit it and the call builds fine, sends `U64_MAX`, and leaves the debit unbounded. The onchain guard does not save you: `mint_exact_amount` aborts with `EMintCostCapRequired` only when `max_cost` is exactly 0, which `U64_MAX` is not. The SDK does reject a `maxCost` at or below zero before it builds anything, but nothing rejects an absent one. Always pass a `maxCost` derived from a fresh quote.
+
+:::
+
+## Mint a two-sided range position
+
+A two-sided range pays out when settlement lands in the half-open band `(lower, upper]`, left-open and right-closed. It uses the same builder, quote, and close path as a directional position, with the range arm of the descriptor.
 
 <ImportContent source="examples/deepbook-predict/src/mint-range.ts" mode="code" tag="mint-range" />
 
-Preview range amounts with `predict::get_range_trade_amounts`, which mirrors `get_trade_amounts` for a `RangeKey`.
+Both bounds are finite USD numbers that must land on the market's admission grid, and `lower` must sit below `upper`. `strike: 'reference'` has no meaning here, because the range arm carries no `strike` field. `read.quoteMint` accepts a range descriptor unchanged, and `pricer.range(lower, upper)` prices the band locally before you commit to it. The sample passes `maxProbability` alongside `maxCost`, the same as the directional one, because a cost cap alone still lets the fill price move.
 
 ## Redeem and settlement
 
-Redeeming sells a position back to the vault and deposits the payout into the owner's manager. The payout depends on the oracle lifecycle:
-
-- **Before settlement:** the payout is the post-trade bid value at current oracle prices.
-- **After settlement:** a binary position pays its settled fair value, and a vertical range pays its full value when settlement landed in the band, or zero otherwise.
-
-The owner redeems a position with `predict::redeem`.
+Closing a position takes one of two paths, and which one applies depends on whether the market has settled. The following sample quotes and closes a live position, then claims a settled one.
 
 <ImportContent source="examples/deepbook-predict/src/redeem.ts" mode="code" tag="redeem" />
 
-### Permissionless redemption
+### Close a live position
 
-`predict::redeem_permissionless` lets a third party close out a settled position for its owner. These 3 properties define it:
+`read.quoteRedeem(owner, descriptor, { orderId, quantity })` returns the net `proceeds`, the `gross` amount, an exact fee breakdown covering `trading`, `builder`, `penalty`, and `inventoryImpactRebate`, plus `quantityClosed` and `remaining`. `tx.redeem` builds the matching transaction.
 
-- **Any address can call it.** The function routes through the package-internal `deposit_permissionless`, which skips the owner check that `predict_manager::deposit` and `withdraw` enforce ([PredictManager: deposit and withdraw](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager#deposit-and-withdraw)). The caller needs no capability, no relationship to the owner, and no signature from them.
-- **It becomes available at settlement, not at expiry.** The position must be settled. An oracle reaches settled only when the first post-expiry price update freezes the settlement price, and it sits in pending settlement until then ([Oracle lifecycle](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle#lifecycle)). Calling earlier fails.
-- **The payout goes to the owner, never the caller.** The quote amount lands in the owner's `PredictManager` balance, and only the owner can withdraw it. The caller pays gas and receives nothing.
-
-Redeem a vertical range with `predict::redeem_range`.
+A partial close retires the order and issues a replacement. Read `replacementOrderId` from `decode.redeem(result)` and update your stored ID, otherwise your next close targets an order that no longer exists. A live close also fails when it lands in the same millisecond timestamp as the mint.
 
 :::caution
 
-The protocol pays the caller no fee, rebate, or share of the payout for a permissionless redemption. There is no keeper incentive, so no economic reason exists for an unrelated third party to run this. Treat it as infrastructure that you run for your own users, or that a position owner runs for themselves, and budget the gas as your own operating cost rather than expecting the network to close out positions for you.
+`tx.redeem` sends `minProbability: 0` and `minProceeds: 0` unconditionally, and the SDK exposes no option to raise either floor. A live close therefore accepts whatever the pricer returns at execution time. Quote immediately before you send, and treat the quoted proceeds as an estimate rather than a guarantee.
 
 :::
 
-#### Monitor settlement and redeem automatically
+### Settlement
 
-Positions are rows in the manager's `positions` table keyed by `MarketKey`, not standalone objects, so you cannot discover them by scanning owned objects ([Binary position quantities](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager#binary-position-quantities)). An automated redeemer needs its own index, built from events:
+Settlement is permissionless. Any address can call `expiry_market::try_settle`, which returns `true` when the market is now settled or was already settled, and `false` when it could not record a settlement. The call is idempotent, and it returns `false` before expiry.
 
-1. **Track positions as users open them.** Record the manager ID and `MarketKey` fields from each `PositionMinted` event, and clear the entry on the matching `PositionRedeemed`. This index is what makes step 3 possible, because nothing onchain enumerates a manager's positions for you.
-1. **Watch for settlement.** Subscribe to `OracleSettled` as [Stream events over gRPC](/onchain-finance/deepbook/deepbook-predict/contract-information#stream-events-over-grpc) shows. Trigger on the event rather than on the expiry timestamp, because the pending settlement gap has no fixed duration.
-1. **Select the affected positions.** On settlement of an oracle, take the tracked entries whose `MarketKey` names that oracle ID.
-1. **Confirm each is still open, then redeem.** Read the current quantity before submitting, so a position the owner already redeemed does not cost you a failed transaction. Build the `MarketKey` with `market_key::up`, `market_key::down`, or `market_key::new`, pass it to `predict_manager::position` in the same transaction, and simulate the pair. The key is command 0 and the quantity is command 1, so decode `returnValues[0]` of the second command with `bcs.U64`.
+Settlement needs an exact price at the market's expiry timestamp, and it looks for one in a fixed order:
 
-Use the same simulation helper described in [Check the limiter before you withdraw](#check-the-limiter-before-you-withdraw), which returns the raw bytes for every command in one call. `PredictManager` is a shared object, so unlike the vault accessors this read is reachable from a simulated transaction.
+1. **Exact Pyth spot first.** `try_settle` looks for a Pyth observation at exactly the expiry timestamp.
+1. **Exact Block Scholes spot after a grace period.** When Pyth has nothing at that timestamp, the call waits 30 seconds past expiry, then tries the exact Block Scholes minute-boundary spot.
 
-`position()` has 2 properties that shape the loop. It returns `0` for a key that was never opened and for one already redeemed, so treat zero as nothing to do rather than as an error. And it requires the exact key up front, which is why the event index in step 1 is not optional.
+A market with neither exact observation stays unsettled, and later calls keep retrying. No approximation substitutes for the exact price, because an expired unsettled market has no solvency-safe mark.
 
-If you would rather not maintain that index, two alternatives enumerate positions directly: list the dynamic fields of the `positions` table using the table's `id`, where each field key is a BCS-serialized `MarketKey`, or read the [indexed portfolio endpoints](/onchain-finance/deepbook/deepbook-predict/contract-information#manager-and-portfolio-data) from the Predict server. The server path is simpler, at the cost of depending on the indexer being current.
+The SDK builds no `try_settle`, so this is the one call on this page you assemble yourself. It is generated-bindings work: a `moveCall` against `expiry_market::try_settle` in the Predict package, passing the `ExpiryMarket`, the `ProtocolConfig`, the propbook `OracleRegistry`, the `PythFeed`, the `BlockScholesValueStore`, and the clock, in that order. Those are the oracle objects the SDK otherwise resolves for you, so read their IDs from [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#underlyings-and-oracle-objects) or from `OracleRegistry` at runtime. The call returns a `bool` you can ignore, and [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict) carries the full signature.
 
-Make the worker idempotent. The event stream delivers at least once, so the same `OracleSettled` can arrive twice after a reconnect, and another party can redeem the same position between your check and your submission. Confirm each redemption against the resulting `PositionRedeemed` event instead of assuming a submitted transaction succeeded.
+Settlement emits `MarketSettled` carrying the `settlement_price` and a `settlement_source` of `0` for Pyth or `1` for Block Scholes. Trigger on that event rather than on the expiry timestamp, because the gap between expiry and settlement has no fixed duration.
+
+### Claim a settled position
+
+`tx.claimSettled(owner, { underlying, expiryMs }, { orderId })` closes a settled position. It takes no quantity, because the deployed `redeem_settled` closes the order in full. `decode.claim(result)` returns the `payout` alongside the market, account, and order identifiers.
+
+### Permissionless redemption
+
+`expiry_market::redeem_settled_permissionless` closes a settled position on the owner's behalf. Three properties define it:
+
+- **Any address can call it:** The function takes no account `Auth`. It mints Predict's app authorization from the shared `AccountRegistry` instead, so the caller needs no capability, no relationship to the owner, and no signature from them. An admin can switch the path off by deauthorizing the Predict app on that registry.
+- **It becomes available at settlement, not at expiry:** The market must be settled. Calling on an unsettled market aborts with `EMarketNotSettled`, and expiry alone does not settle a market. Call `try_settle` first, or wait for `MarketSettled`.
+- **The payout goes to the owner:** The proceeds land in the owner's account, and only the owner can withdraw them. The caller pays gas and receives nothing.
+
+The SDK does not build this call. `tx.claimSettled` builds the owner-authorized `redeem_settled` instead. Build the permissionless variant yourself as a `moveCall` against the Predict package, passing the `ExpiryMarket`, the `AccountRegistry`, the owner's `AccountWrapper`, the `ProtocolConfig`, the order ID, the accumulator root, and the clock. The `predict`, `account`, and `propbook` packages declare no `entry fun` at all, so every integrator call is a `public fun` invoked from a [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks), and several of them return values you must consume in the same block.
+
+To find positions worth closing, `read.positions(owner)` walks the account's dynamic fields and returns `marketId` and `orderId` pairs, and `GET /accounts/ACCOUNT_ID/positions?status=open` returns the same set from the index when it is keyed on the canonical account ID.
+
+:::caution
+
+Key that path on the wrapper ID instead and the service answers `200` with an empty array. A redeemer that trusts the response reads the empty array as nothing to close, skips every open position, and reports success while doing no work. Derive the ID with `deriveAccountId`, take it from an event's `account_id`, or cross-check the count against `read.positions(owner)` before you act on an empty page.
+
+:::
+
+Make any automated redeemer idempotent: the event stream delivers at least once, and another caller can close the same position between your check and your submission.
+
+The protocol pays the caller no fee, rebate, or share of the payout, so no economic incentive exists for an unrelated party to run this. Treat it as infrastructure you run for your own users, or that an owner runs for themselves, and budget the gas as your own operating cost.
 
 ## Liquidity provider flow
 
-Liquidity providers supply an accepted quote asset into the shared vault and receive `PLP` shares. The vault takes the opposite side of every Predict trade, so LP returns track vault profit and loss. The first supplier receives shares one-to-one with the amount they supply. Later suppliers receive shares proportional to their deposit relative to current vault value.
+Liquidity providers supply DUSDC to the shared `PoolVault` and hold PLP, a proportional claim on pool value. The pool is the counterparty to every Predict trade, so PLP value tracks pool profit and loss rather than a fixed yield.
+
+Supply and withdrawal are asynchronous. Neither call mints or burns PLP. Each one escrows your funds, returns a queue index, and waits for the next pool flush, which prices both queues against one pool-wide mark.
+
+:::info
+
+You cannot trigger a flush. Only a holder of a market lifecycle capability starts one, through `start_pool_valuation`, followed by one `value_expiry` per active market and a single `finish_flush`, all inside one transaction. That single frozen mark is what stops anyone from timing an entry or exit against a self-supplied oracle update. Plan on filling at a price you do not control and cannot preview.
+
+:::
 
 ### Supply liquidity
 
-`predict::supply` returns a `Coin<PLP>`. Transfer it to the supplier to keep it.
+`tx.supplyPlp(owner, amountUsdc)` queues a supply request and escrows the DUSDC. The minimum request is 10 DUSDC.
 
 <ImportContent source="examples/deepbook-predict/src/supply.ts" mode="code" tag="supply" />
 
-### Read vault state and value your `PLP`
+`decode.plpRequest(result)` returns the receipt. Persist `index`. It is the handle for `tx.cancelSupplyPlp(owner, index)`, which reclaims the escrow any time before a flush processes the request. The receipt's `kind` is `'supply'` or `'withdraw'`, and `amount` is in quote units for a supply.
 
-`PLP` shares are a proportional claim on vault value, not a fixed-value token. Before you supply or withdraw, read the vault aggregates and derive what your shares are worth.
+The SDK pins `minPlpOut` to `0`, so a supply carries no minimum share output. A queued request the flush cannot execute at the frozen mark, because the PLP price falls outside the executable band or the output rounds to zero shares, is cancelled and refunded rather than left queued or aborting the flush.
 
-No single read function returns the vault totals. `Vault` has the `store` ability and lives inside the `Predict` shared object, and `Predict` exposes no accessor that returns `&Vault`, so `vault_value()`, `balance()`, and `total_max_payout()` are unreachable from a [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks) or a simulation ([Reading vault state](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#reading-vault-state)). Read the values from the `Predict` object contents instead:
-
-Fetch the `Predict` object with its contents, then read 4 fields. The Predict server itself reads exactly these paths in [`crates/predict-server/src/server.rs`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-4-16/crates/predict-server/src/server.rs), so treat them as the reference layout:
-
-| **Value** | **Path in the object contents** |
-|-------|-----------------------------|
-| Pooled treasury balance | `vault.balance` |
-| Mark-to-market liability | `vault.total_mtm` |
-| Worst-case settlement liability | `vault.total_max_payout` |
-| `PLP` total supply | `treasury_cap.total_supply.value` |
-
-The server derives the same quantities you need from those 4 reads: `vault_value` as `balance - total_mtm` floored at zero, share price as `vault_value / plp_total_supply`, and withdrawal capacity as `balance - total_max_payout` floored at zero.
-
-Fetch the object with `client.getObject` and the `json` include, as [`chain.ts`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-4-16/scripts/services/oracle-feed/chain.ts#L97-L106) does. Compute the derived values in `BigInt`: integer division truncates, which reproduces the contract's round-down, and quote amounts exceed the range where floating point stays exact.
-
-Three derived quantities matter to a liquidity provider, and the chain stores none of them:
-
-- **Vault value:** `balance - total_mtm`. This is the net asset value your shares claim against.
-- **Share price:** `vault_value / plp_total_supply`. Use it to price a supply, and expect it to move between reading it and landing your transaction.
-- **Redemption value:** `shares_burned * vault_value / plp_total_supply`, rounded down. Burning the entire supply short-circuits onchain and returns the full vault value with no rounding loss.
-
-Compute these in `BigInt`, as the sample does. Integer division truncates, which reproduces the contract's round-down behavior, and quote amounts exceed the range where floating point stays exact. See the [worked example](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#worked-example) for the same arithmetic with concrete numbers.
-
-:::caution
-
-The `json` representation of object contents is not guaranteed stable across API implementations. The gRPC and GraphQL shapes can differ. For an integration you intend to run unattended, parse the BCS `content` bytes with a generated parser for the `Predict` struct instead, and treat the field paths in this sample as specific to the API you read from.
-
-:::
-
-#### Unsettled oracles move your share value
-
-`total_mtm` is the mark-to-market liability of every open position, and vault value subtracts it. While oracles remain unsettled, that number moves with trader positions and oracle prices, so your share value moves with it even though you placed no trade. The vault is the counterparty to every trade, so liquidity providers hold the other side of trader profit and loss.
-
-Plan around 2 consequences:
-
-- **Mark-to-market is an estimate until settlement.** `total_mtm` reflects current oracle state. It resolves to a realized outcome only when each oracle settles, so a share price you read mid-life is provisional. Do not treat it as a guaranteed outcome.
-- **Worst-case liability locks capital, and settlement releases it.** `total_max_payout` reserves what the vault owes if every oracle settles at its worst strike. Because binary payouts jump at settlement, that reserve can far exceed current mark, and it caps withdrawals through [`available`](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#max-payout). Settlement compaction replaces the worst-case estimate with exact settled liability, which is what frees the reserved capital.
-
-Read `total_max_payout` alongside `vault_value` for this reason. A vault can look solvent on share price while withdrawals stay capped, because the reserve check runs against `balance`, not `vault_value`.
+A request you leave queued eventually fills, and the fill is what turns escrowed DUSDC into PLP. Watch for `vault_events::SupplyFilled`: the flush emits one per filled request, carrying the DUSDC consumed, the shares minted at that flush's mark, the fee, and the amount left queued when the fill was partial. The shares arrive at the account's receive address through the balance accumulator rather than as a coin in your wallet, but you do not have to chase them. `read.plpBalance(owner)` counts them straight away, because the Move `account::balance` behind it sums stored balance and undelivered accumulator funds together, and `tx.withdrawPlp` settles PLP into stored balance itself before it queues anything. `vault_events::WithdrawFilled` is the matching event on the way out, and `RequestCancelled` covers both a cancellation you made and a refund the flush issued.
 
 ### Withdraw liquidity
 
-`predict::withdraw` burns a `Coin<PLP>` and returns the selected quote asset. The withdrawal succeeds only when enough funds remain after the vault covers its current maximum payout and the withdrawal limiter allows the amount.
+`tx.withdrawPlp(owner, shares)` takes raw PLP shares as a `bigint`, not a USD amount. Read the balance with `read.plpBalance(owner)`, which returns the same raw `bigint`, and pass it straight through.
 
 <ImportContent source="examples/deepbook-predict/src/withdraw.ts" mode="code" tag="withdraw" />
 
-#### Check the limiter before you withdraw
+Cancel a queued withdrawal with `tx.cancelWithdrawPlp(owner, index)`, using the index from `decode.plpRequest`. The minimum withdrawal request is 1 PLP, which is `1000000` raw at 6 decimals, and the sample checks that floor itself rather than letting a dust holder take a Move abort. The SDK pins `minDusdcOut` to `0`. This deployment's initial configuration charges a 0.2 percent withdrawal fee and no supply fee. Read the live rates from the `ProtocolConfig` shared object, because the manifest records only the initial snapshot.
 
-`predict::available_withdrawal` returns the amount the withdrawal limiter currently permits, as a `u64` in raw quote units. It reads state and returns a value rather than mutating anything, so you call it by simulating a transaction instead of executing one. Simulation costs no gas and needs no signature, which makes it safe to run on every withdrawal attempt.
+### Read vault state
 
-Build a transaction with a single `moveCall` targeting `predict::available_withdrawal`, passing the `Predict` object and the clock, then simulate it and decode the command's first return value with `bcs.U64`.
+`read.pool()` returns the pool aggregates:
 
-The Predict oracle feed service already does this, in [`simulateReturnValues`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-4-16/scripts/services/oracle-feed/chain.ts#L178-L196). Follow its 3 choices, because each one matters for read calls:
+| **Field** | **Meaning** |
+|-------|---------|
+| `plpTotalSupply` | Total PLP in issue, as a raw `bigint` |
+| `idleUsdc` | The pool's idle DUSDC balance as a decimal number, excluding cash funded into expiries |
+| `supplyRequestsPending` | The number of queued supply requests, not an amount |
+| `withdrawRequestsPending` | The number of queued withdrawal requests, not an amount |
 
-- **Simulate with `checksEnabled: false`.** Validation checks reject calls that never execute onchain, including non-entry Move functions. Leaving checks on makes a read that would otherwise work fail.
-- **Default the sender to `0x0`.** A simulated read needs no funded address and no signature, so it works before a user connects a wallet. Normalize the address rather than passing a bare string.
-- **Return the raw bytes per command.** The service maps `commandResults` to `returnValues[].bcs` and leaves decoding to the caller, which keeps one helper usable for every read function. Decode a `u64` return with `bcs.U64`.
-
-The function delegates straight to the withdrawal limiter:
-
-<ImportContent
-	source="packages/predict/sources/predict.move"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="available_withdrawal"
-/>
-
-Read the limiter itself before you rely on the number:
-
-<ImportContent
-	source="packages/predict/sources/helper/rate_limiter.move"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="available_withdrawal"
-/>
-
-Compare the result to the quote amount your `PLP` burn releases, not to the share count. `withdraw()` converts shares to quote units as `shares_burned * vault_value / plp_total_supply`, rounded down, so derive the outgoing amount with the [redemption value formula](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#redemption-value) before you compare.
-
-:::caution
-
-This check alone does not guarantee the withdrawal succeeds, for 2 reasons. A disabled limiter returns `u64::MAX` rather than a real capacity, and the limiter starts disabled on a new deployment, so a preflight that only compares your amount against this value passes every time and tells you nothing. The limiter is also the second gate: the first reserves the vault's worst-case settlement liability, and `withdraw()` aborts with `EWithdrawExceedsAvailable` when your amount exceeds `balance - total_max_payout`. Treat your usable ceiling as the smaller of that value and `available_withdrawal`. See [Max payout](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#max-payout).
-
-:::
-
-Both gates read live state, so the value you simulate can go stale before your transaction executes. Another liquidity provider's withdrawal drains the same token bucket, and a mint raises max payout. Treat the check as a way to fail fast and size a request, then handle the onchain abort as the authoritative outcome.
+There is no synchronous share price. The pool prices PLP only inside a flush, at the mark that flush freezes, so no read returns a price you could trade against. Use `idleUsdc` and the queue depths instead to judge how much of a withdrawal the pool can settle soon and how many requests sit ahead of yours.
 
 ## Vault strategy considerations
 
-These points follow directly from the protocol's documented mechanics. They are not investment advice.
+These points follow from the protocol's documented mechanics. They are not investment advice.
 
-- **Withdrawals can be capped by liability.** `predict::withdraw` only releases funds available after the vault reserves its current total maximum payout. When open positions carry large payout coverage, less is withdrawable. Read the current withdrawable amount with `predict::available_withdrawal`, as [Check the limiter before you withdraw](#check-the-limiter-before-you-withdraw) shows.
-- **A rate limiter can throttle outflows.** The vault includes a withdrawal limiter with a configured capacity and refill rate. Large withdrawals can be limited even when funds are otherwise available.
-- **LP value tracks vault profit and loss.** Because the vault is the counterparty to every trade, `PLP` share value rises and falls with trader outcomes, not with a fixed yield.
-- **Minting is bounded by an exposure cap.** After each mint, the vault asserts that total mark-to-market liability stays within a configured percentage of vault value, which protects existing LPs.
+- **You fill at the flush mark, not your own:** Both queues price against one pool-wide net asset value computed during the flush. That value moves between the moment you queue and the moment you fill, and no read previews it.
+- **Exits are bounded by idle cash:** The flush fills supplies before withdrawals, so DUSDC supplied in a flush can pay that same flush's withdrawals. Cash already funded into an expiry is not directly redeemable until a rebalance or settlement returns it, so a large exit can fill across several flushes.
+- **PLP value moves with open positions:** Each active expiry contributes its current net asset value to the pool, priced from live oracles, so your share value moves with trader positions and oracle prices even when you place no trade.
+- **Backing is enforced per expiry:** Every expiry holds cash at least equal to its payout liability, and a per-expiry allocation cap snapshotted from cadence configuration bounds how much pool capital one expiry can put at risk.
+- **A queued request can come back refunded:** A request the flush cannot execute at the frozen mark is cancelled and refunded rather than held, so handle a refund as a normal outcome rather than an error.
 
-For the accounting model behind these limits, see [Design](/onchain-finance/deepbook/deepbook-predict/design#vault-and-plp).
+For the accounting model behind these limits, see [Design](/onchain-finance/deepbook/deepbook-predict/design).
 
 ## Verify on Testnet {#verify-on-testnet}
 
-The write paths above pass compile checks but do not execute. To confirm them end to end:
+The write paths above type-check but this document does not execute them. To confirm the flow end to end:
 
-1. Fund a Testnet address with SUI, then confirm with `sui client gas`.
-2. Request DUSDC, then confirm your DUSDC balance with `sui client balance`.
-3. Fetch a live oracle with `getActiveOracle`. Confirm the JSON includes an oracle with `"status": "active"`.
-4. Create a `PredictManager` (see the quickstart) and confirm the ID resolves with `sui client object MANAGER_ID`.
-5. Run `mintBinaryUp` with a `depositAmount` at or above the previewed mint cost. Confirm a success status and a `PositionMinted` event.
-6. Run `mintRange` with two grid strikes where `lowerStrike < higherStrike`. Confirm a `RangeMinted` event.
-7. Run `redeemBinaryUp`. Confirm a `PositionRedeemed` event and that the payout lands in the manager balance (`predict_manager::balance`).
-8. Run `supplyLiquidity`, then confirm you hold a `PLP` coin with `sui client objects`.
-9. Run `withdrawLiquidity` with that `PLP` coin. Confirm a `Withdrawn` event.
+1. Fund a Testnet address with SUI, then confirm the balance with `sui client gas`.
+1. Request DUSDC, then confirm the balance with `sui client balance`.
+1. Confirm all three services report an `OK` status on `/status`.
+1. Call `read.markets()`. Confirm at least one market returns with `mintPaused` false, a non-null `referencePrice`, and at least 30 seconds left before its expiry.
+1. Create the account, then confirm `client.predict.wrapperIdFor(owner)` resolves with `sui client object WRAPPER_ID`.
+1. Deposit DUSDC, then confirm `read.balance(owner)` reports the deposit.
+1. Call `read.quoteMint` with a quantity whose premium clears 1 DUSDC, which means `quantity` multiplied by `entryProbability` above 1. Mint with `maxCost` derived from the quote's `cost`. Confirm an `OrderMinted` event, and record both the `orderId` and the event's `account_id`.
+1. Read the indexed positions with `GET /accounts/ACCOUNT_ID/positions?status=open` using that `account_id`. Confirm the count matches `read.positions(owner)`, which proves you are keying on the right ID rather than reading an empty `200`.
+1. Mint a range position on two admission-grid bounds. Confirm a second `OrderMinted` event whose `lowerTick` and `higherTick` are both finite.
+1. Quote and close part of the directional position. Confirm a `LiveOrderRedeemed` event and record `replacementOrderId`.
+1. After an expiry passes, build the `expiry_market::try_settle` `moveCall` described in [Settlement](#settlement), send it, and confirm a `MarketSettled` event. Claim with `tx.claimSettled` and confirm a `SettledOrderRedeemed` event.
+1. Queue a supply of at least 10 DUSDC. Confirm a `SupplyRequested` event, then cancel it with the returned index and confirm a `RequestCancelled` event.
+1. Queue a second supply of at least 10 DUSDC and leave it queued. Wait for a flush, then confirm a `SupplyFilled` event carrying your queue index and a nonzero `read.plpBalance(owner)`. You cannot start a flush yourself, so this step waits on the operator's cadence.
+1. Queue a withdrawal of at least 1 PLP against that balance. Confirm a `WithdrawRequested` event, then wait for the next flush and confirm either a `WithdrawFilled` event or a `RequestCancelled` refund.

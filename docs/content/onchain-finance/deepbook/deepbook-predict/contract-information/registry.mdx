@@ -1,22 +1,26 @@
 ---
 title: Registry
 description: >-
-  Learn about DeepBook Predict registry setup, oracle creation, quote asset
-  management, and admin configuration entry points.
+  DeepBook Predict registry reference: market lookup, cadence configuration,
+  capability minting and revocation, one-way pause and freeze paths, underlying
+  registration, market creation, and builder codes.
 keywords:
   - deepbook predict registry
   - registry
   - admin cap
-  - create predict
-  - create oracle
-  - quote asset
-  - oracle cap
-  - pricing config
-  - risk config
+  - pause cap
+  - market lifecycle cap
+  - cadence config
+  - expiry market id
+  - create expiry market
+  - builder code
+last_verified: 2026-09-03
+verified_against: predict-testnet-8-21
 goal:
   description: >-
-    Reader can learn about DeepBook Predict registry setup, oracle creation,
-    quote asset management
+    Reader can look up markets and cadence terms in the Predict Registry, and
+    understands which capability gates each lifecycle, pause, and configuration
+    function
   requires:
     - has_frontmatter:
         - title
@@ -30,182 +34,289 @@ goal:
     - has_answer: true
       label: Needs answer summary for AI citation
 questions:
-  - What is Registry in Sui?
-  - How does registry work on Sui?
-  - How do I configure registry?
+  - How do I find the DeepBook Predict market for an underlying and expiry?
+  - What are the DeepBook Predict cadence IDs and cadence configuration values?
+  - Which capability gates pausing, freezing, and market creation in Predict?
 answer: >-
-  Learn about DeepBook Predict registry setup, oracle creation, quote asset
-  management, and admin configuration entry points.
+  The shared Registry object holds the market catalog and cadence configuration
+  for DeepBook Predict. Read a market with expiry_market_id and cadence terms
+  with cadence_config or cadence_configs. AdminCap mints and revokes PauseCap
+  and MarketLifecycleCap, PauseCap engages one-way trading, freeze, and
+  per-market mint stops, and MarketLifecycleCap creates markets.
 ---
 
-The `Registry` shared object tracks the Predict object ID and the oracle IDs created by each `OracleSVICap`. The registry module also exposes admin entry points for setup, quote asset management, oracle creation, pricing configuration, risk configuration, and the withdrawal limiter.
+`deepbook_predict::registry::Registry` is the shared object that holds the market catalog and the cadence configuration for every registered underlying. It also holds the allowlists that decide which `PauseCap` and which `MarketLifecycleCap` still carry authority.
 
-Most app integrations do not call these functions directly. They are operator and governance surfaces for deploying and maintaining the protocol.
+`Registry` and `ProtocolConfig` are created together when the Predict package is published, and the single `AdminCap` is transferred to the publisher at that moment. The object ID for this deployment is on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#shared-objects).
 
-## API
+Most application integrations call only the read functions here. The rest are operator and governance surfaces. None of them is an `entry fun`: every function on this page is a `public fun` invoked as a `moveCall`. The capability-minting functions and `generate_lifecycle_proof` return values that a later command in the same transaction must consume, because Sui rejects an unused return value only when its type lacks `drop`. The two creation functions each return an `ID`, which has `drop`, so a transaction can leave it unused.
 
-<details>
-<summary>Read registered object IDs</summary>
+## Registry state
 
-Use these functions to read the active Predict object ID and the oracle IDs associated with an oracle cap.
+The registry holds the market catalog inline rather than in a separate object:
 
 <ImportContent
-	source="packages/predict/sources/registry.move"
+	source="packages/predict/sources/registry/registry.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="predict_id,oracle_ids"
+	branch="predict-testnet-8-21"
+	struct="Registry"
+/>
+
+The `market_manager` field is a `deepbook_predict::market_manager::MarketManager`, a `store` value embedded in the registry. It carries two tables: the per-underlying cadence configuration, and the map from an underlying and expiry to a market ID. `MarketManager` is not a separate shared object, so there is no second ID to pass.
+
+## Market lookup
+
+Each market is its own shared `ExpiryMarket` object, addressed by the underlying and the expiry:
+
+<ImportContent
+	source="packages/predict/sources/registry/registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	fun="id,expiry_market_id"
 	noComments
 />
 
-</details>
+`expiry_market_id` returns `Option<ID>`, which is empty when no market exists for that pair, including when the underlying is not registered at all. The expiry is a Unix millisecond timestamp on the cadence grid, so compute the exact expiry before looking a market up, or list markets from the `/markets` endpoint instead.
 
-<details>
-<summary>Create the Predict object</summary>
+The table key behind that lookup, `market_manager::MarketKey`, has no accessors and no exported constructor. Treat it as internal, and address markets through `expiry_market_id` or through the `/markets` endpoint.
 
-The `create_predict()` function creates the shared `Predict` object once for a quote asset and records its ID in the registry.
+## Cadence configuration
+
+A cadence is one market schedule for one underlying. Cadence IDs are fixed:
+
+| Cadence ID | Name | Period |
+| --- | --- | --- |
+| `0` | 1m | One minute |
+| `1` | 5m | Five minutes |
+| `2` | 1h | One hour |
+| `3` | 1d | One day |
+| `4` | 1w | One week |
+| `5` | 1mo | 30 days |
+
+A cadence ID above `5` aborts with `EInvalidCadence`. Read one cadence or all six:
 
 <ImportContent
-	source="packages/predict/sources/registry.move"
+	source="packages/predict/sources/registry/registry.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="create_predict"
+	branch="predict-testnet-8-21"
+	fun="cadence_config,cadence_configs"
 	noComments
 />
 
-</details>
+`cadence_configs` always returns one entry per cadence ID, in ID order, so index 3 is always the 1d cadence. A disabled cadence comes back with every term set to zero, and registering a new underlying starts it with all six cadences disabled. Both reads abort with `EUnderlyingNotRegistered` when the underlying has no row.
 
-<details>
-<summary>Create and register oracle caps</summary>
-
-Oracle caps authorize oracle operators to update oracles and tighten per-oracle ask bounds.
+`CadenceConfig` is returned by value and carries the five terms a market snapshots at creation:
 
 <ImportContent
-	source="packages/predict/sources/registry.move"
+	source="packages/predict/sources/registry/market_manager.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="create_oracle_cap,register_oracle_cap"
+	branch="predict-testnet-8-21"
+	struct="CadenceConfig"
+/>
+
+Read the terms with the accessors rather than by field:
+
+<ImportContent
+	source="packages/predict/sources/registry/market_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	fun="cadence_tick_size,cadence_admission_tick_size,cadence_max_expiry_allocation,cadence_initial_expiry_cash,cadence_window_size,cadence_enabled"
 	noComments
 />
 
-</details>
+`cadence_enabled` is derived, not stored: a cadence is enabled exactly when its window size is greater than zero. The live cadence terms for this deployment are on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#cadences), but they are mutable protocol state, so read them onchain before sizing a strike.
 
-<details>
-<summary>Create an oracle</summary>
+## Capabilities
 
-The `create_oracle()` function creates an `OracleSVI`, associates it with the calling cap, and initializes the Predict vault's strike grid for that oracle.
+Three capability types gate the privileged surface, and each one is a distinct owned object:
+
+| Capability | Module | Gates |
+| --- | --- | --- |
+| `AdminCap` | `deepbook_predict::admin` | Protocol configuration, underlying and cadence configuration, per-market mint pause and unpause, and the minting and revocation of the other two capabilities |
+| `PauseCap` | `deepbook_predict::pause_cap` | The three one-way emergency stops |
+| `MarketLifecycleCap` | `deepbook_predict::market_lifecycle_cap` | Market creation, and starting a pool valuation |
 
 <ImportContent
-	source="packages/predict/sources/registry.move"
+	source="packages/predict/sources/capabilities/market_lifecycle_cap.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="create_oracle"
+	branch="predict-testnet-8-21"
+	struct="MarketLifecycleCap,MarketLifecycleProof"
+/>
+
+`AdminCap` is minted once at publication and has no rotation or revocation path. The other two are minted on demand and revoked by ID, so their authority is a row in the registry rather than possession of the object alone.
+
+### Mint and revoke a pause capability
+
+Pause capabilities are deliberately not version-gated, so an emergency stop still works when the running package version is below the configured watermark:
+
+<ImportContent
+	source="packages/predict/sources/registry/registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-8-21"
+	fun="mint_pause_cap,revoke_pause_cap"
 	noComments
 />
 
-</details>
+`mint_pause_cap` returns the new `PauseCap` by value, so the transaction must transfer it to a holder in a later command. Revocation removes the ID from `allowed_pause_caps`, after which every pause path using that object aborts with `EPauseCapNotValid`, even though the object still exists. A holder can also destroy their own capability with `pause_cap::destroy`.
 
-<details>
-<summary>Manage quote assets</summary>
+### Mint and revoke a lifecycle capability
 
-Admins can enable or disable quote assets for new supply and mint inflows.
+Lifecycle capabilities are version-gated, unlike pause capabilities:
 
 <ImportContent
-	source="packages/predict/sources/registry.move"
+	source="packages/predict/sources/registry/registry.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="enable_quote_asset,disable_quote_asset"
+	branch="predict-testnet-8-21"
+	fun="mint_lifecycle_cap,revoke_lifecycle_cap,generate_lifecycle_proof"
 	noComments
 />
 
-</details>
+Revoking an ID that is not in `allowed_lifecycle_caps` aborts with `ELifecycleCapNotFound`, and using a revoked capability aborts with `ELifecycleCapNotValid`.
 
-<details>
-<summary>Configure pricing</summary>
+`generate_lifecycle_proof` converts an allowlisted capability into a `MarketLifecycleProof`. That proof has no abilities, so it cannot be stored, copied, or dropped: the same transaction must consume it. Its only consumer is `plp::start_pool_valuation`, which is why a liquidity flush and its valuation must run as one programmable transaction block.
 
-These functions control global spread, minimum spread, utilization multiplier, and global ask price bounds.
+## Pause and freeze
+
+Three functions engage an emergency stop, and each validates the capability ID against the registry allowlist before it acts:
 
 <ImportContent
-	source="packages/predict/sources/registry.move"
+	source="packages/predict/sources/registry/registry.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="set_base_spread,set_min_spread,set_utilization_multiplier,set_min_ask_price,set_max_ask_price"
+	branch="predict-testnet-8-21"
+	fun="pause_trading_pause_cap,freeze_protocol_pause_cap,pause_expiry_market_mint_pause_cap"
 	noComments
 />
 
-</details>
+Each takes no boolean, so each is one-way:
 
-<details>
-<summary>Configure oracle ask bounds</summary>
+- **`pause_trading_pause_cap`:** sets `trading_paused` on `ProtocolConfig`. Flows guarded by the trading check then abort with `ETradingPaused`.
+- **`freeze_protocol_pause_cap`:** engages the protocol freeze. Version-gated flows then abort with `EProtocolFrozen`.
+- **`pause_expiry_market_mint_pause_cap`:** pauses minting on one market. Minting on that market aborts with `EMintPaused`, while redemption and settlement stay open.
 
-Oracle ask-bound overrides are authorized by the oracle's cap and can only tighten the global bounds.
+Reversal is an `AdminCap` surface, not a `PauseCap` one. `protocol_config::set_trading_paused`, `protocol_config::set_frozen`, and `expiry_market::set_mint_paused` each take a boolean and can move the flag in either direction. `set_frozen` is intentionally not version-gated, so a frozen protocol can still be unfrozen.
+
+## Underlying and cadence administration
+
+An underlying must be registered before any market on it can exist:
 
 <ImportContent
-	source="packages/predict/sources/registry.move"
+	source="packages/predict/sources/registry/registry.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="set_oracle_ask_bounds,clear_oracle_ask_bounds"
+	branch="predict-testnet-8-21"
+	fun="register_underlying,set_template_cadence_config"
 	noComments
 />
 
-</details>
+Registering the same underlying twice aborts with `EUnderlyingAlreadyRegistered`. Registration creates the row with all six cadences disabled, so a second call to `set_template_cadence_config` per cadence is what actually turns a schedule on.
 
-<details>
-<summary>Configure trading and risk controls</summary>
+`set_template_cadence_config` validates the whole cadence as a unit and aborts with `EInvalidCadenceConfig` when the terms mix zero and nonzero values, when the admission tick size is not a whole multiple of the tick size, or when the initial expiry cash falls outside its bounds. A window size above the maximum of `10` is rejected by the configuration constants with `EInvalidCadenceWindowSize`. A successful update emits `CadenceConfigUpdated`.
 
-These functions control the trading pause, max total exposure percentage, and LP withdrawal limiter.
+Changing a cadence does not touch markets that already exist. Each market snapshots its terms at creation, so the grid an open market admits is the grid it was created with.
+
+## Market creation
+
+Market creation is the only lifecycle-capability surface in the registry:
 
 <ImportContent
-	source="packages/predict/sources/registry.move"
+	source="packages/predict/sources/registry/registry.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	fun="set_trading_paused,set_max_total_exposure_pct,update_withdrawal_limiter,enable_withdrawal_limiter,disable_withdrawal_limiter"
+	branch="predict-testnet-8-21"
+	fun="create_and_share_expiry_market"
 	noComments
 />
 
-</details>
+The call passes four gates before it does anything: the package version must be at or above the watermark, the lifecycle capability must be allowlisted, trading must not be paused, and no pool valuation may be in progress. It then picks the next deployable expiry inside the cadence's rolling window and aborts when there is none:
 
-## Structs and events
+- **`ECadenceDisabled`:** the cadence window size is zero.
+- **`ECadenceWindowExceeded`:** every slot inside the rolling window is already deployed.
+- **`EMarketAlreadyCreated`:** a market already exists for that underlying and expiry.
+- **`EInvalidDeploymentExpiry`:** the expiry is not aligned to the cadence grid, or is not past the last deployed watermark.
+- **`EPythFeedNotBoundToUnderlying`** and **`EBlockScholesStoresNotBoundToUnderlying`:** the underlying has no canonical oracle bindings in the Propbook registry.
 
-<details>
-<summary>`Registry` and `AdminCap`</summary>
+The function takes `&OracleRegistry` but no feed objects, so market creation reads no live price. Strike admission is decided entirely by the absolute tick domain and the cadence terms, fixed in advance. The market's reference tick source timestamp is set to the expiry minus one cadence period, and `expiry_market::set_reference_tick` records the reference tick later from the exact Pyth observation at that timestamp.
+
+Two values carry into the new market from the cadence: `admission_tick_size` becomes the market's admission grid, and `max_expiry_allocation` becomes both the vault's allocation cap for that expiry and the scale of the market's inventory-impact curve. The call returns the new market ID and emits `MarketCreated`.
+
+A new market starts with zero cash and cannot mint until the permissionless `plp::rebalance_expiry_cash` funds it. The pool also caps live pre-expiry markets at 24 and aborts with `EMaxLiveExpiryMarketsExceeded` beyond that.
+
+## Builder codes
+
+Builder-code creation is the only permissionless function in the registry that changes state. The reads on this page, `expiry_market_id`, `cadence_config`, and `cadence_configs`, are permissionless too, but they mutate nothing:
 
 <ImportContent
-	source="packages/predict/sources/registry.move"
+	source="packages/predict/sources/registry/registry.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	struct="Registry,AdminCap"
+	branch="predict-testnet-8-21"
+	fun="create_and_share_builder_code"
+	noComments
 />
 
-</details>
+Anyone can call it. The resulting `BuilderCode` is a shared object derived from the registry UID and keyed by the caller address plus the index you pass, so its address is deterministic and one address can hold many codes. The call returns the code ID and emits `BuilderCodeCreated`.
 
-<details>
-<summary>Registry events</summary>
+An account attaches a code with `predict_account::set_builder_code` and detaches it with `predict_account::unset_builder_code`. Builder fees accrue to the code address through the funds accumulator, and only the owner can call `builder_code::claim_all_builder_fees`.
+
+## Errors
+
+`deepbook_predict::registry` raises three capability errors:
+
+| Code | Name | Raised when |
+| --- | --- | --- |
+| `0` | `EPauseCapNotValid` | The pause capability ID is not in `allowed_pause_caps` |
+| `1` | `ELifecycleCapNotValid` | The lifecycle capability ID is not in `allowed_lifecycle_caps` |
+| `2` | `ELifecycleCapNotFound` | Revoking a lifecycle capability ID that was never allowlisted |
+
+`deepbook_predict::market_manager` raises the catalog and cadence errors:
+
+| Code | Name | Raised when |
+| --- | --- | --- |
+| `0` | `EUnderlyingNotRegistered` | No row exists for the underlying |
+| `1` | `EUnderlyingAlreadyRegistered` | `register_underlying` called twice for one underlying |
+| `2` | `ECadenceDisabled` | Deploying on a cadence whose window size is zero |
+| `3` | `EMarketAlreadyCreated` | A market already exists for that underlying and expiry |
+| `4` | `EInvalidCadence` | Cadence ID above `5` |
+| `5` | `ECadenceWindowExceeded` | No deployable slot inside the rolling window |
+| `6` | `EInvalidDeploymentExpiry` | Expiry not grid-aligned, or not past the watermark |
+| `7` | `EInvalidCadenceConfig` | Mixed zero and nonzero terms, admission tick not a multiple of the tick, or initial expiry cash out of bounds |
+| `8` | `EPythFeedNotBoundToUnderlying` | No canonical Pyth binding for the underlying |
+| `9` | `EBlockScholesStoresNotBoundToUnderlying` | No Block Scholes store pair for the underlying |
+
+Gate failures come from `deepbook_predict::protocol_config` instead: `ETradingPaused` (`0`), `EValuationInProgress` (`1`), `EPackageVersionDisabled` (`3`), and `EProtocolFrozen` (`5`).
+
+## Events
+
+Registry activity surfaces through `deepbook_predict::config_events`:
 
 <ImportContent
-	source="packages/predict/sources/registry.move"
+	source="packages/predict/sources/events/config_events.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-4-16"
-	struct="PredictCreated,OracleCreated"
+	branch="predict-testnet-8-21"
+	struct="MarketCreated,CadenceConfigUpdated"
 />
 
-</details>
+`MarketCreated` carries the full snapshot a market was created with, which is what the `/markets` endpoint returns. `CadenceConfigUpdated` carries the registry ID alongside the new terms, so an indexer can replay cadence history without re-reading the object.

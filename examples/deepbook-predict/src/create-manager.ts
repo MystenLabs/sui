@@ -2,43 +2,55 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // docs::#create-manager
-import { Transaction } from '@mysten/sui/transactions';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import type {
+	CreateManagerReceipt,
+	DecodableTransactionResult,
+} from '@mysten/deepbook-v3/predict';
+import type { Transaction } from '@mysten/sui/transactions';
 import { client } from './client.js';
-import { PREDICT } from './config.js';
 
-// Creates and shares a PredictManager, then returns its object ID.
-export async function createManager(signer: Ed25519Keypair): Promise<string> {
-	const tx = new Transaction();
-	tx.moveCall({ target: `${PREDICT.packageId}::predict::create_manager` });
+// Each trader holds one canonical account: a shared `AccountWrapper` holding an
+// `Account`. The builder keeps the legacy DeepBook balance-manager name, but the
+// object it creates is the account wrapper.
+export function createAccount(): Transaction {
+	return client.predict.tx.createManager();
+}
 
-	const result = await client.signAndExecuteTransaction({
-		transaction: tx,
-		signer,
-		include: { effects: true, objectTypes: true },
-	});
+// The wrapper ID is derived from the owner address, so you can compute it before
+// the transaction lands. No chain read.
+export function accountWrapperId(owner: string): string {
+	return client.predict.wrapperIdFor(owner);
+}
 
-	// Wait for finality before acting on the result, so later reads reflect it.
-	await client.waitForTransaction({ result });
+// First-time setup in a single PTB: create the wrapper, deposit, and share it.
+// `owner` must be the address that signs, because the wrapper is derived from
+// the transaction sender. This aborts if the account already exists, so use it
+// only on the create path.
+export function createAndFund(owner: string, amountUsdc: number): Transaction {
+	return client.predict.tx.deposit(owner, amountUsdc, { create: true });
+}
 
-	if (result.$kind === 'FailedTransaction') {
-		// The transaction is onchain and the sender paid gas. Do not retry it.
-		const { status } = result.FailedTransaction;
-		throw new Error(
-			`create_manager aborted: ${status.success ? 'unknown' : JSON.stringify(status.error)}`,
-		);
-	}
+// Fund an account that already exists. The DUSDC is sourced from the owner's
+// coin objects and address balance together.
+export function deposit(owner: string, amountUsdc: number): Transaction {
+	return client.predict.tx.deposit(owner, amountUsdc);
+}
 
-	const objectTypes = result.Transaction?.objectTypes ?? {};
-	const managerId = result.Transaction?.effects?.changedObjects?.find(
-		(obj) =>
-			obj.idOperation === 'Created' &&
-			objectTypes[obj.objectId]?.includes('PredictManager'),
-	)?.objectId;
+// Take DUSDC back out of the account. It lands in the owner's address balance;
+// pass `{ toCoinObject: true }` when you need a discrete coin object instead.
+export function withdrawToWallet(owner: string, amountUsdc: number): Transaction {
+	return client.predict.tx.withdraw(owner, amountUsdc);
+}
 
-	if (!managerId) {
-		throw new Error('Could not find created PredictManager in effects');
-	}
-	return managerId;
+// The decoders are pure and touch no network. Execute the create transaction
+// with events included, then read the IDs off the receipt.
+export function decodeCreated(result: DecodableTransactionResult): CreateManagerReceipt {
+	return client.predict.decode.createManager(result);
+}
+
+// The account's internal custody balance in DUSDC, as a decimal number. This is
+// the balance a mint is debited from, not the owner's wallet balance.
+export async function accountBalance(owner: string): Promise<number> {
+	return client.predict.read.balance(owner);
 }
 // docs::/#create-manager
