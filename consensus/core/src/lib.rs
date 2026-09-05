@@ -36,6 +36,7 @@ mod peers_pool;
 mod proposer;
 mod round_prober;
 mod round_tracker;
+mod slim_block;
 mod stake_aggregator;
 pub mod storage;
 mod subscriber;
