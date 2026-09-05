@@ -368,14 +368,15 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             let barrier_tx = self
                 .checkpoint_builder
                 .get_barrier_tx(checkpoint_height, &settlement_effects);
-            self.execute_system_transaction(barrier_tx)
+            let barrier_effects = self
+                .execute_system_transaction(barrier_tx)
                 .expect("barrier txn cannot fail")
-                .0
-                .status()
-                .unwrap();
+                .0;
+            barrier_effects.status().unwrap();
 
             let committed_accumulator_versions = settlement_effects
                 .iter()
+                .chain(std::iter::once(&barrier_effects))
                 .flat_map(TransactionEffectsAPI::object_changes)
                 .filter(|change| change.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
                 .filter_map(|change| change.input_version)

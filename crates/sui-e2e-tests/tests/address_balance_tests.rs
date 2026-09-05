@@ -2189,10 +2189,23 @@ fn assert_object_funds_check_rejected_poison_writes(
     );
 }
 
-fn object_funds_in_execution_test_env() -> TestEnvBuilder {
-    TestEnvBuilder::new().with_proto_override_cb(Box::new(|_, mut cfg| {
+fn assert_coin_balance_overflow(effects: &impl TransactionEffectsAPI) {
+    let status = effects.status();
+    assert!(
+        matches!(
+            status,
+            sui_types::execution_status::ExecutionStatus::Failure(failure)
+                if failure.error == sui_types::execution_status::ExecutionFailureStatus::CoinBalanceOverflow
+        ),
+        "expected CoinBalanceOverflow, got: {status:?}"
+    );
+}
+
+// Mainnet and testnet still depend on the overflow guards in the flag-off path.
+fn object_funds_test_env(check_in_execution: bool) -> TestEnvBuilder {
+    TestEnvBuilder::new().with_proto_override_cb(Box::new(move |_, mut cfg| {
         cfg.set_enable_object_funds_withdraw_for_testing(true);
-        cfg.set_check_object_funds_withdraw_in_execution_for_testing(true);
+        cfg.set_check_object_funds_withdraw_in_execution_for_testing(check_in_execution);
         cfg
     }))
 }
@@ -2203,7 +2216,16 @@ fn object_funds_in_execution_test_env() -> TestEnvBuilder {
 /// aborts before the poison accumulator write is emitted.
 #[sim_test]
 async fn test_accumulator_merge_overflow_poison_pill_blocked_by_object_funds_check() {
-    let mut test_env = object_funds_in_execution_test_env()
+    accumulator_merge_overflow_poison_pill(true).await;
+}
+
+#[sim_test]
+async fn test_accumulator_merge_overflow_poison_pill_legacy() {
+    accumulator_merge_overflow_poison_pill(false).await;
+}
+
+async fn accumulator_merge_overflow_poison_pill(check_in_execution: bool) {
+    let mut test_env = object_funds_test_env(check_in_execution)
         .with_num_validators(1)
         .build()
         .await;
@@ -2257,12 +2279,15 @@ async fn test_accumulator_merge_overflow_poison_pill_blocked_by_object_funds_che
         },
     });
 
-    // The transaction is rejected before the unbacked object withdrawal can emit a poison write.
     let (_, effects) = test_env
         .exec_tx_directly(poison_tx)
         .await
         .expect("execution must not panic the node");
-    assert_object_funds_check_rejected_poison_writes(&effects, &[u64::MAX]);
+    if check_in_execution {
+        assert_object_funds_check_rejected_poison_writes(&effects, &[u64::MAX]);
+    } else {
+        assert_coin_balance_overflow(&effects);
+    }
 
     // The sender's balance is untouched (only gas was charged) and a subsequent reconfiguration
     // succeeds.
@@ -2274,7 +2299,16 @@ async fn test_accumulator_merge_overflow_poison_pill_blocked_by_object_funds_che
 /// in-execution object-funds check.
 #[sim_test]
 async fn test_accumulator_merge_overflow_custom_coin_blocked_by_object_funds_check() {
-    let mut test_env = object_funds_in_execution_test_env()
+    accumulator_merge_overflow_custom_coin(true).await;
+}
+
+#[sim_test]
+async fn test_accumulator_merge_overflow_custom_coin_legacy() {
+    accumulator_merge_overflow_custom_coin(false).await;
+}
+
+async fn accumulator_merge_overflow_custom_coin(check_in_execution: bool) {
+    let mut test_env = object_funds_test_env(check_in_execution)
         .with_num_validators(1)
         .build()
         .await;
@@ -2303,12 +2337,26 @@ async fn test_accumulator_merge_overflow_custom_coin_blocked_by_object_funds_che
         test_env.rgp,
     );
 
-    // The unbacked object withdrawal is rejected before any u64::MAX accumulator write is emitted.
     let (_, effects) = test_env
         .exec_tx_directly(tx)
         .await
         .expect("execution must not panic the node");
-    assert_object_funds_check_rejected_poison_writes(&effects, &[u64::MAX]);
+    if check_in_execution {
+        assert_object_funds_check_rejected_poison_writes(&effects, &[u64::MAX]);
+    } else {
+        let status = effects.status();
+        assert!(
+            matches!(
+                status,
+                sui_types::execution_status::ExecutionStatus::Failure(failure)
+                    if matches!(
+                        failure.error,
+                        sui_types::execution_status::ExecutionFailureStatus::MovePrimitiveRuntimeError(_)
+                    )
+            ),
+            "expected the custom-coin merge cap to reject the overflow, got: {status:?}"
+        );
+    }
 
     // Nothing was credited to the sender's COIN_A balance.
     assert_eq!(
@@ -2324,7 +2372,16 @@ async fn test_accumulator_merge_overflow_custom_coin_blocked_by_object_funds_che
 /// representability or SUI-conservation checks need to reason about the oversized event.
 #[sim_test]
 async fn test_accumulator_conservation_overflow_single_withdrawal_blocked_by_object_funds_check() {
-    let mut test_env = object_funds_in_execution_test_env()
+    accumulator_conservation_overflow_single_withdrawal(true).await;
+}
+
+#[sim_test]
+async fn test_accumulator_conservation_overflow_single_withdrawal_legacy() {
+    accumulator_conservation_overflow_single_withdrawal(false).await;
+}
+
+async fn accumulator_conservation_overflow_single_withdrawal(check_in_execution: bool) {
+    let mut test_env = object_funds_test_env(check_in_execution)
         .with_num_validators(1)
         .build()
         .await;
@@ -2349,12 +2406,15 @@ async fn test_accumulator_conservation_overflow_single_withdrawal_blocked_by_obj
         test_env.rgp,
     );
 
-    // The unbacked object withdrawal is rejected before any u64::MAX accumulator write is emitted.
     let (_, effects) = test_env
         .exec_tx_directly(tx)
         .await
         .expect("execution must not panic the node");
-    assert_object_funds_check_rejected_poison_writes(&effects, &[u64::MAX]);
+    if check_in_execution {
+        assert_object_funds_check_rejected_poison_writes(&effects, &[u64::MAX]);
+    } else {
+        assert_coin_balance_overflow(&effects);
+    }
     test_env.trigger_reconfiguration().await;
 }
 
@@ -2364,7 +2424,16 @@ async fn test_accumulator_conservation_overflow_single_withdrawal_blocked_by_obj
 /// that withdrawal can put the accumulator fold or gas refund path at risk.
 #[sim_test]
 async fn test_accumulator_merge_overflow_gas_refund_blocked_by_object_funds_check() {
-    let mut test_env = object_funds_in_execution_test_env()
+    accumulator_merge_overflow_gas_refund(true).await;
+}
+
+#[sim_test]
+async fn test_accumulator_merge_overflow_gas_refund_legacy() {
+    accumulator_merge_overflow_gas_refund(false).await;
+}
+
+async fn accumulator_merge_overflow_gas_refund(check_in_execution: bool) {
+    let mut test_env = object_funds_test_env(check_in_execution)
         .with_num_validators(1)
         .build()
         .await;
@@ -2443,12 +2512,15 @@ async fn test_accumulator_merge_overflow_gas_refund_blocked_by_object_funds_chec
         test_env.chain_id,
     );
 
-    // The unbacked object withdrawal is rejected before any u64::MAX accumulator write is emitted.
     let (_, effects) = test_env
         .exec_tx_directly(poison_tx)
         .await
         .expect("execution must not panic the node");
-    assert_object_funds_check_rejected_poison_writes(&effects, &[u64::MAX]);
+    if check_in_execution {
+        assert_object_funds_check_rejected_poison_writes(&effects, &[u64::MAX]);
+    } else {
+        assert_coin_balance_overflow(&effects);
+    }
 
     test_env.trigger_reconfiguration().await;
 }
@@ -2458,7 +2530,16 @@ async fn test_accumulator_merge_overflow_gas_refund_blocked_by_object_funds_chec
 /// The first unbacked object withdrawal now aborts in execution, before those coins can exist.
 #[sim_test]
 async fn test_gas_coin_overflow_via_merge_into_gas_coin_blocked_by_object_funds_check() {
-    let mut test_env = object_funds_in_execution_test_env()
+    gas_coin_overflow_via_merge_into_gas_coin(true).await;
+}
+
+#[sim_test]
+async fn test_gas_coin_overflow_via_merge_into_gas_coin_legacy() {
+    gas_coin_overflow_via_merge_into_gas_coin(false).await;
+}
+
+async fn gas_coin_overflow_via_merge_into_gas_coin(check_in_execution: bool) {
+    let mut test_env = object_funds_test_env(check_in_execution)
         .with_num_validators(1)
         .build()
         .await;
@@ -2546,13 +2627,15 @@ async fn test_gas_coin_overflow_via_merge_into_gas_coin_blocked_by_object_funds_
         test_env.rgp,
     );
 
-    // The first unbacked object withdrawal is rejected before any u64::MAX accumulator write is
-    // emitted or any withdrawn SUI can be merged into the gas coin.
     let (_, effects) = test_env
         .exec_tx_directly(poison_tx)
         .await
         .expect("execution must not panic the node");
-    assert_object_funds_check_rejected_poison_writes(&effects, &[amount1, amount2]);
+    if check_in_execution {
+        assert_object_funds_check_rejected_poison_writes(&effects, &[amount1, amount2]);
+    } else {
+        assert_coin_balance_overflow(&effects);
+    }
 
     test_env.trigger_reconfiguration().await;
 }

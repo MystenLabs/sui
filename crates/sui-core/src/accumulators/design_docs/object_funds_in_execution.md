@@ -79,16 +79,16 @@ executed-but-unsettled withdrawals.
 
 - **Recording.** After a transaction executes *successfully* under the in-execution check, the
   authority records its per-account **net** withdrawal amounts from the effects
-  (a private helper on `AuthorityState`) — net, not running max, because that is what settlement will
-  actually deduct. The in-execution check is only enabled together with
+  through `UnsettledObjectWithdrawals::record_object_funds_withdraws` — net, not running max,
+  because that is what settlement will actually deduct. The in-execution check is only enabled together with
   `record_net_unsettled_object_withdraws`, so nets are the only amounts recorded; the running max
   survives as a debug assertion (net can never exceed the checked peak). Failed transactions
   settle nothing and record nothing.
 - **Reading.** The executor reads the store through the `UnsettledObjectFundsRead` trait, threaded
   into the temporary store as `unsettled_object_funds`.
 - **GC.** Entries are dropped at checkpoint commit for versions the committed effects settled
-  (`UnsettledObjectWithdrawals::commit_effects`) — at commit rather than at barrier execution,
-  because the barrier can execute concurrently with transactions that still read those entries.
+  (`UnsettledObjectWithdrawals::commit_accumulator_versions`) — at commit rather than at barrier
+  execution, because the barrier can execute concurrently with transactions that still read those entries.
 - **Determinism.** Two transactions withdrawing from the same account conflict on the owning
   object, so they never execute concurrently, and both live execution and checkpoint execution
   run a commit's transactions in the same dependency order — every node accumulates the same
@@ -101,9 +101,9 @@ executed-but-unsettled withdrawals.
 | Path | Where the accumulator root version comes from |
 |------|-----------------------------------------------|
 | Live consensus execution | Assigned versions (`AssignedVersions.system_object_versions`). |
-| Checkpoint execution / crash recovery | Recorded `ReadOnlyRoot` in effects, plus the settlement-derived back-fill. See `implicitly_read_system_objects.md`. |
-| Dev-inspect / dry-run | Resolved at read time to the latest committed version (`SystemObjectVersionRequirements::Latest`); never blocks. The old post-execution simulate check is bypassed when the flag is on (and can be deleted after rollout — simulation never re-executes historical transactions). |
-| `sui-replay-2` | Superset harvest from expected effects. **Caveat:** unsettled in-commit withdrawals are *not* reconstructed in isolated replay (`unsettled = 0`), which can diverge from the original execution — see the TODO in `temporary_store.rs`. Mainnet enablement is blocked on this. |
+| Checkpoint execution / crash recovery | Back-filled from the settlement barrier's input version, with recorded `ReadOnlyRoot` versions checked for consistency. See `CheckpointTransactionData::new` in the [checkpoint executor](../../checkpoints/checkpoint_executor/mod.rs). |
+| Dev-inspect / dry-run | Captured from the latest stored root before execution (`SystemObjectVersions::from_latest_in_store`). The old post-execution simulate check is bypassed when the flag is on. Implicit reads are tracked so the response includes the objects referenced by effects. **Caveat:** the unsettled-withdrawal view is empty, so simulation can succeed when committed execution would reject the withdrawal. |
+| `sui-replay-2` | Reconstructed from expected effects (`SystemObjectVersions::from_effects`). **Caveat:** unsettled in-commit withdrawals are *not* reconstructed in isolated replay (`unsettled = 0`), which can diverge from the original execution — see the TODO in `crates/sui-replay-2/src/execution.rs`. Mainnet enablement is blocked on this. |
 
 ## 5. Failure and error semantics
 
@@ -116,5 +116,6 @@ executed-but-unsettled withdrawals.
   `sui_types::funds_accumulator::is_object_funds_insufficient_abort`.
 - The address-funds scheduler path is unchanged and still produces
   `InsufficientFundsForWithdraw` itself (pre-execution, cancellation-style).
-- A root that has not caught up locally never produces a failure at all: execution blocks until
-  the version is committed, so temporary unavailability is invisible in effects.
+- During committed validator/fullnode execution, a root that has not caught up locally is awaited,
+  so temporary unavailability is invisible in effects. Dry-run reads do not wait and can instead
+  produce a load error if the captured root version is unavailable.

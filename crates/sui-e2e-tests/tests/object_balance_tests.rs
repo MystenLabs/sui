@@ -182,6 +182,49 @@ fn assert_object_funds_insufficient(
     );
 }
 
+async fn simulate_object_funds_and_check_root(
+    test_env: &TestEnv,
+    tx: &sui_types::transaction::TransactionData,
+) -> TransactionEffects {
+    use sui_rpc::field::FieldMaskUtil;
+    use sui_rpc::proto::sui::rpc::v2 as proto;
+
+    let mut request = proto::SimulateTransactionRequest::default()
+        .with_transaction(
+            proto::Transaction::default().with_bcs(proto::Bcs::serialize(tx).unwrap()),
+        )
+        .with_read_mask(prost_types::FieldMask::from_paths(["*"]));
+    request.set_checks(proto::simulate_transaction_request::TransactionChecks::Disabled);
+    request.set_do_gas_selection(false);
+    let response = test_env
+        .cluster
+        .grpc_client()
+        .into_inner()
+        .execution_client()
+        .simulate_transaction(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let transaction = response.transaction.unwrap();
+    let effects: TransactionEffects = transaction
+        .effects
+        .unwrap()
+        .bcs
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    let root_version = accumulator_read_only_root_version(&effects)
+        .expect("cold object-funds reads must record the accumulator root");
+    let root_id = SUI_ACCUMULATOR_ROOT_OBJECT_ID.to_string();
+    assert!(
+        transaction.objects.unwrap().objects.iter().any(|object| {
+            object.object_id() == root_id && object.version() == root_version.value()
+        }),
+        "simulation must return the accumulator root at the version referenced by its effects"
+    );
+    effects
+}
+
 #[sim_test]
 async fn test_simulate_object_funds_sufficient_in_execution() {
     let mut test_env = object_funds_in_execution_test_env().build().await;
@@ -198,13 +241,8 @@ async fn test_simulate_object_funds_sufficient_in_execution() {
         )
         .build();
 
-    let result = test_env
-        .cluster
-        .grpc_client()
-        .simulate_transaction(&tx, false, false)
-        .await
-        .unwrap();
-    assert!(result.transaction.effects.status().is_ok());
+    let effects = simulate_object_funds_and_check_root(&test_env, &tx).await;
+    assert!(effects.status().is_ok());
 }
 
 #[sim_test]
@@ -223,13 +261,8 @@ async fn test_simulate_object_funds_insufficient_in_execution() {
         )
         .build();
 
-    let result = test_env
-        .cluster
-        .grpc_client()
-        .simulate_transaction(&tx, false, false)
-        .await
-        .unwrap();
-    assert_object_funds_insufficient(result.transaction.effects.status(), "simulated transaction");
+    let effects = simulate_object_funds_and_check_root(&test_env, &tx).await;
+    assert_object_funds_insufficient(effects.status(), "simulated transaction");
 }
 
 fn accumulator_recorded_as_read_only_root(effects: &TransactionEffects) -> bool {
