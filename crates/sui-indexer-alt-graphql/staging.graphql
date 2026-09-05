@@ -307,6 +307,12 @@ type Balance {
 	"""
 	coinBalance: BigInt
 	"""
+	Fetch the CoinMetadata for this balance's coin type.
+	
+	Returns `null` if no CoinMetadata object exists for the coin type.
+	"""
+	coinMetadata: CoinMetadata
+	"""
 	Coin type for the balance, such as `0x2::sui::SUI`.
 	"""
 	coinType: MoveType
