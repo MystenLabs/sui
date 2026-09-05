@@ -55,7 +55,6 @@ use crate::api::types::transaction_object::TransactionObject;
 use crate::config::Limits;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
-use crate::error::upcast;
 use crate::pagination::Page;
 use crate::pagination::StreamConnection;
 use crate::scope::Scope;
@@ -106,6 +105,45 @@ pub(crate) struct DynamicFieldName {
     pub(crate) literal: Option<String>,
 }
 
+/// Identifies a dynamic field or derived object under a parent object.
+///
+/// At most one of `version`, `rootVersion`, or `atCheckpoint` may be specified.
+#[derive(InputObject)]
+pub(crate) struct NameKey {
+    /// The parent object that owns the dynamic field or derived object claim.
+    pub(crate) parent: SuiAddress,
+
+    /// The dynamic field name or derived object key.
+    pub(crate) name: DynamicFieldName,
+
+    /// If specified, fetch the result at this exact version.
+    pub(crate) version: Option<UInt53>,
+
+    /// If specified, fetch the latest version of the result at or before this root version.
+    pub(crate) root_version: Option<UInt53>,
+
+    /// If specified, fetch the latest version of the result as of this checkpoint.
+    pub(crate) at_checkpoint: Option<UInt53>,
+}
+
+/// Identifies a derived object under one parent object.
+///
+/// At most one of `version`, `rootVersion`, or `atCheckpoint` may be specified.
+#[derive(InputObject)]
+pub(crate) struct DerivedObjectKey {
+    /// The derived object's key.
+    pub(crate) name: DynamicFieldName,
+
+    /// If specified, fetch the derived object at this exact version.
+    pub(crate) version: Option<UInt53>,
+
+    /// If specified, fetch the latest version of the derived object at or before this root version.
+    pub(crate) root_version: Option<UInt53>,
+
+    /// If specified, fetch the latest version of the derived object as of this checkpoint.
+    pub(crate) at_checkpoint: Option<UInt53>,
+}
+
 /// The value of a dynamic field (`MoveValue`) or dynamic object field (`MoveObject`).
 #[derive(Union)]
 pub(crate) enum DynamicFieldValue {
@@ -118,6 +156,9 @@ pub(crate) enum Error {
     #[error("Name literals cannot contain field accesses")]
     FieldAccess,
 
+    #[error(transparent)]
+    Object(#[from] std::sync::Arc<object::Error>),
+
     #[error("Literal error: {0}")]
     Literal(#[from] sui_display::v2::FormatError),
 
@@ -128,12 +169,12 @@ pub(crate) enum Error {
     StoreAccess,
 }
 
-/// Dynamic fields are heterogenous fields that can be added or removed from an object at runtime. Their names are arbitrary Move values that have `copy`, `drop`, and `store`.
+/// Dynamic fields are heterogeneous fields that can be added to or removed from an object at runtime. Their names are arbitrary Move values that have `copy`, `drop`, and `store`.
 ///
-/// There are two sub-types of dynamic fields:
+/// There are two kinds of dynamic fields:
 ///
-/// - Dynamic fields can store any value that has `store`. Objects stored in this kind of field will be considered wrapped (not accessible via its ID by external tools like explorers, wallets, etc. accessing storage).
-/// - Dynamic object fields can only store objects (values that have the `key` ability, and an `id: UID` as its first field) that have `store`, but they will still be directly accessible off-chain via their ID after being attached as a field.
+/// - Dynamic fields can store any value that has `store`. Objects stored in this kind of field are wrapped and cannot be accessed directly by their ID.
+/// - Dynamic object fields can store only objects that have `key` and `store`. Their values remain accessible directly by their ID while attached.
 #[Object]
 impl DynamicField {
     /// The dynamic field's globally unique identifier, which can be passed to `Query.node` to refetch it.
@@ -235,6 +276,25 @@ impl DynamicField {
         self.super_.default_name_record(ctx).await.ok()?
     }
 
+    /// Access a derived object using its key.
+    ///
+    /// The object can be bounded by at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`.
+    ///
+    /// Returns `null` if the derived object has not been claimed, has been deleted, or is not available in the store.
+    pub(crate) async fn derived_object(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+        version: Option<UInt53>,
+        root_version: Option<UInt53>,
+        at_checkpoint: Option<UInt53>,
+    ) -> Option<Result<MoveObject, RpcError<Error>>> {
+        self.super_
+            .derived_object(ctx, name, version, root_version, at_checkpoint)
+            .await
+            .ok()?
+    }
+
     /// Access a dynamic field on an object using its type and BCS-encoded name.
     ///
     /// Returns `null` if a dynamic field with that name could not be found attached to this object.
@@ -282,6 +342,17 @@ impl DynamicField {
         ctx: &Context<'_>,
     ) -> Option<Result<bool, RpcError>> {
         self.super_.has_public_transfer(ctx).await.ok()?
+    }
+
+    /// Access derived objects using their keys and optional version bounds.
+    ///
+    /// Each key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a derived object has not been claimed, has been deleted, or is not available in the store, its corresponding entry is `null`.
+    pub(crate) async fn multi_get_derived_objects(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<DerivedObjectKey>,
+    ) -> Result<Vec<Option<MoveObject>>, RpcError<Error>> {
+        self.super_.multi_get_derived_objects(ctx, keys).await
     }
 
     /// Access dynamic fields on an object using their types and BCS-encoded names.
@@ -524,23 +595,53 @@ impl DynamicField {
         kind: DynamicFieldType,
         name: DynamicFieldName,
     ) -> Result<Option<Self>, RpcError<Error>> {
-        match name {
-            DynamicFieldName {
-                type_: Some(type_),
-                bcs: Some(bcs),
-                literal: None,
-            } => Self::by_serialized_name(ctx, scope, parent, kind, type_, bcs)
-                .await
-                .map_err(upcast),
+        Self::by_key(
+            ctx,
+            scope,
+            kind,
+            NameKey {
+                parent,
+                name,
+                version: None,
+                root_version: None,
+                at_checkpoint: None,
+            },
+        )
+        .await
+    }
 
-            DynamicFieldName {
-                literal: Some(literal),
-                type_: None,
-                bcs: None,
-            } => Self::by_literal_name(ctx, scope, parent, kind, literal).await,
-
-            _ => Err(bad_user_input(Error::NameInput)),
+    /// Look up a dynamic field using its parent, name, and optional version bound.
+    pub(crate) async fn by_key(
+        ctx: &Context<'_>,
+        scope: Scope,
+        kind: DynamicFieldType,
+        key: NameKey,
+    ) -> Result<Option<Self>, RpcError<Error>> {
+        let (mut type_, bcs) = key.name.eval(ctx).await?;
+        if kind == DynamicFieldType::DynamicObject {
+            type_ = DynamicFieldInfo::dynamic_object_field_wrapper(type_).into();
         }
+
+        let address = derive_dynamic_field_id(key.parent, &type_, &bcs)?.into();
+        let object = Object::by_key(
+            ctx,
+            scope,
+            object::ObjectKey {
+                address,
+                version: key.version,
+                root_version: key.root_version,
+                at_checkpoint: key.at_checkpoint,
+            },
+        )
+        .await
+        .map_err(crate::error::convert)?;
+
+        let Some(object) = object else {
+            return Ok(None);
+        };
+
+        let move_object = MoveObject::from_super(object);
+        Ok(Some(DynamicField::from_super(move_object)))
     }
 
     /// Look up a dynamic field by its serialized name (type and BCS bytes).
@@ -560,76 +661,7 @@ impl DynamicField {
         };
 
         let field_id: SuiAddress = derive_dynamic_field_id(parent, &type_, &bcs.0)?.into();
-
         let object = Object::latest(ctx, scope.clone(), field_id).await?;
-
-        let Some(object) = object else {
-            return Ok(None);
-        };
-
-        let move_object = MoveObject::from_super(object);
-        Ok(Some(DynamicField::from_super(move_object)))
-    }
-
-    /// Look up a dynamic field by its literal name (Display v2 expression).
-    ///
-    /// Literals don't support field accesses or dynamic loads, so the interpreter is supplied
-    /// with a dummy store and root object.
-    pub(crate) async fn by_literal_name(
-        ctx: &Context<'_>,
-        scope: Scope,
-        parent: SuiAddress,
-        kind: DynamicFieldType,
-        literal: String,
-    ) -> Result<Option<Self>, RpcError<Error>> {
-        use DynamicFieldType as DFT;
-
-        struct NopStore;
-
-        #[async_trait]
-        impl sui_display::v2::Store for NopStore {
-            async fn latest(
-                &self,
-                _: AccountAddress,
-            ) -> anyhow::Result<Option<(MoveTypeLayout, Vec<u8>)>> {
-                bail!("Dynamic loads not supported")
-            }
-        }
-
-        let limits: &Limits = ctx.data()?;
-        let limits = limits.display();
-
-        let root =
-            sui_display::v2::OwnedSlice::new(MoveTypeLayout::Bool, bcs::to_bytes(&false).unwrap());
-
-        let parsed =
-            sui_display::v2::Name::parse(limits, &literal).map_err(|e| bad_user_input(e.into()))?;
-
-        let interpreter = sui_display::v2::Interpreter::new(root, NopStore);
-
-        let value = match parsed.eval(&interpreter).await {
-            Ok(Some(value)) => value,
-            Ok(None) => return Err(bad_user_input(Error::FieldAccess)),
-            Err(sui_display::v2::FormatError::Store(_)) => {
-                return Err(bad_user_input(Error::StoreAccess));
-            }
-            Err(e) => return Err(bad_user_input(e.into())),
-        };
-
-        let field_id: SuiAddress = match kind {
-            DFT::DynamicField => value
-                .derive_dynamic_field_id(parent)
-                .context("Failed to derive dynamic field ID")?,
-
-            DFT::DynamicObject => value
-                .derive_dynamic_object_field_id(parent)
-                .context("Failed to derive dynamic object field ID")?,
-        }
-        .into();
-
-        let object = Object::latest(ctx, scope.clone(), field_id)
-            .await
-            .map_err(upcast)?;
 
         let Some(object) = object else {
             return Ok(None);
@@ -706,5 +738,53 @@ impl DynamicField {
                 }))
             })
             .await
+    }
+}
+
+impl DynamicFieldName {
+    /// Convert a dynamic field name into its type and serialized bytes.
+    pub(crate) async fn eval(
+        self,
+        ctx: &Context<'_>,
+    ) -> Result<(TypeTag, Vec<u8>), RpcError<Error>> {
+        let literal = match (self.type_, self.bcs, self.literal) {
+            (Some(type_), Some(bcs), None) => return Ok((type_.0, bcs.0)),
+            (None, None, Some(literal)) => literal,
+            _ => return Err(bad_user_input(Error::NameInput)),
+        };
+
+        struct NopStore;
+
+        #[async_trait]
+        impl sui_display::v2::Store for NopStore {
+            async fn latest(
+                &self,
+                _: AccountAddress,
+            ) -> anyhow::Result<Option<(MoveTypeLayout, Vec<u8>)>> {
+                bail!("Dynamic loads not supported")
+            }
+        }
+
+        let limits: &Limits = ctx.data()?;
+        let limits = limits.display();
+
+        let root =
+            sui_display::v2::OwnedSlice::new(MoveTypeLayout::Bool, bcs::to_bytes(&false).unwrap());
+
+        let parsed =
+            sui_display::v2::Name::parse(limits, &literal).map_err(|e| bad_user_input(e.into()))?;
+
+        let interpreter = sui_display::v2::Interpreter::new(root, NopStore);
+
+        let value = match parsed.eval(&interpreter).await {
+            Ok(Some(value)) => value,
+            Ok(None) => return Err(bad_user_input(Error::FieldAccess)),
+            Err(sui_display::v2::FormatError::Store(_)) => {
+                return Err(bad_user_input(Error::StoreAccess));
+            }
+            Err(e) => return Err(bad_user_input(e.into())),
+        };
+
+        Ok((value.type_(), bcs::to_bytes(&value)?))
     }
 }

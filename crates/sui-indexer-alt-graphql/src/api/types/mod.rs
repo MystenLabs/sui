@@ -8,6 +8,7 @@ pub(crate) mod balance_change;
 pub(crate) mod checkpoint;
 pub(crate) mod coin_metadata;
 pub(crate) mod command_result;
+pub(crate) mod derived_object;
 pub(crate) mod display;
 pub(crate) mod dynamic_field;
 pub(crate) mod epoch;
