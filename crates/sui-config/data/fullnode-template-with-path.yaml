@@ -18,6 +18,7 @@ authority-store-pruning-config:
   num-epochs-to-retain: 1
   max-checkpoints-in-batch: 10
   max-transactions-in-batch: 1000
+  max-pruning-batches-per-run: 100
   pruning-run-delay-seconds: 60
 
 protocol-key-pair:

@@ -1351,6 +1351,10 @@ pub struct AuthorityStorePruningConfig {
     /// maximum number of transaction in the pruning batch
     #[serde(default = "default_max_transactions_in_batch")]
     pub max_transactions_in_batch: usize,
+    /// Maximum number of batches an object or checkpoint pruner may process in one scheduler
+    /// iteration. Bounding a run prevents one pruner with a large backlog from starving the other.
+    #[serde(default = "default_max_pruning_batches_per_run")]
+    pub max_pruning_batches_per_run: NonZeroUsize,
     /// enables periodic background compaction for old SST files whose last modified time is
     /// older than `periodic_compaction_threshold_days` days.
     /// That ensures that all sst files eventually go through the compaction process
@@ -1398,6 +1402,10 @@ fn default_max_checkpoints_in_batch() -> usize {
     10
 }
 
+fn default_max_pruning_batches_per_run() -> NonZeroUsize {
+    nonzero!(100usize)
+}
+
 fn default_smoothing() -> bool {
     cfg!(not(test))
 }
@@ -1415,6 +1423,7 @@ impl Default for AuthorityStorePruningConfig {
             pruning_run_delay_seconds: if cfg!(msim) { Some(2) } else { None },
             max_checkpoints_in_batch: default_max_checkpoints_in_batch(),
             max_transactions_in_batch: default_max_transactions_in_batch(),
+            max_pruning_batches_per_run: default_max_pruning_batches_per_run(),
             periodic_compaction_threshold_days: None,
             rpc_store_bitmap_periodic_compaction_days: None,
             num_epochs_to_retain_for_checkpoints: if cfg!(msim) { Some(2) } else { None },
@@ -1988,6 +1997,21 @@ mod tests {
         assert_eq!(
             round_tripped.rpc_store_bitmap_periodic_compaction_days,
             Some(17)
+        );
+    }
+
+    #[test]
+    fn pruning_batch_budget_is_nonzero() {
+        let omitted: AuthorityStorePruningConfig = serde_yaml::from_str("{}").unwrap();
+        assert_eq!(omitted.max_pruning_batches_per_run.get(), 100);
+
+        let configured: AuthorityStorePruningConfig =
+            serde_yaml::from_str("max-pruning-batches-per-run: 7").unwrap();
+        assert_eq!(configured.max_pruning_batches_per_run.get(), 7);
+
+        assert!(
+            serde_yaml::from_str::<AuthorityStorePruningConfig>("max-pruning-batches-per-run: 0")
+                .is_err()
         );
     }
 
