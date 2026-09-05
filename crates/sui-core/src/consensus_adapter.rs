@@ -69,6 +69,8 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_in_flight_semaphore_wait: IntGauge,
     pub sequencing_in_flight_submissions: IntGauge,
     pub sequencing_best_effort_timeout: IntCounterVec,
+    pub sequencing_staggered_delay: Histogram,
+    pub sequencing_staggered_held: IntGauge,
     pub consensus_latency: Histogram,
     pub num_rejected_cert_in_epoch_boundary: IntCounter,
 }
@@ -154,6 +156,17 @@ impl ConsensusAdapterMetrics {
                 "sequencing_best_effort_timeout",
                 "The number of times the best effort submission has timed out.",
                 &["tx_type"],
+                registry,
+            ).unwrap(),
+            sequencing_staggered_delay: register_histogram_with_registry!(
+                "sequencing_staggered_delay",
+                "The staggered-submission delay applied before submitting a transaction without allowed proposers to consensus.",
+                mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            sequencing_staggered_held: register_int_gauge_with_registry!(
+                "sequencing_staggered_held",
+                "Number of submissions currently held in their staggered-submission delay.",
                 registry,
             ).unwrap(),
             // These two metrics originally lived in ValidatorServiceMetrics (authority_server.rs)
@@ -547,26 +560,52 @@ impl ConsensusAdapter {
             debug!("Submitting {:?} to consensus", transaction_keys);
             guard.submitted = true;
 
-            // System messages (checkpoint signatures, EndOfPublish, capability
-            // notifications, randomness DKG, etc.) are not buffered behind user
-            // tx; they are excluded from the semaphore.
-            let _permit: Option<SemaphorePermit> = if is_system_message {
-                None
-            } else {
-                Some(
-                    self.submit_semaphore
-                        .acquire()
-                        .count_in_flight(self.metrics.sequencing_in_flight_semaphore_wait.clone())
-                        .await
-                        .expect("Consensus adapter does not close semaphore"),
-                )
-            };
-            let _in_flight_submission_guard =
-                GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
+            // Staggered submission of transactions without allowed proposers. Soft
+            // bundles are external fan-out too, and are held whenever any member could
+            // have named its proposers and did not.
+            let user_transactions: Vec<_> = transactions
+                .iter()
+                .filter_map(|transaction| transaction.kind.as_user_transaction())
+                .collect();
+            let stagger_delay = epoch_store
+                .staggered_submission()
+                .submission_delay(&user_transactions, epoch_store);
 
             // Submit the transaction to consensus, racing against the processed waiter in
-            // case another validator sequences the transaction first.
+            // case another validator sequences the transaction first. The staggered delay
+            // and the semaphore wait both live inside the raced future, so a transaction
+            // that commits elsewhere while held or queued is cancelled without ever being
+            // submitted, and a held transaction does not occupy a submission permit.
             let submit_fut = async {
+                if let Some(delay) = stagger_delay {
+                    self.metrics
+                        .sequencing_staggered_delay
+                        .observe(delay.as_secs_f64());
+                    // GaugeGuard also decrements when the processed race cancels a
+                    // held submission mid-sleep.
+                    let _held_guard = GaugeGuard::acquire(&self.metrics.sequencing_staggered_held);
+                    time::sleep(delay).await;
+                }
+
+                // System messages (checkpoint signatures, EndOfPublish, capability
+                // notifications, randomness DKG, etc.) are not buffered behind user
+                // tx; they are excluded from the semaphore.
+                let _permit: Option<SemaphorePermit> = if is_system_message {
+                    None
+                } else {
+                    Some(
+                        self.submit_semaphore
+                            .acquire()
+                            .count_in_flight(
+                                self.metrics.sequencing_in_flight_semaphore_wait.clone(),
+                            )
+                            .await
+                            .expect("Consensus adapter does not close semaphore"),
+                    )
+                };
+                let _in_flight_submission_guard =
+                    GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
+
                 const RETRY_DELAY_STEP: Duration = Duration::from_secs(1);
 
                 loop {

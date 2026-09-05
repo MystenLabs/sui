@@ -213,6 +213,12 @@ struct PoolEntry {
     /// Empty for system and ping submissions: the `ConsensusAdapter` already
     /// checks those before they reach the pool.
     processed: Vec<ProcessedWatch>,
+    /// Staggered submission of transactions without allowed proposers: `take()`
+    /// leaves the entry queued until this time, so a copy committed by an
+    /// earlier-slotted validator during the hold resolves it through the
+    /// `processed` watches without it ever occupying block space. `None` submits
+    /// on the next proposal.
+    eligible_at: Option<Instant>,
 }
 
 /// `Some` once every watch has observed processing. Bundles are proposed
@@ -241,6 +247,9 @@ impl AdmissionQueueEntry for PoolEntry {
             .pool_bytes
             .with_label_values(&["user"])
             .sub(self.total_bytes as i64);
+        if self.eligible_at.is_some() {
+            self.metrics.pool_staggered_held.dec();
+        }
         self.ack.resolve_error(
             SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price }
                 .into(),
@@ -407,16 +416,26 @@ impl ConsensusTransactionPool {
         }
 
         let tx_type = tx_type_label(&transactions);
-        let (transactions, total_bytes) = self.serialize_and_validate(&transactions)?;
+        let (serialized, total_bytes) = self.serialize_and_validate(&transactions)?;
+
+        let user_transactions: Vec<_> = transactions
+            .iter()
+            .filter_map(|transaction| transaction.kind.as_user_transaction())
+            .collect();
+        let stagger_delay = self
+            .epoch_store
+            .staggered_submission()
+            .submission_delay(&user_transactions, &self.epoch_store);
         let (sender, receiver) = oneshot::channel();
         let entry = PoolEntry {
-            transactions,
+            transactions: serialized,
             total_bytes,
             gas_price,
             tx_type,
             ack: PendingAck::new(EntryAck::User(sender), keys),
             metrics: self.metrics.clone(),
             processed,
+            eligible_at: stagger_delay.map(|delay| Instant::now() + delay),
         };
 
         let mut inner = self.inner.lock();
@@ -432,6 +451,14 @@ impl ConsensusTransactionPool {
         drop(inner);
 
         let newly_inserted = outcome.notify()?;
+        // Observed only for entries actually admitted, mirroring the adapter path where
+        // the histogram records delays that are really applied.
+        if let Some(delay) = stagger_delay {
+            self.adapter_metrics
+                .sequencing_staggered_delay
+                .observe(delay.as_secs_f64());
+            self.metrics.pool_staggered_held.inc();
+        }
         self.metrics.pool_depth.with_label_values(&["user"]).inc();
         self.metrics
             .pool_bytes
@@ -496,6 +523,7 @@ impl ConsensusTransactionPool {
             ),
             metrics: self.metrics.clone(),
             processed: Vec::new(),
+            eligible_at: None,
         };
 
         {
@@ -692,6 +720,10 @@ impl ConsensusTransactionPool {
             .pool_bytes
             .with_label_values(&[lane])
             .sub(entry.total_bytes as i64);
+        // Only user entries stamped with a staggered hold carry an eligibility time.
+        if entry.eligible_at.is_some() {
+            self.metrics.pool_staggered_held.dec();
+        }
     }
 
     #[cfg(test)]
@@ -866,6 +898,9 @@ impl Drop for TakenTransactionsGuard {
                             .pool_bytes
                             .with_label_values(&["user"])
                             .add(taken.entry.total_bytes as i64);
+                        if taken.entry.eligible_at.is_some() {
+                            self.metrics.pool_staggered_held.inc();
+                        }
                         user.reinsert_front(taken.entry);
                     }
                     UserLane::Closed => halted.push(taken.entry),
@@ -990,11 +1025,25 @@ impl TransactionPool for ConsensusTransactionPool {
         {
             let mut pending_count = transactions.len();
             let mut pending_bytes = total_bytes;
+            let now = Instant::now();
             let popped;
             (popped, already_processed) = user.pop_batch_while(|entry| {
                 // An already-processed entry is excluded without consuming block budget.
+                // Checked before the staggered hold, so a copy committed elsewhere
+                // resolves a held entry immediately instead of after its delay.
                 if all_processed(&mut entry.processed).is_some() {
                     return PopAction::Exclude;
+                }
+                // A staggered entry stays queued (occupying pool capacity, which is the
+                // overload backstop) until its delay elapses — even if staggering was
+                // disarmed after the hold was stamped, bounding the residual by
+                // max_delay. Held entries deliberately leave `limit_reached` untouched:
+                // no block limit was hit.
+                if entry
+                    .eligible_at
+                    .is_some_and(|eligible_at| eligible_at > now)
+                {
+                    return PopAction::Skip;
                 }
                 match entry_limit(entry, pending_count, pending_bytes, max_count, max_bytes) {
                     Some(limit) => {
@@ -1473,6 +1522,7 @@ mod tests {
             ack: PendingAck::new(EntryAck::User(sender), vec![consensus_transaction.key()]),
             metrics,
             processed: Vec::new(),
+            eligible_at: None,
         };
         let UserLane::Open(user) = &mut lane else {
             unreachable!("new user lane must be open");
