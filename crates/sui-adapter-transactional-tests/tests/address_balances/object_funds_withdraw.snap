@@ -30,8 +30,8 @@ task 4, lines 37-39:
 //# programmable --sender A --dry-run --inputs object(2,0) 1 @A
 // Withdrawing one MIST should fail before the vault has an object balance.
 //> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
-Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 2) in command 0
-Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 2) in command 0
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 5) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 5) in command 0
 
 task 5, lines 41-44:
 //# programmable --sender A --inputs 1000 object(2,0)
@@ -58,16 +58,16 @@ task 8, lines 53-55:
 //# programmable --sender A --dry-run --inputs object(2,0) 5000 @A
 // Withdrawing more than the vault's balance should fail.
 //> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
-Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 2) in command 0
-Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 2) in command 0
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 5) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 5) in command 0
 
 task 9, lines 57-60:
 //# programmable --sender A --dry-run --inputs object(2,0) 600 @A
 // Two withdrawals whose sum exceeds the vault's balance should fail on the second withdrawal.
 //> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
 //> 1: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
-Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 2) in command 1
-Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 2) in command 1
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 5) in command 1
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 5) in command 1
 
 task 10, lines 62-66:
 //# programmable --sender A --dry-run --inputs 500 object(2,0) 1400 @A
@@ -85,8 +85,8 @@ task 11, lines 68-72:
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: test::obj_vault::fund(Input(1), Result(0));
 //> 2: test::obj_vault::withdraw_to(Input(1), Input(2), Input(3));
-Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 2) in command 2
-Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 2) in command 2
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 5) in command 2
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 5) in command 2
 
 task 12, lines 74-76:
 //# programmable --sender A --dry-run --inputs object(2,0) 0 @A
@@ -119,8 +119,8 @@ task 15, lines 88-90:
 //# programmable --sender A --inputs object(2,0) 600 @A
 // A second 600 MIST withdrawal should fail because only 400 MIST remains.
 //> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::funds_accumulator::reserve_object_funds_for_withdrawal (function index 10) at offset 0, Abort Code: 2
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("funds_accumulator") }), indices: [], offsets: [(FunctionDefinitionIndex(10), 0)] }), command: Some(0) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::funds_accumulator::reserve_object_funds_for_withdrawal (function index 10) at offset 0, Abort Code: 5
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 5), source: Some(VMError { major_status: ABORTED, sub_status: Some(5), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("funds_accumulator") }), indices: [], offsets: [(FunctionDefinitionIndex(10), 0)] }), command: Some(0) } }
 
 task 16, lines 92-93:
 //# create-checkpoint
