@@ -183,6 +183,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) subscribed_blocks: IntCounterVec,
     pub(crate) observer_subscribed_blocks_batch_size: Histogram,
     pub(crate) observer_subscription_suspended: IntGauge,
+    pub(crate) observer_subscription_attempts: IntCounterVec,
+    pub(crate) observer_peer_failovers: IntCounter,
     pub(crate) verified_blocks: IntCounterVec,
     pub(crate) committed_leaders_total: IntCounterVec,
     pub(crate) last_committed_authority_round: IntGaugeVec,
@@ -614,6 +616,17 @@ impl NodeMetrics {
             observer_subscription_suspended: register_int_gauge_with_registry!(
                 "observer_subscription_suspended",
                 "Whether the observer block stream subscription is currently suspended due to commit lag (1) or active (0)",
+                registry,
+            ).unwrap(),
+            observer_subscription_attempts: register_int_counter_vec_with_registry!(
+                "observer_subscription_attempts",
+                "The number of observer block stream subscription attempts per peer",
+                &["peer", "status"],
+                registry,
+            ).unwrap(),
+            observer_peer_failovers: register_int_counter_with_registry!(
+                "observer_peer_failovers",
+                "The number of times the observer block stream subscription rotated to the next configured peer because the current one made no progress",
                 registry,
             ).unwrap(),
             verified_blocks: register_int_counter_vec_with_registry!(

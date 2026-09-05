@@ -795,6 +795,147 @@ mod consensus_tests {
         }
     }
 
+    /// An observer configured with multiple peers must fail over to its next configured peer
+    /// when the current streaming peer dies, and keep streaming blocks. Without failover the
+    /// observer would freeze shortly after the peer death: with the stream dead no new commit
+    /// votes arrive, so the known quorum commit index stops advancing and commit sync cannot
+    /// make progress either — tracking the live validators is only possible by streaming from
+    /// the second peer.
+    #[sim_test(config = "test_config()")]
+    async fn test_observer_failover_when_streaming_peer_dies() {
+        telemetry_subscribers::init_for_testing();
+        let db_registry = Registry::new();
+        DBMetrics::init(RegistryService::new(db_registry));
+
+        const NUM_OF_AUTHORITIES: usize = 4;
+        const MAX_COMMIT_DIFFERENCE: u32 = 10;
+
+        let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_gc_depth_for_testing(5);
+
+        let authorities = start_committee(
+            &committee,
+            &keypairs,
+            &protocol_config,
+            &[0; NUM_OF_AUTHORITIES],
+            Arc::new(NoopTransactionVerifier {}),
+            |authority_index, parameters| {
+                parameters.observer.server_port = Some(9600 + authority_index.value() as u16);
+            },
+        )
+        .await;
+        let transaction_clients = authorities
+            .iter()
+            .map(|authority| authority.transaction_client())
+            .collect::<Vec<_>>();
+
+        // Observer configured with two peers, in priority order: validator 0, then validator 1.
+        let peer_records = [0u32, 1]
+            .map(|index| {
+                let validator_index = AuthorityIndex::new_for_test(index);
+                let validator_info = committee.authority(validator_index);
+                let address =
+                    replace_port_in_multiaddr(&validator_info.address, 9600 + index as u16)
+                        .expect("Failed to create observer address");
+                consensus_config::PeerRecord {
+                    public_key: validator_info.network_key.clone(),
+                    address,
+                }
+            })
+            .to_vec();
+
+        let observer_dir = Arc::new(TempDir::new().unwrap());
+        let observer_keypair =
+            NetworkKeyPair::generate(&mut rand::rngs::StdRng::from_seed([42; 32]));
+        let observer_ip = local_ip_utils::get_new_ip();
+
+        let mut observer_params = default_parameters();
+        observer_params.db_path = observer_dir.path().to_path_buf();
+        observer_params.observer = consensus_config::ObserverParameters {
+            peers: peer_records,
+            ..Default::default()
+        };
+
+        let observer_config = Config {
+            authority_index: AuthorityIndex::new_for_test(100),
+            db_dir: observer_dir,
+            committee: committee.clone(),
+            keypairs: keypairs.clone(),
+            boot_counter: 0,
+            protocol_config: protocol_config.clone(),
+            clock_drift: 0,
+            transaction_verifier: Arc::new(NoopTransactionVerifier {}),
+            parameters: observer_params,
+            observer_network_keypair: Some(observer_keypair.clone()),
+            observer_ip: Some(observer_ip.clone()),
+        };
+        let observer = AuthorityNode::new(observer_config);
+        observer.start().await.unwrap();
+        observer.spawn_committed_subdag_consumer().unwrap();
+        let observer_monitor = observer.commit_consumer_monitor();
+
+        // Phase 1: the observer streams from validator 0.
+        tracing::info!("Phase 1: streaming from validator 0");
+        for i in 0..100u16 {
+            let txn = vec![i as u8; 16];
+            transaction_clients[i as usize % transaction_clients.len()]
+                .submit(vec![txn], Priority::Normal)
+                .await
+                .unwrap();
+            if i % 20 == 0 {
+                sleep(Duration::from_millis(200)).await;
+            }
+        }
+        sleep(Duration::from_secs(10)).await;
+        let commits_before_kill = observer_monitor.highest_handled_commit();
+        assert!(
+            commits_before_kill > 0,
+            "Observer should process commits from the block stream before the failover"
+        );
+
+        // Phase 2: kill the streaming peer and keep the network busy from the remaining
+        // validators, well beyond the failure budget so the observer has time to rotate.
+        tracing::info!("Phase 2: stopping validator 0 (the observer's streaming peer)");
+        authorities[0].stop().await;
+
+        for i in 0..300u16 {
+            let txn = vec![i as u8; 16];
+            let client = &transaction_clients[1 + (i as usize % (transaction_clients.len() - 1))];
+            client.submit(vec![txn], Priority::Normal).await.unwrap();
+            if i % 10 == 0 {
+                sleep(Duration::from_millis(500)).await;
+            }
+        }
+        sleep(Duration::from_secs(60)).await;
+
+        let validator_commits = authorities[1]
+            .commit_consumer_monitor()
+            .highest_handled_commit();
+        let observer_commits = observer_monitor.highest_handled_commit();
+        tracing::info!(
+            "Commits after failover — validator 1: {}, observer: {} (was {} at kill time)",
+            validator_commits,
+            observer_commits,
+            commits_before_kill,
+        );
+        assert!(
+            observer_commits > commits_before_kill,
+            "Observer should keep processing commits after its streaming peer died"
+        );
+        assert!(
+            validator_commits - observer_commits <= MAX_COMMIT_DIFFERENCE,
+            "Observer should track live validators by streaming from the second configured peer \
+             (validator 1: {validator_commits}, observer: {observer_commits})"
+        );
+
+        // Clean up (validator 0 is already stopped).
+        observer.stop().await;
+        for authority in authorities.iter().skip(1) {
+            authority.stop().await;
+        }
+    }
+
     /// An observer starting mid-run must catch up while its block stream subscription is
     /// suspended on commit lag, and resume the live stream once caught up: commits arrive via
     /// commit sync during catch-up, and via the block stream afterwards.
