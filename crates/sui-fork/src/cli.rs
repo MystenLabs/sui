@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Context;
 use anyhow::Result;
 use clap::CommandFactory;
 use clap::FromArgMatches;
@@ -11,14 +10,15 @@ use reqwest::Url;
 use serde::Serialize;
 use tracing::info;
 
+use sui_futures::service::Error as ServiceError;
+
 use crate::AdvanceCheckpointRequest;
 use crate::AdvanceClockRequest;
 use crate::DEFAULT_RPC_ADDR;
+use crate::ForkNode;
 use crate::ForkingServiceClient;
 use crate::GetStatusRequest;
-use crate::GraphQLClient;
 use crate::StartArgs;
-use crate::seed::SeedInput;
 
 #[derive(Parser)]
 #[command(name = "sui-fork", about = "Fork and interact with a Sui network")]
@@ -109,7 +109,10 @@ impl Cli {
 
     pub async fn execute(self, version: &'static str) -> Result<()> {
         match self.command {
-            Command::Start { args } => cmd_start(args, self.json_output, version).await,
+            Command::Start { mut args } => {
+                args.version = version;
+                cmd_start(args, self.json_output).await
+            }
             Command::AdvanceClock {
                 rpc_addr,
                 duration_ms,
@@ -133,79 +136,26 @@ fn print_output<T: Serialize + std::fmt::Display>(value: &T, json_output: bool) 
     }
 }
 
-async fn cmd_start(args: StartArgs, json_output: bool, version: &'static str) -> Result<()> {
-    let StartArgs {
-        network: node,
-        checkpoint,
-        data_dir,
-        addresses,
-        object_ids,
-        rpc_addr,
-    } = args;
-    let seed_input = SeedInput {
-        addresses: addresses.into_iter().collect(),
-        object_ids: object_ids.into_iter().collect(),
-    };
-    let listener = crate::startup::bind(rpc_addr).await?;
-    let rpc_addr = listener
-        .local_addr()
-        .context("failed to read the fork RPC server's bound address")?;
-    let network_name = node.network_name();
-
-    let resolved_start = crate::startup::resolve_start_checkpoint_from_local(
-        &node,
-        checkpoint,
-        data_dir.as_deref(),
-    )?;
-    let checkpoint = match resolved_start.checkpoint {
-        Some(cp) => cp,
-        None => GraphQLClient::new(node.clone(), version)?
-            .get_latest_checkpoint_sequence_number()
-            .await?
-            .with_context(|| format!("failed to get latest checkpoint for {}", network_name))?,
-    };
-
-    let (context, subscription_handle, indexer_service) =
-        crate::startup::initialize(node, checkpoint, version, data_dir, seed_input).await?;
-    let current_checkpoint = {
-        let sim = context.simulacrum().read().await;
-        sim.store()
-            .get_highest_verified_checkpoint()?
-            .map(|checkpoint| checkpoint.data().sequence_number)
-            .unwrap_or(checkpoint)
-    };
+async fn cmd_start(args: StartArgs, json_output: bool) -> Result<()> {
+    let network = args.network.network_name();
+    let fork = ForkNode::start(args).await?;
+    let status = fork.status().await;
 
     let output = StartOutput {
-        network: network_name.clone(),
-        checkpoint,
-        rpc_addr: rpc_addr.to_string(),
-        current_checkpoint,
-        resuming: resolved_start.resuming,
+        network,
+        checkpoint: status.forked_at_checkpoint,
+        rpc_addr: fork.rpc_address().to_string(),
+        current_checkpoint: status.checkpoint_sequence_number,
+        resuming: fork.resumed(),
     };
     print_output(&output, json_output);
+    info!("{output}");
 
-    if resolved_start.resuming {
-        info!(
-            "Resuming forked network from {}; forked at checkpoint {}, current checkpoint {} (rpc on {})",
-            network_name, checkpoint, current_checkpoint, rpc_addr,
-        );
-    } else {
-        info!(
-            "Starting forked network from {} at checkpoint {} (rpc on {})",
-            network_name, checkpoint, rpc_addr,
-        );
+    info!("forked network running, waiting for shutdown signal (Ctrl+C)");
+    match fork.into_service().main().await {
+        Ok(()) | Err(ServiceError::Terminated) => Ok(()),
+        Err(error) => Err(error.into()),
     }
-
-    let handle = tokio::spawn(crate::startup::run_with_listener(
-        context,
-        subscription_handle,
-        indexer_service,
-        listener,
-        version,
-    ));
-    handle.await??;
-
-    Ok(())
 }
 
 async fn cmd_advance_clock(

@@ -50,6 +50,15 @@ use crate::seed::load_seed_objects;
 use crate::services::ServiceManager;
 use crate::store::ForkStore;
 
+/// Initialized fork state and the services that keep it running.
+pub(crate) struct ForkParts {
+    pub(crate) context: Context,
+    pub(crate) subscription_handle: SubscriptionServiceHandle,
+    pub(crate) indexer_service: Service,
+    pub(crate) data_dir: PathBuf,
+    pub(crate) resumed: bool,
+}
+
 /// Checkpoint selected for startup, plus whether existing local fork state was found.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ResolvedStartCheckpoint {
@@ -106,25 +115,34 @@ pub(crate) fn resolve_start_checkpoint_from_local(
     })
 }
 
-/// Initialize a forked network by fetching the fork checkpoint from the remote endpoint when
-/// needed, applying seed metadata, and starting a local Simulacrum instance from the highest
-/// checkpoint already persisted locally. Also builds the checkpoint subscription broker and
-/// embedded indexer service, which must both be passed to [`run`].
+/// Initialize a forked network and return its execution state and background services.
 ///
-/// `data_dir` is the root folder where the fork state is persisted. If `None`, a default path is
-/// used. See the `[MetadataStore]` docs for details.
-pub async fn initialize(
+/// Resumes compatible state when the data directory can be inspected, otherwise forks at the
+/// requested checkpoint or at the live network's latest one. The caller must keep the returned
+/// indexer service alive and pass the subscription handle to the RPC server.
+pub(crate) async fn initialize(
     node: Node,
-    forked_at_checkpoint: CheckpointSequenceNumber,
+    requested_checkpoint: Option<CheckpointSequenceNumber>,
     version: &str,
     data_dir: Option<PathBuf>,
     seed_input: SeedInput,
-) -> Result<(Context, SubscriptionServiceHandle, Service)> {
-    // 1. Prepare metadata and GraphQL, then open the RPC store before constructing ForkStore.
+) -> Result<ForkParts> {
+    // 1. Resolve the fork point, prepare metadata and GraphQL, then open the RPC store before
+    //    constructing ForkStore.
     let gql = GraphQLClient::new(node.clone(), version)?;
+    let resolved =
+        resolve_start_checkpoint_from_local(&node, requested_checkpoint, data_dir.as_deref())?;
+    let network_name = node.network_name();
+    let forked_at_checkpoint = match resolved.checkpoint {
+        Some(checkpoint) => checkpoint,
+        None => gql
+            .get_latest_checkpoint_sequence_number()
+            .await?
+            .with_context(|| format!("failed to get latest checkpoint for {network_name}"))?,
+    };
     let chain_identifier = gql.chain();
     let local = MetadataStore::new(&node, forked_at_checkpoint, data_dir)?;
-    let network_name = node.network_name();
+    let data_dir = local.root().to_path_buf();
     crate::seed::ensure_seed_policy(&local, &seed_input)?;
 
     // 2. Fetch the startup checkpoint, open the RPC store using its chain identity,
@@ -208,7 +226,13 @@ pub async fn initialize(
         .await?;
     let context = Context::new(simulacrum, services);
 
-    Ok((context, subscription_handle, indexer_service))
+    Ok(ForkParts {
+        context,
+        subscription_handle,
+        indexer_service,
+        data_dir,
+        resumed: resolved.resuming,
+    })
 }
 
 fn fork_chain_identifier(chain: Chain, checkpoint: &VerifiedCheckpoint) -> ChainIdentifier {
@@ -285,76 +309,6 @@ pub(crate) async fn serve(
         });
 
     Ok((rpc_addr, service))
-}
-
-/// Run the forked network until it receives a process shutdown signal or a service stops.
-///
-/// Bind `rpc_addr` before starting the RPC service. Process shutdown drains RPC requests before
-/// stopping the indexer because accepted requests may need the indexer to publish their
-/// checkpoints. Returns an error if binding fails or either service stops unexpectedly.
-pub async fn run(
-    context: Context,
-    subscription_handle: SubscriptionServiceHandle,
-    indexer_service: Service,
-    rpc_addr: SocketAddr,
-    version: &'static str,
-) -> Result<()> {
-    let listener = bind(rpc_addr).await?;
-    run_with_listener(
-        context,
-        subscription_handle,
-        indexer_service,
-        listener,
-        version,
-    )
-    .await
-}
-
-/// Run the forked network over an already-bound listener.
-///
-/// Process shutdown drains RPC requests before stopping the indexer because accepted requests may
-/// need the indexer to publish their checkpoints. Returns an error if either service stops
-/// unexpectedly.
-pub(crate) async fn run_with_listener(
-    context: Context,
-    subscription_handle: SubscriptionServiceHandle,
-    mut indexer_service: Service,
-    listener: tokio::net::TcpListener,
-    version: &'static str,
-) -> Result<()> {
-    let (_, mut rpc_service) =
-        serve(Arc::new(context), subscription_handle, listener, version).await?;
-
-    enum Exit {
-        Shutdown,
-        Rpc(Result<()>),
-        Indexer(Result<()>),
-    }
-
-    info!("forked network running, waiting for shutdown signal (Ctrl+C)");
-    let exit = tokio::select! {
-        result = tokio::signal::ctrl_c() => {
-            result?;
-            Exit::Shutdown
-        }
-        result = rpc_service.join() => Exit::Rpc(result),
-        result = indexer_service.join() => Exit::Indexer(result),
-    };
-
-    match exit {
-        Exit::Shutdown => {
-            info!("shutdown signal received, stopping forked network");
-            let rpc_shutdown = rpc_service.shutdown().await;
-            let indexer_shutdown = indexer_service.shutdown().await;
-            rpc_shutdown?;
-            indexer_shutdown?;
-            Ok(())
-        }
-        Exit::Rpc(Ok(())) => Err(anyhow!("rpc server stopped unexpectedly")),
-        Exit::Rpc(Err(error)) => Err(error.context("rpc server failed")),
-        Exit::Indexer(Ok(())) => Err(anyhow!("embedded rpc-store indexer stopped unexpectedly")),
-        Exit::Indexer(Err(error)) => Err(error.context("embedded rpc-store indexer failed")),
-    }
 }
 
 /// Replace the validator set in the system state with local validators from the NetworkConfig

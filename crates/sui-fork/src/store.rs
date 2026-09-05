@@ -78,7 +78,7 @@ use tracing::info;
 /// (`ReadStore`, `RpcStateReader`, `RpcIndexes`) so the same store backs the `sui-rpc-api`
 /// `RpcService`.
 #[derive(Clone)]
-pub struct ForkStore {
+pub(crate) struct ForkStore {
     inner: Arc<ForkStoreInner>,
 }
 
@@ -114,12 +114,12 @@ impl ForkStore {
         }
     }
 
-    pub fn forked_at_checkpoint(&self) -> CheckpointSequenceNumber {
+    pub(crate) fn forked_at_checkpoint(&self) -> CheckpointSequenceNumber {
         self.inner.forked_at_checkpoint
     }
 
     /// Return the chain (mainnet/testnet/devnet/unknown) this store is connected to.
-    pub fn chain(&self) -> Chain {
+    pub(crate) fn chain(&self) -> Chain {
         self.inner.remote.chain()
     }
 
