@@ -235,20 +235,20 @@ impl<'backing> TemporaryStore<'backing> {
         // resolver. This lets effects-based re-execution recover the same assigned version.
         let loaded_system_objects = system_object_versions
             .get(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
-            .map(|version| {
-                let object = store
-                    .load_implicitly_read_system_object(
-                        &SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                        version,
-                    )
-                    .expect("assigned forwarding address registry version must exist");
+            .and_then(|version| {
+                // Dry-run execution cannot wait for a pruned assigned version. Leave the object
+                // unavailable so the simulation reports a Move abort instead of panicking.
+                let object = store.load_implicitly_read_system_object(
+                    &SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+                    version,
+                )?;
                 if let Some(dependencies) = transaction_dependencies.as_mut() {
                     dependencies.insert(object.previous_transaction);
                 }
-                BTreeMap::from([(
+                Some(BTreeMap::from([(
                     SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
                     (object.version(), object.digest()),
-                )])
+                )]))
             })
             .unwrap_or_default();
         #[cfg(debug_assertions)]

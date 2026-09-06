@@ -13,6 +13,7 @@ use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2::subscription_service_client::SubscriptionServiceClient;
+use sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -60,7 +61,7 @@ async fn subscribe_checkpoint() {
         }
         last = Some(cursor);
 
-        // Subscribe for 50 checkponts to ensure the subscription system works
+        // Subscribe for 50 checkpoints to ensure the subscription system works
         count += 1;
         if count > 50 {
             break;
@@ -215,8 +216,11 @@ fn object_keys(transaction: &ExecutedTransaction) -> Vec<(String, u64)> {
         !objects.is_empty(),
         "requested object set should be non-empty"
     );
+    let forwarding_registry_id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID.to_string();
     objects
         .iter()
+        // ExecuteTransaction omits implicitly read system objects from its object set.
+        .filter(|object| object.object_id.as_deref() != Some(forwarding_registry_id.as_str()))
         .map(|object| {
             (
                 object

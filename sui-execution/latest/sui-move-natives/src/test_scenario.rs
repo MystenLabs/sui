@@ -76,6 +76,10 @@ impl BackingPackageStore for InMemoryTestStore {
 }
 
 impl RuntimeObjectResolver for InMemoryTestStore {
+    fn load_runtime_system_object(&self, object_id: &ObjectID) -> Option<Object> {
+        self.0.borrow().get_object(object_id).cloned()
+    }
+
     fn read_child_object(
         &self,
         parent: &ObjectID,

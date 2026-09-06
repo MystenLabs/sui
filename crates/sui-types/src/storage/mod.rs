@@ -199,10 +199,10 @@ pub enum ObjectFundsSufficiency {
 /// An abstraction of the (possibly distributed) store for objects. This
 /// API only allows for the retrieval of objects, not any state changes
 pub trait RuntimeObjectResolver: BackingPackageStore {
-    /// Load a system object at the consensus-assigned version for this transaction.
+    /// Load a system object for native execution.
     ///
-    /// Execution stores override this method. Other resolver implementations return `None`
-    /// because forwarding resolution is disabled in their execution configurations.
+    /// Latest execution stores override this method. Historical and tooling resolvers retain the
+    /// default because they cannot execute the forwarding-address native.
     fn load_runtime_system_object(&self, _object_id: &ObjectID) -> Option<Object> {
         None
     }
