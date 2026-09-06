@@ -159,7 +159,9 @@ pub async fn execute_transaction(
                 objects.insert(o);
             }
             for (object_id, kind) in effects.unchanged_consensus_objects() {
-                if let sui_types::effects::UnchangedConsensusKind::ReadOnlyRoot((version, _)) = kind
+                if object_id == sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID
+                    && let sui_types::effects::UnchangedConsensusKind::ReadOnlyRoot((version, _)) =
+                        kind
                 {
                     let object = service
                         .reader
