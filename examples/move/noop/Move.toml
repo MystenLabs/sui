@@ -1,0 +1,9 @@
+[package]
+name = "noop"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+noop = "0x0"
