@@ -633,6 +633,16 @@ async fn test_execute_transaction_object_changes_input_output() {
 
 #[sim_test]
 async fn test_execute_transaction_effects_json() {
+    let _guard =
+        sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_create_forwarding_address_registry_for_testing(true);
+            config.set_enable_forwarding_addresses_for_testing(true);
+            config.set_forwarding_address_resolve_cost_base_for_testing(52);
+            config.set_forwarding_address_resolve_cost_per_byte_for_testing(
+                config.obj_access_cost_read_per_byte(),
+            );
+            config
+        });
     let validator_cluster = TestClusterBuilder::new()
         .with_num_validators(1)
         .build()

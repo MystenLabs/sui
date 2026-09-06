@@ -63,6 +63,16 @@ fn proto_to_response(
 
 #[sim_test]
 async fn resolve_transaction_simple_transfer() {
+    let _guard =
+        sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_create_forwarding_address_registry_for_testing(true);
+            config.set_enable_forwarding_addresses_for_testing(true);
+            config.set_forwarding_address_resolve_cost_base_for_testing(52);
+            config.set_forwarding_address_resolve_cost_per_byte_for_testing(
+                config.obj_access_cost_read_per_byte(),
+            );
+            config
+        });
     let test_cluster = TestClusterBuilder::new()
         .with_num_validators(1)
         .build()
