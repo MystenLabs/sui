@@ -299,6 +299,14 @@ impl AdapterInitConfig {
         } else {
             ProtocolConfig::get_for_version(ProtocolVersion::MAX, chain)
         };
+        // Forwarding makes the registry an implicit input to every transaction. Keep legacy
+        // transactional snapshots focused on their declared inputs until a test opts into it.
+        if !enable_feature_flags
+            .iter()
+            .any(|flag| flag == "enable_forwarding_addresses")
+        {
+            protocol_config.set_enable_forwarding_addresses_for_testing(false);
+        }
         if enable_gasless {
             protocol_config.enable_gasless_for_testing();
         }
@@ -2713,10 +2721,13 @@ impl fmt::Display for FakeID {
 
 impl Default for AdapterInitConfig {
     fn default() -> Self {
+        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        // Match `from_args`: legacy snapshots opt into the implicit forwarding registry explicitly.
+        protocol_config.set_enable_forwarding_addresses_for_testing(false);
         Self {
             additional_mapping: BTreeMap::new(),
             account_names: BTreeSet::new(),
-            protocol_config: ProtocolConfig::get_for_max_version_UNSAFE(),
+            protocol_config,
             is_simulator: false,
             num_custom_validator_accounts: 0,
             reference_gas_price: None,
