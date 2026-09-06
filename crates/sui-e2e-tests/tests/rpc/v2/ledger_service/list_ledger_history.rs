@@ -42,7 +42,6 @@ use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc::proto::sui::rpc::v2::event_literal;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2::transaction_literal;
-use sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
@@ -626,11 +625,8 @@ fn object_keys(transaction: &ExecutedTransaction) -> Vec<(String, u64)> {
         !objects.is_empty(),
         "requested object set should be non-empty"
     );
-    let forwarding_registry_id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID.to_string();
     objects
         .iter()
-        // ExecuteTransaction omits implicitly read system objects from its object set.
-        .filter(|object| object.object_id.as_deref() != Some(forwarding_registry_id.as_str()))
         .map(|object| {
             (
                 object

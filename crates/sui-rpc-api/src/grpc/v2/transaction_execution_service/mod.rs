@@ -77,6 +77,7 @@ pub async fn execute_transaction(
                 .with_description(format!("invalid transaction: {e}"))
                 .with_reason(ErrorReason::FieldInvalid)
         })?;
+    let transaction_data = sui_types::transaction::TransactionData::try_from(transaction.clone())?;
 
     if request.signatures.len() > MAX_NUMBER_OF_SIGNATURES {
         return Err(FieldViolation::new("signatures")
@@ -156,6 +157,32 @@ pub async fn execute_transaction(
                 .flatten()
             {
                 objects.insert(o);
+            }
+            if read_mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD)
+                || read_mask.contains(ExecutedTransaction::EFFECTS_FIELD)
+                || read_mask.contains(ExecutedTransaction::OBJECTS_FIELD)
+            {
+                let object_keys = sui_types::storage::get_transaction_object_set(
+                    &transaction_data,
+                    &effects,
+                    &[],
+                );
+                let missing_keys = object_keys
+                    .into_iter()
+                    .filter(|key| objects.get(key).is_none())
+                    .collect::<Vec<_>>();
+                // The executor-provided input/output objects are authoritative. Supplement them
+                // with canonical effect-referenced objects that remain available in the store;
+                // older read-only consensus versions may already have been pruned.
+                for object in service
+                    .reader
+                    .inner()
+                    .multi_get_objects_by_key(&missing_keys)
+                    .into_iter()
+                    .flatten()
+                {
+                    objects.insert(object);
+                }
             }
             objects
         };
