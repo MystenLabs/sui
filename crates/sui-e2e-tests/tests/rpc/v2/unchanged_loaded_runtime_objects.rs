@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use sui_macros::sim_test;
@@ -140,10 +141,16 @@ async fn test_unchanged_loaded_runtime_objects() {
         "0x5b890eaf2abcfa2ab90b77b8e6f3d5d8609586c3e583baf3dccd5af17edf48d1"
     );
 
-    assert_eq!(t.effects().unchanged_consensus_objects().len(), 1);
     assert_eq!(
-        t.effects().unchanged_consensus_objects()[0].object_id(),
-        "0x0000000000000000000000000000000000000000000000000000000000000005"
+        t.effects()
+            .unchanged_consensus_objects()
+            .iter()
+            .map(|object| object.object_id())
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from([
+            "0x0000000000000000000000000000000000000000000000000000000000000005",
+            "0x00000000000000000000000000000000000000000000000000000000000000fa",
+        ])
     );
 }
 
@@ -331,7 +338,7 @@ async fn test_tto_receive_twice() {
 
     //
     // Run the `receive` function to receive the coin from TTO twice, which will result in a fail
-    // but the recieved object should have been read during execution and been unchanged.
+    // but the received object should have been read during execution and been unchanged.
     //
 
     let mut builder = ProgrammableTransactionBuilder::new();
@@ -609,7 +616,7 @@ async fn test_tto_success() {
 
     //
     // Run the `receive` function to receive the coin from TTO twice, which will result in a fail
-    // but the recieved object should have been read during execution and been unchanged.
+    // but the received object should have been read during execution and been unchanged.
     //
 
     let mut builder = ProgrammableTransactionBuilder::new();
@@ -973,7 +980,7 @@ async fn test_receive_input() {
 
     //
     // Run the `receive` function to receive the coin from TTO twice, which will result in a fail
-    // but the recieved object should have been read during execution and been unchanged.
+    // but the received object should have been read during execution and been unchanged.
     //
 
     let mut builder = ProgrammableTransactionBuilder::new();

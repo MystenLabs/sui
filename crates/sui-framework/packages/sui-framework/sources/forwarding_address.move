@@ -35,11 +35,7 @@ public struct ForwardingDeposit<phantom T> has copy, drop {
 /// forwarding addresses only after confirming the intended master registered the ID.
 ///
 /// Aborts if `master_id` is already registered.
-public fun register(
-    registry: &mut ForwardingAddressRegistry,
-    master_id: u64,
-    ctx: &TxContext,
-) {
+public fun register(registry: &mut ForwardingAddressRegistry, master_id: u64, ctx: &TxContext) {
     sui::dynamic_field::add(&mut registry.id, master_id, ctx.sender());
 }
 

@@ -19,6 +19,7 @@ use sui_rpc::proto::sui::rpc::v2::Transaction;
 use sui_rpc::proto::sui::rpc::v2::UserSignature;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_server::TransactionExecutionService;
 use sui_types::balance_change::derive_balance_changes_2;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
 
@@ -156,6 +157,24 @@ pub async fn execute_transaction(
                 .flatten()
             {
                 objects.insert(o);
+            }
+            for (object_id, kind) in effects.unchanged_consensus_objects() {
+                if let sui_types::effects::UnchangedConsensusKind::ReadOnlyRoot((version, _)) = kind
+                {
+                    let object = service
+                        .reader
+                        .inner()
+                        .get_object_by_key(&object_id, version)
+                        .ok_or_else(|| {
+                            RpcError::new(
+                                tonic::Code::Internal,
+                                format!(
+                                    "unable to fetch unchanged consensus object {object_id} at version {version}"
+                                ),
+                            )
+                        })?;
+                    objects.insert(object);
+                }
             }
             objects
         };

@@ -156,11 +156,7 @@ Aborts if <code>master_id</code> is already registered.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_register">register</a>(
-    registry: &<b>mut</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingAddressRegistry">ForwardingAddressRegistry</a>,
-    master_id: u64,
-    ctx: &TxContext,
-) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_register">register</a>(registry: &<b>mut</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingAddressRegistry">ForwardingAddressRegistry</a>, master_id: u64, ctx: &TxContext) {
     <a href="../sui/dynamic_field.md#sui_dynamic_field_add">sui::dynamic_field::add</a>(&<b>mut</b> registry.id, master_id, ctx.sender());
 }
 </code></pre>
