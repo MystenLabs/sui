@@ -46,7 +46,7 @@ use sui_types::{
     id::UID,
     metrics::ExecutionMetrics,
     move_package::MovePackage,
-    object::{MoveObject, Owner},
+    object::{MoveObject, Object, Owner},
     storage::{ObjectFundsResolver, ObjectFundsSufficiency, RuntimeObjectResolver},
 };
 use tracing::error;
@@ -494,6 +494,11 @@ impl<'a> ObjectRuntime<'a> {
 
     pub fn take_user_events(&mut self) -> Vec<(StructTag, Value)> {
         std::mem::take(&mut self.state.events)
+    }
+
+    pub fn load_runtime_system_object(&mut self, object_id: &ObjectID) -> Option<Object> {
+        self.child_object_store
+            .load_runtime_system_object(object_id)
     }
 
     // TODO: Eventually we may want to allow larger types for accumulators,

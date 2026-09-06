@@ -183,6 +183,7 @@ impl EpochState {
         let system_object_versions =
             sui_types::base_types::SystemObjectVersions::from_latest_in_store(
                 store.backing_store(),
+                self.protocol_config.enable_forwarding_addresses(),
             );
         let (inner_temp_store, gas_status, effects, _timings, result) = self
             .executor

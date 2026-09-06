@@ -7,7 +7,6 @@ mod read_store;
 mod shared_in_memory_store;
 mod write_store;
 
-use crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use crate::base_types::{
     ConsensusObjectSequenceKey, ConsensusObjectVersion, FullObjectID, FullObjectRef, SuiAddress,
     SystemObjectVersions, TransactionDigest, VersionNumber,
@@ -23,6 +22,7 @@ use crate::move_package::MovePackage;
 use crate::storage::error::Error as StorageError;
 use crate::transaction::TransactionData;
 use crate::transaction::{SenderSignedData, TransactionDataAPI};
+use crate::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::SuiResult,
@@ -199,6 +199,13 @@ pub enum ObjectFundsSufficiency {
 /// An abstraction of the (possibly distributed) store for objects. This
 /// API only allows for the retrieval of objects, not any state changes
 pub trait RuntimeObjectResolver: BackingPackageStore {
+    /// Load a system object at the consensus-assigned version for this transaction.
+    ///
+    /// Execution stores override this method. Other resolver implementations return `None`
+    /// because forwarding resolution is disabled in their execution configurations.
+    fn load_runtime_system_object(&self, _object_id: &ObjectID) -> Option<Object> {
+        None
+    }
     /// `child` must have an `ObjectOwner` ownership equal to `owner`.
     fn read_child_object(
         &self,
@@ -561,6 +568,9 @@ impl<S: RuntimeObjectResolver> RuntimeObjectResolver for std::sync::Arc<S> {
             epoch_id,
         )
     }
+    fn load_runtime_system_object(&self, id: &ObjectID) -> Option<Object> {
+        RuntimeObjectResolver::load_runtime_system_object(self.as_ref(), id)
+    }
 }
 
 impl<S: RuntimeObjectResolver> RuntimeObjectResolver for &S {
@@ -587,6 +597,9 @@ impl<S: RuntimeObjectResolver> RuntimeObjectResolver for &S {
             epoch_id,
         )
     }
+    fn load_runtime_system_object(&self, id: &ObjectID) -> Option<Object> {
+        RuntimeObjectResolver::load_runtime_system_object(*self, id)
+    }
 }
 
 impl<S: RuntimeObjectResolver> RuntimeObjectResolver for &mut S {
@@ -612,6 +625,9 @@ impl<S: RuntimeObjectResolver> RuntimeObjectResolver for &mut S {
             receive_object_at_version,
             epoch_id,
         )
+    }
+    fn load_runtime_system_object(&self, id: &ObjectID) -> Option<Object> {
+        RuntimeObjectResolver::load_runtime_system_object(*self, id)
     }
 }
 
@@ -865,13 +881,38 @@ impl SystemObjectVersions {
                     version,
                 }
             });
-        Self::new(accumulator_version)
+        let forwarding_address_registry_version = effects
+            .accessed_consensus_objects()
+            .into_iter()
+            .find_map(|object| match object {
+                InputConsensusObject::Mutate((id, version, _))
+                | InputConsensusObject::ReadOnly((id, version, _))
+                    if id == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID =>
+                {
+                    Some(version)
+                }
+                _ => None,
+            })
+            .map(|version| {
+                let initial_shared_version = store
+                    .get_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+                    .and_then(|object| object.owner().start_version())
+                    .expect("forwarding registry in effects must exist as a shared object");
+                ConsensusObjectVersion {
+                    initial_shared_version,
+                    version,
+                }
+            });
+        Self::new(accumulator_version, forwarding_address_registry_version)
     }
 
     /// Before execution, get the latest versions of the implicitly read system objects from the store,
     /// and use these versions as the exact version to read during execution.
     /// This is used only in environments where there is no consensus to assign versions, e.g. simulacrum and dry-run.
-    pub fn from_latest_in_store(store: &dyn ObjectStore) -> Self {
+    pub fn from_latest_in_store(
+        store: &dyn ObjectStore,
+        include_forwarding_address_registry: bool,
+    ) -> Self {
         let accumulator_version = store
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
             .map(|object| {
@@ -884,7 +925,20 @@ impl SystemObjectVersions {
                     version: object.version(),
                 }
             });
-        Self::new(accumulator_version)
+        let forwarding_address_registry_version = include_forwarding_address_registry
+            .then(|| store.get_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID))
+            .flatten()
+            .map(|object| {
+                let initial_shared_version = object
+                    .owner()
+                    .start_version()
+                    .expect("forwarding address registry must be a consensus object");
+                ConsensusObjectVersion {
+                    initial_shared_version,
+                    version: object.version(),
+                }
+            });
+        Self::new(accumulator_version, forwarding_address_registry_version)
     }
 }
 

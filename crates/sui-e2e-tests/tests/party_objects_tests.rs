@@ -45,7 +45,12 @@ async fn party_object_deletion() {
         .effects;
 
     assert_eq!(effects.deleted().len(), 1);
-    assert_eq!(effects.accessed_consensus_objects().len(), 1);
+    assert!(
+        effects
+            .accessed_consensus_objects()
+            .iter()
+            .any(|object| object.id_and_version().0 == object_id)
+    );
 
     // assert the shared object was deleted
     let deleted_obj_id = effects.deleted()[0].0;
@@ -217,7 +222,12 @@ async fn party_object_transfer() {
         .await
         .effects;
 
-    assert_eq!(effects.accessed_consensus_objects().len(), 1);
+    assert!(
+        effects
+            .accessed_consensus_objects()
+            .iter()
+            .any(|object| object.id_and_version().0 == object_id)
+    );
     let mutated_party = effects
         .mutated()
         .into_iter()

@@ -407,6 +407,7 @@ const MAINNET_USDB: &str =
 //              Enable allowed_proposers on testnet and mainnet.
 //              Validate PTB indices at signing time.
 //              Enable memory_safety_invariant_check_v2.
+//              Enable forwarding addresses on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1146,6 +1147,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     create_forwarding_address_registry: bool,
 
+    // If true, resolve forwarding addresses through the forwarding address registry.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_forwarding_addresses: bool,
+
     // Corrects signature-to-signer mapping in CheckpointContentsV2.
     // Deprecated: must always be set to `true`.
     #[serde(skip_serializing_if = "is_false")]
@@ -1772,6 +1777,10 @@ pub struct ProtocolConfig {
 
     package_original_package_id_impl_cost_base: Option<u64>,
     package_original_package_id_impl_cost_per_byte: Option<u64>,
+
+    // `forwarding_address` module
+    forwarding_address_resolve_cost_base: Option<u64>,
+    forwarding_address_resolve_cost_per_byte: Option<u64>,
 
     // `dynamic_field` module
     // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
@@ -2716,6 +2725,10 @@ impl ProtocolConfig {
 
             package_original_package_id_impl_cost_base: None,
             package_original_package_id_impl_cost_per_byte: None,
+
+            // `forwarding_address` module
+            forwarding_address_resolve_cost_base: None,
+            forwarding_address_resolve_cost_per_byte: None,
 
             // `dynamic_field` module
             // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
@@ -4768,6 +4781,12 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.validate_ptb_argument_indices = true;
                     cfg.feature_flags.memory_safety_invariant_check_v2 = true;
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_forwarding_addresses = true;
+                        cfg.forwarding_address_resolve_cost_base = Some(52);
+                        cfg.forwarding_address_resolve_cost_per_byte =
+                            Some(cfg.obj_access_cost_read_per_byte());
+                    }
                 }
                 // Use this template when making changes:
                 //

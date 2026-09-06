@@ -35,7 +35,7 @@ use sui_types::storage::{BackingStore, DenyListResult, ObjectFundsResolver, Pack
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID, SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     digests::ObjectDigest,
     effects::EffectsObjectChange,
@@ -161,6 +161,7 @@ impl<'backing> TemporaryStore<'backing> {
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
         system_object_versions: SystemObjectVersions,
+        transaction_dependencies: &mut BTreeSet<TransactionDigest>,
         transaction: (&TransactionKind, &GasData, SuiAddress),
         unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
     ) -> Self {
@@ -174,6 +175,7 @@ impl<'backing> TemporaryStore<'backing> {
             protocol_config,
             cur_epoch,
             system_object_versions,
+            Some(transaction_dependencies),
             post_execution_check_inputs,
             unsettled_object_funds,
         )
@@ -192,6 +194,7 @@ impl<'backing> TemporaryStore<'backing> {
             protocol_config,
             0,
             SystemObjectVersions::empty(),
+            None,
             PostExecutionCheckInputs {
                 is_genesis: true,
                 ..Default::default()
@@ -210,15 +213,44 @@ impl<'backing> TemporaryStore<'backing> {
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
         system_object_versions: SystemObjectVersions,
+        mut transaction_dependencies: Option<&mut BTreeSet<TransactionDigest>>,
         post_execution_check_inputs: PostExecutionCheckInputs,
         unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
 
-        let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
+        let mut lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
+        if let Some(registry_version) = system_object_versions
+            .get(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+            .map(|version| version.version)
+        {
+            lamport_timestamp =
+                lamport_timestamp.max(SequenceNumber::lamport_increment([registry_version]));
+        }
         let stream_ended_consensus_objects = input_objects.consensus_stream_ended_objects();
         let objects = input_objects.into_object_map();
+        // Consensus assigns the registry to every transaction while forwarding is enabled, so it
+        // participates in Lamport ordering and effects even when execution does not invoke the
+        // resolver. This lets effects-based re-execution recover the same assigned version.
+        let loaded_system_objects = system_object_versions
+            .get(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+            .map(|version| {
+                let object = store
+                    .load_implicitly_read_system_object(
+                        &SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+                        version,
+                    )
+                    .expect("assigned forwarding address registry version must exist");
+                if let Some(dependencies) = transaction_dependencies.as_mut() {
+                    dependencies.insert(object.previous_transaction);
+                }
+                BTreeMap::from([(
+                    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+                    (object.version(), object.digest()),
+                )])
+            })
+            .unwrap_or_default();
         #[cfg(debug_assertions)]
         {
             // Ensure that input objects and receiving objects must not overlap.
@@ -254,7 +286,7 @@ impl<'backing> TemporaryStore<'backing> {
             post_execution_check_inputs,
             invariants: InvariantChecker::default(),
             system_object_versions,
-            loaded_system_objects: RefCell::new(BTreeMap::new()),
+            loaded_system_objects: RefCell::new(loaded_system_objects),
             unsettled_object_funds,
         }
     }
@@ -1157,6 +1189,10 @@ impl TemporaryStore<'_> {
 }
 
 impl RuntimeObjectResolver for TemporaryStore<'_> {
+    fn load_runtime_system_object(&self, object_id: &ObjectID) -> Option<Object> {
+        self.system_object_versions.get(object_id)?;
+        TemporaryStore::load_implicitly_read_system_object(self, object_id)
+    }
     fn read_child_object(
         &self,
         parent: &ObjectID,

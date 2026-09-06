@@ -25,7 +25,8 @@ mod checked {
     use sui_types::{
         SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID,
         SUI_CLOCK_OBJECT_ID, SUI_COIN_REGISTRY_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
-        SUI_DISPLAY_REGISTRY_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+        SUI_DISPLAY_REGISTRY_OBJECT_ID, SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+        SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
@@ -608,6 +609,7 @@ mod checked {
                         | (SUI_COIN_REGISTRY_OBJECT_ID, _)
                         | (SUI_DISPLAY_REGISTRY_OBJECT_ID, _)
                         | (SUI_DENY_LIST_OBJECT_ID, _)
+                        | (SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, _)
                         | (SUI_BRIDGE_OBJECT_ID, _)
 
                         // System objects that can only be taken immutably

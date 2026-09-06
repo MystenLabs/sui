@@ -70,7 +70,12 @@ async fn shared_object_deletion() {
         .effects;
 
     assert_eq!(effects.deleted().len(), 1);
-    assert_eq!(effects.accessed_consensus_objects().len(), 1);
+    assert!(
+        effects
+            .accessed_consensus_objects()
+            .iter()
+            .any(|object| object.id_and_version().0 == counter_id)
+    );
 
     // assert the shared object was deleted
     let deleted_obj_id = effects.deleted()[0].0;

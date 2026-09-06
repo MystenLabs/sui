@@ -217,7 +217,7 @@ impl SingleValidator {
                 &self.epoch_store.epoch(),
                 0,
                 input_objects,
-                sui_types::base_types::SystemObjectVersions::empty(),
+                assigned_versions.system_object_versions,
                 // The benchmark only measures execution throughput and never withdraws object
                 // funds, so there are no unsettled withdrawals to account for.
                 &sui_types::accumulator_root::EmptyUnsettledObjectFunds,

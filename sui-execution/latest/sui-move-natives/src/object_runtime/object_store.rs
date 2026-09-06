@@ -436,6 +436,18 @@ impl<'a> ChildObjectStore<'a> {
         }
     }
 
+    pub(super) fn load_runtime_system_object(&mut self, object_id: &ObjectID) -> Option<Object> {
+        let object = self.inner.resolver.load_runtime_system_object(object_id)?;
+        match self.inner.root_version.get(object_id) {
+            Some(version) if *version != object.version() => return None,
+            Some(_) => {}
+            None => {
+                self.inner.root_version.insert(*object_id, object.version());
+            }
+        }
+        Some(object)
+    }
+
     /// When `parent` has a tracked root version, record the same root version for `id`.
     /// Note that this is not observable at this time, but will be if we either allow for the
     /// re-creation of derived objects, or if we grant access to the `id: UID` of a dynamic field.
