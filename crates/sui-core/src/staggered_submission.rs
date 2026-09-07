@@ -21,18 +21,21 @@
 //! variants still share the sender's address balance and stay visible to sender-level
 //! accounting.
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 
 use fastcrypto::hash::HashFunction;
 use mysten_common::debug_fatal;
 use parking_lot::RwLock;
+use prometheus::IntGauge;
 use rand::SeedableRng as _;
 use rand::rngs::StdRng;
 use sui_types::base_types::ObjectID;
 use sui_types::committee::{Committee, CommitteeTrait as _, EpochId};
 use sui_types::crypto::DefaultHash;
 use sui_types::digests::TransactionDigest;
+use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::transaction::{MAX_UNPAID_ALLOWED_PROPOSERS, Transaction, TransactionDataAPI as _};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -41,6 +44,9 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 const DEFAULT_STAGGER_STEP: Duration = Duration::from_millis(350);
 /// Default upper bound on any submission delay.
 const DEFAULT_STAGGER_MAX_DELAY: Duration = Duration::from_secs(5);
+/// Held (staggered) submissions may occupy at most `capacity / this` of the owner's
+/// pending-transaction capacity; see [`StaggerQuota`].
+const STAGGERED_HELD_QUOTA_DIVISOR: usize = 4;
 
 /// Parameters of the staggering schedule.
 #[derive(Debug, Clone)]
@@ -145,6 +151,131 @@ impl StaggeredSubmission {
             / epoch_store.reference_gas_price().max(1);
 
         compute_delay(&self.params.read(), slot, paid_amplification)
+    }
+}
+
+/// A component's admission gate for staggered (held) submissions, created by its owner
+/// — the transaction pool or the consensus adapter — with the owner's capacity and
+/// held gauge, so slot requests carry no limits or metrics. The stagger policy itself
+/// (mode, schedule) stays on the per-epoch [`StaggeredSubmission`] in the epoch store.
+///
+/// Held submissions are not drained until their delay elapses, so without the quota
+/// (`max_pending_transactions / STAGGERED_HELD_QUOTA_DIVISOR`), sustained
+/// no-proposer-list inflow at up to `max_delay` of dwell each could fill the owner's
+/// capacity and crowd out restricted traffic. At the quota the caller gets a retriable
+/// overload error instead — which also steers the client to retry against another
+/// validator, plausibly one of the transaction's free-slot validators.
+pub struct StaggerQuota {
+    quota: usize,
+    held: Arc<AtomicUsize>,
+    /// Kept in lockstep with `held` for observability.
+    metric: IntGauge,
+}
+
+impl StaggerQuota {
+    pub fn new(max_pending_transactions: usize, held_metric: IntGauge) -> Self {
+        Self {
+            quota: (max_pending_transactions / STAGGERED_HELD_QUOTA_DIVISOR).max(1),
+            held: Arc::new(AtomicUsize::new(0)),
+            metric: held_metric,
+        }
+    }
+
+    /// Whether another held submission would currently be admitted. Advisory: the
+    /// authoritative check-and-register is `submission_slot`.
+    pub fn has_capacity(&self) -> bool {
+        self.held.load(Ordering::Relaxed) < self.quota
+    }
+
+    /// Like [`StaggeredSubmission::submission_delay`], but also registers the hold
+    /// against the quota and returns it as a [`StaggeredSlot`] carrying the
+    /// eligibility time.
+    pub fn submission_slot(
+        &self,
+        txs: &[&Transaction],
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult<Option<StaggeredSlot>> {
+        let Some(delay) = epoch_store
+            .staggered_submission()
+            .submission_delay(txs, epoch_store)
+        else {
+            return Ok(None);
+        };
+        if self
+            .held
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |held| {
+                (held < self.quota).then_some(held + 1)
+            })
+            .is_err()
+        {
+            return Err(SuiErrorKind::ValidatorOverloadedRetryAfter {
+                retry_after_secs: 1,
+            }
+            .into());
+        }
+        self.metric.inc();
+        Ok(Some(StaggeredSlot {
+            delay,
+            eligible_at: Instant::now() + delay,
+            held: self.held.clone(),
+            metric: self.metric.clone(),
+            released: false,
+        }))
+    }
+}
+
+/// A held submission's registration against the stagger quota, carrying when the hold
+/// elapses. Armed while the entry occupies the caller's queue: dropping it armed (the
+/// entry was discarded — insert failure, already-processed exclusion, eviction, flush)
+/// releases the registration automatically. `release` marks consumption into a
+/// proposal, and `rearm` re-registers on requeue after a dropped acknowledgement —
+/// bypassing the quota, just as requeues bypass pool capacity; any excess is
+/// transient.
+#[must_use]
+pub struct StaggeredSlot {
+    delay: Duration,
+    eligible_at: Instant,
+    held: Arc<AtomicUsize>,
+    metric: IntGauge,
+    released: bool,
+}
+
+impl StaggeredSlot {
+    /// The delay this slot was created with.
+    pub fn delay(&self) -> Duration {
+        self.delay
+    }
+
+    /// The instant the hold elapses and the entry may be proposed.
+    pub fn eligible_at(&self) -> Instant {
+        self.eligible_at
+    }
+
+    pub fn release(&mut self) {
+        debug_assert!(!self.released, "staggered slot released twice");
+        self.released = true;
+        self.dec();
+    }
+
+    pub fn rearm(&mut self) {
+        debug_assert!(self.released, "staggered slot rearmed while armed");
+        self.released = false;
+        self.held.fetch_add(1, Ordering::Relaxed);
+        self.metric.inc();
+    }
+
+    fn dec(&self) {
+        let previous = self.held.fetch_sub(1, Ordering::Relaxed);
+        debug_assert!(previous > 0, "staggered held count underflow");
+        self.metric.dec();
+    }
+}
+
+impl Drop for StaggeredSlot {
+    fn drop(&mut self) {
+        if !self.released {
+            self.dec();
+        }
     }
 }
 
@@ -621,6 +752,67 @@ mod pool_tests {
             .unwrap();
         assert!(newly_inserted);
         (receiver, consensus_tx)
+    }
+
+    #[tokio::test]
+    async fn held_quota_rejects_further_staggered_inserts() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
+            c.set_allowed_proposers_for_testing(true);
+            c
+        });
+        let (state, sender, keypair, _, immediate_gas, candidates) = setup().await;
+        let epoch_store = state.epoch_store_for_testing();
+        // Capacity 10 gives a held quota of 10 / STAGGERED_HELD_QUOTA_DIVISOR = 2.
+        let pool = pool_for(&state);
+
+        let staggered = epoch_store.staggered_submission();
+        staggered.set_params_for_testing(StaggerParams {
+            step: Duration::from_secs(60),
+            max_delay: Duration::from_secs(60),
+            free_slots: 1,
+        });
+        staggered.set_active(true);
+
+        let epoch = epoch_store.epoch();
+        let own_index = epoch_store.own_committee_index().unwrap();
+        let mut held_gas = candidates
+            .iter()
+            .filter(|object| object.id() != immediate_gas.id())
+            .filter(|object| {
+                let seed = stagger_seed(&[object.id()], &[], epoch);
+                stagger_slot(&seed, epoch_store.committee(), own_index) >= 1
+            })
+            .cloned();
+
+        // Fill the quota with held entries.
+        for _ in 0..2 {
+            let gas = held_gas.next().expect("not enough held-slot gas objects");
+            let (_receiver, _) = insert(&pool, &state, sender, &keypair, gas).await;
+        }
+
+        // The next entry that would be held is rejected with a retriable error.
+        let gas = held_gas.next().expect("not enough held-slot gas objects");
+        let tx = test_user_transaction(&state, sender, &keypair, gas, vec![]).await;
+        let consensus_tx =
+            ConsensusTransaction::new_user_transaction_v2_message(&state.name, tx.into());
+        let error = pool
+            .try_insert(pool.epoch(), 1, vec![consensus_tx])
+            .unwrap_err();
+        assert!(
+            matches!(
+                error.as_inner(),
+                sui_types::error::SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
+            ),
+            "unexpected quota rejection error: {error}"
+        );
+
+        // An immediate-slot transaction is unaffected by the quota and is proposed.
+        let (_receiver, _) = insert(&pool, &state, sender, &keypair, immediate_gas).await;
+        let (transactions, ack, _) = pool.take(10, usize::MAX);
+        assert_eq!(transactions.len(), 1, "immediate slot was held");
+        // The dropped ack requeues the entry; close() resolves it before the pool drops.
+        drop(ack);
+        pool.close();
     }
 
     #[tokio::test]
