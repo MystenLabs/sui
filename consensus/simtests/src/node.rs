@@ -67,7 +67,14 @@ impl AuthorityNode {
 
     /// Start this Node
     pub async fn start(&self) -> Result<()> {
-        self.start_with_config(self.config.clone()).await
+        self.start_with_config(self.config.clone(), None).await
+    }
+
+    /// Start with a caller-owned consumer that can apply and acknowledge replay
+    /// while startup is still pending.
+    pub async fn start_with_commit_consumer(&self, consumer: CommitConsumerArgs) -> Result<()> {
+        self.start_with_config(self.config.clone(), Some(consumer))
+            .await
     }
 
     /// Start this Node with an empty store.
@@ -78,10 +85,14 @@ impl AuthorityNode {
         let mut config = self.config.clone();
         config.parameters.db_path = db_dir.path().to_path_buf();
         config.db_dir = db_dir;
-        self.start_with_config(config).await
+        self.start_with_config(config, None).await
     }
 
-    async fn start_with_config(&self, config: Config) -> Result<()> {
+    async fn start_with_config(
+        &self,
+        config: Config,
+        consumer: Option<CommitConsumerArgs>,
+    ) -> Result<()> {
         let node_type = if config.observer_network_keypair.is_some() {
             "Observer"
         } else {
@@ -90,7 +101,7 @@ impl AuthorityNode {
         info!(index = %config.authority_index, node_type = node_type, "starting in-memory node");
         // Each start creates a new simulator process. The boot counter is
         // process-local, so use the configured value for each new process.
-        *self.inner.lock() = Some(AuthorityNodeInner::spawn(config).await);
+        *self.inner.lock() = Some(AuthorityNodeInner::spawn(config, consumer).await);
         Ok(())
     }
 
@@ -187,7 +198,7 @@ impl AuthorityNode {
 
     /// If this Node is currently running
     pub fn is_running(&self) -> bool {
-        self.inner.lock().as_ref().map_or(false, |c| c.is_alive())
+        self.inner.lock().as_ref().is_some_and(|c| c.is_alive())
     }
 }
 
@@ -204,12 +215,11 @@ struct NodeHandle {
     node_id: sui_simulator::task::NodeId,
 }
 
-/// When dropped, stop and wait for the node running in this node to completely shutdown.
-impl Drop for AuthorityNodeInner {
+impl Drop for NodeHandle {
     fn drop(&mut self) {
-        if let Some(handle) = self.handle.take() {
-            tracing::info!("shutting down {}", handle.node_id);
-            sui_simulator::runtime::Handle::try_current().map(|h| h.delete_node(handle.node_id));
+        tracing::info!("shutting down {}", self.node_id);
+        if let Some(handle) = sui_simulator::runtime::Handle::try_current() {
+            handle.delete_node(self.node_id);
         }
     }
 }
@@ -229,7 +239,7 @@ impl AuthorityNodeInner {
     }
 
     /// Spawn a new Node.
-    pub async fn spawn(config: Config) -> Self {
+    pub async fn spawn(config: Config, consumer: Option<CommitConsumerArgs>) -> Self {
         let (startup_sender, mut startup_receiver) = tokio::sync::watch::channel(false);
         let (cancel_sender, cancel_receiver) = tokio::sync::watch::channel(false);
 
@@ -268,13 +278,21 @@ impl AuthorityNodeInner {
             .init(move || {
                 info!("Node restarted");
                 let config = config.clone();
+                let consumer = consumer.clone();
                 let mut cancel_receiver = cancel_receiver.clone();
                 let init_receiver_swap_clone = int_receiver_swap_clone.clone();
                 let startup_sender_clone = startup_sender.clone();
 
                 async move {
-                    let (consensus_authority, commit_receiver, commit_consumer_monitor) =
-                        super::node::make_authority(config).await;
+                    let (commit_consumer, commit_receiver) = match consumer {
+                        Some(consumer) => (consumer, None),
+                        None => {
+                            let (consumer, receiver) = CommitConsumerArgs::new(0, 0);
+                            (consumer, Some(receiver))
+                        }
+                    };
+                    let commit_consumer_monitor = commit_consumer.monitor();
+                    let consensus_authority = make_authority(config, commit_consumer).await;
 
                     startup_sender_clone.send(true).ok();
                     init_receiver_swap_clone.store(Some(Arc::new((
@@ -294,6 +312,9 @@ impl AuthorityNodeInner {
             })
             .build();
 
+        // A full-replay startup may wait for application indefinitely. Keep the
+        // node guard across this await so cancelling startup also kills its tasks.
+        let handle = NodeHandle { node_id: node.id() };
         startup_receiver.changed().await.unwrap();
 
         let Some(init_tuple) = init_receiver_swap.swap(None) else {
@@ -307,10 +328,10 @@ impl AuthorityNodeInner {
         };
 
         Self {
-            handle: Some(NodeHandle { node_id: node.id() }),
+            handle: Some(handle),
             cancel_sender: Some(cancel_sender),
             consensus_authority: Some(consensus_authority),
-            commit_receiver: ArcSwapOption::new(Some(Arc::new(commit_receiver))),
+            commit_receiver: ArcSwapOption::new(commit_receiver.map(Arc::new)),
             commit_consumer_monitor,
         }
     }
@@ -361,11 +382,8 @@ impl AuthorityNodeInner {
 
 pub(crate) async fn make_authority(
     config: Config,
-) -> (
-    ConsensusAuthority,
-    UnboundedReceiver<CommittedSubDag>,
-    Arc<CommitConsumerMonitor>,
-) {
+    commit_consumer: CommitConsumerArgs,
+) -> ConsensusAuthority {
     let Config {
         authority_index,
         db_dir: _,
@@ -394,10 +412,7 @@ pub(crate) async fn make_authority(
             (Some(protocol_keypair), network_keypair)
         };
 
-    let (commit_consumer, commit_receiver) = CommitConsumerArgs::new(0, 0);
-    let commit_consumer_monitor = commit_consumer.monitor();
-
-    let authority = ConsensusAuthority::start(
+    ConsensusAuthority::start(
         NetworkType::Tonic,
         0,
         committee,
@@ -413,9 +428,7 @@ pub(crate) async fn make_authority(
         boot_counter,
         None,
     )
-    .await;
-
-    (authority, commit_receiver, commit_consumer_monitor)
+    .await
 }
 
 pub fn default_parameters() -> Parameters {
