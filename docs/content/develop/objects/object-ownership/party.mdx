@@ -61,7 +61,7 @@ Party objects sit between [address-owned](/develop/objects/object-ownership/addr
 | **Property** | **Address-owned** | **Party** | **Shared** |
 |---|---|---|---|
 | Owner | A single address (account address or object ID). | A single address (account address or object ID). | No owner. Anyone can access the object. |
-| Versioned by | Owner-signed fast path, not sequenced by consensus. | Consensus. | Consensus. |
+| Versioned by | The sender's object reference names the version. | Consensus. | Consensus. |
 | Concurrent inflight transactions | One at a time, because the object takes a fast path lock. | Many, because consensus assigns versions. | Many, because consensus assigns versions. |
 | Access control | Only the owner can use the object. | Only addresses with the required permissions can use the object. | Anyone can use the object, so the module must enforce its own rules. |
 | Transfer and wrap | Supported. | Supported. You can move the object to and from other ownership types and wrap it. | Not supported. Sharing is permanent. |

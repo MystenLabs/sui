@@ -48,7 +48,7 @@ Every object has an owner that determines who can use it in transactions and whe
 
 | Ownership type | Access model | Versioning path | Typical latency |
 | --- | --- | --- | --- |
-| [Address-owned](/develop/objects/object-ownership/address-owned) | A single address can use the object. | Fastpath | Lowest (no consensus needed) |
+| [Address-owned](/develop/objects/object-ownership/address-owned) | A single address can use the object. | Fastpath | Lowest (no contention on the object) |
 | [Shared](/develop/objects/object-ownership/shared) | Any address can use the object, subject to Move checks. | Consensus | Higher (consensus ordering required) |
 | [Immutable](/develop/objects/object-ownership/immutable) | Any address can read the object; no one can mutate it. | Fixed after it becomes immutable | Lowest (read-only, no versioning) |
 | [Wrapped](/develop/objects/object-ownership/wrapped) | Only accessible through the object that wraps it. | Depends on the wrapper | Depends on the wrapper |
