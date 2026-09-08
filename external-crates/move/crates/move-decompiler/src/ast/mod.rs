@@ -419,376 +419,368 @@ impl std::fmt::Display for Module {
     }
 }
 
-// Display trait for function
+/// The body sits two levels in, under `module { public fun f () {`.
 impl std::fmt::Display for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.code)
+        fmt_block_body(f, &self.code, 2)
     }
 }
 
+/// Value position: no leading indent and no trailing newline, so an `Exp` interpolated
+/// into a larger expression stays inline. Statement position goes through
+/// [`fmt_block_body`], which supplies both.
 impl std::fmt::Display for Exp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn indent(f: &mut std::fmt::Formatter<'_>, level: usize) -> std::fmt::Result {
-            for _ in 0..level {
-                write!(f, "    ")?;
-            }
-            Ok(())
-        }
+        fmt_exp(f, self, 0)
+    }
+}
 
-        /// Render every `Match` arm (pattern, guard, `=> { body },`), with `fmt_body`
-        /// supplying the body form the caller is in.
-        fn fmt_match_arms(
-            f: &mut std::fmt::Formatter<'_>,
-            enum_ty: &TypeRef,
-            arms: &[MatchArm],
-            level: usize,
-            fmt_body: fn(&mut std::fmt::Formatter<'_>, &Exp, usize) -> std::fmt::Result,
-        ) -> std::fmt::Result {
-            for arm in arms {
+fn indent(f: &mut std::fmt::Formatter<'_>, level: usize) -> std::fmt::Result {
+    for _ in 0..level {
+        write!(f, "    ")?;
+    }
+    Ok(())
+}
+
+/// Render every `Match` arm (pattern, guard, `=> { body },`).
+fn fmt_match_arms(
+    f: &mut std::fmt::Formatter<'_>,
+    enum_ty: &TypeRef,
+    arms: &[MatchArm],
+    level: usize,
+) -> std::fmt::Result {
+    for arm in arms {
+        indent(f, level + 1)?;
+        write_match_pattern(f, enum_ty, &arm.variant, &arm.fields)?;
+        if let Some(guard) = &arm.guard {
+            write!(f, " if ({guard})")?;
+        }
+        writeln!(f, " => {{")?;
+        fmt_block_body(f, &arm.rhs, level + 2)?;
+        indent(f, level + 1)?;
+        writeln!(f, "}},")?;
+    }
+    Ok(())
+}
+
+/// Print `exp` as a value on the right-hand side of an assignment/let-bind: no leading
+/// indent (the caller already wrote `lhs = `), and no trailing newline (the caller
+/// writes the closing `;`). For block-like expressions (IfElse, Switch) this keeps
+/// braces aligned with the assignment's indent level so the result reads like the
+/// idiomatic Move `let X = if (...) { ... } else { ... };` form.
+fn fmt_value(f: &mut std::fmt::Formatter<'_>, exp: &Exp, level: usize) -> std::fmt::Result {
+    match exp {
+        Exp::IfElse(cond, conseq, alt) => {
+            writeln!(f, "if ({}) {{", cond)?;
+            fmt_block_body(f, conseq, level + 1)?;
+            indent(f, level)?;
+            if let Some(alt) = &**alt {
+                writeln!(f, "}} else {{")?;
+                fmt_block_body(f, alt, level + 1)?;
+                indent(f, level)?;
+            }
+            write!(f, "}}")
+        }
+        Exp::Switch(term, enum_ty, cases) => {
+            writeln!(f, "match({}: {enum_ty}) {{", term)?;
+            for (variant, case) in cases {
                 indent(f, level + 1)?;
-                write_match_pattern(f, enum_ty, &arm.variant, &arm.fields)?;
-                if let Some(guard) = &arm.guard {
-                    write!(f, " if ({guard})")?;
-                }
-                writeln!(f, " => {{")?;
-                fmt_body(f, &arm.rhs, level + 2)?;
+                writeln!(f, "{enum_ty}::{variant} => {{")?;
+                fmt_block_body(f, case, level + 2)?;
                 indent(f, level + 1)?;
                 writeln!(f, "}},")?;
             }
+            indent(f, level)?;
+            write!(f, "}}")
+        }
+        Exp::Match(term, enum_ty, cases) => {
+            writeln!(f, "match({}: {enum_ty}) {{", term)?;
+            fmt_match_arms(f, enum_ty, cases, level)?;
+            indent(f, level)?;
+            write!(f, "}}")
+        }
+        Exp::MatchLit(scrutinee, arms) => {
+            writeln!(f, "match ({}) {{", scrutinee)?;
+            for (lit, body) in arms {
+                indent(f, level + 1)?;
+                writeln!(f, "{lit} => {{")?;
+                fmt_block_body(f, body, level + 2)?;
+                indent(f, level + 1)?;
+                writeln!(f, "}},")?;
+            }
+            indent(f, level)?;
+            write!(f, "}}")
+        }
+        // Non-block expressions render inline via their normal Display.
+        other => write!(f, "{}", other),
+    }
+}
+
+/// Print `exp` as the body of a brace-block at `level`. Recurs into `Seq` so each
+/// item is positioned at the block's indent. Inline expressions (which `fmt_exp` would
+/// emit naked, since their normal use is as the RHS of an Assign where the caller
+/// already wrote the indent) get an explicit indent and trailing newline so they read
+/// like the trailing value of a block expression: `if (c) { ...; value }`.
+fn fmt_block_body(f: &mut std::fmt::Formatter<'_>, exp: &Exp, level: usize) -> std::fmt::Result {
+    match exp {
+        Exp::Seq(seq) => {
+            for item in seq {
+                fmt_block_body(f, item, level)?;
+            }
             Ok(())
         }
+        e if emits_own_line(e) => fmt_exp(f, e, level),
+        e => {
+            indent(f, level)?;
+            writeln!(f, "{}", e)
+        }
+    }
+}
 
-        /// Print `exp` as a value on the right-hand side of an assignment/let-bind: no leading
-        /// indent (the caller already wrote `lhs = `), and no trailing newline (the caller
-        /// writes the closing `;`). For block-like expressions (IfElse, Switch) this keeps
-        /// braces aligned with the assignment's indent level so the result reads like the
-        /// idiomatic Move `let X = if (...) { ... } else { ... };` form.
-        fn fmt_value(f: &mut std::fmt::Formatter<'_>, exp: &Exp, level: usize) -> std::fmt::Result {
-            match exp {
-                Exp::IfElse(cond, conseq, alt) => {
-                    writeln!(f, "if ({}) {{", cond)?;
-                    fmt_block_body(f, conseq, level + 1)?;
-                    indent(f, level)?;
-                    if let Some(alt) = &**alt {
-                        writeln!(f, "}} else {{")?;
-                        fmt_block_body(f, alt, level + 1)?;
-                        indent(f, level)?;
-                    }
-                    write!(f, "}}")
-                }
-                Exp::Switch(term, enum_ty, cases) => {
-                    writeln!(f, "match({}: {enum_ty}) {{", term)?;
-                    for (variant, case) in cases {
-                        indent(f, level + 1)?;
-                        writeln!(f, "{enum_ty}::{variant} => {{")?;
-                        fmt_block_body(f, case, level + 2)?;
-                        indent(f, level + 1)?;
-                        writeln!(f, "}},")?;
-                    }
-                    indent(f, level)?;
-                    write!(f, "}}")
-                }
-                Exp::Match(term, enum_ty, cases) => {
-                    writeln!(f, "match({}: {enum_ty}) {{", term)?;
-                    fmt_match_arms(f, enum_ty, cases, level, fmt_block_body)?;
-                    indent(f, level)?;
-                    write!(f, "}}")
-                }
-                Exp::MatchLit(scrutinee, arms) => {
-                    writeln!(f, "match ({}) {{", scrutinee)?;
-                    for (lit, body) in arms {
-                        indent(f, level + 1)?;
-                        writeln!(f, "{lit} => {{")?;
-                        fmt_block_body(f, body, level + 2)?;
-                        indent(f, level + 1)?;
-                        writeln!(f, "}},")?;
-                    }
-                    indent(f, level)?;
-                    write!(f, "}}")
-                }
-                // Non-block expressions render inline via their normal Display.
-                other => write!(f, "{}", other),
+/// `true` for `Exp` variants whose `fmt_exp` already starts with `indent(level)` and
+/// ends with `writeln!`. Everything else is an "inline" expression - `Value`, `Call`,
+/// `Primitive`, `Borrow`, etc. - that needs `fmt_block_body` to provide indent/newline
+/// when it appears at statement position.
+fn emits_own_line(exp: &Exp) -> bool {
+    matches!(
+        exp,
+        Exp::Break(_)
+            | Exp::Continue(_)
+            | Exp::Loop(_, _)
+            | Exp::While(_, _, _)
+            | Exp::IfElse(_, _, _)
+            | Exp::Switch(_, _, _)
+            | Exp::Match(_, _, _)
+            | Exp::MatchLit(_, _)
+            | Exp::Return(_)
+            | Exp::Assign(_, _)
+            | Exp::LetBind(_, _)
+            | Exp::Declare(_)
+            | Exp::Abort(_)
+            | Exp::Unpack(_, _, _)
+            | Exp::UnpackVariant(_, _, _, _)
+            | Exp::VecUnpack(_, _)
+            | Exp::Unstructured(_)
+            | Exp::Block(_, _)
+    )
+}
+
+fn fmt_exp(f: &mut std::fmt::Formatter<'_>, exp: &Exp, level: usize) -> std::fmt::Result {
+    match exp {
+        Exp::Break(label) => {
+            indent(f, level)?;
+            match label {
+                Some(l) => writeln!(f, "break 'loop_{};", l),
+                None => writeln!(f, "break;"),
             }
         }
-
-        /// Print `exp` as the body of a brace-block at `level`. Recurs into `Seq` so each
-        /// item is positioned at the block's indent. Inline expressions (which `fmt_exp` would
-        /// emit naked, since their normal use is as the RHS of an Assign where the caller
-        /// already wrote the indent) get an explicit indent and trailing newline so they read
-        /// like the trailing value of a block expression: `if (c) { ...; value }`.
-        fn fmt_block_body(
-            f: &mut std::fmt::Formatter<'_>,
-            exp: &Exp,
-            level: usize,
-        ) -> std::fmt::Result {
-            match exp {
-                Exp::Seq(seq) => {
-                    for item in seq {
-                        fmt_block_body(f, item, level)?;
-                    }
-                    Ok(())
-                }
-                e if emits_own_line(e) => fmt_exp(f, e, level),
-                e => {
-                    indent(f, level)?;
-                    writeln!(f, "{}", e)
-                }
+        Exp::Continue(label) => {
+            indent(f, level)?;
+            match label {
+                Some(l) => writeln!(f, "continue 'loop_{};", l),
+                None => writeln!(f, "continue;"),
             }
         }
-
-        /// `true` for `Exp` variants whose `fmt_exp` already starts with `indent(level)` and
-        /// ends with `writeln!`. Everything else is an "inline" expression - `Value`,
-        /// `Variable`, `Primitive`, `Borrow`, etc. - that needs `fmt_block_body` to provide
-        /// indent/newline when it appears at statement position.
-        fn emits_own_line(exp: &Exp) -> bool {
-            matches!(
-                exp,
-                Exp::Break(_)
-                    | Exp::Continue(_)
-                    | Exp::Loop(_, _)
-                    | Exp::While(_, _, _)
-                    | Exp::IfElse(_, _, _)
-                    | Exp::Switch(_, _, _)
-                    | Exp::Match(_, _, _)
-                    | Exp::MatchLit(_, _)
-                    | Exp::Return(_)
-                    | Exp::Assign(_, _)
-                    | Exp::LetBind(_, _)
-                    | Exp::Declare(_)
-                    | Exp::Call(_, _)
-                    | Exp::Abort(_)
-                    | Exp::Data { .. }
-                    | Exp::Unpack(_, _, _)
-                    | Exp::UnpackVariant(_, _, _, _)
-                    | Exp::VecUnpack(_, _)
-                    | Exp::Unstructured(_)
-                    | Exp::Block(_, _)
-            )
-        }
-
-        fn fmt_exp(f: &mut std::fmt::Formatter<'_>, exp: &Exp, level: usize) -> std::fmt::Result {
-            match exp {
-                Exp::Break(label) => {
-                    indent(f, level)?;
-                    match label {
-                        Some(l) => writeln!(f, "break 'loop_{};", l),
-                        None => writeln!(f, "break;"),
-                    }
-                }
-                Exp::Continue(label) => {
-                    indent(f, level)?;
-                    match label {
-                        Some(l) => writeln!(f, "continue 'loop_{};", l),
-                        None => writeln!(f, "continue;"),
-                    }
-                }
-                Exp::Loop(label, body) => {
-                    indent(f, level)?;
-                    match label {
-                        Some(l) => writeln!(f, "'loop_{}: loop {{", l)?,
-                        None => writeln!(f, "loop {{")?,
-                    }
-                    fmt_exp(f, body, level + 1)?;
-                    indent(f, level)?;
-                    writeln!(f, "}}")
-                }
-                Exp::Seq(seq) => {
-                    if seq.is_empty() {
-                        return Ok(());
-                    } else {
-                        for exp in seq {
-                            fmt_exp(f, exp, level)?;
-                        }
-                    }
-                    Ok(())
-                }
-                Exp::While(label, cond, body) => {
-                    indent(f, level)?;
-                    match label {
-                        Some(l) => writeln!(f, "'loop_{}: while({}) {{", l, cond)?,
-                        None => writeln!(f, "while({}) {{", cond)?,
-                    }
-                    fmt_exp(f, body, level + 1)?;
-                    indent(f, level)?;
-                    writeln!(f, "}}")
-                }
-                Exp::IfElse(cond, conseq, alt) => {
-                    indent(f, level)?;
-                    writeln!(f, "if ({}) {{", cond)?;
-                    fmt_exp(f, conseq, level + 1)?;
-                    indent(f, level)?;
-                    if let Some(alt) = &**alt {
-                        writeln!(f, "}} else {{")?;
-                        fmt_exp(f, alt, level + 1)?;
-                        indent(f, level)?;
-                    }
-                    writeln!(f, "}}")
-                }
-                Exp::Switch(term, enum_ty, cases) => {
-                    indent(f, level)?;
-                    writeln!(f, "match({}: {enum_ty}) {{", term)?;
-                    for (variant, case) in cases {
-                        indent(f, level + 1)?;
-                        writeln!(f, "{enum_ty}::{variant} => {{")?;
-                        fmt_exp(f, case, level + 2)?;
-                        indent(f, level + 1)?;
-                        writeln!(f, "}},")?;
-                    }
-                    indent(f, level)?;
-                    writeln!(f, "}}")
-                }
-                Exp::Match(term, enum_ty, cases) => {
-                    indent(f, level)?;
-                    writeln!(f, "match({}: {enum_ty}) {{", term)?;
-                    fmt_match_arms(f, enum_ty, cases, level, fmt_exp)?;
-                    indent(f, level)?;
-                    writeln!(f, "}}")
-                }
-                Exp::MatchLit(scrutinee, arms) => {
-                    indent(f, level)?;
-                    writeln!(f, "match ({}) {{", scrutinee)?;
-                    for (lit, body) in arms {
-                        indent(f, level + 1)?;
-                        writeln!(f, "{lit} => {{")?;
-                        fmt_exp(f, body, level + 2)?;
-                        indent(f, level + 1)?;
-                        writeln!(f, "}},")?;
-                    }
-                    indent(f, level)?;
-                    writeln!(f, "}}")
-                }
-                Exp::Data { op, args } => {
-                    indent(f, level)?;
-                    write_data_op(f, op, args)
-                }
-                Exp::Return(exps) => {
-                    indent(f, level)?;
-                    write!(f, "return ")?;
-                    for exp in exps {
-                        fmt_exp(f, exp, level)?;
-                    }
-                    writeln!(f)
-                }
-                Exp::Assign(items, exp) => {
-                    indent(f, level)?;
-                    write!(f, "{} = ", items.join(", "))?;
-                    fmt_value(f, exp, level)?;
-                    writeln!(f, ";")
-                }
-                Exp::LetBind(items, exp) => {
-                    indent(f, level)?;
-                    write!(f, "let {} = ", items.join(", "))?;
-                    fmt_value(f, exp, level)?;
-                    writeln!(f, ";")
-                }
-                Exp::Declare(items) => {
-                    indent(f, level)?;
-                    writeln!(f, "let {};", items.join(", "))
-                }
-                Exp::Call((module_name, fun_name), exps) => {
-                    indent(f, level)?;
-                    if module_name.is_builtin() {
-                        write!(f, "{fun_name}(")?;
-                    } else {
-                        write!(f, "{module_name}::{fun_name}(")?;
-                    }
-                    for (i, exp) in exps.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        fmt_exp(f, exp, level)?;
-                    }
-                    writeln!(f, ")")
-                }
-                Exp::Abort(exp) => {
-                    indent(f, level)?;
-                    writeln!(f, "abort {};", exp)
-                }
-                Exp::Primitive { op, args } => write_primitive_op(f, op, args),
-                Exp::Borrow(mut_, exp) => write!(f, "{}{}", if *mut_ { "&mut " } else { "&" }, exp),
-                Exp::Value(value) => write!(f, "{}", value),
-                Exp::Variable(name) => write!(f, "{}", name),
-                Exp::Constant(constant) => write!(f, "{:?}", constant),
-                Exp::Unpack(struct_ty, items, exp) => {
-                    indent(f, level)?;
-                    write!(f, "let {struct_ty} {{")?;
-                    if !items.is_empty() {
-                        write!(f, " ")?;
-                    }
-                    for (i, (sym, name)) in items.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "{sym}: {name}")?;
-                    }
-                    if !items.is_empty() {
-                        write!(f, " ")?;
-                    }
-                    writeln!(f, "}} = {};", exp)
-                }
-                Exp::UnpackVariant(unpack_kind, (enum_ty, variant), items, exp) => {
-                    indent(f, level)?;
-                    write!(f, "let {enum_ty}::{variant} {{")?;
-                    if !items.is_empty() {
-                        write!(f, " ")?;
-                    }
-                    for (i, (sym, name)) in items.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "{sym}: {name}")?;
-                    }
-                    if !items.is_empty() {
-                        write!(f, " ")?;
-                    }
-                    let unpack_str = match unpack_kind {
-                        UnpackKind::Value => "",
-                        UnpackKind::ImmRef => "&",
-                        UnpackKind::MutRef => "&mut ",
-                    };
-                    writeln!(f, "}} = {unpack_str}{exp};",)
-                }
-                Exp::VecUnpack(items, exp) => {
-                    indent(f, level)?;
-                    write!(f, "let [")?;
-                    for (i, name) in items.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "{}", name)?;
-                    }
-                    writeln!(f, "] = {};", exp)
-                }
-                Exp::Unstructured(nodes) => {
-                    indent(f, level)?;
-                    writeln!(f, "unstructured {{")?;
-                    for node in nodes {
-                        match node {
-                            UnstructuredNode::Labeled(label, body) => {
-                                indent(f, level + 1)?;
-                                writeln!(f, "'label_{}:", label)?;
-                                fmt_exp(f, body, level + 1)?;
-                            }
-                            UnstructuredNode::Statement(exp) => {
-                                fmt_exp(f, exp, level + 1)?;
-                            }
-                            UnstructuredNode::Goto(label) => {
-                                indent(f, level + 1)?;
-                                writeln!(f, "goto 'label_{};", label)?;
-                            }
-                        }
-                    }
-                    indent(f, level)?;
-                    writeln!(f, "}}")
-                }
-                // Block is a marker; recur into the body. The pretty printer emits the
-                // `/* block N */` comment; the Debug `Display` path is for tests and stays
-                // transparent.
-                Exp::Block(_, body) => fmt_exp(f, body, level),
+        Exp::Loop(label, body) => {
+            indent(f, level)?;
+            match label {
+                Some(l) => writeln!(f, "'loop_{}: loop {{", l)?,
+                None => writeln!(f, "loop {{")?,
             }
+            fmt_block_body(f, body, level + 1)?;
+            indent(f, level)?;
+            writeln!(f, "}}")
         }
-
-        fmt_exp(f, self, 2)
+        Exp::Seq(seq) => {
+            if seq.is_empty() {
+                return Ok(());
+            } else {
+                for exp in seq {
+                    fmt_block_body(f, exp, level)?;
+                }
+            }
+            Ok(())
+        }
+        Exp::While(label, cond, body) => {
+            indent(f, level)?;
+            match label {
+                Some(l) => writeln!(f, "'loop_{}: while({}) {{", l, cond)?,
+                None => writeln!(f, "while({}) {{", cond)?,
+            }
+            fmt_block_body(f, body, level + 1)?;
+            indent(f, level)?;
+            writeln!(f, "}}")
+        }
+        Exp::IfElse(cond, conseq, alt) => {
+            indent(f, level)?;
+            writeln!(f, "if ({}) {{", cond)?;
+            fmt_block_body(f, conseq, level + 1)?;
+            indent(f, level)?;
+            if let Some(alt) = &**alt {
+                writeln!(f, "}} else {{")?;
+                fmt_block_body(f, alt, level + 1)?;
+                indent(f, level)?;
+            }
+            writeln!(f, "}}")
+        }
+        Exp::Switch(term, enum_ty, cases) => {
+            indent(f, level)?;
+            writeln!(f, "match({}: {enum_ty}) {{", term)?;
+            for (variant, case) in cases {
+                indent(f, level + 1)?;
+                writeln!(f, "{enum_ty}::{variant} => {{")?;
+                fmt_block_body(f, case, level + 2)?;
+                indent(f, level + 1)?;
+                writeln!(f, "}},")?;
+            }
+            indent(f, level)?;
+            writeln!(f, "}}")
+        }
+        Exp::Match(term, enum_ty, cases) => {
+            indent(f, level)?;
+            writeln!(f, "match({}: {enum_ty}) {{", term)?;
+            fmt_match_arms(f, enum_ty, cases, level)?;
+            indent(f, level)?;
+            writeln!(f, "}}")
+        }
+        Exp::MatchLit(scrutinee, arms) => {
+            indent(f, level)?;
+            writeln!(f, "match ({}) {{", scrutinee)?;
+            for (lit, body) in arms {
+                indent(f, level + 1)?;
+                writeln!(f, "{lit} => {{")?;
+                fmt_block_body(f, body, level + 2)?;
+                indent(f, level + 1)?;
+                writeln!(f, "}},")?;
+            }
+            indent(f, level)?;
+            writeln!(f, "}}")
+        }
+        Exp::Data { op, args } => write_data_op(f, op, args),
+        Exp::Return(exps) => {
+            indent(f, level)?;
+            write!(f, "return")?;
+            for (i, exp) in exps.iter().enumerate() {
+                write!(f, "{}", if i == 0 { " " } else { ", " })?;
+                fmt_value(f, exp, level)?;
+            }
+            writeln!(f)
+        }
+        Exp::Assign(items, exp) => {
+            indent(f, level)?;
+            write!(f, "{} = ", items.join(", "))?;
+            fmt_value(f, exp, level)?;
+            writeln!(f, ";")
+        }
+        Exp::LetBind(items, exp) => {
+            indent(f, level)?;
+            write!(f, "let {} = ", items.join(", "))?;
+            fmt_value(f, exp, level)?;
+            writeln!(f, ";")
+        }
+        Exp::Declare(items) => {
+            indent(f, level)?;
+            writeln!(f, "let {};", items.join(", "))
+        }
+        Exp::Call((module_name, fun_name), exps) => {
+            if module_name.is_builtin() {
+                write!(f, "{fun_name}(")?;
+            } else {
+                write!(f, "{module_name}::{fun_name}(")?;
+            }
+            for (i, exp) in exps.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                fmt_value(f, exp, level)?;
+            }
+            write!(f, ")")
+        }
+        Exp::Abort(exp) => {
+            indent(f, level)?;
+            writeln!(f, "abort {};", exp)
+        }
+        Exp::Primitive { op, args } => write_primitive_op(f, op, args),
+        Exp::Borrow(mut_, exp) => write!(f, "{}{}", if *mut_ { "&mut " } else { "&" }, exp),
+        Exp::Value(value) => write!(f, "{}", value),
+        Exp::Variable(name) => write!(f, "{}", name),
+        Exp::Constant(constant) => write!(f, "{:?}", constant),
+        Exp::Unpack(struct_ty, items, exp) => {
+            indent(f, level)?;
+            write!(f, "let {struct_ty} {{")?;
+            if !items.is_empty() {
+                write!(f, " ")?;
+            }
+            for (i, (sym, name)) in items.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{sym}: {name}")?;
+            }
+            if !items.is_empty() {
+                write!(f, " ")?;
+            }
+            writeln!(f, "}} = {};", exp)
+        }
+        Exp::UnpackVariant(unpack_kind, (enum_ty, variant), items, exp) => {
+            indent(f, level)?;
+            write!(f, "let {enum_ty}::{variant} {{")?;
+            if !items.is_empty() {
+                write!(f, " ")?;
+            }
+            for (i, (sym, name)) in items.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{sym}: {name}")?;
+            }
+            if !items.is_empty() {
+                write!(f, " ")?;
+            }
+            let unpack_str = match unpack_kind {
+                UnpackKind::Value => "",
+                UnpackKind::ImmRef => "&",
+                UnpackKind::MutRef => "&mut ",
+            };
+            writeln!(f, "}} = {unpack_str}{exp};",)
+        }
+        Exp::VecUnpack(items, exp) => {
+            indent(f, level)?;
+            write!(f, "let [")?;
+            for (i, name) in items.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{}", name)?;
+            }
+            writeln!(f, "] = {};", exp)
+        }
+        Exp::Unstructured(nodes) => {
+            indent(f, level)?;
+            writeln!(f, "unstructured {{")?;
+            for node in nodes {
+                match node {
+                    UnstructuredNode::Labeled(label, body) => {
+                        indent(f, level + 1)?;
+                        writeln!(f, "'label_{}:", label)?;
+                        fmt_block_body(f, body, level + 1)?;
+                    }
+                    UnstructuredNode::Statement(exp) => {
+                        fmt_block_body(f, exp, level + 1)?;
+                    }
+                    UnstructuredNode::Goto(label) => {
+                        indent(f, level + 1)?;
+                        writeln!(f, "goto 'label_{};", label)?;
+                    }
+                }
+            }
+            indent(f, level)?;
+            writeln!(f, "}}")
+        }
+        // Block is a marker; recur into the body. The pretty printer emits the
+        // `/* block N */` comment; the Debug `Display` path is for tests and stays
+        // transparent.
+        Exp::Block(_, body) => fmt_block_body(f, body, level),
     }
 }
 
@@ -824,7 +816,7 @@ fn write_data_op(
         DataOp::Pack(_) => todo!(),
         DataOp::Unpack(_) => todo!(),
         DataOp::ReadRef => write!(f, "*{}", args[0]),
-        DataOp::WriteRef => writeln!(f, "*{} = {}", args[0], args[1]),
+        DataOp::WriteRef => write!(f, "*{} = {}", args[0], args[1]),
         DataOp::FreezeRef => write!(f, "{}", args[0]),
         DataOp::MutBorrowField(field_ref) => {
             write!(f, "&mut ({}).{}", args[0], field_ref.field.name)

@@ -9,7 +9,7 @@ module unpack {
 
     public fun unpack_bar () {
         let Bar { val: reg_1, other: reg_2 } = l0;
-        return reg_1reg_2
+        return reg_1, reg_2
     }
 
 }
