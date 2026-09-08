@@ -59,7 +59,6 @@ sui-swarm-config.workspace = true
 sui-swarm.workspace = true
 sui-test-transaction-builder.workspace = true
 sui-config.workspace = true
-sui-json-rpc-types.workspace = true
 sui-sdk.workspace = true
 sui-keys.workspace = true
 sui-light-client.workspace = true
