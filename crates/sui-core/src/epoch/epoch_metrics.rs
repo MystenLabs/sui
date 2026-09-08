@@ -127,8 +127,9 @@ pub struct EpochMetrics {
     pub epoch_execution_time_observer_overutilized_objects: IntGauge,
 
     /// Per-object utilization for objects that were overutilized at least once at some
-    /// point in their lifetime.
-    /// Note: This metric is disabled by default as it may have very large cardinality.
+    /// point in their lifetime, keyed by a hash bucket of the object ID by default.
+    /// Objects listed in `ExecutionTimeObserverConfig::object_utilization_metric_tracked_ids`
+    /// are always reported under their full ID and excluded from the buckets.
     pub epoch_execution_time_observer_object_utilization: CounterVec,
 
     /// The number of execution time observations loaded at start of epoch.

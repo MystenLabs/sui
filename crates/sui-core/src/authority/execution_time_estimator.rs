@@ -391,15 +391,22 @@ impl ExecutionTimeObserver {
                         .epoch_execution_time_observer_overutilized_objects
                         .dec();
                 }
-                if utilization.was_overutilized {
-                    let key = if self.config.report_object_utilization_metric_with_full_id() {
-                        id.to_string()
-                    } else {
-                        let key_lsb = id.into_bytes()[ObjectID::LENGTH - 1];
-                        let hash = key_lsb % OBJECT_UTILIZATION_METRIC_HASH_MODULUS;
-                        format!("{:x}", hash)
-                    };
-
+                // Explicitly tracked objects are always reported under their full ID and
+                // never contribute to a hash bucket. Other objects are only reported once
+                // they have been overutilized, to bound metric cardinality.
+                let metric_key = if self.config.is_object_utilization_tracked(&id)
+                    || (utilization.was_overutilized
+                        && self.config.report_object_utilization_metric_with_full_id())
+                {
+                    Some(id.to_string())
+                } else if utilization.was_overutilized {
+                    let key_lsb = id.into_bytes()[ObjectID::LENGTH - 1];
+                    let hash = key_lsb % OBJECT_UTILIZATION_METRIC_HASH_MODULUS;
+                    Some(format!("{:x}", hash))
+                } else {
+                    None
+                };
+                if let Some(key) = metric_key {
                     epoch_store
                         .metrics
                         .epoch_execution_time_observer_object_utilization
@@ -898,6 +905,7 @@ mod tests {
     use crate::consensus_adapter::{
         ConsensusAdapter, ConsensusAdapterMetrics, MockConsensusClient,
     };
+    use std::collections::BTreeSet;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::transaction::{
@@ -1374,6 +1382,114 @@ mod tests {
                 .unwrap()
                 .0,
             Duration::from_secs(3) // still the old value, no sharing when not overutilized
+        );
+    }
+
+    #[tokio::test]
+    async fn test_object_utilization_metric_tracked_ids() {
+        telemetry_subscribers::init_for_testing();
+
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_per_object_congestion_control_mode_for_testing(
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    ExecutionTimeEstimateParams {
+                        target_utilization: 100,
+                        allowed_txn_cost_overage_burst_limit_us: 0,
+                        randomness_scalar: 0,
+                        max_estimate_us: u64::MAX,
+                        stored_observations_num_included_checkpoints: 10,
+                        stored_observations_limit: u64::MAX,
+                        stake_weighted_median_threshold: 0,
+                        default_none_duration_for_new_keys: true,
+                        observations_chunk_size: Some(18),
+                    },
+                ),
+            );
+            config
+        });
+
+        let mock_consensus_client = MockConsensusClient::new();
+        let authority = TestAuthorityBuilder::new().build().await;
+        let epoch_store = authority.epoch_store_for_testing();
+        let consensus_adapter = Arc::new(ConsensusAdapter::new(
+            Arc::new(mock_consensus_client),
+            CheckpointStore::new_for_tests(),
+            authority.name,
+            100_000,
+            100_000,
+            ConsensusAdapterMetrics::new_test(),
+            Arc::new(tokio::sync::Notify::new()),
+        ));
+        let mut observer = ExecutionTimeObserver::new_for_testing(
+            epoch_store.clone(),
+            Box::new(consensus_adapter.clone()),
+            Duration::from_millis(500),
+            false,
+        );
+
+        // Both objects hash to the same metric bucket so that we can verify the tracked
+        // object is excluded from it.
+        let mut bytes = [0u8; ObjectID::LENGTH];
+        bytes[ObjectID::LENGTH - 1] = 0x05;
+        bytes[0] = 1;
+        let tracked_id = ObjectID::new(bytes);
+        bytes[0] = 2;
+        let untracked_id = ObjectID::new(bytes);
+        let bucket_key = "5";
+        observer.config.object_utilization_metric_tracked_ids = Some(BTreeSet::from([tracked_id]));
+
+        let package = ObjectID::random();
+        let make_ptb = |id: ObjectID| ProgrammableTransaction {
+            inputs: vec![CallArg::Object(ObjectArg::SharedObject {
+                id,
+                initial_shared_version: SequenceNumber::new(),
+                mutability: SharedObjectMutability::Mutable,
+            })],
+            commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
+                package,
+                module: "test_module".to_string(),
+                function: "test_function".to_string(),
+                type_arguments: vec![],
+                arguments: vec![],
+            }))],
+        };
+        let tracked_ptb = make_ptb(tracked_id);
+        let untracked_ptb = make_ptb(untracked_id);
+        let metric = &epoch_store
+            .metrics
+            .epoch_execution_time_observer_object_utilization;
+        let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
+
+        tokio::time::pause();
+
+        // First observation: neither object is overutilized yet. Only the tracked object
+        // is reported, and nothing lands in the shared bucket.
+        observer.record_local_observations(&tracked_ptb, &timings, Duration::from_secs(2), 1);
+        observer.record_local_observations(&untracked_ptb, &timings, Duration::from_secs(2), 1);
+        assert_eq!(
+            metric
+                .with_label_values(&[tracked_id.to_string().as_str()])
+                .get(),
+            2.0
+        );
+        assert_eq!(metric.with_label_values(&[bucket_key]).get(), 0.0);
+
+        // Second observation with no time elapsed: both objects are now overutilized. The
+        // untracked object is reported in its bucket; the tracked object stays out of it.
+        observer.record_local_observations(&tracked_ptb, &timings, Duration::from_secs(2), 1);
+        observer.record_local_observations(&untracked_ptb, &timings, Duration::from_secs(2), 1);
+        assert_eq!(
+            metric
+                .with_label_values(&[tracked_id.to_string().as_str()])
+                .get(),
+            4.0
+        );
+        assert_eq!(metric.with_label_values(&[bucket_key]).get(), 2.0);
+        assert_eq!(
+            metric
+                .with_label_values(&[untracked_id.to_string().as_str()])
+                .get(),
+            0.0
         );
     }
 
