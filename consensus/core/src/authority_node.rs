@@ -216,14 +216,13 @@ where
 
             let own_hostname = committee.authority(own_index).hostname.clone();
             info!(
-                "Starting consensus validator authority {} {}, {:?}, epoch start timestamp {}, boot counter {}, replaying after commit index {}, consumer last processed commit index {}",
+                "Starting consensus validator authority {} {}, {:?}, epoch start timestamp {}, boot counter {}, replay mode {:?}",
                 own_index,
                 own_hostname,
                 protocol_config.protocol_version(),
                 epoch_start_timestamp_ms,
                 boot_counter,
-                commit_consumer.replay_after_commit_index,
-                commit_consumer.consumer_last_processed_commit_index
+                commit_consumer.replay_mode
             );
 
             metrics
@@ -235,12 +234,11 @@ where
         } else {
             // Otherwise this is an observer node and no index exists for it.
             info!(
-                "Starting consensus observer authority, {:?}, epoch start timestamp {}, boot counter {}, replaying after commit index {}, consumer last processed commit index {}",
+                "Starting consensus observer authority, {:?}, epoch start timestamp {}, boot counter {}, replay mode {:?}",
                 protocol_config.protocol_version(),
                 epoch_start_timestamp_ms,
                 boot_counter,
-                commit_consumer.replay_after_commit_index,
-                commit_consumer.consumer_last_processed_commit_index
+                commit_consumer.replay_mode
             );
             None
         };
