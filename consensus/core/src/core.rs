@@ -1225,6 +1225,7 @@ pub(crate) async fn create_cores(
 #[cfg(test)]
 pub(crate) struct CoreTestFixture {
     pub(crate) core: Core,
+    pub(crate) commit_consumer_monitor: Arc<crate::CommitConsumerMonitor>,
     pub(crate) transaction_vote_tracker: TransactionVoteTracker,
     pub(crate) signal_receivers: CoreSignalsReceivers,
     pub(crate) block_receiver: broadcast::Receiver<ExtendedBlock>,
@@ -1322,6 +1323,7 @@ impl CoreTestFixture {
         let block_receiver = signal_receivers.block_broadcast_receiver();
 
         let (commit_consumer, commit_output_receiver) = CommitConsumerArgs::new(0, 0);
+        let commit_consumer_monitor = commit_consumer.monitor();
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -1349,6 +1351,7 @@ impl CoreTestFixture {
 
         Self {
             core,
+            commit_consumer_monitor,
             transaction_vote_tracker,
             signal_receivers,
             block_receiver,
@@ -3428,6 +3431,7 @@ mod test {
 
         let authority_index = AuthorityIndex::new_for_test(0);
         let core = CoreTestFixture::new(context, vec![1, 1, 1, 1], authority_index, true).await;
+        let monitor = core.commit_consumer_monitor.clone();
         let mut core = core.core;
 
         // Build a fully connected DAG and accept its blocks, without any commits yet.
@@ -3448,6 +3452,9 @@ mod test {
             assert!(subdag.decided_with_local_blocks);
         }
         assert_eq!(core.dag_state.read().last_commit_index(), 11);
+        assert_eq!(monitor.progress().highest_committed_index, 11);
+        assert_eq!(monitor.progress().highest_committed_round, 11);
+        assert_eq!(monitor.highest_handled_commit(), 0);
 
         // Re-running the commit rule must be a no-op.
         assert!(core.try_commit_v3().unwrap().is_empty());

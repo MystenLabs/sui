@@ -8,7 +8,7 @@ use tokio::time::Instant;
 use tracing::info;
 
 use crate::{
-    CommitConsumerArgs, CommittedSubDag,
+    CommitConsumerArgs, CommitConsumerMonitor, CommittedSubDag,
     block::{BlockAPI, VerifiedBlock},
     commit::{CommitAPI, load_committed_subdag_from_store},
     commit_finalizer::{CommitFinalizer, CommitFinalizerHandle},
@@ -43,6 +43,7 @@ pub(crate) struct CommitObserver {
     commit_interpreter: Linearizer,
     /// Handle to an unbounded channel to send output commits.
     commit_finalizer_handle: CommitFinalizerHandle,
+    consumer_monitor: Arc<CommitConsumerMonitor>,
 }
 
 impl CommitObserver {
@@ -68,6 +69,7 @@ impl CommitObserver {
             transaction_vote_tracker,
             commit_interpreter,
             commit_finalizer_handle,
+            consumer_monitor: commit_consumer.monitor(),
         };
         observer.recover_and_send_commits(&commit_consumer).await;
 
@@ -126,7 +128,7 @@ impl CommitObserver {
             );
             tracing::trace!("Committed subdag: {:#?}", commit);
             // Failures in sender.send() are assumed to be permanent
-            self.commit_finalizer_handle.send(commit.clone())?;
+            self.send_to_finalizer(commit.clone())?;
         }
 
         self.dag_state
@@ -138,6 +140,9 @@ impl CommitObserver {
 
     /// Forwards a committed subdag to the commit finalizer. Used by `Core::post_commit`.
     pub(crate) fn send_to_finalizer(&self, subdag: CommittedSubDag) -> ConsensusResult<()> {
+        // Both the legacy and v3 commit paths report progress before consumer work.
+        self.consumer_monitor
+            .report_committed(subdag.commit_ref.index, subdag.leader.round);
         self.commit_finalizer_handle.send(subdag)
     }
 
@@ -150,6 +155,30 @@ impl CommitObserver {
             .store
             .read_last_commit()
             .expect("Reading the last commit should not fail");
+        if let Some(commit) = &last_commit {
+            self.consumer_monitor
+                .report_committed(commit.index(), commit.leader().round);
+        }
+        // Storage ownership, target discovery, and commit decoding stay here.
+        // Consumers rebuilding from empty never supply a second durable cursor.
+        let replay_target = if commit_consumer.pace_replay {
+            let target = if self.context.protocol_config.transaction_voting_enabled() {
+                self.store
+                    .read_last_finalized_commit()
+                    .expect("Reading the last finalized commit should not fail")
+                    .map_or(0, |commit| commit.index)
+            } else {
+                last_commit.as_ref().map_or(0, |commit| commit.index())
+            };
+            assert!(
+                target <= last_commit.as_ref().map_or(0, |commit| commit.index()),
+                "finalized replay target cannot exceed the consensus store head"
+            );
+            self.consumer_monitor.set_replay_target(target);
+            target
+        } else {
+            0
+        };
         let Some(last_commit) = &last_commit else {
             assert_eq!(
                 replay_after_commit_index, 0,
@@ -222,6 +251,18 @@ impl CommitObserver {
                 let committed_sub_dag =
                     load_committed_subdag_from_store(self.store.as_ref(), commit);
 
+                if commit_consumer.pace_replay
+                    && self.context.protocol_config.transaction_voting_enabled()
+                    && committed_sub_dag.commit_ref.index <= replay_target
+                {
+                    // A hole inside the finalized prefix cannot become a live
+                    // finalization wait while recovery is paced by application.
+                    assert!(
+                        committed_sub_dag.recovered_rejected_transactions,
+                        "missing rejected transactions below the finalized replay target"
+                    );
+                }
+
                 if !committed_sub_dag.recovered_rejected_transactions && !seen_unfinalized_commit {
                     info!(
                         "Starting to recover unfinalized commit from {}",
@@ -255,6 +296,19 @@ impl CommitObserver {
                     .set(last_sent_commit_index as i64);
 
                 tokio::task::yield_now().await;
+            }
+            if commit_consumer.pace_replay {
+                // Bound queued finalized history across BOTH the finalizer and
+                // consumer channels. Yielding alone does not apply backpressure.
+                // Do not await the unfinalized tail: it can require live consensus
+                // to finalize, and startup must be allowed to reach that phase.
+                tokio::select! {
+                    biased;
+                    () = self.consumer_monitor.wait_for_handled(end_index.min(replay_target)) => {},
+                    () = commit_consumer.commit_sender.closed() => {
+                        panic!("consensus commit consumer closed during startup replay");
+                    }
+                }
             }
         }
 
@@ -338,6 +392,265 @@ mod tests {
         test_dag_builder::DagBuilder,
     };
 
+    fn full_replay_fixture(
+        commits: u32,
+        finalized: u32,
+        voting: bool,
+    ) -> (Arc<Context>, Arc<RwLock<DagState>>, TransactionVoteTracker) {
+        let config = if voting {
+            consensus_config::ConsensusProtocolConfig::for_testing()
+        } else {
+            consensus_config::ConsensusProtocolConfig::default()
+        };
+        assert_eq!(config.transaction_voting_enabled(), voting);
+        let context = Arc::new(Context::new_for_test(4).0.with_protocol_config(config));
+        let store = Arc::new(MemStore::new());
+        if commits > 0 {
+            let mut builder = DagBuilder::new(context.clone());
+            builder.layers(1..=(commits * 2 + 2)).build();
+            let produced = builder.get_sub_dag_and_commits(1..=commits);
+            assert!(produced.len() >= commits as usize);
+            for (index, (subdag, commit)) in produced.into_iter().take(commits as usize).enumerate()
+            {
+                let finalized_rows = if (index as u32) < finalized {
+                    vec![(commit.reference(), std::collections::BTreeMap::new())]
+                } else {
+                    Vec::new()
+                };
+                store
+                    .write(crate::storage::WriteBatch::new(
+                        subdag.blocks,
+                        vec![commit],
+                        Vec::new(),
+                        finalized_rows,
+                    ))
+                    .unwrap();
+            }
+        }
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let tracker = TransactionVoteTracker::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+        );
+        (context, dag_state, tracker)
+    }
+
+    #[tokio::test]
+    async fn supplied_watermark_replay_keeps_its_target_without_waiting_for_acknowledgements() {
+        let (context, dag_state, tracker) = full_replay_fixture(7, 7, true);
+        let (args, mut receiver) = CommitConsumerArgs::new(2, 4);
+        let monitor = args.monitor();
+        let mut observer = timeout(
+            Duration::from_secs(5),
+            CommitObserver::new(context, args, dag_state, tracker),
+        )
+        .await
+        .expect("legacy replay must not require application acknowledgements during startup");
+        assert_eq!(monitor.progress().replay_target, Some(4));
+        assert_eq!(monitor.progress().highest_committed_index, 7);
+        assert_eq!(monitor.highest_handled_commit(), 2);
+        for index in 3..=7 {
+            let commit = timeout(Duration::from_secs(5), receiver.recv())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(commit.commit_ref.index, index);
+        }
+        monitor.set_highest_handled_commit(3);
+        assert!(
+            timeout(
+                Duration::from_millis(20),
+                monitor.replay_to_consumer_last_processed_commit_complete(),
+            )
+            .await
+            .is_err()
+        );
+        monitor.set_highest_handled_commit(4);
+        timeout(
+            Duration::from_secs(1),
+            monitor.replay_to_consumer_last_processed_commit_complete(),
+        )
+        .await
+        .expect("legacy readiness uses the supplied watermark, not the stored head");
+        observer.stop().await;
+    }
+
+    #[tokio::test]
+    async fn full_replay_is_paced_by_applied_commits_even_without_finalized_rows() {
+        let (context, dag_state, tracker) = full_replay_fixture(7, 0, false);
+        let (args, mut receiver) = CommitConsumerArgs::new_with_full_replay();
+        let monitor = args.monitor();
+        let recovery = tokio::spawn(CommitObserver::new(context, args, dag_state, tracker));
+        for index in 1..=3 {
+            let commit = timeout(Duration::from_secs(5), receiver.recv())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(commit.commit_ref.index, index);
+            assert_eq!(monitor.progress().replay_target, Some(7));
+            assert!(monitor.progress().highest_committed_round >= commit.leader.round);
+            if index < 3 {
+                monitor.set_highest_handled_commit(index);
+            }
+        }
+        // Receiving is not applying. Withhold the last acknowledgement and
+        // prove a second storage batch cannot get queued behind this one.
+        assert!(
+            timeout(Duration::from_millis(100), receiver.recv())
+                .await
+                .is_err(),
+            "recovery must wait for the consumer to apply the current batch"
+        );
+        assert!(!recovery.is_finished());
+        monitor.set_highest_handled_commit(3);
+        for index in 4..=7 {
+            let commit = timeout(Duration::from_secs(5), receiver.recv())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(commit.commit_ref.index, index);
+            monitor.set_highest_handled_commit(index);
+        }
+        let mut observer = timeout(Duration::from_secs(5), recovery)
+            .await
+            .unwrap()
+            .unwrap();
+        monitor
+            .replay_to_consumer_last_processed_commit_complete()
+            .await;
+        observer.stop().await;
+    }
+
+    #[tokio::test]
+    async fn full_replay_does_not_wait_for_an_unfinalized_tail() {
+        let (context, dag_state, tracker) = full_replay_fixture(7, 3, true);
+        let (args, mut receiver) = CommitConsumerArgs::new_with_full_replay();
+        let monitor = args.monitor();
+        let recovery = tokio::spawn(CommitObserver::new(context, args, dag_state, tracker));
+        for index in 1..=3 {
+            let commit = timeout(Duration::from_secs(5), receiver.recv())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(commit.commit_ref.index, index);
+            monitor.set_highest_handled_commit(index);
+        }
+        assert_eq!(monitor.progress().replay_target, Some(3));
+        let mut observer = timeout(Duration::from_secs(5), recovery)
+            .await
+            .expect("unfinalized commits must not prevent live consensus startup")
+            .unwrap();
+        monitor
+            .replay_to_consumer_last_processed_commit_complete()
+            .await;
+        observer.stop().await;
+    }
+
+    #[tokio::test]
+    async fn full_replay_of_an_empty_store_publishes_an_empty_target() {
+        let (context, dag_state, tracker) = full_replay_fixture(0, 0, false);
+        let (args, _receiver) = CommitConsumerArgs::new_with_full_replay();
+        let monitor = args.monitor();
+        assert_eq!(monitor.progress().replay_target, None);
+        let mut observer = CommitObserver::new(context, args, dag_state, tracker).await;
+        assert_eq!(monitor.progress().replay_target, Some(0));
+        timeout(
+            Duration::from_secs(1),
+            monitor.replay_to_consumer_last_processed_commit_complete(),
+        )
+        .await
+        .unwrap();
+        observer.stop().await;
+    }
+
+    #[tokio::test]
+    async fn a_closed_full_replay_consumer_does_not_leave_startup_waiting() {
+        let (context, dag_state, tracker) = full_replay_fixture(7, 0, false);
+        let (args, mut receiver) = CommitConsumerArgs::new_with_full_replay();
+        let recovery = tokio::spawn(CommitObserver::new(context, args, dag_state, tracker));
+        for _ in 0..3 {
+            timeout(Duration::from_secs(5), receiver.recv())
+                .await
+                .unwrap()
+                .unwrap();
+        }
+        drop(receiver);
+        let error = timeout(Duration::from_secs(5), recovery)
+            .await
+            .unwrap()
+            .err()
+            .expect(
+                "a vanished consumer must fail startup instead of waiting for its acknowledgement",
+            );
+        assert!(error.is_panic());
+        assert!(
+            error
+                .to_string()
+                .contains("consensus commit consumer closed during startup replay")
+        );
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "finalized replay target cannot exceed the consensus store head")]
+    async fn a_finalized_target_beyond_stored_history_fails_replay() {
+        let (context, dag_state, tracker) = full_replay_fixture(3, 3, true);
+        let store = dag_state.read().store();
+        let mut missing = store.read_last_commit().unwrap().unwrap().reference();
+        missing.index += 1;
+        store
+            .write(crate::storage::WriteBatch::new(
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                vec![(missing, std::collections::BTreeMap::new())],
+            ))
+            .unwrap();
+        let (args, _receiver) = CommitConsumerArgs::new_with_full_replay();
+        CommitObserver::new(context, args, dag_state, tracker).await;
+    }
+
+    #[tokio::test]
+    async fn a_finalization_hole_below_the_replay_target_fails_startup() {
+        let (context, dag_state, tracker) = full_replay_fixture(5, 0, true);
+        let store = dag_state.read().store();
+        let finalized = store
+            .scan_commits((1..=5).into())
+            .unwrap()
+            .into_iter()
+            .filter(|commit| commit.index() != 3)
+            .map(|commit| (commit.reference(), std::collections::BTreeMap::new()))
+            .collect();
+        store
+            .write(crate::storage::WriteBatch::new(
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                finalized,
+            ))
+            .unwrap();
+        let (args, mut receiver) = CommitConsumerArgs::new_with_full_replay();
+        let monitor = args.monitor();
+        let consume = tokio::spawn(async move {
+            while let Some(commit) = receiver.recv().await {
+                monitor.set_highest_handled_commit(commit.commit_ref.index);
+            }
+        });
+        let recovery = tokio::spawn(CommitObserver::new(context, args, dag_state, tracker));
+        let error = timeout(Duration::from_secs(5), recovery)
+            .await
+            .unwrap()
+            .err()
+            .expect("a hole in finalized history must fail startup");
+        assert!(error.is_panic());
+        assert!(
+            error
+                .to_string()
+                .contains("missing rejected transactions below the finalized replay target")
+        );
+        consume.abort();
+    }
+
     #[rstest]
     #[tokio::test]
     async fn test_handle_commit() {
@@ -392,6 +705,16 @@ mod tests {
         let commits = observer
             .handle_committed_leaders(leaders.clone(), true)
             .unwrap();
+        let head = commits.last().unwrap();
+        assert_eq!(
+            observer.consumer_monitor.progress().highest_committed_index,
+            head.commit_ref.index
+        );
+        assert_eq!(
+            observer.consumer_monitor.progress().highest_committed_round,
+            head.leader.round
+        );
+        assert_eq!(observer.consumer_monitor.highest_handled_commit(), 0);
 
         // Check commits are returned by CommitObserver::handle_committed_leaders is accurate
         let mut expected_stored_refs: Vec<BlockRef> = vec![];
