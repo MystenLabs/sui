@@ -63,7 +63,7 @@ mod test {
 
         // Start all validators — they initially connect via Chain addresses,
         // then discovery gossip propagates the bad addresses from validators 1..3.
-        // The peer cache is saved as TrustedPeersUpdated fires during gossip.
+        // The peer cache is saved on the discovery tick after gossip updates it.
         test_cluster.start_all_validators().await;
 
         // Wait for discovery gossip to propagate and peer cache to be written.

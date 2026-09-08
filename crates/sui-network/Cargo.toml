@@ -13,6 +13,7 @@ workspace = true
 anemo.workspace = true
 anemo-tower.workspace = true
 governor.workspace = true
+lru.workspace = true
 serde.workspace = true
 serde_yaml.workspace = true
 tonic.workspace = true

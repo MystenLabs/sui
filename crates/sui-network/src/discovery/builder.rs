@@ -102,13 +102,13 @@ impl Builder {
         let store_path = discovery_config.peer_addr_store_path.clone();
         let metrics = metrics.unwrap_or_else(Metrics::disabled);
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
-        let (mailbox_tx, mailbox_rx) = mpsc::channel(discovery_config.mailbox_capacity());
+        let mailbox_capacity = discovery_config.mailbox_capacity();
+        metrics.set_mailbox_capacity(mailbox_capacity as i64);
+        let (mailbox_tx, mailbox_rx) = mpsc::channel(mailbox_capacity);
 
         let handle = Handle {
             _shutdown_handle: Arc::new(shutdown_tx),
-            sender: super::Sender {
-                sender: mailbox_tx.clone(),
-            },
+            sender: super::Sender::new(mailbox_tx.clone()),
         };
 
         let endpoint_manager = EndpointManager::new(handle.sender());
@@ -141,7 +141,6 @@ impl Builder {
                 shutdown_handle: shutdown_rx,
                 state,
                 mailbox: mailbox_rx,
-                mailbox_tx: mailbox_tx.clone(),
                 metrics,
                 configured_peers,
                 chain_peers,
@@ -162,7 +161,6 @@ pub struct UnstartedDiscovery {
     pub(super) shutdown_handle: oneshot::Receiver<()>,
     pub(super) state: Arc<RwLock<State>>,
     pub(super) mailbox: mpsc::Receiver<DiscoveryMessage>,
-    pub(super) mailbox_tx: mpsc::Sender<DiscoveryMessage>,
     pub(super) metrics: Metrics,
     pub(super) configured_peers: Arc<OnceLock<HashMap<PeerId, PeerInfo>>>,
     pub(super) chain_peers: Arc<RwLock<HashSet<PeerId>>>,
@@ -187,7 +185,6 @@ impl UnstartedDiscovery {
             shutdown_handle,
             state,
             mailbox,
-            mailbox_tx,
             metrics,
             configured_peers,
             chain_peers,
@@ -220,12 +217,13 @@ impl UnstartedDiscovery {
                 shutdown_handle,
                 state,
                 mailbox,
-                mailbox_tx,
                 metrics,
                 consensus_external_address,
                 endpoint_manager,
                 store_path,
                 peer_cooldowns: HashMap::new(),
+                last_saved_peers_fingerprint: None,
+                save_peers_task: None,
             },
             handle,
         )

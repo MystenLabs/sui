@@ -504,7 +504,7 @@ pub struct DiscoveryConfig {
 
     /// Size of the Discovery loop's mailbox.
     ///
-    /// If unspecified, this will default to `1,024`.
+    /// If unspecified, this will default to `2,048`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mailbox_capacity: Option<usize>,
 
