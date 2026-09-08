@@ -71,7 +71,7 @@ answer: >-
   prompt={"Prepare an upgrade for this published Sui package. Check compatibility rules, build the upgrade transaction, identify the UpgradeCap, and document the exact upgrade steps."}
 />
 
-Sui smart contracts are immutable package objects consisting of a collection of Move modules. Because packages are immutable, a transaction references a package by ID alone and loads it at its latest version, rather than passing it as a versioned input. If packages were mutable, they would be [shared objects](/develop/objects/object-ownership/shared), and every call into a package would contend on that object.
+Sui smart contracts are immutable package objects consisting of a collection of Move modules. Because packages are immutable, a transaction identifies a package version by its package ID rather than passing it as a versioned object input. If packages were mutable, they would be [shared objects](/develop/objects/object-ownership/shared), and every call into a package would contend on that object.
 
 The inability to change packages, however, becomes a problem when considering the iterative nature of code development. Builders require the ability to update their code and pull changes from other developers while keeping the properties that immutability provides. The Sui network provides a method for upgrading your packages while still retaining their immutable properties.
 
