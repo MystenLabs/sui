@@ -171,7 +171,6 @@ members = [
     "crates/sui-rpc-api",
     "crates/sui-rpc-benchmark",
     "crates/sui-rpc-cursor",
-    "crates/sui-rpc-loadgen",
     "crates/sui-rpc-resolver",
     "crates/sui-rpc-store",
     "crates/sui-sdk",
@@ -729,7 +728,6 @@ sui-protocol-config-macros = { path = "crates/sui-protocol-config-macros" }
 sui-proxy = { path = "crates/sui-proxy" }
 sui-replay-2 = { path = "crates/sui-replay-2" }
 sui-rosetta = { path = "crates/sui-rosetta" }
-sui-rpc-loadgen = { path = "crates/sui-rpc-loadgen" }
 sui-sdk = { path = "crates/sui-sdk" }
 sui-simulator = { path = "crates/sui-simulator" }
 sui-snapshot = { path = "crates/sui-snapshot" }
