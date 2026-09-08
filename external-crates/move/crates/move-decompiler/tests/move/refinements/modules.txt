@@ -5,4 +5,13 @@ lift_terminating_arm
 negate_comparison
 simplify_borrow_deref
 simplify_zero_compare
-needs_mut
+needs_mut_arm_binder
+needs_mut_assign_then_break
+needs_mut_back_edge
+needs_mut_borrowed_let
+needs_mut_declare_threshold
+needs_mut_labeled_break
+needs_mut_param
+needs_mut_reassigned_let
+needs_mut_unassigned_let
+needs_mut_unpack_binder

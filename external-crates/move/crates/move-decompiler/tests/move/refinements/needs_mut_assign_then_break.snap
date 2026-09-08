@@ -1,0 +1,18 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module needs_mut_assign_then_break {
+    public fun assign_then_break () {
+        let l3 = 0u64;
+        while(l3 < l0) {
+            l3 = l3 + 1u64;
+        }
+        let l4 = l3;
+        return if (l4 > l1) {
+            l4 - l1
+        } else {
+            l1 - l4
+        }
+    }
+
+}

@@ -1,0 +1,13 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module needs_mut_reassigned_let {
+    public fun reassigned_let () {
+        let l2 = l1;
+        if (l0) {
+            l2 = l1 + 1u64;
+        }
+        return l2 + l2
+    }
+
+}
