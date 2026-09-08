@@ -44,6 +44,7 @@ export default {
         'develop/objects/derived-objects',
         'develop/objects/dynamic-fields',
         'develop/objects/versioning',
+        'develop/objects/escrow-example',
         {
           type: 'category',
           label: 'Object Display',
