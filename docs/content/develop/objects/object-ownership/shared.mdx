@@ -65,6 +65,7 @@ fun init(ctx: &mut TxContext) {
         price: 1000,
         balance: balance::zero()
     })
+}
 ```
 
 ## When to use shared objects
@@ -120,7 +121,7 @@ public fun buy_donut(
     assert!(coin::value(payment) >= shop.price, ENotEnough);
 
     // Take amount = `shop.price` from Coin<SUI>
-    let paid = payment.balance_mut.split(shop.price);
+    let paid = payment.balance_mut().split(shop.price);
 
     // Put the coin to the Shop's balance
     shop.balance.join(paid);

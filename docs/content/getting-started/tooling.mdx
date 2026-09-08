@@ -550,6 +550,18 @@ Frontend toolkits, wallet integration, authentication, and app scaffolding.
 />
 
 <ToolCard
+  name="human.tech Wallet Protocol (WaaP) SDK"
+  description="White label embedded wallets with social login, biometrics and gas sponsorship. One account works across apps, and also signs on Solana and EVM."
+  notes="Non-custodial. Keys are reconstructed in secure hardware, the user keeps ownership and can export at any time. Policies are enforced before a signature exists, and WaaP Squid Mode adds decentralized signing across the Ika network."
+  install="npm install @human.tech/waap-sdk"
+  docs="https://docs.waap.human.tech/for-apps"
+  website="https://wallet.human.tech"
+  github="https://github.com/holonym-foundation/welcome.human.tech"
+  language="TypeScript"
+  community
+/>
+
+<ToolCard
   name="Suiet Wallet Kit"
   description="React toolkit for apps to interact with all wallet types in Sui easily."
   github="https://github.com/suiet/wallet-kit"
@@ -1014,6 +1026,18 @@ Autonomous agents, verifiable inference, and TEE infrastructure.
   name="Hosted Sui MCP Server (Kapa)"
   description="Hosted MCP server providing semantic search over Sui documentation for AI tools and agents like Claude Code, Cursor, and VS Code."
   website="https://sui.mcp.kapa.ai/"
+  community
+/>
+
+<ToolCard
+  name="WaaP CLI"
+  description="Agent payments from a headless wallet, with spend caps the AI agent cannot raise. Scoped, expiring grants let it transact autonomously on Sui, Solana and EVM."
+  notes="The agent holds no key. Every request passes a policy gate server-side before a signature exists, so a prompt-injected agent has nothing to reach for. Grants are bound by recipient, chain, a cumulative spend ceiling and an expiry. Agentic pay-per-use without a browser or a human in the loop for each transaction."
+  install="npm install -g @human.tech/waap-cli"
+  docs="https://docs.waap.human.tech/for-agents"
+  website="https://wallet.human.tech/agents"
+  github="https://github.com/holonym-foundation/welcome.human.tech"
+  language="TypeScript"
   community
 />
 

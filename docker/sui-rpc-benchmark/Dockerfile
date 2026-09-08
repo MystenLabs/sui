@@ -2,7 +2,7 @@
 #
 # Copy in all crates, Cargo.toml and Cargo.lock unmodified,
 # and build the application.
-FROM rust:1.96.1-bullseye AS builder
+FROM rust:1.96.1-bookworm AS builder
 RUN apt-get update \
  && apt-get install -y --no-install-recommends cmake clang ca-certificates \
  && rm -rf /var/lib/apt/lists/*
@@ -25,7 +25,7 @@ COPY crates crates
 RUN cargo build --locked --profile ${PROFILE} --bin sui-rpc-benchmark
 
 # Production Image
-FROM debian:bullseye-slim AS runtime
+FROM debian:bookworm-slim AS runtime
 # Use jemalloc as memory allocator
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libjemalloc-dev ca-certificates curl postgresql \

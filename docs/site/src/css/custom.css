@@ -2966,3 +2966,54 @@ body {
   font-weight: 600;
   margin-bottom: 1rem;
 }
+/* Legacy API banner - deprecated surfaces scheduled for removal.
+   Deliberately amber rather than the blue admonition palette: every other
+   callout on the site is blue or grey, so a blue banner would not read as
+   "this is going away". */
+.legacy-api-banner {
+  max-width: 960px;
+  margin: 0 auto 1.5rem;
+  padding: 1rem 1.25rem;
+  border-left: 4px solid #B45309;
+  border-radius: 4px;
+  background-color: #FFF7ED;
+  color: #1A1A1A;
+}
+
+.legacy-api-banner__title {
+  margin: 0 0 0.35rem;
+  font-weight: 700;
+  font-size: 1rem;
+  color: #7C2D12;
+}
+
+.legacy-api-banner p {
+  margin: 0;
+}
+
+.legacy-api-banner a {
+  color: #7C2D12;
+  text-decoration: underline;
+}
+
+.legacy-api-banner a:hover {
+  color: #431407;
+}
+
+[data-theme='dark'] .legacy-api-banner {
+  border-left: 4px solid #F59E0B;
+  background-color: #2A1A05;
+  color: #FFFFFF;
+}
+
+[data-theme='dark'] .legacy-api-banner__title {
+  color: #FCD34D;
+}
+
+[data-theme='dark'] .legacy-api-banner a {
+  color: #FCD34D;
+}
+
+[data-theme='dark'] .legacy-api-banner a:hover {
+  color: #FDE68A;
+}

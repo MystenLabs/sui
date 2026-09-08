@@ -118,68 +118,29 @@ Because Move has no floating-point numbers, all RPT math is scaled by a precisio
 
 Accrual is bounded by an explicit emission window `[start_timestamp, stop_timestamp]`. Outside this window, the accumulator stops advancing. The window is set by `notify_reward_amount(coin, duration_ms)`, which derives `reward_rate = (coin_amount + leftover) / duration_ms` and asserts `rate × duration ≤ reward_balance`. This makes solvency structural: any rewards the math can accrue, the pool can pay.
 
-## Prerequisites
-
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
 
-- [x] [Install the latest version of Sui](/getting-started/onboarding/sui-install).
+- [x] [Install the Sui CLI](/getting-started/onboarding/sui-install).
 
-- [x] [Configure the Sui client](/getting-started/onboarding/configure-sui-client).
-
-- [x] [Create a Sui address](/getting-started/onboarding/get-address).
-
-- [x] [Get SUI Testnet tokens](/getting-started/onboarding/get-coins).
-
-- [x] Download and install an IDE. The following are recommended, as they offer Move extensions:
-
-    - [VSCode](https://code.visualstudio.com/), corresponding [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move)
-
-    - [Emacs](https://www.gnu.org/software/emacs/), corresponding [Move extension](https://github.com/amnn/move-mode)
-
-    - [Vim](https://www.vim.org/download.php), corresponding [Move extension](https://github.com/yanganto/move.vim)
-
-    - [Zed](https://zed.dev/), corresponding [Move extension](https://github.com/Tzal3x/move-zed-extension)
-
-        Alternatively, you can use the [Move web IDE](https://www.playmove.dev/), which does not require a download. It does not support all functions necessary for this guide, however.
-
-- [x] [Download and install Git](https://git-scm.com/downloads).
+- [x] [Create an address and fund it with SUI](/getting-started/onboarding/get-coins) for gas.
 
 </TabItem>
 </Tabs>
 
-## Setup
+## Reference implementation
 
-Follow these steps to set up the example locally.
-
-##### Step 1: Clone the repo
+A complete, tested implementation lives in [`staking-contract-template`](https://github.com/MystenLabs/staking-contract-template). Build it, run its tests, and publish it as-is, or lift the accumulator logic into a package of your own:
 
 ```bash
-$ git clone https://github.com/MystenLabs/staking-contract-template.git
-$ cd staking-contract-template/staking
-```
-
-##### Step 2: Build and test
-
-```bash
-$ sui move build
-$ sui move test
-```
-
-All tests should pass, confirming the accumulator math, receipt lifecycle, and admin operations work correctly.
-
-##### Step 3: Publish to Testnet
-
-```bash
-$ sui client switch --env testnet
 $ sui client publish --gas-budget 100000000
 ```
 
-The package uses implicit framework dependencies (empty `[dependencies]` in `Move.toml`), so the correct Sui framework version resolves from the active environment automatically. Take note of your package ID and the `StakingPool` and `AdminCap` object IDs from the output.
+The package leaves `[dependencies]` empty in `Move.toml`, so the framework version resolves from your active environment. Record the package ID and the `StakingPool` and `AdminCap` object IDs from the output.
 
-## Run the example
+## Calling the contract
 
-Every entry point is a `public fun` that returns its objects instead of transferring them internally. This makes the module composable in programmable transaction blocks, but it also means plain `sui client call` fails with `UnusedValueWithoutDrop`. Use `sui client ptb` and transfer the results explicitly.
+Every entry point is a `public fun` that returns its objects instead of transferring them internally. That makes the module composable in programmable transaction blocks, but it also means a plain `sui client call` fails with `UnusedValueWithoutDrop`. Use `sui client ptb` and transfer the results explicitly.
 
 ### Create a pool
 
@@ -194,7 +155,7 @@ $ sui client ptb \
 
 ### Fund the reward schedule
 
-Fund the pool with reward tokens and start the emission window. Replace `ADMIN_CAP_ID`, `POOL_ID`, and `REWARD_COIN_ID` with the relevant object IDs. `DURATION_MS` is the emission window length in milliseconds.
+Fund the pool with reward tokens and start the emission window. `DURATION_MS` is the emission window length in milliseconds.
 
 ```bash
 $ sui client ptb \
@@ -228,7 +189,7 @@ $ sui client ptb \
 
 ### Unstake
 
-Fully exit your position. The function consumes the receipt, and you receive your principal and any accrued rewards.
+Fully exit the position. The function consumes the receipt and returns principal plus accrued rewards.
 
 ```bash
 $ sui client ptb \
@@ -289,7 +250,7 @@ The following security properties are important when deploying or extending this
 
 - **Rounding behavior:** Accumulator increments floor at each update. With an extremely low reward rate against a very large total stake, per-update increments can floor to zero. Keep the reward rate (per-ms, in base units) comfortably above `total_staked / 10^18`.
 
-For a hands-on exercise exploring what happens when a staking contract gets the accumulator pattern wrong, see [Staking with time-accumulation](/getting-started/examples/staking-ctf).
+For a hands-on exercise exploring what happens when a staking contract gets the accumulator pattern wrong, see the [staking challenge in the CTF repository](https://github.com/MystenLabs/CTF).
 
 ## Common modifications
 
@@ -364,7 +325,7 @@ The following sections address common issues with this example.
 
 **Cause:** Every public function returns objects instead of transferring them. Plain `sui client call` does not consume the return values.
 
-**Fix:** Use `sui client ptb` and explicitly transfer the returned objects. See the [Run the example](#run-the-example) section for the correct syntax.
+**Fix:** Use `sui client ptb` and explicitly transfer the returned objects. See [Calling the contract](#calling-the-contract) for the correct syntax.
 
 ### `EZeroRewardRate` when funding the pool
 

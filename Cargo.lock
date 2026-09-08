@@ -6319,9 +6319,9 @@ checksum = "92620684d99f750bae383ecb3be3748142d6095760afd5cbcf2261e9a279d780"
 
 [[package]]
 name = "h2"
-version = "0.4.16"
+version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9f37a958b41b3b19ee2707c06439c0e9e547e847223eb791ecb0cb821c65e27"
+checksum = "ef8e5e5a340588f4452631496976cf8636d4a7ecf600239fdc27615d2530bc16"
 dependencies = [
  "atomic-waker",
  "bytes",
@@ -14495,7 +14495,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.3.1"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=d71f9d6f788afc6b30baef85a342e0e7867c0019#d71f9d6f788afc6b30baef85a342e0e7867c0019"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=618b6c8484a2394f73d9b5e21cce0ac228b2cf31#618b6c8484a2394f73d9b5e21cce0ac228b2cf31"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -16037,6 +16037,7 @@ dependencies = [
  "fastcrypto-tbls",
  "futures",
  "governor",
+ "h2",
  "http 1.3.1",
  "mysten-common",
  "mysten-metrics",
@@ -16529,7 +16530,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.3.2"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=d71f9d6f788afc6b30baef85a342e0e7867c0019#d71f9d6f788afc6b30baef85a342e0e7867c0019"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=618b6c8484a2394f73d9b5e21cce0ac228b2cf31#618b6c8484a2394f73d9b5e21cce0ac228b2cf31"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16764,7 +16765,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.3.2"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=d71f9d6f788afc6b30baef85a342e0e7867c0019#d71f9d6f788afc6b30baef85a342e0e7867c0019"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=618b6c8484a2394f73d9b5e21cce0ac228b2cf31#618b6c8484a2394f73d9b5e21cce0ac228b2cf31"
 dependencies = [
  "base64ct",
  "bcs",

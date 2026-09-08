@@ -4,15 +4,16 @@
 use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::GasCharger;
 use move_vm_runtime::runtime::MoveRuntime;
-use mysten_common::ZipDebugEqIteratorExt;
+use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::AccumulatorObjId;
-use sui_types::base_types::VersionDigest;
+use sui_types::base_types::{SystemObjectVersions, VersionDigest};
 use sui_types::coin_reservation::ParsedDigest;
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
@@ -32,6 +33,7 @@ use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_trans
 use sui_types::{
     SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
+    digests::ObjectDigest,
     effects::EffectsObjectChange,
     error::{ExecutionError, SuiResult},
     gas::GasCostSummary,
@@ -45,11 +47,17 @@ use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
 pub(crate) mod invariants;
 use invariants::InvariantChecker;
 
+/// Declared allowance ids per `(funder, funds type)` key.
+type AllowanceIds = BTreeMap<(SuiAddress, TypeTag), Vec<ObjectID>>;
+
 #[derive(Default)]
 struct PostExecutionCheckInputs {
     /// Per-`(address, type)` funds-accumulator reservation budget authorized by this transaction.
     /// Shared by gasless execution validation and the post-execution invariant checks.
     input_reservations: BTreeMap<(SuiAddress, TypeTag), u64>,
+    /// The allowance ids declared per `WithdrawFrom::SenderAllowance` reservation key. Consumed by
+    /// `check_ownership_invariants` to authorize Splits at non-signer keys.
+    allowance_ids: AllowanceIds,
     /// For the advance-epoch transaction, `(epoch_fees minted, epoch_rebates burned)`; `None`
     /// for every other transaction. Needed by the expensive SUI conservation check.
     advance_epoch_gas_summary: Option<(u64, u64)>,
@@ -63,13 +71,15 @@ struct PostExecutionCheckInputs {
 impl PostExecutionCheckInputs {
     fn new(transaction: (&TransactionKind, &GasData, SuiAddress), enable_gasless: bool) -> Self {
         let (transaction_kind, gas_data, transaction_signer) = transaction;
+        let (input_reservations, allowance_ids) = compute_input_reservations(
+            transaction_kind,
+            gas_data,
+            transaction_signer,
+            enable_gasless,
+        );
         Self {
-            input_reservations: compute_input_reservations(
-                transaction_kind,
-                gas_data,
-                transaction_signer,
-                enable_gasless,
-            ),
+            input_reservations,
+            allowance_ids,
             advance_epoch_gas_summary: transaction_kind.get_advance_epoch_tx_gas_summary(),
             is_genesis: matches!(transaction_kind, TransactionKind::Genesis(_)),
             declared_packages: declared_packages(transaction_kind),
@@ -123,6 +133,14 @@ pub struct TemporaryStore<'backing> {
 
     /// Execution-attempt bookkeeping for post-execution system checks.
     invariants: InvariantChecker,
+
+    /// Versions of system objects this transaction may implicitly read during execution.
+    system_object_versions: SystemObjectVersions,
+
+    /// System objects implicitly read during execution, keyed by object ID, with the version (and its
+    /// digest) at which they were read.
+    /// Interior-mutable because reads happen behind `&self` (`RuntimeObjectResolver`).
+    loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -136,7 +154,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
-        _system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        system_object_versions: SystemObjectVersions,
         transaction: (&TransactionKind, &GasData, SuiAddress),
     ) -> Self {
         let post_execution_check_inputs =
@@ -148,6 +166,7 @@ impl<'backing> TemporaryStore<'backing> {
             tx_digest,
             protocol_config,
             cur_epoch,
+            system_object_versions,
             post_execution_check_inputs,
         )
     }
@@ -164,6 +183,7 @@ impl<'backing> TemporaryStore<'backing> {
             tx_digest,
             protocol_config,
             0,
+            SystemObjectVersions::empty(),
             PostExecutionCheckInputs {
                 is_genesis: true,
                 ..Default::default()
@@ -178,6 +198,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
+        system_object_versions: SystemObjectVersions,
         post_execution_check_inputs: PostExecutionCheckInputs,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
@@ -220,7 +241,38 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
             post_execution_check_inputs,
             invariants: InvariantChecker::default(),
+            system_object_versions,
+            loaded_system_objects: RefCell::new(BTreeMap::new()),
         }
+    }
+
+    /// Checks that the system object `object_id` is available at the version this transaction
+    /// requires, and records the read so it can be emitted into effects
+    /// and reproduced on replay.
+    /// This is expected to return Some in normal cases. If it ever returns None, it should be
+    /// treated as an invariant violation.
+    pub fn load_implicitly_read_system_object(&self, object_id: &ObjectID) -> Option<Object> {
+        let version = match self.system_object_versions.get(object_id) {
+            Some(version) => version,
+            None => {
+                debug_fatal!(
+                    "system_object_versions must contain entry for object_id: {:?}",
+                    object_id
+                );
+                return None;
+            }
+        };
+        let object = self
+            .store
+            // If this transaction needs to read an implicit system object,
+            // the version must be assigned before execution.
+            .load_implicitly_read_system_object(object_id, version)?;
+        // Record the read version so it can be emitted into effects as a read-only consensus object and
+        // reproduced on replay.
+        self.loaded_system_objects
+            .borrow_mut()
+            .insert(*object_id, (object.version(), object.digest()));
+        Some(object)
     }
 
     // Helpers to access private fields
@@ -502,10 +554,12 @@ impl<'backing> TemporaryStore<'backing> {
         let lamport_version = self.lamport_timestamp;
         // TODO: Cleanup this clone. Potentially add unchanged_shraed_objects directly to InnerTempStore.
         let loaded_per_epoch_config_objects = self.loaded_per_epoch_config_objects.read().clone();
+        let loaded_system_objects = self.loaded_system_objects.borrow().clone();
         let unchanged_consensus_objects = TransactionEffectsV2::compute_unchanged_consensus_objects(
             shared_object_refs,
             loaded_per_epoch_config_objects,
             &object_changes,
+            loaded_system_objects,
         );
         let inner = self.into_inner(accumulator_running_max_withdraws);
 
@@ -662,11 +716,13 @@ impl<'backing> TemporaryStore<'backing> {
             cur_epoch,
             protocol_config,
             post_execution_check_inputs,
+            system_object_versions,
             // Represents what happened during execution, which needs to be kept.
             loaded_runtime_objects,
             runtime_packages_loaded_from_db,
             loaded_per_epoch_config_objects,
-            // Execution outcomes, can be discarded.
+            loaded_system_objects,
+            // Execution outcomes can be discarded.
             execution_results: _,
             invariants: _,
         } = self;
@@ -685,6 +741,8 @@ impl<'backing> TemporaryStore<'backing> {
             runtime_packages_loaded_from_db,
             loaded_per_epoch_config_objects,
             post_execution_check_inputs,
+            system_object_versions,
+            loaded_system_objects,
             execution_results: ExecutionResultsV2::default(),
             invariants: InvariantChecker::default(),
         };
@@ -1127,9 +1185,11 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
 }
 
 /// Compute the per-`(address, type)` funds-accumulator reservation budget authorized by the
-/// transaction. Today every funds accumulator is a `Balance<T>`, but the `(address, TypeTag)`
-/// keying lets this generalize as more accumulator types are added. Sources:
-/// - PTB `FundsWithdrawalArg`s for any supported accumulator type (sender or sponsor as owner).
+/// transaction, and the allowance ids declared per key. Today every funds accumulator is a
+/// `Balance<T>`, but the `(address, TypeTag)` keying lets this generalize as more accumulator
+/// types are added. Budget sources:
+/// - PTB `FundsWithdrawalArg`s for any supported accumulator type (sender, sponsor, or
+///   allowance funder as owner).
 /// - Gas paid entirely from address balance (credits `(gas_owner, Balance<SUI>)`).
 /// - Gas-data entries with coin-reservation digests (also credit `(gas_owner, Balance<SUI>)`).
 fn compute_input_reservations(
@@ -1137,24 +1197,33 @@ fn compute_input_reservations(
     gas_data: &GasData,
     transaction_signer: SuiAddress,
     enable_gasless: bool,
-) -> BTreeMap<(SuiAddress, TypeTag), u64> {
+) -> (BTreeMap<(SuiAddress, TypeTag), u64>, AllowanceIds) {
     use sui_types::balance::Balance;
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::{Reservation, WithdrawFrom, is_gas_paid_from_address_balance};
 
     let is_gasless = enable_gasless && is_gasless_transaction(gas_data, transaction_kind);
     let mut reservations: BTreeMap<(SuiAddress, TypeTag), u64> = BTreeMap::new();
+    let mut allowance_ids = AllowanceIds::new();
     let sui_balance_type = Balance::type_tag(GAS::type_tag());
 
     for arg in transaction_kind.get_funds_withdrawals() {
+        let ty = arg.type_arg.to_type_tag();
         let owner = match arg.withdraw_from {
             WithdrawFrom::Sender => transaction_signer,
             WithdrawFrom::Sponsor => gas_data.owner,
+            // The funder will differ from the signer/sponsor, but permission
+            // is verified at signing
+            WithdrawFrom::SenderAllowance { funder, allowance } => {
+                allowance_ids
+                    .entry((funder, ty.clone()))
+                    .or_default()
+                    .push(allowance);
+                funder
+            }
         };
         let Reservation::MaxAmountU64(reservation) = arg.reservation;
-        let entry = reservations
-            .entry((owner, arg.type_arg.to_type_tag()))
-            .or_insert(0);
+        let entry = reservations.entry((owner, ty)).or_insert(0);
         *entry = entry.saturating_add(reservation);
     }
 
@@ -1176,7 +1245,7 @@ fn compute_input_reservations(
         }
     }
 
-    reservations
+    (reservations, allowance_ids)
 }
 
 /// What each `Publish`/`Upgrade` command declares about the package it writes, in command order.

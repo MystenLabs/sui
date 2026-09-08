@@ -3,6 +3,8 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 3 tasks
 
+// check: "Keep(EXECUTED)"
+
 task 1, lines 72-81:
 //# run
 Error: Function execution failed with VMError: {

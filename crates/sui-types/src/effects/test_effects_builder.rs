@@ -314,6 +314,7 @@ impl TestEffectsBuilder {
             shared_objects,
             BTreeSet::new(),
             &changed_objects,
+            BTreeMap::new(),
         );
         TransactionEffects::new_from_execution_v2(
             status,

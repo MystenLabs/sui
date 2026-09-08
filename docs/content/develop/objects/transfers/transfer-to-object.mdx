@@ -95,37 +95,47 @@ transfer::public_transfer(b, @0xADD);
 transfer::public_transfer(c, @0x0B);
 ```
 
-## RPC methods
+## Querying objects owned by an object
 
-Because there is no difference in the result of the object transfer, you can use existing RPC methods such as `getOwnedObjects` on the 32-byte ID. If the ID represents an address, then the method returns the objects owned by that address. If the ID is an object ID, then the method returns the objects the object ID owns.
+Because there is no difference in the result of the object transfer, the same owned-object query works whether the 32-byte ID is an address or an object ID. Where the legacy `suix_getOwnedObjects` JSON-RPC method inferred which one you meant, the GraphQL `ObjectFilter` lets you state it with `ownerKind`.
 
-```json
-// Get the objects owned by the address 0xADD. Returns `b`.
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "suix_getOwnedObjects",
-  "params": [
-    "0xADD"
-  ]
-}
+Objects that the address `0xADD` owns, which returns `b`:
 
-// Get the objects owned by the object with object ID 0x0B. Returns `c`
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "suix_getOwnedObjects",
-  "params": [
-    "0x0B"
-  ]
+```graphql
+query {
+  objects(filter: { owner: "0xADD", ownerKind: ADDRESS }) {
+    nodes {
+      address
+      asMoveObject {
+        contents { type { repr } }
+      }
+    }
+  }
 }
 ```
+
+Objects that the object with object ID `0x0B` owns, which returns `c`:
+
+```graphql
+query {
+  objects(filter: { owner: "0x0B", ownerKind: OBJECT }) {
+    nodes {
+      address
+      asMoveObject {
+        contents { type { repr } }
+      }
+    }
+  }
+}
+```
+
+Sui Foundation disabled JSON-RPC on Mainnet full nodes. If your application still calls `suix_getOwnedObjects`, see the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration).
 
 ## Receive objects
 
 An object must receive another object before it can use it. To receive the object, use a `Receiving(o: ObjectRef)` argument type in a [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks). This argument takes an object reference containing the object's `ObjectID`, `Version`, and `Digest`, similar to address-owned object arguments. However, `Receiving` PTB arguments are not passed as an owned value or mutable reference within the transaction.
 
-The core receiving interface in Move is defined in the [`transfer`](https://docs.sui.io/references/framework/sui_sui/transferx) module in the Sui framework:
+The [`transfer`](/references/framework/sui_sui/transfer) module in the Sui framework defines the core receiving interface in Move:
 
 ```move
 module sui::transfer;

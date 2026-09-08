@@ -20,6 +20,7 @@ mod loop_to_seq;
 mod negate_comparison;
 mod reconstruct_match;
 mod recover_asserts;
+mod recover_match_guards;
 mod remove_trailing_continue;
 mod remove_trailing_return;
 mod simplify_borrow_deref;
@@ -47,6 +48,8 @@ const REFINEMENTS: &[Refinement] = &[
     introduce_while::refine,
     loop_to_seq::refine,
     reconstruct_match::refine,
+    // Must precede the if-shape rewrites, which restructure guard `if`s beyond recognition.
+    recover_match_guards::refine,
     // Strip spurious trailing `continue`/`return` markers first - they're structurer
     // artifacts that would otherwise make `simplify_if`'s `always_terminates` predicate
     // fire on arms whose true Move-level shape doesn't actually terminate.
@@ -129,8 +132,9 @@ trait Refine {
             }
             E::Match(e, _, es) => {
                 let mut changed = self.refine(e);
-                for (_, _, e) in es.iter_mut() {
-                    changed |= self.refine(e);
+                for arm in es.iter_mut() {
+                    changed |= arm.guard.as_mut().is_some_and(|g| self.refine(g));
+                    changed |= self.refine(&mut arm.rhs);
                 }
                 changed
             }

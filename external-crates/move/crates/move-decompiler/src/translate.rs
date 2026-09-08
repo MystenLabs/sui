@@ -462,8 +462,11 @@ fn collect_goto_targets_into(exp: &Exp, out: &mut HashSet<u64>) {
         }
         Exp::Match(c, _, arms) => {
             collect_goto_targets_into(c, out);
-            for (_, _, e) in arms {
-                collect_goto_targets_into(e, out);
+            for arm in arms {
+                arm.guard
+                    .iter()
+                    .for_each(|g| collect_goto_targets_into(g, out));
+                collect_goto_targets_into(&arm.rhs, out);
             }
         }
         Exp::MatchLit(c, arms) => {
@@ -534,8 +537,11 @@ fn strip_untargeted_blocks(exp: &mut Exp, targets: &HashSet<u64>) {
         }
         Exp::Match(c, _, arms) => {
             strip_untargeted_blocks(c, targets);
-            for (_, _, e) in arms {
-                strip_untargeted_blocks(e, targets);
+            for arm in arms {
+                arm.guard
+                    .iter_mut()
+                    .for_each(|g| strip_untargeted_blocks(g, targets));
+                strip_untargeted_blocks(&mut arm.rhs, targets);
             }
         }
         Exp::MatchLit(c, arms) => {

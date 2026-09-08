@@ -118,15 +118,13 @@ SuiNS NFT ownership allows any address to be set as the target address. So, the 
 
 ### Offchain resolution
 
-For offchain resolution, use the available Sui API endpoints:
+For offchain resolution, pass the name to the [`address`](/references/sui-api/sui-graphql/beta/reference/operations/queries/address) GraphQL query. To fetch the full name record instead of just the target address, use the [`nameRecord`](/references/sui-api/sui-graphql/beta/reference/operations/queries/name-record) query.
 
-- [JSON-RPC](https://docs.sui.io/sui-api-ref#suix_resolvenameserviceaddress)
-
-- [GraphQL](https://docs.sui.io/references/sui-api/sui-graphql/reference/api/queries/resolve-suins-address)
+The JSON-RPC `suix_resolveNameServiceAddress` method previously served this lookup. JSON-RPC is disabled on Sui Foundation Mainnet full nodes, so migrate any code still calling it. See the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration).
 
 :::info
 
-For GraphQL's default name resolution, use the [`defaultSuinsName` field](https://docs.sui.io/references/sui-api/sui-graphql/reference/types/objects/address).
+For reverse lookup, read the [`defaultNameRecord` field](/references/sui-api/sui-graphql/beta/reference/types/objects/address) on the `Address` type. It replaced `defaultSuinsName`.
 
 :::
 

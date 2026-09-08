@@ -1,0 +1,200 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+// `BalanceWithdraw` inputs. For an allowance-sourced withdrawal the funder and
+// the allowance are addresses, and `asTransactionObject` resolves the allowance
+// as the transaction changed it, without an explicit digest. A plain sender
+// withdrawal has neither.
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 11-14:
+//# programmable --sender A --inputs 5000 @A
+// Fund A's (the funder) address balance.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+mutated: object(0,0)
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 5000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 16:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 18-21:
+//# programmable --sender A --inputs b"gql" @B vector[1000u256] vector[] vector[99999999999999]
+// A issues an allowance to B: 1000 lifetime cap.
+//> 0: std::option::none<sui::allowance::RateLimit>();
+//> 1: sui::allowance::new<sui::balance::Balance<sui::sui::SUI>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
+created: object(3,0), object(3,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6422000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 23-26:
+//# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(400,@A,object(3,0)) mutshared(3,0) immshared(6) @B
+// B spends 400 of A's funds through the allowance.
+//> 0: sui::allowance::balance_spend<sui::sui::SUI>(Input(1), Input(0), Input(2));
+//> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(3));
+mutated: object(0,1), object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 400), (object(4,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 400)
+gas summary: computation_cost: 1000000, storage_cost: 4126800,  storage_rebate: 3107412, non_refundable_storage_fee: 31388
+
+task 5, line 28:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, lines 30-75:
+//# run-graphql
+Response: {
+  "data": {
+    "transaction": {
+      "kind": {
+        "__typename": "ProgrammableTransaction",
+        "inputs": {
+          "nodes": [
+            {
+              "__typename": "BalanceWithdraw",
+              "withdrawFrom": "SENDER_ALLOWANCE",
+              "reservation": {
+                "amount": "400"
+              },
+              "funder": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              },
+              "allowance": {
+                "address": "0xeffb8a3ec3ab07f130d30b6d199d26e8f5723cd0a740226cc65345d8d104af44",
+                "asTransactionObject": {
+                  "__typename": "ObjectChange",
+                  "address": "0xeffb8a3ec3ab07f130d30b6d199d26e8f5723cd0a740226cc65345d8d104af44",
+                  "inputState": {
+                    "version": 3
+                  },
+                  "outputState": {
+                    "version": 4,
+                    "asMoveObject": {
+                      "contents": {
+                        "json": {
+                          "id": "0xeffb8a3ec3ab07f130d30b6d199d26e8f5723cd0a740226cc65345d8d104af44",
+                          "settings": {
+                            "funder": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                            "spender": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a",
+                            "app": null,
+                            "lifetime_cap": "1000",
+                            "start_timestamp_ms": null,
+                            "expiration_timestamp_ms": "99999999999999",
+                            "rate_limit": null,
+                            "name": "gql"
+                          },
+                          "current_spend": "400"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "__typename": "SharedInput"
+            },
+            {
+              "__typename": "SharedInput"
+            },
+            {
+              "__typename": "MoveValue"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 7, lines 77-80:
+//# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(100) @A
+// B withdraws 100 from their own balance: a plain sender withdrawal.
+//> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
+//> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(1));
+mutated: object(0,1)
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100), (object(4,0), B, sui::balance::Balance<sui::sui::SUI>, Split, 100)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, lines 82-85:
+//# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(200,@A,object(3,0)) mutshared(3,0) immshared(6) @B
+// A second spend moves the allowance past the version the first spend wrote.
+//> 0: sui::allowance::balance_spend<sui::sui::SUI>(Input(1), Input(0), Input(2));
+//> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(3));
+mutated: object(0,1), object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 200), (object(4,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 200)
+gas summary: computation_cost: 1000000, storage_cost: 4126800,  storage_rebate: 4085532, non_refundable_storage_fee: 41268
+
+task 9, line 87:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 10, lines 89-117:
+//# run-graphql
+Response: {
+  "data": {
+    "transaction": {
+      "kind": {
+        "inputs": {
+          "nodes": [
+            {
+              "__typename": "BalanceWithdraw",
+              "withdrawFrom": "SENDER",
+              "reservation": {
+                "amount": "100"
+              },
+              "funder": null,
+              "allowance": null
+            },
+            {
+              "__typename": "MoveValue"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 11, lines 119-160:
+//# run-graphql
+Response: {
+  "data": {
+    "transaction": {
+      "kind": {
+        "inputs": {
+          "nodes": [
+            {
+              "allowance": {
+                "asObject": {
+                  "version": 6
+                },
+                "asTransactionObject": {
+                  "inputState": {
+                    "version": 3
+                  },
+                  "outputState": {
+                    "version": 4
+                  }
+                },
+                "created": {
+                  "idCreated": true,
+                  "outputState": {
+                    "version": 3
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

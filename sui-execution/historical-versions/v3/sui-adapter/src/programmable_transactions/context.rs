@@ -1923,6 +1923,12 @@ mod checked {
                             should have been checked at signing"
                         );
                     }
+                    WithdrawFrom::SenderAllowance { .. } => {
+                        unimplemented!(
+                            "WithdrawFrom::SenderAllowance is not supported by this execution \
+                            version, should have been checked at signing"
+                        );
+                    }
                 };
                 // After this point, we can treat this like any other returned/loaded value, e.g.
                 // from a Move call. As such, sanity check Withdrawal should have only drop.

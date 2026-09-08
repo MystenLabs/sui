@@ -1,0 +1,218 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 22 tasks
+
+// Allowances over a custom coin: the funder's only balance is FOO (reservation
+// checking is per-type, no SUI required), and a dual-type PTB spends a FOO and
+// a SUI allowance from the same funder as two independent keys.
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 10-24:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 10617200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 26-29:
+//# programmable --sender A --inputs object(1,1) 5000 @A
+// Fund A's FOO address balance; A holds no SUI balance yet.
+//> 0: sui::coin::mint<test::foo::FOO>(Input(0), Input(1));
+//> 1: sui::coin::send_funds<test::foo::FOO>(Result(0), Input(2));
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(2,0), A, sui::balance::Balance<test::foo::FOO>, Merge, 5000)
+gas summary: computation_cost: 1000000, storage_cost: 2675200,  storage_rebate: 2648448, non_refundable_storage_fee: 26752
+
+task 3, line 31:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 33-36:
+//# programmable --sender A --inputs b"foo" @B vector[1000u256] vector[] vector[99999999999999]
+// A issues a FOO allowance to B: 1000 lifetime cap.
+//> 0: std::option::none<sui::allowance::RateLimit>();
+//> 1: sui::allowance::new<sui::balance::Balance<test::foo::FOO>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
+created: object(4,0), object(4,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6422000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 38-41:
+//# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<test::foo::FOO>>(400,@A,object(4,0)) mutshared(4,0) immshared(6) @B
+// B spends 400 FOO while the funder has no SUI balance at all.
+//> 0: sui::allowance::balance_spend<test::foo::FOO>(Input(1), Input(0), Input(2));
+//> 1: sui::balance::send_funds<test::foo::FOO>(Result(0), Input(3));
+mutated: object(0,1), object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006, 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(2,0), A, sui::balance::Balance<test::foo::FOO>, Split, 400), (object(5,0), B, sui::balance::Balance<test::foo::FOO>, Merge, 400)
+gas summary: computation_cost: 1000000, storage_cost: 4126800,  storage_rebate: 3107412, non_refundable_storage_fee: 31388
+
+task 6, lines 43-44:
+//# view-funds sui::balance::Balance<test::foo::FOO> A
+5000
+
+task 7, lines 46-47:
+//# view-funds sui::balance::Balance<test::foo::FOO> B
+No funds accumulator object found
+
+task 8, line 49:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 9, line 51:
+//# view-funds sui::balance::Balance<test::foo::FOO> A
+4600
+
+task 10, line 53:
+//# view-funds sui::balance::Balance<test::foo::FOO> B
+400
+
+task 11, lines 55-58:
+//# programmable --sender A --inputs 1000 @A
+// Fund A's SUI balance for the dual-type spend below.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+mutated: object(0,0)
+accumulators_written: (object(11,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 1000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, line 60:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 13, lines 62-65:
+//# programmable --sender A --inputs b"sui" @B vector[1000u256] vector[] vector[99999999999999]
+// A issues a SUI allowance to B: 1000 lifetime cap.
+//> 0: std::option::none<sui::allowance::RateLimit>();
+//> 1: sui::allowance::new<sui::balance::Balance<sui::sui::SUI>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
+created: object(13,0), object(13,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6422000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 14, lines 67-72:
+//# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<test::foo::FOO>>(300,@A,object(4,0)) allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(200,@A,object(13,0)) mutshared(4,0) mutshared(13,0) immshared(6) @B
+// One PTB, two types from one funder: two keys, two Splits.
+//> 0: sui::allowance::balance_spend<test::foo::FOO>(Input(2), Input(0), Input(4));
+//> 1: sui::balance::send_funds<test::foo::FOO>(Result(0), Input(5));
+//> 2: sui::allowance::balance_spend<sui::sui::SUI>(Input(3), Input(1), Input(4));
+//> 3: sui::balance::send_funds<sui::sui::SUI>(Result(2), Input(5));
+mutated: object(0,1), object(4,0), object(13,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006, 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(2,0), A, sui::balance::Balance<test::foo::FOO>, Split, 300), (object(5,0), B, sui::balance::Balance<test::foo::FOO>, Merge, 300), (object(11,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 200), (object(14,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 200)
+gas summary: computation_cost: 1000000, storage_cost: 7265600,  storage_rebate: 7192944, non_refundable_storage_fee: 72656
+
+task 15, lines 74-75:
+//# view-object 4,0
+Owner: Shared( 4 )
+Version: 7
+Contents: sui::allowance::Allowance<sui::balance::Balance<test::foo::FOO>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    settings: sui::allowance::Settings {
+        funder: A,
+        spender: std::option::Option<address> {
+            vec: vector[
+                B,
+            ],
+        },
+        app: std::option::Option<std::type_name::TypeName> {
+            vec: vector[],
+        },
+        lifetime_cap: std::option::Option<u256> {
+            vec: vector[
+                1000u256,
+            ],
+        },
+        start_timestamp_ms: std::option::Option<u64> {
+            vec: vector[],
+        },
+        expiration_timestamp_ms: std::option::Option<u64> {
+            vec: vector[
+                99999999999999u64,
+            ],
+        },
+        rate_limit: std::option::Option<sui::allowance::RateLimit> {
+            vec: vector[],
+        },
+        name: std::string::String {
+            bytes: vector[
+                102u8,
+                111u8,
+                111u8,
+            ],
+        },
+    },
+    current_spend: 700u256,
+}
+
+task 16, lines 77-78:
+//# view-object 13,0
+Owner: Shared( 6 )
+Version: 7
+Contents: sui::allowance::Allowance<sui::balance::Balance<sui::sui::SUI>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(13,0),
+        },
+    },
+    settings: sui::allowance::Settings {
+        funder: A,
+        spender: std::option::Option<address> {
+            vec: vector[
+                B,
+            ],
+        },
+        app: std::option::Option<std::type_name::TypeName> {
+            vec: vector[],
+        },
+        lifetime_cap: std::option::Option<u256> {
+            vec: vector[
+                1000u256,
+            ],
+        },
+        start_timestamp_ms: std::option::Option<u64> {
+            vec: vector[],
+        },
+        expiration_timestamp_ms: std::option::Option<u64> {
+            vec: vector[
+                99999999999999u64,
+            ],
+        },
+        rate_limit: std::option::Option<sui::allowance::RateLimit> {
+            vec: vector[],
+        },
+        name: std::string::String {
+            bytes: vector[
+                115u8,
+                117u8,
+                105u8,
+            ],
+        },
+    },
+    current_spend: 200u256,
+}
+
+task 17, line 80:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 18, lines 82-83:
+//# view-funds sui::balance::Balance<test::foo::FOO> A
+4300
+
+task 19, lines 85-86:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+800
+
+task 20, lines 88-89:
+//# view-funds sui::balance::Balance<test::foo::FOO> B
+700
+
+task 21, lines 91-92:
+//# view-funds sui::balance::Balance<sui::sui::SUI> B
+200

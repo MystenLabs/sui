@@ -1061,7 +1061,7 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                 gas_used: effect.gas_cost_summary().clone(),
                 shared_objects: to_sui_object_ref(
                     effect
-                        .input_consensus_objects()
+                        .accessed_consensus_objects()
                         .into_iter()
                         .map(|kind| {
                             #[allow(deprecated)]
@@ -2426,6 +2426,9 @@ impl SuiCallArg {
                 withdraw_from: match arg.withdraw_from {
                     WithdrawFrom::Sender => SuiWithdrawFrom::Sender,
                     WithdrawFrom::Sponsor => SuiWithdrawFrom::Sponsor,
+                    WithdrawFrom::SenderAllowance { funder, allowance } => {
+                        SuiWithdrawFrom::SenderAllowance { funder, allowance }
+                    }
                 },
             }),
         })
@@ -2524,6 +2527,10 @@ pub enum SuiWithdrawalTypeArg {
 pub enum SuiWithdrawFrom {
     Sender,
     Sponsor,
+    SenderAllowance {
+        funder: SuiAddress,
+        allowance: ObjectID,
+    },
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]

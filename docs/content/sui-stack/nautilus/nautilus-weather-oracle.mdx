@@ -150,110 +150,48 @@ The enclave exposes 3 endpoints:
 
 For the full Nautilus framework and deployment tooling, see the [Nautilus documentation](/sui-stack/nautilus/nautilus-overview).
 
-## Prerequisites
-
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
-- [x] [Install the latest version of Sui](/getting-started/onboarding/sui-install).
 
-- [x] [Configure the Sui client](/getting-started/onboarding/configure-sui-client).
+- [x] Work through [Using Nautilus](/sui-stack/nautilus/using-nautilus) and confirm you can deploy an enclave to an AWS Nitro instance.
 
-- [x] [Create a Sui address](/getting-started/onboarding/get-address).
+- [x] [Install the Sui CLI](/getting-started/onboarding/sui-install) and [fund an address with Testnet SUI](/getting-started/onboarding/get-coins).
 
-- [x] [Get SUI Testnet tokens](/getting-started/onboarding/get-coins).
-
-- [x] Download and install an IDE. The following are recommended, as they offer Move extensions:
-
-    - [VSCode](https://code.visualstudio.com/), corresponding [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move)
-
-    - [Emacs](https://www.gnu.org/software/emacs/), corresponding [Move extension](https://github.com/amnn/move-mode)
-
-    - [Vim](https://www.vim.org/download.php), corresponding [Move extension](https://github.com/yanganto/move.vim)
-
-    - [Zed](https://zed.dev/), corresponding [Move extension](https://github.com/Tzal3x/move-zed-extension)
-    
-        Alternatively, you can use the [Move web IDE](https://www.playmove.dev/), which does not require a download. It does not support all functions necessary for this guide, however.
-
-- [x] [Download and install Git](https://git-scm.com/downloads).
-
-- [x] [Node.js](https://nodejs.org/) 18 or later
-
-- [x] A Sui wallet ([Slush Wallet](https://slush.app/) or another compatible wallet)
-
-- [x] A [weatherapi.com](https://www.weatherapi.com/) API key (free tier)
+- [x] An API key for the data source you bring onchain. The reference app uses [weatherapi.com](https://www.weatherapi.com/).
 
 </TabItem>
 </Tabs>
 
-## Setup
+## Reference app
 
-Follow these steps to set up the example locally.
-
-##### Step 1: Clone the repo
-
-```bash
-$ git clone -b solution https://github.com/MystenLabs/sui-move-bootcamp.git
-$ cd sui-move-bootcamp/K4
-```
-
-##### Step 2: Review the example files
-
-The K4 directory contains the 2 files you customize for any Nautilus application:
+A complete implementation lives in [`sui-move-bootcamp/K4`](https://github.com/MystenLabs/sui-move-bootcamp/tree/solution/K4). Only 2 files change for any Nautilus application:
 
 ```
 K4/example/
 ├── move/
-│   └── weather.move      # Move contract: signature verification + NFT minting
+│   └── weather.move           # Signature verification + minting
 └── rust/
-    ├── mod.rs             # Enclave handler: API fetch + signing
-    └── allowed_endpoints.yaml  # Endpoint allowlist
+    ├── mod.rs                 # Enclave handler: API fetch + signing
+    └── allowed_endpoints.yaml # Endpoint allowlist
 ```
 
-The rest of the Nautilus framework (enclave runtime, attestation, key management) comes from the [Nautilus repo](https://github.com/MystenLabs/nautilus). You only write the application logic.
-
-##### Step 3: Create `Move.toml`
-
-Create a Move.toml file:
-
-```bash
-$ touch example/move/Move.toml
-```
-
-Insert the following content into the new Move.toml file:
+Everything else (enclave runtime, attestation, key management) comes from the [Nautilus repo](https://github.com/MystenLabs/nautilus). Your Move package depends on the enclave module:
 
 ```toml
-[package]
-name = "app"
-
 [dependencies]
 enclave = { git = "https://github.com/MystenLabs/nautilus.git", subdir = "move/enclave", rev = "main" }
 ```
 
-##### Step 4: Configure the weather API key
+## Wiring it into your own application
 
-Set the API key as an environment variable before starting the enclave:
+Adapting this to a different data source takes 4 changes:
 
-```bash
-$ export WEATHER_API_KEY=YOUR_WEATHERAPI_KEY
-```
+1. **Match the structs.** The Rust response struct and the Move struct must have identical field names, in the same order, with compatible types. BCS serialization is order-sensitive, so a mismatch fails signature verification even when the signature is valid.
+2. **Allowlist the domain.** Add your API host to `allowed_endpoints.yaml`, or the enclave cannot reach it.
+3. **Set an intent constant.** The reference app uses `WEATHER_INTENT` with value `0` as a domain separator. Give each distinct message type its own value so a signature for one cannot be replayed as another.
+4. **Register the enclave.** Publish your package, then call `GET /get_attestation` on the running enclave and submit the attestation to `register_enclave`. This stores the enclave public key onchain. The `init` function ships with placeholder PCR values; replace them with the real hashes from your built enclave image before Mainnet.
 
-##### Step 5: Deploy the Move contract
-
-```bash
-$ sui client switch --env testnet
-$ sui move build
-$ sui client publish --gas-budget 200000000
-```
-
-The `init` function creates an `EnclaveConfig` with placeholder PCR values. In production, replace these with the actual PCR hashes from your built enclave image.
-
-##### Step 6: Setup and register the enclave
-
-Follow the Nautilus documentation to [setup and deploy your enclave](/sui-stack/nautilus/using-nautilus). After deploying the enclave to an AWS Nitro instance, call `GET /get_attestation` and submit the attestation document to the contract's `register_enclave` function. This stores the enclave's public key onchain.
-
-## Run the example
-
-Send a weather request to the enclave:
+Once registered, call the enclave and submit its signed output:
 
 ```bash
 $ curl -X POST http://ENCLAVE_URL/process_data \
@@ -261,13 +199,7 @@ $ curl -X POST http://ENCLAVE_URL/process_data \
   -d '{"location": "London"}'
 ```
 
-The enclave returns a signed response containing the location, temperature, and timestamp. Submit the signed response to the `update_weather` function on Sui. The contract verifies the signature and mints a `WeatherNFT` with the verified data.
-
-To verify the NFT was created:
-
-```bash
-$ sui client tx-block TX_DIGEST --json | jq '.objectChanges[] | select(.type == "created")'
-```
+The enclave returns the signed payload. Pass it to `update_weather` along with a reference to the `Enclave` object. The contract verifies the signature against the stored public key and aborts with `EInvalidSignature` if it does not match.
 
 ## Key code highlights
 

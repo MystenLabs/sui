@@ -202,7 +202,7 @@ impl StressTestRunner {
         }
 
         println!("CONSENSUS:");
-        for kind in effects.input_consensus_objects() {
+        for kind in effects.accessed_consensus_objects() {
             let (obj_id, version) = kind.id_and_version();
             let object = state
                 .get_object_store()
