@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
 use futures::StreamExt;
+use std::collections::HashMap;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsResponse;
@@ -123,8 +123,7 @@ pub(crate) async fn batch_get_objects(
         Ok::<_, RpcError>(unversioned_objects)
     };
 
-    let (exact_objects, unversioned_objects) =
-        tokio::try_join!(exact_future, unversioned_future)?;
+    let (exact_objects, unversioned_objects) = tokio::try_join!(exact_future, unversioned_future)?;
 
     let mut objects = Vec::with_capacity(requests.len());
     for (address, version) in requests {
