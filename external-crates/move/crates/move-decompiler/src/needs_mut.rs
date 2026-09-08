@@ -716,6 +716,27 @@ mod tests {
     }
 
     #[test]
+    fn unpack_binding_needs_mut() {
+        // let S { v } = s; v = 1: the unpack binder takes `mut`, the untouched sibling
+        // field does not.
+        let unpack = Exp::Unpack(
+            crate::ast::TypeRef::Aliased(move_symbol_pool::Symbol::from("S")),
+            vec![
+                (move_symbol_pool::Symbol::from("v"), "v".to_string()),
+                (move_symbol_pool::Symbol::from("w"), "w".to_string()),
+            ],
+            Box::new(num()),
+        );
+        let fun = fun_with(seq(vec![unpack, assign("v", num())]));
+        let annots = MutAnnotations::analyze(&fun);
+        let Exp::Seq(items) = &fun.code else {
+            unreachable!()
+        };
+        assert!(annots.needs_mut(&items[0], "v"));
+        assert!(!annots.needs_mut(&items[0], "w"));
+    }
+
+    #[test]
     fn param_mut_borrow_is_detected() {
         let mut fun = fun_with(seq(vec![Exp::Call(
             (
