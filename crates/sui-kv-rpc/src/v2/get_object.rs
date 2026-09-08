@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
+use futures::StreamExt;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsResponse;
@@ -16,7 +17,7 @@ use crate::PackageResolver;
 use crate::render::object_to_response;
 
 pub const MAX_BATCH_REQUESTS: usize = 1000;
-pub const MAX_UNVERSIONED_BATCH_REQUESTS: usize = 50;
+pub const MAX_CONCURRENT_UNVERSIONED_SCANS: usize = 50;
 pub(crate) async fn get_object(
     mut client: BigTableClient,
     GetObjectRequest {
@@ -60,17 +61,6 @@ pub(crate) async fn batch_get_objects(
             format!("number of batch requests exceed limit of {MAX_BATCH_REQUESTS}"),
         ));
     }
-
-    let unversioned_count = requests.iter().filter(|r| r.version.is_none()).count();
-    if unversioned_count > MAX_UNVERSIONED_BATCH_REQUESTS {
-        return Err(RpcError::new(
-            tonic::Code::InvalidArgument,
-            format!(
-                "number of unversioned batch requests exceeds limit of {MAX_UNVERSIONED_BATCH_REQUESTS}"
-            ),
-        ));
-    }
-
     let requests = requests
         .into_iter()
         .map(|req| (req.object_id, req.version))
@@ -118,7 +108,10 @@ pub(crate) async fn batch_get_objects(
                 Ok::<_, RpcError>((object_id, object))
             }
         });
-        let unversioned_results = futures::future::join_all(unversioned_futures).await;
+        let unversioned_results = futures::stream::iter(unversioned_futures)
+            .buffer_unordered(MAX_CONCURRENT_UNVERSIONED_SCANS)
+            .collect::<Vec<_>>()
+            .await;
 
         let mut unversioned_objects = HashMap::new();
         for result in unversioned_results {
@@ -191,36 +184,6 @@ mod tests {
                 let mut req = GetObjectRequest::default();
                 req.object_id = Some(ObjectID::random().to_canonical_string(true));
                 req.version = Some(1);
-                req
-            })
-            .collect();
-
-        let mut req = BatchGetObjectsRequest::default();
-        req.requests = requests;
-
-        let err = batch_get_objects(client, req, &resolver).await.unwrap_err();
-        let status: tonic::Status = err.into();
-        assert_eq!(status.code(), tonic::Code::InvalidArgument);
-
-        server.abort();
-    }
-
-    #[tokio::test]
-    async fn test_batch_get_objects_unversioned_limit_exceeded() {
-        let mock = MockBigtableServer::new();
-        let (addr, server) = mock.start().await.expect("start mock BigTable");
-        let client = InnerBigTableClient::new_local(addr.to_string(), "test".to_string())
-            .await
-            .expect("connect to mock BigTable");
-        let package_store: Arc<dyn PackageStore> =
-            Arc::new(BigTablePackageStore::new(client.clone()));
-        let resolver = Arc::new(Resolver::new(package_store));
-
-        let requests = (0..MAX_UNVERSIONED_BATCH_REQUESTS + 1)
-            .map(|_| {
-                let mut req = GetObjectRequest::default();
-                req.object_id = Some(ObjectID::random().to_canonical_string(true));
-                req.version = None;
                 req
             })
             .collect();
