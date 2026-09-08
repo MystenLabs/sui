@@ -61,6 +61,8 @@ cluster-wide consensus latency. If a host is an outlier, decide hardware vs soft
 `ConsensusCommitHandler::handle_consensus_commit`, `BuildCheckpoints`, `ExecutionDriver::loop`,
 `CheckpointExecutor::parallel_step`). Whichever approaches 1.0 is the ceiling. Then break it down with its sub-scopes
 (see metrics.md). Remember that `notify_read` scopes and anything spanning an `.await` measure waiting, not CPU.
+Check `monitored_tasks{callsite}` / `monitored_futures{callsite}` for the spawn sites in that stage: how many tasks
+are live, whether the count is pinned at a limit, leaking, or unexpectedly zero.
 After the obvious suspects, explore the code base for other metrics near the suspect stage (grep for
 `register_*_with_registry!` in that crate) and for `monitored_mpsc` channel names feeding it.
 

@@ -92,6 +92,24 @@ Storage (writeback_cache.rs, authority_store_pruner.rs)
 Channels: `monitored_channel_inflight` / `_sent` / `_received` (labelled `name`) show backlog on `monitored_mpsc`
 channels; a growing inflight count points straight at the consumer stage.
 
+## Task and future counts per spawn site
+
+`spawn_monitored_task!`, `spawn_logged_monitored_task!`, and `monitored_future!` (same file) keep an up/down gauge
+of live tasks/futures per call site:
+
+| metric | label | source |
+|---|---|---|
+| `monitored_tasks` | `callsite` = `file:line` (or `file:name` when a name is given) | `spawn_monitored_task!`, `spawn_logged_monitored_task!` |
+| `monitored_futures` | same | `monitored_future!` |
+
+Use them to answer "how many tasks from this spawn site are active right now": `monitored_tasks{callsite=~".*consensus_handler.*"}`.
+A count that grows without bound is a leak or a stage whose consumer stopped; a count pinned at a semaphore or pool
+limit means that stage is the ceiling; a count that goes to zero when work is pending means the spawner is stuck
+upstream. `topk(10, monitored_tasks)` per host is a quick way to spot an unexpected pileup. Because the label is
+`file:line`, the same site shifts name between SHAs; match on the file name rather than the line when comparing
+across deploys. `spawn_logged_monitored_task!` also logs `Spawning future <callsite>` / `Future <callsite> completed`
+at INFO, greppable in Loki when you need per-task timing.
+
 ## Latency and throughput metrics, by stage
 
 Triage order: client `latency_s` -> `transaction_driver_settlement_finality_latency` -> consensus commit latency ->
@@ -169,7 +187,7 @@ Storage (typed-store/src/metrics.rs, labels `cf_name`, `db_name`)
 
 Process level (mysten-metrics)
 - `thread_stall_duration_sec`: the tokio runtime was blocked; any sizeable value shows up as latency everywhere.
-- `monitored_tasks{callsite}` / `monitored_futures{callsite}` runaway growth => task leak or stuck stage.
+- `monitored_tasks{callsite}` / `monitored_futures{callsite}`: see "Task and future counts per spawn site" above.
 - `uptime` (and `consensus_uptime`) reset => process restarted; explains sudden discontinuities.
 - `process_cpu_seconds_total`, `process_resident_memory_bytes`, `process_open_fds`; node-exporter (:9091) for
   disk, NIC, load per host. `system_invariant_violations{name}`: always investigate.
